@@ -1,0 +1,24 @@
+@extends('layouts.app')
+@section('content')
+<div class="farast-product" dir="rtl">
+  <div class="product-breadcrumb"><a href="{{ route('store') }}">فروشگاه</a><span>›</span><span>{{ $product->category?->name }}</span></div>
+  <div class="product-detail-grid">
+    <section class="product-main">
+      <div class="product-detail-cover">@if($product->cover_path)<img src="{{ asset($product->cover_path) }}" alt="{{ $product->title }}">@else<span>FARAST</span>@endif</div>
+      @if($product->previews->isNotEmpty())<div class="preview-panel"><div class="preview-head"><strong>پیش‌نمایش محصول</strong><span>{{ $product->preview_pages }} صفحه اول</span></div><div class="preview-grid">@foreach($product->previews->where('is_active',true)->take($product->preview_pages) as $preview)<a href="{{ route('store.preview',$preview) }}" target="_blank" rel="noopener"><img src="{{ route('store.preview',$preview) }}" alt="پیش‌نمایش {{ $loop->iteration }}" loading="lazy"><small>صفحه {{ $loop->iteration }}</small></a>@endforeach</div></div>@endif
+      <article class="product-description"><h2>توضیحات</h2>{!! nl2br(e($product->description ?: $product->short_description ?: 'توضیحی ثبت نشده است.')) !!}</article>
+    </section>
+    <aside class="product-buy-card"><small>{{ $product->category?->name }}</small><h1>{{ $product->title }}</h1><p>{{ $product->short_description }}</p><div class="detail-price">{{ number_format((int)$product->price_rials / 10) }} تومان</div><button type="button" class="add-to-cart" data-product-id="{{ $product->id }}">افزودن به سبد خرید</button><div class="buy-meta"><span>نسخه {{ $product->version ?: 'فعلی' }}</span><span>دانلود امن پس از خرید</span><span>مجوز {{ $product->license_type }}</span></div></aside>
+  </div>
+</div>
+@endsection
+@push('styles')
+<style>
+.farast-product{min-height:calc(100vh - 80px);background:#f5f8fc;padding:28px max(15px,5vw) 70px;color:#20334d}.product-breadcrumb{display:flex;gap:9px;font-size:.68rem;color:#78879b;margin-bottom:18px}.product-breadcrumb a{color:#1769ff;text-decoration:none}.product-detail-grid{max-width:1200px;margin:auto;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px}.product-main{min-width:0}.product-detail-cover{height:420px;border-radius:16px;background:linear-gradient(135deg,#091735,#285da8);display:grid;place-items:center;overflow:hidden;color:#fff;font-size:1.4rem;font-weight:800}.product-detail-cover img{width:100%;height:100%;object-fit:cover}.preview-panel,.product-description,.product-buy-card{background:#fff;border:1px solid #e0e7ef;border-radius:15px}.preview-panel{margin-top:16px;padding:14px}.preview-head{display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:10px}.preview-head span{color:#8391a3;font-size:.62rem}.preview-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.preview-grid a{text-decoration:none;color:#687a91;font-size:.6rem}.preview-grid img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border:1px solid #dce4ee;border-radius:7px;background:#f5f8fc}.preview-grid small{display:block;margin-top:4px}.product-description{margin-top:16px;padding:18px;font-size:.75rem;line-height:2;color:#53667e}.product-description h2{font-size:.9rem;color:#203c60;margin:0 0 8px}.product-buy-card{padding:22px;height:max-content;position:sticky;top:20px}.product-buy-card>small{font-size:.62rem;color:#77879b}.product-buy-card h1{font-size:1.25rem;line-height:1.7;margin:6px 0}.product-buy-card p{font-size:.7rem;color:#718198;line-height:1.8}.detail-price{font-size:1.15rem;font-weight:900;color:#1769ff;margin:18px 0}.add-to-cart{width:100%;height:43px;border:0;border-radius:9px;background:#1769ff;color:#fff;font:inherit;font-size:.75rem;font-weight:800;cursor:pointer}.add-to-cart:hover{background:#0d58db}.buy-meta{display:grid;gap:7px;margin-top:14px;padding-top:14px;border-top:1px solid #edf1f5;color:#75869b;font-size:.62rem}@media(max-width:850px){.product-detail-grid{grid-template-columns:1fr}.product-buy-card{position:static}.product-detail-cover{height:300px}}@media(max-width:520px){.preview-grid{grid-template-columns:repeat(2,1fr)}.product-detail-cover{height:230px}}
+</style>
+@endpush
+@push('scripts')
+<script>
+(()=>{const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';document.querySelectorAll('.add-to-cart').forEach(b=>b.addEventListener('click',async()=>{b.disabled=true;try{const r=await fetch('/cart/products/'+b.dataset.productId,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({quantity:1})});const j=await r.json();if(!r.ok)throw new Error(j.message||'افزودن به سبد خرید ناموفق بود');b.textContent='به سبد اضافه شد';if(window.FarastCart?.refresh)window.FarastCart.refresh();setTimeout(()=>b.textContent='افزودن به سبد خرید',1500)}catch(e){alert(e.message)}finally{b.disabled=false}}))})();
+</script>
+@endpush

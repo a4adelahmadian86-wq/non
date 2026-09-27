@@ -1,0 +1,13 @@
+{
+  "name": "farast-voice-stream",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=20"},
+  "scripts": {"start": "node server-pro.mjs"},
+  "dependencies": {
+    "@google-cloud/speech": "^8.1.0",
+    "dotenv": "^16.4.7",
+    "microsoft-cognitiveservices-speech-sdk": "^1.51.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,353 @@
+[
+  {
+    "name": "01-notification-info",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/01-notification-info.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/01-notification-info.wav",
+      "ogg": "OGG/01-notification-info.ogg",
+      "mp3_320kbps": "MP3_320kbps/01-notification-info.mp3"
+    },
+    "duration": "0.420s",
+    "purpose": "neutral information",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "02-notification-success",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/02-notification-success.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/02-notification-success.wav",
+      "ogg": "OGG/02-notification-success.ogg",
+      "mp3_320kbps": "MP3_320kbps/02-notification-success.mp3"
+    },
+    "duration": "0.620s",
+    "purpose": "positive completion",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "03-notification-warning",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/03-notification-warning.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/03-notification-warning.wav",
+      "ogg": "OGG/03-notification-warning.ogg",
+      "mp3_320kbps": "MP3_320kbps/03-notification-warning.mp3"
+    },
+    "duration": "0.580s",
+    "purpose": "attention without alarm",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "04-notification-error",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/04-notification-error.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/04-notification-error.wav",
+      "ogg": "OGG/04-notification-error.ogg",
+      "mp3_320kbps": "MP3_320kbps/04-notification-error.mp3"
+    },
+    "duration": "0.680s",
+    "purpose": "error feedback",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "05-upload-start",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/05-upload-start.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/05-upload-start.wav",
+      "ogg": "OGG/05-upload-start.ogg",
+      "mp3_320kbps": "MP3_320kbps/05-upload-start.mp3"
+    },
+    "duration": "0.200s",
+    "purpose": "upload initiated",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "06-upload-complete",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/06-upload-complete.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/06-upload-complete.wav",
+      "ogg": "OGG/06-upload-complete.ogg",
+      "mp3_320kbps": "MP3_320kbps/06-upload-complete.mp3"
+    },
+    "duration": "0.580s",
+    "purpose": "upload completed",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "07-processing-start",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/07-processing-start.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/07-processing-start.wav",
+      "ogg": "OGG/07-processing-start.ogg",
+      "mp3_320kbps": "MP3_320kbps/07-processing-start.mp3"
+    },
+    "duration": "0.240s",
+    "purpose": "processing initiated",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "08-processing-complete",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/08-processing-complete.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/08-processing-complete.wav",
+      "ogg": "OGG/08-processing-complete.ogg",
+      "mp3_320kbps": "MP3_320kbps/08-processing-complete.mp3"
+    },
+    "duration": "0.620s",
+    "purpose": "processing completed",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "09-processing-error",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/09-processing-error.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/09-processing-error.wav",
+      "ogg": "OGG/09-processing-error.ogg",
+      "mp3_320kbps": "MP3_320kbps/09-processing-error.mp3"
+    },
+    "duration": "0.700s",
+    "purpose": "processing failed",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "10-ai-start",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/10-ai-start.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/10-ai-start.wav",
+      "ogg": "OGG/10-ai-start.ogg",
+      "mp3_320kbps": "MP3_320kbps/10-ai-start.mp3"
+    },
+    "duration": "0.340s",
+    "purpose": "AI task initiated",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "11-ai-complete",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/11-ai-complete.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/11-ai-complete.wav",
+      "ogg": "OGG/11-ai-complete.ogg",
+      "mp3_320kbps": "MP3_320kbps/11-ai-complete.mp3"
+    },
+    "duration": "0.720s",
+    "purpose": "AI task completed",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "12-ai-warning",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/12-ai-warning.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/12-ai-warning.wav",
+      "ogg": "OGG/12-ai-warning.ogg",
+      "mp3_320kbps": "MP3_320kbps/12-ai-warning.mp3"
+    },
+    "duration": "0.620s",
+    "purpose": "AI attention state",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "13-save-success",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/13-save-success.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/13-save-success.wav",
+      "ogg": "OGG/13-save-success.ogg",
+      "mp3_320kbps": "MP3_320kbps/13-save-success.mp3"
+    },
+    "duration": "0.480s",
+    "purpose": "saved successfully",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "14-export-complete",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/14-export-complete.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/14-export-complete.wav",
+      "ogg": "OGG/14-export-complete.ogg",
+      "mp3_320kbps": "MP3_320kbps/14-export-complete.mp3"
+    },
+    "duration": "0.660s",
+    "purpose": "export completed",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "15-message-received",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/15-message-received.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/15-message-received.wav",
+      "ogg": "OGG/15-message-received.ogg",
+      "mp3_320kbps": "MP3_320kbps/15-message-received.mp3"
+    },
+    "duration": "0.380s",
+    "purpose": "new message received",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "16-support-message",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/16-support-message.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/16-support-message.wav",
+      "ogg": "OGG/16-support-message.ogg",
+      "mp3_320kbps": "MP3_320kbps/16-support-message.mp3"
+    },
+    "duration": "0.520s",
+    "purpose": "support message received",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "17-login-success",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/17-login-success.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/17-login-success.wav",
+      "ogg": "OGG/17-login-success.ogg",
+      "mp3_320kbps": "MP3_320kbps/17-login-success.mp3"
+    },
+    "duration": "0.520s",
+    "purpose": "successful login",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "18-logout",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/18-logout.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/18-logout.wav",
+      "ogg": "OGG/18-logout.ogg",
+      "mp3_320kbps": "MP3_320kbps/18-logout.mp3"
+    },
+    "duration": "0.300s",
+    "purpose": "logout",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "19-button-soft",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/19-button-soft.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/19-button-soft.wav",
+      "ogg": "OGG/19-button-soft.ogg",
+      "mp3_320kbps": "MP3_320kbps/19-button-soft.mp3"
+    },
+    "duration": "0.120s",
+    "purpose": "soft button interaction",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "20-toggle-on",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/20-toggle-on.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/20-toggle-on.wav",
+      "ogg": "OGG/20-toggle-on.ogg",
+      "mp3_320kbps": "MP3_320kbps/20-toggle-on.mp3"
+    },
+    "duration": "0.180s",
+    "purpose": "toggle enabled",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "21-toggle-off",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/21-toggle-off.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/21-toggle-off.wav",
+      "ogg": "OGG/21-toggle-off.ogg",
+      "mp3_320kbps": "MP3_320kbps/21-toggle-off.mp3"
+    },
+    "duration": "0.160s",
+    "purpose": "toggle disabled",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "22-modal-open",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/22-modal-open.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/22-modal-open.wav",
+      "ogg": "OGG/22-modal-open.ogg",
+      "mp3_320kbps": "MP3_320kbps/22-modal-open.mp3"
+    },
+    "duration": "0.220s",
+    "purpose": "modal opened",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "23-modal-close",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/23-modal-close.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/23-modal-close.wav",
+      "ogg": "OGG/23-modal-close.ogg",
+      "mp3_320kbps": "MP3_320kbps/23-modal-close.mp3"
+    },
+    "duration": "0.200s",
+    "purpose": "modal closed",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "24-editor-autosave",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/24-editor-autosave.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/24-editor-autosave.wav",
+      "ogg": "OGG/24-editor-autosave.ogg",
+      "mp3_320kbps": "MP3_320kbps/24-editor-autosave.mp3"
+    },
+    "duration": "0.360s",
+    "purpose": "editor autosave",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "25-voice-start",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/25-voice-start.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/25-voice-start.wav",
+      "ogg": "OGG/25-voice-start.ogg",
+      "mp3_320kbps": "MP3_320kbps/25-voice-start.mp3"
+    },
+    "duration": "0.280s",
+    "purpose": "voice capture started",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "26-voice-stop",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/26-voice-stop.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/26-voice-stop.wav",
+      "ogg": "OGG/26-voice-stop.ogg",
+      "mp3_320kbps": "MP3_320kbps/26-voice-stop.mp3"
+    },
+    "duration": "0.300s",
+    "purpose": "voice capture stopped",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  },
+  {
+    "name": "27-voice-error",
+    "filename": {
+      "wav_48khz_24bit": "WAV_48kHz_24bit/27-voice-error.wav",
+      "wav_44_1khz_16bit": "WAV_44.1kHz_16bit/27-voice-error.wav",
+      "ogg": "OGG/27-voice-error.ogg",
+      "mp3_320kbps": "MP3_320kbps/27-voice-error.mp3"
+    },
+    "duration": "0.660s",
+    "purpose": "voice error",
+    "recommended_volume": "70–85% UI master; start around 78%",
+    "recommended_usage": "Restrained UI cue; avoid stacking multiple cues simultaneously."
+  }
+]

@@ -1,0 +1,831 @@
+FARAST MASTER IMPLEMENTATION PROMPT
+====================================
+
+MISSION
+-------
+You are the autonomous senior engineering team responsible for completing the FARAST application in the repository you have been given.
+
+Do NOT behave like a consultant who only analyzes the repository and then replies with a plan. Do NOT stop after saying "I reviewed it", "I will implement it", "next I would...", or "here is what should be done".
+
+YOUR JOB IS TO ACTUALLY IMPLEMENT THE WORK IN THE REPOSITORY.
+Continue working through the complete specification in this single task until the requested implementation is genuinely complete, integrated, tested, and visible in the running application. If the environment imposes a hard execution/time/tool limit, finish the highest-value executable work before that limit and leave the repository in a valid buildable state; never stop merely because you reached a convenient checkpoint.
+
+The final response is NOT the deliverable. The repository and the working application are the deliverable.
+
+IMPORTANT EXECUTION RULE
+------------------------
+When you receive this prompt, begin by inspecting the existing repository and current implementation. Then modify the actual code. Do not ask the user to approve ordinary implementation decisions that are already specified here. Make sensible engineering decisions yourself.
+
+Do not replace working functionality merely for cosmetic reasons. Extend, repair, integrate, and improve what already exists.
+
+If a feature is already partially implemented, treat the existing implementation as the starting point and develop it toward this specification. Do not rebuild an equivalent feature from scratch unless the existing implementation is unsafe, structurally incompatible, or irreparably broken.
+
+SOURCE REPOSITORIES AND REUSE POLICY
+------------------------------------
+Primary repository:
+https://github.com/a4adelahmadian86-wq/type
+
+Reference repository:
+https://github.com/a4adelahmadian86-wq/digitalshop
+
+You MAY inspect the reference repository, including its branches and historical commits, to understand useful product ideas, workflows, UI patterns, field structures, validation rules, profile behavior, product-management behavior, and other capabilities that can improve FARAST.
+
+You MUST NOT copy the reference repository wholesale, copy its files as a replacement architecture, or reproduce proprietary code verbatim. Extract ideas, behavior, information architecture, UX patterns, and requirements, then implement them independently inside FARAST using FARAST's own architecture, naming, design system, security model, and data model.
+
+In particular, inspect historical commits when useful. The old DigitalShop implementation contained useful ideas such as richer product creation parameters, read-only controls/options, product metadata, profile/account functionality, and other mature admin/user workflows. Bring the useful capabilities into FARAST as original implementations rather than copying the old code.
+
+PRODUCT VISION
+--------------
+FARAST is one integrated application with two connected business engines:
+
+1. DIGITAL STORE
+   - categories
+   - products
+   - product metadata
+   - previews
+   - search and filtering
+   - cart
+   - checkout
+   - payment
+   - orders
+   - invoices
+   - secure downloads
+   - personal library
+   - favorites and related commerce features
+
+2. TYPING / DOCUMENT / INTELLIGENT SERVICES
+   - file upload
+   - preflight analysis
+   - page estimation
+   - OCR
+   - typing
+   - professional document editor
+   - voice typing
+   - image-to-text workflows
+   - AI processing and review
+   - document formatting
+   - Word/PDF export
+   - service pricing
+   - deposits/advance payments when required
+   - support and workflow tracking
+
+These are not two unrelated websites. They are two engines inside one FARAST product, sharing identity, account, wallet, support, search, notifications, security, and application shell.
+
+CORE UX PRINCIPLES
+------------------
+1. The product must feel like a serious SaaS application, not a collection of static pages.
+2. Every visible important feature must connect to a real backend workflow whenever the feature is presented as functional.
+3. Never create fake buttons, fake statistics, fake payment success, fake downloads, fake AI results, fake admin actions, or fake data merely to make a screen look complete.
+4. If an external provider is not configured, show an accurate configuration state and provide a safe fallback where appropriate; never claim a live integration that does not exist.
+5. Preserve user work across navigation, reloads, recoverable failures, and appropriate session states.
+6. Provide clear loading, success, warning, error, empty, disabled, offline, permission, and processing states.
+7. Prefer progressive enhancement and graceful degradation.
+8. Keep the UI responsive from desktop to tablet to mobile.
+9. FARAST supports Persian RTL as a first-class interface, while technical content may remain LTR where appropriate.
+10. Use professional iconography. Icons should communicate actions without relying on text-only buttons when an icon is standard and recognizable.
+11. Tooltips must be Persian and should include keyboard shortcuts when a shortcut exists.
+12. Do not introduce unnecessary horizontal scrolling in core application interfaces.
+
+BRAND / VISUAL LANGUAGE
+-----------------------
+Use the FARAST identity as the visual foundation:
+- deep navy
+- intelligent blue
+- indigo/violet
+- cyan accents
+- off-white surfaces
+- slate text
+- smooth engineered geometry
+- controlled rounded corners
+- convergent/four-lobed visual language
+- strong negative-space center
+- optical balance
+
+Do not turn the brand into a generic AI aesthetic. Avoid using brains, robots, neural networks, generic circuit diagrams, infinity symbols, generic clouds, or generic gear imagery as the primary FARAST identity.
+
+TYPOGRAPHY
+----------
+- Main application UI: professional Persian typography such as Vazirmatn.
+- Document editor default: B Nazanin, 14 pt.
+- Document editor should behave visually like a professional Word-style editor.
+
+APPLICATION SHELL
+-----------------
+Build one consistent shell containing, where appropriate:
+- FARAST brand
+- global search
+- account/profile
+- cart
+- notifications/status
+- workspace navigation
+- support access
+- wallet/finance access
+- connectivity status
+- responsive navigation
+
+The shell must not make the whole application disappear when the network temporarily fails.
+
+ONLINE / OFFLINE BEHAVIOR
+-------------------------
+Implement an app-like offline strategy:
+- maintain a service-worker/application shell where appropriate
+- detect real connectivity rather than guessing from favicon failures
+- show real online/offline/recovery states
+- keep the current page usable when the network is lost
+- allow cached pages/assets to remain available
+- do not navigate to a blank/error page simply because a background request failed
+- queue only operations that are safe to queue and never silently lose user work
+
+SINGLE TAB / WINDOW POLICY
+--------------------------
+FARAST must not allow two active FARAST browser tabs/windows to operate simultaneously for the same browser/device session.
+Use a robust browser-side lock/lease strategy such as BroadcastChannel plus localStorage, with safe recovery from stale locks.
+Do not rely on the server alone for this UX rule.
+
+AUTHENTICATION / SECURITY
+-------------------------
+Implement production-grade authentication and authorization:
+- phone/email flows already present in the application must remain functional
+- protect authenticated routes
+- protect admin routes
+- verify ownership of user resources
+- prevent IDOR
+- validate every request
+- rate-limit sensitive actions
+- enforce CSRF protection for state-changing web requests
+- never expose private storage through public URLs
+- use signed/temporary download URLs where appropriate
+- sanitize rich editor content
+- never trust client-side prices, roles, permissions, or payment status
+- do not commit passwords, API keys, service-account credentials, or tokens
+- use environment variables/secrets for external integrations
+
+ADMIN / MASTER ADMIN
+--------------------
+The master admin account and administrative authorization must be provisioned securely. Never hard-code a plaintext password in source code.
+
+Admin capabilities should include real workflows for:
+- dashboard overview
+- users
+- roles/capabilities
+- blocking/unblocking users
+- finance
+- wallet adjustments with auditability
+- pricing
+- announcements
+- support/tickets
+- email/settings
+- social links
+- store categories
+- store products
+- product files
+- previews
+- product parameters/options
+- read-only parameters/options where relevant
+- orders
+- payments
+- library/download visibility where appropriate
+- system settings
+
+PRODUCT MANAGEMENT
+------------------
+Build a professional product-management workflow inspired by mature commerce software, while implementing it independently.
+
+Product creation/editing should support, where applicable:
+- title
+- slug
+- short description
+- full description
+- category
+- price
+- discount
+- sale scheduling
+- cover/thumbnail
+- product files
+- secure file storage
+- preview files/pages
+- tags
+- SEO metadata
+- version
+- status
+- featured state
+- stock/digital availability semantics
+- custom parameters/attributes
+- parameter types
+- required/optional parameters
+- read-only/display-only parameters
+- selectable parameters/options
+- validation rules
+- sort order
+- related products
+- download limits
+- license/access information
+- visibility
+- publish/unpublish
+
+Do not make these fields cosmetic. Persist them, validate them, display them where appropriate, and make them affect real product behavior.
+
+USER PROFILE / ACCOUNT
+----------------------
+Provide a professional profile/account area inspired by the useful behavior of the reference product, but implemented independently.
+Include appropriate:
+- profile information
+- contact information
+- security settings
+- password/authentication state
+- order history
+- service history
+- purchased library
+- wallet/finance summary
+- saved/favorite items where supported
+- notification preferences
+- privacy controls
+- active session/device awareness where appropriate
+
+STORE ENGINE
+------------
+The intended flow is:
+Category -> Product -> Preview -> Cart -> Order -> Payment -> Library/Download
+
+Integrate it with:
+- Wallet
+- Finance
+- Support
+- Search
+- Notifications
+- Account
+
+Store requirements:
+- real category hierarchy
+- real product catalog
+- real product detail pages
+- preview before purchase where allowed
+- real cart persistence
+- cart validation on server
+- real order creation
+- server-authoritative totals
+- payment state machine
+- wallet payment where supported
+- external gateway abstraction for future/live providers
+- invoice/order records
+- idempotent payment handling
+- secure post-payment entitlement creation
+- secure download tokens
+- expiration and download limits where configured
+- personal library
+
+Never grant a paid file merely because the browser says payment succeeded.
+
+SEARCH
+------
+Implement application-wide search architecture capable of searching relevant:
+- products
+- categories
+- services
+- documents where permitted
+- user library where permitted
+- support content where appropriate
+
+Support filtering, empty states, loading states, and safe query handling.
+
+TYPING / SERVICE PRE-FLIGHT
+---------------------------
+The service workflow should begin with a real preflight rather than blindly opening the editor.
+
+For uploaded supported files:
+- validate MIME/type and size
+- store privately
+- calculate a stable content hash
+- estimate pages where technically possible
+- identify file type
+- calculate a transparent preliminary estimate
+- show free-credit/discount rules when applicable
+- require confirmation when appropriate
+- require a deposit/advance when the configured business rule requires it
+- never consume a free credit during mere analysis/quotation
+- consume credits only at the correct final processing stage
+- avoid double-charging deposits/taxes
+- persist the pricing snapshot used for the transaction
+
+Current business rule to preserve unless a later explicit product rule replaces it:
+- 1 to 7 pages: no deposit requirement
+- 8 to 12 pages: 5% deposit
+- 13 to 18 pages: 10%
+- 19 to 28 pages: 20%
+- 29 to 38 pages: 30%
+- 39 to 78 pages: 45%
+- 79+ pages: 55%
+
+The quotation flow must have real accept/decline endpoints and must never create duplicate jobs or charges merely because the user refreshes the page.
+
+EDITOR: PROFESSIONAL WORD-LIKE EXPERIENCE
+------------------------------------------
+The editor is a major product surface and must be treated as a real application, not a decorative toolbar.
+
+Default document behavior:
+- B Nazanin
+- 14 pt
+- Word-like line spacing
+- Word-like margins
+- A4 page
+- simple page border by default
+- RTL-aware document layout
+- whole application/page scroll, not an independent paper viewport that traps scrolling
+- stable toolbar dimensions across tabs
+- responsive toolbar that wraps into multiple rows/groups
+- no horizontal ribbon scrolling as the normal interaction
+- no drag/drop upload box inside the document page
+- file upload controls belong to the application/ribbon flow, not inside the paper
+
+Ribbon rule:
+- only the active tab's panel is visible
+- do not stack every ribbon panel vertically
+- toolbar height/scale should remain stable between tabs
+- tools should use professional icons rather than long text labels
+- hover/focus tooltip in Persian
+- show keyboard shortcut in tooltip when applicable
+
+HOME / CLIPBOARD
+----------------
+Implement real behavior for:
+- Paste
+- Cut
+- Copy
+- Format Painter
+- Paste Special
+- Keep Source Formatting
+- Merge Formatting
+- Keep Text Only
+- Set Default Paste
+
+FONT
+----
+Implement real behavior for:
+- Font family
+- Font size
+- Grow Font
+- Shrink Font
+- Change Case
+- Clear Formatting
+- Bold
+- Italic
+- Underline
+- Strikethrough
+- Subscript
+- Superscript
+- Text Effects
+- Text Highlight
+- Font Color
+
+PARAGRAPH
+---------
+Implement real behavior for:
+- Bullets
+- Numbering
+- Multilevel lists
+- Decrease Indent
+- Increase Indent
+- Sort
+- Show/Hide formatting marks
+- Align Left
+- Center
+- Align Right
+- Justify
+- Line spacing
+- Paragraph spacing
+- Shading
+- Borders
+
+STYLES
+------
+Support a real style system including:
+- style gallery
+- Normal
+- No Spacing
+- Title
+- Subtitle
+- Heading 1 through Heading 9
+- Quote
+- Intense Quote
+- List Paragraph
+- Create Style
+- Apply Style
+- Manage Style
+
+EDITING
+-------
+Support:
+- Find
+- Navigation Pane
+- Replace
+- Replace All
+- Select
+- Select All
+- Select Objects where technically applicable
+- Selection Pane where technically applicable
+
+HOME INPUT FEATURES
+--------------------
+Support:
+- voice typing
+- typing/OCR from file
+
+INSERT
+------
+Support real insertion workflows for:
+- pages
+- tables
+- illustrations
+- images
+- add-ins architecture where applicable
+- media where supported
+- links
+- comments
+- header
+- footer
+- text boxes/sections where applicable
+- symbols
+
+DRAW
+----
+Provide a real drawing/ink architecture where browser capabilities permit:
+- touch/select
+- lasso
+- eraser
+- pen
+- pencil
+- highlighter
+- adjustable color
+- adjustable thickness
+- ink conversion where technically possible
+- replay where technically possible
+
+Do not fake unavailable browser functionality. Use progressive enhancement and clearly indicate unavailable provider-dependent capabilities.
+
+DESIGN
+------
+Support:
+- themes
+- theme colors
+- theme fonts
+- paragraph spacing presets
+- effects
+- document defaults
+- watermark
+- page color
+- page borders
+
+LAYOUT
+------
+Support:
+- margins
+- orientation
+- paper size
+- columns
+- breaks
+- line numbers
+- hyphenation where technically applicable
+- paragraph indentation
+- paragraph spacing
+- object arrangement
+
+REFERENCES
+----------
+Provide architecture and real workflows for:
+- table of contents
+- footnotes
+- endnotes
+- research hooks where available
+- citations
+- bibliography
+- captions
+- index
+- table of authorities where applicable
+
+MAILINGS
+--------
+Provide a real extensible architecture for:
+- envelopes
+- labels
+- mail merge
+- recipients
+- merge fields
+- preview
+- finish/merge
+
+REVIEW
+------
+Support or architect real workflows for:
+- spelling/proofing hooks
+- read aloud hooks
+- accessibility checks
+- language
+- comments
+- tracking/track changes
+- accepting/rejecting changes
+- compare
+- combine where technically possible
+- protect document
+- ink review
+
+VIEW
+----
+Support:
+- document views
+- immersive/read mode
+- page movement
+- show/hide controls
+- zoom
+- window/pane behavior
+- macros architecture where safe and technically appropriate
+
+HELP
+----
+Provide:
+- contextual help
+- training/help links
+- feedback
+- troubleshooting
+
+RIGHT-CLICK / CONTEXT MENU
+--------------------------
+Inside the editor, prevent the browser context menu and show a FARAST custom Persian context menu.
+It should expose context-appropriate actions such as:
+- undo/redo
+- cut/copy/paste
+- paste options
+- select all
+- formatting
+- link
+- comment
+- paragraph actions
+- inspect/selection-related actions where appropriate
+
+KEYBOARD SHORTCUTS
+-------------------
+Implement reliable standard shortcuts where applicable, including:
+- Ctrl+B
+- Ctrl+I
+- Ctrl+U
+- Ctrl+Z
+- Ctrl+Y
+- Ctrl+A
+- Ctrl+F
+- Ctrl+H
+- Ctrl+K
+
+Do not hijack browser/system shortcuts unnecessarily.
+
+VOICE TYPING
+------------
+Voice typing must be a real workflow.
+- Prefer browser speech APIs when available.
+- Provide a server transcription path as fallback.
+- Handle Firefox limitations gracefully.
+- Send recorded audio using the correct multipart field.
+- Support common browser recording formats.
+- Show recording, processing, success, empty, permission-denied, and provider-error states.
+- Insert transcript into the actual editor selection/caret.
+- Do not claim Google or another provider is free/unlimited. Provider credentials and billing remain configuration concerns.
+
+IMAGE / OCR TYPING
+------------------
+The image-to-text path must actually work:
+- accept supported image/PDF/ZIP sources
+- upload to private storage
+- run preflight
+- analyze/OCR through configured services
+- return usable text or a meaningful provider/configuration error
+- insert the result into the editor
+- preserve document ownership
+- avoid exposing private uploaded files publicly
+
+EDITOR PERSISTENCE
+------------------
+Every typed document must be safely saveable as a draft.
+- Draft saving must not require payment merely to preserve work.
+- Save rich text safely.
+- Sanitize dangerous HTML/CSS/attributes.
+- Preserve legitimate tables, links, headings, lists, superscript/subscript, font information, and document formatting.
+- Use ownership checks.
+- Avoid destructive overwrites caused by stale browser tabs or delayed requests.
+- Use content hashes/versioning where useful.
+
+EXPORT / PAYMENT
+----------------
+For non-admin users, paid export must be server-authorized.
+- verify ownership
+- verify required payment/order state
+- verify the exported content corresponds to the authorized document/version where applicable
+- never trust a client-side paid flag
+- do not expose private source files
+- produce real DOCX/PDF output when the corresponding libraries/services are configured
+
+AI
+--
+Integrate AI as a real processing layer, not as a fake chat bubble.
+Support appropriate capabilities such as:
+- text cleanup
+- formatting assistance
+- uncertain-word review
+- translation
+- summarization where offered
+- document assistance
+- OCR correction
+- intelligent suggestions
+
+AI output must be clearly distinguishable from user-authored text and must not silently overwrite important content.
+
+WALLET / FINANCE
+----------------
+Build authoritative finance state:
+- wallet balance
+- transactions
+- top-up records
+- service deposits
+- refunds where supported
+- order payments
+- audit trail for administrative adjustments
+- idempotency
+- transaction locking/atomicity where required
+
+SUPPORT
+-------
+Provide real support workflows:
+- ticket creation
+- ticket status
+- user messages
+- admin replies
+- attachments where safe
+- timestamps
+- unread state
+- escalation/priority where appropriate
+
+NOTIFICATIONS / ANNOUNCEMENTS
+-----------------------------
+Announcements and notification states must be backed by real data and respect active windows, permissions, and user context.
+
+ACCESSIBILITY
+-------------
+Implement:
+- keyboard accessibility
+- focus states
+- ARIA labels where needed
+- meaningful icon labels
+- color contrast
+- reduced-motion respect
+- visible disabled/loading/error states
+- RTL-aware semantics
+
+RESPONSIVE DESIGN
+-----------------
+Desktop, tablet, and mobile are first-class targets.
+Do not solve mobile by simply shrinking desktop UI.
+Core actions must remain reachable without awkward horizontal scrolling.
+
+PERFORMANCE
+-----------
+- avoid loading huge bundles unnecessarily
+- lazy-load expensive features where appropriate
+- avoid duplicate listeners
+- debounce search and autosave appropriately
+- avoid duplicate network requests
+- cache safe static assets
+- keep the editor responsive
+
+DATA INTEGRITY
+--------------
+Use database constraints and server-side validation.
+For financial/order/library operations:
+- use transactions
+- use unique constraints where appropriate
+- make retry behavior safe
+- make payment callbacks idempotent
+- prevent duplicate entitlements
+- prevent duplicate charges
+
+PRIVATE FILE STORAGE
+-------------------
+User uploads and purchased files that are not public must live in private storage.
+Use authorization and signed/temporary delivery rather than public static URLs.
+Validate paths to prevent traversal.
+
+TESTING AND VALIDATION
+----------------------
+This is mandatory and part of implementation, not optional documentation.
+After every meaningful code change, run the relevant checks before moving to the next logical change.
+
+At minimum, validate:
+1. dependencies/composer integrity
+2. PHP syntax for all changed PHP/config/routes/database files
+3. route registration and route:list
+4. migration validity
+5. Blade compilation/view cache
+6. JavaScript syntax for all changed JS files
+7. relevant automated tests
+8. database integration tests where available
+9. build/frontend checks where configured
+
+Before declaring completion, run the complete available CI/test suite.
+
+CRITICAL RULE: DO NOT CLAIM "NO ERRORS" WITHOUT ACTUALLY RUNNING THE AVAILABLE VALIDATION.
+If CI fails, inspect the exact failure, fix it, and rerun the appropriate checks. Do not merely report the failure.
+
+BLADE SAFETY
+------------
+Blade directive nesting must be checked carefully. Prefer readable multi-line directives over dense one-line conditional markup. A single missing @endif, @endauth, @endforeach, @php/@endphp, or mismatched conditional can break the entire application.
+
+Do not use clever compressed Blade syntax if it makes validation harder.
+
+JAVASCRIPT SAFETY
+-----------------
+- keep scripts modular
+- avoid duplicate global event handlers
+- use defensive DOM checks
+- do not assume optional elements exist
+- handle failed fetches
+- handle malformed JSON
+- handle aborted requests
+- avoid syntax errors in compatibility files
+
+NO FAKE COMPLETION
+------------------
+The following are explicitly forbidden:
+- "Coming soon" placeholders for a feature that the specification requires to be implemented now, unless the feature genuinely depends on an unavailable external provider and the application provides a real provider/configuration state.
+- buttons that do nothing
+- menus that only open decorative panels
+- fake payment success
+- fake downloads
+- fake product parameters
+- fake OCR
+- fake voice transcription
+- fake AI processing
+- fake admin controls
+- hard-coded business totals presented as live calculations
+
+When a feature cannot be implemented because a third-party credential/provider is absent, implement the complete application-side contract, validation, storage, error handling, and configuration path so the feature becomes functional as soon as the provider is configured.
+
+EXISTING IMPLEMENTATION COMPATIBILITY
+-------------------------------------
+Before changing architecture, inspect what is already present in the repository.
+Existing FARAST functionality should be preserved and upgraded.
+Existing partial modules include, where present:
+- authentication
+- store engine
+- cart
+- library/downloads
+- preflight/pricing
+- editor
+- voice transcription
+- wallet/finance
+- support
+- admin
+- offline shell
+- single-tab lock
+- FARAST visual system
+
+Do not accidentally remove routes, migrations, controllers, services, or UI behavior that the application already relies on.
+
+COMMIT / CHANGE DISCIPLINE
+--------------------------
+Make focused commits or coherent changes.
+Each commit should describe what was actually implemented.
+Never commit secrets.
+Never overwrite unrelated user work simply because it is inconvenient.
+
+FINAL ACCEPTANCE CRITERIA
+-------------------------
+The task is complete only when:
+- the application boots successfully
+- Blade views compile
+- PHP syntax is clean
+- routes load
+- migrations are valid
+- frontend JavaScript parses
+- existing tests pass or known failures are fixed
+- the major specified workflows are connected end-to-end
+- the editor is usable rather than decorative
+- upload/OCR/voice flows have real request/response paths
+- store/cart/order/payment/library have real backend state
+- profile/admin/product management are professional and functional
+- offline behavior is graceful
+- single-tab behavior works
+- security/ownership checks are present
+- the UI is responsive and visually coherent
+- no new fake functionality has been introduced
+
+FINAL RESPONSE RULE
+-------------------
+Only after the implementation work and validation have been performed, give a concise completion report containing:
+- what was actually changed
+- important files/modules changed
+- validation commands/checks run
+- current test/CI result
+- any genuinely external configuration still required
+
+Do NOT answer with a plan for work that you did not perform.
+Do NOT stop at analysis.
+Do NOT ask the user to tell you to continue when the requested work is already specified here.
+
+START NOW.
+Inspect the repository, compare the current implementation with this specification, use the reference repository and its history for ideas where useful, then implement the required work continuously until the application is genuinely complete and validated.

@@ -1,0 +1,42 @@
+import crypto from 'node:crypto';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {WebSocketServer} from 'ws';
+import dotenv from 'dotenv';
+import speech from '@google-cloud/speech';
+import {createAzureStream} from './providers/azure.mjs';
+
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+dotenv.config({path:path.join(root,'.env')});
+const PORT=Number(process.env.VOICE_STREAM_PORT||6002);
+const HOST=process.env.VOICE_STREAM_HOST||'127.0.0.1';
+const APP_KEY=String(process.env.APP_KEY||'');
+const APP_URL=String(process.env.VOICE_STREAM_APP_URL||'http://127.0.0.1:8001').replace(/\/$/,'');
+const REGION=String(process.env.GOOGLE_SPEECH_REGION||'us');
+const MAX_FRAME=24000;
+const RESTART_MS=Number(process.env.VOICE_STREAM_RESTART_MS||240000);
+const STOP_GRACE_MS=Number(process.env.VOICE_STREAM_STOP_GRACE_MS||1200);
+const ORIGINS=String(process.env.VOICE_STREAM_ORIGINS||'http://127.0.0.1:8001,http://localhost:8001').split(',').map(x=>x.trim()).filter(Boolean);
+if(!APP_KEY)throw new Error('APP_KEY is required.');
+const b64=v=>Buffer.from(v.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-v.length%4)%4),'base64').toString('utf8');
+function verify(token){const [p,s]=String(token||'').split('.',2);if(!p||!s)throw new Error('invalid_token');const e=crypto.createHmac('sha256',APP_KEY).update(p).digest('hex');if(s.length!==e.length||!crypto.timingSafeEqual(Buffer.from(s),Buffer.from(e)))throw new Error('invalid_signature');const d=JSON.parse(b64(p));if(!d.uid||!d.locale||Number(d.exp)<Math.floor(Date.now()/1000))throw new Error('expired_token');return d;}
+function gatewaySig(token){return crypto.createHmac('sha256',APP_KEY).update(String(token)).digest('hex');}
+async function config(token,exclude=[]){const r=await fetch(`${APP_URL}/editor/voice/stream-config`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-Farast-Voice-Gateway':gatewaySig(token)},body:JSON.stringify({token,exclude_account_ids:exclude})});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.message||`provider_config_${r.status}`);return d;}
+async function usage(token,data){try{await fetch(`${APP_URL}/editor/voice/stream-usage`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-Farast-Voice-Gateway':gatewaySig(token)},body:JSON.stringify(data)})}catch{}}
+const send=(ws,x)=>{if(ws.readyState===1)ws.send(JSON.stringify(x))};
+function googleRequest(project,region,locale){return {recognizer:`projects/${project}/locations/${region}/recognizers/_`,streamingConfig:{config:{explicitDecodingConfig:{encoding:'LINEAR16',sampleRateHertz:16000,audioChannelCount:1},languageCodes:[locale],model:'chirp_3',features:{enableAutomaticPunctuation:true}},streamingFeatures:{interimResults:true,enableVoiceActivityEvents:true}}}
+class Session{
+ constructor(ws,auth,token){Object.assign(this,{ws,auth,token,stream:null,azure:null,closed:false,timer:null,audioSeconds:0,inputBytes:0,accountId:null,provider:null,model:null,providerData:null,excluded:[]});this.startedAt=Date.now();}
+ async start(){if(this.closed)return;const d=this.providerData||await config(this.token,this.excluded);this.providerData=d;this.provider=String(d.provider||'').toLowerCase();this.accountId=Number(d.account_id||0)||null;this.model=d.model||this.provider;this.closeProvider();if(this.provider==='google')this.startGoogle(d);else if(this.provider==='azure')this.startAzure(d);else throw new Error(`unsupported_provider_${this.provider}`);clearTimeout(this.timer);this.timer=setTimeout(()=>this.restart(),RESTART_MS);send(this.ws,{type:'ready',provider:this.provider,model:this.model,account_id:this.accountId});}
+ startGoogle(d){const c=d.credentials||{};const project=String(c.project_id||c.projectId||'');if(!project)throw new Error('google_project_id_missing');const opts={apiEndpoint:`${d.region||REGION}-speech.googleapis.com`,projectId:project};if(c.client_email&&c.private_key)opts.credentials={client_email:c.client_email,private_key:c.private_key};else if(process.env.GOOGLE_APPLICATION_CREDENTIALS)opts.keyFilename=process.env.GOOGLE_APPLICATION_CREDENTIALS;const Client=speech.v2?.SpeechClient;if(!Client)throw new Error('google_speech_v2_unavailable');const client=new Client(opts);const factory=typeof client._streamingRecognize==='function'?client._streamingRecognize.bind(client):client.streamingRecognize.bind(client);this.stream=factory().on('error',e=>this.providerError(e)).on('data',r=>{for(const x of r?.results||[]){const a=x?.alternatives?.[0];const t=String(a?.transcript||'').trim();if(!t)continue;send(this.ws,{type:x.isFinal?'final':'interim',text:t,confidence:Number(a?.confidence||0),stability:Number(x.stability||0),provider:'google',model:'chirp_3',account_id:this.accountId})}});this.stream.write(googleRequest(project,String(d.region||REGION),this.auth.locale));}
+ startAzure(d){this.azure=createAzureStream(d,this.auth.locale,{ready:()=>{},interim:t=>{if(t.trim())send(this.ws,{type:'interim',text:t.trim(),provider:'azure',model:'speech',account_id:this.accountId})},final:t=>{if(t.trim())send(this.ws,{type:'final',text:t.trim(),confidence:0,provider:'azure',model:'speech',account_id:this.accountId})},error:e=>this.providerError(e)});}
+ providerError(e){if(this.closed)return;send(this.ws,{type:'provider_error',provider:this.provider,account_id:this.accountId,code:String(e?.code||e?.errorCode||e?.message||'provider_error').replace(/\s+/g,'_').slice(0,100)});this.failover();}
+ async failover(){if(this.closed)return;if(this.accountId&&!this.excluded.includes(this.accountId))this.excluded.push(this.accountId);this.closeProvider();this.providerData=null;try{await this.start()}catch{}}
+ async restart(){if(this.closed)return;send(this.ws,{type:'restarting',provider:this.provider});this.closeProvider();await this.start();}
+ closeProvider(){clearTimeout(this.timer);if(this.stream)try{this.stream.end()}catch{}this.stream=null;if(this.azure)try{this.azure.close()}catch{}this.azure=null;}
+ audio(buf){if(this.closed||!buf?.length)return;this.audioSeconds+=buf.length/32000;this.inputBytes+=buf.length;if(this.provider==='google'&&this.stream)for(let i=0;i<buf.length;i+=MAX_FRAME)this.stream.write({audio:buf.subarray(i,Math.min(i+MAX_FRAME,buf.length))});else if(this.provider==='azure'&&this.azure)this.azure.write(buf);}
+ async stop(){if(this.closed)return;this.closed=true;this.closeProvider();await usage(this.token,{account_id:this.accountId,audio_seconds:this.audioSeconds,input_bytes:this.inputBytes,success:true,latency_ms:Date.now()-this.startedAt});}
+}
+const wss=new WebSocketServer({host:HOST,port:PORT,maxPayload:MAX_FRAME+2048});
+wss.on('connection',(ws,req)=>{const origin=String(req.headers.origin||'');if(origin&&ORIGINS.length&&!ORIGINS.includes(origin)){ws.close(1008,'origin_not_allowed');return}let s=null;let stopTimer=null;ws.on('message',async(data,binary)=>{try{if(!s){if(binary)throw new Error('start_required');const m=JSON.parse(data.toString());if(m.type!=='start')throw new Error('start_required');const token=String(m.token||'');const a=verify(token);if(m.locale!==a.locale)throw new Error('locale_mismatch');s=new Session(ws,a,token);await s.start();return}if(binary)s.audio(Buffer.from(data));else{const m=JSON.parse(data.toString());if(m.type==='stop'){await s.stop();clearTimeout(stopTimer);stopTimer=setTimeout(()=>{try{ws.close(1000,'normal')}catch{}},STOP_GRACE_MS)}}}catch(e){send(ws,{type:'error',code:e?.message||'stream_error'});try{ws.close(1008,'voice_stream_error')}catch{}}});ws.on('close',()=>{clearTimeout(stopTimer);if(s&&!s.closed)s.stop()});ws.on('error',()=>{clearTimeout(stopTimer);if(s&&!s.closed)s.stop()})});
+console.log(`Farast voice stream: ws://${HOST}:${PORT} | provider router`);
