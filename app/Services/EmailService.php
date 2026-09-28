@@ -168,6 +168,15 @@ class EmailService
 
     public function sendTest(string $email): void
     {
+        $this->mailConfig->apply();
+        $provider = $this->mailConfig->currentProvider();
+
+        if ($provider === 'sendmail' && ! $this->mailConfig->sendmailBinaryAvailable()) {
+            throw new \RuntimeException(
+                'Sendmail روی این سیستم نصب نیست (روی ویندوز معمول است). در پنل ایمیل، سرویس‌دهنده را روی «لاگ داخلی سایت» بگذارید و دوباره تست کنید. متن ایمیل در storage/logs ذخیره می‌شود.'
+            );
+        }
+
         $this->dispatch(
             type: 'test',
             to: $email,
@@ -203,13 +212,19 @@ class EmailService
         try {
             $provider = $this->mailConfig->currentProvider();
 
-            // Resend از API مستقیم (بدون وابستگی اجباری به SDK)
             if ($provider === 'resend') {
                 $this->sendViaResendApi($to, $subject, $htmlView, $viewData);
-            } elseif (config('queue.default') === 'sync' || filter_var(SiteSetting::read('email_sync', false), FILTER_VALIDATE_BOOLEAN)) {
-                Mail::to($to)->send($mailable);
             } else {
-                Mail::to($to)->queue($mailable);
+                $selfHosted = in_array($provider, ['sendmail', 'local', 'smtp', 'log'], true);
+                $forceSync = $selfHosted
+                    || config('queue.default') === 'sync'
+                    || filter_var(SiteSetting::read('email_sync', true), FILTER_VALIDATE_BOOLEAN);
+
+                if ($forceSync) {
+                    Mail::to($to)->send($mailable);
+                } else {
+                    Mail::to($to)->queue($mailable);
+                }
             }
 
             $log->update(['status' => 'sent', 'sent_at' => now()]);
@@ -220,24 +235,28 @@ class EmailService
                 'log_id' => $log->id,
             ]);
         } catch (Throwable $e) {
+            $msg = $e->getMessage();
+            if (str_contains(strtolower($msg), 'mailpit')) {
+                $msg = 'اتصال به mailpit ممکن نیست. این host فقط داخل Docker کار می‌کند. در پنل ایمیل سرویس‌دهنده را «لاگ داخلی» بگذارید یا SMTP را روی 127.0.0.1 تنظیم کنید.';
+            } elseif (str_contains(strtolower($msg), 'sendmail')) {
+                $msg = 'Sendmail در دسترس نیست. روی ویندوز از «لاگ داخلی» استفاده کنید؛ روی سرور لینوکس Postfix/Sendmail نصب کنید.';
+            }
+
             $log->update([
                 'status' => 'failed',
-                'error' => mb_substr($e->getMessage(), 0, 1000),
+                'error' => mb_substr($msg, 0, 1000),
             ]);
 
             Log::error('farast.email.failed', [
                 'type' => $type,
                 'email_hash' => $this->hash($to),
-                'error' => $e->getMessage(),
+                'error' => $msg,
             ]);
 
-            throw $e;
+            throw new \RuntimeException($msg, 0, $e);
         }
     }
 
-    /**
-     * ارسال مستقیم با Resend API (رایگان و پایدار)
-     */
     protected function sendViaResendApi(string $to, string $subject, string $htmlView, array $viewData): void
     {
         $apiKey = SiteSetting::read('resend_api_key', env('RESEND_API_KEY'));
@@ -245,13 +264,6 @@ class EmailService
             throw new \RuntimeException('کلید Resend تنظیم نشده است.');
         }
 
-        $html = View::make($htmlView, $viewData)->render();
-        // layout را هم رندر کنیم اگر view فقط section دارد — برای otp و بقیه از extends استفاده می‌کنند
-        if (! str_contains($html, '<html')) {
-            $html = View::make('emails.layout', array_merge($viewData, ['subject' => $subject, 'slot' => $html]))->render();
-        }
-
-        // Blade extends خروجی کامل HTML می‌دهد؛ مستقیم استفاده می‌کنیم
         $html = View::make($htmlView, array_merge($viewData, ['subject' => $subject]))->render();
 
         $from = config('mail.from.address');
