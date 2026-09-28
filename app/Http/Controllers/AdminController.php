@@ -234,6 +234,11 @@ class AdminController extends Controller
 
         $provider = $mailConfig->currentProvider();
 
+        $mailHost = SiteSetting::read('mail_host', env('MAIL_HOST'));
+        if (is_string($mailHost) && str_contains(strtolower($mailHost), 'mailpit')) {
+            $mailHost = '127.0.0.1';
+        }
+
         return view('admin.emails', [
             'flags' => $flags,
             'types' => EmailService::TYPES,
@@ -244,10 +249,10 @@ class AdminController extends Controller
             'mailer' => $provider,
             'providers' => MailConfigService::PROVIDERS,
             'providerConfigured' => $mailConfig->providerConfigured($provider),
-            'mailHost' => SiteSetting::read('mail_host', env('MAIL_HOST')),
-            'mailPort' => SiteSetting::read('mail_port', env('MAIL_PORT', 587)),
+            'mailHost' => $mailHost,
+            'mailPort' => SiteSetting::read('mail_port', env('MAIL_PORT', 25)),
             'mailUsername' => SiteSetting::read('mail_username', env('MAIL_USERNAME')),
-            'mailEncryption' => SiteSetting::read('mail_encryption', env('MAIL_ENCRYPTION', 'tls')),
+            'mailEncryption' => SiteSetting::read('mail_encryption', env('MAIL_ENCRYPTION')),
             'hasResendKey' => filled(SiteSetting::read('resend_api_key', env('RESEND_API_KEY'))),
             'hasBrevoKey' => filled(SiteSetting::read('brevo_api_key', env('BREVO_API_KEY'))),
             'hasSmtpPassword' => filled(SiteSetting::read('mail_password', env('MAIL_PASSWORD'))),
@@ -266,7 +271,7 @@ class AdminController extends Controller
         SiteSetting::write('email_sync', $request->boolean('email_sync') ? '1' : '0');
 
         $data = $request->validate([
-            'mail_provider' => ['required', 'in:log,smtp,mailtrap,brevo,resend'],
+            'mail_provider' => ['required', 'in:log,sendmail,local,smtp,mailtrap,brevo,resend'],
             'mail_from_address' => ['nullable', 'email', 'max:255'],
             'mail_from_name' => ['nullable', 'string', 'max:120'],
             'mail_host' => ['nullable', 'string', 'max:200'],
@@ -279,6 +284,10 @@ class AdminController extends Controller
         ]);
 
         SiteSetting::write('mail_provider', $data['mail_provider']);
+
+        if (isset($data['mail_host']) && is_string($data['mail_host']) && str_contains(strtolower($data['mail_host']), 'mailpit')) {
+            $data['mail_host'] = '127.0.0.1';
+        }
 
         if (filled($data['mail_from_address'] ?? null)) {
             SiteSetting::write('mail_from_address', trim($data['mail_from_address']));
@@ -309,7 +318,6 @@ class AdminController extends Controller
             SiteSetting::write('brevo_api_key', trim($data['brevo_api_key']), true);
         }
 
-        // presetهای پیش‌فرض برای راحتی
         if ($data['mail_provider'] === 'mailtrap' && empty($data['mail_host'])) {
             SiteSetting::write('mail_host', 'sandbox.smtp.mailtrap.io');
             SiteSetting::write('mail_port', '2525');
@@ -318,6 +326,13 @@ class AdminController extends Controller
             SiteSetting::write('mail_host', 'smtp-relay.brevo.com');
             SiteSetting::write('mail_port', '587');
             SiteSetting::write('mail_encryption', 'tls');
+        }
+        if ($data['mail_provider'] === 'local') {
+            SiteSetting::write('mail_host', '127.0.0.1');
+            if (empty($data['mail_port'])) {
+                SiteSetting::write('mail_port', '25');
+            }
+            SiteSetting::write('mail_encryption', '');
         }
 
         return back()->with('status', 'تنظیمات ایمیل و سرویس‌دهنده ذخیره شد.');
@@ -331,8 +346,12 @@ class AdminController extends Controller
 
         try {
             $emailService->sendTest($data['test_email']);
+            $provider = app(\App\Services\MailConfigService::class)->currentProvider();
+            $extra = $provider === 'log'
+                ? ' (حالت لاگ: متن ایمیل در storage/logs نوشته شد — ارسال اینترنتی نیست)'
+                : '';
 
-            return back()->with('status', 'ایمیل آزمایشی به '.$data['test_email'].' ارسال شد.');
+            return back()->with('status', 'ایمیل آزمایشی به '.$data['test_email'].' ارسال شد.'.$extra);
         } catch (\Throwable $e) {
             return back()->withErrors(['test_email' => 'ارسال ناموفق: '.$e->getMessage()]);
         }
