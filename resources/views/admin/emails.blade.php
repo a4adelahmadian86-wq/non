@@ -21,7 +21,7 @@
       <div>
         <span class="admin-kicker">EMAIL SYSTEM</span>
         <h1>سیستم ایمیل حرفه‌ای</h1>
-        <p>سرویس‌های رایگان رایج، کنترل انواع ایمیل، تست ارسال و لاگ از یک پنل.</p>
+        <p>اولویت: لاگ داخلی یا خود سرور (رایگان). کنترل انواع ایمیل، تست و لاگ از یک پنل.</p>
       </div>
       <div class="admin-profile">
         <div class="profile-avatar">م</div>
@@ -42,14 +42,13 @@
       </div>
     @endif
 
-    {{-- سرویس‌دهنده --}}
     <section class="admin-section">
       <div class="section-heading">
         <div>
-          <span class="section-icon"><i class="fa-solid fa-cloud"></i></span>
+          <span class="section-icon"><i class="fa-solid fa-server"></i></span>
           <div>
-            <h2>سرویس‌دهنده ایمیل (رایگان)</h2>
-            <p>Resend، Brevo و Mailtrap برای شروع رایگان و پایدار پیشنهاد می‌شوند.</p>
+            <h2>سرویس‌دهنده ایمیل</h2>
+            <p>اولویت: «لاگ داخلی» برای تست رایگان بدون خطا. Sendmail فقط روی لینوکس. سرویس‌های بیرونی اختیاری‌اند.</p>
           </div>
         </div>
         <span class="configured-pill {{ $providerConfigured ? '' : 'offline' }}">
@@ -68,16 +67,16 @@
             @endforeach
           </select>
           <small>
-            <b>Resend</b>: بهترین برای پروداکشن رایگان ·
-            <b>Brevo</b>: SMTP رایگان روزانه ·
-            <b>Mailtrap</b>: فقط تست ·
-            <b>Log</b>: فقط در لاگ سرور
+            <b>لاگ داخلی</b>: همیشه کار می‌کند (بدون mailpit/sendmail) ·
+            <b>Sendmail</b>: فقط لینوکس با Postfix ·
+            <b>SMTP محلی</b>: 127.0.0.1 ·
+            بیرونی‌ها اختیاری
           </small>
         </div>
 
         <div class="field">
           <label>آدرس فرستنده (From)</label>
-          <input type="email" name="mail_from_address" value="{{ $mailFrom }}" placeholder="noreply@yourdomain.com">
+          <input type="email" name="mail_from_address" value="{{ $mailFrom }}" placeholder="noreply@localhost">
         </div>
 
         <div class="field">
@@ -86,25 +85,24 @@
         </div>
 
         <div class="field secret-field">
-          <label>کلید Resend API</label>
-          <input type="password" name="resend_api_key" placeholder="{{ $hasResendKey ? 'تنظیم شده — برای تغییر وارد کنید' : 're_...' }}" autocomplete="new-password">
-          <small>از <a href="https://resend.com" target="_blank" rel="noopener">resend.com</a> رایگان بگیرید.</small>
+          <label>کلید Resend API (اختیاری)</label>
+          <input type="password" name="resend_api_key" placeholder="{{ ($hasResendKey ?? false) ? 'تنظیم شده — برای تغییر وارد کنید' : 're_...' }}" autocomplete="new-password">
+          <small>فقط اگر سرویس بیرونی می‌خواهید.</small>
         </div>
 
         <div class="field secret-field">
-          <label>کلید / رمز Brevo</label>
-          <input type="password" name="brevo_api_key" placeholder="{{ $hasBrevoKey ? 'تنظیم شده — برای تغییر وارد کنید' : 'کلید SMTP Brevo' }}" autocomplete="new-password">
-          <small>از پنل Brevo بخش SMTP & API</small>
+          <label>کلید / رمز Brevo (اختیاری)</label>
+          <input type="password" name="brevo_api_key" placeholder="{{ ($hasBrevoKey ?? false) ? 'تنظیم شده — برای تغییر وارد کنید' : 'کلید SMTP Brevo' }}" autocomplete="new-password">
         </div>
 
         <div class="field">
           <label>SMTP Host</label>
-          <input name="mail_host" value="{{ $mailHost }}" placeholder="smtp-relay.brevo.com">
+          <input name="mail_host" value="{{ $mailHost }}" placeholder="127.0.0.1">
         </div>
 
         <div class="field">
           <label>SMTP Port</label>
-          <input type="number" name="mail_port" value="{{ $mailPort }}" min="1">
+          <input type="number" name="mail_port" value="{{ $mailPort }}" min="1" placeholder="25">
         </div>
 
         <div class="field">
@@ -114,13 +112,13 @@
 
         <div class="field secret-field">
           <label>SMTP Password</label>
-          <input type="password" name="mail_password" placeholder="{{ $hasSmtpPassword ? 'تنظیم شده — برای تغییر وارد کنید' : 'رمز SMTP' }}" autocomplete="new-password">
+          <input type="password" name="mail_password" placeholder="{{ ($hasSmtpPassword ?? false) ? 'تنظیم شده — برای تغییر وارد کنید' : 'رمز SMTP' }}" autocomplete="new-password">
         </div>
 
         <div class="field">
           <label>Encryption</label>
           <select name="mail_encryption">
-            <option value="tls" @selected(($mailEncryption ?: 'tls') === 'tls')>TLS</option>
+            <option value="tls" @selected(($mailEncryption ?: '') === 'tls')>TLS</option>
             <option value="ssl" @selected($mailEncryption === 'ssl')>SSL</option>
             <option value="null" @selected($mailEncryption === '' || $mailEncryption === null)>بدون</option>
           </select>
@@ -137,7 +135,7 @@
           <label class="toggle-card">
             <span><i class="fa-solid fa-envelope"></i> {{ $label }}</span>
             <input type="hidden" name="email_{{ $key }}_enabled" value="0">
-            <input type="checkbox" name="email_{{ $key }}_enabled" value="1" {{ ($flags['email_'.$key.'_enabled'] ?? true) ? 'checked' : '' }}>
+            <input type="checkbox" name="email_{{ $key }}_enabled" value="1" {{ ($flags[$key] ?? true) ? 'checked' : '' }}>
             <b></b>
           </label>
         @endforeach
@@ -145,12 +143,12 @@
         <label class="toggle-card">
           <span><i class="fa-solid fa-bolt"></i> ارسال همزمان (بدون Queue)</span>
           <input type="hidden" name="email_sync" value="0">
-          <input type="checkbox" name="email_sync" value="1" {{ filter_var(\App\Models\SiteSetting::read('email_sync', false), FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+          <input type="checkbox" name="email_sync" value="1" {{ filter_var(\App\Models\SiteSetting::read('email_sync', true), FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
           <b></b>
         </label>
 
         <div class="settings-actions">
-          <button class="admin-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره تنظیمات ایمیل</button>
+          <button class="admin-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> ذخیره تنظیمات ایمیل</button>
         </div>
       </form>
     </section>
@@ -161,7 +159,7 @@
           <span class="section-icon green-bg"><i class="fa-solid fa-paper-plane"></i></span>
           <div>
             <h2>ارسال ایمیل آزمایشی</h2>
-            <p>بعد از ذخیره سرویس‌دهنده، اینجا تست کنید.</p>
+            <p>بعد از ذخیره سرویس‌دهنده، اینجا تست کنید. برای تست بدون خطا از «لاگ داخلی» استفاده کنید.</p>
           </div>
         </div>
       </div>
@@ -173,7 +171,7 @@
           <input type="email" name="test_email" required placeholder="you@example.com" value="{{ old('test_email') }}">
         </div>
         <div class="settings-actions" style="align-self:end">
-          <button class="admin-secondary"><i class="fa-solid fa-flask"></i> ارسال تست</button>
+          <button class="admin-secondary" type="submit"><i class="fa-solid fa-flask"></i> ارسال تست</button>
         </div>
       </form>
     </section>
