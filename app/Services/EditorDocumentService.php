@@ -19,8 +19,9 @@ class EditorDocumentService
         ?int $expectedRevision = null,
         string $source = 'editor',
         ?array $pageSettings = null,
+        ?array $documentModel = null,
     ): array {
-        $model = $this->normalizeHtml($html);
+        $model = $documentModel ?: $this->normalizeHtml($html);
         $now = now();
 
         return $this->db->transaction(function () use ($legacy, $html, $model, $title, $expectedRevision, $source, $pageSettings, $now) {
@@ -58,7 +59,7 @@ class EditorDocumentService
                 'title' => $title ?: $document->title,
                 'content' => $html,
                 'content_json' => $model,
-                'page_settings' => $pageSettings ?: ($document->page_settings ?: $this->defaultPageSettings()),
+                'page_settings' => $pageSettings ?: ($document->page_settings ?: ($model['settings'] ?? $this->defaultPageSettings())),
                 'revision' => $nextRevision,
                 'last_saved_at' => $now,
             ])->save();
@@ -84,6 +85,7 @@ class EditorDocumentService
                 'document_id' => $document->id,
                 'revision' => $nextRevision,
                 'saved_at' => $now->toIso8601String(),
+                'page_settings' => $document->page_settings,
                 'word_count' => $this->wordCount($plain),
             ];
         }, 3);
