@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\TypingDocument;
 use App\Models\FarastDocument;
 use App\Services\CapabilityService;
+use App\Services\EditorDocumentService;
 use Illuminate\Http\Request;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\IOFactory;
@@ -14,7 +15,7 @@ use Dompdf\Dompdf;
 
 class ExportController extends Controller
 {
-    public function export(Request $r, string $format, CapabilityService $capabilities)
+    public function export(Request $r, string $format, CapabilityService $capabilities, EditorDocumentService $documents)
     {
         $key=$format==='docx'?'can_export_docx':($format==='pdf'?'can_export_pdf':null);
         abort_unless($key&&$capabilities->allowed(auth()->user(),$key),403,'این نوع خروجی برای حساب شما فعال نیست.');
@@ -27,7 +28,7 @@ class ExportController extends Controller
             abort_unless($paid && hash_equals((string)$paid->content_hash,$hash),402,'ابتدا متن نهایی را بازبینی کنید و هزینه خروجی را در صفحه پرداخت تسویه کنید.');
         }
         $canonical=$doc->farast_document_id ? FarastDocument::whereKey($doc->farast_document_id)->where('user_id',auth()->id())->first() : null;
-        $content=$this->cleanExportHtml((string)($canonical?->content ?? $doc->content));
+        $content=$documents->sanitizeHtml($this->cleanExportHtml((string)($canonical?->content ?? $doc->content)));
         $settings=$canonical?->page_settings ?: ['paper'=>'A4','orientation'=>'portrait','margin_top'=>25,'margin_right'=>25,'margin_bottom'=>25,'margin_left'=>25,'direction'=>'rtl','font_family'=>'B Nazanin','font_size'=>16];
         if($format==='docx')return $this->docx($doc,$content,$settings);
         $paper=strtoupper((string)($settings['paper']??'A4')); $orientation=($settings['orientation']??'portrait')==='landscape'?'landscape':'portrait'; $mt=(float)($settings['margin_top']??25.4); $mr=(float)($settings['margin_right']??25.4); $mb=(float)($settings['margin_bottom']??25.4); $ml=(float)($settings['margin_left']??25.4); $dir=($settings['direction']??'rtl')==='ltr'?'ltr':'rtl'; $font=e((string)($settings['font_family']??'B Nazanin')); $fontSize=(int)($settings['font_size']??16); $html='<html dir="'.$dir.'"><head><meta charset="utf-8"><style>@page{size:'.$paper.' '.$orientation.';margin:'.$mt.'mm '.$mr.'mm '.$mb.'mm '.$ml.'mm}body{font-family:"'.$font.'",Tahoma,Arial,sans-serif;font-size:'.$fontSize.'px;direction:'.$dir.';text-align:'.($dir==='rtl'?'right':'left').';line-height:1.8;color:#111}p{margin:0 0 8pt}h1{font-size:25px;margin:0 0 12pt}h2{font-size:21px;margin:0 0 10pt}h3{font-size:18px;margin:0 0 8pt}blockquote{border-right:3px solid #999;margin:10px 0;padding:6px 12px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:5px}a{color:#111;text-decoration:underline}</style></head><body>'.$content.'</body></html>';
