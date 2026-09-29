@@ -25,7 +25,7 @@ class EditorDocumentService
         $model = $documentModel ? $this->sanitizeDocumentModel($documentModel) : $this->normalizeHtml($safeHtml);
         $now = now();
 
-        return $this->db->transaction(function () use ($legacy, $html, $model, $title, $expectedRevision, $source, $pageSettings, $now) {
+        return $this->db->transaction(function () use ($legacy, $safeHtml, $model, $title, $expectedRevision, $source, $pageSettings, $now) {
             $document = $legacy->farast_document_id
                 ? FarastDocument::whereKey($legacy->farast_document_id)->where('user_id', $legacy->user_id)->lockForUpdate()->first()
                 : null;
