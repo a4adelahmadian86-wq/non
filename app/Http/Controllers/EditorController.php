@@ -131,6 +131,8 @@ class EditorController extends Controller
 
         abort_unless(Str::startsWith($data['path'], 'typing/'.auth()->id().'/'), 403);
         abort_unless(Storage::disk('private')->exists($data['path']), 404);
+        $data['mime'] = Storage::disk('private')->mimeType($data['path']) ?: $data['mime'];
+        abort_unless(in_array($data['mime'], ['image/jpeg','image/png','image/webp','application/pdf','application/zip'], true), 415, 'نوع فایل برای پردازش پشتیبانی نمی‌شود.');
         $bytes = Storage::disk('private')->get($data['path']);
         $maxBytes = (int) $caps['max_file_mb'] * 1024 * 1024;
         abort_unless($caps['unlimited'] || strlen($bytes) <= $maxBytes, 413, 'حجم فایل برای حساب شما بیشتر از سقف مجاز است.');
