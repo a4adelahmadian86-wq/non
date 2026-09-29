@@ -6,7 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 class PlatformCompletionTest extends TestCase {
  use RefreshDatabase;
  public function test_authenticated_user_can_open_document_workspace(): void {
-  $u=new User; $u->name='QA'; $u->email='qa-'.uniqid().'@example.test'; $u->password=bcrypt('secret'); $u->save();
+  $u=new User; $u->name='QA'; $u->email='qa-'.uniqid().'@example.test'; $u->password=bcrypt('secret'); $u->mobile='09'.str_pad((string)random_int(100000000,999999999),9,'0'); $u->save();
   $this->actingAs($u)->get('/workspace/documents')->assertOk();
  }
  public function test_authenticated_user_can_create_document(): void {
