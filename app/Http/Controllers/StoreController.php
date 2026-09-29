@@ -30,18 +30,34 @@ class StoreController extends Controller
             ->withQueryString();
 
         $categories = StoreCategory::query()->where('is_active', true)->orderBy('sort_order')->get();
-        return view('store.index', compact('products', 'categories', 'q', 'category'));
+        $featured = StoreProduct::query()->with('category')->published()->where('featured', true)->orderBy('sort_order')->limit(8)->get();
+
+        return view('store.index', compact('products', 'categories', 'q', 'category', 'featured'));
     }
 
-    public function product(string $slug)
+    public function product(Request $request, string $slug)
     {
-        $product = StoreProduct::with(['category','images','previews','tags','related'])->published()->where('slug', $slug)->firstOrFail();
+        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related'])
+            ->published()
+            ->where('slug', $slug)
+            ->firstOrFail();
+
+        $ids = collect($request->session()->get('store_recent_ids', []))
+            ->reject(fn ($id) => (int) $id === (int) $product->id)
+            ->prepend($product->id)
+            ->unique()
+            ->take(12)
+            ->values()
+            ->all();
+        $request->session()->put('store_recent_ids', $ids);
+
         return view('store.product', compact('product'));
     }
 
     public function category(string $slug)
     {
         $cat = StoreCategory::where('slug', $slug)->where('is_active', true)->firstOrFail();
+
         return redirect()->route('store', ['category' => $cat->slug]);
     }
 
@@ -51,6 +67,7 @@ class StoreController extends Controller
         abort_unless($preview->is_active && $preview->product && $preview->product->status === 'published', 404);
         $disk = Storage::disk($preview->disk ?: 'private');
         abort_unless($disk->exists($preview->path), 404);
+
         return $disk->response($preview->path, null, [
             'Cache-Control' => 'private, max-age=300',
             'X-Content-Type-Options' => 'nosniff',
