@@ -13,7 +13,7 @@
 <label>Scopes<input name="canva_scopes" value="design:meta:read design:content:read design:content:write asset:read asset:write"></label>
 <button type="submit">ذخیره تنظیمات Canva</button></form>
 <div class="control-status">{{ $canvaConnected?'اتصال کاربر فعلی برقرار است.':'اتصال کاربر فعلی برقرار نیست.' }}</div>
-@if($canvaConfigured)<a class="control-link" href="{{ route('admin.integrations.canva.connect') }}">اتصال / ورود به Canva</a>@endif
+@if($canvaConfigured)<a class="control-link" href="{{ route('canva.connect') }}">اتصال / ورود به Canva</a>@endif
 </article>
 <article class="control-card"><div class="provider-head"><strong>Gemini</strong><span class="ok">Server-side</span></div><p>مدل، کلید رمزنگاری‌شده، مسیر AI و quota از backend کنترل می‌شود.</p><form method="post" action="{{ route('admin.providers.ai.update') }}">@csrf<label>API Key<input type="password" name="gemini_api_key" placeholder="برای جایگزینی کلید وارد کنید" autocomplete="new-password"></label><label>Model<input name="gemini_model" value="{{ AppModelsSiteSetting::read('gemini_model','gemini-3.8-flash') }}"></label><button type="submit">ذخیره Gemini</button></form></article>
 <article class="control-card"><div class="provider-head"><strong>Voice Router</strong><span class="ok">Gladia → Azure → Google</span></div><p>حساب‌های صوتی موجود در جدول provider orchestration مدیریت می‌شوند؛ quota و سلامت در همان معماری ثبت می‌شوند.</p><a class="control-link" href="{{ route('admin.index') }}#voice-settings">مدیریت حساب‌های صوتی</a></article>
