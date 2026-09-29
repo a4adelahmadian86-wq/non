@@ -15,21 +15,30 @@ class StoreController extends Controller
     {
         $q = trim((string) $request->query('q', ''));
         $category = $request->query('category');
+        $sort = (string) $request->query('sort', 'newest');
+        $price = (string) $request->query('price', 'all');
 
         $base = StoreProduct::query()->with(['category', 'images'])->published();
 
-        $products = (clone $base)
+        $productsQuery = (clone $base)
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')
                     ->orWhere('short_description', 'like', '%'.$q.'%')
                     ->orWhere('description', 'like', '%'.$q.'%');
             }))
             ->when($category, fn ($query) => $query->whereHas('category', fn ($cat) => $cat->where('slug', $category)))
-            ->orderByDesc('featured')
-            ->orderBy('sort_order')
-            ->latest('published_at')
-            ->paginate(24)
-            ->withQueryString();
+            ->when($price === 'free', fn ($query) => $query->where('price_rials', 0))
+            ->when($price === 'paid', fn ($query) => $query->where('price_rials', '>', 0));
+
+        $productsQuery = match ($sort) {
+            'price_asc' => $productsQuery->orderBy('price_rials')->orderBy('title'),
+            'price_desc' => $productsQuery->orderByDesc('price_rials')->orderBy('title'),
+            'title' => $productsQuery->orderBy('title'),
+            'featured' => $productsQuery->orderByDesc('featured')->orderBy('sort_order'),
+            default => $productsQuery->orderByDesc('featured')->orderBy('sort_order')->latest('published_at'),
+        };
+
+        $products = $productsQuery->paginate(24)->withQueryString();
 
         $categories = StoreCategory::query()->where('is_active', true)->orderBy('sort_order')->get();
         $featured = (clone $base)->where('featured', true)->orderBy('sort_order')->limit(12)->get();
@@ -41,10 +50,10 @@ class StoreController extends Controller
             ? StoreProduct::with('category')->published()->whereIn('id', $recentIds)->get()->sortBy(fn ($p) => array_search($p->id, $recentIds))->values()
             : collect();
 
-        $isBrowsing = $q !== '' || $category;
+        $isBrowsing = $q !== '' || $category || $price !== 'all' || $sort !== 'newest';
 
         return view('store.index', compact(
-            'products', 'categories', 'q', 'category', 'featured', 'free', 'latest', 'recent', 'isBrowsing'
+            'products', 'categories', 'q', 'category', 'featured', 'free', 'latest', 'recent', 'isBrowsing', 'sort', 'price'
         ));
     }
 

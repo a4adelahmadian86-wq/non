@@ -28,6 +28,11 @@ class StoreCartController extends Controller
         return view('store.cart', ['cart' => $payload, 'recent' => $recent]);
     }
 
+    public function summary(Request $request, StoreCartService $cart)
+    {
+        return response()->json(['ok' => true] + $cart->payload($cart->current($request), $request));
+    }
+
     public function add(Request $request, StoreCartService $cart, StoreProduct $product)
     {
         $data = $request->validate(['quantity' => 'nullable|integer|min:1|max:99']);

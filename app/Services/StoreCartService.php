@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\StoreCart;
-use App\Models\StoreCartItem;
 use App\Models\StoreCoupon;
 use App\Models\StoreProduct;
 use Illuminate\Http\Request;
@@ -117,22 +116,27 @@ class StoreCartService
     public function payload(StoreCart $cart, ?Request $request = null): array
     {
         $subtotal = 0;
+        $count = 0;
         $items = [];
         foreach ($cart->items as $item) {
             if (! $item->product || $item->product->status !== 'published') {
                 continue;
             }
             $unit = (int) $item->product->price_rials;
-            $line = $unit * (int) $item->quantity;
+            $qty = (int) $item->quantity;
+            $line = $unit * $qty;
             $subtotal += $line;
+            $count += $qty;
             $items[] = [
                 'id' => $item->id,
                 'product_id' => $item->product_id,
                 'title' => $item->product->title,
                 'slug' => $item->product->slug,
-                'quantity' => (int) $item->quantity,
+                'quantity' => $qty,
                 'unit_price_rials' => $unit,
                 'line_total_rials' => $line,
+                'unit_price_toman' => (int) floor($unit / 10),
+                'line_total_toman' => (int) floor($line / 10),
             ];
         }
 
@@ -162,10 +166,14 @@ class StoreCartService
 
         return [
             'items' => $items,
+            'count' => $count,
             'subtotal_rials' => $subtotal,
             'discount_rials' => $discount,
             'tax_rials' => 0,
             'total_rials' => $taxable,
+            'subtotal_toman' => (int) floor($subtotal / 10),
+            'discount_toman' => (int) floor($discount / 10),
+            'total_toman' => (int) floor($taxable / 10),
             'coupon_code' => $couponCode,
         ];
     }

@@ -32,6 +32,7 @@ Route::get('/store/category/{slug}',[StoreController::class,'category'])->name('
 Route::get('/store/product/{slug}',[StoreController::class,'product'])->name('store.product');
 Route::get('/store/preview/{preview}',[StoreController::class,'preview'])->name('store.preview');
 Route::get('/cart',[StoreCartController::class,'index'])->name('cart');
+Route::get('/cart/summary',[StoreCartController::class,'summary'])->middleware('throttle:60,1')->name('cart.summary');
 Route::post('/cart/products/{product}',[StoreCartController::class,'add'])->middleware('throttle:60,10')->name('cart.add');
 Route::post('/cart/products/{product}/update',[StoreCartController::class,'update'])->middleware('throttle:60,10')->name('cart.update');
 Route::post('/cart/products/{product}/remove',[StoreCartController::class,'remove'])->middleware('throttle:60,10')->name('cart.remove');
