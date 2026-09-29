@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 class DashboardNavigationService
 {
-    public function __construct(private readonly CapabilityService $capabilities)
+    public function __construct(private readonly CapabilityService $capabilities, private readonly AuthorizationService $authorization)
     {
     }
 
@@ -101,12 +101,10 @@ class DashboardNavigationService
 
     private function allows(User $user, string $permission, string $scope): bool
     {
-        if ($user->isAdmin()) {
-            return true;
-        }
+        if ($user->isAdmin()) return true;
 
-        if (in_array($scope, ['team', 'organization', 'global'], true)) {
-            return false;
+        if (in_array($permission, AuthorizationService::PERMISSIONS, true)) {
+            return $this->authorization->allows($user, $permission);
         }
 
         $capability = match ($permission) {
@@ -117,10 +115,7 @@ class DashboardNavigationService
             default => null,
         };
 
-        if ($capability === null) {
-            return $permission === 'documents.view';
-        }
-
+        if ($capability === null) return $permission === 'documents.view';
         return $this->capabilities->allowed($user, $capability);
     }
 }
