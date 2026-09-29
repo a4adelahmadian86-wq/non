@@ -102,7 +102,8 @@ class AdminController extends Controller
             $account->healthy = true;
             $account->metadata = array_merge((array)$account->metadata, $cfg['metadata']);
             if (array_key_exists($cfg['quota_key'], $data) && $data[$cfg['quota_key']] !== null && $data[$cfg['quota_key']] !== '') {
-                $account->quota_limit_seconds = (int)$data[$cfg['quota_key']];
+                $quotaSeconds = (int) $data[$cfg['quota_key']];
+                $account->quota_limit_seconds = $quotaSeconds > 0 ? $quotaSeconds : null;
             }
             $credentials = $cfg['credentials']();
             if ($credentials !== null) $account->credentials_array = $credentials;
