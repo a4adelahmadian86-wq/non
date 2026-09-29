@@ -16,7 +16,7 @@ const getEditors=()=>$$('.farast-editor');
 const getSelectionInfo=()=>{
  const s=getSelection();if(!s||!s.rangeCount)return null;const r=s.getRangeAt(0),root=r.commonAncestorContainer.nodeType===1?r.commonAncestorContainer:r.commonAncestorContainer.parentElement,ed=root?.closest?.('.farast-editor'),block=root?.closest?.('[data-block-id]');
  if(!ed||!block)return null;
- const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);let start=0,end=0,n;while(n=walker.nextNode()){if(n===r.startContainer)start+=r.startOffset;else if(n===r.endContainer)end+=r.endOffset;else{const pos=n.compareDocumentPosition(r.startContainer);if(pos&Node.DOCUMENT_POSITION_FOLLOWING)start+=n.nodeValue.length;const pos2=n.compareDocumentPosition(r.endContainer);if(pos2&Node.DOCUMENT_POSITION_FOLLOWING)end+=n.nodeValue.length}} 
+ const offsetInBlock=(container,offset)=>{const rr=document.createRange();rr.selectNodeContents(block);try{rr.setEnd(container,offset)}catch{}return rr.toString().length};const start=offsetInBlock(r.startContainer,r.startOffset),end=offsetInBlock(r.endContainer,r.endOffset); 
  return {blockId:block.dataset.blockId,start,end,collapsed:r.collapsed,text:s.toString(),range:r.cloneRange()};
 };
 const restoreSelection=info=>{
