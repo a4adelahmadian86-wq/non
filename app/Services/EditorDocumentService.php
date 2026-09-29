@@ -97,6 +97,7 @@ class EditorDocumentService
             return [
                 'html' => $legacy->content ?: '<p><br></p>',
                 'revision' => 0,
+                'document_model' => $this->normalizeHtml($legacy->content ?: '<p><br></p>'),
                 'page_settings' => $this->defaultPageSettings(),
             ];
         }
@@ -108,6 +109,7 @@ class EditorDocumentService
         return [
             'html' => $document?->content ?: ($legacy->content ?: '<p><br></p>'),
             'revision' => (int) ($document?->revision ?? 0),
+            'document_model' => $document?->content_json ?: $this->normalizeHtml($document?->content ?: $legacy->content ?: '<p><br></p>'),
             'page_settings' => $document?->page_settings ?: $this->defaultPageSettings(),
         ];
     }
