@@ -1,0 +1,1 @@
+(()=>{document.addEventListener('click',e=>{const b=e.target.closest('[data-farast-command]');if(b&&window.FarastEditor)window.FarastEditor.execute(b.dataset.farastCommand);const c=e.target.closest('[data-farast-open-comments]');if(c)document.getElementById('commentsDialog')?.removeAttribute('hidden')});})();
