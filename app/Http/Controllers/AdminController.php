@@ -39,6 +39,11 @@ class AdminController extends Controller
                 'documents' => \App\Models\TypingDocument::count(),
                 'ai' => AiInteraction::count(),
                 'ai_today' => AiInteraction::whereDate('created_at', today())->count(),
+                'voice_seconds' => (int) (\Illuminate\Support\Facades\DB::table('voice_provider_usage')->sum('audio_seconds')),
+                'voice_requests' => (int) (\Illuminate\Support\Facades\DB::table('voice_provider_usage')->sum('requests')),
+                'organizations' => Schema::hasTable('organizations') ? \App\Models\Organization::count() : 0,
+                'teams' => Schema::hasTable('teams') ? \App\Models\Team::count() : 0,
+                'audit_events' => Schema::hasTable('audit_logs') ? \Illuminate\Support\Facades\DB::table('audit_logs')->count() : 0,
             ],
             'settings' => $settings,
             'secretStatus' => [
