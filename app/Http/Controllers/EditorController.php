@@ -37,6 +37,23 @@ class EditorController extends Controller
         return view('editor', ['capabilities' => $capabilities->forUser(auth()->user())]);
     }
 
+    public function createDocument(Request $request, CapabilityService $capabilities, \App\Services\EditorDocumentService $documents)
+    {
+        abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
+        $data = $request->validate(['title' => ['nullable','string','max:255']]);
+        $legacy = TypingDocument::create([
+            'user_id' => $request->user()->id,
+            'title' => $data['title'] ?? 'سند جدید',
+            'content' => '<p><br></p>',
+            'page_count' => 1,
+            'word_count' => 0,
+            'language_mix' => ['fa' => true, 'en' => false],
+            'status' => 'draft',
+        ]);
+        $saved = $documents->save($legacy, '<p><br></p>', $legacy->title, null, 'editor');
+        return response()->json(['ok' => true, 'document_id' => $legacy->id, 'revision' => $saved['revision'] ?? 1, 'title' => $legacy->title, 'content' => '<p><br></p>', 'page_settings' => $saved['page_settings'] ?? $documents->defaultPageSettings()]);
+    }
+
     public function pending(Request $request)
     {
         $pending = $request->session()->get('pending_upload');
