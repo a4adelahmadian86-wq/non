@@ -13,7 +13,7 @@
       <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}">{{ $label }}</button>
     @endforeach
   </nav>
-  <section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
+  <section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section><div class="farast-advanced-tools" role="toolbar" aria-label="ابزارهای پیشرفته"><button type="button" data-farast-command="track">ردگیری تغییرات</button><button type="button" data-farast-command="accept">پذیرش تغییر</button><button type="button" data-farast-command="reject">رد تغییر</button><button type="button" data-farast-command="footnote">پاورقی</button><button type="button" data-farast-command="bookmark">نشانک</button><button type="button" data-farast-command="watermark">واترمارک</button><button type="button" data-farast-command="review">بازبینی</button></div>
   <main class="farast-workspace">
     <aside class="farast-nav-panel" id="navigationPane" aria-label="پیمایش سند">
       <div class="panel-heading"><strong>پیمایش</strong><button type="button" data-close-panel="navigationPane" aria-label="بستن">×</button></div>
