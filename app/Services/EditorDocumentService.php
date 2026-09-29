@@ -19,11 +19,15 @@ class EditorDocumentService
         ?int $expectedRevision = null,
         string $source = 'editor',
         ?array $pageSettings = null,
+        ?array $documentModel = null,
     ): array {
-        $model = $this->normalizeHtml($html);
+        $safeHtml = $this->sanitizeHtml($html);
+        $normalizedSettings = $this->normalizePageSettings($pageSettings ?: (($documentModel['settings'] ?? null) ?: $this->defaultPageSettings()));
+        $model = $documentModel ? $this->sanitizeDocumentModel($documentModel) : $this->normalizeHtml($safeHtml);
+        $model['settings'] = $normalizedSettings;
         $now = now();
 
-        return $this->db->transaction(function () use ($legacy, $html, $model, $title, $expectedRevision, $source, $pageSettings, $now) {
+        return $this->db->transaction(function () use ($legacy, $safeHtml, $model, $title, $expectedRevision, $source, $pageSettings, $now) {
             $document = $legacy->farast_document_id
                 ? FarastDocument::whereKey($legacy->farast_document_id)->where('user_id', $legacy->user_id)->lockForUpdate()->first()
                 : null;
@@ -32,10 +36,10 @@ class EditorDocumentService
                 $document = FarastDocument::create([
                     'user_id' => $legacy->user_id,
                     'title' => $title ?: $legacy->title ?: 'سند جدید',
-                    'content' => $html,
+                    'content' => $safeHtml,
                     'content_json' => $model,
                     'document_format' => 'farast-v1',
-                    'page_settings' => $pageSettings ?: $this->defaultPageSettings(),
+                    'page_settings' => $normalizedSettings,
                     'revision' => 0,
                     'last_saved_at' => $now,
                     'status' => $legacy->status === 'trashed' ? 'trashed' : 'active',
@@ -56,9 +60,9 @@ class EditorDocumentService
             $nextRevision = (int) $document->revision + 1;
             $document->fill([
                 'title' => $title ?: $document->title,
-                'content' => $html,
+                'content' => $safeHtml,
                 'content_json' => $model,
-                'page_settings' => $pageSettings ?: ($document->page_settings ?: $this->defaultPageSettings()),
+                'page_settings' => $normalizedSettings ?: ($document->page_settings ?: $this->defaultPageSettings()),
                 'revision' => $nextRevision,
                 'last_saved_at' => $now,
             ])->save();
@@ -66,14 +70,14 @@ class EditorDocumentService
             if ($nextRevision === 1 || $source !== 'autosave') {
                 $document->versions()->create([
                     'user_id' => $legacy->user_id,
-                    'content' => $html,
+                    'content' => $safeHtml,
                     'label' => $source === 'ai' ? 'تغییر هوش مصنوعی' : ($source === 'manual' ? 'ذخیره دستی' : 'نسخه '.$nextRevision),
                 ]);
             }
 
             $plain = $model['plain_text'] ?? '';
             $legacy->update([
-                'content' => $html,
+                'content' => $safeHtml,
                 'title' => $title ?: $legacy->title,
                 'word_count' => $this->wordCount($plain),
             ]);
@@ -84,6 +88,7 @@ class EditorDocumentService
                 'document_id' => $document->id,
                 'revision' => $nextRevision,
                 'saved_at' => $now->toIso8601String(),
+                'page_settings' => $document->page_settings,
                 'word_count' => $this->wordCount($plain),
             ];
         }, 3);
@@ -95,6 +100,7 @@ class EditorDocumentService
             return [
                 'html' => $legacy->content ?: '<p><br></p>',
                 'revision' => 0,
+                'document_model' => $this->normalizeHtml($legacy->content ?: '<p><br></p>'),
                 'page_settings' => $this->defaultPageSettings(),
             ];
         }
@@ -106,7 +112,31 @@ class EditorDocumentService
         return [
             'html' => $document?->content ?: ($legacy->content ?: '<p><br></p>'),
             'revision' => (int) ($document?->revision ?? 0),
+            'document_model' => $document?->content_json ?: $this->normalizeHtml($document?->content ?: $legacy->content ?: '<p><br></p>'),
             'page_settings' => $document?->page_settings ?: $this->defaultPageSettings(),
+        ];
+    }
+
+    public function normalizePageSettings(?array $settings): array
+    {
+        $defaults = $this->defaultPageSettings();
+        $paper = strtoupper((string) ($settings['paper'] ?? $defaults['paper']));
+        $orientation = (string) ($settings['orientation'] ?? $defaults['orientation']);
+        $direction = (string) ($settings['direction'] ?? $defaults['direction']);
+        return [
+            'paper' => in_array($paper, ['A4', 'A5', 'LETTER'], true) ? ($paper === 'LETTER' ? 'Letter' : $paper) : 'A4',
+            'orientation' => in_array($orientation, ['portrait', 'landscape'], true) ? $orientation : 'portrait',
+            'margin_top' => max(5, min(60, (float) ($settings['margin_top'] ?? $defaults['margin_top']))),
+            'margin_right' => max(5, min(60, (float) ($settings['margin_right'] ?? $defaults['margin_right']))),
+            'margin_bottom' => max(5, min(60, (float) ($settings['margin_bottom'] ?? $defaults['margin_bottom']))),
+            'margin_left' => max(5, min(60, (float) ($settings['margin_left'] ?? $defaults['margin_left']))),
+            'header_distance' => max(0, min(40, (float) ($settings['header_distance'] ?? $defaults['header_distance']))),
+            'footer_distance' => max(0, min(40, (float) ($settings['footer_distance'] ?? $defaults['footer_distance']))),
+            'direction' => $direction === 'ltr' ? 'ltr' : 'rtl',
+            'font_family' => mb_substr(trim((string) ($settings['font_family'] ?? $defaults['font_family'])), 0, 120) ?: $defaults['font_family'],
+            'font_size' => max(8, min(72, (int) ($settings['font_size'] ?? $defaults['font_size']))),
+            'header' => mb_substr((string) ($settings['header'] ?? ''), 0, 1000),
+            'footer' => mb_substr((string) ($settings['footer'] ?? ''), 0, 1000),
         ];
     }
 
@@ -125,6 +155,65 @@ class EditorDocumentService
             'font_family' => 'B Nazanin',
             'font_size' => 16,
         ];
+    }
+
+    public function sanitizeHtml(string $html): string
+    {
+        $html = trim($html);
+        if ($html === '') return '<p><br></p>';
+        $dom = new \\DOMDocument('1.0', 'UTF-8');
+        @$dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-root">'.$html.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $root = $dom->getElementById('farast-root');
+        if (!$root) return '<p><br></p>';
+        $allowedTags = ['div','p','br','span','strong','b','em','i','u','s','strike','sub','sup','h1','h2','h3','h4','h5','h6','blockquote','ul','ol','li','table','thead','tbody','tfoot','tr','th','td','img','a','hr'];
+        $allowedAttrs = ['id','class','style','dir','title','alt','width','height','colspan','rowspan','href','target','rel','src'];
+        $walk = function(\\DOMNode $node) use (&$walk, $allowedTags, $allowedAttrs): void {
+            for ($child = $node->firstChild; $child; ) {
+                $next = $child->nextSibling;
+                if ($child instanceof \\DOMElement) {
+                    $tag = strtolower($child->tagName);
+                    if (!in_array($tag, $allowedTags, true)) { $node->removeChild($child); $child = $next; continue; }
+                    foreach (iterator_to_array($child->attributes) as $attr) {
+                        $name = strtolower($attr->name);
+                        $value = trim($attr->value);
+                        if (!in_array($name, $allowedAttrs, true) || str_starts_with($name, 'on')) { $child->removeAttribute($attr->name); continue; }
+                        if (in_array($name, ['href','src'], true) && preg_match('/^\\s*(?:javascript:|vbscript:|data:text\\/html)/iu', $value)) { $child->removeAttribute($attr->name); continue; }
+                        if ($name === 'style' && preg_match('/(?:expression\\s*\\(|url\\s*\\(\\s*["\\']?\\s*(?:javascript:|data:text\\/html))/iu', $value)) { $child->removeAttribute($attr->name); }
+                    }
+                    if ($tag === 'a' && $child->hasAttribute('target')) $child->setAttribute('rel', 'noopener noreferrer');
+                    $walk($child);
+                }
+                $child = $next;
+            }
+        };
+        $walk($root);
+        $out = '';
+        foreach (iterator_to_array($root->childNodes) as $child) $out .= $dom->saveHTML($child);
+        return $out !== '' ? $out : '<p><br></p>';
+    }
+
+    private function sanitizeDocumentModel(array $model): array
+    {
+        $model['schema'] = 2;
+        $model['type'] = 'document';
+        $model['direction'] = (($model['direction'] ?? 'rtl') === 'ltr') ? 'ltr' : 'rtl';
+        $model['settings'] = is_array($model['settings'] ?? null) ? $model['settings'] : $this->defaultPageSettings();
+        foreach (($model['sections'] ?? []) as $si => $section) {
+            $blocks = [];
+            foreach (($section['blocks'] ?? []) as $block) {
+                if (!is_array($block)) continue;
+                $block['id'] = is_string($block['id'] ?? null) && $block['id'] !== '' ? $block['id'] : (string) Str::uuid();
+                $block['html'] = $this->sanitizeHtml((string) ($block['html'] ?? '<p><br></p>'));
+                $block['text'] = trim(preg_replace('/\\s+/u', ' ', strip_tags($block['html'])) ?? '');
+                $blocks[] = $block;
+            }
+            $model['sections'][$si]['blocks'] = $blocks;
+        }
+        $model['sections'] = array_values(array_filter($model['sections'] ?? [], 'is_array'));
+        if (!$model['sections']) $model['sections'] = [['id' => 'section-1', 'blocks' => []]];
+        $model['comments'] = is_array($model['comments'] ?? null) ? $model['comments'] : [];
+        $model['review'] = is_array($model['review'] ?? null) ? $model['review'] : [];
+        return $model;
     }
 
     public function normalizeHtml(string $html): array

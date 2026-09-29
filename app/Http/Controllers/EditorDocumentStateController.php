@@ -30,6 +30,7 @@ class EditorDocumentStateController extends Controller
             'title' => $legacy->title,
             'content' => $state['html'],
             'revision' => $state['revision'],
+            'document_model' => $state['document_model'] ?? null,
             'page_settings' => $state['page_settings'],
         ]);
     }

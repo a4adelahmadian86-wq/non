@@ -23,6 +23,7 @@ class EditorSaveController extends Controller
             'revision' => ['nullable', 'integer', 'min:0'],
             'source' => ['nullable', 'string', 'in:editor,manual,autosave,ai,recovery'],
             'page_settings' => ['nullable', 'array'],
+            'document_model' => ['nullable', 'array'],
         ]);
 
         $document = TypingDocument::whereKey($data['document_id'])
@@ -36,6 +37,7 @@ class EditorSaveController extends Controller
             array_key_exists('revision', $data) ? (int) $data['revision'] : null,
             $data['source'] ?? 'editor',
             $data['page_settings'] ?? null,
+            $data['document_model'] ?? null,
         );
 
         if (($result['conflict'] ?? false) === true) {

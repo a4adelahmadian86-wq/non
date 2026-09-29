@@ -37,6 +37,23 @@ class EditorController extends Controller
         return view('editor', ['capabilities' => $capabilities->forUser(auth()->user())]);
     }
 
+    public function createDocument(Request $request, CapabilityService $capabilities, \App\Services\EditorDocumentService $documents)
+    {
+        abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
+        $data = $request->validate(['title' => ['nullable','string','max:255']]);
+        $legacy = TypingDocument::create([
+            'user_id' => $request->user()->id,
+            'title' => $data['title'] ?? 'سند جدید',
+            'content' => '<p><br></p>',
+            'page_count' => 1,
+            'word_count' => 0,
+            'language_mix' => json_encode(['fa' => true, 'en' => false], JSON_UNESCAPED_UNICODE),
+            'status' => 'draft',
+        ]);
+        $saved = $documents->save($legacy, '<p><br></p>', $legacy->title, null, 'editor');
+        return response()->json(['ok' => true, 'document_id' => $legacy->id, 'revision' => $saved['revision'] ?? 1, 'title' => $legacy->title, 'content' => '<p><br></p>', 'page_settings' => $saved['page_settings'] ?? $documents->defaultPageSettings()]);
+    }
+
     public function pending(Request $request)
     {
         $pending = $request->session()->get('pending_upload');
@@ -114,6 +131,8 @@ class EditorController extends Controller
 
         abort_unless(Str::startsWith($data['path'], 'typing/'.auth()->id().'/'), 403);
         abort_unless(Storage::disk('private')->exists($data['path']), 404);
+        $data['mime'] = Storage::disk('private')->mimeType($data['path']) ?: $data['mime'];
+        abort_unless(in_array($data['mime'], ['image/jpeg','image/png','image/webp','application/pdf','application/zip'], true), 415, 'نوع فایل برای پردازش پشتیبانی نمی‌شود.');
         $bytes = Storage::disk('private')->get($data['path']);
         $maxBytes = (int) $caps['max_file_mb'] * 1024 * 1024;
         abort_unless($caps['unlimited'] || strlen($bytes) <= $maxBytes, 413, 'حجم فایل برای حساب شما بیشتر از سقف مجاز است.');

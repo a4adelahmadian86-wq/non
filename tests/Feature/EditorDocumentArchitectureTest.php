@@ -57,6 +57,44 @@ class EditorDocumentArchitectureTest extends TestCase
         ]);
     }
 
+    public function test_editor_can_create_and_persist_native_document_model(): void
+    {
+        $user = $this->makeUser();
+        $create = $this->actingAs($user)->postJson('/editor/documents', ['title' => 'سند مدل']);
+        $create->assertOk()->assertJsonPath('title', 'سند مدل');
+        $id = (int) $create->json('document_id');
+        $this->assertDatabaseHas('farast_documents', ['title' => 'سند مدل', 'revision' => 1]);
+
+        $model = ['schema' => 2, 'type' => 'document', 'direction' => 'rtl', 'settings' => ['paper' => 'A4'], 'sections' => [['id' => 'section-1', 'blocks' => [['id' => 'b1', 'type' => 'paragraph', 'text' => 'سلام', 'html' => '<p>سلام</p>']]]], 'comments' => [], 'review' => []];
+        $legacy = TypingDocument::findOrFail($id);
+        $result = app(EditorDocumentService::class)->save($legacy, '<p>سلام</p>', 'سند مدل', 1, 'manual', ['paper' => 'A4'], $model);
+        $this->assertTrue($result['ok']);
+        $this->assertSame(2, $result['revision']);
+        $this->assertSame(2, $legacy->farastDocument->fresh()->content_json['schema']);
+        $this->assertSame('b1', $legacy->farastDocument->fresh()->content_json['sections'][0]['blocks'][0]['id']);
+    }
+
+    public function test_editor_persistence_sanitizes_script_and_event_handlers(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'امنیت',
+            'content' => '<p>متن</p>',
+            'page_count' => 1,
+            'word_count' => 1,
+            'language_mix' => ['fa' => true],
+            'status' => 'draft',
+        ]);
+        $result = app(EditorDocumentService::class)->save($legacy, '<p onclick="alert(1)">سلام</p><script>alert(2)</script><a href="javascript:alert(3)">پیوند</a>', 'امنیت', null, 'manual');
+        $this->assertTrue($result['ok']);
+        $saved = $legacy->farastDocument->fresh();
+        $this->assertStringNotContainsString('<script', $saved->content);
+        $this->assertStringNotContainsString('onclick=', $saved->content);
+        $this->assertStringNotContainsString('javascript:', $saved->content);
+        $this->assertStringContainsString('سلام', $saved->content);
+    }
+
     public function test_stale_revision_is_rejected_without_overwriting_canonical_content(): void
     {
         $user = $this->makeUser();
