@@ -40,12 +40,13 @@ final class GeminiProviderAdapter implements AiProviderInterface
         return new AiProviderResult(
             result: $raw['result'] ?? [],
             providerRequestId: $raw['provider_interaction_id'] ?? null,
-            model: $this->model(),
+            model: $raw['model'] ?? $this->model(),
             usage: $raw['usage'] ?? null,
             metadata: [
                 'http_status' => $raw['http_status'] ?? null,
                 'output_bytes' => $raw['output_bytes'] ?? 0,
                 'prompt_hash' => $raw['prompt_hash'] ?? null,
+                'fallback_used' => $raw['fallback_used'] ?? false,
             ],
         );
     }
