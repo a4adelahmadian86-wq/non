@@ -43,6 +43,9 @@
 </section>
 @endsection
 
+@push('styles')
+<link rel="stylesheet" href="/css/store.css?v=20260929">
+@endpush
 @push('scripts')
 <script>
 (()=>{
