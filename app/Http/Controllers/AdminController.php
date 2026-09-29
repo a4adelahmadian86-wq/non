@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\UserCapability;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use App\Models\VoiceProviderAccount;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
 use App\Services\MailConfigService;
@@ -45,7 +46,77 @@ class AdminController extends Controller
                 'files' => (bool) (SiteSetting::read('files_api_key') ?: env('FILES_API_KEY')),
             ],
             'capabilities' => $capabilities,
+            'voiceAccounts' => VoiceProviderAccount::query()->get()->keyBy('provider'),
         ]);
+    }
+
+    public function updateVoiceProviders(Request $r)
+    {
+        $data = $r->validate([
+            'gladia_api_key' => ['nullable', 'string', 'max:500'],
+            'gladia_enabled' => ['nullable', 'boolean'],
+            'gladia_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:315360000'],
+            'azure_subscription_key' => ['nullable', 'string', 'max:500'],
+            'azure_region' => ['nullable', 'string', 'max:80'],
+            'azure_enabled' => ['nullable', 'boolean'],
+            'azure_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:315360000'],
+            'google_project_id' => ['nullable', 'string', 'max:200'],
+            'google_client_email' => ['nullable', 'email', 'max:255'],
+            'google_private_key' => ['nullable', 'string', 'max:10000'],
+            'google_region' => ['nullable', 'string', 'max:80'],
+            'google_enabled' => ['nullable', 'boolean'],
+            'google_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:315360000'],
+        ]);
+
+        $providers = [
+            'gladia' => [
+                'name' => 'Gladia Primary', 'model' => 'solaria-1', 'enabled_key' => 'gladia_enabled',
+                'quota_key' => 'gladia_quota_limit_seconds', 'locales' => ['fa-IR','en-US','ar-SA'],
+                'credentials' => fn () => filled($data['gladia_api_key'] ?? null) ? ['api_key' => trim($data['gladia_api_key'])] : null,
+                'metadata' => ['service' => 'gladia'],
+            ],
+            'azure' => [
+                'name' => 'Azure Speech Primary', 'model' => 'speech', 'enabled_key' => 'azure_enabled',
+                'quota_key' => 'azure_quota_limit_seconds', 'locales' => ['fa-IR','en-US','ar-SA'],
+                'credentials' => fn () => filled($data['azure_subscription_key'] ?? null) ? ['subscription_key' => trim($data['azure_subscription_key']), 'region' => trim((string)($data['azure_region'] ?? ''))] : null,
+                'metadata' => ['service' => 'azure-speech'],
+            ],
+            'google' => [
+                'name' => 'Google Speech Primary', 'model' => 'chirp_3', 'enabled_key' => 'google_enabled',
+                'quota_key' => 'google_quota_limit_seconds', 'locales' => ['fa-IR','en-US','ar-SA'],
+                'credentials' => fn () => (filled($data['google_project_id'] ?? null) || filled($data['google_client_email'] ?? null) || filled($data['google_private_key'] ?? null)) ? [
+                    'project_id' => trim((string)($data['google_project_id'] ?? '')),
+                    'client_email' => trim((string)($data['google_client_email'] ?? '')),
+                    'private_key' => (string)($data['google_private_key'] ?? ''),
+                ] : null,
+                'metadata' => ['service' => 'google-cloud-speech', 'region' => trim((string)($data['google_region'] ?? 'us'))],
+            ],
+        ];
+
+        foreach ($providers as $provider => $cfg) {
+            $account = VoiceProviderAccount::firstOrNew(['provider' => $provider]);
+            $account->name = $cfg['name'];
+            $account->model = $cfg['model'];
+            $account->capabilities = ['locales' => $cfg['locales'], 'realtime' => true];
+            $account->enabled = $r->boolean($cfg['enabled_key']);
+            $account->healthy = true;
+            $account->metadata = array_merge((array)$account->metadata, $cfg['metadata']);
+            if (array_key_exists($cfg['quota_key'], $data) && $data[$cfg['quota_key']] !== null && $data[$cfg['quota_key']] !== '') {
+                $account->quota_limit_seconds = (int)$data[$cfg['quota_key']];
+            }
+            $credentials = $cfg['credentials']();
+            if ($credentials !== null) $account->credentials_array = $credentials;
+            if (!$account->exists) {
+                $account->billing_mode = 'monthly_free';
+                $account->quality_score = 50;
+                $account->reliability_score = 50;
+                $account->priority = $provider === 'gladia' ? 10 : 20;
+                $account->quota_used_seconds = 0;
+            }
+            $account->save();
+        }
+
+        return back()->with('status', 'حساب‌ها و کلیدهای سرویس‌های صوتی ذخیره شدند. مقدار کلیدها نمایش داده نمی‌شود.');
     }
 
     public function finance()
