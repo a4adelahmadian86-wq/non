@@ -20,8 +20,8 @@ jobs:
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: composer install --no-interaction --prefer-dist --no-progress
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=array' 'QUEUE_CONNECTION=sync' > .env
-      - run: php -l app/Services/EditorDocumentService.php && php -l app/Http/Controllers/EditorDocumentStateController.php && php -l app/Http/Controllers/EditorSaveController.php && php -l app/Models/FarastDocument.php && php -l app/Models/FarastDocumentVersion.php
-      - run: node --check public/js/editor-architecture.js
+      - run: php -l app/Services/EditorDocumentService.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/EditorDocumentStateController.php && php -l app/Http/Controllers/EditorSaveController.php && php -l app/Http/Controllers/ExportController.php && php -l app/Models/FarastDocument.php && php -l app/Models/FarastDocumentVersion.php
+      - run: node --check public/js/editor-core.js
       - run: php artisan key:generate
       - run: touch database/database.sqlite
       - run: php artisan migrate --force
