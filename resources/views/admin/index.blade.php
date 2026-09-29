@@ -15,6 +15,11 @@
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
             <a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>
             <a href="#pricing"><i class="fa-solid fa-tags"></i><span>قیمت‌گذاری</span></a>
+            <a href="{{ route('admin.access') }}"><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>
+            <a href="{{ route('admin.organizations') }}"><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>
+            <a href="{{ route('admin.integrations') }}"><i class="fa-solid fa-plug"></i><span>یکپارچه‌سازی‌ها</span></a>
+            <a href="{{ route('admin.analytics') }}"><i class="fa-solid fa-chart-line"></i><span>تحلیل‌ها</span></a>
+            <a href="{{ route('admin.audit') }}"><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>
         </nav>
         <div class="farast-admin-nav-bottom">
             <a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><span>مالی</span></a>
