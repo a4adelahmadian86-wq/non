@@ -47,7 +47,7 @@ class EditorController extends Controller
             'content' => '<p><br></p>',
             'page_count' => 1,
             'word_count' => 0,
-            'language_mix' => ['fa' => true, 'en' => false],
+            'language_mix' => json_encode(['fa' => true, 'en' => false], JSON_UNESCAPED_UNICODE),
             'status' => 'draft',
         ]);
         $saved = $documents->save($legacy, '<p><br></p>', $legacy->title, null, 'editor');
