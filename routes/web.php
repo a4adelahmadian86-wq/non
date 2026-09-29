@@ -90,6 +90,7 @@ Route::middleware(['auth','single.editor'])->group(function(){
     Route::get('/dashboard',[EditorController::class,'dashboard'])->name('dashboard');
     Route::get('/workspace/documents',[PlatformCompletionController::class,'documents'])->name('platform.documents');
     Route::post('/workspace/documents',[PlatformCompletionController::class,'createDocument'])->name('platform.documents.create');
+    Route::post('/workspace/folders',[PlatformCompletionController::class,'createFolder'])->name('platform.folders.create');
     Route::post('/workspace/documents/{id}',[PlatformCompletionController::class,'updateDocument'])->name('platform.documents.update');
     Route::post('/workspace/documents/{id}/favorite',[PlatformCompletionController::class,'favorite'])->name('platform.documents.favorite');
     Route::post('/workspace/documents/{id}/trash',[PlatformCompletionController::class,'trash'])->name('platform.documents.trash');
@@ -171,5 +172,8 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/plans',[PlatformCompletionController::class,'savePlan'])->name('plans.save');
     Route::get('/support-management',[PlatformCompletionController::class,'adminSupport'])->name('support.management');
     Route::get('/cms',[PlatformCompletionController::class,'cms'])->name('cms');
+    Route::get('/teams/{team}/members',[PlatformCompletionController::class,'teamMembers'])->name('teams.members');
+    Route::post('/teams/{team}/members',[PlatformCompletionController::class,'addTeamMember'])->name('teams.members.add');
+    Route::delete('/teams/{team}/members/{user}',[PlatformCompletionController::class,'removeTeamMember'])->name('teams.members.remove');
     Route::post('/cms',[PlatformCompletionController::class,'saveCms'])->name('cms.save');
 });
