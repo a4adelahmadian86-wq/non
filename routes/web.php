@@ -36,6 +36,8 @@ Route::post('/cart/products/{product}',[StoreCartController::class,'add'])->midd
 Route::post('/cart/products/{product}/update',[StoreCartController::class,'update'])->middleware('throttle:60,10')->name('cart.update');
 Route::post('/cart/products/{product}/remove',[StoreCartController::class,'remove'])->middleware('throttle:60,10')->name('cart.remove');
 Route::post('/cart/checkout',[StoreCartController::class,'checkout'])->middleware(['auth','throttle:10,10'])->name('cart.checkout');
+Route::post('/cart/coupon',[StoreCartController::class,'applyCoupon'])->middleware('throttle:30,10')->name('cart.coupon');
+Route::post('/cart/coupon/clear',[StoreCartController::class,'clearCoupon'])->middleware('throttle:30,10')->name('cart.coupon.clear');
 Route::get('/pricing',[EditorController::class,'pricing'])->name('pricing');
 Route::get('/announcements',[AnnouncementController::class,'index'])->name('announcements');
 Route::get('/social',[SocialController::class,'index'])->name('social');
