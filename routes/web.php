@@ -102,6 +102,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/social',[SocialController::class,'admin'])->name('social');
     Route::post('/social',[SocialController::class,'update'])->name('social.update');
     Route::post('/settings',[AdminController::class,'updateSettings'])->name('settings.update');
+    Route::post('/voice-providers',[AdminController::class,'updateVoiceProviders'])->name('voice.providers.update');
     Route::post('/pricing',[AdminController::class,'updatePricing'])->name('pricing.update');
     Route::post('/users/{user}/capabilities',[AdminController::class,'updateUserCapabilities'])->name('user.capabilities');
     Route::post('/users/{user}/block',[AdminController::class,'toggleUser'])->name('user.toggle');
