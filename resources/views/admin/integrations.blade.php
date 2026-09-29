@@ -5,7 +5,7 @@
 @if(session('status'))<div class="control-success">{{ session('status') }}</div>@endif
 <section class="control-grid">
 <article class="control-card"><div class="provider-head"><strong>Canva Connect</strong><span class="{{ $canvaConfigured?'ok':'warn' }}">{{ $canvaConfigured?'تنظیم شده':'NOT CONFIGURED' }}</span></div>
-<p>اتصال رسمی OAuth 2.0 + PKCE برای دسترسی کاربر به طراحی‌ها و جریان‌های Canva.</p>
+<p>اتصال رسمی OAuth 2.0 + PKCE برای دسترسی کاربر به طراحی‌ها و جریان‌های Canva. پس از اتصال، مسیرهای server-side برای فهرست طراحی‌ها، ایجاد طراحی، import فایل و export job در دسترس‌اند.</p>
 <form method="post" action="{{ route('admin.integrations.canva.save') }}">@csrf
 <label>Client ID<input name="canva_client_id" placeholder="Client ID"></label>
 <label>Client Secret<input type="password" name="canva_client_secret" placeholder="{{ $canvaConfigured?'Secret تنظیم شده؛ برای جایگزینی وارد کنید':'Client Secret' }}" autocomplete="new-password"></label>
