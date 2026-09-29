@@ -74,4 +74,17 @@ class StoreController extends Controller
             'Content-Disposition' => 'inline',
         ]);
     }
+
+    public function reader(string $slug)
+    {
+        $product = StoreProduct::with(['previews' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')])
+            ->published()
+            ->where('slug', $slug)
+            ->firstOrFail();
+
+        $previews = $product->previews;
+        abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
+
+        return view('store.reader', compact('product', 'previews'));
+    }
 }
