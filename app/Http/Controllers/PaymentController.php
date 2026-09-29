@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\PaysWithZarinpal;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\SiteSetting;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Storage;
 
 class PaymentController extends Controller
 {
+    use PaysWithZarinpal;
+
     public function createForDocument(Request $request, TypingDocument $document, PricingService $pricing, FreeQuotaService $free)
     {
         abort_unless($document->user_id === auth()->id() && $document->status !== 'deleted', 404);
