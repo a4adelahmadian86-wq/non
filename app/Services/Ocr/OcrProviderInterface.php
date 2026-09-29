@@ -1,0 +1,1 @@
+<?php namespace App\Services\Ocr; interface OcrProviderInterface { public function recognize(string $path,array $options=[]): string; }
