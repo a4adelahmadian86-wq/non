@@ -105,6 +105,9 @@ Route::middleware('auth')->group(function(){
     Route::get('/canva/designs',[CanvaController::class,'designs'])->name('canva.designs');
     Route::post('/canva/designs',[CanvaController::class,'create'])->name('canva.designs.create');
     Route::post('/canva/designs/{design}/export',[CanvaController::class,'export'])->name('canva.designs.export');
+    Route::get('/canva/exports/{job}',[CanvaController::class,'exportStatus'])->name('canva.exports.status');
+    Route::post('/canva/imports',[CanvaController::class,'import'])->name('canva.imports.create');
+    Route::get('/canva/imports/{job}',[CanvaController::class,'importStatus'])->name('canva.imports.status');
 });
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function(){
