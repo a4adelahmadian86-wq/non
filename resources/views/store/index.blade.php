@@ -10,6 +10,7 @@
         <p>مثل فدیبو و طاقچه: پیش‌نمایش واقعی قبل از خرید، سبد خرید، علاقه‌مندی و دانلود فوری پس از پرداخت.</p>
         <form method="get" action="{{ route('store') }}" class="store-search">
           <input name="q" value="{{ $q }}" placeholder="جستجوی عنوان، موضوع یا فایل…" aria-label="جستجوی فروشگاه">
+          @if($category)<input type="hidden" name="category" value="{{ $category }}">@endif
           <button type="submit"><i class="fa-solid fa-magnifying-glass"></i> جستجو</button>
         </form>
         <div class="store-hero-links">
@@ -34,11 +35,35 @@
     @endif
 
     <div class="store-chips">
-      <a class="{{ !$category && !$q ? 'active' : '' }}" href="{{ route('store') }}">همه</a>
+      <a class="{{ !$category ? 'active' : '' }}" href="{{ route('store', request()->only(['q','sort','price'])) }}">همه</a>
       @foreach($categories as $cat)
-        <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', ['category'=>$cat->slug]) }}">{{ $cat->name }}</a>
+        <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', array_merge(request()->only(['q','sort','price']), ['category'=>$cat->slug])) }}">{{ $cat->name }}</a>
       @endforeach
     </div>
+
+    <form method="get" action="{{ route('store') }}" class="store-toolbar" style="background:#fff;border:1px solid #e2e9f2;border-radius:12px;padding:12px 14px;margin-bottom:18px">
+      @if($q)<input type="hidden" name="q" value="{{ $q }}">@endif
+      @if($category)<input type="hidden" name="category" value="{{ $category }}">@endif
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%">
+        <label style="font-size:.74rem;color:#6b7c93">مرتب‌سازی
+          <select name="sort" onchange="this.form.submit()" style="margin-right:6px;padding:8px 10px;border:1px solid #e2e9f2;border-radius:8px;font:inherit">
+            <option value="newest" @selected(($sort??'newest')==='newest')>جدیدترین</option>
+            <option value="featured" @selected(($sort??'')==='featured')>ویژه</option>
+            <option value="price_asc" @selected(($sort??'')==='price_asc')>ارزان‌ترین</option>
+            <option value="price_desc" @selected(($sort??'')==='price_desc')>گران‌ترین</option>
+            <option value="title" @selected(($sort??'')==='title')>عنوان</option>
+          </select>
+        </label>
+        <label style="font-size:.74rem;color:#6b7c93">قیمت
+          <select name="price" onchange="this.form.submit()" style="margin-right:6px;padding:8px 10px;border:1px solid #e2e9f2;border-radius:8px;font:inherit">
+            <option value="all" @selected(($price??'all')==='all')>همه</option>
+            <option value="free" @selected(($price??'')==='free')>فقط رایگان</option>
+            <option value="paid" @selected(($price??'')==='paid')>فقط پولی</option>
+          </select>
+        </label>
+        <span style="margin-right:auto;font-size:.74rem;color:#6b7c93">{{ $products->total() }} مورد</span>
+      </div>
+    </form>
 
     @if(!$isBrowsing)
       @if($featured->count())
@@ -98,7 +123,7 @@
           <div class="store-empty-state">
             <i class="fa-solid fa-box-open"></i>
             <h2>محصولی پیدا نشد</h2>
-            <p>عبارت جستجو یا دسته را تغییر دهید.</p>
+            <p>عبارت جستجو، فیلتر قیمت یا دسته را تغییر دهید.</p>
             <a class="store-primary-btn" href="{{ route('store') }}">بازگشت به فروشگاه</a>
           </div>
         @endforelse
@@ -110,7 +135,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20260929m1">
+<link rel="stylesheet" href="/css/store.css?v=20260929m2">
 @endpush
 @push('scripts')
 <script>
