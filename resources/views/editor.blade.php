@@ -141,7 +141,7 @@ window.FARAST_EDITOR=true;window.FARAST_AUTHENTICATED={{ auth()->check() ? 'true
 (()=>{
 'use strict';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],csrf=$('meta[name="csrf-token"]')?.content||'',editor=$('#editor'),source=$('#source'),analyze=$('#analyze'),dropZone=$('#dropZone');
-let docId=null,interactionId=null,requestId=null,saveTimer=null,zoom=1,uploadedPath=null,uploadedMime=null,uploadedName=null,preflightBusy=false;
+let docId=null,docRevision=0,interactionId=null,requestId=null,saveTimer=null,zoom=1,uploadedPath=null,uploadedMime=null,uploadedName=null,preflightBusy=false;
 const nf=n=>new Intl.NumberFormat('fa-IR').format(Number(n||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 function setStatus(t,ok=false){$('#statusText').textContent=t;$('#saveState').textContent=ok?'ذخیره شد':t}
