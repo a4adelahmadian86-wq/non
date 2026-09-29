@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\TypingDocument;
+use App\Models\FarastDocument;
 use App\Services\CapabilityService;
 use Illuminate\Http\Request;
 use PhpOffice\PhpWord\PhpWord;
@@ -25,7 +26,8 @@ class ExportController extends Controller
             $paid=Order::where('user_id',auth()->id())->where('document_id',$doc->id)->where('status','paid')->whereNotNull('paid_at')->latest('paid_at')->first();
             abort_unless($paid && hash_equals((string)$paid->content_hash,$hash),402,'ابتدا متن نهایی را بازبینی کنید و هزینه خروجی را در صفحه پرداخت تسویه کنید.');
         }
-        $content=$this->cleanExportHtml((string)$doc->content);
+        $canonical=$doc->farast_document_id ? FarastDocument::whereKey($doc->farast_document_id)->where('user_id',auth()->id())->first() : null;
+        $content=$this->cleanExportHtml((string)($canonical?->content ?? $doc->content));
         if($format==='docx')return $this->docx($doc,$content);
         $html='<html dir="rtl"><head><meta charset="utf-8"><style>@page{size:A4;margin:25.4mm}body{font-family:"B Nazanin",BNazanin,Tahoma,sans-serif;font-size:16px;direction:rtl;text-align:right;line-height:1.15;color:#111}p{margin:0 0 8pt}h1{font-size:25px;margin:0 0 12pt}h2{font-size:21px;margin:0 0 10pt}h3{font-size:18px;margin:0 0 8pt}blockquote{border-right:3px solid #999;margin:10px 0;padding:6px 12px}a{color:#111;text-decoration:underline}</style></head><body>'.$content.'</body></html>';
         $pdf=new Dompdf(['isRemoteEnabled'=>false]);$pdf->loadHtml($html,'UTF-8');$pdf->setPaper('A4');$pdf->render();$canvas=$pdf->getCanvas();$canvas->page_script(function($pageNumber,$pageCount,$canvas,$fontMetrics){$margin=28.8;$canvas->rectangle($margin,$margin,$canvas->get_width()-($margin*2),$canvas->get_height()-($margin*2),[0.85,0.87,0.90],0.7);});return response($pdf->output(),200,['Content-Type'=>'application/pdf','Content-Disposition'=>'attachment; filename="farast-'.$doc->id.'.pdf"']);
