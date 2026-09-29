@@ -44,7 +44,7 @@ class GeminiEditorProvider implements AiProvider
                     $last = new RuntimeException(match (true) {
                         $response->status() === 401 || $response->status() === 403 => 'ai_provider_auth_failed',
                         $response->status() === 429 => 'ai_provider_rate_limited',
-                        $response->status() >= 500 => 'ai_provider_service_unavailable',
+                        $response->status() === 503 => 'ai_provider_service_unavailable',
                         default => 'ai_provider_http_'.$response->status(),
                     });
                     continue;
