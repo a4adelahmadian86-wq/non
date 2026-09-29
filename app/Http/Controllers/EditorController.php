@@ -13,6 +13,7 @@ use App\Services\GeminiService;
 use App\Services\PricingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -127,6 +128,14 @@ class EditorController extends Controller
             'پیش از شروع تایپ، برآورد اولیه فایل را تأیید کنید.'
         );
 
+        $ocrJobId = null;
+        if (\Illuminate\Schema\Schema::hasTable('farast_ocr_jobs')) {
+            $ocrJobId = DB::table('farast_ocr_jobs')->insertGetId([
+                'user_id' => auth()->id(), 'provider' => 'gemini', 'status' => 'processing',
+                'source_path' => $data['path'], 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
         try {
             $result = $ai->transcribe($data['mime'], base64_encode($bytes), [
                 'user_id' => auth()->id(),
@@ -135,11 +144,13 @@ class EditorController extends Controller
                 'source_name' => $data['source_name'] ?? null,
             ]);
         } catch (\Throwable $e) {
+            if ($ocrJobId) DB::table('farast_ocr_jobs')->where('id', $ocrJobId)->update(['status' => 'failed', 'error' => $e->getMessage(), 'updated_at' => now()]);
             Log::warning('farast.editor.ocr_exception', ['user_id' => auth()->id(), 'error' => $e->getMessage()]);
             return response()->json(['ok' => false, 'message' => 'ارتباط با هوش مصنوعی برقرار نشد. جزئیات خطا در لاگ ثبت شده است.'], 502);
         }
 
         if (($result['rejected'] ?? false)) {
+            if ($ocrJobId) DB::table('farast_ocr_jobs')->where('id', $ocrJobId)->update(['status' => 'failed', 'error' => (string) ($result['reason'] ?? 'ورودی رد شد'), 'updated_at' => now()]);
             return response()->json([
                 'ok' => false,
                 'message' => 'این ورودی شامل جدول، نمودار، شکل، فرمول یا محتوای گرافیکی است و برای تایپ دقیق متن عادی پذیرفته نمی‌شود.',
@@ -147,6 +158,8 @@ class EditorController extends Controller
                 'interaction_id' => $result['_ai_interaction_id'] ?? null,
             ], 422);
         }
+
+        if ($ocrJobId) DB::table('farast_ocr_jobs')->where('id', $ocrJobId)->update(['status' => 'completed', 'result_text' => (string) ($result['text'] ?? ''), 'updated_at' => now()]);
 
         $blocks = $result['blocks'] ?? [];
         $html = $this->blocksToHtml($blocks);
