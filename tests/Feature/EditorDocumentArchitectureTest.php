@@ -74,6 +74,27 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertSame('b1', $legacy->farastDocument->fresh()->content_json['sections'][0]['blocks'][0]['id']);
     }
 
+    public function test_editor_persistence_sanitizes_script_and_event_handlers(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'امنیت',
+            'content' => '<p>متن</p>',
+            'page_count' => 1,
+            'word_count' => 1,
+            'language_mix' => ['fa' => true],
+            'status' => 'draft',
+        ]);
+        $result = app(EditorDocumentService::class)->save($legacy, '<p onclick="alert(1)">سلام</p><script>alert(2)</script><a href="javascript:alert(3)">پیوند</a>', 'امنیت', null, 'manual');
+        $this->assertTrue($result['ok']);
+        $saved = $legacy->farastDocument->fresh();
+        $this->assertStringNotContainsString('<script', $saved->content);
+        $this->assertStringNotContainsString('onclick=', $saved->content);
+        $this->assertStringNotContainsString('javascript:', $saved->content);
+        $this->assertStringContainsString('سلام', $saved->content);
+    }
+
     public function test_stale_revision_is_rejected_without_overwriting_canonical_content(): void
     {
         $user = $this->makeUser();
