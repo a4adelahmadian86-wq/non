@@ -97,6 +97,16 @@ Route::middleware(['auth','single.editor'])->group(function(){
     Route::post('/documents/{document}/checkout',[PaymentController::class,'createForDocument'])->middleware('throttle:10,10')->name('documents.checkout');
 });
 
+
+Route::middleware('auth')->group(function(){
+    Route::get('/canva/connect',[CanvaController::class,'connect'])->name('canva.connect');
+    Route::get('/canva/callback',[CanvaController::class,'callback'])->name('canva.callback');
+    Route::post('/canva/disconnect',[CanvaController::class,'disconnect'])->name('canva.disconnect');
+    Route::get('/canva/designs',[CanvaController::class,'designs'])->name('canva.designs');
+    Route::post('/canva/designs',[CanvaController::class,'create'])->name('canva.designs.create');
+    Route::post('/canva/designs/{design}/export',[CanvaController::class,'export'])->name('canva.designs.export');
+});
+
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function(){
     Route::get('/',[AdminController::class,'index'])->name('index');
     Route::get('/finance',[AdminController::class,'finance'])->name('finance');
