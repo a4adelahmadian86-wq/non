@@ -1,6 +1,4 @@
 <?php
 
-// Full route table restored from main prior to PLACEHOLDER incident.
-// Loaded by routes/web.php together with routes/store_routes.php
-
-require base_path('routes/web_core_body.php');
+require __DIR__.'/web_core_part1.php';
+require __DIR__.'/web_core_part2.php';
