@@ -22,7 +22,9 @@ class EditorDocumentService
         ?array $documentModel = null,
     ): array {
         $safeHtml = $this->sanitizeHtml($html);
+        $normalizedSettings = $this->normalizePageSettings($pageSettings ?: (($documentModel['settings'] ?? null) ?: $this->defaultPageSettings()));
         $model = $documentModel ? $this->sanitizeDocumentModel($documentModel) : $this->normalizeHtml($safeHtml);
+        $model['settings'] = $normalizedSettings;
         $now = now();
 
         return $this->db->transaction(function () use ($legacy, $safeHtml, $model, $title, $expectedRevision, $source, $pageSettings, $now) {
@@ -37,7 +39,7 @@ class EditorDocumentService
                     'content' => $safeHtml,
                     'content_json' => $model,
                     'document_format' => 'farast-v1',
-                    'page_settings' => $pageSettings ?: $this->defaultPageSettings(),
+                    'page_settings' => $normalizedSettings,
                     'revision' => 0,
                     'last_saved_at' => $now,
                     'status' => $legacy->status === 'trashed' ? 'trashed' : 'active',
@@ -60,7 +62,7 @@ class EditorDocumentService
                 'title' => $title ?: $document->title,
                 'content' => $safeHtml,
                 'content_json' => $model,
-                'page_settings' => $pageSettings ?: ($document->page_settings ?: ($model['settings'] ?? $this->defaultPageSettings())),
+                'page_settings' => $normalizedSettings ?: ($document->page_settings ?: $this->defaultPageSettings()),
                 'revision' => $nextRevision,
                 'last_saved_at' => $now,
             ])->save();
@@ -112,6 +114,29 @@ class EditorDocumentService
             'revision' => (int) ($document?->revision ?? 0),
             'document_model' => $document?->content_json ?: $this->normalizeHtml($document?->content ?: $legacy->content ?: '<p><br></p>'),
             'page_settings' => $document?->page_settings ?: $this->defaultPageSettings(),
+        ];
+    }
+
+    public function normalizePageSettings(?array $settings): array
+    {
+        $defaults = $this->defaultPageSettings();
+        $paper = strtoupper((string) ($settings['paper'] ?? $defaults['paper']));
+        $orientation = (string) ($settings['orientation'] ?? $defaults['orientation']);
+        $direction = (string) ($settings['direction'] ?? $defaults['direction']);
+        return [
+            'paper' => in_array($paper, ['A4', 'A5', 'LETTER'], true) ? ($paper === 'LETTER' ? 'Letter' : $paper) : 'A4',
+            'orientation' => in_array($orientation, ['portrait', 'landscape'], true) ? $orientation : 'portrait',
+            'margin_top' => max(5, min(60, (float) ($settings['margin_top'] ?? $defaults['margin_top']))),
+            'margin_right' => max(5, min(60, (float) ($settings['margin_right'] ?? $defaults['margin_right']))),
+            'margin_bottom' => max(5, min(60, (float) ($settings['margin_bottom'] ?? $defaults['margin_bottom']))),
+            'margin_left' => max(5, min(60, (float) ($settings['margin_left'] ?? $defaults['margin_left']))),
+            'header_distance' => max(0, min(40, (float) ($settings['header_distance'] ?? $defaults['header_distance']))),
+            'footer_distance' => max(0, min(40, (float) ($settings['footer_distance'] ?? $defaults['footer_distance']))),
+            'direction' => $direction === 'ltr' ? 'ltr' : 'rtl',
+            'font_family' => mb_substr(trim((string) ($settings['font_family'] ?? $defaults['font_family'])), 0, 120) ?: $defaults['font_family'],
+            'font_size' => max(8, min(72, (int) ($settings['font_size'] ?? $defaults['font_size']))),
+            'header' => mb_substr((string) ($settings['header'] ?? ''), 0, 1000),
+            'footer' => mb_substr((string) ($settings['footer'] ?? ''), 0, 1000),
         ];
     }
 
