@@ -20,6 +20,7 @@ use App\Http\Controllers\TypingPreflightController;
 use App\Http\Controllers\UserFileController;
 use App\Http\Controllers\VoiceController;
 use App\Http\Controllers\WalletController;
+use App\Http\Controllers\PlatformCompletionController;
 use App\Models\Announcement;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -87,6 +88,26 @@ Route::middleware(['auth','single.editor'])->group(function(){
     Route::post('/editor/export/{format}',[ExportController::class,'export'])->whereIn('format',['docx','pdf'])->middleware('throttle:10,10')->name('editor.export');
     Route::post('/editor/heartbeat',[EditorController::class,'heartbeat'])->middleware('throttle:60,1')->name('editor.heartbeat');
     Route::get('/dashboard',[EditorController::class,'dashboard'])->name('dashboard');
+    Route::get('/workspace/documents',[PlatformCompletionController::class,'documents'])->name('platform.documents');
+    Route::post('/workspace/documents',[PlatformCompletionController::class,'createDocument'])->name('platform.documents.create');
+    Route::post('/workspace/documents/{id}',[PlatformCompletionController::class,'updateDocument'])->name('platform.documents.update');
+    Route::post('/workspace/documents/{id}/favorite',[PlatformCompletionController::class,'favorite'])->name('platform.documents.favorite');
+    Route::post('/workspace/documents/{id}/trash',[PlatformCompletionController::class,'trash'])->name('platform.documents.trash');
+    Route::post('/workspace/documents/{id}/restore',[PlatformCompletionController::class,'restore'])->name('platform.documents.restore');
+    Route::delete('/workspace/documents/{id}',[PlatformCompletionController::class,'destroy'])->name('platform.documents.destroy');
+    Route::get('/workspace/documents/{id}/versions',[PlatformCompletionController::class,'versions'])->name('platform.documents.versions');
+    Route::post('/workspace/documents/{id}/share',[PlatformCompletionController::class,'share'])->name('platform.documents.share');
+    Route::get('/workspace/notifications',[PlatformCompletionController::class,'notifications'])->name('platform.notifications');
+    Route::post('/workspace/notifications/{id}/read',[PlatformCompletionController::class,'readNotification'])->name('platform.notifications.read');
+    Route::get('/workspace/workflows',[PlatformCompletionController::class,'workflow'])->name('platform.workflows');
+    Route::post('/workspace/workflows',[PlatformCompletionController::class,'saveWorkflow'])->name('platform.workflows.save');
+    Route::post('/workspace/workflows/{id}/run',[PlatformCompletionController::class,'runWorkflow'])->name('platform.workflows.run');
+    Route::get('/workspace/security',[PlatformCompletionController::class,'security'])->name('platform.security');
+    Route::post('/workspace/ocr',[PlatformCompletionController::class,'ocr'])->name('platform.ocr');
+    Route::get('/workspace/ocr/{id}',[PlatformCompletionController::class,'ocrStatus'])->name('platform.ocr.status');
+    Route::get('/workspace/billing',[PlatformCompletionController::class,'billing'])->name('platform.billing');
+    Route::post('/workspace/billing/{plan}',[PlatformCompletionController::class,'subscribe'])->name('platform.billing.subscribe');
+
     Route::get('/support',[SupportController::class,'index'])->middleware('capability:can_support')->name('support');
     Route::post('/support/tickets',[SupportController::class,'create'])->middleware(['throttle:10,10','capability:can_support'])->name('support.create');
     Route::post('/support/tickets/{ticket}/messages',[SupportController::class,'message'])->middleware(['throttle:30,10','capability:can_support'])->name('support.message');
@@ -109,6 +130,8 @@ Route::middleware('auth')->group(function(){
     Route::post('/canva/imports',[CanvaController::class,'import'])->name('canva.imports.create');
     Route::get('/canva/imports/{job}',[CanvaController::class,'importStatus'])->name('canva.imports.status');
 });
+
+Route::get('/shared/documents/{token}',[PlatformCompletionController::class,'shared'])->name('platform.documents.shared');
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function(){
     Route::get('/',[AdminController::class,'index'])->name('index');
@@ -144,4 +167,9 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/providers/voice/{provider}/test',[ProviderAdminController::class,'testVoice'])->name('providers.voice.test');
 
     Route::post('/tickets/{ticket}/reply',[SupportController::class,'adminReply'])->name('tickets.reply');
+    Route::get('/plans',[PlatformCompletionController::class,'adminPlans'])->name('plans');
+    Route::post('/plans',[PlatformCompletionController::class,'savePlan'])->name('plans.save');
+    Route::get('/support-management',[PlatformCompletionController::class,'adminSupport'])->name('support.management');
+    Route::get('/cms',[PlatformCompletionController::class,'cms'])->name('cms');
+    Route::post('/cms',[PlatformCompletionController::class,'saveCms'])->name('cms.save');
 });
