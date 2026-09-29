@@ -206,12 +206,14 @@ class PaymentController extends Controller
 
                 $taxRate = max(0, (float) SiteSetting::read('tax_rate_percent', 10));
                 $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
-                $tax = $taxEnabled ? (int) round($subtotal * $taxRate / 100) : 0;
-                $total = $subtotal + $tax;
+                $discount = max(0, min($subtotal, (int) $locked->discount_rials));
+                $taxable = max(0, $subtotal - $discount);
+                $tax = ($taxable > 0 && $taxEnabled) ? (int) round($taxable * $taxRate / 100) : 0;
+                $total = $taxable + $tax;
 
                 $locked->update([
                     'subtotal_rials' => $subtotal,
-                    'discount_rials' => 0,
+                    'discount_rials' => $discount,
                     'tax_rials' => $tax,
                     'total_rials' => $total,
                     'pricing_snapshot' => [
