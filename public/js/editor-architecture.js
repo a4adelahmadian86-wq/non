@@ -21,7 +21,24 @@ ready(()=>{
  const searchText=(term,from=0)=>{if(!term)return null;const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);let pos=0,node;while(node=walker.nextNode()){const text=node.nodeValue||'',idx=text.toLocaleLowerCase().indexOf(term.toLocaleLowerCase(),Math.max(0,from-pos));if(idx>=0){const r=document.createRange();r.setStart(node,idx);r.setEnd(node,idx+term.length);return{range:r,offset:pos+idx}}pos+=text.length}return null};
  let searchCursor=0;
  const findNext=()=>{const term=document.getElementById('findInput')?.value?.trim()||'';if(!term){toast('عبارت جستجو را وارد کنید.','error');return}const found=searchText(term,searchCursor)||searchText(term,0);if(!found){toast('عبارت موردنظر پیدا نشد.');searchCursor=0;return}restoreSelection(found.range);editor.focus();searchCursor=found.offset+term.length};
- const replaceOne=()=>{const find=document.getElementById('findInput')?.value||'',replace=document.getElementById('replaceInput')?.value??'';const s=getSelection();if(s?.toString()===find){transaction('replace',()=>{const r=s.getRangeAt(0);r.deleteContents();r.insertNode(document.createTextNode(replace))});editor.dispatchEvent(new Event('input',{bubbles:true}));return}findNext();const s2=getSelection();if(s2?.toString()===find){transaction('replace',()=>{const r=s2.getRangeAt(0);r.deleteContents();r.insertNode(document.createTextNode(replace))});editor.dispatchEvent(new Event('input',{bubbles:true))}};
+ const replaceOne=()=>{
+   const find=document.getElementById('findInput')?.value||'';
+   const replace=document.getElementById('replaceInput')?.value??'';
+   const replaceSelection=()=>{
+     const selection=getSelection();
+     if(!selection||selection.toString()!==find||!selection.rangeCount)return false;
+     transaction('replace',()=>{
+       const range=selection.getRangeAt(0);
+       range.deleteContents();
+       range.insertNode(document.createTextNode(replace));
+     });
+     editor.dispatchEvent(new Event('input',{bubbles:true}));
+     return true;
+   };
+   if(replaceSelection())return;
+   findNext();
+   replaceSelection();
+ };
  const replaceAll=()=>{const find=document.getElementById('findInput')?.value||'',replace=document.getElementById('replaceInput')?.value??'';if(!find)return;transaction('replace-all',()=>{const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT),nodes=[];let n;while(n=walker.nextNode())nodes.push(n);const escaped=find.replace(/[.*+?^$()|[\]\\]/g,'\\$&'),re=new RegExp(escaped,'giu');nodes.forEach(x=>x.nodeValue=(x.nodeValue||'').replace(re,replace))});editor.dispatchEvent(new Event('input',{bubbles:true}));searchCursor=0};
  const pageBreak=()=>{transaction('page-break',()=>{const r=cloneSelection(),marker=document.createElement('div');marker.className='farast-page-break';marker.dataset.pageBreak='true';marker.setAttribute('role','separator');marker.setAttribute('aria-label','شکست صفحه');marker.innerHTML='<span>شکست صفحه</span>';if(r&&!r.collapsed){r.collapse(false);r.insertNode(marker);restoreSelection(r)}else editor.appendChild(marker)});editor.dispatchEvent(new Event('input',{bubbles:true}))};
  const openVersions=async()=>{if(!window.__farastDocId){toast('ابتدا یک سند را با AI پردازش کنید.','error');return}const dialog=document.getElementById('versionDialog'),list=document.getElementById('versionList'),status=document.getElementById('versionDialogStatus');dialog?.classList.remove('hidden');if(!list)return;list.innerHTML='';status.textContent='در حال دریافت نسخه‌ها…';try{const res=await fetch('/editor/documents/'+window.__farastDocId+'/versions',{headers:{'Accept':'application/json'}});const data=await res.json();if(!res.ok)throw new Error(data.message||'دریافت تاریخچه ناموفق بود');status.textContent=data.versions?.length?'نسخه‌های ذخیره‌شده':'هنوز نسخه‌ای ثبت نشده است';(data.versions||[]).forEach(v=>{const row=document.createElement('div');row.className='farast-version-item';const info=document.createElement('span');info.textContent=(v.label||'نسخه')+' — '+new Date(v.created_at).toLocaleString('fa-IR');const b=document.createElement('button');b.type='button';b.textContent='بازیابی';b.onclick=async()=>{if(!confirm('نسخه انتخاب‌شده جایگزین متن فعلی شود؟'))return;const rr=await fetch('/editor/documents/'+window.__farastDocId+'/versions/'+v.id+'/restore',{method:'POST',headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content||'','Accept':'application/json'}});const jj=await rr.json();if(!rr.ok)throw new Error(jj.message||'بازیابی ناموفق بود');location.reload()};row.append(info,b);list.append(row)})}catch(e){status.textContent=e.message||'دریافت تاریخچه ناموفق بود'}};
