@@ -78,13 +78,13 @@ class AdminController extends Controller
                 'name' => 'Gladia Primary', 'model' => 'solaria-1', 'enabled_key' => 'gladia_enabled',
                 'quota_key' => 'gladia_quota_limit_seconds', 'locales' => ['fa-IR','en-US','ar-SA'],
                 'credentials' => fn () => filled($data['gladia_api_key'] ?? null) ? ['api_key' => trim($data['gladia_api_key'])] : null,
-                'metadata' => ['service' => 'gladia'],
+                'metadata' => ['service' => 'gladia'], 'priority' => 10,
             ],
             'azure' => [
                 'name' => 'Azure Speech Primary', 'model' => 'speech', 'enabled_key' => 'azure_enabled',
                 'quota_key' => 'azure_quota_limit_seconds', 'locales' => ['fa-IR','en-US','ar-SA'],
                 'credentials' => fn () => filled($data['azure_subscription_key'] ?? null) ? ['subscription_key' => trim($data['azure_subscription_key']), 'region' => trim((string)($data['azure_region'] ?? ''))] : null,
-                'metadata' => ['service' => 'azure-speech'],
+                'metadata' => ['service' => 'azure-speech'], 'priority' => 20,
             ],
             'google' => [
                 'name' => 'Google Speech Primary', 'model' => 'chirp_3', 'enabled_key' => 'google_enabled',
@@ -94,7 +94,7 @@ class AdminController extends Controller
                     'client_email' => trim((string)($data['google_client_email'] ?? '')),
                     'private_key' => (string)($data['google_private_key'] ?? ''),
                 ] : null,
-                'metadata' => ['service' => 'google-cloud-speech', 'region' => trim((string)($data['google_region'] ?? 'us'))],
+                'metadata' => ['service' => 'google-cloud-speech', 'region' => trim((string)($data['google_region'] ?? 'us'))], 'priority' => 30,
             ],
         ];
 
@@ -105,6 +105,7 @@ class AdminController extends Controller
             $account->capabilities = ['locales' => $cfg['locales'], 'realtime' => true];
             $account->enabled = $r->boolean($cfg['enabled_key']);
             $account->healthy = true;
+            $account->priority = (int) ($cfg['metadata']['priority'] ?? 100);
             $account->metadata = array_merge((array)$account->metadata, $cfg['metadata']);
             if (array_key_exists($cfg['quota_key'], $data) && $data[$cfg['quota_key']] !== null && $data[$cfg['quota_key']] !== '') {
                 $quotaSeconds = (int) $data[$cfg['quota_key']];
