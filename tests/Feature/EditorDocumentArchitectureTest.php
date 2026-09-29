@@ -95,6 +95,39 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertStringContainsString('سلام', $saved->content);
     }
 
+    public function test_editor_review_reference_tools_persist_in_canonical_model(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'ابزارها',
+            'content' => '<p>متن</p>',
+            'status' => 'draft',
+        ]);
+
+        $model = [
+            'schema' => 2,
+            'type' => 'document',
+            'direction' => 'rtl',
+            'settings' => ['paper' => 'A4'],
+            'sections' => [['id' => 'section-1', 'blocks' => [['id' => 'b1', 'type' => 'paragraph', 'text' => 'متن', 'html' => '<p data-block-id="b1">متن</p>']]]],
+            'comments' => [['id' => 'c1', 'block_id' => 'b1', 'text' => 'بررسی شود', 'status' => 'open']],
+            'review' => [['id' => 'r1', 'block_id' => 'b1', 'before_html' => '<p>متن</p>', 'after_html' => '<p>متن جدید</p>', 'status' => 'pending']],
+            'bookmarks' => [['id' => 'm1', 'name' => 'مقدمه', 'block_id' => 'b1', 'offset' => 0]],
+            'footnotes' => [['id' => 'f1', 'number' => 1, 'text' => 'منبع', 'block_id' => 'b1']],
+            'watermark' => 'پیش‌نویس',
+        ];
+
+        $result = app(EditorDocumentService::class)->save($legacy, '<p data-block-id="b1">متن</p>', 'ابزارها', null, 'manual', ['paper' => 'A4'], $model);
+        $this->assertTrue($result['ok']);
+        $saved = $legacy->farastDocument->fresh()->content_json;
+        $this->assertSame('open', $saved['comments'][0]['status']);
+        $this->assertSame('pending', $saved['review'][0]['status']);
+        $this->assertSame('مقدمه', $saved['bookmarks'][0]['name']);
+        $this->assertSame('منبع', $saved['footnotes'][0]['text']);
+        $this->assertSame('پیش‌نویس', $saved['watermark']);
+    }
+
     public function test_stale_revision_is_rejected_without_overwriting_canonical_content(): void
     {
         $user = $this->makeUser();
