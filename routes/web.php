@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminPlatformController;
+use App\Http\Controllers\CanvaController;
+use App\Http\Controllers\ProviderAdminController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EditorAiAssistController;
@@ -113,5 +116,19 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/emails',[AdminController::class,'emails'])->name('emails');
     Route::post('/emails/settings',[AdminController::class,'updateEmailSettings'])->name('emails.settings');
     Route::post('/emails/test',[AdminController::class,'sendTestEmail'])->name('emails.test');
+    Route::get('/integrations',[AdminPlatformController::class,'integrations'])->name('integrations');
+    Route::post('/integrations/canva',[AdminPlatformController::class,'saveCanva'])->name('integrations.canva.save');
+    Route::get('/integrations/canva/connect',[CanvaController::class,'connect'])->name('integrations.canva.connect');
+    Route::get('/integrations/canva/callback',[CanvaController::class,'callback'])->name('integrations.canva.callback');
+    Route::post('/integrations/canva/disconnect',[CanvaController::class,'disconnect'])->name('integrations.canva.disconnect');
+    Route::get('/access',[AdminPlatformController::class,'access'])->name('access');
+    Route::post('/access/roles/{role}',[AdminPlatformController::class,'updateRole'])->name('access.roles.update');
+    Route::get('/organizations',[AdminPlatformController::class,'organizations'])->name('organizations');
+    Route::post('/organizations',[AdminPlatformController::class,'storeOrganization'])->name('organizations.store');
+    Route::get('/analytics',[AdminPlatformController::class,'analytics'])->name('analytics');
+    Route::get('/audit',[AdminPlatformController::class,'audit'])->name('audit');
+    Route::post('/providers/ai',[ProviderAdminController::class,'updateAi'])->name('providers.ai.update');
+    Route::get('/providers/voice/{provider}/test',[ProviderAdminController::class,'testVoice'])->name('providers.voice.test');
+
     Route::post('/tickets/{ticket}/reply',[SupportController::class,'adminReply'])->name('tickets.reply');
 });
