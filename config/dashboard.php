@@ -75,7 +75,7 @@ return [
         [
             'key' => 'reports', 'label' => 'گزارش‌ها و تحلیل‌ها', 'icon' => 'fa-chart-pie',
             'items' => [
-                ['key' => 'reports.overview', 'label' => 'گزارش کلی', 'icon' => 'fa-chart-column', 'planned' => true, 'permission' => 'reports.view', 'scope' => 'organization'],
+                ['key' => 'reports.overview', 'label' => 'گزارش کلی', 'icon' => 'fa-chart-column', 'route' => 'admin.analytics', 'permission' => 'reports.view', 'scope' => 'organization'],
                 ['key' => 'reports.users', 'label' => 'فعالیت کاربران', 'icon' => 'fa-user-chart', 'planned' => true, 'permission' => 'reports.users', 'scope' => 'organization'],
                 ['key' => 'reports.team', 'label' => 'عملکرد تیم', 'icon' => 'fa-people-group', 'planned' => true, 'permission' => 'reports.team', 'scope' => 'team'],
                 ['key' => 'reports.documents', 'label' => 'اسناد', 'icon' => 'fa-file-chart-column', 'planned' => true, 'permission' => 'reports.documents', 'scope' => 'organization'],
@@ -100,8 +100,8 @@ return [
             'key' => 'access', 'label' => 'مدیریت کاربران و دسترسی‌ها', 'icon' => 'fa-user-shield', 'admin_only' => true,
             'items' => [
                 ['key' => 'access.users', 'label' => 'کاربران', 'icon' => 'fa-users', 'route' => 'admin.index', 'fragment' => '#users', 'admin_only' => true],
-                ['key' => 'access.roles', 'label' => 'نقش‌ها', 'icon' => 'fa-id-badge', 'planned' => true, 'permission' => 'access.manage', 'scope' => 'global', 'admin_only' => true],
-                ['key' => 'access.permissions', 'label' => 'مجوزها', 'icon' => 'fa-key', 'planned' => true, 'permission' => 'access.manage', 'scope' => 'global', 'admin_only' => true],
+                ['key' => 'access.roles', 'label' => 'نقش‌ها', 'icon' => 'fa-id-badge', 'route' => 'admin.access', 'permission' => 'access.manage', 'scope' => 'global', 'admin_only' => true],
+                ['key' => 'access.permissions', 'label' => 'مجوزها', 'icon' => 'fa-key', 'route' => 'admin.access', 'permission' => 'access.manage', 'scope' => 'global', 'admin_only' => true],
                 ['key' => 'access.groups', 'label' => 'گروه‌ها', 'icon' => 'fa-layer-group', 'planned' => true, 'permission' => 'access.manage', 'scope' => 'global', 'admin_only' => true],
                 ['key' => 'access.teams', 'label' => 'تیم‌ها', 'icon' => 'fa-users-rectangle', 'planned' => true, 'permission' => 'team.manage', 'scope' => 'organization', 'admin_only' => true],
                 ['key' => 'access.requests', 'label' => 'درخواست‌های دسترسی', 'icon' => 'fa-user-clock', 'planned' => true, 'permission' => 'access.manage', 'scope' => 'global', 'admin_only' => true],
@@ -113,10 +113,10 @@ return [
         [
             'key' => 'organization', 'label' => 'مدیریت سازمان', 'icon' => 'fa-building', 'admin_only' => true,
             'items' => [
-                ['key' => 'organization.info', 'label' => 'اطلاعات سازمان', 'icon' => 'fa-building', 'planned' => true, 'permission' => 'organization.manage', 'scope' => 'organization', 'admin_only' => true],
+                ['key' => 'organization.info', 'label' => 'اطلاعات سازمان', 'icon' => 'fa-building', 'route' => 'admin.organizations', 'permission' => 'organization.manage', 'scope' => 'organization', 'admin_only' => true],
                 ['key' => 'organization.structure', 'label' => 'ساختار سازمانی', 'icon' => 'fa-sitemap', 'planned' => true, 'permission' => 'organization.manage', 'scope' => 'organization', 'admin_only' => true],
                 ['key' => 'organization.units', 'label' => 'واحدها', 'icon' => 'fa-diagram-project', 'planned' => true, 'permission' => 'organization.manage', 'scope' => 'organization', 'admin_only' => true],
-                ['key' => 'organization.teams', 'label' => 'تیم‌ها', 'icon' => 'fa-users-rectangle', 'planned' => true, 'permission' => 'team.manage', 'scope' => 'organization', 'admin_only' => true],
+                ['key' => 'organization.teams', 'label' => 'تیم‌ها', 'icon' => 'fa-users-rectangle', 'route' => 'admin.organizations', 'permission' => 'team.manage', 'scope' => 'organization', 'admin_only' => true],
                 ['key' => 'organization.members', 'label' => 'اعضا', 'icon' => 'fa-users', 'planned' => true, 'permission' => 'organization.manage', 'scope' => 'organization', 'admin_only' => true],
                 ['key' => 'organization.policies', 'label' => 'سیاست‌ها', 'icon' => 'fa-shield-halved', 'planned' => true, 'permission' => 'organization.manage', 'scope' => 'organization', 'admin_only' => true],
                 ['key' => 'organization.settings', 'label' => 'تنظیمات سازمان', 'icon' => 'fa-gear', 'planned' => true, 'permission' => 'organization.manage', 'scope' => 'organization', 'admin_only' => true],
@@ -126,9 +126,9 @@ return [
         [
             'key' => 'security', 'label' => 'امنیت و نظارت', 'icon' => 'fa-shield-halved', 'admin_only' => true,
             'items' => [
-                ['key' => 'security.report', 'label' => 'گزارش امنیتی', 'icon' => 'fa-file-shield', 'planned' => true, 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],
+                ['key' => 'security.report', 'label' => 'گزارش امنیتی', 'icon' => 'fa-file-shield', 'route' => 'admin.audit', 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],
                 ['key' => 'security.sensitive', 'label' => 'فعالیت‌های حساس', 'icon' => 'fa-user-lock', 'planned' => true, 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],
-                ['key' => 'security.logs', 'label' => 'لاگ‌ها', 'icon' => 'fa-list', 'planned' => true, 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],
+                ['key' => 'security.logs', 'label' => 'لاگ‌ها', 'icon' => 'fa-list', 'route' => 'admin.audit', 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],
                 ['key' => 'security.sessions', 'label' => 'نشست‌ها', 'icon' => 'fa-display', 'planned' => true, 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],
                 ['key' => 'security.logins', 'label' => 'ورودها', 'icon' => 'fa-right-to-bracket', 'planned' => true, 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],
                 ['key' => 'security.events', 'label' => 'رویدادهای امنیتی', 'icon' => 'fa-triangle-exclamation', 'planned' => true, 'permission' => 'system.audit', 'scope' => 'global', 'admin_only' => true],

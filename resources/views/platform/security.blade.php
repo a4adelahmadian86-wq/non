@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('content')<div class="container" dir="rtl"><h1>مرکز امنیت ورود و نشست</h1><p>رخدادهای امنیتی اخیر حساب شما</p><table><tr><th>رخداد</th><th>IP</th><th>زمان</th></tr>@foreach($events as $e)<tr><td>{{$e->event}}</td><td>{{$e->ip}}</td><td>{{$e->created_at}}</td></tr>@endforeach</table></div>@endsection

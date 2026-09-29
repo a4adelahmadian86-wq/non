@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('content')<main class="container" dir="rtl"><h1>{{ $d->title }}</h1><div>{!! $d->content !!}</div><small>سطح دسترسی: {{$s->permission}}</small></main>@endsection

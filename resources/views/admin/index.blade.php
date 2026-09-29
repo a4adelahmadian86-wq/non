@@ -15,6 +15,11 @@
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
             <a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>
             <a href="#pricing"><i class="fa-solid fa-tags"></i><span>قیمت‌گذاری</span></a>
+            <a href="{{ route('admin.access') }}"><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>
+            <a href="{{ route('admin.organizations') }}"><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>
+            <a href="{{ route('admin.integrations') }}"><i class="fa-solid fa-plug"></i><span>یکپارچه‌سازی‌ها</span></a>
+            <a href="{{ route('admin.analytics') }}"><i class="fa-solid fa-chart-line"></i><span>تحلیل‌ها</span></a>
+            <a href="{{ route('admin.audit') }}"><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>
         </nav>
         <div class="farast-admin-nav-bottom">
             <a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><span>مالی</span></a>
@@ -82,7 +87,8 @@
                 @csrf
                 <label class="modern-field secret"><span><i class="fa-solid fa-key"></i> کلید Gemini</span><input type="password" name="gemini_api_key" placeholder="{{ $secretStatus['gemini'] ? 'کلید تنظیم شده است؛ برای تغییر وارد کنید' : 'کلید Gemini API' }}" autocomplete="new-password"><small>خالی بگذارید تا مقدار فعلی حفظ شود.</small></label>
                 <label class="modern-field secret"><span><i class="fa-solid fa-file-shield"></i> کلید Files</span><input type="password" name="files_api_key" placeholder="{{ $secretStatus['files'] ? 'کلید تنظیم شده است؛ برای تغییر وارد کنید' : 'کلید سرویس Files' }}" autocomplete="new-password"><small>برای سرویس فایل و ورودی‌های بزرگ.</small></label>
-                <label class="modern-field"><span><i class="fa-solid fa-microchip"></i> مدل Gemini</span><input name="gemini_model" value="{{ $settings['gemini_model'] }}"></label>
+                <label class="modern-field"><span><i class="fa-solid fa-microchip"></i> مدل اصلی Gemini</span><input name="gemini_model" value="{{ $settings['gemini_model'] }}"></label>
+                <label class="modern-field"><span><i class="fa-solid fa-shuffle"></i> مدل fallback</span><input name="gemini_fallback_model" value="{{ $settings['gemini_fallback_model'] ?? '' }}" placeholder="اختیاری؛ مثلاً یک مدل پشتیبان"></label>
                 <label class="modern-field"><span><i class="fa-solid fa-file-arrow-up"></i> سقف فایل</span><input type="number" name="max_file_mb" value="{{ $settings['max_file_mb'] }}" min="1"><small>مگابایت</small></label>
                 <label class="modern-field"><span><i class="fa-solid fa-bolt"></i> درخواست AI روزانه</span><input type="number" name="daily_ai_requests" value="{{ $settings['daily_ai_requests'] }}" min="0"><small>برای کاربر عادی</small></label>
                 <label class="modern-field"><span><i class="fa-solid fa-gift"></i> صفحه رایگان هفتگی</span><input type="number" name="weekly_free_pages" value="{{ $settings['weekly_free_pages'] }}" min="0"><small>برای کاربر عادی</small></label>
@@ -192,4 +198,16 @@
         </section>
     </main>
 </div>
+<section class="admin-section admin-panel-wide" id="platform-control">
+<div class="admin-panel-head"><div><span class="panel-eyebrow">FARAST CONTROL CENTER</span><h2>مدیریت کامل پلتفرم</h2><p>ماژول‌های عملیاتی واقعی از همین کنسول قابل دسترسی‌اند؛ وضعیت‌های «planned» بدون مسیر عملیاتی به‌عنوان قابلیت کامل معرفی نمی‌شوند.</p></div></div>
+<div class="ops-grid">
+<a href="{{ route('admin.access') }}"><span class="ops-icon purple"><i class="fa-solid fa-user-shield"></i></span><div><b>RBAC</b><small>نقش‌ها و مجوزهای granular</small></div></a>
+<a href="{{ route('admin.organizations') }}"><span class="ops-icon"><i class="fa-solid fa-building"></i></span><div><b>{{ number_format($stats['organizations']) }}</b><small>سازمان · {{ number_format($stats['teams']) }} تیم</small></div></a>
+<a href="{{ route('admin.integrations') }}"><span class="ops-icon cyan"><i class="fa-solid fa-plug"></i></span><div><b>Integrations</b><small>Gemini · Voice · Canva OAuth</small></div></a>
+<a href="{{ route('admin.analytics') }}"><span class="ops-icon orange"><i class="fa-solid fa-chart-line"></i></span><div><b>{{ number_format($stats['voice_requests']) }}</b><small>{{ number_format($stats['voice_seconds']) }} ثانیه صوت ثبت‌شده</small></div></a>
+<a href="{{ route('admin.audit') }}"><span class="ops-icon"><i class="fa-solid fa-shield-halved"></i></span><div><b>{{ number_format($stats['audit_events']) }}</b><small>رویداد ممیزی</small></div></a>
+<a href="{{ route('admin.finance') }}"><span class="ops-icon purple"><i class="fa-solid fa-wallet"></i></span><div><b>Finance</b><small>تراکنش، کیف پول و پرداخت</small></div></a>
+<a href="{{ route('admin.emails') }}"><span class="ops-icon cyan"><i class="fa-solid fa-envelope"></i></span><div><b>Email</b><small>تنظیم و تست ایمیل</small></div></a>
+<a href="{{ route('admin.social') }}"><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>Content</b><small>اعلان و شبکه‌های اجتماعی</small></div></a>
+</div></section>
 @endsection

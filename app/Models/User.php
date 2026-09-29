@@ -27,7 +27,7 @@ class User extends Authenticatable
         self::ROLE_GUEST,
     ];
 
-    protected $fillable = ['name','mobile','email','password','role','is_verified','is_blocked'];
+    protected $fillable = ['name','mobile','email','password','role','is_verified','is_blocked','organization_id'];
     protected $hidden = ['password','remember_token'];
 
     protected function casts(): array
@@ -40,6 +40,9 @@ class User extends Authenticatable
     public function wallet(): HasOne { return $this->hasOne(Wallet::class); }
     public function orders(): HasMany { return $this->hasMany(Order::class); }
     public function freeCredits(): HasMany { return $this->hasMany(FreeCredit::class); }
+    public function organization(): \Illuminate\Database\Eloquent\Relations\BelongsTo { return $this->belongsTo(Organization::class); }
+    public function teams(): \Illuminate\Database\Eloquent\Relations\BelongsToMany { return $this->belongsToMany(Team::class)->withPivot('team_role')->withTimestamps(); }
+    public function canvaConnection(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(CanvaConnection::class); }
 
     public function isAdmin(): bool
     {

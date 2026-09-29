@@ -22,11 +22,11 @@ class EditorAiAssistController extends Controller
             $result = $ai->assist($data['operation'],$data['text'],array_merge($data,['user'=>$request->user()]));
             return response()->json(array_merge(['ok'=>true],$result));
         } catch (ValidationException|HttpExceptionInterface $e) { throw $e; }
-        catch (\InvalidArgumentException $e) { return response()->json(['ok'=>false,'message'=>$this->safeMessage($e->getMessage())],422); }
+        catch (\InvalidArgumentException $e) { return response()->json(['ok'=>false,'message'=>$e->getMessage(),'user_message'=>$this->safeMessage($e->getMessage())],422); }
         catch (\Throwable $e) {
             $code = preg_match('/^ai_[a-z0-9_]+$/',$e->getMessage()) ? $e->getMessage() : 'ai_provider_failure';
             Log::warning('farast.editor.ai_assist_failed',['user_id'=>$request->user()->id,'operation'=>$data['operation'],'error_code'=>$code]);
-            return response()->json(['ok'=>false,'error_code'=>$code,'message'=>$this->safeMessage($code)],502);
+            return response()->json(['ok'=>false,'error_code'=>$code,'message'=>$code,'user_message'=>$this->safeMessage($code)],502);
         }
     }
 

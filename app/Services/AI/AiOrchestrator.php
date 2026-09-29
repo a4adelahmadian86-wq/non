@@ -65,12 +65,19 @@ class AiOrchestrator
             $latency = (int) ((hrtime(true) - $started) / 1_000_000);
             $result = $normalized->result;
             $resolvedModel = $normalized->model ?: $model;
+            $usage = (array) ($normalized->usage ?? []);
+            $inputTokens = (int) ($usage['input_tokens'] ?? 0);
+            $outputTokens = (int) ($usage['output_tokens'] ?? 0);
+            $totalTokens = (int) ($usage['total_tokens'] ?? ($inputTokens + $outputTokens));
             $interaction->update([
                 'provider_interaction_id' => $normalized->providerRequestId,
                 'model' => $resolvedModel,
                 'prompt_hash' => $normalized->metadata['prompt_hash'] ?? null,
                 'latency_ms' => $latency,
                 'output_bytes' => (int) ($normalized->metadata['output_bytes'] ?? 0),
+                'input_tokens' => $inputTokens ?: null,
+                'output_tokens' => $outputTokens ?: null,
+                'total_tokens' => $totalTokens ?: null,
                 'status' => 'completed',
                 'output_meta' => [
                     'http_status' => $normalized->metadata['http_status'] ?? null,
