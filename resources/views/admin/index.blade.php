@@ -11,6 +11,7 @@
             <a class="is-active" href="#overview"><i class="fa-solid fa-grid-2"></i><span>نمای کلی</span></a>
             <a href="#users"><i class="fa-solid fa-users"></i><span>کاربران</span></a>
             <a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>
+<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
             <a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>
             <a href="#pricing"><i class="fa-solid fa-tags"></i><span>قیمت‌گذاری</span></a>
@@ -86,6 +87,46 @@
                 <label class="modern-field"><span><i class="fa-solid fa-bolt"></i> درخواست AI روزانه</span><input type="number" name="daily_ai_requests" value="{{ $settings['daily_ai_requests'] }}" min="0"><small>برای کاربر عادی</small></label>
                 <label class="modern-field"><span><i class="fa-solid fa-gift"></i> صفحه رایگان هفتگی</span><input type="number" name="weekly_free_pages" value="{{ $settings['weekly_free_pages'] }}" min="0"><small>برای کاربر عادی</small></label>
                 <div class="settings-submit"><button class="admin-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره تنظیمات</button></div>
+            </form>
+        </section>
+
+        <section id="voice-settings" class="admin-section admin-panel-wide">
+            <div class="admin-panel-head">
+                <div>
+                    <span class="panel-eyebrow">VOICE AI GATEWAY</span>
+                    <h2>کلیدها و حساب‌های تایپ صوتی</h2>
+                    <p>کلیدها رمزنگاری‌شده در دیتابیس نگهداری می‌شوند. مقدار ذخیره‌شده هرگز دوباره در صفحه نمایش داده نمی‌شود.</p>
+                </div>
+            </div>
+            <form method="post" action="{{ route('admin.voice.providers.update') }}" class="settings-modern">
+                @csrf
+                @php
+                    $gladia = $voiceAccounts['gladia'] ?? null;
+                    $azure = $voiceAccounts['azure'] ?? null;
+                    $google = $voiceAccounts['google'] ?? null;
+                @endphp
+                <div class="modern-field" style="grid-column:1/-1">
+                    <span><i class="fa-solid fa-wave-square"></i> Gladia — تایپ زنده</span>
+                    <input type="text" name="gladia_api_key" placeholder="{{ $gladia && filled($gladia->credentials_array['api_key'] ?? null) ? 'کلید Gladia تنظیم شده؛ برای تغییر وارد کنید' : 'Gladia API Key' }}" autocomplete="off">
+                    <small>موتور اصلی پیشنهادی برای جریان زنده فارسی. فعال: <input type="checkbox" name="gladia_enabled" value="1" {{ $gladia?->enabled ? 'checked' : '' }}> · سقف ثانیه ماهانه: <input type="number" name="gladia_quota_limit_seconds" value="{{ $gladia?->quota_limit_seconds ?? 36000 }}" min="0" style="max-width:180px"></small>
+                </div>
+                <div class="modern-field" style="grid-column:1/-1">
+                    <span><i class="fa-solid fa-cloud"></i> Azure Speech — موتور پشتیبان</span>
+                    <input type="text" name="azure_subscription_key" placeholder="{{ $azure && filled($azure->credentials_array['subscription_key'] ?? null) ? 'کلید Azure تنظیم شده؛ برای تغییر وارد کنید' : 'Azure Speech subscription key' }}" autocomplete="off">
+                    <input type="text" name="azure_region" value="{{ $azure->credentials_array['region'] ?? '' }}" placeholder="Azure region مانند eastus">
+                    <small>برای failover در صورت خطای موتور اصلی. فعال: <input type="checkbox" name="azure_enabled" value="1" {{ $azure?->enabled ? 'checked' : '' }}> · سقف ثانیه: <input type="number" name="azure_quota_limit_seconds" value="{{ $azure?->quota_limit_seconds ?? 0 }}" min="0" style="max-width:180px"></small>
+                </div>
+                <div class="modern-field" style="grid-column:1/-1">
+                    <span><i class="fa-brands fa-google"></i> Google Cloud Speech — موتور پشتیبان</span>
+                    <input type="text" name="google_project_id" value="{{ $google->credentials_array['project_id'] ?? '' }}" placeholder="Google Cloud Project ID">
+                    <input type="text" name="google_client_email" value="{{ $google->credentials_array['client_email'] ?? '' }}" placeholder="Service Account client email">
+                    <textarea name="google_private_key" rows="5" placeholder="{{ $google && filled($google->credentials_array['private_key'] ?? null) ? 'Private key تنظیم شده؛ برای تغییر وارد کنید' : '-----BEGIN PRIVATE KEY----- ...' }}" autocomplete="off"></textarea>
+                    <input type="text" name="google_region" value="{{ $google->metadata['region'] ?? 'us' }}" placeholder="Google Speech region">
+                    <small>Streaming واقعی Google Cloud از مسیر gRPC انجام می‌شود. فعال: <input type="checkbox" name="google_enabled" value="1" {{ $google?->enabled ? 'checked' : '' }}> · سقف ثانیه: <input type="number" name="google_quota_limit_seconds" value="{{ $google?->quota_limit_seconds ?? 0 }}" min="0" style="max-width:180px"></small>
+                </div>
+                <div class="settings-submit" style="grid-column:1/-1">
+                    <button class="admin-primary"><i class="fa-solid fa-shield-halved"></i> ذخیره حساب‌های صوتی</button>
+                </div>
             </form>
         </section>
 
