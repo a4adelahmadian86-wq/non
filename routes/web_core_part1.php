@@ -1,0 +1,82 @@
+<?php
+
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminPlatformController;
+use App\Http\Controllers\CanvaController;
+use App\Http\Controllers\ProviderAdminController;
+use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\EditorAiAssistController;
+use App\Http\Controllers\EditorController;
+use App\Http\Controllers\EditorSaveController;
+use App\Http\Controllers\EditorDocumentStateController;
+use App\Http\Controllers\ExportController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\SocialController;
+use App\Http\Controllers\StoreCartController;
+use App\Http\Controllers\StoreController;
+use App\Http\Controllers\StoreLibraryController;
+use App\Http\Controllers\SupportController;
+use App\Http\Controllers\TypingPreflightController;
+use App\Http\Controllers\UserFileController;
+use App\Http\Controllers\VoiceController;
+use App\Http\Controllers\WalletController;
+use App\Http\Controllers\PlatformCompletionController;
+use App\Models\Announcement;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
+
+Route::get('/', function () { $announcements=Schema::hasTable('announcements')?Announcement::visible()->latest()->limit(4)->get():collect(); return view('home',compact('announcements')); })->name('home');
+Route::get('/store',[StoreController::class,'index'])->name('store');
+Route::get('/store/category/{slug}',[StoreController::class,'category'])->name('store.category');
+Route::get('/store/product/{slug}',[StoreController::class,'product'])->name('store.product');
+Route::get('/store/preview/{preview}',[StoreController::class,'preview'])->name('store.preview');
+Route::get('/cart',[StoreCartController::class,'index'])->name('cart');
+Route::post('/cart/products/{product}',[StoreCartController::class,'add'])->middleware('throttle:60,10')->name('cart.add');
+Route::post('/cart/products/{product}/update',[StoreCartController::class,'update'])->middleware('throttle:60,10')->name('cart.update');
+Route::post('/cart/products/{product}/remove',[StoreCartController::class,'remove'])->middleware('throttle:60,10')->name('cart.remove');
+Route::post('/cart/checkout',[StoreCartController::class,'checkout'])->middleware(['auth','throttle:10,10'])->name('cart.checkout');
+Route::post('/cart/coupon',[StoreCartController::class,'applyCoupon'])->middleware('throttle:30,10')->name('cart.coupon');
+Route::post('/cart/coupon/clear',[StoreCartController::class,'clearCoupon'])->middleware('throttle:30,10')->name('cart.coupon.clear');
+Route::get('/pricing',[EditorController::class,'pricing'])->name('pricing');
+Route::get('/announcements',[AnnouncementController::class,'index'])->name('announcements');
+Route::get('/social',[SocialController::class,'index'])->name('social');
+Route::view('/terms','legal.terms')->name('terms');
+Route::view('/refund-policy','legal.refunds')->name('refunds');
+Route::view('/privacy','legal.privacy')->name('privacy');
+Route::get('/assets/sounds/{file}',function(string $file){abort_unless(preg_match('/^[0-9]{2}-[a-z0-9-]+\.ogg$/',$file)===1);$path=base_path('FARAST-UI-SOUNDS/OGG/'.$file);abort_unless(is_file($path),404);return response()->file($path,['Content-Type'=>'audio/ogg','Cache-Control'=>'public, max-age=31536000, immutable','X-Content-Type-Options'=>'nosniff']);})->where('file','[0-9]{2}-[A-Za-z0-9-]+\.ogg')->name('assets.sounds');
+
+Route::get('/login',[AuthController::class,'showLogin'])->name('login');
+Route::post('/login/phone',[AuthController::class,'phoneContinue'])->middleware('throttle:10,10')->name('login.phone');
+Route::get('/login/password',[AuthController::class,'passwordForm'])->name('login.password');
+Route::post('/login/password',[AuthController::class,'passwordLogin'])->middleware('throttle:10,10')->name('login.password.store');
+Route::get('/register',[AuthController::class,'registerForm'])->name('register');
+Route::post('/register',[AuthController::class,'registerStore'])->middleware('throttle:10,10')->name('register.store');
+Route::post('/login/register/verify',[AuthController::class,'verifyRegistrationOtp'])->middleware('throttle:10,10')->name('register.otp.verify');
+Route::post('/login/request-otp',[AuthController::class,'requestOtp'])->middleware('throttle:5,10')->name('login.otp');
+Route::get('/login/email',[AuthController::class,'emailLoginForm'])->name('login.email');
+Route::post('/login/email',[AuthController::class,'requestEmailOtp'])->middleware('throttle:5,10')->name('login.email.request');
+Route::post('/login/email/verify',[AuthController::class,'verifyEmailOtp'])->middleware('throttle:10,10')->name('login.email.verify');
+Route::get('/login/email/mobile',[AuthController::class,'emailMobileForm'])->name('login.email.mobile');
+Route::post('/login/email/mobile',[AuthController::class,'requestEmailMobileOtp'])->middleware('throttle:5,10')->name('login.email.mobile.request');
+Route::post('/logout',[AuthController::class,'logout'])->middleware('auth')->name('logout');
+
+Route::post('/editor/voice/stream-config',[VoiceController::class,'streamConfig'])->middleware('throttle:120,1')->name('editor.voice.stream-config');
+Route::post('/editor/voice/stream-usage',[VoiceController::class,'streamUsage'])->middleware('throttle:120,1')->name('editor.voice.stream-usage');
+
+Route::middleware('auth')->group(function(){
+    Route::get('/editor/preflight/estimate',[TypingPreflightController::class,'estimate'])->middleware('throttle:30,10')->name('editor.preflight.estimate.get');
+    Route::post('/editor/preflight/estimate',[TypingPreflightController::class,'estimate'])->middleware('throttle:30,10')->name('editor.preflight.estimate');
+    Route::post('/editor/preflight/accept',[TypingPreflightController::class,'accept'])->middleware('throttle:30,10')->name('editor.preflight.accept');
+    Route::post('/editor/preflight/decline',[TypingPreflightController::class,'decline'])->middleware('throttle:30,10')->name('editor.preflight.decline');
+    Route::post('/editor/documents',[EditorController::class,'createDocument'])->middleware(['throttle:30,10','capability:can_type'])->name('editor.documents.create');
+    Route::get('/editor/pending',[EditorController::class,'pending'])->middleware('throttle:60,10')->name('editor.pending');
+    Route::post('/editor/upload',[EditorController::class,'upload'])->middleware('throttle:20,10')->name('editor.upload');
+    Route::get('/library',[StoreLibraryController::class,'index'])->name('library');
+    Route::post('/library/{libraryItem}/download',[StoreLibraryController::class,'issue'])->middleware('throttle:20,10')->name('library.download.issue');
+    Route::get('/downloads/{download}',[StoreLibraryController::class,'stream'])->middleware('throttle:60,10')->name('store.download.stream');
+    Route::get('/editor/files',[UserFileController::class,'index'])->middleware('throttle:60,10')->name('editor.files.index');
+    Route::post('/editor/files',[UserFileController::class,'upload'])->middleware('throttle:20,10')->name('editor.files.upload');
+    Route::post('/editor/files/{file}/select',[UserFileController::class,'select'])->middleware('throttle:30,10')->name('editor.files.select');
+    Route::delete('/editor/files/{file}',[UserFileController::class,'destroy'])->middleware('throttle:30,10')->name('editor.files.destroy');
+});
