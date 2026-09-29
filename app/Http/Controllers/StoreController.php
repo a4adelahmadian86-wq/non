@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
+use App\Models\StoreWishlist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,9 +15,10 @@ class StoreController extends Controller
     {
         $q = trim((string) $request->query('q', ''));
         $category = $request->query('category');
-        $products = StoreProduct::query()
-            ->with(['category', 'images'])
-            ->published()
+
+        $base = StoreProduct::query()->with(['category', 'images'])->published();
+
+        $products = (clone $base)
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')
                     ->orWhere('short_description', 'like', '%'.$q.'%')
@@ -30,9 +32,20 @@ class StoreController extends Controller
             ->withQueryString();
 
         $categories = StoreCategory::query()->where('is_active', true)->orderBy('sort_order')->get();
-        $featured = StoreProduct::query()->with('category')->published()->where('featured', true)->orderBy('sort_order')->limit(8)->get();
+        $featured = (clone $base)->where('featured', true)->orderBy('sort_order')->limit(12)->get();
+        $free = (clone $base)->where('price_rials', 0)->orderBy('sort_order')->limit(12)->get();
+        $latest = (clone $base)->latest('published_at')->limit(12)->get();
 
-        return view('store.index', compact('products', 'categories', 'q', 'category', 'featured'));
+        $recentIds = collect($request->session()->get('store_recent_ids', []))->take(12)->all();
+        $recent = $recentIds
+            ? StoreProduct::with('category')->published()->whereIn('id', $recentIds)->get()->sortBy(fn ($p) => array_search($p->id, $recentIds))->values()
+            : collect();
+
+        $isBrowsing = $q !== '' || $category;
+
+        return view('store.index', compact(
+            'products', 'categories', 'q', 'category', 'featured', 'free', 'latest', 'recent', 'isBrowsing'
+        ));
     }
 
     public function product(Request $request, string $slug)
@@ -51,7 +64,35 @@ class StoreController extends Controller
             ->all();
         $request->session()->put('store_recent_ids', $ids);
 
-        return view('store.product', compact('product'));
+        $related = $product->related->isNotEmpty()
+            ? $product->related->take(8)
+            : StoreProduct::with('category')
+                ->published()
+                ->where('id', '!=', $product->id)
+                ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
+                ->orderByDesc('featured')
+                ->limit(8)
+                ->get();
+
+        $alsoViewed = StoreProduct::with('category')
+            ->published()
+            ->where('id', '!=', $product->id)
+            ->whereIn('id', collect($ids)->reject(fn ($id) => (int) $id === (int) $product->id)->take(8))
+            ->get();
+
+        $inWishlist = false;
+        $inLater = false;
+        if ($request->user()) {
+            $lists = StoreWishlist::where('user_id', $request->user()->id)
+                ->where('product_id', $product->id)
+                ->pluck('list_type');
+            $inWishlist = $lists->contains('wishlist');
+            $inLater = $lists->contains('later');
+        }
+
+        $hasPreview = $product->previews->where('is_active', true)->isNotEmpty();
+
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview'));
     }
 
     public function category(string $slug)
