@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCoupon;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductPreview;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 
@@ -26,6 +27,11 @@ class StoreDemoSeeder extends Seeder
             ['name' => 'آزمایشی', 'description' => 'دسته محصولات آزمایشی', 'is_active' => true, 'sort_order' => 1]
         );
 
+        $books = StoreCategory::firstOrCreate(
+            ['slug' => 'books'],
+            ['name' => 'کتاب و جزوه', 'description' => 'نمونه دسته کتابخانه', 'is_active' => true, 'sort_order' => 2]
+        );
+
         $product = StoreProduct::updateOrCreate(
             ['slug' => 'demo-free'],
             [
@@ -40,7 +46,7 @@ class StoreDemoSeeder extends Seeder
                 'published_at' => now(),
                 'featured' => true,
                 'sort_order' => 1,
-                'preview_pages' => 1,
+                'preview_pages' => 3,
                 'license_type' => 'شخصی',
                 'version' => '1.0',
             ]
@@ -60,6 +66,8 @@ class StoreDemoSeeder extends Seeder
             ]
         );
 
+        $this->seedPreviews($product, 3, 'نمونه رایگان');
+
         $paidPath = 'store/demo/demo-paid.txt';
         $paidFull = storage_path('app/private/'.$paidPath);
         if (! is_file($paidFull)) {
@@ -68,18 +76,19 @@ class StoreDemoSeeder extends Seeder
         $paid = StoreProduct::updateOrCreate(
             ['slug' => 'demo-paid'],
             [
-                'category_id' => $category->id,
+                'category_id' => $books->id,
                 'title' => 'فایل آزمایشی پولی (۳۵ هزار تومان)',
                 'sku' => 'DEMO-PAID-001',
                 'type' => 'digital_file',
                 'short_description' => 'برای تست سبد، تخفیف و پرداخت کیف‌پول',
-                'description' => 'قیمت نمایشی ۳۵۰٬۰۰۰ ریال (۳۵ هزار تومان).',
+                'description' => 'قیمت نمایشی ۳۵۰٬۰۰۰ ریال (۳۵ هزار تومان). پیش‌نمایش چند صفحه دارد.',
                 'price_rials' => 350000,
                 'compare_at_price_rials' => 450000,
                 'status' => 'published',
                 'published_at' => now(),
                 'featured' => true,
                 'sort_order' => 2,
+                'preview_pages' => 3,
                 'license_type' => 'شخصی',
                 'version' => '1.0',
             ]
@@ -98,6 +107,8 @@ class StoreDemoSeeder extends Seeder
             ]
         );
 
+        $this->seedPreviews($paid, 3, 'نمونه پولی');
+
         StoreCoupon::updateOrCreate(
             ['code' => 'FARAST10'],
             [
@@ -109,5 +120,41 @@ class StoreDemoSeeder extends Seeder
                 'description' => '۱۰٪ تخفیف آزمایشی',
             ]
         );
+    }
+
+    private function seedPreviews(StoreProduct $product, int $pages, string $label): void
+    {
+        $previewDir = storage_path('app/private/store/previews/'.$product->id);
+        File::ensureDirectoryExists($previewDir);
+
+        for ($i = 1; $i <= $pages; $i++) {
+            $rel = 'store/previews/'.$product->id.'/page-'.$i.'.svg';
+            $full = storage_path('app/private/'.$rel);
+            $svg = <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#f7fafc"/>
+  <rect x="40" y="40" width="520" height="720" rx="12" fill="#fff" stroke="#dbe4f0"/>
+  <text x="300" y="120" text-anchor="middle" font-family="Tahoma,Arial" font-size="28" fill="#1a2b45">{$label}</text>
+  <text x="300" y="170" text-anchor="middle" font-family="Tahoma,Arial" font-size="18" fill="#6b7c93">صفحه پیش‌نمایش {$i}</text>
+  <text x="80" y="260" font-family="Tahoma,Arial" font-size="16" fill="#52667e">این یک صفحه نمونه است تا خوانشگر</text>
+  <text x="80" y="290" font-family="Tahoma,Arial" font-size="16" fill="#52667e">فروشگاه فراست را قبل از خرید ببینید.</text>
+  <text x="80" y="340" font-family="Tahoma,Arial" font-size="15" fill="#8a9bb0">محصول: {$product->title}</text>
+</svg>
+SVG;
+            file_put_contents($full, $svg);
+
+            StoreProductPreview::updateOrCreate(
+                ['product_id' => $product->id, 'path' => $rel],
+                [
+                    'disk' => 'private',
+                    'mime' => 'image/svg+xml',
+                    'page_number' => $i,
+                    'kind' => 'image',
+                    'watermarked' => true,
+                    'is_active' => true,
+                    'sort_order' => $i,
+                ]
+            );
+        }
     }
 }
