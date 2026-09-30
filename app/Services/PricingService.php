@@ -70,7 +70,7 @@ class PricingService
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
         $pages = max(1, $pages);
-        $pageUnit = max(0, (int)($rules['page_base'] ?? 300000));
+        $pageUnit = max(0, $this->ruleValue('page_base', 0));
         $price = $pages * $pageUnit;
 
         return [
@@ -91,11 +91,13 @@ class PricingService
     {
         $policy = FarastPricingPolicy::where('code', $key)->where('active', true)->first();
         if ($policy) {
-            return $key === 'typing_payg_multiplier'
-                ? max(100, (int) ($policy->payg_multiplier_percent ?: $policy->base_price_rials))
-                : ($policy->unit === 'percentage' && (int) $policy->base_price_rials === 0)
-                    ? ((int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback)
-                    : max(0, (int) $policy->base_price_rials);
+            if ($key === 'typing_payg_multiplier') {
+                return max(100, (int) ($policy->payg_multiplier_percent ?: $policy->base_price_rials));
+            }
+            if ($policy->unit === 'percentage' && (int) $policy->base_price_rials === 0) {
+                return (int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback;
+            }
+            return max(0, (int) $policy->base_price_rials);
         }
         return (int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback;
     }
