@@ -10,7 +10,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   const phoneResponse = await phoneResponsePromise;
   if (!phoneResponse.ok()) throw new Error(`/login/phone failed: ${phoneResponse.status()} ${await phoneResponse.text()}`);
   await expect(page).toHaveURL(/\/login\/password/);
-  await page.getByLabel('رمز عبور').fill(password);
+  await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'ورود به حساب' }).click();
 
   await expect(page).toHaveURL(/\/projects\/new/);
