@@ -44,6 +44,54 @@ class PricingService
             'voice_minute'=>$this->ruleValue('typing_voice_minute', 0),
         ];
     }
+
+    public function calculate(string $policyCode, int $units, bool $subscription = false): array
+    {
+        $units = max(0, $units);
+        $policy = FarastPricingPolicy::where('code', $policyCode)->where('active', true)->first();
+
+        if (!$policy) {
+            return [
+                'policy' => $policyCode,
+                'units' => $units,
+                'base_price_rials' => 0,
+                'subscription_allowance' => 0,
+                'included_units' => 0,
+                'billable_units' => $units,
+                'additional_usage_rials' => 0,
+                'discount_rials' => 0,
+                'fee_rials' => 0,
+                'final_price_rials' => 0,
+            ];
+        }
+
+        $allowance = $subscription ? max(0, (int) $policy->subscription_allowance) : 0;
+        $included = min($units, $allowance);
+        $billable = max(0, $units - $included);
+        $unit = max(0, (int) $policy->base_price_rials);
+        $additionalUnit = $policy->additional_price_rials === null ? $unit : max(0, (int) $policy->additional_price_rials);
+        $additional = $billable * $additionalUnit;
+        $multiplier = max(100, (int) ($policy->payg_multiplier_percent ?: 100));
+        $usage = (int) round($additional * $multiplier / 100);
+        $discount = (int) round($usage * max(0, min(100, (int) $policy->discount_percent)) / 100);
+        $fee = max(0, (int) $policy->fee_rials);
+        $final = max(0, $usage - $discount + $fee);
+
+        return [
+            'policy' => $policyCode,
+            'unit' => $policy->unit,
+            'units' => $units,
+            'base_price_rials' => $unit,
+            'subscription_allowance' => $allowance,
+            'included_units' => $included,
+            'billable_units' => $billable,
+            'additional_usage_rials' => $usage,
+            'discount_rials' => $discount,
+            'fee_rials' => $fee,
+            'final_price_rials' => $final,
+        ];
+    }
+
     public function quote(string $text, int $pages): array
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
