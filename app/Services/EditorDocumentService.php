@@ -295,7 +295,7 @@ class EditorDocumentService
         $model['review'] = $model['reviewChanges']; // compatibility alias for older clients
         $model['bookmarks'] = $this->sanitizeBookmarks($model['bookmarks'] ?? []);
         $model['resources'] = is_array($model['resources'] ?? null) ? array_values($model['resources']) : [];
-        $model['fields'] = is_array($model['fields'] ?? null) ? array_values($model['fields']) : [];
+        $model['fields'] = $this->sanitizeFields($model['fields'] ?? []);
         $model['plain_text'] = $this->plainTextFromModel($model);
         $model['stats'] = [
             'words' => $this->wordCount($model['plain_text']),
@@ -464,6 +464,24 @@ class EditorDocumentService
                 'offset' => max(0, (int) ($bookmark['offset'] ?? 0)),
             ];
         }, $bookmarks), fn ($v) => $v !== null));
+    }
+
+    private function sanitizeFields(mixed $fields): array
+    {
+        if (!is_array($fields)) return [];
+        $allowed = ['pageNumber','pageCount','date','documentTitle'];
+        $out = [];
+        foreach ($fields as $field) {
+            if (!is_array($field)) continue;
+            $type = (string) ($field['type'] ?? $field['fieldType'] ?? '');
+            if (!in_array($type, $allowed, true)) continue;
+            $out[] = [
+                'id' => (string) ($field['id'] ?? Str::uuid()),
+                'type' => $type,
+                'format' => mb_substr((string) ($field['format'] ?? 'default'), 0, 40),
+            ];
+        }
+        return $out;
     }
 
     private function migrateDocumentModel(array $model, int $schema): array
