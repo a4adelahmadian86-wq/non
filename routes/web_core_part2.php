@@ -18,8 +18,6 @@ use App\Http\Controllers\SupportController;
 use App\Http\Controllers\VoiceController;
 use App\Http\Controllers\WalletController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 
 Route::get('/projects/new', [ProjectController::class, 'create'])->middleware('auth')->name('projects.create');
 Route::post('/projects', [ProjectController::class, 'store'])->middleware(['auth','throttle:30,10','capability:can_type'])->name('projects.store');
