@@ -36,6 +36,8 @@ class User extends Authenticatable
     }
 
     public function documents(): HasMany { return $this->hasMany(TypingDocument::class); }
+    public function projects(): HasMany { return $this->hasMany(FarastProject::class); }
+    public function knowledge(): HasMany { return $this->hasMany(UserKnowledge::class); }
     public function tickets(): HasMany { return $this->hasMany(Ticket::class); }
     public function wallet(): HasOne { return $this->hasOne(Wallet::class); }
     public function orders(): HasMany { return $this->hasMany(Order::class); }
