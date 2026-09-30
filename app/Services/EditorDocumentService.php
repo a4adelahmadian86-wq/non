@@ -193,6 +193,51 @@ class EditorDocumentService
         return $out !== '' ? $out : '<p><br></p>';
     }
 
+    public function normalizeHtml(string $html): array
+    {
+        $safe = $this->sanitizeHtml($html);
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        @$dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-normalize-root">'.$safe.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $root = $dom->getElementById('farast-normalize-root');
+        $blocks = [];
+
+        if ($root) {
+            foreach ($root->childNodes as $node) {
+                if (!$node instanceof \DOMElement) continue;
+                $tag = strtolower($node->tagName);
+                $type = $tag === 'blockquote' ? 'quote'
+                    : ($tag === 'table' ? 'table'
+                    : (($tag === 'ul' || $tag === 'ol') ? 'list'
+                    : ($tag === 'hr' ? 'divider'
+                    : ($tag === 'div' && $node->hasAttribute('data-page-break') ? 'page_break'
+                    : (preg_match('/^h[1-6]$/', $tag) ? 'heading' : 'paragraph')))));
+                $block = ['id' => (string) Str::uuid(), 'type' => $type, 'html' => $dom->saveHTML($node)];
+                if ($type === 'heading') $block['level'] = (int) substr($tag, 1);
+                $blocks[] = $block;
+            }
+        }
+
+        return $this->sanitizeDocumentModel([
+            'schema' => 1,
+            'type' => 'document',
+            'direction' => 'rtl',
+            'settings' => $this->defaultPageSettings(),
+            'sections' => [[
+                'id' => 'section-1',
+                'settings' => [],
+                'header' => ['blocks' => []],
+                'footer' => ['blocks' => []],
+                'blocks' => $blocks,
+                'footnotes' => [],
+            ]],
+            'comments' => [],
+            'reviewChanges' => [],
+            'bookmarks' => [],
+            'resources' => [],
+            'fields' => [],
+        ]);
+    }
+
     private const CURRENT_SCHEMA = 3;
 
     private function sanitizeDocumentModel(array $model): array
