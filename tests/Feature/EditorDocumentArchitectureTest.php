@@ -194,4 +194,45 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertSame('سلام فراست', $saved->content_json['plain_text']);
     }
 
+
+    public function test_lists_and_structural_fields_round_trip_through_canonical_model(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'ساختار',
+            'content' => '<p><br></p>',
+            'status' => 'draft',
+        ]);
+
+        $model = [
+            'schema' => 3,
+            'type' => 'document',
+            'direction' => 'rtl',
+            'sections' => [[
+                'id' => 'section-1',
+                'blocks' => [[
+                    'id' => 'list-1',
+                    'type' => 'list',
+                    'ordered' => false,
+                    'items' => [
+                        ['id' => 'item-1', 'runs' => [['text' => 'اول']]],
+                        ['id' => 'item-2', 'runs' => [['text' => 'دوم']]],
+                    ],
+                ]],
+            ]],
+            'fields' => [['id' => 'field-1', 'type' => 'pageNumber']],
+        ];
+
+        app(EditorDocumentService::class)->save($legacy, '<p>ignored</p>', 'ساختار', null, 'manual', null, $model);
+        $saved = $legacy->farastDocument->fresh();
+        $canonical = $saved->content_json;
+
+        $this->assertSame('list', $canonical['sections'][0]['blocks'][0]['type']);
+        $this->assertCount(2, $canonical['sections'][0]['blocks'][0]['items']);
+        $this->assertSame('pageNumber', $canonical['fields'][0]['type']);
+        $this->assertStringContainsString('<ul>', $saved->content);
+        $this->assertStringContainsString('اول', $saved->content);
+    }
+
 }
