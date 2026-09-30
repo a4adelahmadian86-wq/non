@@ -282,6 +282,7 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertSame('bookmark-1', $saved['bookmarks'][0]['id']);
         $this->assertSame('res-1', $saved['resources'][0]['id']);
         $this->assertSame('data:image/png;base64,AAAA', $saved['resources'][0]['source']);
+        $this->assertStringContainsString('data:image/png;base64,AAAA', $legacy->farastDocument->fresh()->content);
     }
 
     public function test_paragraph_layout_semantics_round_trip(): void
