@@ -14,6 +14,8 @@ class ProjectInterviewService
         'exam' => ['label' => 'سؤالات امتحان', 'icon' => 'fa-list-check', 'available' => false],
         'contract' => ['label' => 'قرارداد', 'icon' => 'fa-file-signature', 'available' => false],
         'forms' => ['label' => 'فرم‌ها', 'icon' => 'fa-clipboard-list', 'available' => false],
+        'report' => ['label' => 'گزارش', 'icon' => 'fa-file-lines', 'available' => false],
+        'research_document' => ['label' => 'سند پژوهشی', 'icon' => 'fa-microscope', 'available' => false],
         'presentation' => ['label' => 'ارائه', 'icon' => 'fa-display', 'available' => false],
         'design' => ['label' => 'طراحی', 'icon' => 'fa-palette', 'available' => false],
         'poster_card' => ['label' => 'پوستر / کارت', 'icon' => 'fa-address-card', 'available' => false],
@@ -39,6 +41,7 @@ class ProjectInterviewService
         $template = (new TemplateRegistry())->get($answers['template'] ?? 'simple_typing');
         $settings = $template['settings'];
         $workflow = $answers['workflow'] ?? 'manual';
+        $projectType = $answers['project_type'] ?? 'typing';
         $required = ['document.editing'];
         if ($workflow === 'voice') $required[] = 'speech.transcription';
         if ($workflow === 'source_file') {
@@ -46,15 +49,15 @@ class ProjectInterviewService
             if (($answers['source_type'] ?? '') === 'handwritten' || ($answers['source_type'] ?? '') === 'mixed') $required[] = 'handwriting.ocr';
         }
 
-        $classification = $this->applications->classify($answers['project_type'] ?? 'typing');
+        $classification = $this->applications->classify($projectType);
         if (!$classification['available']) {
             throw new \InvalidArgumentException('این نوع پروژه هنوز قابل اجرا نیست.');
         }
 
         return [
-            'project_type' => $answers['project_type'] ?? 'typing',
+            'project_type' => $projectType,
             'application' => $classification['application'],
-            'editor_type' => 'word_processor',
+            'editor_type' => $classification['application'],
             'workflow' => $workflow,
             'template' => $answers['template'] ?? 'simple_typing',
             'language' => $answers['language'] ?? 'fa',
