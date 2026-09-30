@@ -1,0 +1,4 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Model;
+class FarastPricingPolicy extends Model { protected $table='farast_pricing_policies'; protected $fillable=['code','capability_code','unit','base_price_rials','subscription_allowance','additional_price_rials','payg_multiplier_percent','discount_percent','fee_rials','active','metadata']; protected function casts():array{return ['base_price_rials'=>'integer','subscription_allowance'=>'integer','additional_price_rials'=>'integer','payg_multiplier_percent'=>'integer','discount_percent'=>'integer','fee_rials'=>'integer','active'=>'boolean','metadata'=>'array'];} }

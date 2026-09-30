@@ -16,7 +16,7 @@ class EditorAiAssistController extends Controller
             'operation'=>['required','string','max:80'],'text'=>['required','string','max:100000'],'sentence'=>['nullable','string','max:4000'],
             'before_cursor'=>['nullable','string','max:12000'],'after_cursor'=>['nullable','string','max:12000'],'target_language'=>['nullable','string','max:120'],
             'tone'=>['nullable','string','max:120'],'instruction'=>['nullable','string','max:1000'],'processing_mode'=>['nullable','string','in:automatic,local,server,external'],
-            'provider'=>['nullable','string','max:40','regex:/^[A-Za-z0-9._-]+$/'],
+            'provider'=>['nullable','string','max:40','regex:/^[A-Za-z0-9._-]+$/'],'project_id'=>['nullable','integer'],'document_id'=>['nullable','integer'],
         ]);
         try {
             $result = $ai->assist($data['operation'],$data['text'],array_merge($data,['user'=>$request->user()]));

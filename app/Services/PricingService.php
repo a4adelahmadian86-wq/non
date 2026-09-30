@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PricingRule;
+use App\Models\FarastPricingPolicy;
 
 class PricingService
 {
@@ -15,13 +16,13 @@ class PricingService
             'source_file' => match ($sourceType) { 'handwritten' => 'typing_handwritten_page', 'mixed' => 'typing_mixed_page', default => 'typing_printed_page' },
             default => 'typing_manual_page',
         };
-        $unit = max(0, (int)($rules[$key] ?? 300000));
+        $unit = max(0, $this->ruleValue($key, 0));
         $audio = 0;
         if ($workflow === 'voice' && $audioMinutes !== null) {
-            $perMinute = max(0, (int)($rules['typing_voice_minute'] ?? 10000));
+            $perMinute = max(0, $this->ruleValue('typing_voice_minute', 0));
             $audio = max(0, $audioMinutes) * $perMinute;
         }
-        $multiplier = $payg ? max(100, (int)($rules['typing_payg_multiplier'] ?? 125)) : 100;
+        $multiplier = $payg ? max(100, $this->ruleValue('typing_payg_multiplier', 100)) : 100;
         $line = (int)round(($pages * $unit + $audio) * $multiplier / 100);
         return [
             'pages'=>$pages,'unit_price_rials'=>$unit,'free_page_value_rials'=>$unit,'price_rials'=>$line,'currency'=>'IRR',
@@ -34,24 +35,29 @@ class PricingService
     public function initialTypingPrices(): array
     {
         return [
-            'manual'=>300000,'voice'=>450000,'printed'=>330000,'handwritten'=>500000,'mixed'=>600000,
-            'payg_multiplier_percent'=>125,'voice_minute'=>10000,
+            'manual'=>$this->ruleValue('typing_manual_page', 0),
+            'voice'=>$this->ruleValue('typing_voice_page', 0),
+            'printed'=>$this->ruleValue('typing_printed_page', 0),
+            'handwritten'=>$this->ruleValue('typing_handwritten_page', 0),
+            'mixed'=>$this->ruleValue('typing_mixed_page', 0),
+            'payg_multiplier_percent'=>$this->ruleValue('typing_payg_multiplier', 100),
+            'voice_minute'=>$this->ruleValue('typing_voice_minute', 0),
         ];
     }
     public function quote(string $text, int $pages): array
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
         $pages = max(1, $pages);
-        $base = (int)($rules['page_base'] ?? 300000);
+        $base = $this->ruleValue('page_base', 0);
         $stats = $this->stats($text);
         $stats['words_per_page'] = $stats['word_count'] / $pages;
         $factor = 1.0;
-        if ($stats['english_ratio'] >= 0.70) $factor = max($factor, (int)($rules['english_multiplier'] ?? 120) / 100);
-        elseif ($stats['arabic_ratio'] >= 0.70) $factor = max($factor, (int)($rules['arabic_multiplier'] ?? 110) / 100);
-        elseif ($stats['mixed_ratio'] >= 0.35) $factor = max($factor, (int)($rules['mixed_multiplier'] ?? 105) / 100);
-        if ($stats['words_per_page'] > 650) $factor = max($factor, (int)($rules['dense_page_multiplier'] ?? 110) / 100);
+        if ($stats['english_ratio'] >= 0.70) $factor = max($factor, $this->ruleValue('english_multiplier', 100) / 100);
+        elseif ($stats['arabic_ratio'] >= 0.70) $factor = max($factor, $this->ruleValue('arabic_multiplier', 100) / 100);
+        elseif ($stats['mixed_ratio'] >= 0.35) $factor = max($factor, $this->ruleValue('mixed_multiplier', 100) / 100);
+        if ($stats['words_per_page'] > 650) $factor = max($factor, $this->ruleValue('dense_page_multiplier', 100) / 100);
         $pageUnit = (int)round($base * $factor);
-        $formulaUnit = (int)($rules['formula_unit'] ?? 5000);
+        $formulaUnit = $this->ruleValue('formula_unit', 0);
         $formulaCost = $stats['formula_units'] * $formulaUnit;
         $price = (int)round($pages * $pageUnit + $formulaCost);
         return [
@@ -79,6 +85,19 @@ class PricingService
                 'formula_cost' => null,
             ],
         ];
+    }
+
+    private function ruleValue(string $key, int $fallback = 0): int
+    {
+        $policy = FarastPricingPolicy::where('code', $key)->where('active', true)->first();
+        if ($policy) {
+            return $key === 'typing_payg_multiplier'
+                ? max(100, (int) ($policy->payg_multiplier_percent ?: $policy->base_price_rials))
+                : ($policy->unit === 'percentage' && (int) $policy->base_price_rials === 0)
+                    ? ((int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback)
+                    : max(0, (int) $policy->base_price_rials);
+        }
+        return (int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback;
     }
 
     private function stats(string $text): array

@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\FarastProject;
-
 class ProjectInterviewService
 {
     public const TYPES = [
@@ -11,70 +9,46 @@ class ProjectInterviewService
         'editing' => ['label' => 'ویرایش', 'icon' => 'fa-pen-to-square', 'available' => false],
         'article' => ['label' => 'مقاله', 'icon' => 'fa-newspaper', 'available' => false],
         'book' => ['label' => 'کتاب', 'icon' => 'fa-book', 'available' => false],
-        'presentation' => ['label' => 'ارائه', 'icon' => 'fa-display', 'available' => false],
-        'design' => ['label' => 'پوستر / طراحی', 'icon' => 'fa-palette', 'available' => false],
-        'programming' => ['label' => 'برنامه‌نویسی', 'icon' => 'fa-code', 'available' => false],
-        'contract' => ['label' => 'قرارداد', 'icon' => 'fa-file-signature', 'available' => false],
+        'resume' => ['label' => 'رزومه', 'icon' => 'fa-id-card', 'available' => false],
         'exam' => ['label' => 'سؤالات امتحان', 'icon' => 'fa-list-check', 'available' => false],
+        'contract' => ['label' => 'قرارداد', 'icon' => 'fa-file-signature', 'available' => false],
         'forms' => ['label' => 'فرم‌ها', 'icon' => 'fa-clipboard-list', 'available' => false],
-        'pricing_sheet' => ['label' => 'برگه قیمت', 'icon' => 'fa-tags', 'available' => false],
+        'presentation' => ['label' => 'ارائه', 'icon' => 'fa-display', 'available' => false],
+        'design' => ['label' => 'طراحی', 'icon' => 'fa-palette', 'available' => false],
+        'poster_card' => ['label' => 'پوستر / کارت', 'icon' => 'fa-address-card', 'available' => false],
+        'programming' => ['label' => 'برنامه‌نویسی', 'icon' => 'fa-code', 'available' => false],
         'other' => ['label' => 'سایر', 'icon' => 'fa-layer-group', 'available' => false],
     ];
 
-    public const TEMPLATES = [
-        'simple_typing' => [
-            'name' => 'تایپ ساده',
-            'description' => 'صفحه A4، راست‌به‌چپ و تایپوگرافی استاندارد فارسی.',
-            'settings' => [
-                'paper' => 'A4','orientation' => 'portrait',
-                'margin_top' => 25,'margin_right' => 25,'margin_bottom' => 25,'margin_left' => 25,
-                'header_distance' => 12,'footer_distance' => 12,
-                'direction' => 'rtl','font_family' => 'B Nazanin','font_size' => 16,
-                'line_height' => 1.8,'paragraph_spacing' => 8,'page_border' => true,
-            ],
-        ],
-        'academic_typing' => [
-            'name' => 'تایپ دانشگاهی',
-            'description' => 'قالب رسمی برای متون دانشگاهی با صفحه‌بندی فارسی.',
-            'settings' => [
-                'paper' => 'A4','orientation' => 'portrait',
-                'margin_top' => 30,'margin_right' => 30,'margin_bottom' => 25,'margin_left' => 25,
-                'header_distance' => 12,'footer_distance' => 12,
-                'direction' => 'rtl','font_family' => 'B Nazanin','font_size' => 16,
-                'line_height' => 1.8,'paragraph_spacing' => 10,'page_border' => false,
-            ],
-        ],
-        'official_document' => [
-            'name' => 'سند رسمی',
-            'description' => 'قالب رسمی با حاشیه و فاصله‌گذاری متعارف.',
-            'settings' => [
-                'paper' => 'A4','orientation' => 'portrait',
-                'margin_top' => 25,'margin_right' => 25,'margin_bottom' => 25,'margin_left' => 25,
-                'header_distance' => 12,'footer_distance' => 12,
-                'direction' => 'rtl','font_family' => 'B Nazanin','font_size' => 16,
-                'line_height' => 1.8,'paragraph_spacing' => 8,'page_border' => true,
-            ],
-        ],
-    ];
+    public const TEMPLATES = TemplateRegistry::TEMPLATES;
 
     public function nextQuestion(array $answers): ?array
     {
         if (empty($answers['project_type'])) return ['key'=>'project_type','title'=>'روی چه کاری می‌خواهید کار کنید؟','type'=>'project_type'];
         if ($answers['project_type'] !== 'typing') return null;
-        if (empty($answers['template'])) return ['key'=>'template','title'=>'قالب سند را انتخاب کنید','type'=>'template'];
-        if (empty($answers['workflow'])) return ['key'=>'workflow','title'=>'چطور می‌خواهید تایپ کنید؟','type'=>'typing_mode'];
+        if (empty($answers['workflow'])) return ['key'=>'workflow','title'=>'چطور می‌خواهید سند را ایجاد کنید؟','type'=>'typing_mode'];
         if ($answers['workflow'] === 'source_file' && empty($answers['source_type'])) return ['key'=>'source_type','title'=>'منبع شما چه نوعی است؟','type'=>'source_type'];
         if ($answers['workflow'] === 'voice' && empty($answers['language'])) return ['key'=>'language','title'=>'زبان گفتار چیست؟','type'=>'language'];
+        if (empty($answers['template'])) return ['key'=>'template','title'=>'قالب سند را انتخاب کنید','type'=>'template'];
         return null;
     }
 
     public function buildContext(array $answers, array $userPreferences = []): array
     {
-        $template = self::TEMPLATES[$answers['template'] ?? 'simple_typing'] ?? self::TEMPLATES['simple_typing'];
+        $template = (new TemplateRegistry())->get($answers['template'] ?? 'simple_typing');
         $settings = $template['settings'];
-        $context = [
+        $workflow = $answers['workflow'] ?? 'manual';
+        $required = ['document.editing'];
+        if ($workflow === 'voice') $required[] = 'speech.transcription';
+        if ($workflow === 'source_file') {
+            $required[] = 'ocr';
+            if (($answers['source_type'] ?? '') === 'handwritten' || ($answers['source_type'] ?? '') === 'mixed') $required[] = 'handwriting.ocr';
+        }
+
+        return [
             'project_type' => $answers['project_type'] ?? 'typing',
-            'workflow' => $answers['workflow'] ?? 'manual',
+            'editor_type' => 'word_processor',
+            'workflow' => $workflow,
             'template' => $answers['template'] ?? 'simple_typing',
             'language' => $answers['language'] ?? 'fa',
             'direction' => $settings['direction'],
@@ -82,10 +56,15 @@ class ProjectInterviewService
             'estimated_pages' => max(1, (int) ($answers['estimated_pages'] ?? 1)),
             'input_format' => $answers['input_format'] ?? null,
             'required_tools' => array_values($answers['required_tools'] ?? []),
+            'required_capabilities' => array_values(array_unique($required)),
+            'requirements' => ['special' => $answers['special_requirements'] ?? null],
             'special_requirements' => $answers['special_requirements'] ?? null,
+            'billing_state' => ['mode' => $workflow === 'manual' ? 'included' : 'usage'],
+            'usage_state' => ['estimated_pages' => max(1, (int) ($answers['estimated_pages'] ?? 1))],
+            'audit_state' => ['created_from' => 'project_interview'],
+            'output_state' => ['status' => 'draft'],
             'template_settings' => $settings,
             'user_preferences_snapshot' => array_intersect_key($userPreferences, array_flip(['language','direction','font_family','font_size'])),
         ];
-        return $context;
     }
 }

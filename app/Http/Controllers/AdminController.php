@@ -6,6 +6,7 @@ use App\Models\AiInteraction;
 use App\Models\Announcement;
 use App\Models\EmailLog;
 use App\Models\PricingRule;
+use App\Models\FarastPricingPolicy;
 use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\User;
@@ -247,6 +248,20 @@ class AdminController extends Controller
         PricingRule::updateOrCreate(['key' => $d['key']], [
             'value' => $d['value'],
             'label' => $d['label'],
+            'active' => true,
+        ]);
+
+        $unit = match ($d['key']) {
+            'typing_voice_minute' => 'minute',
+            'typing_payg_multiplier', 'english_multiplier', 'arabic_multiplier', 'mixed_multiplier', 'dense_page_multiplier' => 'percentage',
+            default => 'page',
+        };
+        FarastPricingPolicy::updateOrCreate(['code' => $d['key']], [
+            'capability_code' => null,
+            'unit' => $unit,
+            'base_price_rials' => $unit === 'percentage' ? 0 : $d['value'],
+            'additional_price_rials' => $unit === 'percentage' ? 0 : $d['value'],
+            'payg_multiplier_percent' => $d['key'] === 'typing_payg_multiplier' ? $d['value'] : 100,
             'active' => true,
         ]);
 

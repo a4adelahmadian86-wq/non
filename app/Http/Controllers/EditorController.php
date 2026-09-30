@@ -14,6 +14,8 @@ use App\Services\FreeQuotaService;
 use App\Services\GeminiService;
 use App\Services\PricingService;
 use App\Services\ProjectInterviewService;
+use App\Services\FeedbackPipelineService;
+use App\Services\EntitlementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -87,6 +89,14 @@ class EditorController extends Controller
 
     public function pending(Request $request)
     {
+        $project = !empty($data['project_id'])
+            ? FarastProject::whereKey((int) $data['project_id'])->where('user_id', auth()->id())->firstOrFail()
+            : null;
+        abort_unless($entitlements->allows($user, 'ocr', $project), 403, 'قابلیت OCR برای این پروژه فعال نیست.');
+        if ($project && in_array((string) ($project->context['source_type'] ?? ''), ['handwritten', 'mixed'], true)) {
+            abort_unless($entitlements->allows($user, 'handwriting.ocr', $project), 403, 'تشخیص دست‌نویس برای این پروژه فعال نیست.');
+        }
+
         $pending = $request->session()->get('pending_upload');
         if (! $pending || ! Storage::disk('private')->exists($pending['path'] ?? '')) {
             return response()->json(['ok' => true, 'pending' => null, 'authenticated' => auth()->check()]);
@@ -133,6 +143,7 @@ class EditorController extends Controller
         PricingService $pricing,
         CapabilityService $capabilities,
         FreeQuotaService $free,
+        EntitlementService $entitlements,
     ) {
         $user = auth()->user();
         $caps = $capabilities->forUser($user);
@@ -147,6 +158,7 @@ class EditorController extends Controller
             'path' => 'required|string',
             'mime' => 'required|string',
             'source_name' => 'nullable|string|max:255',
+            'project_id' => 'nullable|integer',
         ]);
 
         $pending = $request->session()->get('pending_upload');
@@ -302,7 +314,7 @@ class EditorController extends Controller
         return response()->json(['ok' => true, 'saved_at' => now()->toIso8601String()]);
     }
 
-    public function feedback(Request $request, CapabilityService $capabilities)
+    public function feedback(Request $request, CapabilityService $capabilities, FeedbackPipelineService $pipeline)
     {
         abort_unless($capabilities->allowed(auth()->user(), 'can_feedback'), 403, 'ثبت بازخورد برای این حساب فعال نیست.');
         $data = $request->validate([
@@ -333,6 +345,16 @@ class EditorController extends Controller
             'context' => $data['context'] ?? null,
         ]);
         Log::info('farast.ai.feedback', ['feedback_id' => $feedback->id, 'user_id' => auth()->id(), 'document_id' => $doc->id, 'type' => $feedback->type]);
+
+        $evidence = $pipeline->record($feedback, 'ai.editor', '1.0.0', [
+            'operation' => $feedback->interaction?->operation,
+            'document_id' => $doc->id,
+            'context' => $feedback->context,
+        ], [
+            'rating' => $feedback->rating,
+            'corrected' => filled($feedback->corrected_text),
+        ]);
+        $pipeline->queueReview($evidence);
 
         return response()->json(['ok' => true, 'feedback_id' => $feedback->id]);
     }

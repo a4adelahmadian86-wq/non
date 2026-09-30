@@ -6,18 +6,20 @@ use App\Models\FarastProject;
 use App\Services\CapabilityService;
 use App\Services\ProjectBillingService;
 use App\Services\ProjectInterviewService;
+use App\Services\PricingService;
 use App\Services\UserKnowledgeService;
 use Illuminate\Http\Request;
 
 class ProjectController extends Controller
 {
-    public function create(ProjectInterviewService $interview, ProjectBillingService $billing)
+    public function create(ProjectInterviewService $interview, ProjectBillingService $billing, PricingService $pricing)
     {
         $subscription = $billing->includedAllowance(request()->user(), 'manual');
         return view('projects.create', [
             'types' => $interview::TYPES,
             'templates' => $interview::TEMPLATES,
             'subscriber' => $subscription['subscriber'],
+            'initialPrices' => $pricing->initialTypingPrices(),
         ]);
     }
 
