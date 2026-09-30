@@ -294,7 +294,7 @@ class EditorDocumentService
         $model['reviewChanges'] = $this->sanitizeReviewChanges($model['reviewChanges'] ?? ($model['review'] ?? []));
         $model['review'] = $model['reviewChanges']; // compatibility alias for older clients
         $model['bookmarks'] = $this->sanitizeBookmarks($model['bookmarks'] ?? []);
-        $model['resources'] = is_array($model['resources'] ?? null) ? array_values($model['resources']) : [];
+        $model['resources'] = $this->sanitizeResources($model['resources'] ?? []);
         $model['fields'] = $this->sanitizeFields($model['fields'] ?? []);
         $model['plain_text'] = $this->plainTextFromModel($model);
         $model['stats'] = [
@@ -409,6 +409,34 @@ class EditorDocumentService
             }
         }
         return $merged;
+    }
+
+    private function sanitizeResources(mixed $resources): array
+    {
+        if (!is_array($resources)) return [];
+        $out = [];
+        foreach ($resources as $resource) {
+            if (!is_array($resource)) continue;
+            $type = (string) ($resource['type'] ?? '');
+            if (!in_array($type, ['image','file'], true)) continue;
+            $id = (string) ($resource['id'] ?? Str::uuid());
+            $item = [
+                'id' => mb_substr($id, 0, 160),
+                'type' => $type,
+                'mime' => mb_substr((string) ($resource['mime'] ?? ''), 0, 120),
+                'name' => mb_substr((string) ($resource['name'] ?? ''), 0, 255),
+                'width' => max(0, (int) ($resource['width'] ?? 0)),
+                'height' => max(0, (int) ($resource['height'] ?? 0)),
+            ];
+            if ($type === 'image' && isset($resource['source']) && is_string($resource['source'])) {
+                // Resource identity is the stable id; source is sanitized payload, not the identity.
+                if (strlen($resource['source']) <= 8_000_000 && preg_match('/^data:image\\/(?:png|jpeg|gif|webp);base64,/i', $resource['source'])) {
+                    $item['source'] = $resource['source'];
+                }
+            }
+            $out[] = $item;
+        }
+        return $out;
     }
 
     private function sanitizeComments(mixed $comments): array
