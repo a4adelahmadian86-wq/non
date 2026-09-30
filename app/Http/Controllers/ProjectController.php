@@ -8,6 +8,7 @@ use App\Services\ProjectBillingService;
 use App\Services\ProjectInterviewService;
 use App\Services\PricingService;
 use App\Services\UserKnowledgeService;
+use App\Services\ApplicationRegistry;
 use Illuminate\Http\Request;
 
 class ProjectController extends Controller
@@ -23,10 +24,10 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing)
+    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications)
     {
         $data = $request->validate([
-            'project_type' => ['required','string','in:typing'],
+            'project_type' => ['required','string','in:typing,editing,article,book,resume,exam,contract,forms,presentation,design,poster_card,programming,other'],
             'template' => ['required','string','in:'.implode(',',array_keys($interview::TEMPLATES))],
             'workflow' => ['required','string','in:manual,voice,source_file'],
             'source_type' => ['nullable','string','in:printed,handwritten,mixed'],
@@ -36,6 +37,7 @@ class ProjectController extends Controller
             'special_requirements' => ['nullable','string','max:2000'],
         ]);
 
+        abort_unless($applications->canStart($data['project_type']), 422, 'این نوع پروژه هنوز قابل اجرا نیست.');
         $context = $interview->buildContext($data,$knowledge->snapshotForProject($request->user()));
         $project = FarastProject::create([
             'user_id'=>$request->user()->id,
