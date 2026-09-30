@@ -106,7 +106,7 @@ class EntitlementService
 
             if ($row->quantity !== null) {
                 $row->increment('used_quantity', $quantity);
-                $remaining = max(0, (int) $row->quantity - (int) $row->used_quantity - $quantity);
+                $remaining = max(0, (int) $row->quantity - (int) $row->used_quantity);
             } else {
                 $remaining = null;
             }
