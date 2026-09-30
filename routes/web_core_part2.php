@@ -11,6 +11,7 @@ use App\Http\Controllers\EditorSaveController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PlatformCompletionController;
+use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProviderAdminController;
 use App\Http\Controllers\SocialController;
 use App\Http\Controllers\SupportController;
@@ -18,6 +19,8 @@ use App\Http\Controllers\VoiceController;
 use App\Http\Controllers\WalletController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/projects/new', [ProjectController::class, 'create'])->middleware('auth')->name('projects.create');
+Route::post('/projects', [ProjectController::class, 'store'])->middleware(['auth','throttle:30,10','capability:can_type'])->name('projects.store');
 Route::get('/editor', [EditorController::class, 'create'])->middleware(['auth', 'single.editor'])->name('editor');
 
 Route::middleware(['auth', 'single.editor'])->group(function () {
