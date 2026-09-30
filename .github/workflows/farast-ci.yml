@@ -32,7 +32,7 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
-      - run: ADMIN_MOBILE=091512345678 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-farast-e2e php artisan db:seed --force
+      - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-farast-e2e php artisan db:seed --force
       - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-server.log 2>&1 &
       - run: npm init -y
       - run: npm install --no-save @playwright/test@1.55.0
