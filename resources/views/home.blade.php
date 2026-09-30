@@ -73,7 +73,7 @@
             <div class="home-upload-box" id="homeDrop" tabindex="0" role="button" aria-label="انتخاب یا رها کردن فایل برای شروع">
                 <div class="home-upload-icon"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i></div>
                 <div><strong>فایل را اینجا رها کنید</strong><span>یا از دستگاه انتخاب کنید</span></div>
-                <button type="button" id="homeChoose" class="home-upload-button"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> انتخاب فایل</button>
+                <span id="homeChoose" class="home-upload-button"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> انتخاب فایل</span>
                 <input id="homeFile" type="file" accept="image/*,.pdf,.zip" hidden>
             </div>
             <div id="homeMsg" class="home-upload-msg" role="status" aria-live="polite" hidden></div>
