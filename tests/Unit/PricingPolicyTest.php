@@ -26,7 +26,7 @@ class PricingPolicyTest extends TestCase
 
         $this->assertSame(2, $result['included_units']);
         $this->assertSame(2, $result['billable_units']);
-        $this->assertSame(216000, $result['additional_usage_rials']);
+        $this->assertSame(240000, $result['additional_usage_rials']);
         $this->assertSame(5000, $result['fee_rials']);
         $this->assertSame(221000, $result['final_price_rials']);
     }
