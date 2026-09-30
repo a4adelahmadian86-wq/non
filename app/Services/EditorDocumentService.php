@@ -324,6 +324,19 @@ class EditorDocumentService
             return $normalized;
         }
 
+        if ($type === 'list') {
+            $normalized['ordered'] = (bool) ($block['ordered'] ?? false);
+            $normalized['items'] = [];
+            foreach (($block['items'] ?? []) as $item) {
+                if (!is_array($item)) continue;
+                $normalized['items'][] = [
+                    'id' => is_string($item['id'] ?? null) && $item['id'] !== '' ? $item['id'] : (string) Str::uuid(),
+                    'runs' => $this->sanitizeRuns($item['runs'] ?? []),
+                ];
+            }
+            return $normalized;
+        }
+
         if ($type === 'table') {
             $rows = [];
             foreach (($block['rows'] ?? []) as $row) {
@@ -566,6 +579,15 @@ class EditorDocumentService
                     $html .= '</tr>';
                 }
                 $html .= '</tbody></table>';
+                continue;
+            }
+            if ($type === 'list') {
+                $tag = !empty($block['ordered']) ? 'ol' : 'ul';
+                $html .= '<'.$tag.'>';
+                foreach (($block['items'] ?? []) as $item) {
+                    $html .= '<li>'.$this->runsToHtml($item['runs'] ?? []).'</li>';
+                }
+                $html .= '</'.$tag.'>';
                 continue;
             }
             $tag = $type === 'heading' ? 'h'.max(1, min(6, (int) ($block['level'] ?? 2))) : ($type === 'quote' ? 'blockquote' : ($type === 'list_item' ? 'li' : 'p'));
