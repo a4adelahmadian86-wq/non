@@ -26,13 +26,16 @@ class ProjectBillingService
     public function entitlement(User $user, FarastProject $project, int $amount): array
     {
         $included = $this->includedAllowance($user, (string)($project->context['workflow'] ?? 'manual'));
-        $covered = min($included['remaining'], max(0,$amount));
+        $unit = $this->pricing->projectQuote((string)($project->context['workflow'] ?? 'manual'), (string)($project->context['source_type'] ?? ''), 1)['unit_price_rials'];
+        $coveredPages = min($included['remaining'], max(0, (int)($project->context['estimated_pages'] ?? 1)));
+        $covered = min(max(0,$amount), $coveredPages * $unit);
         $additional = max(0,$amount-$covered);
         return [
             'subscriber' => $included['subscriber'],
             'included_rials' => $covered,
             'additional_rials' => $additional,
             'upgrade_available' => $additional > 0 && $included['subscriber'],
+            'included_pages' => $coveredPages,
             'payg_available' => true,
             'status' => $additional > 0 ? 'payment_required' : 'included',
         ];
@@ -58,6 +61,7 @@ class ProjectBillingService
         $project->forceFill([
             'estimated_pages'=>$pages,'used_pages'=>$pages,'estimated_price_rials'=>$quote['price_rials'],
             'billing_state'=>['status'=>$ent['status'],'quote'=>$quote,'entitlement'=>$ent,'amount_remaining'=>$ent['additional_rials']],
+            'output_state'=>['status'=>$ent['additional_rials'] > 0 ? 'locked' : 'unlocked','reason'=>$ent['additional_rials'] > 0 ? 'payment_required' : 'included'],
         ])->save();
         return ['quote'=>$quote,'entitlement'=>$ent];
     }
