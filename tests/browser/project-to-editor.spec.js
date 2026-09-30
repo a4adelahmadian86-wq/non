@@ -4,7 +4,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   const password = `${process.env.GITHUB_RUN_ID || 'local'}-farast-e2e`;
 
   await page.goto('/login?continue=/projects/new');
-  await page.getByRole('textbox', { name: /شماره موبایل/ }).fill('091512345678');
+  await page.locator('input[name="mobile"]').fill('091512345678');
   await page.getByRole('button', { name: /ادامه با شماره موبایل/ }).click();
   await expect(page).toHaveURL(/\/login\/password/);
   await page.getByLabel('رمز عبور').fill(password);
