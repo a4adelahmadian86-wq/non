@@ -89,14 +89,6 @@ class EditorController extends Controller
 
     public function pending(Request $request)
     {
-        $project = !empty($data['project_id'])
-            ? FarastProject::whereKey((int) $data['project_id'])->where('user_id', auth()->id())->firstOrFail()
-            : null;
-        abort_unless($entitlements->allows($user, 'ocr', $project), 403, 'قابلیت OCR برای این پروژه فعال نیست.');
-        if ($project && in_array((string) ($project->context['source_type'] ?? ''), ['handwritten', 'mixed'], true)) {
-            abort_unless($entitlements->allows($user, 'handwriting.ocr', $project), 403, 'تشخیص دست‌نویس برای این پروژه فعال نیست.');
-        }
-
         $pending = $request->session()->get('pending_upload');
         if (! $pending || ! Storage::disk('private')->exists($pending['path'] ?? '')) {
             return response()->json(['ok' => true, 'pending' => null, 'authenticated' => auth()->check()]);
@@ -160,6 +152,14 @@ class EditorController extends Controller
             'source_name' => 'nullable|string|max:255',
             'project_id' => 'nullable|integer',
         ]);
+
+        $project = !empty($data['project_id'])
+            ? FarastProject::whereKey((int) $data['project_id'])->where('user_id', auth()->id())->firstOrFail()
+            : null;
+        abort_unless($entitlements->allows($user, 'ocr', $project), 403, 'قابلیت OCR برای این پروژه فعال نیست.');
+        if ($project && in_array((string) ($project->context['source_type'] ?? ''), ['handwritten', 'mixed'], true)) {
+            abort_unless($entitlements->allows($user, 'handwriting.ocr', $project), 403, 'تشخیص دست‌نویس برای این پروژه فعال نیست.');
+        }
 
         $pending = $request->session()->get('pending_upload');
         if ($pending && hash_equals((string) ($pending['path'] ?? ''), (string) $data['path'])) {
