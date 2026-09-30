@@ -7,6 +7,7 @@ use App\Models\TypingDocument;
 use App\Models\FarastDocument;
 use App\Models\FarastProject;
 use App\Services\CapabilityService;
+use App\Services\AuditLogService;
 use App\Services\EditorDocumentService;
 use Illuminate\Http\Request;
 use PhpOffice\PhpWord\PhpWord;
@@ -16,7 +17,7 @@ use Dompdf\Dompdf;
 
 class ExportController extends Controller
 {
-    public function export(Request $r, string $format, CapabilityService $capabilities, EditorDocumentService $documents)
+    public function export(Request $r, string $format, CapabilityService $capabilities, EditorDocumentService $documents, AuditLogService $audit)
     {
         $key=$format==='docx'?'can_export_docx':($format==='pdf'?'can_export_pdf':null);
         abort_unless($key&&$capabilities->allowed(auth()->user(),$key),403,'این نوع خروجی برای حساب شما فعال نیست.');
@@ -29,7 +30,10 @@ class ExportController extends Controller
             $hash=hash('sha256',(string)$doc->content);
             $paid=Order::where('user_id',auth()->id())->where('document_id',$doc->id)->where('status','paid')->whereNotNull('paid_at')->latest('paid_at')->first();
             $orderAuthorized = $paid && hash_equals((string)$paid->content_hash,$hash);
-            abort_unless($projectUnlocked || $orderAuthorized,402,'ابتدا متن نهایی را بازبینی کنید و هزینه یا سهمیه پروژه را تکمیل کنید.');
+            if (!$projectUnlocked && !$orderAuthorized) {
+                $audit->record(auth()->id(),'export.denied',$r->ip(),['document_id'=>$doc->id,'format'=>$format,'project_id'=>$doc->project_id,'reason'=>'payment_or_entitlement_required']);
+                abort(402,'ابتدا متن نهایی را بازبینی کنید و هزینه یا سهمیه پروژه را تکمیل کنید.');
+            }
         }
         $canonical=$doc->farast_document_id ? FarastDocument::whereKey($doc->farast_document_id)->where('user_id',auth()->id())->first() : null;
         $content=$documents->sanitizeHtml($this->cleanExportHtml((string)($canonical?->content ?? $doc->content)));
