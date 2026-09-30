@@ -1,11 +1,11 @@
 @extends('layouts.app')
 @section('content')
-<div id="farastWord" class="farast-editor-app" dir="rtl" lang="fa" data-authenticated="{{ auth()->check() ? '1' : '0' }}">
+<div id="farastWord" class="farast-editor-app" dir="rtl" lang="fa" data-authenticated="{{ auth()->check() ? '1' : '0' }}" data-project-id="{{ $project?->id ?? '' }}">
   <header class="farast-appbar">
     <div class="farast-brand"><span class="farast-brand-mark" aria-hidden="true">✦</span><strong>فراست</strong></div>
     <button class="farast-mobile-icon" id="mobileNav" type="button" aria-label="پیمایش سند">☰</button>
     <label class="farast-doc-title"><span class="sr-only">عنوان سند</span><input id="docTitle" value="سند جدید" maxlength="255"></label>
-    <div class="farast-save-state" id="saveState" aria-live="polite">آماده</div>
+    <div class="farast-save-state" id="saveState" aria-live="polite">آماده</div>@if($project)<div class="farast-save-state" id="projectBillingState">برآورد: {{ number_format((int)($project->estimated_price_rials ?? 0)) }} ریال</div>@endif
     <div class="farast-app-actions"><button id="saveNow" type="button" class="primary">ذخیره</button><a href="{{ route('dashboard') }}">بازگشت</a></div>
   </header>
   <nav class="farast-tabs" aria-label="نوار فرمان">
