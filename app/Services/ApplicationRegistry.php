@@ -14,6 +14,8 @@ class ApplicationRegistry
         'exam' => ['application' => 'word_processor', 'available' => false],
         'contract' => ['application' => 'word_processor', 'available' => false],
         'forms' => ['application' => 'word_processor', 'available' => false],
+        'report' => ['application' => 'word_processor', 'available' => false],
+        'research_document' => ['application' => 'word_processor', 'available' => false],
         'presentation' => ['application' => 'presentation', 'available' => false],
         'design' => ['application' => 'design', 'available' => false],
         'poster_card' => ['application' => 'design', 'available' => false],
@@ -24,26 +26,11 @@ class ApplicationRegistry
     public function classify(string $projectType): array
     {
         $type = trim($projectType);
-        if (!isset(self::PROJECT_TYPES[$type])) {
-            throw new InvalidArgumentException('نوع پروژه پشتیبانی نمی‌شود.');
-        }
-
+        if (!isset(self::PROJECT_TYPES[$type])) throw new InvalidArgumentException('نوع پروژه پشتیبانی نمی‌شود.');
         $definition = self::PROJECT_TYPES[$type];
-
-        return [
-            'project_type' => $type,
-            'application' => $definition['application'],
-            'available' => (bool) $definition['available'],
-        ];
+        return ['project_type' => $type, 'application' => $definition['application'], 'available' => (bool) $definition['available']];
     }
 
-    public function canStart(string $projectType): bool
-    {
-        return $this->classify($projectType)['available'];
-    }
-
-    public function applicationFor(string $projectType): string
-    {
-        return $this->classify($projectType)['application'];
-    }
+    public function canStart(string $projectType): bool { return $this->classify($projectType)['available']; }
+    public function applicationFor(string $projectType): string { return $this->classify($projectType)['application']; }
 }
