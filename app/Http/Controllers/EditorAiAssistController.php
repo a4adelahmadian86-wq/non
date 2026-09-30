@@ -22,6 +22,10 @@ class EditorAiAssistController extends Controller
             $result = $ai->assist($data['operation'],$data['text'],array_merge($data,['user'=>$request->user()]));
             return response()->json(array_merge(['ok'=>true],$result));
         } catch (ValidationException|HttpExceptionInterface $e) { throw $e; }
+        catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'ai_capability_not_entitled') return response()->json(['ok'=>false,'message'=>'این قابلیت برای پروژه یا حساب شما فعال نیست.'],403);
+            throw $e;
+        }
         catch (\InvalidArgumentException $e) { return response()->json(['ok'=>false,'message'=>$e->getMessage(),'user_message'=>$this->safeMessage($e->getMessage())],422); }
         catch (\Throwable $e) {
             $code = preg_match('/^ai_[a-z0-9_]+$/',$e->getMessage()) ? $e->getMessage() : 'ai_provider_failure';
