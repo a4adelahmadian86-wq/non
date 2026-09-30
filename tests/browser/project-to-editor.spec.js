@@ -25,8 +25,8 @@ test('logs in through the real auth flow, creates a typing project, and opens th
 
   await page.getByRole('button', { name: 'ایجاد پروژه' }).click();
   await expect(page).toHaveURL(/\/editor(?:\?.*)?$/);
-  await expect(page.locator('#farastWord')).toBeVisible();
-  await expect(page.locator('#pagesViewport .farast-page')).toBeVisible();
+  await expect(page.locator('#farastWord')).toBeVisible({ timeout: 1000 });
+  await expect(page.locator('#pagesViewport .farast-page')).toBeVisible({ timeout: 1000 });
   await expect(page.locator('.farast-editor').first()).toHaveAttribute('contenteditable', 'true');
   await expect(page.locator('#docTitle')).toHaveValue('سند جدید');
 });
