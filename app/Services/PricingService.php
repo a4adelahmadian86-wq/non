@@ -6,11 +6,43 @@ use App\Models\PricingRule;
 
 class PricingService
 {
+    public function projectQuote(string $workflow, string $sourceType, int $pages, string $text = '', bool $payg = false, ?int $audioMinutes = null): array
+    {
+        $rules = PricingRule::where('active', true)->pluck('value', 'key');
+        $pages = max(1, $pages);
+        $key = match ($workflow) {
+            'voice' => 'typing_voice_page',
+            'source_file' => match ($sourceType) { 'handwritten' => 'typing_handwritten_page', 'mixed' => 'typing_mixed_page', default => 'typing_printed_page' },
+            default => 'typing_manual_page',
+        };
+        $unit = max(0, (int)($rules[$key] ?? 300000));
+        $audio = 0;
+        if ($workflow === 'voice' && $audioMinutes !== null) {
+            $perMinute = max(0, (int)($rules['typing_voice_minute'] ?? 10000));
+            $audio = max(0, $audioMinutes) * $perMinute;
+        }
+        $multiplier = $payg ? max(100, (int)($rules['typing_payg_multiplier'] ?? 125)) : 100;
+        $line = (int)round(($pages * $unit + $audio) * $multiplier / 100);
+        return [
+            'pages'=>$pages,'unit_price_rials'=>$unit,'price_rials'=>$line,'currency'=>'IRR',
+            'workflow'=>$workflow,'source_type'=>$sourceType ?: null,'payg'=>$payg,
+            'audio_minutes'=>$audioMinutes,'audio_cost_rials'=>$audio,
+            'breakdown'=>['unit'=>$unit,'pages'=>$pages,'audio_cost'=>$audio,'multiplier'=>$multiplier],
+        ];
+    }
+
+    public function initialTypingPrices(): array
+    {
+        return [
+            'manual'=>300000,'voice'=>450000,'printed'=>330000,'handwritten'=>500000,'mixed'=>600000,
+            'payg_multiplier_percent'=>125,'voice_minute'=>10000,
+        ];
+    }
     public function quote(string $text, int $pages): array
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
         $pages = max(1, $pages);
-        $base = (int)($rules['page_base'] ?? 35000);
+        $base = (int)($rules['page_base'] ?? 300000);
         $stats = $this->stats($text);
         $stats['words_per_page'] = $stats['word_count'] / $pages;
         $factor = 1.0;
@@ -32,7 +64,7 @@ class PricingService
     {
         $rules = PricingRule::where('active', true)->pluck('value', 'key');
         $pages = max(1, $pages);
-        $pageUnit = max(0, (int)($rules['page_base'] ?? 35000));
+        $pageUnit = max(0, (int)($rules['page_base'] ?? 300000));
         $price = $pages * $pageUnit;
 
         return [
