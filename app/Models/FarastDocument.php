@@ -12,6 +12,7 @@ class FarastDocument extends Model
 
     protected $fillable = [
         'user_id',
+        'project_id',
         'folder_id',
         'title',
         'content',
