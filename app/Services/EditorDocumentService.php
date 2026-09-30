@@ -621,7 +621,9 @@ class EditorDocumentService
             }
             if ($type === 'divider') { $html .= '<hr>'; continue; }
             if ($type === 'image') {
-                $src = $block['resourceId'] ?? '';
+                $resourceId = (string) ($block['resourceId'] ?? '');
+                $resource = collect($model['resources'] ?? [])->first(fn ($item) => is_array($item) && (string) ($item['id'] ?? '') === $resourceId);
+                $src = is_array($resource) ? (string) ($resource['source'] ?? '') : $resourceId;
                 $alt = htmlspecialchars((string) ($block['alt'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
                 $html .= '<p><img src="'.htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'" alt="'.$alt.'"></p>';
                 continue;
