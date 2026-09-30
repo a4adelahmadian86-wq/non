@@ -65,12 +65,12 @@ class EditorDocumentArchitectureTest extends TestCase
         $id = (int) $create->json('document_id');
         $this->assertDatabaseHas('farast_documents', ['title' => 'سند مدل', 'revision' => 1]);
 
-        $model = ['schema' => 2, 'type' => 'document', 'direction' => 'rtl', 'settings' => ['paper' => 'A4'], 'sections' => [['id' => 'section-1', 'blocks' => [['id' => 'b1', 'type' => 'paragraph', 'text' => 'سلام', 'html' => '<p>سلام</p>']]]], 'comments' => [], 'review' => []];
+        $model = ['schema' => 3, 'type' => 'document', 'direction' => 'rtl', 'settings' => ['paper' => 'A4'], 'sections' => [['id' => 'section-1', 'blocks' => [['id' => 'b1', 'type' => 'paragraph', 'runs' => [['text' => 'سلام', 'bold' => true]]]]]], 'comments' => [], 'review' => []];
         $legacy = TypingDocument::findOrFail($id);
         $result = app(EditorDocumentService::class)->save($legacy, '<p>سلام</p>', 'سند مدل', 1, 'manual', ['paper' => 'A4'], $model);
         $this->assertTrue($result['ok']);
         $this->assertSame(2, $result['revision']);
-        $this->assertSame(2, $legacy->farastDocument->fresh()->content_json['schema']);
+        $this->assertSame(3, $legacy->farastDocument->fresh()->content_json['schema']);
         $this->assertSame('b1', $legacy->farastDocument->fresh()->content_json['sections'][0]['blocks'][0]['id']);
     }
 
@@ -117,4 +117,81 @@ class EditorDocumentArchitectureTest extends TestCase
             'revision' => 1,
         ]);
     }
+
+    public function test_legacy_schema_is_migrated_to_semantic_runs_without_data_loss(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'مهاجرت',
+            'content' => '<p><strong>سلام</strong> دنیا</p>',
+            'status' => 'draft',
+        ]);
+
+        $model = [
+            'schema' => 2,
+            'type' => 'document',
+            'direction' => 'rtl',
+            'sections' => [[
+                'id' => 'section-1',
+                'blocks' => [[
+                    'id' => 'legacy-block',
+                    'type' => 'paragraph',
+                    'text' => 'سلام دنیا',
+                    'html' => '<p><strong>سلام</strong> دنیا</p>',
+                ]],
+            ]],
+        ];
+
+        $result = app(EditorDocumentService::class)->save(
+            $legacy,
+            '<p><strong>سلام</strong> دنیا</p>',
+            'مهاجرت',
+            null,
+            'manual',
+            null,
+            $model,
+        );
+
+        $this->assertTrue($result['ok']);
+        $saved = $legacy->farastDocument->fresh()->content_json;
+        $this->assertSame(3, $saved['schema']);
+        $this->assertSame('legacy-block', $saved['sections'][0]['blocks'][0]['id']);
+        $this->assertSame('سلام دنیا', implode('', array_map(fn ($run) => $run['text'], $saved['sections'][0]['blocks'][0]['runs'])));
+        $this->assertTrue($saved['sections'][0]['blocks'][0]['runs'][0]['bold']);
+    }
+
+    public function test_semantic_model_is_rendered_back_to_compatibility_html(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'رندر',
+            'content' => '<p><br></p>',
+            'status' => 'draft',
+        ]);
+
+        $model = [
+            'schema' => 3,
+            'type' => 'document',
+            'direction' => 'rtl',
+            'sections' => [[
+                'id' => 'section-1',
+                'blocks' => [[
+                    'id' => 'b-render',
+                    'type' => 'paragraph',
+                    'runs' => [
+                        ['text' => 'سلام '],
+                        ['text' => 'فراست', 'bold' => true],
+                    ],
+                ]],
+            ]],
+        ];
+
+        app(EditorDocumentService::class)->save($legacy, '<p>ignored</p>', 'رندر', null, 'manual', null, $model);
+        $saved = $legacy->farastDocument->fresh();
+        $this->assertStringContainsString('<strong>فراست</strong>', $saved->content);
+        $this->assertSame('سلام فراست', $saved->content_json['plain_text']);
+    }
+
 }
