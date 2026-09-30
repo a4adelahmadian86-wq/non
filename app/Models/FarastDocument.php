@@ -43,6 +43,11 @@ class FarastDocument extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(FarastProject::class);
+    }
+
     public function versions(): HasMany
     {
         return $this->hasMany(FarastDocumentVersion::class, 'document_id');
