@@ -22,4 +22,5 @@ const closeModal=()=>{if(!modal)return;modal.hidden=true;drop?.focus()};
 close?.addEventListener('click',closeModal);modal?.addEventListener('click',event=>{if(event.target===modal)closeModal()});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&modal&&!modal.hidden)closeModal()});
 if(new URLSearchParams(location.search).get('typing_preflight')==='1')estimate();
+if(new URLSearchParams(location.search).get('focus')==='upload'){window.setTimeout(()=>{drop?.scrollIntoView({behavior:'auto',block:'center'});drop?.focus({preventScroll:true});drop?.classList.add('is-focused');window.setTimeout(()=>drop?.classList.remove('is-focused'),900)},0)}
 })();
