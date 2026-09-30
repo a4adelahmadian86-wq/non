@@ -663,6 +663,14 @@ class EditorDocumentService
             if ($styles) $attrs .= ' style="'.implode(';', $styles).'"';
             $html .= '<'.$tag.$attrs.'>'.$this->runsToHtml($block['runs'] ?? []).'</'.$tag.'>';
         }
+        foreach (($model['resources'] ?? []) as $resource) {
+            if (!is_array($resource) || ($resource['type'] ?? '') !== 'image') continue;
+            $src = (string) ($resource['source'] ?? '');
+            if ($src !== '' && !str_contains($html, $src)) {
+                // Keep unplaced resources recoverable in the compatibility HTML without rendering them.
+                $html .= '<!-- farast-resource:'.str_replace('-->', '', $src).' -->';
+            }
+        }
         return $html ?: '<p><br></p>';
     }
 
