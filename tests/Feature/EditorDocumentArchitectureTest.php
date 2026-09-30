@@ -284,4 +284,28 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertSame('data:image/png;base64,AAAA', $saved['resources'][0]['source']);
     }
 
+    public function test_paragraph_layout_semantics_round_trip(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create(['user_id' => $user->id, 'title' => 'طرح', 'content' => '<p>متن</p>', 'status' => 'draft']);
+        $model = [
+            'schema' => 3, 'type' => 'document', 'direction' => 'rtl',
+            'sections' => [[
+                'id' => 'section-1',
+                'blocks' => [[
+                    'id' => 'layout-1', 'type' => 'paragraph', 'direction' => 'rtl',
+                    'alignment' => 'justify', 'lineHeight' => '1.8', 'paragraphSpacing' => 12, 'indent' => 2,
+                    'runs' => [['id' => 'run-layout', 'text' => 'متن']],
+                ]],
+            ]],
+        ];
+        app(EditorDocumentService::class)->save($legacy, '<p>ignored</p>', 'طرح', null, 'manual', null, $model);
+        $saved = $legacy->farastDocument->fresh()->content_json['sections'][0]['blocks'][0];
+        $this->assertSame('justify', $saved['alignment']);
+        $this->assertSame('1.8', $saved['lineHeight']);
+        $this->assertSame(12, $saved['paragraphSpacing']);
+        $this->assertSame(2, $saved['indent']);
+        $this->assertSame('rtl', $saved['direction']);
+    }
+
 }
