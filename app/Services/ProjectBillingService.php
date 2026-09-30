@@ -15,11 +15,13 @@ class ProjectBillingService
     public function quote(FarastProject $project, int $pages, ?string $text = null): array
     {
         $context = $project->context ?? [];
+        $subscription = $this->includedAllowance($project->user, (string)($context['workflow'] ?? 'manual'));
         return $this->pricing->projectQuote(
             (string)($context['workflow'] ?? 'manual'),
             (string)($context['source_type'] ?? ''),
             max(1,$pages),
-            $text ?? ''
+            $text ?? '',
+            !$subscription['subscriber']
         );
     }
 
