@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiFeedback;
+use App\Models\FarastDocument;
+use App\Models\FarastProject;
 use App\Models\AiInteraction;
 use App\Models\EditorSession;
 use App\Models\Order;
@@ -11,6 +13,7 @@ use App\Services\CapabilityService;
 use App\Services\FreeQuotaService;
 use App\Services\GeminiService;
 use App\Services\PricingService;
+use App\Services\ProjectInterviewService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -32,26 +35,54 @@ class EditorController extends Controller
         ]);
     }
 
-    public function create(CapabilityService $capabilities)
+    public function create(CapabilityService $capabilities, ProjectInterviewService $interview)
     {
-        return view('editor', ['capabilities' => $capabilities->forUser(auth()->user())]);
+        $project = null;
+        if (request()->filled('project')) {
+            $project = FarastProject::whereKey((int) request('project'))->where('user_id', auth()->id())->firstOrFail();
+        }
+        return view('editor', [
+            'capabilities' => $capabilities->forUser(auth()->user()),
+            'project' => $project,
+            'projectTemplates' => $interview::TEMPLATES,
+        ]);
     }
 
     public function createDocument(Request $request, CapabilityService $capabilities, \App\Services\EditorDocumentService $documents)
     {
         abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
-        $data = $request->validate(['title' => ['nullable','string','max:255']]);
+        $data = $request->validate([
+            'title' => ['nullable','string','max:255'],
+            'project_id' => ['nullable','integer'],
+        ]);
+        $project = !empty($data['project_id'])
+            ? FarastProject::whereKey((int)$data['project_id'])->where('user_id',$request->user()->id)->firstOrFail()
+            : null;
+        $settings = $project?->context['template_settings'] ?? $documents->defaultPageSettings();
         $legacy = TypingDocument::create([
             'user_id' => $request->user()->id,
-            'title' => $data['title'] ?? 'سند جدید',
+            'project_id' => $project?->id,
+            'title' => $data['title'] ?? ($project?->name ?? 'سند جدید'),
             'content' => '<p><br></p>',
-            'page_count' => 1,
+            'page_count' => max(1,(int)($project?->estimated_pages ?? 1)),
             'word_count' => 0,
-            'language_mix' => json_encode(['fa' => true, 'en' => false], JSON_UNESCAPED_UNICODE),
+            'language_mix' => ['fa' => true, 'en' => false],
             'status' => 'draft',
+            'price_rials' => (int)($project?->estimated_price_rials ?? 0),
         ]);
-        $saved = $documents->save($legacy, '<p><br></p>', $legacy->title, null, 'editor');
-        return response()->json(['ok' => true, 'document_id' => $legacy->id, 'revision' => $saved['revision'] ?? 1, 'title' => $legacy->title, 'content' => '<p><br></p>', 'page_settings' => $saved['page_settings'] ?? $documents->defaultPageSettings()]);
+        $saved = $documents->save($legacy, '<p><br></p>', $legacy->title, null, 'editor', $settings);
+        if ($project) {
+            FarastDocument::whereKey($legacy->farast_document_id)->where('user_id',$request->user()->id)->update(['project_id'=>$project->id]);
+        }
+        return response()->json([
+            'ok' => true,
+            'document_id' => $legacy->id,
+            'project_id' => $project?->id,
+            'revision' => $saved['revision'] ?? 1,
+            'title' => $legacy->title,
+            'content' => '<p><br></p>',
+            'page_settings' => $saved['page_settings'] ?? $settings,
+        ]);
     }
 
     public function pending(Request $request)
