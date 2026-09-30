@@ -9,6 +9,7 @@ use App\Services\ProjectInterviewService;
 use App\Services\PricingService;
 use App\Services\UserKnowledgeService;
 use App\Services\ApplicationRegistry;
+use App\Services\AuditEventService;
 use Illuminate\Http\Request;
 
 class ProjectController extends Controller
@@ -24,7 +25,7 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications)
+    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications, AuditEventService $audit)
     {
         $data = $request->validate([
             'project_type' => ['required','string','in:typing,editing,article,book,resume,exam,contract,forms,presentation,design,poster_card,programming,other'],
@@ -49,6 +50,12 @@ class ProjectController extends Controller
         ]);
         $estimatePages=(int)($context['estimated_pages'] ?? 1);
         $quote=$billing->applyQuote($project,$estimatePages);
+        $audit->record('project.created', $request->user()->id, $project->id, 'project', $project->id, [
+            'project_type' => $project->project_type,
+            'application' => $project->context['application'] ?? null,
+            'workflow' => $project->workflow,
+            'required_capabilities' => $project->context['required_capabilities'] ?? [],
+        ]);
         return response()->json([
             'ok'=>true,'project_id'=>$project->id,'next_url'=>route('editor',['project'=>$project->id]),
             'context'=>$project->fresh()->context,'quote'=>$quote['quote'],'entitlement'=>$quote['entitlement'],
