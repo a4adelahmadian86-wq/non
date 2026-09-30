@@ -368,6 +368,14 @@ class EditorDocumentService
             return $normalized;
         }
 
+        foreach (['alignment','direction'] as $key) {
+            if (isset($block[$key]) && in_array($block[$key], $key === 'alignment' ? ['left','center','right','justify'] : ['rtl','ltr'], true)) {
+                $normalized[$key] = $block[$key];
+            }
+        }
+        if (isset($block['lineHeight']) && is_scalar($block['lineHeight'])) $normalized['lineHeight'] = mb_substr((string) $block['lineHeight'], 0, 32);
+        if (isset($block['paragraphSpacing'])) $normalized['paragraphSpacing'] = max(0, min(200, (int) $block['paragraphSpacing']));
+        if (isset($block['indent'])) $normalized['indent'] = max(0, min(12, (int) $block['indent']));
         $normalized['runs'] = $this->sanitizeRuns($block['runs'] ?? []);
         if (!$normalized['runs']) {
             $legacyHtml = (string) ($block['html'] ?? '');
@@ -643,7 +651,15 @@ class EditorDocumentService
                 continue;
             }
             $tag = $type === 'heading' ? 'h'.max(1, min(6, (int) ($block['level'] ?? 2))) : ($type === 'quote' ? 'blockquote' : ($type === 'list_item' ? 'li' : 'p'));
-            $html .= '<'.$tag.'>'.$this->runsToHtml($block['runs'] ?? []).'</'.$tag.'>';
+            $attrs = '';
+            $styles = [];
+            if (!empty($block['alignment'])) $styles[] = 'text-align:'.$block['alignment'];
+            if (!empty($block['lineHeight'])) $styles[] = 'line-height:'.htmlspecialchars((string) $block['lineHeight'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            if (isset($block['paragraphSpacing'])) $styles[] = 'margin-bottom:'.(int) $block['paragraphSpacing'].'px';
+            if (!empty($block['indent'])) $styles[] = 'margin-inline-start:'.((int) $block['indent'] * 32).'px';
+            if (!empty($block['direction'])) $attrs .= ' dir="'.$block['direction'].'"';
+            if ($styles) $attrs .= ' style="'.implode(';', $styles).'"';
+            $html .= '<'.$tag.$attrs.'>'.$this->runsToHtml($block['runs'] ?? []).'</'.$tag.'>';
         }
         return $html ?: '<p><br></p>';
     }
