@@ -3,7 +3,7 @@
 <div class="container user-dashboard" dir="rtl">
     <header class="page-head">
         <div><span class="eyebrow"><i class="fa-solid fa-gauge-high"></i> فضای کاری</span><h1>داشبورد شما</h1><p class="dashboard-sub">اسناد، ظرفیت حساب و قابلیت‌های فعال شما در یک نمای ساده و خصوصی.</p></div>
-        @if($capabilities['active'] && $capabilities['can_type'])<a class="btn primary" href="{{ route('editor') }}"><i class="fa-solid fa-plus"></i> تایپ جدید</a>@endif
+        @if($capabilities['active'] && $capabilities['can_type'])<a class="btn primary" href="{{ route('projects.create') }}"><i class="fa-solid fa-plus"></i> پروژه جدید</a>@endif
     </header>
     <section class="cards dashboard-cards" aria-label="خلاصه حساب">
         <div><b>{{ number_format($documents->count()) }}</b><span><i class="fa-solid fa-file-lines"></i> سندهای من</span></div>
@@ -21,7 +21,7 @@
     </div>
     <section class="panel recent-documents"><div class="panel-heading"><div><h2>اسناد اخیر</h2><p>هر سند فقط برای حساب مالک آن نمایش داده می‌شود.</p></div><span class="dashboard-count">{{ number_format($documents->count()) }}</span></div>
         @forelse($documents as $d)<article class="doc"><span><i class="fa-regular fa-file-lines"></i><span>{{ $d->title }}</span></span><span>{{ number_format($d->page_count) }} صفحه</span><span>{{ number_format($d->price_rials) }} ریال</span><a href="{{ route('editor') }}"><i class="fa-solid fa-arrow-left"></i> باز کردن در ویرایشگر</a></article>
-        @empty<div class="empty-state"><i class="fa-regular fa-folder-open"></i><p>هنوز سندی ندارید.</p>@if($capabilities['can_type'])<a href="{{ route('editor') }}">ایجاد اولین سند</a>@endif</div>@endforelse
+        @empty<div class="empty-state"><i class="fa-regular fa-folder-open"></i><p>هنوز سندی ندارید.</p>@if($capabilities['can_type'])<a href="{{ route('projects.create') }}">ایجاد اولین پروژه</a>@endif</div>@endforelse
     </section>
 </div>
 @endsection
