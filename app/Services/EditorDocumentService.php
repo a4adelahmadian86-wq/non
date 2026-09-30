@@ -401,7 +401,7 @@ class EditorDocumentService
     private function sanitizeComments(mixed $comments): array
     {
         if (!is_array($comments)) return [];
-        return array_values(array_map(function ($comment) {
+        return array_values(array_filter(array_map(function ($comment) {
             if (!is_array($comment)) return null;
             return [
                 'id' => (string) ($comment['id'] ?? Str::uuid()),
@@ -412,13 +412,13 @@ class EditorDocumentService
                 'anchor' => is_array($comment['anchor'] ?? null) ? $comment['anchor'] : [],
                 'resolved' => (bool) ($comment['resolved'] ?? false),
             ];
-        }, $comments), fn ($v) => $v !== null);
+        }, $comments), fn ($v) => $v !== null));
     }
 
     private function sanitizeReviewChanges(mixed $changes): array
     {
         if (!is_array($changes)) return [];
-        return array_values(array_map(function ($change) {
+        return array_values(array_filter(array_map(function ($change) {
             if (!is_array($change)) return null;
             $type = (string) ($change['type'] ?? 'formatting');
             if (!in_array($type, ['insertion','deletion','formatting'], true)) return null;
@@ -436,13 +436,13 @@ class EditorDocumentService
                 'after' => is_array($change['after'] ?? null) ? $change['after'] : [],
                 'status' => $status,
             ];
-        }, $changes), fn ($v) => $v !== null);
+        }, $changes), fn ($v) => $v !== null));
     }
 
     private function sanitizeBookmarks(mixed $bookmarks): array
     {
         if (!is_array($bookmarks)) return [];
-        return array_values(array_map(function ($bookmark) {
+        return array_values(array_filter(array_map(function ($bookmark) {
             if (!is_array($bookmark)) return null;
             return [
                 'id' => (string) ($bookmark['id'] ?? Str::uuid()),
@@ -450,7 +450,7 @@ class EditorDocumentService
                 'blockId' => (string) ($bookmark['blockId'] ?? $bookmark['block_id'] ?? ''),
                 'offset' => max(0, (int) ($bookmark['offset'] ?? 0)),
             ];
-        }, $bookmarks), fn ($v) => $v !== null);
+        }, $bookmarks), fn ($v) => $v !== null));
     }
 
     private function migrateDocumentModel(array $model, int $schema): array
