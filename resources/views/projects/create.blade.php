@@ -1,0 +1,33 @@
+@extends('layouts.app')
+@section('content')
+<style>
+.project-create{max-width:1120px;margin:32px auto;padding:0 20px}.project-create__head{text-align:center;margin-bottom:28px}.project-create__head .eyebrow{color:#64748b;font-size:13px}.project-create__head h1{margin:8px 0;font-size:32px}.project-create__head p{margin:0;color:#64748b}.project-step{background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:28px;box-shadow:0 14px 40px rgba(15,23,42,.06)}.project-question{font-size:21px;font-weight:700;margin:0 0 20px}.project-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.project-card{border:1px solid #e2e8f0;background:#fff;border-radius:18px;padding:20px;min-height:130px;text-align:right;cursor:pointer;transition:.2s}.project-card:hover,.project-card:focus-visible{transform:translateY(-2px);border-color:#94a3b8;box-shadow:0 10px 24px rgba(15,23,42,.08);outline:none}.project-card.is-selected{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}.project-card.is-disabled{opacity:.55;cursor:default}.project-card i{font-size:23px;display:block;margin-bottom:16px}.project-card strong{display:block}.project-card small{display:block;color:#64748b;margin-top:6px}.project-back{margin-bottom:16px;border:0;background:none;color:#475569;cursor:pointer}.project-price{margin-top:22px;padding:16px;border-radius:16px;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;gap:12px}.project-actions{display:flex;justify-content:space-between;gap:12px;margin-top:22px}.project-actions button{min-height:44px;border-radius:12px;padding:0 18px;border:1px solid #cbd5e1;background:#fff;cursor:pointer}.project-actions .primary{background:#0f172a;color:#fff;border-color:#0f172a}.project-note{font-size:13px;color:#64748b;margin-top:12px}@media(max-width:800px){.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-create{margin:18px auto}.project-step{padding:20px}}@media(max-width:520px){.project-grid{grid-template-columns:1fr}.project-create__head h1{font-size:26px}.project-card{min-height:100px}}
+</style>
+<div class="project-create" dir="rtl">
+<header class="project-create__head"><span class="eyebrow">FARAST · شروع کار</span><h1>پروژه جدید</h1><p>فقط اطلاعاتی را می‌پرسیم که برای قدم بعدی لازم است.</p></header>
+<section class="project-step">
+<button class="project-back" id="back" type="button" hidden>← بازگشت</button>
+<h2 class="project-question" id="question">روی چه کاری می‌خواهید کار کنید؟</h2>
+<div class="project-grid" id="choices"></div>
+<div class="project-price" id="price" hidden><span>برآورد اولیه</span><strong id="priceValue">—</strong></div>
+<div class="project-actions"><span class="project-note" id="note">انتخاب شما، مرحله بعد را مشخص می‌کند.</span><button class="primary" id="continue" type="button" disabled>ادامه</button></div>
+</section>
+</div>
+<script>
+(()=>{const types=@json($types),templates=@json($templates),choices=document.getElementById('choices'),question=document.getElementById('question'),back=document.getElementById('back'),cont=document.getElementById('continue'),note=document.getElementById('note'),price=document.getElementById('price'),priceValue=document.getElementById('priceValue'),answers={};let step='project_type';
+const labels={typing_mode:{manual:'خودم تایپ می‌کنم',voice:'تایپ صوتی',source_file:'تایپ از روی فایل'},source_type:{printed:'متن چاپی',handwritten:'دست‌نویس',mixed:'چاپی + دست‌نویس'},language:{fa:'فارسی',en:'انگلیسی',mixed:'ترکیبی'}};
+const render=(key)=>{choices.innerHTML='';cont.disabled=true;let items=[];
+if(key==='project_type')items=Object.entries(types).map(([id,x])=>({id,title:x.label,sub:x.available?'آماده استفاده':'به‌زودی',icon:x.icon,disabled:!x.available}));
+else if(key==='template')items=Object.entries(templates).map(([id,x])=>({id,title:x.name,sub:x.description,icon:'fa-file-lines'}));
+else items=Object.entries(labels[key]||{}).map(([id,title])=>({id,title,sub:'',icon:key==='typing_mode'?(id==='voice'?'fa-microphone':id==='source_file'?'fa-file-arrow-up':'fa-keyboard'):'fa-circle-check'}));
+items.forEach(x=>{const b=document.createElement('button');b.type='button';b.className='project-card'+(x.disabled?' is-disabled':'');b.disabled=!!x.disabled;b.innerHTML='<i class="fa-solid '+x.icon+'"></i><strong>'+x.title+'</strong><small>'+x.sub+'</small>';b.onclick=()=>{answers[key]=x.id;renderNext()};choices.appendChild(b)})};
+const renderNext=()=>{if(step==='project_type'){step='template';question.textContent='قالب سند را انتخاب کنید';back.hidden=false;render(step);return}
+if(step==='template'){step='workflow';question.textContent='چطور می‌خواهید تایپ کنید؟';render(step);return}
+if(step==='workflow'){step=answers.workflow==='source_file'?'source_type':(answers.workflow==='voice'?'language':'done');question.textContent=step==='done'?'پروژه آماده است':'یک مورد دیگر را مشخص کنیم';if(step==='done'){cont.disabled=false;note.textContent='تنظیمات کافی است؛ پروژه را بسازید.';price.hidden=false;priceValue.textContent='در حال محاسبه…';renderPrice()}else render(step);return}
+if(step==='source_type'||step==='language'){step='done';question.textContent='پروژه آماده است';cont.disabled=false;note.textContent='تنظیمات کافی است؛ پروژه را بسازید.';price.hidden=false;renderPrice()}};
+const renderPrice=()=>{const base=answers.workflow==='manual'?300000:answers.workflow==='voice'?450000:answers.source_type==='printed'?330000:answers.source_type==='handwritten'?500000:600000;priceValue.textContent=new Intl.NumberFormat('fa-IR').format(base)+' ریال / صفحه';};
+back.onclick=()=>{if(step==='template')location.reload();else if(step==='workflow'){step='template';question.textContent='قالب سند را انتخاب کنید';render(step)}else if(step==='source_type'||step==='language'){step='workflow';question.textContent='چطور می‌خواهید تایپ کنید؟';render(step)}else if(step==='done'){step=answers.workflow==='source_file'?'source_type':answers.workflow==='voice'?'language':'workflow';question.textContent='تنظیمات پروژه';render(step)}};
+cont.onclick=async()=>{if(step!=='done')return;cont.disabled=true;note.textContent='در حال ساخت پروژه…';try{const r=await fetch('{{ route('projects.store') }}',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content},body:JSON.stringify({...answers,name:'پروژه تایپ جدید',estimated_pages:1})});const j=await r.json();if(!r.ok)throw new Error(j.message||'ساخت پروژه ناموفق بود');location.href=j.next_url}catch(e){note.textContent=e.message;cont.disabled=false}};
+render('project_type');})();
+</script>
+@endsection
