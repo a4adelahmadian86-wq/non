@@ -11,11 +11,13 @@ use Illuminate\Http\Request;
 
 class ProjectController extends Controller
 {
-    public function create(ProjectInterviewService $interview)
+    public function create(ProjectInterviewService $interview, ProjectBillingService $billing)
     {
+        $subscription = $billing->includedAllowance(request()->user(), 'manual');
         return view('projects.create', [
             'types' => $interview::TYPES,
             'templates' => $interview::TEMPLATES,
+            'subscriber' => $subscription['subscriber'],
         ]);
     }
 
