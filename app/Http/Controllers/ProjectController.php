@@ -28,7 +28,7 @@ class ProjectController extends Controller
     public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications, AuditEventService $audit)
     {
         $data = $request->validate([
-            'project_type' => ['required','string','in:typing,editing,article,book,resume,exam,contract,forms,presentation,design,poster_card,programming,other'],
+            'project_type' => ['required','string','in:typing,editing,article,book,resume,exam,contract,forms,report,research_document,presentation,design,poster_card,programming,other'],
             'template' => ['required','string','in:'.implode(',',array_keys($interview::TEMPLATES))],
             'workflow' => ['required','string','in:manual,voice,source_file'],
             'source_type' => ['nullable','string','in:printed,handwritten,mixed'],
@@ -43,7 +43,7 @@ class ProjectController extends Controller
         $project = FarastProject::create([
             'user_id'=>$request->user()->id,
             'name'=>($data['name'] ?? '') ?: 'پروژه تایپ جدید',
-            'project_type'=>'typing','workflow'=>$context['workflow'],'template_code'=>$context['template'],
+            'project_type'=>$context['project_type'],'workflow'=>$context['workflow'],'template_code'=>$context['template'],
             'status'=>'active','context'=>$context,
             'billing_state'=>['status'=>'estimated'],
             'output_state'=>['status'=>'locked','reason'=>'entitlement_pending'],
