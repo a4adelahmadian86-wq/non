@@ -29,7 +29,7 @@ class EntitlementService
             ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
             ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()))
             ->get()
-            ->sortByDesc(function (FarastEntitlement $row) use ($project) {
+            ->sortByDesc(function (FarastEntitlement $row) use ($project, $user) {
                 return (($project && (int) $row->project_id === (int) $project->id) ? 4 : 0)
                     + (((int) $row->user_id === (int) $user->id) ? 2 : 0)
                     + ($row->mode === 'subscription' ? 1 : 0);
