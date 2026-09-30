@@ -24,7 +24,7 @@ class PricingService
         $multiplier = $payg ? max(100, (int)($rules['typing_payg_multiplier'] ?? 125)) : 100;
         $line = (int)round(($pages * $unit + $audio) * $multiplier / 100);
         return [
-            'pages'=>$pages,'unit_price_rials'=>$unit,'price_rials'=>$line,'currency'=>'IRR',
+            'pages'=>$pages,'unit_price_rials'=>$unit,'free_page_value_rials'=>$unit,'price_rials'=>$line,'currency'=>'IRR',
             'workflow'=>$workflow,'source_type'=>$sourceType ?: null,'payg'=>$payg,
             'audio_minutes'=>$audioMinutes,'audio_cost_rials'=>$audio,
             'breakdown'=>['unit'=>$unit,'pages'=>$pages,'audio_cost'=>$audio,'multiplier'=>$multiplier],
