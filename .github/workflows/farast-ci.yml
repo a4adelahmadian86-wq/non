@@ -32,3 +32,10 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
+      - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-server.log 2>&1 &
+      - run: npm init -y
+      - run: npm install --no-save @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+        env:
+          FARAST_E2E_URL: http://127.0.0.1:8000
