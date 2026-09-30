@@ -162,24 +162,24 @@ class EditorDocumentService
     {
         $html = trim($html);
         if ($html === '') return '<p><br></p>';
-        $dom = new \\DOMDocument('1.0', 'UTF-8');
+        $dom = new \DOMDocument('1.0', 'UTF-8');
         @$dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-root">'.$html.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         $root = $dom->getElementById('farast-root');
         if (!$root) return '<p><br></p>';
         $allowedTags = ['div','p','br','span','strong','b','em','i','u','s','strike','sub','sup','h1','h2','h3','h4','h5','h6','blockquote','ul','ol','li','table','thead','tbody','tfoot','tr','th','td','img','a','hr'];
         $allowedAttrs = ['id','class','style','dir','title','alt','width','height','colspan','rowspan','href','target','rel','src'];
-        $walk = function(\\DOMNode $node) use (&$walk, $allowedTags, $allowedAttrs): void {
+        $walk = function(\DOMNode $node) use (&$walk, $allowedTags, $allowedAttrs): void {
             for ($child = $node->firstChild; $child; ) {
                 $next = $child->nextSibling;
-                if ($child instanceof \\DOMElement) {
+                if ($child instanceof \DOMElement) {
                     $tag = strtolower($child->tagName);
                     if (!in_array($tag, $allowedTags, true)) { $node->removeChild($child); $child = $next; continue; }
                     foreach (iterator_to_array($child->attributes) as $attr) {
                         $name = strtolower($attr->name);
                         $value = trim($attr->value);
                         if (!in_array($name, $allowedAttrs, true) || str_starts_with($name, 'on')) { $child->removeAttribute($attr->name); continue; }
-                        if (in_array($name, ['href','src'], true) && preg_match('/^\\s*(?:javascript:|vbscript:|data:text\\/html)/iu', $value)) { $child->removeAttribute($attr->name); continue; }
-                        if ($name === 'style' && preg_match('/(?:expression\\s*\\(|url\\s*\\(\\s*["\\']?\\s*(?:javascript:|data:text\\/html))/iu', $value)) { $child->removeAttribute($attr->name); }
+                        if (in_array($name, ['href','src'], true) && preg_match('/^\s*(?:javascript:|vbscript:|data:text\/html)/iu', $value)) { $child->removeAttribute($attr->name); continue; }
+                        if ($name === 'style' && preg_match('/(?:expression\s*\(|url\s*\(\s*["\']?\s*(?:javascript:|data:text\/html))/iu', $value)) { $child->removeAttribute($attr->name); }
                     }
                     if ($tag === 'a' && $child->hasAttribute('target')) $child->setAttribute('rel', 'noopener noreferrer');
                     $walk($child);
