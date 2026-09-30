@@ -14,6 +14,7 @@ use App\Models\WalletTransaction;
 use App\Services\EmailService;
 use App\Services\FreeQuotaService;
 use App\Services\PricingService;
+use App\Services\ProjectBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -27,7 +28,8 @@ class PaymentController extends Controller
         abort_unless($document->user_id === auth()->id() && $document->status !== 'deleted', 404);
         $request->validate(['accept_terms' => ['accepted']]);
 
-        $quote = $pricing->quote((string) $document->content, max(1, (int) $document->page_count));
+        $project = $document->project_id ? FarastProject::whereKey($document->project_id)->where('user_id',auth()->id())->first() : null;
+        $quote = $project ? app(ProjectBillingService::class)->quote($project, max(1,(int)$document->page_count), (string)$document->content) : $pricing->quote((string) $document->content, max(1, (int) $document->page_count));
         $freePages = $free->availablePages(auth()->user(), $this->freePagesSetting());
         $freeApplied = min(1, $freePages, $quote['pages']);
         [$subtotal, $discount, $tax, $gross] = $this->totals($quote, $freeApplied);
@@ -93,7 +95,8 @@ class PaymentController extends Controller
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                $quote = $pricing->quote((string) $document->content, max(1, (int) $document->page_count));
+                $project = $document->project_id ? FarastProject::whereKey($document->project_id)->where('user_id',auth()->id())->first() : null;
+                $quote = $project ? app(ProjectBillingService::class)->quote($project, max(1,(int)$document->page_count), (string)$document->content) : $pricing->quote((string) $document->content, max(1, (int) $document->page_count));
                 $available = $free->availablePages(auth()->user(), $this->freePagesSetting());
                 $freeApplied = min(1, $available, $quote['pages']);
                 [$subtotal, $discount, $tax, $gross] = $this->totals($quote, $freeApplied);
