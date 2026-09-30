@@ -5,7 +5,7 @@
     <div class="farast-brand"><span class="farast-brand-mark" aria-hidden="true">✦</span><strong>فراست</strong></div>
     <button class="farast-mobile-icon" id="mobileNav" type="button" aria-label="پیمایش سند">☰</button>
     <label class="farast-doc-title"><span class="sr-only">عنوان سند</span><input id="docTitle" value="سند جدید" maxlength="255"></label>
-    <div class="farast-save-state" id="saveState" aria-live="polite">آماده</div>@if($project)<div class="farast-save-state" id="projectBillingState">برآورد: {{ number_format((int)($project->estimated_price_rials ?? 0)) }} ریال</div>@endif
+    <div class="farast-save-state" id="saveState" aria-live="polite">آماده</div>@if($project)<div class="farast-save-state" id="projectBillingState">@if(($project->output_state['status'] ?? null) === 'unlocked') خروجی مجاز · {{ ($project->billing_state['status'] ?? null) === 'included' ? 'در سهمیه اشتراک' : 'پرداخت‌شده' }} @else خروجی قفل · {{ number_format((int)($project->billing_state['amount_remaining'] ?? $project->estimated_price_rials ?? 0)) }} ریال باقی‌مانده @endif</div>@endif
     <div class="farast-app-actions"><button id="saveNow" type="button" class="primary">ذخیره</button><a href="{{ route('dashboard') }}">بازگشت</a></div>
   </header>
   <nav class="farast-tabs" aria-label="نوار فرمان">
