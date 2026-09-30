@@ -620,7 +620,7 @@ class EditorDocumentService
 
     private function normalizePersian(string $text): string
     {
-        return preg_replace(['/[يى]/u','/ك/u','/ۀ/u','/ـ/u','/\x{200C}{2,}/u'], ['ی','ک','هٔ','','\x{200C}'], $text) ?? $text;
+        return preg_replace(['/[يى]/u','/ك/u','/ۀ/u','/ـ/u','/\x{200C}{2,}/u'], ['ی','ک','هٔ','',"\u{200C}"], $text) ?? $text;
     }
 
     private function wordCount(string $text): int
