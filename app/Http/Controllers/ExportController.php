@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\TypingDocument;
 use App\Models\FarastDocument;
+use App\Models\FarastProject;
 use App\Services\CapabilityService;
 use App\Services\EditorDocumentService;
 use Illuminate\Http\Request;
@@ -23,9 +24,12 @@ class ExportController extends Controller
         $doc=TypingDocument::whereKey($id)->where('user_id',auth()->id())->firstOrFail();
         abort_unless($doc->status!=='deleted',404);
         if(!auth()->user()->isAdmin()){
+            $project = $doc->project_id ? FarastProject::whereKey($doc->project_id)->where('user_id',auth()->id())->first() : null;
+            $projectUnlocked = $project && (($project->output_state['status'] ?? null) === 'unlocked');
             $hash=hash('sha256',(string)$doc->content);
             $paid=Order::where('user_id',auth()->id())->where('document_id',$doc->id)->where('status','paid')->whereNotNull('paid_at')->latest('paid_at')->first();
-            abort_unless($paid && hash_equals((string)$paid->content_hash,$hash),402,'ابتدا متن نهایی را بازبینی کنید و هزینه خروجی را در صفحه پرداخت تسویه کنید.');
+            $orderAuthorized = $paid && hash_equals((string)$paid->content_hash,$hash);
+            abort_unless($projectUnlocked || $orderAuthorized,402,'ابتدا متن نهایی را بازبینی کنید و هزینه یا سهمیه پروژه را تکمیل کنید.');
         }
         $canonical=$doc->farast_document_id ? FarastDocument::whereKey($doc->farast_document_id)->where('user_id',auth()->id())->first() : null;
         $content=$documents->sanitizeHtml($this->cleanExportHtml((string)($canonical?->content ?? $doc->content)));
