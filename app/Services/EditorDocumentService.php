@@ -495,16 +495,16 @@ class EditorDocumentService
     private function runsFromHtml(string $html): array
     {
         $html = $this->sanitizeHtml($html);
-        $dom = new DOMDocument('1.0', 'UTF-8');
+        $dom = new \DOMDocument('1.0', 'UTF-8');
         @$dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-run-root">'.$html.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         $root = $dom->getElementById('farast-run-root');
         if (!$root) return [['text' => '']];
 
-        $walk = function (DOMNode $node, array $style = []) use (&$walk): array {
+        $walk = function (\DOMNode $node, array $style = []) use (&$walk): array {
             $runs = [];
             foreach ($node->childNodes as $child) {
                 $next = $style;
-                if ($child instanceof DOMElement) {
+                if ($child instanceof \DOMElement) {
                     $tag = strtolower($child->tagName);
                     if (in_array($tag, ['strong','b'], true)) $next['bold'] = true;
                     if (in_array($tag, ['em','i'], true)) $next['italic'] = true;
@@ -524,7 +524,7 @@ class EditorDocumentService
                         }
                     }
                 }
-                if ($child instanceof DOMText) {
+                if ($child instanceof \DOMText) {
                     $text = $this->normalizePersian($child->wholeText);
                     if ($text !== '') $runs[] = ['text' => $text] + $next;
                 } else {
