@@ -235,4 +235,53 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertStringContainsString('اول', $saved->content);
     }
 
+    public function test_structural_annotations_and_resources_survive_canonical_sanitization(): void
+    {
+        $user = $this->makeUser();
+        $legacy = TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'نشانه‌ها',
+            'content' => '<p>متن</p>',
+            'status' => 'draft',
+        ]);
+
+        $model = [
+            'schema' => 3,
+            'type' => 'document',
+            'direction' => 'rtl',
+            'sections' => [[
+                'id' => 'section-1',
+                'blocks' => [[
+                    'id' => 'b1',
+                    'type' => 'paragraph',
+                    'runs' => [
+                        ['id' => 'run-1', 'text' => 'سلام', 'bold' => true],
+                        ['id' => 'run-2', 'text' => ' دنیا'],
+                    ],
+                ]],
+            ]],
+            'comments' => [[
+                'id' => 'comment-1', 'text' => 'بررسی شود',
+                'anchor' => ['start' => ['blockId' => 'b1', 'offset' => 0], 'end' => ['blockId' => 'b1', 'offset' => 4]],
+            ]],
+            'reviewChanges' => [[
+                'id' => 'change-1', 'type' => 'insertion', 'status' => 'pending',
+                'blockId' => 'b1', 'start' => 4, 'end' => 8,
+                'before' => [], 'after' => [['text' => ' جدید']],
+            ]],
+            'bookmarks' => [['id' => 'bookmark-1', 'name' => 'مقدمه', 'blockId' => 'b1', 'offset' => 0]],
+            'resources' => [['id' => 'res-1', 'type' => 'image', 'mime' => 'image/png', 'name' => 'x.png', 'source' => 'data:image/png;base64,AAAA']],
+        ];
+
+        app(EditorDocumentService::class)->save($legacy, '<p>ignored</p>', 'نشانه‌ها', null, 'manual', null, $model);
+        $saved = $legacy->farastDocument->fresh()->content_json;
+
+        $this->assertSame('run-1', $saved['sections'][0]['blocks'][0]['runs'][0]['id']);
+        $this->assertSame('comment-1', $saved['comments'][0]['id']);
+        $this->assertSame('change-1', $saved['reviewChanges'][0]['id']);
+        $this->assertSame('bookmark-1', $saved['bookmarks'][0]['id']);
+        $this->assertSame('res-1', $saved['resources'][0]['id']);
+        $this->assertSame('data:image/png;base64,AAAA', $saved['resources'][0]['source']);
+    }
+
 }
