@@ -387,7 +387,7 @@ class EditorDocumentService
             if (!is_array($run)) continue;
             $text = $this->normalizePersian((string) ($run['text'] ?? ''));
             if ($text === '' && count($runs) > 1) continue;
-            $item = ['text' => $text];
+            $item = ['id' => is_string($run['id'] ?? null) && $run['id'] !== '' ? $run['id'] : (string) Str::uuid(), 'text' => $text];
             foreach (['bold','italic','underline','strike'] as $flag) {
                 if (array_key_exists($flag, $run)) $item[$flag] = (bool) $run[$flag];
             }
@@ -402,13 +402,19 @@ class EditorDocumentService
         $merged = [];
         foreach ($out as $run) {
             $last = $merged[count($merged) - 1] ?? null;
-            if ($last && array_diff_assoc($run, $last) === [] && array_diff_assoc($last, $run) === []) {
+            if ($last && $this->runStylesEqual($run, $last)) {
                 $merged[count($merged) - 1]['text'] .= $run['text'];
             } else {
                 $merged[] = $run;
             }
         }
         return $merged;
+    }
+
+    private function runStylesEqual(array $a, array $b): bool
+    {
+        unset($a['id'], $b['id'], $a['text'], $b['text']);
+        return $a === $b;
     }
 
     private function sanitizeResources(mixed $resources): array
