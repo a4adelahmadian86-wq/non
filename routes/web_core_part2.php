@@ -21,16 +21,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
-Route::get('/__e2e/login', function () {
-    abort_unless(app()->environment('testing'), 404);
-    $user = \App\Models\User::updateOrCreate(
-        ['email' => 'farast-e2e@example.test'],
-        ['name' => 'FARAST E2E', 'password' => Hash::make('e2e-password'), 'role' => 'admin', 'is_verified' => true, 'is_blocked' => false]
-    );
-    Auth::login($user);
-    return redirect()->route('projects.create');
-});
-
 Route::get('/projects/new', [ProjectController::class, 'create'])->middleware('auth')->name('projects.create');
 Route::post('/projects', [ProjectController::class, 'store'])->middleware(['auth','throttle:30,10','capability:can_type'])->name('projects.store');
 Route::get('/editor', [EditorController::class, 'create'])->middleware(['auth', 'single.editor'])->name('editor');
