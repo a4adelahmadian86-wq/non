@@ -4,6 +4,7 @@ namespace App\Services;
 
 class ProjectInterviewService
 {
+    public function __construct(private ApplicationRegistry $applications) {}
     public const TYPES = [
         'typing' => ['label' => 'تایپ', 'icon' => 'fa-keyboard', 'available' => true],
         'editing' => ['label' => 'ویرایش', 'icon' => 'fa-pen-to-square', 'available' => false],
@@ -45,8 +46,14 @@ class ProjectInterviewService
             if (($answers['source_type'] ?? '') === 'handwritten' || ($answers['source_type'] ?? '') === 'mixed') $required[] = 'handwriting.ocr';
         }
 
+        $classification = $this->applications->classify($answers['project_type'] ?? 'typing');
+        if (!$classification['available']) {
+            throw new \InvalidArgumentException('این نوع پروژه هنوز قابل اجرا نیست.');
+        }
+
         return [
             'project_type' => $answers['project_type'] ?? 'typing',
+            'application' => $classification['application'],
             'editor_type' => 'word_processor',
             'workflow' => $workflow,
             'template' => $answers['template'] ?? 'simple_typing',
