@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\PaysWithZarinpal;
 use App\Models\Order;
+use App\Models\FarastProject;
 use App\Models\Payment;
 use App\Models\SiteSetting;
 use App\Models\StoreLibraryItem;
@@ -159,6 +160,10 @@ class PaymentController extends Controller
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 $document->update(['status' => 'paid', 'price_rials' => $gross]);
+                if ($document->project_id) {
+                    $project = FarastProject::whereKey($document->project_id)->where('user_id', auth()->id())->lockForUpdate()->first();
+                    if ($project) $project->update(['paid_rials' => max((int)$project->paid_rials, (int)$total), 'billing_state' => array_merge($project->billing_state ?? [], ['status'=>'paid','amount_remaining'=>0]), 'output_state' => ['status'=>'unlocked','reason'=>'payment_verified']]);
+                }
                 $paidOrder = $locked->fresh();
             });
 
