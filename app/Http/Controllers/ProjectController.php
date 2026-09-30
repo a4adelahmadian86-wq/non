@@ -37,7 +37,7 @@ class ProjectController extends Controller
         $context = $interview->buildContext($data,$knowledge->snapshotForProject($request->user()));
         $project = FarastProject::create([
             'user_id'=>$request->user()->id,
-            'name'=>$data['name'] ?: 'پروژه تایپ جدید',
+            'name'=>($data['name'] ?? '') ?: 'پروژه تایپ جدید',
             'project_type'=>'typing','workflow'=>$context['workflow'],'template_code'=>$context['template'],
             'status'=>'active','context'=>$context,
             'billing_state'=>['status'=>'estimated'],
