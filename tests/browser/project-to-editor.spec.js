@@ -78,6 +78,11 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.keyboard.press('Control+y');
   await expect.poll(async () => (await editor.locator('strong').allTextContents()).join('')).toContain('سلام فراست');
 
+  const beforeSaveSemantic = await page.evaluate(() => ({
+    plain: window.FarastEditor?.state?.model?.plain_text || '',
+    runs: window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(b => ({ type: b.type, text: (b.runs || []).map(r => r.text).join('') })) || []
+  }));
+  if (!beforeSaveSemantic.plain.includes('سلام فراست')) throw new Error('BEFORE_SAVE_MODEL='+JSON.stringify(beforeSaveSemantic));
   await page.locator('#saveNow').click();
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
 
