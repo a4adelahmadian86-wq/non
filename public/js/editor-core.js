@@ -5,7 +5,7 @@ ready(()=>{
 const app=document.getElementById('farastWord');if(!app)return;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], csrf=$('meta[name="csrf-token"]')?.content||'';
 const nf=n=>new Intl.NumberFormat('fa-IR').format(Number(n||0));
-const state={documentId:null,revision:0,dirty:false,saving:false,saveQueued:false,zoom:1,model:null,selection:null,history:[],historyIndex:-1,historyTimer:null,rendering:false,online:navigator.onLine,pageSettings:{paper:'A4',orientation:'portrait',margin:'normal',direction:'rtl',fontFamily:'B Nazanin',fontSize:16,header:'',footer:'',differentFirstPage:false},comments:[],review:[]};
+const state={documentId:app.dataset.documentId?Number(app.dataset.documentId):null,revision:0,dirty:false,saving:false,saveQueued:false,zoom:1,model:null,selection:null,history:[],historyIndex:-1,historyTimer:null,rendering:false,online:navigator.onLine,pageSettings:{paper:'A4',orientation:'portrait',margin:'normal',direction:'rtl',fontFamily:'B Nazanin',fontSize:16,header:'',footer:'',differentFirstPage:false},comments:[],review:[]};
 const api=async(url,options={})=>{const o={...options,headers:{...(options.headers||{}),Accept:'application/json','X-CSRF-TOKEN':csrf}};const r=await fetch(url,o);let j={};try{j=await r.json()}catch{}if(!r.ok){const e=new Error(j.message||j.user_message||'خطا در ارتباط با سرور');e.status=r.status;e.data=j;throw e}return j};
 const uid=()=>crypto?.randomUUID?.()||'b-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 const normalizeFa=s=>String(s??'').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/ۀ/g,'هٔ').replace(/\u0640/g,'').replace(/\u200c{2,}/g,'\u200c');
