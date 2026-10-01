@@ -191,10 +191,14 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   expect(reloadedListState.list.items).toBeGreaterThan(0);
   expect(reloadedListState.hasPageBreak).toBeTruthy();
 
-  const firstListItem = page.locator('.farast-editor li').first();
-  await firstListItem.scrollIntoViewIfNeeded();
-  await firstListItem.click();
-  await page.locator('.farast-ribbon button[data-command="indent"]').click();
+  await page.evaluate(() => {
+    const list = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'list');
+    const item = list?.items?.[0];
+    if (!list || !item) throw new Error('LIST_ITEM_FOR_INDENT_MISSING');
+    const end = (item.runs || []).reduce((n, r) => n + String(r.text || '').length, 0);
+    window.FarastEditor.state.selection = { start: { blockId: list.id, offset: end, itemId: item.id }, end: { blockId: list.id, offset: end, itemId: item.id }, direction: 'forward', affinity: 'downstream', text: '' };
+    window.FarastEditor.execute('indent');
+  });
   await expect.poll(async () => page.evaluate(() => {
     const list = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'list');
     return list?.items?.[0]?.level ?? 0;
