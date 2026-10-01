@@ -192,8 +192,8 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   expect(reloadedListState.hasPageBreak).toBeTruthy();
 
   await page.locator('.farast-tab[data-tab="insert"]').click();
-  page.on('dialog', dialog => dialog.accept('2'));
-  page.on('dialog', dialog => dialog.accept('2'));
+  const acceptRegressionTableDialogs = dialog => dialog.accept('2');
+  page.on('dialog', acceptRegressionTableDialogs);
   await page.locator('.farast-ribbon button[data-command="table"]').click();
   await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'table' && b.rows?.length === 2 && b.rows?.[0]?.cells?.length === 2))).toBeTruthy();
   const tableCell = page.locator('.farast-editor table td').first();
@@ -224,6 +224,8 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0, text: table?.rows?.[0]?.cells?.[0]?.runs?.map(r => r.text || '').join('') || '' };
   });
   expect(reloadedTableState).toEqual({ rows: 2, cols: 2, text: 'سلول اول' });
+
+  page.off('dialog', acceptRegressionTableDialogs);
 
 
   await page.locator('.farast-editor').first().click();
