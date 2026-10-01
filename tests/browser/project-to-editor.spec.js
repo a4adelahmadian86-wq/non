@@ -30,6 +30,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.getByRole('button', { name: 'ایجاد پروژه' }).click();
   await expect(page).toHaveURL(/\/editor(?:\?.*)?$/);
   await expect(page.locator('#farastWord')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
   try {
     await expect(page.locator('#pagesViewport .farast-page')).toBeVisible({ timeout: 5000 });
   } catch (error) {
@@ -82,6 +83,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
 
   await page.reload();
   await expect(page.locator('#pagesViewport .farast-page').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
   const reloadedModelText = await page.evaluate(() => window.FarastEditor?.state?.model?.plain_text || '');
   expect(reloadedModelText).toContain('سلام فراست');
   expect(reloadedModelText).toContain('FARAST 2026');
