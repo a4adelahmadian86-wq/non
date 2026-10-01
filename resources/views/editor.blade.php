@@ -27,7 +27,7 @@
   'view'=>[['navigation','پیمایش سند'],['zoomOut','کاهش بزرگ‌نمایی'],['zoomIn','افزایش بزرگ‌نمایی'],['fullscreen','تمام‌صفحه']],
   'insert'=>[['pageBreak','شکست صفحه'],['table','جدول'],['image','تصویر'],['link','پیوند'],['comment','نظر']],
   'format'=>[['normal','عادی'],['h1','عنوان ۱'],['h2','عنوان ۲'],['h3','عنوان ۳'],['bold','پررنگ'],['italic','کج'],['underline','زیرخط'],['strike','خط‌خورده'],['rtl','راست‌به‌چپ'],['ltr','چپ‌به‌راست'],['right','راست‌چین'],['center','وسط‌چین'],['left','چپ‌چین'],['justify','دوطرفه']],
-  'tools'=>[['aiPanel','دستیار AI'],['track','ردگیری تغییرات'],['accept','پذیرش تغییر'],['reject','رد تغییر']]
+  'tools'=>[['aiPanel','دستیار AI']]
  ] as $menu=>$items)
  <div class="farast-menu">
   <button type="button" aria-haspopup="true" aria-expanded="false">{{ match($menu){'file'=>'فایل','edit'=>'ویرایش','view'=>'نمایش','insert'=>'درج','format'=>'قالب','tools'=>'ابزارها',default=>$menu} }}</button>
@@ -39,7 +39,7 @@
  <div class="farast-menu"><button type="button" aria-haspopup="true" aria-expanded="false">راهنما</button><div class="farast-menu-panel" role="menu"><a role="menuitem" href="{{ route('support') }}">راهنما و پشتیبانی</a><a role="menuitem" href="{{ route('pricing') }}">قیمت‌گذاری</a></div></div>
 </nav>
   <nav class="farast-tabs" aria-label="نوار فرمان">
-    @foreach(['home'=>'خانه','insert'=>'درج','layout'=>'طرح','design'=>'طراحی','references'=>'مراجع','review'=>'بازبینی','view'=>'نمایش','ai'=>'هوش مصنوعی'] as $tab=>$label)
+    @foreach(['home'=>'خانه','insert'=>'درج','layout'=>'طرح','design'=>'طراحی','review'=>'بازبینی','view'=>'نمایش','ai'=>'هوش مصنوعی'] as $tab=>$label)
       <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}">{{ $label }}</button>
     @endforeach
   </nav>
