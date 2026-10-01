@@ -55,8 +55,21 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect.poll(async () => (await editor.locator('strong').allTextContents()).join('')).toContain('سلام فراست');
   const transactionLog = await page.evaluate(() => window.FarastEditor?.getTransactions?.() || []);
   expect(transactionLog.some(x => x.command === 'InsertText')).toBeTruthy();
-  expect(transactionLog.some(x => x.command === 'bold' || x.command === 'FormatText')).toBeTruthy();
-  expect(transactionLog.every(x => x.id && x.timestamp && x.command && x.source)).toBeTruthy();
+  expect(transactionLog.some(x => x.command === 'FormatText')).toBeTruthy();
+  expect(transactionLog.every(x => x.id && x.timestamp && x.command && x.source && x.precondition)).toBeTruthy();
+
+  const kernelContract = await page.evaluate(() => ({
+    commands: ['InsertText','DeleteRange','FormatText','SetParagraphStyle','SetDirection','SplitParagraph','MergeParagraph','InsertPageBreak','InsertTable','InsertImage','InsertLink','AddComment','RemoveComment','AddBookmark','RemoveBookmark','undo','redo'].every(name => window.FarastEditor?.commands?.has(name)),
+    selection: window.FarastEditor?.state?.selection ? {
+      start: window.FarastEditor.state.selection.start,
+      end: window.FarastEditor.state.selection.end
+    } : null,
+    canonical: window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.every(b => b.id && (b.type === 'page_break' || b.type === 'image' || Array.isArray(b.runs) || Array.isArray(b.items) || Array.isArray(b.rows)))
+  }));
+  expect(kernelContract.commands).toBeTruthy();
+  expect(kernelContract.canonical).toBeTruthy();
+  expect(kernelContract.selection?.start?.blockId).toBeTruthy();
+  expect(typeof kernelContract.selection.start.offset).toBe('number');
 
 
   await page.keyboard.press('Control+z');
