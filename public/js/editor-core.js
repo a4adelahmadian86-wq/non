@@ -23,7 +23,13 @@ const getSelectionInfo=()=>{
       const editor=el?.closest?.('.farast-editor');
       const blocks=editor?[...editor.querySelectorAll('[data-block-id]')]:[];
       if(!blocks.length)return null;
-      if(node?.nodeType===3&&node.parentElement===editor)return {blockId:blocks[0].dataset.blockId,offset:Math.max(0,offset)};
+      const rootTextNodes=[...(editor.childNodes||[])].filter(n=>n.nodeType===3);
+      if(rootTextNodes.length&&(node===editor||node?.parentElement===editor)){
+        let rootOffset=0;
+        if(node===editor){for(let i=0;i<Math.min(offset,editor.childNodes.length);i++)rootOffset+=(editor.childNodes[i]?.textContent||'').length}
+        else {for(const child of editor.childNodes){if(child===node)break;rootOffset+=(child.textContent||'').length}rootOffset+=Math.max(0,offset)}
+        return {blockId:blocks[0].dataset.blockId,offset:rootOffset};
+      }
       block=offset<=0?blocks[0]:blocks[blocks.length-1];
       const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);
       let n,last=null; while(n=walker.nextNode())last=n;
