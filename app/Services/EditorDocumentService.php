@@ -23,17 +23,6 @@ class EditorDocumentService
     ): array {
         $safeHtml = $this->sanitizeHtml($html);
         $normalizedSettings = $this->normalizePageSettings($pageSettings ?: (($documentModel['settings'] ?? null) ?: $this->defaultPageSettings()));
-        if ($documentModel) {
-            $traceRuns = array_values(array_filter(($documentModel['sections'][0]['blocks'][0]['runs'] ?? []), 'is_array'));
-            error_log('FARAST_TEMP_SAVE_TRACE '.json_encode([
-                'legacy_id' => $legacy->id,
-                'source' => $source,
-                'expected_revision' => $expectedRevision,
-                'run_lengths' => array_map(fn ($run) => mb_strlen((string) ($run['text'] ?? '')), $traceRuns),
-                'space_counts' => array_map(fn ($run) => substr_count((string) ($run['text'] ?? ''), ' '), $traceRuns),
-                'plain_space_count' => substr_count((string) ($documentModel['plain_text'] ?? ''), ' '),
-            ], JSON_UNESCAPED_UNICODE));
-        }
         $model = $documentModel ? $this->sanitizeDocumentModel($documentModel) : $this->normalizeHtml($safeHtml);
         $safeHtml = $this->documentModelToHtml($model);
         $model['settings'] = $normalizedSettings;
