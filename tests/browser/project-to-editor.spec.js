@@ -69,6 +69,12 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(page.locator('#farastWord')).toHaveAttribute('data-document-id', /.+/);
 
   const paragraph = 'این یک پاراگراف فارسی برای آزمون صفحه‌بندی پایدار فراست است. FARAST 2026.';
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: process.env.FARAST_E2E_URL || 'http://127.0.0.1:8000' });
+  await page.evaluate(() => navigator.clipboard.writeText('متن چسبانده‌شده فارسی FARAST'));
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Control+v');
+  await expect(page.locator('.farast-editor').first()).toContainText('متن چسبانده‌شده فارسی FARAST');
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
   for (let i = 0; i < 120; i++) {
