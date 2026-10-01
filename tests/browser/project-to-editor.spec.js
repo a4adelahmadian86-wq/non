@@ -191,6 +191,19 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   expect(reloadedListState.list.items).toBeGreaterThan(0);
   expect(reloadedListState.hasPageBreak).toBeTruthy();
 
+  await page.locator('.farast-editor li').first().click();
+  await page.locator('.farast-ribbon button[data-command="indent"]').click();
+  await expect.poll(async () => page.evaluate(() => {
+    const list = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'list');
+    return list?.items?.[0]?.level ?? 0;
+  })).toBe(1);
+  await page.locator('#saveNow').click();
+  await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
+  await page.reload();
+  await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
+  const nestedListLevel = await page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'list')?.items?.[0]?.level ?? 0);
+  expect(nestedListLevel).toBe(1);
+
   await page.locator('.farast-tab[data-tab="insert"]').click();
   const acceptRegressionTableDialogs = dialog => dialog.accept('2');
   page.on('dialog', acceptRegressionTableDialogs);
