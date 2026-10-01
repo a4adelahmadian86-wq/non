@@ -49,6 +49,9 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   const selection = await page.evaluate(() => { const s = window.FarastEditor?.getSelection?.(); return s ? { text: s.text, start: s.start, end: s.end } : null; });
   if (!selection?.text?.includes('سلام فراست')) throw new Error('SELECTION='+JSON.stringify(selection));
   await page.locator('.farast-ribbon button[data-command="bold"]').click();
+  const modelAfterBold = await page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks || null);
+  const domAfterBold = await editor.innerHTML();
+  if (!JSON.stringify(modelAfterBold).includes('"bold":true')) throw new Error('MODEL_AFTER_BOLD='+JSON.stringify(modelAfterBold)+' DOM='+domAfterBold);
   await expect(editor.locator('strong')).toContainText('سلام فراست');
 
   await page.keyboard.press('Control+z');
