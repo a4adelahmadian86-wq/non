@@ -93,13 +93,6 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.keyboard.press('Control+z');
   await expect.poll(async () => page.evaluate(() => !window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'list'))).toBeTruthy();
 
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
-  await page.locator('#source').setInputFiles({ name: 'kernel-test.png', mimeType: 'image/png', buffer: png });
-  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.resources?.length || 0)).toBeGreaterThan(0);
-  const resource = await page.evaluate(() => window.FarastEditor?.state?.model?.resources?.[0] || null);
-  expect(resource?.id).toMatch(/^asset-/);
-  expect(resource?.storage_path).toBeTruthy();
-  expect(resource?.source || '').not.toMatch(/^data:image\//);
 
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
@@ -116,6 +109,15 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.locator('.farast-ribbon button[data-command="pageBreak"]').click();
   await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(2);
   await expect(page.locator('#totalPages')).toHaveText(/^[۳-۹۰-۹]+$/);
+
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.locator('#source').setInputFiles({ name: 'kernel-test.png', mimeType: 'image/png', buffer: png });
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.resources?.length || 0)).toBeGreaterThan(0);
+  const resource = await page.evaluate(() => window.FarastEditor?.state?.model?.resources?.[0] || null);
+  expect(resource?.id).toMatch(/^asset-/);
+  expect(resource?.storage_path).toBeTruthy();
+  expect(resource?.source || '').not.toMatch(/^data:image\//);
+
 
   await page.setViewportSize({ width: 820, height: 900 });
   await expect(page.locator('#farastWord')).toBeVisible();
