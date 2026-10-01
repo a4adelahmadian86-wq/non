@@ -169,6 +169,62 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.keyboard.press('Control+z');
   await expect.poll(async () => page.evaluate(() => !window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'table'))).toBeTruthy();
 
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.press('Control+a');
+  await page.locator('.farast-ribbon button[data-command="ul"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'list' && !b.ordered))).toBeTruthy();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'page_break'))).toBeTruthy();
+
+  const listBlockId = await page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'list')?.id || null);
+  expect(listBlockId).toBeTruthy();
+  await page.locator('#saveNow').click();
+  await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
+  await page.reload();
+  await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
+  const reloadedListState = await page.evaluate(() => {
+    const blocks = window.FarastEditor?.state?.model?.sections?.[0]?.blocks || [];
+    const list = blocks.find(b => b.type === 'list');
+    return { list: list ? { ordered: list.ordered, items: list.items?.length || 0, levels: (list.items || []).map(i => i.level ?? 0) } : null, hasPageBreak: blocks.some(b => b.type === 'page_break') };
+  });
+  expect(reloadedListState.list).toBeTruthy();
+  expect(reloadedListState.list.ordered).toBeFalsy();
+  expect(reloadedListState.list.items).toBeGreaterThan(0);
+  expect(reloadedListState.hasPageBreak).toBeTruthy();
+
+  await page.locator('.farast-tab[data-tab="insert"]').click();
+  page.on('dialog', dialog => dialog.accept('2'));
+  page.on('dialog', dialog => dialog.accept('2'));
+  await page.locator('.farast-ribbon button[data-command="table"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'table' && b.rows?.length === 2 && b.rows?.[0]?.cells?.length === 2))).toBeTruthy();
+  const tableCell = page.locator('.farast-editor table td').first();
+  await tableCell.click();
+  await page.keyboard.insertText('سلول اول');
+  await expect.poll(async () => page.evaluate(() => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
+    return table?.rows?.[0]?.cells?.[0]?.runs?.map(r => r.text || '').join('') || '';
+  })).toContain('سلول اول');
+  await page.evaluate(() => window.FarastEditor?.execute?.('addTableRow'));
+  await page.evaluate(() => window.FarastEditor?.execute?.('addTableColumn'));
+  await expect.poll(async () => page.evaluate(() => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
+    return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
+  })).toEqual({ rows: 3, cols: 3 });
+  await page.evaluate(() => window.FarastEditor?.execute?.('removeTableColumn'));
+  await page.evaluate(() => window.FarastEditor?.execute?.('removeTableRow'));
+  await expect.poll(async () => page.evaluate(() => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
+    return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
+  })).toEqual({ rows: 2, cols: 2 });
+  await page.locator('#saveNow').click();
+  await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
+  await page.reload();
+  await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
+  const reloadedTableState = await page.evaluate(() => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
+    return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0, text: table?.rows?.[0]?.cells?.[0]?.runs?.map(r => r.text || '').join('') || '' };
+  });
+  expect(reloadedTableState).toEqual({ rows: 2, cols: 2, text: 'سلول اول' });
+
 
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
