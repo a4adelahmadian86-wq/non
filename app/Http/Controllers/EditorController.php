@@ -40,12 +40,18 @@ class EditorController extends Controller
     public function create(CapabilityService $capabilities, ProjectInterviewService $interview)
     {
         $project = null;
+        $document = null;
         if (request()->filled('project')) {
             $project = FarastProject::whereKey((int) request('project'))->where('user_id', auth()->id())->firstOrFail();
+            $document = TypingDocument::where('user_id', auth()->id())
+                ->where('project_id', $project->id)
+                ->latest('id')
+                ->first();
         }
         return view('editor', [
             'capabilities' => $capabilities->forUser(auth()->user()),
             'project' => $project,
+            'document' => $document,
             'projectTemplates' => $interview::TEMPLATES,
         ]);
     }
