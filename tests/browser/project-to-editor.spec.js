@@ -83,6 +83,9 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     runs: window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(b => ({ type: b.type, text: (b.runs || []).map(r => r.text).join('') })) || []
   }));
   if (!beforeSaveSemantic.plain.includes('سلام فراست')) throw new Error('BEFORE_SAVE_MODEL='+JSON.stringify(beforeSaveSemantic));
+  const beforeSaveRunsText = await page.evaluate(() => (window.FarastEditor?.state?.model?.sections || []).flatMap(section => section.blocks || []).map(block => (block.runs || []).map(run => run.text || '').join('')).join('\\n'));
+  expect(beforeSaveRunsText).toContain('سلام فراست');
+  expect(beforeSaveRunsText).toContain('FARAST 2026');
   const saveDocumentId = await page.evaluate(() => String(window.FarastEditor?.state?.documentId || ''));
   if (!saveDocumentId) throw new Error('SAVE_DOCUMENT_ID_MISSING');
   const saveResponsePromise = page.waitForResponse(response => response.url().endsWith('/editor/save') && response.request().method() === 'POST');
