@@ -442,6 +442,12 @@ class EditorDocumentService
                 'width' => max(0, (int) ($resource['width'] ?? 0)),
                 'height' => max(0, (int) ($resource['height'] ?? 0)),
             ];
+            if (isset($resource['storage_path']) && is_string($resource['storage_path'])) {
+                $item['storage_path'] = mb_substr($resource['storage_path'], 0, 500);
+            }
+            if (isset($resource['url']) && is_string($resource['url']) && str_starts_with($resource['url'], '/editor/')) {
+                $item['url'] = mb_substr($resource['url'], 0, 1000);
+            }
             if ($type === 'image' && isset($resource['source']) && is_string($resource['source'])) {
                 // Resource identity is the stable id; source is sanitized payload, not the identity.
                 if (strlen($resource['source']) <= 8_000_000 && preg_match('/^data:image\\/(?:png|jpeg|gif|webp);base64,/i', $resource['source'])) {
@@ -623,7 +629,7 @@ class EditorDocumentService
             if ($type === 'image') {
                 $resourceId = (string) ($block['resourceId'] ?? '');
                 $resource = collect($model['resources'] ?? [])->first(fn ($item) => is_array($item) && (string) ($item['id'] ?? '') === $resourceId);
-                $src = is_array($resource) ? (string) ($resource['source'] ?? '') : $resourceId;
+                $src = is_array($resource) ? (string) ($resource['url'] ?? $resource['source'] ?? '') : $resourceId;
                 $alt = htmlspecialchars((string) ($block['alt'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
                 $html .= '<p><img src="'.htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'" alt="'.$alt.'"></p>';
                 continue;
