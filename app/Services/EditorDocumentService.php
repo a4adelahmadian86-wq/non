@@ -6,6 +6,7 @@ use App\Models\FarastDocument;
 use App\Models\TypingDocument;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class EditorDocumentService
@@ -23,7 +24,25 @@ class EditorDocumentService
     ): array {
         $safeHtml = $this->sanitizeHtml($html);
         $normalizedSettings = $this->normalizePageSettings($pageSettings ?: (($documentModel['settings'] ?? null) ?: $this->defaultPageSettings()));
+        if ($documentModel) {
+            $incomingRuns = array_values(array_filter(($documentModel['sections'][0]['blocks'][0]['runs'] ?? []), 'is_array'));
+            Log::info('FARAST_TEMP_CANONICAL_SAVE_INPUT', [
+                'legacy_id' => $legacy->id,
+                'run_count' => count($incomingRuns),
+                'run_lengths' => array_map(fn ($run) => mb_strlen((string) ($run['text'] ?? '')), $incomingRuns),
+                'run_space_counts' => array_map(fn ($run) => substr_count((string) ($run['text'] ?? ''), ' '), $incomingRuns),
+            ]);
+        }
         $model = $documentModel ? $this->sanitizeDocumentModel($documentModel) : $this->normalizeHtml($safeHtml);
+        if ($documentModel) {
+            $savedRuns = array_values(array_filter(($model['sections'][0]['blocks'][0]['runs'] ?? []), 'is_array'));
+            Log::info('FARAST_TEMP_CANONICAL_SAVE_SANITIZED', [
+                'legacy_id' => $legacy->id,
+                'run_count' => count($savedRuns),
+                'run_lengths' => array_map(fn ($run) => mb_strlen((string) ($run['text'] ?? '')), $savedRuns),
+                'run_space_counts' => array_map(fn ($run) => substr_count((string) ($run['text'] ?? ''), ' '), $savedRuns),
+            ]);
+        }
         $safeHtml = $this->documentModelToHtml($model);
         $model['settings'] = $normalizedSettings;
         $now = now();
