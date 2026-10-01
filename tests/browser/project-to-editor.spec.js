@@ -232,14 +232,14 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return table?.rows?.[0]?.cells?.[0]?.runs?.map(r => r.text || '').join('') || '';
   })).toContain('سلول اول');
-  await page.evaluate(() => window.FarastEditor?.execute?.('addTableRow'));
-  await page.evaluate(() => window.FarastEditor?.execute?.('addTableColumn'));
+  await page.evaluate(cell => window.FarastEditor?.execute?.('addTableRow', cell), tableCellState);
+  await page.evaluate(cell => window.FarastEditor?.execute?.('addTableColumn', cell), tableCellState);
   await expect.poll(async () => page.evaluate(() => {
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
   })).toEqual({ rows: 3, cols: 3 });
-  await page.evaluate(() => window.FarastEditor?.execute?.('removeTableColumn'));
-  await page.evaluate(() => window.FarastEditor?.execute?.('removeTableRow'));
+  await page.evaluate(cell => window.FarastEditor?.execute?.('removeTableColumn', cell), tableCellState);
+  await page.evaluate(cell => window.FarastEditor?.execute?.('removeTableRow', cell), tableCellState);
   await expect.poll(async () => page.evaluate(() => {
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
