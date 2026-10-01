@@ -171,9 +171,22 @@ const insertHtml=html=>{const box=document.createElement('div');box.innerHTML=ht
 const insertPageBreak=()=>transaction('شکست صفحه',model=>{model.sections[0].blocks.push({id:uid(),type:'page_break'},{id:uid(),type:'paragraph',runs:[{id:uid(),text:''}]})});
 const table=()=>{const rows=Math.max(1,Math.min(20,Number(prompt('تعداد ردیف‌ها','3')||3))),cols=Math.max(1,Math.min(12,Number(prompt('تعداد ستون‌ها','3')||3)));let h='<table><tbody>';for(let r=0;r<rows;r++){h+='<tr>';for(let c=0;c<cols;c++)h+='<td><br></td>';h+='</tr>'}h+='</tbody></table><p><br></p>';insertHtml(h)};
 const image=()=>$('#source').click();
-const insertImageFile=async file=>{if(!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=()=>{const resourceId='res-'+uid();const source=String(reader.result||'');transaction('درج تصویر',model=>{model.resources=model.resources||[];model.resources.push({id:resourceId,type:'image',mime:file.type,name:file.name||'image',source,width:0,height:0});const sel=selectionRange(),blocks=model.sections[0].blocks||[],idx=sel?blocks.findIndex(b=>b.id===sel.start.blockId):-1;const block={id:uid(),type:'image',resourceId,alt:'تصویر سند',width:0,height:0,alignment:'center',wrapping:'inline'};if(idx>=0)blocks.splice(idx+1,0,block);else blocks.push(block)})};reader.readAsDataURL(file)};
-const toggleList=ordered=>{const sel=selectionRange();if(!sel)return;transaction('فهرست',model=>{const blocks=model.sections[0].blocks||[],si=blocks.findIndex(b=>b.id===sel.start.blockId),ei=blocks.findIndex(b=>b.id===sel.end.blockId);if(si<0)return;const lo=Math.min(si,ei<0?si:ei),hi=Math.max(si,ei<0?si:ei),selected=blocks.slice(lo,hi+1);if(selected.length===1&&selected[0].type==='list'){selected[0].ordered=ordered;return}const items=selected.filter(b=>['paragraph','heading','quote'].includes(b.type)).map(b=>({id:uid(),level:0,runs:b.runs||[{id:uid(),text:''}]}));if(!items.length)return;const list={id:uid(),type:'list',ordered,items};blocks.splice(lo,selected.length,list);state.selection={start:{blockId:list.id,offset:0,itemId:items[0].id},end:{blockId:list.id,offset:0,itemId:items[0].id},direction:'forward',affinity:'downstream',text:''}},{command:ordered?'OrderedList':'UnorderedList',input:{ordered}})};
-const indentListItem=delta=>{const sel=selectionRange();if(!sel?.itemId)return changeIndent(delta);transaction(delta>0?'افزایش سطح فهرست':'کاهش سطح فهرست',model=>{const b=model.sections[0].blocks.find(x=>x.id===sel.start.blockId),item=b?.items?.find(x=>x.id===sel.start.itemId);if(item)item.level=Math.max(0,Math.min(8,(Number(item.level)||0)+delta))},{command:delta>0?'IncreaseListLevel':'DecreaseListLevel'});
+const insertImageFile=async file=>{
+  if(!file?.type?.startsWith('image/'))return;
+  try{
+    if(!state.documentId)await createDocument();
+    const fd=new FormData();fd.append('document_id',String(state.documentId));fd.append('asset',file,file.name||'image');
+    const uploaded=await api('/editor/assets',{method:'POST',body:fd});
+    const resource=uploaded.resource;if(!resource?.id)throw new Error('ذخیره منبع تصویر ناموفق بود.');
+    const sel=selectionRange();
+    transaction('درج تصویر',model=>{
+      model.resources=model.resources||[];model.resources.push(resource);
+      const blocks=model.sections[0].blocks||[],idx=sel?.start?.blockId?blocks.findIndex(b=>b.id===sel.start.blockId):-1;
+      const block={id:uid(),type:'image',resourceId:resource.id,alt:'تصویر سند',width:resource.width||0,height:resource.height||0,alignment:'center',wrapping:'inline'};
+      if(idx>=0)blocks.splice(idx+1,0,block);else blocks.push(block);
+      state.selection={start:{blockId:block.id,offset:0},end:{blockId:block.id,offset:0},direction:'forward',affinity:'downstream',text:''};
+    },{command:'InsertImage',input:{resourceId:resource.id,mime:resource.mime,name:resource.name}});
+  }catch(e){toast(e.message||'درج تصویر ناموفق بود.','error')}
 };
 const toolbar={home:[['clipboard','کلیپ‌بورد','copy','paste','selectAll'],['history','تاریخچه','undo','redo'],['font','قلم','font','fontSize','bold','italic','underline','strike','color','highlight'],['paragraph','پاراگراف','rtl','ltr','right','center','left','justify','ul','ol','indent','outdent'],['styles','سبک‌ها','normal','h1','h2','h3','quote'],['edit','ویرایش','find','comment']],insert:[['page','صفحه','pageBreak','blankPage'],['table','جدول','table'],['media','رسانه','image'],['link','پیوند','link'],['headers','سربرگ و پابرگ','header','footer','pageNumber']],layout:[['page','صفحه','paper','orientation','margin'],['direction','جهت','rtl','ltr'],['spacing','فاصله','lineHeight','paragraphSpacing']],design:[['design','طراحی','pageColor','border']],references:[['refs','مراجع','toc']],review:[['review','بازبینی','versions','comment']],view:[['view','نمایش','navigation','ai','zoomOut','zoomIn','print','fullscreen']],ai:[['assistant','هوش مصنوعی','aiPanel','aiProof','aiRewrite','aiShorten','aiSummarize','aiTranslate'],['ocr','OCR','source','ocr']]};
 const syncActiveEditorModel=()=>{$('.farast-editor').forEach(editor=>syncEditorFromDom(editor));};
