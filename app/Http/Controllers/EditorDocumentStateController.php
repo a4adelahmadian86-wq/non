@@ -24,6 +24,13 @@ class EditorDocumentStateController extends Controller
 
         $state = $documents->loadForLegacy($legacy);
 
+        Log::info('farast.editor.load.contract', [
+            'document_id' => $document,
+            'revision' => $state['revision'] ?? null,
+            'blocks' => count($state['document_model']['sections'][0]['blocks'] ?? []),
+            'plain_length' => mb_strlen((string) ($state['document_model']['plain_text'] ?? '')),
+        ]);
+
         return response()->json([
             'ok' => true,
             'document_id' => $legacy->id,
