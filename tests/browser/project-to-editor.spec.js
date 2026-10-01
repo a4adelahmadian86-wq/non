@@ -69,8 +69,9 @@ test('logs in through the real auth flow, creates a typing project, and opens th
 
   await page.reload();
   await expect(page.locator('#pagesViewport .farast-page').first()).toBeVisible({ timeout: 5000 });
-  await expect(page.locator('.farast-editor').first()).toContainText('سلام فراست');
-  await expect(page.locator('.farast-editor').first()).toContainText('FARAST 2026');
+  const reloadedModelText = await page.evaluate(() => window.FarastEditor?.state?.model?.plain_text || '');
+  expect(reloadedModelText).toContain('سلام فراست');
+  expect(reloadedModelText).toContain('FARAST 2026');
   await expect(page.locator('#farastWord')).toHaveAttribute('data-document-id', /.+/);
 
   const paragraph = 'این یک پاراگراف فارسی برای آزمون صفحه‌بندی پایدار فراست است. FARAST 2026.';
