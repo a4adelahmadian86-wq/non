@@ -135,6 +135,75 @@ class EditorController extends Controller
         ]);
     }
 
+    public function uploadAsset(Request $request, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
+
+        $data = $request->validate([
+            'document_id' => ['required', 'integer'],
+            'asset' => ['required', 'file', 'max:20480', 'mimes:jpg,jpeg,png,webp,gif'],
+        ]);
+
+        $document = TypingDocument::whereKey((int) $data['document_id'])
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        $file = $data['asset'];
+        $resourceId = 'asset-'.Str::uuid()->toString();
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $path = $file->storeAs(
+            'editor-assets/'.$request->user()->id.'/'.$document->id,
+            $resourceId.'.'.$extension,
+            'private'
+        );
+
+        return response()->json([
+            'ok' => true,
+            'resource' => [
+                'id' => $resourceId,
+                'type' => 'image',
+                'mime' => $file->getMimeType(),
+                'name' => $file->getClientOriginalName(),
+                'storage_path' => $path,
+                'url' => route('editor.document.asset', ['document' => $document->id, 'resource' => $resourceId]),
+                'width' => 0,
+                'height' => 0,
+            ],
+        ]);
+    }
+
+    public function asset(Request $request, int $document, string $resource)
+    {
+        $legacy = TypingDocument::whereKey($document)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        abort_unless($legacy->farast_document_id, 404);
+
+        $farast = FarastDocument::whereKey($legacy->farast_document_id)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        $resources = is_array($farast->content_json['resources'] ?? null) ? $farast->content_json['resources'] : [];
+        $item = collect($resources)->first(fn ($row) => is_array($row) && ($row['id'] ?? null) === $resource);
+        abort_unless(is_array($item) && !empty($item['storage_path']), 404);
+
+        $path = (string) $item['storage_path'];
+        abort_unless(Storage::disk('private')->exists($path), 404);
+
+        $stream = Storage::disk('private')->readStream($path);
+        abort_unless(is_resource($stream), 404);
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            fclose($stream);
+        }, 200, [
+            'Content-Type' => (string) ($item['mime'] ?? 'application/octet-stream'),
+            'Cache-Control' => 'private, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function analyze(
         Request $request,
         GeminiService $ai,
