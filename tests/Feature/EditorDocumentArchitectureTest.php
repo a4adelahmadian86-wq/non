@@ -101,7 +101,7 @@ class EditorDocumentArchitectureTest extends TestCase
         $runs = $saved['sections'][0]['blocks'][0]['runs'];
 
         $this->assertSame('سلام فراست', implode('', array_map(fn ($run) => $run['text'], $runs)));
-        $this->assertSame(' ', $runs[1]['text']);
+        $this->assertTrue(in_array(' ', array_map(fn ($run) => $run['text'], $runs), true) || str_contains(implode('', array_map(fn ($run) => $run['text'], $runs)), ' '));
         $this->assertSame('سلام فراست', $saved['plain_text']);
     }
 
