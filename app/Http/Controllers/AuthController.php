@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmailOtpChallenge;
+use App\Models\EditorSession;
 use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\EmailService;
@@ -298,6 +299,9 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        if ($request->user()) {
+            EditorSession::where('user_id', $request->user()->id)->delete();
+        }
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
