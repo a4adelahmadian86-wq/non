@@ -107,6 +107,9 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   expect(String(savePayload.document_id)).toBe(saveDocumentId);
   expect(savePayload.document_model?.plain_text || '').toContain('سلام فراست');
   expect(savePayload.document_model?.plain_text || '').toContain('FARAST 2026');
+  const savePayloadRunsText = (savePayload.document_model?.sections || []).flatMap(section => section.blocks || []).map(block => (block.runs || []).map(run => run.text || '').join('')).join('\\n');
+  expect(savePayloadRunsText).toContain('سلام فراست');
+  expect(savePayloadRunsText).toContain('FARAST 2026');
   expect(Number(saveBody.document_id)).toBe(Number(saveDocumentId));
   expect(Number(saveBody.revision)).toBeGreaterThan(0);
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
