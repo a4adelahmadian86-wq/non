@@ -62,7 +62,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.keyboard.press('Control+z');
   await expect(editor.locator('strong')).toHaveCount(0);
   await page.keyboard.press('Control+y');
-  await expect(editor.locator('strong')).toHaveCount(1);
+  await expect.poll(async () => (await editor.locator('strong').allTextContents()).join('')).toContain('سلام فراست');
 
   await page.locator('#saveNow').click();
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
