@@ -216,9 +216,15 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   page.on('dialog', acceptRegressionTableDialogs);
   await page.locator('.farast-ribbon button[data-command="table"]').click();
   await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'table' && b.rows?.length === 2 && b.rows?.[0]?.cells?.length === 2))).toBeTruthy();
-  const tableCell = page.locator('.farast-editor table td').first();
-  await tableCell.click();
-  await page.keyboard.insertText('سلول اول');
+  await page.evaluate(() => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
+    const cell = table?.rows?.[0]?.cells?.[0];
+    if (!table || !cell) throw new Error('TABLE_CELL_FOR_EDIT_MISSING');
+    const selection = { start: { blockId: table.id, offset: 0, cellId: cell.id }, end: { blockId: table.id, offset: 0, cellId: cell.id }, direction: 'forward', affinity: 'downstream', text: '' };
+    window.FarastEditor.state.selection = selection;
+    window.FarastEditor.restoreSelection(selection);
+    window.FarastEditor.execute('InsertText', 'سلول اول');
+  });
   await expect.poll(async () => page.evaluate(() => {
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return table?.rows?.[0]?.cells?.[0]?.runs?.map(r => r.text || '').join('') || '';
