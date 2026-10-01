@@ -154,6 +154,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'page_break'))).toBeTruthy();
 
   await page.locator('.farast-tab[data-tab="home"]').click();
+  await page.locator('.farast-tab[data-tab="home"]').click();
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
   await page.locator('.farast-ribbon button[data-command="ul"]').click();
