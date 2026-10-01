@@ -28,6 +28,8 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/editor/analyze', [EditorController::class, 'analyze'])->middleware(['throttle:20,10', 'capability:can_ai'])->name('editor.analyze');
     Route::post('/editor/ai/assist', EditorAiAssistController::class)->middleware(['throttle:30,10', 'capability:can_ai'])->name('editor.ai.assist');
     Route::post('/editor/save', EditorSaveController::class)->middleware(['throttle:120,1', 'capability:can_type'])->name('editor.save');
+    Route::post('/editor/assets', [EditorController::class, 'uploadAsset'])->middleware('throttle:60,10')->name('editor.assets.upload');
+    Route::get('/editor/documents/{document}/assets/{resource}', [EditorController::class, 'asset'])->middleware('throttle:120,10')->name('editor.document.asset');
     Route::get('/editor/documents/{document}/state', [EditorDocumentStateController::class, 'show'])->middleware('throttle:60,10')->name('editor.document.state');
     Route::get('/editor/documents/{document}/versions', [EditorDocumentStateController::class, 'versions'])->middleware('throttle:30,10')->name('editor.document.versions');
     Route::post('/editor/documents/{document}/versions/{version}/restore', [EditorDocumentStateController::class, 'restore'])->middleware('throttle:20,10')->name('editor.document.version.restore');
