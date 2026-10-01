@@ -191,7 +191,9 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   expect(reloadedListState.list.items).toBeGreaterThan(0);
   expect(reloadedListState.hasPageBreak).toBeTruthy();
 
-  await page.locator('.farast-editor li').first().click();
+  const firstListItem = page.locator('.farast-editor li').first();
+  await firstListItem.scrollIntoViewIfNeeded();
+  await firstListItem.click();
   await page.locator('.farast-ribbon button[data-command="indent"]').click();
   await expect.poll(async () => page.evaluate(() => {
     const list = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'list');
