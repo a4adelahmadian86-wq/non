@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('content')
-<div id="farastWord" class="farast-editor-app" dir="rtl" lang="fa" data-authenticated="{{ auth()->check() ? '1' : '0' }}" data-project-id="{{ $project?->id ?? '' }}">
+<div id="farastWord" class="farast-editor-app" dir="rtl" lang="fa" data-authenticated="{{ auth()->check() ? '1' : '0' }}" data-project-id="{{ $project?->id ?? '' }}" data-document-id="{{ $document?->id ?? '' }}">
   <header class="farast-appbar">
     <div class="farast-brand"><span class="farast-brand-mark" aria-hidden="true">✦</span><strong>فراست</strong></div>
     <button class="farast-mobile-icon" id="mobileNav" type="button" aria-label="پیمایش سند">☰</button>
