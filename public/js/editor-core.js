@@ -96,22 +96,51 @@ const renderPages=(blocks=state.model?.sections?.[0]?.blocks||[],preserve=state.
     page.append(head,editor,foot); vp.appendChild(page);
   };
   newPage();
+  const sliceRuns=(runs,start,end)=>{
+    const out=[];let pos=0;
+    for(const run of runs||[]){
+      const text=run.text||'',next=pos+text.length;
+      const a=Math.max(0,start-pos),z=Math.min(text.length,end-pos);
+      if(z>a)out.push({...run,id:uid(),text:text.slice(a,z)});
+      pos=next;if(pos>=end)break;
+    }
+    return out.length?out:[{id:uid(),text:''}];
+  };
+  const sliceBlock=(b,start,end)=>({...b,id:uid(),runs:sliceRuns(b.runs||[],start,end)});
+  const fittingParts=(b)=>{
+    if(!['paragraph','heading','quote'].includes(b.type))return [b];
+    const text=runsText(b.runs||[]); if(text.length<2)return [b];
+    const measure=part=>{
+      const h=blockToHtml(part),probe=document.createElement('div');
+      probe.innerHTML=h;const node=probe.firstElementChild;if(!node)return false;
+      node.style.marginBottom='0';editor.appendChild(node);
+      const fits=editor.scrollHeight<=contentH+1;editor.removeChild(node);return fits;
+    };
+    if(measure(b))return [b];
+    let lo=1,hi=text.length,best=0;
+    while(lo<=hi){
+      const mid=Math.floor((lo+hi)/2);
+      if(measure(sliceBlock(b,0,mid))){best=mid;lo=mid+1}else hi=mid-1;
+    }
+    if(!best)return [b];
+    return [sliceBlock(b,0,best),sliceBlock(b,best,text.length)];
+  };
   const addBlock=b=>{
     if(b.type==='page_break'){if(editor.children.length)newPage();return}
-    const h=blockToHtml(b),probe=document.createElement('div'); probe.innerHTML=h;
-    const node=probe.firstElementChild; if(!node)return;
-    editor.insertAdjacentHTML('beforeend',h);
-    const added=editor.lastElementChild;
-    if(!added)return;
-    added.dataset.blockId=added.dataset.blockId||b.id;
-    editor.dataset.blockIds=editor.dataset.blockIds?editor.dataset.blockIds+','+b.id:b.id;
-    if(editor.scrollHeight>contentH+1 && editor.children.length>1){
-      editor.removeChild(added);
-      editor.dataset.blockIds=editor.dataset.blockIds.split(',').slice(0,-1).join(',');
-      newPage();
-      editor.insertAdjacentHTML('beforeend',h);
-      const next=editor.lastElementChild;
-      if(next)editor.dataset.blockIds=b.id;
+    const queue=fittingParts(b);
+    for(const part of queue){
+      const h=blockToHtml(part),probe=document.createElement('div');probe.innerHTML=h;
+      const node=probe.firstElementChild;if(!node)continue;
+      editor.appendChild(node);
+      node.dataset.blockId=node.dataset.blockId||part.id;
+      editor.dataset.blockIds=editor.dataset.blockIds?editor.dataset.blockIds+','+part.id:part.id;
+      if(editor.scrollHeight>contentH+1 && editor.children.length>1){
+        editor.removeChild(node);
+        editor.dataset.blockIds=editor.dataset.blockIds.split(',').slice(0,-1).join(',');
+        newPage();
+        editor.appendChild(node);
+        editor.dataset.blockIds=part.id;
+      }
     }
   };
   for(const b of blocks)addBlock(b);
