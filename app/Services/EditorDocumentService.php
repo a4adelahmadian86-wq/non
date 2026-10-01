@@ -366,7 +366,8 @@ class EditorDocumentService
             $normalized['alt'] = mb_substr((string) ($block['alt'] ?? ''), 0, 1000);
             $alignment = (string) ($block['alignment'] ?? 'center');
             $normalized['alignment'] = in_array($alignment, ['left','center','right'], true) ? $alignment : 'center';
-            $normalized['wrapping'] = in_array(($block['wrapping'] ?? 'inline'), ['inline','square','tight','top-bottom','behind','in-front'], true) ? $block['wrapping'] : 'inline';
+            $wrapping = (string) ($block['wrapping'] ?? 'inline');
+            $normalized['wrapping'] = in_array($wrapping, ['inline','square','tight','top-bottom','behind','in-front'], true) ? $wrapping : 'inline';
             $normalized['metadata'] = is_array($block['metadata'] ?? null) ? $block['metadata'] : [];
             return $normalized;
         }
