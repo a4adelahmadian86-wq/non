@@ -364,7 +364,8 @@ class EditorDocumentService
             $normalized['width'] = max(1, (int) ($block['width'] ?? 0));
             $normalized['height'] = max(1, (int) ($block['height'] ?? 0));
             $normalized['alt'] = mb_substr((string) ($block['alt'] ?? ''), 0, 1000);
-            $normalized['alignment'] = in_array(($block['alignment'] ?? 'center'), ['left','center','right'], true) ? $block['alignment'] : 'center';
+            $alignment = (string) ($block['alignment'] ?? 'center');
+            $normalized['alignment'] = in_array($alignment, ['left','center','right'], true) ? $alignment : 'center';
             $normalized['wrapping'] = in_array(($block['wrapping'] ?? 'inline'), ['inline','square','tight','top-bottom','behind','in-front'], true) ? $block['wrapping'] : 'inline';
             $normalized['metadata'] = is_array($block['metadata'] ?? null) ? $block['metadata'] : [];
             return $normalized;
