@@ -30,13 +30,6 @@ class EditorSaveController extends Controller
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
-        Log::info('farast.editor.save.contract', [
-            'document_id' => (int) $data['document_id'],
-            'expected_revision' => $data['revision'] ?? null,
-            'blocks' => count($data['document_model']['sections'][0]['blocks'] ?? []),
-            'plain_length' => mb_strlen((string) ($data['document_model']['plain_text'] ?? '')),
-        ]);
-
         $result = $documents->save(
             $document,
             $data['content'],
