@@ -45,6 +45,11 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(editor).toContainText('سلام فراست');
   await page.keyboard.type(' FARAST 2026');
   await expect(editor).toContainText('FARAST 2026');
+  const afterTypingModel = await page.evaluate(() => ({
+    plain: window.FarastEditor?.state?.model?.plain_text || '',
+    runs: (window.FarastEditor?.state?.model?.sections?.[0]?.blocks || []).map(b => (b.runs || []).map(r => ({ text: r.text || '', length: (r.text || '').length })))
+  }));
+  if (!afterTypingModel.runs.flat().some(run => run.text === ' ')) throw new Error('AFTER_TYPING_RUNS=' + JSON.stringify(afterTypingModel));
 
   await page.keyboard.press('Control+a');
   const selection = await page.evaluate(() => { const s = window.FarastEditor?.getSelection?.(); return s ? { text: s.text, start: s.start, end: s.end } : null; });
@@ -77,6 +82,11 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(editor.locator('strong')).toHaveCount(0);
   await page.keyboard.press('Control+y');
   await expect.poll(async () => (await editor.locator('strong').allTextContents()).join('')).toContain('سلام فراست');
+  const afterRedoModel = await page.evaluate(() => ({
+    plain: window.FarastEditor?.state?.model?.plain_text || '',
+    runs: (window.FarastEditor?.state?.model?.sections?.[0]?.blocks || []).map(b => (b.runs || []).map(r => ({ text: r.text || '', length: (r.text || '').length })))
+  }));
+  if (!afterRedoModel.runs.flat().some(run => run.text === ' ')) throw new Error('AFTER_REDO_RUNS=' + JSON.stringify(afterRedoModel));
 
   const beforeSaveSemantic = await page.evaluate(() => ({
     plain: window.FarastEditor?.state?.model?.plain_text || '',
