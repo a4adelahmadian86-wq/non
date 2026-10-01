@@ -72,13 +72,13 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
   await page.keyboard.insertText(longText);
-  await expect(page.locator('#pagesViewport .farast-page')).toHaveCountGreaterThan(1);
+  await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(1);
 
   await page.locator('#saveNow').click();
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
 
   await page.locator('.farast-ribbon button[data-command="pageBreak"]').click();
-  await expect(page.locator('#pagesViewport .farast-page')).toHaveCountGreaterThan(2);
+  await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(2);
   await expect(page.locator('#totalPages')).toHaveText(/^[۳-۹۰-۹]+$/);
 
   await page.setViewportSize({ width: 820, height: 900 });
