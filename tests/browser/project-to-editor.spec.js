@@ -52,7 +52,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   const modelAfterBold = await page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks || null);
   const domAfterBold = await editor.innerHTML();
   if (!JSON.stringify(modelAfterBold).includes('"bold":true')) { const debug = await page.evaluate(() => ({ stateSelection: window.FarastEditor?.state?.selection || null, lastSelection: window.FarastEditor?.state?.lastSelection || null, raw: (() => { const s = getSelection(); return s ? { text: s.toString(), anchorNode: s.anchorNode?.nodeType, anchorOffset: s.anchorOffset, focusNode: s.focusNode?.nodeType, focusOffset: s.focusOffset } : null; })() })); throw new Error('MODEL_AFTER_BOLD='+JSON.stringify(modelAfterBold)+' DOM='+domAfterBold+' DEBUG='+JSON.stringify(debug)); }
-  await expect.poll(async () => editor.locator('strong').allTextContents()).toContain('سلام فراست');
+  await expect.poll(async () => (await editor.locator('strong').allTextContents()).join('')).toContain('سلام فراست');
   const transactionLog = await page.evaluate(() => window.FarastEditor?.getTransactions?.() || []);
   expect(transactionLog.some(x => x.command === 'InsertText')).toBeTruthy();
   expect(transactionLog.some(x => x.command === 'bold' || x.command === 'FormatText')).toBeTruthy();
