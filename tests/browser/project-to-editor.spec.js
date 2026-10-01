@@ -105,6 +105,13 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   if (canonicalState.status !== 200) throw new Error('CANONICAL_STATE_RESPONSE=' + JSON.stringify(canonicalState));
   expect(Number(canonicalState.body.document_id)).toBe(Number(saveDocumentId));
   expect(Number(canonicalState.body.revision)).toBe(Number(saveBody.revision));
+  const canonicalRunsText = (canonicalState.body.document_model?.sections || []).flatMap(section => section.blocks || []).map(block => {
+    if (block.type === 'table') return (block.rows || []).flatMap(row => row.cells || []).map(cell => (cell.runs || []).map(run => run.text || '').join('')).join(' ');
+    if (block.type === 'list') return (block.items || []).map(item => (item.runs || []).map(run => run.text || '').join('')).join(' ');
+    return (block.runs || []).map(run => run.text || '').join('');
+  }).join('\\n');
+  expect(canonicalRunsText).toContain('سلام فراست');
+  expect(canonicalRunsText).toContain('FARAST 2026');
   expect(canonicalState.body.document_model?.plain_text || '').toContain('سلام فراست');
   expect(canonicalState.body.document_model?.plain_text || '').toContain('FARAST 2026');
 
