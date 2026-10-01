@@ -333,6 +333,7 @@ class EditorDocumentService
                 if (!is_array($item)) continue;
                 $normalized['items'][] = [
                     'id' => is_string($item['id'] ?? null) && $item['id'] !== '' ? $item['id'] : (string) Str::uuid(),
+                    'level' => max(0, min(8, (int) ($item['level'] ?? 0))),
                     'runs' => $this->sanitizeRuns($item['runs'] ?? []),
                 ];
             }
