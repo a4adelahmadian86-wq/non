@@ -23,6 +23,7 @@ const getSelectionInfo=()=>{
       const editor=el?.closest?.('.farast-editor');
       const blocks=editor?[...editor.querySelectorAll('[data-block-id]')]:[];
       if(!blocks.length)return null;
+      if(node?.nodeType===3&&node.parentElement===editor)return {blockId:blocks[0].dataset.blockId,offset:Math.max(0,offset)};
       block=offset<=0?blocks[0]:blocks[blocks.length-1];
       const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);
       let n,last=null; while(n=walker.nextNode())last=n;
