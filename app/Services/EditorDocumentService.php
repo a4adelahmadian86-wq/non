@@ -138,6 +138,8 @@ class EditorDocumentService
             'font_size' => max(8, min(72, (int) ($settings['font_size'] ?? $defaults['font_size']))),
             'header' => mb_substr((string) ($settings['header'] ?? ''), 0, 1000),
             'footer' => mb_substr((string) ($settings['footer'] ?? ''), 0, 1000),
+            'pageColor' => mb_substr((string) ($settings['pageColor'] ?? $settings['page_color'] ?? ''), 0, 40),
+            'border' => (bool) ($settings['border'] ?? false),
         ];
     }
 
