@@ -1,5 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
+test.afterEach(async ({ page }) => {
+  try {
+    const csrf = await page.locator('meta[name="csrf-token"]').getAttribute('content');
+    if (csrf) await page.evaluate(async token => { await fetch('/logout', { method: 'POST', headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' }, credentials: 'same-origin' }); }, csrf);
+  } catch (_) {}
+});
+
 test('logs in through the real auth flow, creates a typing project, and opens the real word processor surface', async ({ page }) => {
   const pageErrors = [];
   const consoleErrors = [];
@@ -154,10 +161,11 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.keyboard.press('Control+z');
   await expect.poll(async () => page.evaluate(() => !window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'list'))).toBeTruthy();
   await page.locator('.farast-tab[data-tab="insert"]').click();
-  page.once('dialog', dialog => dialog.accept('2'));
-  page.once('dialog', dialog => dialog.accept('2'));
+  const acceptTableDialogs = dialog => dialog.accept('2');
+  page.on('dialog', acceptTableDialogs);
   await page.locator('.farast-ribbon button[data-command="table"]').click();
   await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'table' && b.rows?.length === 2 && b.rows?.[0]?.cells?.length === 2))).toBeTruthy();
+  page.off('dialog', acceptTableDialogs);
   await page.keyboard.press('Control+z');
   await expect.poll(async () => page.evaluate(() => !window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'table'))).toBeTruthy();
 
