@@ -13,7 +13,30 @@ const setStatus=(text,type='info')=>{const a=$('#statusText'),b=$('#saveState');
 const toast=(text,type='info')=>{let x=$('#farastEditorMessage');if(!x){x=document.createElement('div');x.id='farastEditorMessage';document.body.appendChild(x)}x.textContent=text;x.dataset.type=type;clearTimeout(x._timer);x._timer=setTimeout(()=>x.remove(),2800)};
 const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 const getEditors=()=>$$('.farast-editor');
-const getSelectionInfo=()=>{const s=getSelection();if(!s||!s.rangeCount)return null;const r=s.getRangeAt(0);const point=(node,offset)=>{const el=node?.nodeType===1?node:node?.parentElement;const block=el?.closest?.('[data-block-id]');if(!block)return null;const rr=document.createRange();rr.selectNodeContents(block);try{rr.setEnd(node,offset)}catch{return{blockId:block.dataset.blockId,offset:0}}return{blockId:block.dataset.blockId,offset:rr.toString().length}};const start=point(r.startContainer,r.startOffset),end=point(r.endContainer,r.endOffset);if(!start||!end)return null;return{start,end,blockId:start.blockId,startOffset:start.offset,endOffset:end.offset,collapsed:r.collapsed,text:s.toString(),range:r.cloneRange()}};
+const getSelectionInfo=()=>{
+  const s=getSelection(); if(!s||!s.rangeCount)return null;
+  const r=s.getRangeAt(0);
+  const point=(node,offset)=>{
+    let el=node?.nodeType===1?node:node?.parentElement;
+    let block=el?.closest?.('[data-block-id]');
+    if(!block){
+      const editor=el?.closest?.('.farast-editor');
+      const blocks=editor?[...editor.querySelectorAll('[data-block-id]')]:[];
+      if(!blocks.length)return null;
+      block=offset<=0?blocks[0]:blocks[blocks.length-1];
+      const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);
+      let n,last=null; while(n=walker.nextNode())last=n;
+      const length=block.textContent?.length||0;
+      return {blockId:block.dataset.blockId,offset:offset<=0?0:length};
+    }
+    const rr=document.createRange(); rr.selectNodeContents(block);
+    try{rr.setEnd(node,offset)}catch{return{blockId:block.dataset.blockId,offset:0}}
+    return{blockId:block.dataset.blockId,offset:rr.toString().length};
+  };
+  const start=point(r.startContainer,r.startOffset),end=point(r.endContainer,r.endOffset);
+  if(!start||!end)return null;
+  return{start,end,blockId:start.blockId,startOffset:start.offset,endOffset:end.offset,collapsed:r.collapsed,text:s.toString(),range:r.cloneRange()};
+};
 const restoreSelection=info=>{if(!info)return;const start=info.start||{blockId:info.blockId,offset:info.startOffset||0},end=info.end||{blockId:info.blockId,offset:info.endOffset??info.startOffset??0};const resolve=p=>{const block=document.querySelector('[data-block-id="'+CSS.escape(p.blockId)+'"]');if(!block)return null;const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);let n,total=0;while(n=walker.nextNode()){const len=n.nodeValue?.length||0;if(p.offset<=total+len)return{node:n,offset:Math.max(0,p.offset-total)};total+=len}return{node:block,offset:block.childNodes.length}};const s=resolve(start),e=resolve(end);if(!s||!e)return;const r=document.createRange();try{r.setStart(s.node,s.offset);r.setEnd(e.node,e.offset);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}catch{}};
 const currentRange=()=>{const i=getSelectionInfo();return i?.range||null};
 const blockFromNode=node=>{let x=node?.nodeType===1?node:node?.parentElement;return x?.closest?.('[data-block-id]')||null};
