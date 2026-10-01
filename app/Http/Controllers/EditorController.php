@@ -165,7 +165,7 @@ class EditorController extends Controller
                 'mime' => $file->getMimeType(),
                 'name' => $file->getClientOriginalName(),
                 'storage_path' => $path,
-                'url' => route('editor.document.asset', ['document' => $document->id, 'resource' => $resourceId]),
+                'url' => '/editor/documents/'.$document->id.'/assets/'.$resourceId,
                 'width' => 0,
                 'height' => 0,
             ],
