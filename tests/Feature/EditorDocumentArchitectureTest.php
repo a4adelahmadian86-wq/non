@@ -57,6 +57,54 @@ class EditorDocumentArchitectureTest extends TestCase
         ]);
     }
 
+    public function test_http_save_preserves_space_only_canonical_runs(): void
+    {
+        $user = $this->makeUser();
+
+        $create = $this->actingAs($user)->postJson('/editor/documents', ['title' => 'فاصله']);
+        $create->assertOk();
+
+        $documentId = (int) $create->json('document_id');
+        $model = [
+            'schema' => 3,
+            'type' => 'document',
+            'direction' => 'rtl',
+            'sections' => [[
+                'id' => 'section-1',
+                'blocks' => [[
+                    'id' => 'block-1',
+                    'type' => 'paragraph',
+                    'runs' => [
+                        ['id' => 'run-1', 'text' => 'سلام'],
+                        ['id' => 'run-space', 'text' => ' '],
+                        ['id' => 'run-2', 'text' => 'فراست'],
+                    ],
+                ]],
+            ]],
+            'comments' => [],
+            'review' => [],
+        ];
+
+        $response = $this->actingAs($user)->postJson('/editor/save', [
+            'document_id' => $documentId,
+            'title' => 'فاصله',
+            'content' => '<p>سلام فراست</p>',
+            'document_model' => $model,
+            'revision' => 1,
+            'source' => 'manual',
+            'page_settings' => ['paper' => 'A4'],
+        ]);
+
+        $response->assertOk()->assertJsonPath('revision', 2);
+
+        $saved = TypingDocument::findOrFail($documentId)->farastDocument->fresh()->content_json;
+        $runs = $saved['sections'][0]['blocks'][0]['runs'];
+
+        $this->assertSame('سلام فراست', implode('', array_map(fn ($run) => $run['text'], $runs)));
+        $this->assertSame(' ', $runs[1]['text']);
+        $this->assertSame('سلام فراست', $saved['plain_text']);
+    }
+
     public function test_editor_can_create_and_persist_native_document_model(): void
     {
         $user = $this->makeUser();
