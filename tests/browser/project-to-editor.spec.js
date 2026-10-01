@@ -51,7 +51,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.locator('.farast-ribbon button[data-command="bold"]').click();
   const modelAfterBold = await page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks || null);
   const domAfterBold = await editor.innerHTML();
-  if (!JSON.stringify(modelAfterBold).includes('"bold":true')) throw new Error('MODEL_AFTER_BOLD='+JSON.stringify(modelAfterBold)+' DOM='+domAfterBold);
+  if (!JSON.stringify(modelAfterBold).includes('"bold":true')) { const debug = await page.evaluate(() => ({ stateSelection: window.FarastEditor?.state?.selection || null, lastSelection: window.FarastEditor?.state?.lastSelection || null, raw: (() => { const s = getSelection(); return s ? { text: s.toString(), anchorNode: s.anchorNode?.nodeType, anchorOffset: s.anchorOffset, focusNode: s.focusNode?.nodeType, focusOffset: s.focusOffset } : null; })() })); throw new Error('MODEL_AFTER_BOLD='+JSON.stringify(modelAfterBold)+' DOM='+domAfterBold+' DEBUG='+JSON.stringify(debug)); }
   await expect(editor.locator('strong')).toContainText('سلام فراست');
 
   await page.keyboard.press('Control+z');
