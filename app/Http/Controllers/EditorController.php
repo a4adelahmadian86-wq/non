@@ -41,13 +41,24 @@ class EditorController extends Controller
     {
         $project = null;
         $document = null;
-        if (request()->filled('project')) {
+
+        if (request()->filled('document')) {
+            $document = TypingDocument::whereKey((int) request('document'))
+                ->where('user_id', auth()->id())
+                ->firstOrFail();
+            if ($document->project_id) {
+                $project = FarastProject::whereKey($document->project_id)
+                    ->where('user_id', auth()->id())
+                    ->first();
+            }
+        } elseif (request()->filled('project')) {
             $project = FarastProject::whereKey((int) request('project'))->where('user_id', auth()->id())->firstOrFail();
             $document = TypingDocument::where('user_id', auth()->id())
                 ->where('project_id', $project->id)
                 ->latest('id')
                 ->first();
         }
+
         return view('editor', [
             'capabilities' => $capabilities->forUser(auth()->user()),
             'project' => $project,
