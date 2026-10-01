@@ -83,16 +83,45 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     runs: window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(b => ({ type: b.type, text: (b.runs || []).map(r => r.text).join('') })) || []
   }));
   if (!beforeSaveSemantic.plain.includes('سلام فراست')) throw new Error('BEFORE_SAVE_MODEL='+JSON.stringify(beforeSaveSemantic));
+  const saveDocumentId = await page.locator('#farastWord').getAttribute('data-document-id');
+  if (!saveDocumentId) throw new Error('SAVE_DOCUMENT_ID_MISSING');
+  const saveResponsePromise = page.waitForResponse(response => response.url().endsWith('/editor/save') && response.request().method() === 'POST');
   await page.locator('#saveNow').click();
+  const saveResponse = await saveResponsePromise;
+  const savePayload = saveResponse.request().postDataJSON();
+  const saveBody = await saveResponse.json();
+  if (!saveResponse.ok()) throw new Error('SAVE_RESPONSE=' + JSON.stringify(saveBody));
+  expect(String(savePayload.document_id)).toBe(saveDocumentId);
+  expect(savePayload.document_model?.plain_text || '').toContain('سلام فراست');
+  expect(savePayload.document_model?.plain_text || '').toContain('FARAST 2026');
+  expect(Number(saveBody.document_id)).toBe(Number(saveDocumentId));
+  expect(Number(saveBody.revision)).toBeGreaterThan(0);
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
+
+  const canonicalState = await page.evaluate(async (documentId) => {
+    const response = await fetch('/editor/documents/' + documentId + '/state', { headers: { Accept: 'application/json' } });
+    return { status: response.status, body: await response.json() };
+  }, saveDocumentId);
+  if (canonicalState.status !== 200) throw new Error('CANONICAL_STATE_RESPONSE=' + JSON.stringify(canonicalState));
+  expect(Number(canonicalState.body.document_id)).toBe(Number(saveDocumentId));
+  expect(Number(canonicalState.body.revision)).toBe(Number(saveBody.revision));
+  expect(canonicalState.body.document_model?.plain_text || '').toContain('سلام فراست');
+  expect(canonicalState.body.document_model?.plain_text || '').toContain('FARAST 2026');
 
   await page.reload();
   await expect(page.locator('#pagesViewport .farast-page').first()).toBeVisible({ timeout: 5000 });
   await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
-  const reloadedModelText = await page.evaluate(() => window.FarastEditor?.state?.model?.plain_text || '');
-  expect(reloadedModelText).toContain('سلام فراست');
-  expect(reloadedModelText).toContain('FARAST 2026');
-  await expect(page.locator('#farastWord')).toHaveAttribute('data-document-id', /.+/);
+  const reloadedDocumentId = await page.locator('#farastWord').getAttribute('data-document-id');
+  expect(reloadedDocumentId).toBe(saveDocumentId);
+  const reloadedModelState = await page.evaluate(() => ({
+    plainText: window.FarastEditor?.state?.model?.plain_text || '',
+    revision: Number(window.FarastEditor?.state?.revision || 0),
+    documentId: Number(window.FarastEditor?.state?.documentId || 0)
+  }));
+  expect(reloadedModelState.documentId).toBe(Number(saveDocumentId));
+  expect(reloadedModelState.revision).toBeGreaterThanOrEqual(Number(saveBody.revision));
+  expect(reloadedModelState.plainText).toContain('سلام فراست');
+  expect(reloadedModelState.plainText).toContain('FARAST 2026');
 
   const paragraph = 'این یک پاراگراف فارسی برای آزمون صفحه‌بندی پایدار فراست است. FARAST 2026.';
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: process.env.FARAST_E2E_URL || 'http://127.0.0.1:8000' });
