@@ -68,10 +68,13 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(page.locator('.farast-editor').first()).toContainText('FARAST 2026');
   await expect(page.locator('#farastWord')).toHaveAttribute('data-document-id', /.+/);
 
-  const longText = ('این یک متن فارسی طولانی برای آزمون صفحه‌بندی پایدار فراست است. FARAST 2026. ').repeat(260);
+  const paragraph = 'این یک پاراگراف فارسی برای آزمون صفحه‌بندی پایدار فراست است. FARAST 2026.';
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
-  await page.keyboard.insertText(longText);
+  for (let i = 0; i < 120; i++) {
+    await page.keyboard.insertText(paragraph);
+    if (i < 119) await page.keyboard.press('Enter');
+  }
   await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(1);
 
   await page.locator('#saveNow').click();
