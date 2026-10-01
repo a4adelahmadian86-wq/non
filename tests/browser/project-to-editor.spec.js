@@ -83,7 +83,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     runs: window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(b => ({ type: b.type, text: (b.runs || []).map(r => r.text).join('') })) || []
   }));
   if (!beforeSaveSemantic.plain.includes('سلام فراست')) throw new Error('BEFORE_SAVE_MODEL='+JSON.stringify(beforeSaveSemantic));
-  const saveDocumentId = await page.locator('#farastWord').getAttribute('data-document-id');
+  const saveDocumentId = await page.evaluate(() => String(window.FarastEditor?.state?.documentId || ''));
   if (!saveDocumentId) throw new Error('SAVE_DOCUMENT_ID_MISSING');
   const saveResponsePromise = page.waitForResponse(response => response.url().endsWith('/editor/save') && response.request().method() === 'POST');
   await page.locator('#saveNow').click();
