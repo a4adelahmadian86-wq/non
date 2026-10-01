@@ -198,7 +198,9 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     const item = list?.items?.[0];
     if (!list || !item) throw new Error('LIST_ITEM_FOR_INDENT_MISSING');
     const end = (item.runs || []).reduce((n, r) => n + String(r.text || '').length, 0);
-    window.FarastEditor.state.selection = { start: { blockId: list.id, offset: end, itemId: item.id }, end: { blockId: list.id, offset: end, itemId: item.id }, direction: 'forward', affinity: 'downstream', text: '' };
+    const selection = { start: { blockId: list.id, offset: end, itemId: item.id }, end: { blockId: list.id, offset: end, itemId: item.id }, direction: 'forward', affinity: 'downstream', text: '' };
+    window.FarastEditor.state.selection = selection;
+    window.FarastEditor.restoreSelection(selection);
     window.FarastEditor.execute('indent');
   });
   await expect.poll(async () => page.evaluate(() => {
