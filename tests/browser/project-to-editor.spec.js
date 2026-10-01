@@ -53,6 +53,11 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   const domAfterBold = await editor.innerHTML();
   if (!JSON.stringify(modelAfterBold).includes('"bold":true')) { const debug = await page.evaluate(() => ({ stateSelection: window.FarastEditor?.state?.selection || null, lastSelection: window.FarastEditor?.state?.lastSelection || null, raw: (() => { const s = getSelection(); return s ? { text: s.toString(), anchorNode: s.anchorNode?.nodeType, anchorOffset: s.anchorOffset, focusNode: s.focusNode?.nodeType, focusOffset: s.focusOffset } : null; })() })); throw new Error('MODEL_AFTER_BOLD='+JSON.stringify(modelAfterBold)+' DOM='+domAfterBold+' DEBUG='+JSON.stringify(debug)); }
   await expect.poll(async () => editor.locator('strong').allTextContents()).toContain('سلام فراست');
+  const transactionLog = await page.evaluate(() => window.FarastEditor?.getTransactions?.() || []);
+  expect(transactionLog.some(x => x.command === 'InsertText')).toBeTruthy();
+  expect(transactionLog.some(x => x.command === 'bold' || x.command === 'FormatText')).toBeTruthy();
+  expect(transactionLog.every(x => x.id && x.timestamp && x.command && x.source)).toBeTruthy();
+
 
   await page.keyboard.press('Control+z');
   await expect(editor.locator('strong')).toHaveCount(0);
@@ -75,6 +80,25 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.keyboard.press('Control+a');
   await page.keyboard.press('Control+v');
   await expect(page.locator('.farast-editor').first()).toContainText('متن چسبانده‌شده فارسی FARAST');
+  await page.locator('.farast-tab[data-tab="insert"]').click();
+  await expect(page.locator('.farast-ribbon button[data-command="pageBreak"]')).toBeVisible();
+  await page.locator('.farast-ribbon button[data-command="pageBreak"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'page_break'))).toBeTruthy();
+
+  await page.locator('.farast-tab[data-tab="home"]').click();
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.press('Control+a');
+  await page.locator('.farast-ribbon button[data-command="ul"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.some(b => b.type === 'list' && !b.ordered))).toBeTruthy();
+
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.locator('#source').setInputFiles({ name: 'kernel-test.png', mimeType: 'image/png', buffer: png });
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.resources?.length || 0)).toBeGreaterThan(0);
+  const resource = await page.evaluate(() => window.FarastEditor?.state?.model?.resources?.[0] || null);
+  expect(resource?.id).toMatch(/^asset-/);
+  expect(resource?.storage_path).toBeTruthy();
+  expect(resource?.source || '').not.toMatch(/^data:image\//);
+
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
   for (let i = 0; i < 120; i++) {
@@ -86,6 +110,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.locator('#saveNow').click();
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
 
+  await page.locator('.farast-tab[data-tab="insert"]').click();
   await page.locator('.farast-ribbon button[data-command="pageBreak"]').click();
   await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(2);
   await expect(page.locator('#totalPages')).toHaveText(/^[۳-۹۰-۹]+$/);
