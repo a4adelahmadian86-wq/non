@@ -46,6 +46,8 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(editor).toContainText('FARAST 2026');
 
   await page.keyboard.press('Control+a');
+  const selection = await page.evaluate(() => { const s = window.FarastEditor?.getSelection?.(); return s ? { text: s.text, start: s.start, end: s.end } : null; });
+  if (!selection?.text?.includes('سلام فراست')) throw new Error('SELECTION='+JSON.stringify(selection));
   await page.locator('.farast-ribbon button[data-command="bold"]').click();
   await expect(editor.locator('strong')).toContainText('سلام فراست');
 
