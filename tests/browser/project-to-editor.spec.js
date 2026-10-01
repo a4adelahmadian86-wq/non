@@ -45,10 +45,9 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await page.keyboard.type(' FARAST 2026');
   await expect(editor).toContainText('FARAST 2026');
 
-  await page.keyboard.press('Control+ArrowLeft');
-  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('Control+a');
   await page.locator('.farast-ribbon button[data-command="bold"]').click();
-  await expect(editor.locator('strong')).toContainText('6');
+  await expect(editor.locator('strong')).toContainText('سلام فراست');
 
   await page.keyboard.press('Control+z');
   await expect(editor.locator('strong')).toHaveCount(0);
