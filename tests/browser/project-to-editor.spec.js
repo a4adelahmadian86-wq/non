@@ -66,8 +66,23 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(page.locator('#pagesViewport .farast-page').first()).toBeVisible({ timeout: 5000 });
   await expect(page.locator('.farast-editor').first()).toContainText('سلام فراست');
   await expect(page.locator('.farast-editor').first()).toContainText('FARAST 2026');
+  await expect(page.locator('#farastWord')).toHaveAttribute('data-document-id', /.+/);
+
+  const longText = ('این یک متن فارسی طولانی برای آزمون صفحه‌بندی پایدار فراست است. FARAST 2026. ').repeat(260);
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.insertText(longText);
+  await expect(page.locator('#pagesViewport .farast-page')).toHaveCountGreaterThan(1);
+
+  await page.locator('#saveNow').click();
+  await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
 
   await page.locator('.farast-ribbon button[data-command="pageBreak"]').click();
-  await expect(page.locator('#pagesViewport .farast-page')).toHaveCount(2);
-  await expect(page.locator('#totalPages')).toHaveText('۲');
+  await expect(page.locator('#pagesViewport .farast-page')).toHaveCountGreaterThan(2);
+  await expect(page.locator('#totalPages')).toHaveText(/^[۳-۹۰-۹]+$/);
+
+  await page.setViewportSize({ width: 820, height: 900 });
+  await expect(page.locator('#farastWord')).toBeVisible();
+  await expect(page.locator('#pagesViewport .farast-page').first()).toBeVisible();
+  await expect(page.locator('.farast-editor').first()).toHaveAttribute('contenteditable', 'true');
 });
