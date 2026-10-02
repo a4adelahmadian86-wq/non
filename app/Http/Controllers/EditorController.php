@@ -222,6 +222,7 @@ class EditorController extends Controller
         CapabilityService $capabilities,
         FreeQuotaService $free,
         EntitlementService $entitlements,
+        \App\Services\CommerceAuthorizationService $commerce,
     ) {
         $user = auth()->user();
         $caps = $capabilities->forUser($user);
@@ -276,6 +277,19 @@ class EditorController extends Controller
             'پیش از شروع تایپ، برآورد اولیه فایل را تأیید کنید.'
         );
 
+        $ocrReservation = $commerce->reserve(
+            $user,
+            'ocr',
+            max(1, (float)($accepted['pages'] ?? 1)),
+            ['project_id'=>$project?->id],
+            [
+                'policy_code'=>'ocr',
+                'unit'=>'page',
+                'allow_payg'=>true,
+                'idempotency_key'=>$request->header('Idempotency-Key') ?: ('ocr-'.$user->id.'-'.$hash),
+            ]
+        );
+
         $ocrJobId = null;
         if (\Illuminate\Schema\Schema::hasTable('farast_ocr_jobs')) {
             $ocrJobId = DB::table('farast_ocr_jobs')->insertGetId([
@@ -292,10 +306,16 @@ class EditorController extends Controller
                 'source_name' => $data['source_name'] ?? null,
             ]);
         } catch (\Throwable $e) {
+            try { $commerce->release($ocrReservation); } catch (\Throwable) {}
             if ($ocrJobId) DB::table('farast_ocr_jobs')->where('id', $ocrJobId)->update(['status' => 'failed', 'error' => $e->getMessage(), 'updated_at' => now()]);
             Log::warning('farast.editor.ocr_exception', ['user_id' => auth()->id(), 'error' => $e->getMessage()]);
             return response()->json(['ok' => false, 'message' => 'ارتباط با هوش مصنوعی برقرار نشد. جزئیات خطا در لاگ ثبت شده است.'], 502);
         }
+
+        $commerce->commit($ocrReservation, [
+            'cost_metadata'=>['provider'=>$result['engine'] ?? 'gemini','input_bytes'=>strlen($bytes)],
+            'metadata'=>['page_count'=>(int)($result['page_count'] ?? 1),'rejected'=>(bool)($result['rejected'] ?? false),'interaction_id'=>$result['_ai_interaction_id'] ?? null],
+        ]);
 
         if (($result['rejected'] ?? false)) {
             if ($ocrJobId) DB::table('farast_ocr_jobs')->where('id', $ocrJobId)->update(['status' => 'failed', 'error' => (string) ($result['reason'] ?? 'ورودی رد شد'), 'updated_at' => now()]);
