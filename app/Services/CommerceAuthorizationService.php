@@ -27,7 +27,7 @@ class CommerceAuthorizationService
         $quantity=max(0,$quantity);
         $organizationId=$actor->organization_id ?: ($scope['organization_id'] ?? null);
         $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId);
-        $quote=$this->pricing->quote((string)($context['policy_code'] ?? $capability),$quantity,$context);
+        $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $quote=$this->pricing->quote((string)($context['policy_code'] ?? $capability),$quantity,$pricingContext);
         $unit=(string)($entitlement?->unit ?: ($quote['unit'] ?? ($context['unit'] ?? 'unit')));
         $remaining=$entitlement?->quantity===null?null:($entitlement?->quantity !== null ? max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)):null);
         $limits=['quota'=>$entitlement?->quantity,'used'=>$entitlement?->used_quantity,'reserved'=>$entitlement?$this->reservedForEntitlement((int)$entitlement->id):0,'payg_available'=>(bool)($context['allow_payg']??true)];
@@ -57,7 +57,7 @@ class CommerceAuthorizationService
             if($existing)return $existing;
             $organizationId=$actor->organization_id ?: ($scope['organization_id']??null);
             $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId,true);
-            $quote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$context);
+            $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $quote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext);
             $mode=$this->mode($actor,$capability,$quantity,$entitlement,$quote,$context);
             if($entitlement && $entitlement->quantity!==null && !in_array($mode,['payg','overage'],true)){
                 $available=max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id));
