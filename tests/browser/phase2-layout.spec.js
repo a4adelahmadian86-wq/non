@@ -28,7 +28,7 @@ test('A4 geometry and long paragraph fragmentation', async ({ page }) => {
   await openEditor(page);
   await page.locator('.farast-editor').first().click();
   await page.keyboard.insertText('فراست FARAST 2026 متن فارسی برای آزمون صفحه‌بندی واقعی است. '.repeat(55));
-  await page.evaluate(() => window.FarastEditor.flushLayout(true));
+  await page.evaluate(() => window.FarastEditor.flushLayout());
   await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(1);
   const result = await page.evaluate(() => ({
     layout: window.FarastDocumentLayout?.lastLayout || null,
@@ -78,13 +78,13 @@ test('editing a fragmented paragraph preserves the complete canonical text', asy
   const original = 'پاراگراف بسیار طولانی فراست برای آزمون حفظ متن بین صفحات است. FARAST 2026. '.repeat(90);
   await page.locator('.farast-editor').first().click();
   await page.keyboard.insertText(original);
+  await page.evaluate(() => window.FarastEditor.flushLayout());
   await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(1);
   const before = await page.evaluate(() => window.FarastEditor.state.model.plain_text);
   const second = page.locator('.farast-editor').nth(1);
   await second.click();
   await page.keyboard.press('End');
   await page.keyboard.insertText(' پایان');
-  await page.evaluate(() => window.FarastEditor.flushLayout());
   await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('پایان');
   const after = await page.evaluate(() => window.FarastEditor.state.model.plain_text);
   expect(after.length).toBeGreaterThan(before.length);
