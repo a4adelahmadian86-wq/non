@@ -26,15 +26,15 @@ class FarastEditorAgentTest extends TestCase{
  public function test_stale_revision_is_rejected_at_commit():void{
   $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
   $this->mock(EditorAiAssistService::class,function($m){$m->shouldReceive('assist')->andReturn(['text'=>'متن جدید','provider'=>'test','model'=>'mock']);});
-  $p=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'رسمی‌تر کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]])->json();
+  $p=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'این متن را بازنویسی کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]])->json();
   $f->update(['revision'=>2]);
   $c=$this->actingAs($u)->postJson('/editor/agent/tasks/'.$p['task_id'].'/commit',['base_revision'=>$p['base_revision'],'result_revision'=>2,'transactions'=>1,'changed_blocks'=>1,'changed_characters'=>3]);
   $c->assertStatus(409);
  }
  public function test_prompt_injection_document_text_is_data_not_authority():void{
   $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
-  $this->mock(EditorAiAssistService::class,function($m){$m->shouldReceive('assist')->once()->withArgs(function($op,$text,$ctx){return $op==='selection.tone' && str_contains($ctx['instruction'],'untrusted data');})->andReturn(['text'=>'متن رسمی','provider'=>'test','model'=>'mock']);});
-  $r=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'رسمی‌تر کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]]);
+  $this->mock(EditorAiAssistService::class,function($m){$m->shouldReceive('assist')->once()->withArgs(function($op,$text,$ctx){return $op==='selection.rewrite' && str_contains($ctx['instruction'],'untrusted data');})->andReturn(['text'=>'متن رسمی','provider'=>'test','model'=>'mock']);});
+  $r=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'این متن را بازنویسی کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]]);
   $r->assertOk()->assertJsonPath('intent.operation','rewrite');
  }
 }
