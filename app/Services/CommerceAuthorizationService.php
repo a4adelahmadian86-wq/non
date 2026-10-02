@@ -114,15 +114,17 @@ class CommerceAuthorizationService
     {
         return DB::transaction(function()use($charge,$amount,$reason,$idempotencyKey){
             $row=$charge instanceof FarastCharge?FarastCharge::whereKey($charge->id)->lockForUpdate()->firstOrFail():FarastCharge::where('charge_id',$charge)->lockForUpdate()->firstOrFail();
-            if($amount<=0||$amount>(int)$row->total)throw new RuntimeException('invalid_refund_amount');
+            if($amount<=0)throw new RuntimeException('invalid_refund_amount');
             if($existing=FarastRefund::where('idempotency_key',$idempotencyKey)->first())return $existing;
+            $refunded=(int)FarastRefund::where('charge_id',$row->id)->where('status','completed')->sum('amount');
+            if($amount>(int)$row->total-$refunded)throw new RuntimeException('refund_exceeds_charge');
             $refund=FarastRefund::create(['refund_id'=>Str::uuid(),'idempotency_key'=>$idempotencyKey,'charge_id'=>$row->id,'actor_id'=>$row->actor_id,'amount'=>$amount,'currency'=>$row->currency,'status'=>'completed','reason'=>$reason,'metadata'=>['charge_snapshot'=>$row->snapshot]]);
             if($row->actor_id&&$amount>0){
                 $wallet=Wallet::firstOrCreate(['user_id'=>$row->actor_id],['balance_rials'=>0]);$wallet=Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
                 $before=(int)$wallet->balance_rials;$wallet->update(['balance_rials'=>$before+$amount]);
                 WalletTransaction::create(['wallet_id'=>$wallet->id,'type'=>'credit','amount_rials'=>$amount,'balance_before'=>$before,'balance_after'=>$before+$amount,'reference_type'=>'farast_refund','reference_id'=>$refund->id,'description'=>'بازپرداخت اعتبار FARAST','idempotency_key'=>'refund-'.$idempotencyKey]);
             }
-            if($amount>=(int)$row->total)$row->update(['status'=>'refunded']);
+            if($amount+$refunded>=(int)$row->total)$row->update(['status'=>'refunded']);
             return $refund;
         });
     }
