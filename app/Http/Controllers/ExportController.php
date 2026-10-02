@@ -31,7 +31,7 @@ class ExportController extends Controller
         $reservation=null;
         try {
             $reservation=$commerce->reserve(auth()->user(),'export.'.$format,1,['project_id'=>$doc->project_id,'document_id'=>$doc->id],['policy_code'=>'export.'.$format,'unit'=>'export','allow_payg'=>false,'idempotency_key'=>$idempotency]);
-        } catch (\\RuntimeException $e) {
+        } catch (\RuntimeException $e) {
             if ($e->getMessage()==='not_entitled') abort(402,'سهمیه یا entitlement خروجی نهایی کافی نیست.');
             throw $e;
         }
