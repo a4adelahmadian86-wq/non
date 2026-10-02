@@ -24,7 +24,7 @@ jobs:
       - run: touch database/database.sqlite
       - run: php artisan migrate --force
       - run: php artisan test --filter='FarastEditorAgentTest'
-      - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=\${GITHUB_RUN_ID}-farast-e2e php artisan db:seed --force
+      - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-farast-e2e php artisan db:seed --force
       - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-agent.log 2>&1 &
       - run: npm init -y
       - run: npm install --no-save @playwright/test@1.55.0
