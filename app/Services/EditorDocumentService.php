@@ -157,6 +157,8 @@ class EditorDocumentService
             'direction' => 'rtl',
             'font_family' => 'B Nazanin',
             'font_size' => 16,
+            'pageColor' => '#ffffff',
+            'border' => true,
         ];
     }
 
@@ -263,7 +265,7 @@ class EditorDocumentService
         foreach (($model['sections'] ?? []) as $section) {
             if (!is_array($section)) continue;
             $section['id'] = is_string($section['id'] ?? null) && $section['id'] !== '' ? $section['id'] : (string) Str::uuid();
-            $section['settings'] = is_array($section['settings'] ?? null) ? $section['settings'] : [];
+            $section['settings'] = is_array($section['settings'] ?? null) ? array_intersect_key($section['settings'], $this->defaultPageSettings()) : [];
             $section['header'] = is_array($section['header'] ?? null) ? $section['header'] : ['blocks' => []];
             $section['footer'] = is_array($section['footer'] ?? null) ? $section['footer'] : ['blocks' => []];
             $blocks = [];
@@ -354,7 +356,7 @@ class EditorDocumentService
                         'runs' => $this->sanitizeRuns($cell['runs'] ?? []),
                     ];
                 }
-                $rows[] = ['cells' => $cells];
+                $rows[] = ['id' => is_string($row['id'] ?? null) && $row['id'] !== '' ? $row['id'] : (string) Str::uuid(), 'header' => (bool) ($row['header'] ?? false), 'cells' => $cells];
             }
             $normalized['rows'] = $rows;
             return $normalized;
@@ -381,6 +383,8 @@ class EditorDocumentService
         if (isset($block['lineHeight']) && is_scalar($block['lineHeight'])) $normalized['lineHeight'] = mb_substr((string) $block['lineHeight'], 0, 32);
         if (isset($block['paragraphSpacing'])) $normalized['paragraphSpacing'] = max(0, min(200, (int) $block['paragraphSpacing']));
         if (isset($block['indent'])) $normalized['indent'] = max(0, min(12, (int) $block['indent']));
+        foreach (['keepWithNext','keepTogether','pageBreakBefore','pageBreakAfter'] as $layoutFlag) if (array_key_exists($layoutFlag, $block)) $normalized[$layoutFlag] = (bool) $block[$layoutFlag];
+        foreach (['widows','orphans'] as $layoutCount) if (isset($block[$layoutCount])) $normalized[$layoutCount] = max(1, min(10, (int) $block[$layoutCount]));
         $normalized['runs'] = $this->sanitizeRuns($block['runs'] ?? []);
         if (!$normalized['runs']) {
             $legacyHtml = (string) ($block['html'] ?? '');
