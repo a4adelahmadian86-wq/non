@@ -22,7 +22,7 @@ async function openEditor(page){
 
 test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
  await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('این متن عامل سند است');await page.keyboard.press('Control+a');
- await page.locator('[data-agent-open]').click({force:true});await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun').click({force:true});
+ await page.locator('[data-agent-open]') .click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun') .click();
  await expect(page.locator('#farastAgentPlan')).toContainText('format_bold',{timeout:10000});await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click({force:true});
  await expect.poll(async()=>JSON.stringify(await page.evaluate(()=>window.FarastEditor?.getTransactions?.()||[]))).toContain('FormatText');
  await expect(editor.locator('strong')).toContainText('این متن عامل سند است');await page.locator('#farastAgentUndo').click();await expect(editor.locator('strong')).toHaveCount(0);
