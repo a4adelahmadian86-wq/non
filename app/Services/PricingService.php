@@ -48,47 +48,27 @@ class PricingService
     public function calculate(string $policyCode, int $units, bool $subscription = false): array
     {
         $units = max(0, $units);
-        $policy = FarastPricingPolicy::where('code', $policyCode)->where('active', true)->first();
+        $engine = app(PricingEngine::class);
+        $policy = $engine->resolve($policyCode);
+        $included = $subscription && $policy ? min($units, max(0, (float)$policy->included_quantity)) : 0;
+        $quote = $engine->quote($policyCode, $units, ['included_quantity'=>$included]);
 
-        if (!$policy) {
+        if (! $quote['available']) {
             return [
-                'policy' => $policyCode,
-                'units' => $units,
-                'base_price_rials' => 0,
-                'subscription_allowance' => 0,
-                'included_units' => 0,
-                'billable_units' => $units,
-                'additional_usage_rials' => 0,
-                'discount_rials' => 0,
-                'fee_rials' => 0,
-                'final_price_rials' => 0,
+                'policy'=>$policyCode,'units'=>$units,'base_price_rials'=>0,'subscription_allowance'=>0,
+                'included_units'=>0,'billable_units'=>$units,'additional_usage_rials'=>0,'discount_rials'=>0,
+                'fee_rials'=>0,'final_price_rials'=>0,
             ];
         }
 
-        $allowance = $subscription ? max(0, (int) $policy->subscription_allowance) : 0;
-        $included = min($units, $allowance);
-        $billable = max(0, $units - $included);
-        $unit = max(0, (int) $policy->base_price_rials);
-        $additionalUnit = $policy->additional_price_rials === null ? $unit : max(0, (int) $policy->additional_price_rials);
-        $additional = $billable * $additionalUnit;
-        $multiplier = max(100, (int) ($policy->payg_multiplier_percent ?: 100));
-        $usage = (int) round($additional * $multiplier / 100);
-        $discount = (int) round($usage * max(0, min(100, (int) $policy->discount_percent)) / 100);
-        $fee = max(0, (int) $policy->fee_rials);
-        $final = max(0, $usage - $discount + $fee);
-
         return [
-            'policy' => $policyCode,
-            'unit' => $policy->unit,
-            'units' => $units,
-            'base_price_rials' => $unit,
-            'subscription_allowance' => $allowance,
-            'included_units' => $included,
-            'billable_units' => $billable,
-            'additional_usage_rials' => $usage,
-            'discount_rials' => $discount,
-            'fee_rials' => $fee,
-            'final_price_rials' => $final,
+            'policy'=>$policyCode,'unit'=>$quote['unit'],'units'=>$units,
+            'base_price_rials'=>(int)$quote['unit_price'],'subscription_allowance'=>$included,
+            'included_units'=>$quote['included_quantity'],'billable_units'=>$quote['billable_quantity'],
+            'additional_usage_rials'=>$quote['subtotal'],'discount_rials'=>$quote['discount'],
+            'fee_rials'=>$quote['fee'],'final_price_rials'=>$quote['total'],
+            'pricing_policy_version_id'=>$quote['pricing_policy_version_id'] ?? null,
+            'currency'=>$quote['currency'],
         ];
     }
 
@@ -137,15 +117,18 @@ class PricingService
 
     private function ruleValue(string $key, int $fallback = 0): int
     {
+        $version = app(PricingEngine::class)->resolve($key);
+        if ($version) {
+            if ($key === 'typing_payg_multiplier') return max(100, (int) round($version->payg_multiplier_basis_points / 100));
+            if ($version->unit === 'percentage' && (int)$version->unit_price === 0) {
+                return max(0, (int) round($version->payg_multiplier_basis_points / 100));
+            }
+            return max(0, (int)$version->unit_price);
+        }
         $policy = FarastPricingPolicy::where('code', $key)->where('active', true)->first();
         if ($policy) {
-            if ($key === 'typing_payg_multiplier') {
-                return max(100, (int) ($policy->payg_multiplier_percent ?: $policy->base_price_rials));
-            }
-            if ($policy->unit === 'percentage' && (int) $policy->base_price_rials === 0) {
-                return (int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback;
-            }
-            return max(0, (int) $policy->base_price_rials);
+            if ($key === 'typing_payg_multiplier') return max(100, (int)($policy->payg_multiplier_percent ?: $policy->base_price_rials));
+            return max(0, (int)$policy->base_price_rials);
         }
         return (int) PricingRule::where('key', $key)->where('active', true)->value('value') ?: $fallback;
     }
