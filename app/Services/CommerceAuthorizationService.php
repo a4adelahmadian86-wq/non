@@ -111,6 +111,31 @@ class CommerceAuthorizationService
         DB::transaction(function()use($reservation){$row=$reservation instanceof FarastUsageReservation?FarastUsageReservation::whereKey($reservation->id)->lockForUpdate()->firstOrFail():FarastUsageReservation::where('reservation_id',$reservation)->lockForUpdate()->firstOrFail();$this->releaseInternal($row);});
     }
 
+    public function settlePostpaid(FarastCharge|string $charge): FarastCharge
+    {
+        return DB::transaction(function() use ($charge) {
+            $row=$charge instanceof FarastCharge
+                ? FarastCharge::whereKey($charge->id)->lockForUpdate()->firstOrFail()
+                : FarastCharge::where('charge_id',$charge)->lockForUpdate()->firstOrFail();
+            if($row->status==='charged')return $row;
+            if($row->status!=='pending')throw new RuntimeException('charge_not_settleable');
+            $wallet=Wallet::firstOrCreate(['user_id'=>$row->actor_id],['balance_rials'=>0]);
+            $wallet=Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+            if((int)$wallet->balance_rials<(int)$row->total)throw new RuntimeException('insufficient_credit');
+            $before=(int)$wallet->balance_rials;$after=$before-(int)$row->total;
+            $wallet->update(['balance_rials'=>$after]);
+            WalletTransaction::create([
+                'wallet_id'=>$wallet->id,'type'=>'debit','amount_rials'=>(int)$row->total,
+                'balance_before'=>$before,'balance_after'=>$after,'reference_type'=>'farast_postpaid_charge',
+                'reference_id'=>$row->id,'description'=>'تسویه مصرف پس‌پرداخت FARAST',
+                'idempotency_key'=>'postpaid-'.$row->idempotency_key,
+            ]);
+            $row->update(['status'=>'charged']);
+            if($row->invoice_id)FarastInvoice::whereKey($row->invoice_id)->update(['status'=>'paid','paid_at'=>now(),'updated_at'=>now()]);
+            return $row->fresh();
+        });
+    }
+
     public function refund(FarastCharge|string $charge,int $amount,string $reason,string $idempotencyKey): FarastRefund
     {
         return DB::transaction(function()use($charge,$amount,$reason,$idempotencyKey){
