@@ -16,4 +16,10 @@ class FarastUsageEvent extends Model
     {
         return ['quantity'=>'decimal:6','occurred_at'=>'datetime','cost_metadata'=>'array','metadata'=>'array'];
     }
+    protected static function booted(): void
+    {
+        static::updating(function () { throw new \LogicException('usage_event_is_immutable'); });
+        static::deleting(function () { throw new \LogicException('usage_event_is_immutable'); });
+    }
+
 }
