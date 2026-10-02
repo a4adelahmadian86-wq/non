@@ -1,11 +1,12 @@
 <?php
 namespace App\Services\Agent;
-use App\Models\FarastAgentTask;use App\Models\FarastDocument;use App\Models\TypingDocument;use App\Models\User;use App\Services\AuditEventService;use App\Services\AuthorizationService;use App\Services\EditorAiAssistService;use Illuminate\Support\Facades\DB;use Illuminate\Support\Str;use RuntimeException;
+use App\Models\FarastAgentTask;use App\Models\FarastDocument;use App\Models\TypingDocument;use App\Models\User;use App\Services\AuditEventService;use App\Services\AuthorizationService;
+use App\Services\CommerceAuthorizationService;use App\Services\EditorAiAssistService;use Illuminate\Support\Facades\DB;use Illuminate\Support\Str;use RuntimeException;
 class FarastEditorAgent{
- public function __construct(private AgentContextBuilder $contextBuilder,private AgentIntentInterpreter $interpreter,private AgentToolSelector $selector,private AgentValidationService $validator,private EditorAiAssistService $ai,private AuditEventService $audit,private AuthorizationService $authorization){}
+ public function __construct(private AgentContextBuilder $contextBuilder,private AgentIntentInterpreter $interpreter,private AgentToolSelector $selector,private AgentValidationService $validator,private EditorAiAssistService $ai,private AuditEventService $audit,private AuthorizationService $authorization,private CommerceAuthorizationService $commerce){}
  public function plan(User $user,int $legacyId,string $prompt,array $requestContext=[]):array{
   $legacy=TypingDocument::whereKey($legacyId)->where('user_id',$user->id)->firstOrFail();$document=FarastDocument::whereKey($legacy->farast_document_id)->where('user_id',$user->id)->firstOrFail();if(!$this->authorization->allows($user,'documents.edit'))throw new RuntimeException('agent_permission_denied');
-  $context=$this->contextBuilder->build($user,$legacy,$document,$requestContext);$intent=$this->interpreter->interpret($prompt,$context);$tool=$this->selector->select($intent);
+  $context=$this->contextBuilder->build($user,$legacy,$document,$requestContext);$gate=$this->commerce->authorize($user,'document.editing',['project_id'=>$context['project_id'],'document_id'=>$document->id],1,['allow_payg'=>false,'policy_code'=>'document.editing']);if(!$gate->allowed)throw new RuntimeException($gate->denialReason??'not_entitled');$intent=$this->interpreter->interpret($prompt,$context);$tool=$this->selector->select($intent);
   $budget=array_merge(['max_tool_calls'=>3,'max_execution_ms'=>45000,'max_transactions'=>1,'max_changed_blocks'=>100,'max_changed_characters'=>100000,'max_cost'=>PHP_INT_MAX,'max_retries'=>2],$requestContext['budget']??[]);
   $command=$this->commandFor($intent,$context);$preview=['kind'=>'command','text'=>null,'metadata'=>[]];$usage=null;
   if($intent['operation']==='rewrite'){
