@@ -154,7 +154,7 @@ const registerCommands=()=>{const bind=(n,fn)=>commandRegistry.set(n,fn);
 bind('InsertText',v=>{if(v&&typeof v==='object'&&v.range)return insertTextAtSelection(String(v.text??''),'ورود متن','InsertText',v.range);return insertTextAtSelection(String(v??''),'ورود متن','InsertText')});
 bind('DeleteRange',v=>deleteSelection(v?.backward!==false));
 bind('FormatText',v=>mutateSelectedRuns('قالب‌بندی',v?.patch||{}));
-bind('NormalizeText',v=>{const sel=v?.range||selectionRange();if(!sel)return false;const text=sel.text||'';return replaceSelectionText('نرمال‌سازی فارسی',normalizeFa(text),'NormalizeText',sel)});
+bind('NormalizeText',v=>{const sel=v?.range||selectionRange();if(!sel)return false;const text=v?.text??sel.text??'';return replaceSelectionText('نرمال‌سازی فارسی',normalizeFa(text),'NormalizeText',sel)});
 bind('SetParagraphStyle',v=>blockStyle(v?.tag||'p'));
 bind('SetDirection',v=>setBlockDirection(v?.direction==='ltr'?'ltr':'rtl'));
 bind('SplitParagraph',splitParagraph);
