@@ -76,9 +76,9 @@ const pageMetrics=()=>{
 };
 
 let layoutTimer=null,layoutPending=null;
-const flushLayout=()=>{if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null}const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||[],blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false;state.layoutDirty=false}};
+const flushLayout=()=>{if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null}state.rendering=true;const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||[],blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false;state.layoutDirty=false}};
 const renderPages=(blocks=state.model?.sections?.[0]?.blocks||[],preserve=state.selection)=>{
- state.rendering=true;layoutPending={preserve};if(document.activeElement?.closest?.('.farast-editor')){state.layoutDirty=true;return}
+ layoutPending={preserve};if(document.activeElement?.closest?.('.farast-editor')){state.layoutDirty=true;state.rendering=false;return}state.rendering=true;
  if(layoutTimer)clearTimeout(layoutTimer);layoutTimer=setTimeout(flushLayout,300);
 };
 document.addEventListener('focusout',event=>{if(event.target?.closest?.('.farast-editor'))setTimeout(()=>{if(layoutPending)flushLayout()},0)});
