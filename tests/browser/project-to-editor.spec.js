@@ -237,7 +237,12 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
   })).toEqual({ rows: 3, cols: 2 });
-  await page.evaluate(cell => window.FarastEditor?.execute?.('addTableColumn', cell), tableCellState);
+  const currentTableCellState = await page.evaluate(() => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
+    const cell = table?.rows?.[0]?.cells?.[0];
+    return cell ? { blockId: table.id, cellId: cell.id } : null;
+  });
+  await page.evaluate(cell => window.FarastEditor?.execute?.('addTableColumn', cell), currentTableCellState);
   await expect.poll(async () => page.evaluate(() => {
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
