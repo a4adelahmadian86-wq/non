@@ -31,3 +31,6 @@
 
 /* The full editor shell is a layout wrapper, not an interactive hit target. */
 #farastWord{pointer-events:none}#farastWord>*{pointer-events:auto}
+
+/* Higher-specificity shell rule must not re-enable Ribbon hit-testing. */
+#farastWord>.farast-ribbon,#farastWord>.farast-ribbon .farast-ribbon-group{pointer-events:none}#farastWord>.farast-ribbon button,#farastWord>.farast-ribbon select,#farastWord>.farast-ribbon input,#farastWord>.farast-ribbon a{pointer-events:auto}
