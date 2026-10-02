@@ -254,7 +254,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
   })).toEqual({ rows: 3, cols: 3 });
-  await page.evaluate(tableId => window.FarastEditor?.commands?.get?.('removeTableColumn')?.({ blockId: tableId }), currentTableCellState.blockId);
+  await page.evaluate(cell => window.FarastEditor?.commands?.get?.('removeTableColumn')?.(cell), tableCellState);
   await expect.poll(async () => page.evaluate(tableId => {
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.id === tableId);
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
