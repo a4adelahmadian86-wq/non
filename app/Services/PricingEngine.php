@@ -48,7 +48,9 @@ class PricingEngine
         $discountBp = max(0, min(10000, (int) $policy->discount_basis_points));
         $trusted = is_array($context['trusted_adjustments'] ?? null) ? $context['trusted_adjustments'] : [];
         $extraDiscountBp = max(0, min(10000, (int)($trusted['discount_basis_points'] ?? 0)));
-        $discount = (int) round($subtotal * ($discountBp + min(10000 - $discountBp, $extraDiscountBp)) / 10000);
+        $percentDiscount = (int) round($subtotal * ($discountBp + min(10000 - $discountBp, $extraDiscountBp)) / 10000);
+        $fixedDiscount = max(0, min($subtotal, (int)($trusted['fixed_discount_amount'] ?? 0)));
+        $discount = min($subtotal, $percentDiscount + $fixedDiscount);
 
         $fee = $billable <= 0 ? 0 : max(0, (int) $policy->fee_amount + (int)($trusted['fee_amount'] ?? 0));
         $taxBp = max(0, min(10000, (int) $policy->tax_basis_points));
