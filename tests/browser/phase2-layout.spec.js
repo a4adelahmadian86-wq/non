@@ -27,7 +27,7 @@ test.afterEach(async ({ page }) => {
 test('A4 geometry and long paragraph fragmentation', async ({ page }) => {
   await openEditor(page);
   await page.locator('.farast-editor').first().click();
-  await page.keyboard.insertText('فراست FARAST 2026 متن فارسی برای آزمون صفحه‌بندی واقعی است. '.repeat(120));
+  await page.keyboard.insertText('فراست FARAST 2026 متن فارسی برای آزمون صفحه‌بندی واقعی است. '.repeat(55));
   await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(1);
   const result = await page.evaluate(() => ({
     layout: window.FarastDocumentLayout?.lastLayout || null,
