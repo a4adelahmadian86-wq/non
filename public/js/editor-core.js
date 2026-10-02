@@ -75,6 +75,7 @@ const syncEditorFromDom=ed=>{const model=normalizeModel();const localNodes=[...(
  active.replaceChildren(...holder.childNodes);active.dataset.blockIds=wanted.map(b=>b.id).join(',');
  if(preserve)restoreSelection(preserve);return true;
 };
+
 const pageMetrics=()=>{
   const sizes={A4:[794,1123],A5:[560,794],Letter:[816,1056]};
   const key=state.pageSettings.paper==='A5'?'A5':state.pageSettings.paper==='Letter'?'Letter':'A4';
@@ -84,12 +85,12 @@ const pageMetrics=()=>{
 };
 
 let layoutTimer=null,layoutPending=null;
-const flushLayout=()=>{if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null}state.rendering=true;const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||[],blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false;state.layoutDirty=false}};
+const flushLayout=(force=false)=>{if(!force&&document.activeElement?.closest?.('.farast-editor')){state.layoutDirty=true;state.rendering=false;return}if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null}state.rendering=true;const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||[],blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false;state.layoutDirty=false}};
 const renderPages=(blocks=state.model?.sections?.[0]?.blocks||[],preserve=state.selection)=>{
  layoutPending={preserve};if(patchFocusedEditor(preserve)){state.layoutDirty=true;state.rendering=false;return}state.rendering=true;
  if(layoutTimer)clearTimeout(layoutTimer);layoutTimer=setTimeout(flushLayout,300);
 };
-document.addEventListener('focusout',event=>{if(event.target?.closest?.('.farast-editor'))setTimeout(()=>{if(layoutPending)flushLayout()},0)});
+document.addEventListener('focusout',event=>{if(event.target?.closest?.('.farast-editor'))setTimeout(()=>{if(layoutPending)flushLayout(false)},0)});
 const htmlSnapshot=()=>{captureModel();return state.model.sections.flatMap(s=>s.blocks||[]).map(blockToHtml).join('')};
 const commitHistory=(before,after,label='ویرایش',tx=null)=>{if(sameModel(before,after))return;state.history=state.history.slice(0,state.historyIndex+1);state.history.push({before:cloneModel(before),after:cloneModel(after),label,at:Date.now(),transaction:tx,semantic:true});if(state.history.length>100)state.history.shift();state.historyIndex=state.history.length-1};
 const transaction=(label,fn,{render=true,preserveSelection=true,recordHistory=true,source='user',actor='user',command=label,input=null,provenance=null}={})=>{normalizeModel();const before=cloneModel(state.model),beforeRevision=state.localRevision;let result;try{result=fn(state.model);captureModel();const errors=validateModel(state.model);if(errors.length)throw new Error('مدل سند نامعتبر است: '+errors.slice(0,3).join('، '));}catch(error){state.model=before;normalizeModel();captureModel();state.selection=state.lastSelection||state.selection;throw error}const after=cloneModel(state.model);if(sameModel(before,after))return state.model;const tx=recordTransaction({actor,source,command,input,precondition:{documentId:state.documentId,localRevision:beforeRevision,serverRevision:state.revision},beforeRevision,effects:transactionEffects(before,after),provenance:{application:'farast-word-processor',kernel:'editor-core',...(provenance||{})}});if(recordHistory)commitHistory(before,after,label,tx);state.dirty=true;if(render)renderPages(state.model.sections[0].blocks,preserveSelection?state.selection:null);scheduleSave();updateStats();return result??state.model};
