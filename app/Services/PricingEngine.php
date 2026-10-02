@@ -50,10 +50,10 @@ class PricingEngine
         $extraDiscountBp = max(0, min(10000, (int)($trusted['discount_basis_points'] ?? 0)));
         $discount = (int) round($subtotal * ($discountBp + min(10000 - $discountBp, $extraDiscountBp)) / 10000);
 
-        $fee = max(0, (int) $policy->fee_amount + (int)($trusted['fee_amount'] ?? 0));
+        $fee = $billable <= 0 ? 0 : max(0, (int) $policy->fee_amount + (int)($trusted['fee_amount'] ?? 0));
         $taxBp = max(0, min(10000, (int) $policy->tax_basis_points));
         $taxable = max(0, $subtotal - $discount + $fee);
-        $tax = (int) round($taxable * $taxBp / 10000);
+        $tax = $billable <= 0 ? 0 : (int) round($taxable * $taxBp / 10000);
         $total = max(0, $taxable + $tax);
 
         return [
