@@ -38,7 +38,17 @@
  @endforeach
  <div class="farast-menu"><button type="button" aria-haspopup="true" aria-expanded="false">راهنما</button><div class="farast-menu-panel" role="menu"><a role="menuitem" href="{{ route('support') }}">راهنما و پشتیبانی</a><a role="menuitem" href="{{ route('pricing') }}">قیمت‌گذاری</a></div></div>
 </nav>
-  <nav class="farast-tabs" aria-label="نوار فرمان">
+  <style>
+.farast-appbar,.farast-menubar,.farast-tabs,.farast-ribbon{position:relative;z-index:20}
+.farast-workspace{position:relative;z-index:1}
+.farast-ribbon{min-height:56px;pointer-events:none}
+.farast-ribbon *{pointer-events:none}
+.farast-ribbon button,.farast-ribbon select,.farast-ribbon input,.farast-ribbon a,[data-command]{pointer-events:auto}
+#farastAgentPanel{position:fixed;inset-inline-end:24px;bottom:72px;z-index:2000;pointer-events:none}
+#farastAgentPanel.open{pointer-events:auto}
+#farastAgentPanel.open *{pointer-events:auto}
+</style>
+<nav class="farast-tabs" aria-label="نوار فرمان">
     @foreach(['home'=>'خانه','insert'=>'درج','layout'=>'طرح','design'=>'طراحی','review'=>'بازبینی','view'=>'نمایش','ai'=>'هوش مصنوعی'] as $tab=>$label)
       <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}">{{ $label }}</button>
     @endforeach
