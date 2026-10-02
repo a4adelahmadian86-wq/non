@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Contracts\Commerce\AuthorizationDecision;
 use App\Models\FarastCharge;
+use App\Models\FarastCouponRedemption;
 use App\Models\FarastEntitlement;
 use App\Models\FarastInvoice;
 use App\Models\FarastInvoiceItem;
@@ -20,14 +21,14 @@ use RuntimeException;
 
 class CommerceAuthorizationService
 {
-    public function __construct(private PricingEngine $pricing, private CapabilityService $capabilities) {}
+    public function __construct(private PricingEngine $pricing, private CapabilityService $capabilities, private PromotionService $promotions) {}
 
     public function authorize(User $actor, string $capability, array $scope = [], float $quantity = 1, array $context = []): AuthorizationDecision
     {
         $quantity=max(0,$quantity);
         $organizationId=$actor->organization_id ?: ($scope['organization_id'] ?? null);
         $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId);
-        $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $quote=$this->pricing->quote((string)($context['policy_code'] ?? $capability),$quantity,$pricingContext);
+        $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $baseQuote=$this->pricing->quote((string)($context['policy_code'] ?? $capability),$quantity,$pricingContext); $adjustments=$this->promotions->trustedAdjustments($actor,$capability,$quantity,(int)($baseQuote['subtotal']??0),$context); $pricingContext['trusted_adjustments']=$adjustments; $quote=$this->pricing->quote((string)($context['policy_code'] ?? $capability),$quantity,$pricingContext); $quote['adjustments']=$adjustments['metadata']??[];
         $unit=(string)($entitlement?->unit ?: ($quote['unit'] ?? ($context['unit'] ?? 'unit')));
         $remaining=$entitlement?->quantity===null?null:($entitlement?->quantity !== null ? max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)):null);
         $limits=['quota'=>$entitlement?->quantity,'used'=>$entitlement?->used_quantity,'reserved'=>$entitlement?$this->reservedForEntitlement((int)$entitlement->id):0,'payg_available'=>(bool)($context['allow_payg']??true)];
@@ -57,7 +58,7 @@ class CommerceAuthorizationService
             if($existing)return $existing;
             $organizationId=$actor->organization_id ?: ($scope['organization_id']??null);
             $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId,true);
-            $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $quote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext);
+            $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $baseQuote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext); $adjustments=$this->promotions->trustedAdjustments($actor,$capability,$quantity,(int)($baseQuote['subtotal']??0),$context); $pricingContext['trusted_adjustments']=$adjustments; $quote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext); $quote['adjustments']=$adjustments['metadata']??[];
             $mode=$this->mode($actor,$capability,$quantity,$entitlement,$quote,$context);
             if($entitlement && $entitlement->quantity!==null && !in_array($mode,['payg','overage'],true)){
                 $available=max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id));
@@ -133,6 +134,8 @@ class CommerceAuthorizationService
     {
         if($existing=FarastCharge::where('idempotency_key',$reservation->idempotency_key)->first())return $existing;
         $charge=FarastCharge::create(['charge_id'=>Str::uuid(),'idempotency_key'=>$reservation->idempotency_key,'actor_id'=>$event->actor_id,'organization_id'=>$event->organization_id,'usage_event_id'=>$event->id,'reservation_id'=>$reservation->id,'order_id'=>$resultContext['order_id']??null,'capability'=>$event->capability,'quantity'=>$event->quantity,'unit'=>$event->unit,'unit_price'=>(int)($quote['unit_price']??0),'currency'=>$quote['currency']??'IRR','subtotal'=>(int)($quote['subtotal']??0),'discount'=>(int)($quote['discount']??0),'fee'=>(int)($quote['fee']??0),'tax'=>(int)($quote['tax']??0),'total'=>(int)($quote['total']??0),'status'=>(($quote['total']??0)>0&&($reservation->metadata['context']['postpaid']??false))?'pending':'charged','pricing_policy_version_id'=>$event->pricing_policy_version_id,'snapshot'=>$quote+['result'=>$resultContext]]);
+        $adjustmentCode=$quote['adjustments']['coupon_code']??null;
+        if($adjustmentCode){ FarastCouponRedemption::firstOrCreate(['idempotency_key'=>'charge-'.$reservation->idempotency_key],['coupon_code'=>$adjustmentCode,'actor_id'=>$event->actor_id,'charge_id'=>$charge->id,'discount_amount'=>(int)($quote['discount']??0),'currency'=>$charge->currency]); }
         $invoice=FarastInvoice::create(['invoice_number'=>'FAR-'.now()->format('YmdHis').'-'.str_pad((string)$charge->id,6,'0',STR_PAD_LEFT),'actor_id'=>$event->actor_id,'organization_id'=>$event->organization_id,'currency'=>$charge->currency,'subtotal'=>$charge->subtotal,'discount'=>$charge->discount,'fee'=>$charge->fee,'tax'=>$charge->tax,'total'=>$charge->total,'status'=>$charge->total>0?'issued':'paid','issued_at'=>now(),'paid_at'=>$charge->total>0?null:now(),'snapshot'=>$charge->snapshot]);
         FarastInvoiceItem::create(['invoice_id'=>$invoice->id,'charge_id'=>$charge->id,'description'=>$event->capability,'quantity'=>$event->quantity,'unit'=>$event->unit,'unit_price'=>$charge->unit_price,'subtotal'=>$charge->subtotal,'discount'=>$charge->discount,'fee'=>$charge->fee,'tax'=>$charge->tax,'total'=>$charge->total,'currency'=>$charge->currency,'snapshot'=>$charge->snapshot]);
         $charge->update(['invoice_id'=>$invoice->id]);
