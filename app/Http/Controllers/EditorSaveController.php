@@ -21,7 +21,7 @@ class EditorSaveController extends Controller
             'content' => ['required', 'string', 'max:4000000'],
             'title' => ['nullable', 'string', 'max:255'],
             'revision' => ['nullable', 'integer', 'min:0'],
-            'source' => ['nullable', 'string', 'in:editor,manual,autosave,ai,recovery'],
+            'source' => ['nullable', 'string', 'in:editor,manual,autosave,ai,ai-agent-context,recovery'],
             'page_settings' => ['nullable', 'array'],
             'document_model' => ['nullable', 'array'],
         ]);
