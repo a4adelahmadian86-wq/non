@@ -41,7 +41,6 @@ return new class extends Migration
                 $table->string('checksum', 64);
                 $table->timestamps();
                 $table->unique(['policy_code', 'version']);
-                $table->index(['capability_code']);
             });
         }
 
