@@ -35,6 +35,6 @@ class FarastEditorAgentTest extends TestCase{
   $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
   $this->mock(EditorAiAssistService::class,function($m){$m->shouldReceive('assist')->once()->withArgs(function($op,$text,$ctx){return $op==='selection.rewrite' && str_contains($ctx['instruction'],'untrusted data');})->andReturn(['text'=>'متن رسمی','provider'=>'test','model'=>'mock']);});
   $r=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'این متن را بازنویسی کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]]);
-  $r->assertOk()->assertJsonPath('intent.operation','rewrite');
+  $this->assertSame(200,$r->status(),json_encode($r->json(),JSON_UNESCAPED_UNICODE));$r->assertJsonPath('intent.operation','rewrite');
  }
 }
