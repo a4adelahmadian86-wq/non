@@ -25,3 +25,6 @@
 .farast-editor{caret-color:#2458a6}.farast-editor:focus{outline:0}.farast-editor::selection,.farast-editor *::selection{background:rgba(37,88,166,.20)}.farast-editor[data-empty="true"]::before{content:'شروع به تایپ کنید...';display:block;color:#9aa6b5;pointer-events:none;user-select:none}.farast-editor[data-empty="true"]:focus::before{color:#b3bdc9}
 
 @media(max-width:800px){.farast-page{width:calc(100vw - 16px)!important;height:auto!important;min-height:calc((100vw - 16px)*1.414)!important;padding:72px 28px 66px!important}.farast-page.landscape{min-height:calc((100vw - 16px)*.707)!important}.farast-editor{width:100%!important;height:auto!important;min-height:calc((100vw - 16px)*1.15)!important;overflow:visible!important}}
+
+/* Ribbon chrome must not block canvas hit-testing; only interactive controls receive pointer events. */
+.farast-ribbon,.farast-ribbon-group{pointer-events:none}.farast-ribbon button,.farast-ribbon select,.farast-ribbon input,.farast-ribbon a{pointer-events:auto}
