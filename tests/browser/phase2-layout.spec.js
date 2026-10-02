@@ -72,6 +72,22 @@ test('table and image remain represented across pagination', async ({ page }) =>
   expect(await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.some(b => b.type === 'image'))).toBeTruthy();
 });
 
+test('editing a fragmented paragraph preserves the complete canonical text', async ({ page }) => {
+  await openEditor(page);
+  const original = 'پاراگراف بسیار طولانی فراست برای آزمون حفظ متن بین صفحات است. FARAST 2026. '.repeat(90);
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.insertText(original);
+  await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(1);
+  const before = await page.evaluate(() => window.FarastEditor.state.model.plain_text);
+  const second = page.locator('.farast-editor').nth(1);
+  await second.click();
+  await page.keyboard.press('End');
+  await page.keyboard.insertText(' پایان');
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('پایان');
+  const after = await page.evaluate(() => window.FarastEditor.state.model.plain_text);
+  expect(after.length).toBeGreaterThan(before.length);
+  expect(after).toContain('FARAST 2026');
+});
 test('print uses A4 page geometry', async ({ page }) => {
   await openEditor(page);
   const css = await page.evaluate(() => document.getElementById('farastDynamicPrint')?.textContent || '');
