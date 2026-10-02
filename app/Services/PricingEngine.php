@@ -38,7 +38,7 @@ class PricingEngine
 
         $unitPrice = max(0, (int) $policy->unit_price);
         $additional = $policy->additional_unit_price === null ? $unitPrice : max(0, (int) $policy->additional_unit_price);
-        $included = max(0.0, (float) $policy->included_quantity);
+        $included = max(0.0, (float)($context['included_quantity'] ?? 0));
         $includedConsumed = min($quantity, $included);
         $billable = max(0.0, $quantity - $includedConsumed);
         $rawSubtotal = (int) round($billable * $additional);
