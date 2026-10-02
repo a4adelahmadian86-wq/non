@@ -154,6 +154,7 @@ const registerCommands=()=>{const bind=(n,fn)=>commandRegistry.set(n,fn);
 bind('InsertText',v=>{if(v&&typeof v==='object'&&v.range)return insertTextAtSelection(String(v.text??''),'ورود متن','InsertText',v.range);return insertTextAtSelection(String(v??''),'ورود متن','InsertText')});
 bind('DeleteRange',v=>deleteSelection(v?.backward!==false));
 bind('FormatText',v=>mutateSelectedRuns('قالب‌بندی',v?.patch||{}));
+bind('NormalizeText',v=>{const sel=v?.range||selectionRange();if(!sel)return false;const text=sel.text||'';return replaceSelectionText('نرمال‌سازی فارسی',normalizeFa(text),'NormalizeText',sel)});
 bind('SetParagraphStyle',v=>blockStyle(v?.tag||'p'));
 bind('SetDirection',v=>setBlockDirection(v?.direction==='ltr'?'ltr':'rtl'));
 bind('SplitParagraph',splitParagraph);
@@ -254,7 +255,7 @@ $('#pagesViewport').addEventListener('compositionend',e=>{const editor=e.target.
  if(!state.documentId){await createDocument();const hasLocalText=state.model?.sections?.some(s=>(s.blocks||[]).some(b=>runsText(b.runs||[]).trim().length>0));if(hasLocalText){captureModel();state.dirty=false;await saveNow('initial-local-edit')}else{await loadState()}}else if(!state.lastCommittedModel){await loadState()}state.lastCommittedModel=cloneModel(state.model);updateStats();try{if(state.documentId){const url=new URL(window.location.href);url.searchParams.delete('project');url.searchParams.set('document',String(state.documentId));window.history.replaceState({},'',url.toString())}}catch{}app.dataset.editorReady='1';
 };
 const exportDoc=async format=>{try{await saveNow('manual');const form=document.createElement('form');form.method='POST';form.action='/editor/export/'+format;form.innerHTML='<input type="hidden" name="_token" value="'+escapeHtml(csrf)+'"><input type="hidden" name="document_id" value="'+state.documentId+'">';document.body.appendChild(form);form.submit()}catch(e){toast(e.message,'error')}};
-window.FarastEditor={state,execute:command,commands:commandRegistry,undo,redo,transaction,getSelection:getSelectionInfo,restoreSelection,markSaved:r=>{state.revision=r;state.dirty=false},getPageSettings:()=>({...state.pageSettings}),getTransactions:()=>state.transactions.slice(),flushLayout};
+window.FarastEditor={state,execute:command,commands:commandRegistry,undo,redo,transaction,getSelection:getSelectionInfo,restoreSelection,saveNow,markSaved:r=>{state.revision=r;state.dirty=false},getPageSettings:()=>({...state.pageSettings}),getTransactions:()=>state.transactions.slice(),flushLayout};
 init().catch(e=>{setStatus(e.message||'راه‌اندازی ویرایشگر ناموفق بود','error');toast(e.message||'راه‌اندازی ناموفق بود','error')});
 });
 })();
