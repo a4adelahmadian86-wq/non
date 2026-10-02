@@ -13,4 +13,10 @@ class FarastCostEvent extends Model
         'output_bytes','metadata',
     ];
     protected function casts(): array { return ['quantity'=>'decimal:6','cost_amount'=>'integer','metadata'=>'array']; }
+    protected static function booted(): void
+    {
+        static::updating(function () { throw new \LogicException('cost_event_is_immutable'); });
+        static::deleting(function () { throw new \LogicException('cost_event_is_immutable'); });
+    }
+
 }
