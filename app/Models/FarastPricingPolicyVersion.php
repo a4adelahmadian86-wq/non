@@ -24,4 +24,10 @@ class FarastPricingPolicyVersion extends Model
             'effective_from'=>'datetime','effective_until'=>'datetime','metadata'=>'array',
         ];
     }
+    protected static function booted(): void
+    {
+        static::updating(function () { throw new \LogicException('pricing_policy_version_is_immutable'); });
+        static::deleting(function () { throw new \LogicException('pricing_policy_version_is_immutable'); });
+    }
+
 }
