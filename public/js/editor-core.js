@@ -75,12 +75,11 @@ const pageMetrics=()=>{
   return {w,h};
 };
 
-let layoutFrame=null,layoutPending=null;
+let layoutTimer=null,layoutPending=null;
 const renderPages=(blocks=state.model?.sections?.[0]?.blocks||[],preserve=state.selection)=>{
- state.rendering=true;layoutPending={preserve};
- if(layoutFrame)return;
- const run=()=>{layoutFrame=null;const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||blocks,blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false}};
- layoutFrame=window.requestAnimationFrame?requestAnimationFrame(run):setTimeout(run,0);
+ state.rendering=true;layoutPending={preserve};if(layoutTimer)clearTimeout(layoutTimer);
+ const run=()=>{layoutTimer=null;const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||blocks,blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false}};
+ layoutTimer=setTimeout(run,120);
 };
 const htmlSnapshot=()=>{captureModel();return state.model.sections.flatMap(s=>s.blocks||[]).map(blockToHtml).join('')};
 const commitHistory=(before,after,label='ویرایش',tx=null)=>{if(sameModel(before,after))return;state.history=state.history.slice(0,state.historyIndex+1);state.history.push({before:cloneModel(before),after:cloneModel(after),label,at:Date.now(),transaction:tx,semantic:true});if(state.history.length>100)state.history.shift();state.historyIndex=state.history.length-1};

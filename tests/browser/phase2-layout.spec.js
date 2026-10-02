@@ -51,7 +51,7 @@ test('explicit page break survives reload', async ({ page }) => {
   await page.locator('#saveNow').click();
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
   await page.reload();
-  expect(await page.locator('#pagesViewport .farast-page').count()).toBe(2);
+  await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBe(2);
   expect(await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.filter(b => b.type === 'page_break').length)).toBe(1);
 });
 
