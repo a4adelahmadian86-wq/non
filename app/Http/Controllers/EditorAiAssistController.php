@@ -19,7 +19,7 @@ class EditorAiAssistController extends Controller
             'provider'=>['nullable','string','max:40','regex:/^[A-Za-z0-9._-]+$/'],'project_id'=>['nullable','integer'],
         ]);
         try {
-            $result = $ai->assist($data['operation'],$data['text'],array_merge($data,['user'=>$request->user()]));
+            $result = $ai->assist($data['operation'],$data['text'],array_merge($data,['user'=>$request->user(),'idempotency_key'=>$request->header('Idempotency-Key')]));
             return response()->json(array_merge(['ok'=>true],$result));
         } catch (ValidationException|HttpExceptionInterface $e) { throw $e; }
         catch (\RuntimeException $e) {
