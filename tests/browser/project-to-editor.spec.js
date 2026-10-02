@@ -259,7 +259,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.id === tableId);
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
   }, currentTableCellState.blockId)).toEqual({ rows: 3, cols: 2 });
-  await page.evaluate(tableId => window.FarastEditor?.commands?.get?.('removeTableRow')?.({ blockId: tableId, rowIndex: 0 }), currentTableCellState.blockId);
+  await page.evaluate(tableId => window.FarastEditor?.commands?.get?.('removeTableRow')?.({ blockId: tableId, rowIndex: 1 }), currentTableCellState.blockId);
   await expect.poll(async () => page.evaluate(tableId => {
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.id === tableId);
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
