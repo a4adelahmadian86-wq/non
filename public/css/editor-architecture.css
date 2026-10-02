@@ -28,3 +28,6 @@
 
 /* Ribbon chrome must not block canvas hit-testing; only interactive controls receive pointer events. */
 .farast-ribbon,.farast-ribbon-group{pointer-events:none}.farast-ribbon button,.farast-ribbon select,.farast-ribbon input,.farast-ribbon a{pointer-events:auto}
+
+/* The full editor shell is a layout wrapper, not an interactive hit target. */
+#farastWord{pointer-events:none}#farastWord>*{pointer-events:auto}
