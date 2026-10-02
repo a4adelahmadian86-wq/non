@@ -240,32 +240,70 @@ class AdminController extends Controller
     public function updatePricing(Request $r)
     {
         $d = $r->validate([
-            'key' => 'required|string',
+            'key' => 'required|string|max:120',
             'value' => 'required|integer|min:0',
             'label' => 'required|string|max:160',
         ]);
 
-        PricingRule::updateOrCreate(['key' => $d['key']], [
-            'value' => $d['value'],
-            'label' => $d['label'],
-            'active' => true,
-        ]);
+        DB::transaction(function () use ($d) {
+            PricingRule::updateOrCreate(['key' => $d['key']], [
+                'value' => $d['value'],
+                'label' => $d['label'],
+                'active' => true,
+            ]);
 
-        $unit = match ($d['key']) {
-            'typing_voice_minute' => 'minute',
-            'typing_payg_multiplier', 'english_multiplier', 'arabic_multiplier', 'mixed_multiplier', 'dense_page_multiplier' => 'percentage',
-            default => 'page',
-        };
-        FarastPricingPolicy::updateOrCreate(['code' => $d['key']], [
-            'capability_code' => null,
-            'unit' => $unit,
-            'base_price_rials' => $unit === 'percentage' ? 0 : $d['value'],
-            'additional_price_rials' => $unit === 'percentage' ? 0 : $d['value'],
-            'payg_multiplier_percent' => $d['key'] === 'typing_payg_multiplier' ? $d['value'] : 100,
-            'active' => true,
-        ]);
+            $unit = match ($d['key']) {
+                'typing_voice_minute' => 'minute',
+                'typing_payg_multiplier', 'english_multiplier', 'arabic_multiplier', 'mixed_multiplier', 'dense_page_multiplier' => 'percentage',
+                default => 'page',
+            };
 
-        return back()->with('status', 'قیمت‌گذاری به‌روزرسانی شد.');
+            $policy = FarastPricingPolicy::firstOrNew(['code' => $d['key']]);
+            $policy->capability_code = $policy->capability_code ?: null;
+            $policy->unit = $unit;
+            $policy->base_price_rials = $unit === 'percentage' ? 0 : $d['value'];
+            $policy->additional_price_rials = $unit === 'percentage' ? 0 : $d['value'];
+            $policy->payg_multiplier_percent = $d['key'] === 'typing_payg_multiplier' ? $d['value'] : max(100, (int)($policy->payg_multiplier_percent ?: 100));
+            $policy->active = true;
+            $policy->save();
+
+            $previous = DB::table('farast_pricing_policy_versions')
+                ->where('policy_code', $d['key'])
+                ->orderByDesc('version')
+                ->lockForUpdate()
+                ->first();
+
+            if ($previous) {
+                DB::table('farast_pricing_policy_versions')->where('id', $previous->id)->update([
+                    'effective_until' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $version = (int)($previous->version ?? 0) + 1;
+            $payload = [
+                'policy_code' => $d['key'],
+                'version' => $version,
+                'capability_code' => $policy->capability_code,
+                'unit' => $unit,
+                'currency' => 'IRR',
+                'unit_price' => max(0, (int)$policy->base_price_rials),
+                'additional_unit_price' => $policy->additional_price_rials === null ? null : max(0, (int)$policy->additional_price_rials),
+                'fee_amount' => max(0, (int)$policy->fee_rials),
+                'discount_basis_points' => max(0, min(10000, (int)round((float)$policy->discount_percent * 100))),
+                'tax_basis_points' => 0,
+                'payg_multiplier_basis_points' => max(10000, (int)round((float)($policy->payg_multiplier_percent ?: 100) * 100)),
+                'included_quantity' => max(0, (float)$policy->subscription_allowance),
+                'effective_from' => now(),
+                'metadata' => json_encode(['label'=>$d['label'],'source'=>'admin_pricing'], JSON_UNESCAPED_UNICODE),
+                'checksum' => hash('sha256', json_encode([$d['key'],$version,$d['value'],$policy->unit,$policy->additional_price_rials,$policy->fee_rials,$policy->discount_percent,$policy->subscription_allowance], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+            DB::table('farast_pricing_policy_versions')->insert($payload);
+        });
+
+        return back()->with('status', 'قیمت‌گذاری به‌روزرسانی و نسخه immutable آن ثبت شد.');
     }
 
     public function updateUserCapabilities(Request $r, User $user)
