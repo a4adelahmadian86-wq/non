@@ -47,29 +47,19 @@ class PricingService
 
     public function calculate(string $policyCode, int $units, bool $subscription = false): array
     {
-        $units = max(0, $units);
-        $engine = app(PricingEngine::class);
-        $policy = $engine->resolve($policyCode);
-        $included = $subscription && $policy ? min($units, max(0, (float)$policy->included_quantity)) : 0;
-        $quote = $engine->quote($policyCode, $units, ['included_quantity'=>$included]);
-
-        if (! $quote['available']) {
-            return [
-                'policy'=>$policyCode,'units'=>$units,'base_price_rials'=>0,'subscription_allowance'=>0,
-                'included_units'=>0,'billable_units'=>$units,'additional_usage_rials'=>0,'discount_rials'=>0,
-                'fee_rials'=>0,'final_price_rials'=>0,
-            ];
+        $units=max(0,$units);
+        $policy=FarastPricingPolicy::where('code',$policyCode)->where('active',true)->first();
+        if(!$policy){
+            return ['policy'=>$policyCode,'units'=>$units,'base_price_rials'=>0,'subscription_allowance'=>0,'included_units'=>0,'billable_units'=>$units,'additional_usage_rials'=>0,'discount_rials'=>0,'fee_rials'=>0,'final_price_rials'=>0];
         }
-
-        return [
-            'policy'=>$policyCode,'unit'=>$quote['unit'],'units'=>$units,
-            'base_price_rials'=>(int)$quote['unit_price'],'subscription_allowance'=>$included,
-            'included_units'=>$quote['included_quantity'],'billable_units'=>$quote['billable_quantity'],
-            'additional_usage_rials'=>$quote['subtotal'],'discount_rials'=>$quote['discount'],
-            'fee_rials'=>$quote['fee'],'final_price_rials'=>$quote['total'],
-            'pricing_policy_version_id'=>$quote['pricing_policy_version_id'] ?? null,
-            'currency'=>$quote['currency'],
-        ];
+        $included=$subscription?min($units,max(0,(int)$policy->subscription_allowance)):0;
+        $billable=max(0,$units-$included);
+        $additionalPrice=max(0,(int)($policy->additional_price_rials??$policy->base_price_rials));
+        $subtotal=$billable*$additionalPrice;
+        $discount=min($subtotal,(int)round($subtotal*max(0,min(100,(float)$policy->discount_percent))/100));
+        $fee=$billable>0?max(0,(int)$policy->fee_rials):0;
+        $total=max(0,$subtotal-$discount+$fee);
+        return ['policy'=>$policyCode,'unit'=>'page','units'=>$units,'base_price_rials'=>(int)$policy->base_price_rials,'subscription_allowance'=>$included,'included_units'=>$included,'billable_units'=>$billable,'additional_usage_rials'=>$subtotal,'discount_rials'=>$discount,'fee_rials'=>$fee,'final_price_rials'=>$total,'pricing_policy_version_id'=>null,'currency'=>'IRR'];
     }
 
     public function quote(string $text, int $pages): array
