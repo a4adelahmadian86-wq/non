@@ -242,7 +242,11 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     const cell = table?.rows?.[0]?.cells?.[0];
     return cell ? { blockId: table.id, cellId: cell.id } : null;
   });
-  const addColumnResult = await page.evaluate(tableId => window.FarastEditor?.execute?.('addTableColumn', { blockId: tableId }), currentTableCellState.blockId);
+  const addColumnResult = await page.evaluate(tableId => {
+    const handler = window.FarastEditor?.commands?.get?.('addTableColumn');
+    if (typeof handler !== 'function') throw new Error('TABLE_COLUMN_COMMAND_NOT_REGISTERED');
+    return handler({ blockId: tableId });
+  }, currentTableCellState.blockId);
   expect(addColumnResult).not.toBeFalsy();
   await expect.poll(async () => page.evaluate(() => {
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
