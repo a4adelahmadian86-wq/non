@@ -254,12 +254,16 @@ test('logs in through the real auth flow, creates a typing project, and opens th
     const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
   })).toEqual({ rows: 3, cols: 3 });
-  await page.evaluate(cell => window.FarastEditor?.execute?.('removeTableColumn', cell), tableCellState);
-  await page.evaluate(cell => window.FarastEditor?.execute?.('removeTableRow', cell), tableCellState);
-  await expect.poll(async () => page.evaluate(() => {
-    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type === 'table');
+  await page.evaluate(tableId => window.FarastEditor?.commands?.get?.('removeTableColumn')?.({ blockId: tableId }), currentTableCellState.blockId);
+  await expect.poll(async () => page.evaluate(tableId => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.id === tableId);
     return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
-  })).toEqual({ rows: 2, cols: 2 });
+  }, currentTableCellState.blockId)).toEqual({ rows: 3, cols: 2 });
+  await page.evaluate(tableId => window.FarastEditor?.commands?.get?.('removeTableRow')?.({ blockId: tableId }), currentTableCellState.blockId);
+  await expect.poll(async () => page.evaluate(tableId => {
+    const table = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.id === tableId);
+    return { rows: table?.rows?.length || 0, cols: table?.rows?.[0]?.cells?.length || 0 };
+  }, currentTableCellState.blockId)).toEqual({ rows: 2, cols: 2 });
   await page.locator('#saveNow').click();
   await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
   await page.reload();
