@@ -25,7 +25,7 @@ test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
  await page.locator('[data-agent-open]') .click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun') .click();
  await expect(page.locator('#farastAgentPlan')).toContainText('format_bold',{timeout:10000});await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
  await expect.poll(async()=>JSON.stringify(await page.evaluate(()=>window.FarastEditor?.getTransactions?.()||[]))).toContain('FormatText');
- await expect(editor.locator('strong')).toContainText('این متن عامل سند است');await page.locator('#farastAgentUndo').click();await expect(editor.locator('strong')).toHaveCount(0);
+ await expect(editor.locator('strong').filter({hasText:'این متن عامل سند است'})).toHaveCount(1);await page.locator('#farastAgentUndo').click();await expect(editor.locator('strong')).toHaveCount(0);
 });
 
 test('high risk agent action requires explicit approval',async({page})=>{
