@@ -34,3 +34,8 @@
 
 /* Higher-specificity shell rule must not re-enable Ribbon hit-testing. */
 #farastWord>.farast-ribbon,#farastWord>.farast-ribbon .farast-ribbon-group{pointer-events:none}#farastWord>.farast-ribbon button,#farastWord>.farast-ribbon select,#farastWord>.farast-ribbon input,#farastWord>.farast-ribbon a{pointer-events:auto}
+
+
+/* Editor is a full-screen application mounted inside the shared layout main. Keep the layout wrapper transparent to hit-testing so the real editor surface receives pointer events. */
+.editor-page-body #app-main{pointer-events:none}
+.editor-page-body #app-main #farastWord{pointer-events:auto}
