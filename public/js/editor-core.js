@@ -76,12 +76,11 @@ const pageMetrics=()=>{
 };
 
 let layoutTimer=null,layoutPending=null;
-const flushLayout=()=>{if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null}const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||[],blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false;state.layoutDirty=false}};
 const renderPages=(blocks=state.model?.sections?.[0]?.blocks||[],preserve=state.selection)=>{
- state.rendering=true;layoutPending={preserve};if(document.activeElement?.closest?.('.farast-editor')){state.layoutDirty=true;return}
- if(layoutTimer)clearTimeout(layoutTimer);layoutTimer=setTimeout(flushLayout,300);
+ state.rendering=true;layoutPending={preserve};if(layoutTimer)clearTimeout(layoutTimer);
+ const run=()=>{layoutTimer=null;const p=layoutPending||{};layoutPending=null;const vp=$('#pagesViewport');if(!vp){state.rendering=false;return}try{window.FarastDocumentLayout?.render?.({viewport:vp,model:state.model,settings:state.pageSettings,blocks:state.model?.sections?.[0]?.blocks||blocks,blockToHtml,preserveSelection:p.preserve,restoreSelection,nf})}finally{state.rendering=false}};
+ layoutTimer=setTimeout(run,300);
 };
-document.addEventListener('focusout',event=>{if(event.target?.closest?.('.farast-editor'))setTimeout(()=>{if(layoutPending)flushLayout()},0)});
 const htmlSnapshot=()=>{captureModel();return state.model.sections.flatMap(s=>s.blocks||[]).map(blockToHtml).join('')};
 const commitHistory=(before,after,label='ویرایش',tx=null)=>{if(sameModel(before,after))return;state.history=state.history.slice(0,state.historyIndex+1);state.history.push({before:cloneModel(before),after:cloneModel(after),label,at:Date.now(),transaction:tx,semantic:true});if(state.history.length>100)state.history.shift();state.historyIndex=state.history.length-1};
 const transaction=(label,fn,{render=true,preserveSelection=true,recordHistory=true,source='user',actor='user',command=label,input=null,provenance=null}={})=>{normalizeModel();const before=cloneModel(state.model),beforeRevision=state.localRevision;let result;try{result=fn(state.model);captureModel();const errors=validateModel(state.model);if(errors.length)throw new Error('مدل سند نامعتبر است: '+errors.slice(0,3).join('، '));}catch(error){state.model=before;normalizeModel();captureModel();state.selection=state.lastSelection||state.selection;throw error}const after=cloneModel(state.model);if(sameModel(before,after))return state.model;const tx=recordTransaction({actor,source,command,input,precondition:{documentId:state.documentId,localRevision:beforeRevision,serverRevision:state.revision},beforeRevision,effects:transactionEffects(before,after),provenance:{application:'farast-word-processor',kernel:'editor-core',...(provenance||{})}});if(recordHistory)commitHistory(before,after,label,tx);state.dirty=true;if(render)renderPages(state.model.sections[0].blocks,preserveSelection?state.selection:null);scheduleSave();updateStats();return result??state.model};
@@ -245,3 +244,6 @@ $('#pagesViewport').addEventListener('compositionend',e=>{const editor=e.target.
 };
 const exportDoc=async format=>{try{await saveNow('manual');const form=document.createElement('form');form.method='POST';form.action='/editor/export/'+format;form.innerHTML='<input type="hidden" name="_token" value="'+escapeHtml(csrf)+'"><input type="hidden" name="document_id" value="'+state.documentId+'">';document.body.appendChild(form);form.submit()}catch(e){toast(e.message,'error')}};
 window.FarastEditor={state,execute:command,commands:commandRegistry,undo,redo,transaction,getSelection:getSelectionInfo,restoreSelection,markSaved:r=>{state.revision=r;state.dirty=false},getPageSettings:()=>({...state.pageSettings}),getTransactions:()=>state.transactions.slice(),flushLayout};
+init().catch(e=>{setStatus(e.message||'راه‌اندازی ویرایشگر ناموفق بود','error');toast(e.message||'راه‌اندازی ناموفق بود','error')});
+});
+})();
