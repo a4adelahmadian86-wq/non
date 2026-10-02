@@ -2,7 +2,7 @@
 const boot=()=>{const app=document.getElementById('farastWord');if(!app||!window.FarastEditor)return;
 const panel=document.getElementById('farastAgentPanel'),input=document.getElementById('farastAgentInput'),status=document.getElementById('farastAgentStatus'),preview=document.getElementById('farastAgentPreview'),planBox=document.getElementById('farastAgentPlan'),csrf=document.querySelector('meta[name=csrf-token]')?.content||'';
 const api=async(url,o={})=>{const r=await fetch(url,{...o,headers:{Accept:'application/json','X-CSRF-TOKEN':csrf,...(o.headers||{})}}),j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error_code||'خطای دستیار');return j};
-const sel=()=>{const s=FarastEditor.getSelection?.();return s?.start?.blockId?{block_id:s.start.blockId,item_id:s.start.itemId||null,cell_id:s.start.cellId||null,start:s.start.offset,end:s.end.offset}:null};
+const sel=()=>{const live=FarastEditor.getSelection?.();const saved=FarastEditor.state?.lastSelection||FarastEditor.state?.selection;const s=(live?.start?.blockId&&live?.text)?live:saved;if(!s?.start?.blockId)return null;return {block_id:s.start.blockId,item_id:s.start.itemId||null,cell_id:s.start.cellId||null,start:Number(s.start.offset||0),end:Number(s.end?.offset??s.start.offset??0),text:String(s.text||'')};};
 const set=t=>{if(status)status.textContent=t};
 document.querySelectorAll('[data-agent-open]').forEach(b=>b.onclick=()=>panel?.classList.add('open'));
 document.getElementById('farastAgentClose')?.addEventListener('click',()=>panel?.classList.remove('open'));
