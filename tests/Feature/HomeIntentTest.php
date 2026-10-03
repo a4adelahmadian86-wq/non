@@ -40,8 +40,9 @@ class HomeIntentTest extends TestCase
         $interview = app(ProjectInterviewService::class);
 
         $article = $interview->buildContext([
-            'project_type' => 'article',
+            'project_type' => 'typing',
             'workflow' => 'manual',
+            'template' => 'academic_typing',
         ]);
 
         $this->assertSame('word_processor', $article['application']);
@@ -64,7 +65,7 @@ class HomeIntentTest extends TestCase
         $user = $this->user();
 
         $response = $this->actingAs($user)->postJson('/projects', [
-            'project_type' => 'contract',
+            'project_type' => 'typing',
             'workflow' => 'manual',
             'template' => 'official_document',
             'language' => 'fa',
