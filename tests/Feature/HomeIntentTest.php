@@ -80,7 +80,7 @@ class HomeIntentTest extends TestCase
 
         $this->assertDatabaseHas('farast_projects', [
             'id' => $response->json('project_id'),
-            'project_type' => 'contract',
+            'project_type' => 'typing',
             'workflow' => 'manual',
             'template_code' => 'official_document',
         ]);
