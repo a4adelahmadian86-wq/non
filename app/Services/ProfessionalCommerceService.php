@@ -29,7 +29,7 @@ class ProfessionalCommerceService
         return FarastPriceQuote::updateOrCreate(['idempotency_key'=>$key],[
             'quote_id'=>(string)Str::uuid(),'actor_id'=>$actor->id,'organization_id'=>$actor->organization_id,
             'capability'=>$capability,'quantity'=>$quantity,'unit'=>$decision->unit,'currency'=>$quote['currency']??'IRR',
-            'pricing_policy_version_id'=>$quote['pricing_policy_version_id']??null,'subtotal'=>(int)($quote['subtotal']??0),
+            'pricing_policy_version_id'=>$decision->pricingPolicyVersionId,'subtotal'=>(int)($quote['subtotal']??0),
             'discount'=>(int)($quote['discount']??0),'fee'=>(int)($quote['fee']??0),'tax'=>(int)($quote['tax']??0),
             'total'=>(int)($quote['total']??0),'status'=>$decision->allowed?'valid':'denied','expires_at'=>$expires,
             'snapshot'=>['decision'=>$decision->toArray(),'quote'=>$quote,'context'=>$this->safeContext($context)],
@@ -63,9 +63,11 @@ class ProfessionalCommerceService
 
     public function recordUsageCounter(User $actor,string $capability,string $unit,float $quantity,?string $scopeKey=null): FarastUsageCounter
     {
-        $scopeKey=$scopeKey?:'user:'.$actor->id;$start=now()->startOfMonth();$end=now()->endOfMonth();
-        $counter=FarastUsageCounter::firstOrCreate(['scope_key'=>$scopeKey,'capability'=>$capability,'unit'=>$unit,'period_start'=>$start],['quantity'=>0,'period_end'=>$end]);
-        $counter->increment('quantity',$quantity);return $counter->fresh();
+        $metric=($scopeKey?:'user:'.$actor->id).'|'.$capability.'|'.$unit;
+        $start=now()->startOfMonth()->toDateString();$end=now()->endOfMonth()->toDateString();
+        $counter=FarastUsageCounter::firstOrCreate(['user_id'=>$actor->id,'metric'=>$metric,'period_start'=>$start],['used'=>0,'period_end'=>$end]);
+        $counter->increment('used',(int)ceil($quantity));
+        return $counter->fresh();
     }
 
     private function safeContext(array $context):array{return array_intersect_key($context,array_flip(['policy_code','region_code','currency','unit','allow_payg','allow_overage','postpaid','quote_ttl_seconds','scope']));}
