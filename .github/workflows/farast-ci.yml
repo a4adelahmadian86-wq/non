@@ -28,6 +28,7 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
+      - run: php artisan view:cache
       - run: php artisan test
         env:
           DB_CONNECTION: sqlite
