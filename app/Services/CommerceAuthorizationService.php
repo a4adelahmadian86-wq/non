@@ -28,10 +28,14 @@ class CommerceAuthorizationService
         $quantity=max(0,$quantity);
         $organizationId=$actor->organization_id ?: ($scope['organization_id'] ?? null);
         $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId);
+        $planMeta=is_array($entitlement?->metadata)?$entitlement->metadata:[];
+        if(array_key_exists('allow_payg',$planMeta))$context['allow_payg']=(bool)$context['allow_payg']; else if(array_key_exists('allow_payg',$planMeta))$context['allow_payg']=(bool)$planMeta['allow_payg'];
+        if(!array_key_exists('allow_overage',$context)&&array_key_exists('allow_overage',$planMeta))$context['allow_overage']=(bool)$planMeta['allow_overage'];
+        if(!array_key_exists('postpaid',$context)&&array_key_exists('postpaid',$planMeta))$context['postpaid']=(bool)$planMeta['postpaid'];
         $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $baseQuote=$this->pricing->quote((string)($context['policy_code'] ?? $capability),$quantity,$pricingContext); $adjustments=$this->promotions->trustedAdjustments($actor,$capability,$quantity,(int)($baseQuote['subtotal']??0),$context); $pricingContext['trusted_adjustments']=$adjustments; $quote=$this->pricing->quote((string)($context['policy_code'] ?? $capability),$quantity,$pricingContext); $quote['adjustments']=$adjustments['metadata']??[];
         $unit=(string)($entitlement?->unit ?: ($quote['unit'] ?? ($context['unit'] ?? 'unit')));
         $remaining=$entitlement?->quantity===null?null:($entitlement?->quantity !== null ? max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)):null);
-        $limits=['quota'=>$entitlement?->quantity,'used'=>$entitlement?->used_quantity,'reserved'=>$entitlement?$this->reservedForEntitlement((int)$entitlement->id):0,'payg_available'=>(bool)($context['allow_payg']??true)];
+        $limits=['quota'=>$entitlement?->quantity,'used'=>$entitlement?->used_quantity,'reserved'=>$entitlement?$this->reservedForEntitlement((int)$entitlement->id):0,'payg_available'=>(bool)($context['allow_payg']??true),'overage_available'=>(bool)($context['allow_overage']??false),'postpaid'=>(bool)($context['postpaid']??false)];
 
         if($actor->isAdmin()) $mode='administrator';
         elseif($entitlement && ($entitlement->quantity===null || $remaining >= $quantity)) $mode=(string)$entitlement->mode;
