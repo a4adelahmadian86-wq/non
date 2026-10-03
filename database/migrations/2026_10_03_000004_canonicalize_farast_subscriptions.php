@@ -14,6 +14,12 @@ return new class extends Migration
 
         $legacy='farast_subscriptions_legacy_'.date('YmdHis');
         Schema::rename('farast_subscriptions',$legacy);
+        $columns=Schema::getColumnListing($legacy);
+        $rows=DB::table($legacy)->get();
+
+        // Drop the legacy table before creating the canonical one so SQLite/MySQL
+        // cannot retain old index/foreign-key names in the same schema.
+        Schema::dropIfExists($legacy);
 
         Schema::create('farast_subscriptions',function(Blueprint $table){
             $table->id();
@@ -29,15 +35,12 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        $columns=Schema::getColumnListing($legacy);
-        $rows=DB::table($legacy)->get();
         foreach($rows as $row){
             $planId=$row->plan_id??null;
             if(!$planId)continue;
-            // Prefer an already migrated commercial plan with the same legacy id;
-            // otherwise resolve by legacy code when available.
+
             if(!DB::table('farast_commercial_plans')->where('id',$planId)->exists()){
-                $code=isset($row->plan_code)?(string)$row->plan_code:null;
+                $code=in_array('plan_code',$columns,true)?(string)($row->plan_code??''):null;
                 if($code)$planId=DB::table('farast_commercial_plans')->where('code',$code)->value('id');
             }
             if(!$planId)continue;
