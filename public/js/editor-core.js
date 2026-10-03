@@ -151,7 +151,7 @@ const legacyCommand=()=>false;
 const commandRegistry=new Map();
 const command=(name,input)=>{const handler=commandRegistry.get(name);if(!handler){console.warn('[FARAST Editor Kernel] Unknown command:',name);return false}try{return handler(input)}catch(error){toast(error?.message||'اجرای فرمان ناموفق بود.','error');throw error}};
 const registerCommands=()=>{const bind=(n,fn)=>commandRegistry.set(n,fn);
-bind('InsertText',v=>{if(v&&typeof v==='object'&&v.range)return insertTextAtSelection(String(v.text??''),'ورود متن','InsertText',v.range);return insertTextAtSelection(String(v??''),'ورود متن','InsertText')});
+bind('InsertText',v=>{const inserted=v&&typeof v==='object'&&v.range?insertTextAtSelection(String(v.text??''),'ورود متن','InsertText',v.range):insertTextAtSelection(String(v??''),'ورود متن','InsertText');const active=document.activeElement?.closest?.('.farast-editor');const selectedBlock=state.selection?.start?.blockId;const activeBlocks=(active?.dataset.blockIds||'').split(',').filter(Boolean);if(inserted&&selectedBlock&&!activeBlocks.includes(selectedBlock))flushLayout(true);return inserted;});
 bind('DeleteRange',v=>deleteSelection(v?.backward!==false));
 bind('FormatText',v=>{const r=mutateSelectedRuns('قالب‌بندی',v?.patch||{},v?.range||null);flushLayout(true);return r;});
 bind('NormalizeText',v=>{const sel=v?.range||selectionRange();if(!sel)return false;const text=v?.text??sel.text??'';return replaceSelectionText('نرمال‌سازی فارسی',normalizeFa(text),'NormalizeText',sel)});
