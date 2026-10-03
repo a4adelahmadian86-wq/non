@@ -62,6 +62,8 @@ class CommerceAuthorizationService
             if($existing)return $existing;
             $organizationId=$actor->organization_id ?: ($scope['organization_id']??null);
             $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId,true);
+            $planMeta=is_array($entitlement?->metadata)?$entitlement->metadata:[];
+            foreach(['allow_payg','allow_overage','postpaid'] as $flag)if(!array_key_exists($flag,$context)&&array_key_exists($flag,$planMeta))$context[$flag]=(bool)$planMeta[$flag];
             $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $baseQuote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext); $adjustments=$this->promotions->trustedAdjustments($actor,$capability,$quantity,(int)($baseQuote['subtotal']??0),$context); $pricingContext['trusted_adjustments']=$adjustments; $quote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext); $quote['adjustments']=$adjustments['metadata']??[];
             $mode=$this->mode($actor,$capability,$quantity,$entitlement,$quote,$context);
             if($entitlement && $entitlement->quantity!==null && !in_array($mode,['payg','overage'],true)){
