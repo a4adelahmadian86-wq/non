@@ -26,7 +26,7 @@ use App\Models\Announcement;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
-Route::get('/', function () { $announcements=Schema::hasTable('announcements')?Announcement::visible()->latest()->limit(4)->get():collect(); return view('home',compact('announcements')); })->name('home');
+Route::get('/', function () { $announcements=Schema::hasTable('announcements')?Announcement::visible()->latest()->limit(4)->get():collect(); $recentProjects=auth()->check()&&Schema::hasTable('farast_projects')?auth()->user()->projects()->latest()->limit(3)->get():collect(); return view('home',compact('announcements','recentProjects')); })->name('home');
 Route::get('/store',[StoreController::class,'index'])->name('store');
 Route::get('/store/category/{slug}',[StoreController::class,'category'])->name('store.category');
 Route::get('/store/product/{slug}',[StoreController::class,'product'])->name('store.product');
