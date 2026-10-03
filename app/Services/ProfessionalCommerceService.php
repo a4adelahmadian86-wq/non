@@ -36,23 +36,28 @@ class ProfessionalCommerceService
         ]);
     }
 
-    public function createProduct(array $data): FarastCommercialProduct{return FarastCommercialProduct::create($data);}
-    public function createPlan(array $data): FarastCommercialPlan{return FarastCommercialPlan::create($data);}
+    public function createProduct(array $data): FarastCommercialProduct { return FarastCommercialProduct::create($data); }
+    public function createPlan(array $data): FarastCommercialPlan { return FarastCommercialPlan::create($data); }
 
     public function subscribe(User $actor,FarastCommercialPlan $plan): FarastSubscription
     {
+        if(!$plan->active)throw new RuntimeException('plan_inactive');
         return DB::transaction(function()use($actor,$plan){
-            $sub=FarastSubscription::create([
-                'user_id'=>$actor->id,'plan_id'=>$plan->id,'status'=>'active','starts_at'=>now(),
+            $subscription=FarastSubscription::create([
+                'subscription_id'=>(string)Str::uuid(),'user_id'=>$actor->id,'organization_id'=>$actor->organization_id,
+                'plan_id'=>$plan->id,'status'=>'active','starts_at'=>now(),
                 'ends_at'=>$plan->billing_interval==='monthly'?now()->addMonth():($plan->billing_interval==='yearly'?now()->addYear():null),
+                'metadata'=>['plan_code'=>$plan->code,'currency'=>$plan->currency,'price'=>(int)$plan->price,'quotas'=>$plan->quotas,
+                    'allow_payg'=>(bool)$plan->allow_payg,'allow_overage'=>(bool)$plan->allow_overage,'postpaid'=>(bool)$plan->postpaid],
             ]);
             $this->subscriptions->sync($actor,(int)$plan->id);
-            return $sub;
+            return $subscription;
         });
     }
 
     public function grantTemporaryPurchase(User $actor,string $capability,float $quantity,string $unit='unit',?int $projectId=null,array $metadata=[]): FarastEntitlement
     {
+        if($quantity<=0)throw new RuntimeException('quantity_must_be_positive');
         return FarastEntitlement::create([
             'user_id'=>$actor->id,'organization_id'=>$actor->organization_id,'project_id'=>$projectId,'capability_code'=>$capability,
             'mode'=>'temporary_purchase','status'=>'active','quantity'=>(int)ceil($quantity),'used_quantity'=>0,'unit'=>$unit,'priority'=>200,
@@ -63,12 +68,19 @@ class ProfessionalCommerceService
 
     public function recordUsageCounter(User $actor,string $capability,string $unit,float $quantity,?string $scopeKey=null): FarastUsageCounter
     {
-        $metric=($scopeKey?:'user:'.$actor->id).'|'.$capability.'|'.$unit;
-        $start=now()->startOfMonth()->toDateString();$end=now()->endOfMonth()->toDateString();
-        $counter=FarastUsageCounter::firstOrCreate(['user_id'=>$actor->id,'metric'=>$metric,'period_start'=>$start],['used'=>0,'period_end'=>$end]);
-        $counter->increment('used',(int)ceil($quantity));
+        if($quantity<0)throw new RuntimeException('quantity_must_be_non_negative');
+        $scope=$scopeKey?:'user:'.$actor->id;
+        $start=now()->startOfMonth();$end=now()->endOfMonth();
+        $counter=FarastUsageCounter::firstOrCreate(
+            ['scope_key'=>$scope,'capability'=>$capability,'unit'=>$unit,'period_start'=>$start],
+            ['quantity'=>0,'period_end'=>$end]
+        );
+        $counter->increment('quantity',$quantity);
         return $counter->fresh();
     }
 
-    private function safeContext(array $context):array{return array_intersect_key($context,array_flip(['policy_code','region_code','currency','unit','allow_payg','allow_overage','postpaid','quote_ttl_seconds','scope']));}
+    private function safeContext(array $context):array
+    {
+        return array_intersect_key($context,array_flip(['policy_code','region_code','currency','unit','allow_payg','allow_overage','postpaid','quote_ttl_seconds','scope']));
+    }
 }
