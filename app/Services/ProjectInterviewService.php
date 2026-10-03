@@ -47,11 +47,11 @@ class ProjectInterviewService
 
     public function buildContext(array $answers, array $userPreferences = []): array
     {
+        $workflow = $answers['workflow'] ?? 'manual';
+        $projectType = $answers['project_type'] ?? 'typing';
         $templateCode = $answers['template'] ?? $this->suggestTemplate($projectType);
         $template = (new TemplateRegistry())->get($templateCode);
         $settings = $template['settings'];
-        $workflow = $answers['workflow'] ?? 'manual';
-        $projectType = $answers['project_type'] ?? 'typing';
         $required = ['document.editing'];
         if ($workflow === 'voice') $required[] = 'speech.transcription';
         if ($workflow === 'source_file') {
