@@ -118,7 +118,7 @@ class EditorController extends Controller
         ]);
     }
 
-    public function upload(Request $request, CapabilityService $capabilities)
+    public function upload(Request $request, CapabilityService $capabilities, \App\Services\UploadSecurityService $security)
     {
         $limit = auth()->check() ? (int) $capabilities->forUser(auth()->user())['max_file_mb'] : 50;
         $limit = max(1, min($limit, 2048));
@@ -129,6 +129,7 @@ class EditorController extends Controller
         $file = $request->file('source');
         $folder = auth()->check() ? 'typing/'.auth()->id() : 'typing/pending';
         $path = $file->store($folder, 'private');
+        try { $security->inspect($path, $file->getMimeType(), $limit * 1024 * 1024); \App\Models\FarastStorageObject::create(['user_id'=>auth()->id(),'disk'=>'private','path'=>$path,'mime'=>$file->getMimeType(),'size'=>Storage::disk('private')->size($path),'checksum'=>hash('sha256',Storage::disk('private')->get($path)),'status'=>'quarantined','classification'=>'upload','provenance'=>['pipeline'=>'upload_security','scan'=>'required']]); } catch (\Throwable $e) { Storage::disk('private')->delete($path); throw $e; }
         $pending = [
             'path' => $path,
             'mime' => $file->getMimeType(),
@@ -146,7 +147,7 @@ class EditorController extends Controller
         ]);
     }
 
-    public function uploadAsset(Request $request, CapabilityService $capabilities)
+    public function uploadAsset(Request $request, CapabilityService $capabilities, \App\Services\UploadSecurityService $security)
     {
         abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
 
@@ -167,6 +168,7 @@ class EditorController extends Controller
             $resourceId.'.'.$extension,
             'private'
         );
+        try { $security->inspect($path, $file->getMimeType(), 20 * 1024 * 1024); \App\Models\FarastStorageObject::create(['user_id'=>$request->user()->id,'document_id'=>$document->farast_document_id,'disk'=>'private','path'=>$path,'mime'=>$file->getMimeType(),'size'=>Storage::disk('private')->size($path),'checksum'=>hash('sha256',Storage::disk('private')->get($path)),'status'=>'quarantined','classification'=>'editor_asset','provenance'=>['pipeline'=>'upload_security','scan'=>'required']]); } catch (\Throwable $e) { Storage::disk('private')->delete($path); throw $e; }
 
         return response()->json([
             'ok' => true,
