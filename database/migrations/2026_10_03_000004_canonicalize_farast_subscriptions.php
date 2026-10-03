@@ -27,7 +27,6 @@ return new class extends Migration
             $table->timestamp('cancelled_at')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
-            $table->index(['user_id','status']);
         });
 
         $columns=Schema::getColumnListing($legacy);
