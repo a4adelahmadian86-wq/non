@@ -60,7 +60,6 @@
       <div id="navigationItems"><span class="muted">عنوان‌های سند اینجا نمایش داده می‌شوند.</span></div>
     </aside>
     <section class="farast-canvas-shell">
-      <div class="farast-canvas-toolbar"><button id="zoomOut" type="button" aria-label="کاهش بزرگ‌نمایی" title="کاهش بزرگ‌نمایی"><i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i></button><span id="zoomValue">100%</span><button id="zoomIn" type="button" aria-label="افزایش بزرگ‌نمایی" title="افزایش بزرگ‌نمایی"><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i></button><span class="toolbar-separator"></span><button id="showAi" type="button" aria-label="دستیار AI" title="دستیار AI"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></button><button type="button" data-agent-open aria-label="عامل سند" title="عامل سند"><i class="fa-solid fa-robot" aria-hidden="true"></i></button><button id="showSearch" type="button" aria-label="جستجو" title="جستجو"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button><button id="printDocument" type="button" aria-label="چاپ" title="چاپ"><i class="fa-solid fa-print" aria-hidden="true"></i></button></div>
       <div class="farast-page-viewport" id="pagesViewport" tabindex="0" aria-label="صفحات سند"></div>
     </section>
     <aside class="farast-ai-panel" id="aiSidebar" aria-label="دستیار هوش مصنوعی">
