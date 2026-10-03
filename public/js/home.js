@@ -9,7 +9,7 @@ const labels={editing:'ویرایش',article:'مقاله',book:'کتاب',resume
 const icons={editing:'fa-pen-to-square',article:'fa-newspaper',book:'fa-book',resume:'fa-id-card',exam:'fa-list-check',contract:'fa-file-signature',forms:'fa-clipboard-list',report:'fa-file-lines',research_document:'fa-microscope'};
 const templateFor={article:'academic_typing',research_document:'academic_typing',contract:'official_document',forms:'official_document',report:'official_document'};
 const setStatus=(message='')=>{status.textContent=message};
-const api=async(url,body={})=>{const response=await fetch(url,{method:'POST',headers:{'X-CSRF-TOKEN':token,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify(body)});let data={};try{data=await response.json()}catch{}if(!response.ok){const e=new Error(data.message||'عملیات انجام نشد.');e.status=response.status;throw e}return data};
+const api=async(url,body={})=>{const response=await fetch(url,{method:'POST',headers:{'X-CSRF-TOKEN':token,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify(body)});if(response.redirected&&response.url.includes('/login')){const e=new Error('ورود لازم است.');e.status=401;throw e}let data={};try{data=await response.json()}catch{}if(!response.ok){const e=new Error(data.message||'عملیات انجام نشد.');e.status=response.status;throw e}return data};
 const showStep=html=>{grid.hidden=true;step.hidden=false;content.innerHTML=html;setStatus('');content.querySelector('button,input')?.focus()};
 const showGrid=()=>{step.hidden=true;grid.hidden=false;setStatus('');grid.querySelector('[data-intent="'+(activeIntent||'')+'"]')?.focus()};
 const goLogin=path=>{location.href='/login?continue='+encodeURIComponent(path)};
