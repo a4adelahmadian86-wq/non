@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 class TemplateRegistry
 {
-    public const TEMPLATES=['simple_typing'=>['name'=>'تایپ ساده','description'=>'قالب پایه A4 راست‌به‌چپ.'],'academic_typing'=>['name'=>'تایپ دانشگاهی','description'=>'قالب رسمی دانشگاهی.'],'official_document'=>['name'=>'سند رسمی','description'=>'قالب رسمی با حاشیه.']];
+    public const TEMPLATES=['simple_typing'=>['name'=>'تایپ ساده','description'=>'قالب پایه A4 راست‌به‌چپ.','settings'=>['paper'=>'A4','orientation'=>'portrait','margin_top'=>25,'margin_right'=>25,'margin_bottom'=>25,'margin_left'=>25,'direction'=>'rtl','font_family'=>'B Nazanin','font_size'=>16,'line_height'=>1.8,'page_border'=>true]],'academic_typing'=>['name'=>'تایپ دانشگاهی','description'=>'قالب رسمی دانشگاهی.','settings'=>['paper'=>'A4','orientation'=>'portrait','direction'=>'rtl','font_family'=>'B Nazanin','font_size'=>16]],'official_document'=>['name'=>'سند رسمی','description'=>'قالب رسمی با حاشیه.','settings'=>['paper'=>'A4','orientation'=>'portrait','direction'=>'rtl','font_family'=>'B Nazanin','font_size'=>16,'page_border'=>true]]];
 
     public function all():array
     {
