@@ -307,7 +307,31 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   expect(resource?.source || '').not.toMatch(/^data:image\//);
 
 
-  await page.setViewportSize({ width: 820, height: 900 });
+  // Editor shell contract: exactly one authoritative Ribbon and no legacy canvas toolbar.
+  await expect(page.locator('.farast-ribbon')).toHaveCount(1);
+  await expect(page.locator('.farast-canvas-toolbar')).toHaveCount(0);
+  await expect(page.locator('.farast-tabs')).toHaveCount(1);
+
+  // RTL/alignment are semantic commands, not DOM-only formatting.
+  await page.locator('.farast-tab[data-tab="home"]').click();
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.press('Control+a');
+  await page.locator('.farast-ribbon button[data-command="rtl"]').click();
+  await page.locator('.farast-ribbon button[data-command="right"]').click();
+  const paragraphSemantics = await page.evaluate(() => {
+    const block = window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.find(b => b.type !== 'page_break');
+    return block ? { direction: block.direction, alignment: block.alignment } : null;
+  });
+  expect(paragraphSemantics?.direction).toBe('rtl');
+  expect(paragraphSemantics?.alignment).toBe('right');
+
+  // Print layout must keep the page surface and suppress application chrome.
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#farastWord')).toBeVisible();
+  await expect(page.locator('.farast-page').first()).toBeVisible();
+  await page.emulateMedia({ media: 'screen' });
+
+  await page.setViewportSize({ width: 700, height: 900 });
   await expect(page.locator('#farastWord')).toBeVisible();
   await expect(page.locator('#pagesViewport .farast-page').first()).toBeVisible();
   await expect(page.locator('.farast-editor').first()).toHaveAttribute('contenteditable', 'true');
