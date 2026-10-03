@@ -12,7 +12,7 @@ return Application::configure(basePath:dirname(__DIR__))
         TrimStrings::skipWhen(fn(Request $request):bool=>$request->is('editor/save')&&$request->has('document_model'));
         $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class]);
         $middleware->append(App\Http\Middleware\EnsurePrivateStorageDisk::class);
-        if(filter_var(env('FARAST_OBSERVABILITY_ENABLED',true),FILTER_VALIDATE_BOOLEAN))$middleware->append(App\Http\Middleware\FarastObservability::class);
+        if(config('farast.observability.enabled',true))$middleware->append(App\Http\Middleware\FarastObservability::class);
     })
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
