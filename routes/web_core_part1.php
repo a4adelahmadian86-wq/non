@@ -64,6 +64,7 @@ Route::post('/logout',[AuthController::class,'logout'])->middleware('auth')->nam
 
 Route::post('/editor/voice/stream-config',[VoiceController::class,'streamConfig'])->middleware('throttle:120,1')->name('editor.voice.stream-config');
 Route::post('/editor/voice/stream-usage',[VoiceController::class,'streamUsage'])->middleware('throttle:120,1')->name('editor.voice.stream-usage');
+Route::post('/editor/upload',[EditorController::class,'upload'])->middleware('throttle:20,10')->name('editor.upload');
 
 Route::middleware('auth')->group(function(){
     Route::get('/editor/preflight/estimate',[TypingPreflightController::class,'estimate'])->middleware('throttle:30,10')->name('editor.preflight.estimate.get');
@@ -72,7 +73,6 @@ Route::middleware('auth')->group(function(){
     Route::post('/editor/preflight/decline',[TypingPreflightController::class,'decline'])->middleware('throttle:30,10')->name('editor.preflight.decline');
     Route::post('/editor/documents',[EditorController::class,'createDocument'])->middleware(['throttle:30,10','capability:can_type'])->name('editor.documents.create');
     Route::get('/editor/pending',[EditorController::class,'pending'])->middleware('throttle:60,10')->name('editor.pending');
-    Route::post('/editor/upload',[EditorController::class,'upload'])->middleware('throttle:20,10')->name('editor.upload');
     Route::get('/library',[StoreLibraryController::class,'index'])->name('library');
     Route::post('/library/{libraryItem}/download',[StoreLibraryController::class,'issue'])->middleware('throttle:20,10')->name('library.download.issue');
     Route::get('/downloads/{download}',[StoreLibraryController::class,'stream'])->middleware('throttle:60,10')->name('store.download.stream');
