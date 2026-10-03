@@ -124,6 +124,7 @@ class EditorController extends Controller
         $limit = max(1, min($limit, 2048));
         $request->validate([
             'source' => 'required|file|max:'.($limit * 1024).'|mimes:jpg,jpeg,png,webp,pdf,zip',
+            'source_type' => ['nullable','string','in:printed,handwritten,mixed'],
         ]);
 
         $file = $request->file('source');
@@ -134,6 +135,7 @@ class EditorController extends Controller
             'path' => $path,
             'mime' => $file->getMimeType(),
             'name' => $file->getClientOriginalName(),
+            'source_type' => $request->input('source_type'),
         ];
         $request->session()->put('pending_upload', $pending);
         $request->session()->forget(['typing_preflight_quote', 'typing_preflight_accepted', 'typing_preflight_deposit_order']);
