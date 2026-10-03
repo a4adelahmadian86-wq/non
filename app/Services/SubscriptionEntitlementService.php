@@ -2,18 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\FarastCommercialPlan;
 use App\Models\FarastEntitlement;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 
 class SubscriptionEntitlementService
 {
     public function sync(User $user, int $planId): array
     {
-        $plan=DB::table('farast_plans')->where('id',$planId)->where('active',1)->first();
+        $plan=FarastCommercialPlan::query()->whereKey($planId)->where('active',true)->first();
         if(!$plan)return [];
-        $quotas=is_string($plan->quotas??null)?json_decode($plan->quotas,true):($plan->quotas??[]);
-        $quotas=is_array($quotas)?$quotas:[];
+        $quotas=is_array($plan->quotas)?$plan->quotas:[];
         $map=[
             'typing_pages'=>['capability'=>'document.editing','unit'=>'page'],
             'pages'=>['capability'=>'document.editing','unit'=>'page'],
@@ -29,8 +28,9 @@ class SubscriptionEntitlementService
             $created[]=FarastEntitlement::create([
                 'user_id'=>$user->id,'organization_id'=>$user->organization_id,'capability_code'=>$spec['capability'],
                 'mode'=>'subscription','status'=>'active','quantity'=>$quantity,'used_quantity'=>0,'unit'=>$spec['unit'],
-                'priority'=>100,'source_type'=>'subscription','source_id'=>(string)$planId,
-                'starts_at'=>now(),'ends_at'=>now()->addMonth(),'metadata'=>['plan_code'=>$plan->code,'plan_id'=>$planId,'quota_key'=>$key],
+                'priority'=>100,'source_type'=>'subscription','source_id'=>(string)$plan->id,
+                'starts_at'=>now(),'ends_at'=>$plan->billing_interval==='monthly'?now()->addMonth():($plan->billing_interval==='yearly'?now()->addYear():null),
+                'metadata'=>['plan_code'=>$plan->code,'plan_id'=>$plan->id,'quota_key'=>$key],
             ]);
         }
         return $created;
