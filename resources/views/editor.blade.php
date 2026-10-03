@@ -50,7 +50,7 @@
 </style>
 <nav class="farast-tabs" aria-label="نوار فرمان">
     @foreach(['home'=>'خانه','insert'=>'درج','layout'=>'طرح','design'=>'طراحی','review'=>'بازبینی','view'=>'نمایش','ai'=>'هوش مصنوعی'] as $tab=>$label)
-      <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}">{{ $label }}</button>
+      <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}" @if($tab === 'ai') data-agent-open="1" @endif>{{ $label }}</button>
     @endforeach
   </nav>
   <section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
