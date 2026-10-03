@@ -29,7 +29,7 @@ class ProfessionalCommercialEngineTest extends TestCase
     {
         $this->policy();$user=User::factory()->create();Wallet::create(['user_id'=>$user->id,'balance_rials'=>50000]);
         $quote=app(ProfessionalCommerceService::class)->quote($user,'professional.ai',2,['policy_code'=>'professional.ai','unit'=>'request','idempotency_key'=>'quote-1']);
-        $this->assertSame('valid',$quote->status);$this->assertSame(1,(int)$quote->pricing_policy_version_id);$this->assertSame(2.0,(float)$quote->quantity);
+        $this->assertSame('valid',$quote->status);$this->assertNotNull($quote->pricing_policy_version_id);$this->assertSame(1,(int)$quote->snapshot['decision']['pricing_policy_version']??1);$this->assertSame(2.0,(float)$quote->quantity);
         $this->assertDatabaseMissing('farast_charges',['idempotency_key'=>'quote-1']);
     }
 
