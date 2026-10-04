@@ -30,6 +30,7 @@ class FarastEditorAgentTest extends TestCase{
   $c=$this->actingAs($u)->postJson('/editor/agent/tasks/'.$p['task_id'].'/commit',['base_revision'=>$p['base_revision']]);
   $this->assertSame(200,$c->status(),json_encode($c->json(),JSON_UNESCAPED_UNICODE));
   $c->assertJsonPath('status','executed');
+  $this->assertSame('FormatText',$c->json('execution.command.name') ?? $c->json('execution.command')); 
   $fresh=$f->fresh();
   $this->assertSame(2,(int)$fresh->revision);
   $this->assertTrue((bool)($fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['bold']??false),json_encode($fresh->content_json,JSON_UNESCAPED_UNICODE));
