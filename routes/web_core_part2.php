@@ -30,6 +30,7 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/editor/agent/plan', [\App\Http\Controllers\EditorAgentController::class, 'plan'])->middleware(['throttle:20,10'])->name('editor.agent.plan');
     Route::post('/editor/agent/tasks/{task}/approve', [\App\Http\Controllers\EditorAgentController::class, 'approve'])->middleware(['throttle:30,10'])->name('editor.agent.approve');
     Route::post('/editor/agent/tasks/{task}/commit', [\App\Http\Controllers\EditorAgentController::class, 'commit'])->middleware(['throttle:30,10'])->name('editor.agent.commit');
+    Route::post('/editor/agent/tasks/{task}/undo', [\App\Http\Controllers\EditorAgentController::class, 'undo'])->middleware(['throttle:30,10'])->name('editor.agent.undo');
     Route::post('/editor/save', EditorSaveController::class)->middleware(['throttle:120,1', 'capability:can_type'])->name('editor.save');
     Route::post('/editor/assets', [EditorController::class, 'uploadAsset'])->middleware('throttle:60,10')->name('editor.assets.upload');
     Route::get('/editor/documents/{document}/assets/{resource}', [EditorController::class, 'asset'])->middleware('throttle:120,10')->name('editor.document.asset');
