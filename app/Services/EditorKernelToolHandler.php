@@ -74,44 +74,46 @@ class EditorKernelToolHandler implements FarastToolHandler
         $blockId=(string)($range['start']['blockId']??'');
         if($blockId==='')throw new RuntimeException('agent_target_not_found');
 
-        foreach(($model['sections']??[]) as &$section){
-            foreach(($section['blocks']??[]) as &$block){
+        foreach(($model['sections']??[]) as $sectionIndex=>$section){
+            foreach(($section['blocks']??[]) as $blockIndex=>$block){
                 if((string)($block['id']??'')!==$blockId)continue;
 
-                $runs=&$block['runs'];
+                $runs=$block['runs']??[];
                 if(isset($range['start']['cellId'])){
-                    $cellId=(string)$range['start']['cellId'];
-                    $found=false;
-                    foreach(($block['rows']??[]) as &$row){
-                        foreach(($row['cells']??[]) as &$cell){
+                    $cellId=(string)$range['start']['cellId']; $found=false;
+                    foreach(($block['rows']??[]) as $rowIndex=>$row){
+                        foreach(($row['cells']??[]) as $cellIndex=>$cell){
                             if((string)($cell['id']??'')===$cellId){
-                                $runs=&$cell['runs']; $found=true; break 2;
+                                $runs=$cell['runs']??[];
+                                $start=max(0,(int)($range['start']['offset']??0)); $end=max($start,(int)($range['end']['offset']??$start));
+                                $runs=$this->formatRuns($runs,$start,$end,$patch);
+                                $model['sections'][$sectionIndex]['blocks'][$blockIndex]['rows'][$rowIndex]['cells'][$cellIndex]['runs']=$runs;
+                                return ['changed_blocks'=>1,'changed_characters'=>0,'block_id'=>$blockId];
                             }
                         }
                     }
-                    unset($cell,$row);
-                    if(!$found)throw new RuntimeException('agent_target_not_found');
-                }elseif(isset($range['start']['itemId'])){
-                    $itemId=(string)$range['start']['itemId'];
-                    $found=false;
-                    foreach(($block['items']??[]) as &$item){
-                        if((string)($item['id']??'')===$itemId){$runs=&$item['runs'];$found=true;break;}
-                    }
-                    unset($item);
-                    if(!$found)throw new RuntimeException('agent_target_not_found');
+                    throw new RuntimeException('agent_target_not_found');
                 }
 
-                if(!is_array($runs))throw new RuntimeException('agent_target_not_found');
-                $start=max(0,(int)($range['start']['offset']??0));
-                $end=max($start,(int)($range['end']['offset']??$start));
-                $current=$this->runsText($runs);
-                $start=min($start,mb_strlen($current)); $end=min($end,mb_strlen($current));
-                $runs=$this->formatRuns($runs,$start,$end,$patch);
-                unset($runs,$block,$section);
+                if(isset($range['start']['itemId'])){
+                    $itemId=(string)$range['start']['itemId'];
+                    foreach(($block['items']??[]) as $itemIndex=>$item){
+                        if((string)($item['id']??'')===$itemId){
+                            $runs=$item['runs']??[];
+                            $start=max(0,(int)($range['start']['offset']??0)); $end=max($start,(int)($range['end']['offset']??$start));
+                            $runs=$this->formatRuns($runs,$start,$end,$patch);
+                            $model['sections'][$sectionIndex]['blocks'][$blockIndex]['items'][$itemIndex]['runs']=$runs;
+                            return ['changed_blocks'=>1,'changed_characters'=>0,'block_id'=>$blockId];
+                        }
+                    }
+                    throw new RuntimeException('agent_target_not_found');
+                }
+
+                $start=max(0,(int)($range['start']['offset']??0)); $end=max($start,(int)($range['end']['offset']??$start));
+                $model['sections'][$sectionIndex]['blocks'][$blockIndex]['runs']=$this->formatRuns($runs,$start,$end,$patch);
                 return ['changed_blocks'=>1,'changed_characters'=>0,'block_id'=>$blockId];
             }
         }
-        unset($block,$section);
         throw new RuntimeException('agent_target_not_found');
     }
 
