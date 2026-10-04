@@ -17,6 +17,11 @@ class FarastDocumentVersion extends Model
         'label',
     ];
 
+    protected function casts(): array
+    {
+        return ['content_json' => 'array'];
+    }
+
     public function document(): BelongsTo
     {
         return $this->belongsTo(FarastDocument::class, 'document_id');
