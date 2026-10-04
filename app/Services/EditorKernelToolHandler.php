@@ -46,30 +46,47 @@ class EditorKernelToolHandler implements FarastToolHandler
 
     private function replaceRange(array &$model, ?array $range, string $text): array
     {
-        [$block, $target] = $this->target($model, $range);
-        if (!$block || !$target) throw new RuntimeException('agent_target_not_found');
-        $runs =& $target['runs'];
-        $start = max(0, (int) ($range['start']['offset'] ?? 0));
-        $end = max($start, (int) ($range['end']['offset'] ?? $start));
-        $current = $this->runsText($runs);
-        $start = min($start, mb_strlen($current)); $end = min($end, mb_strlen($current));
-        $before = $this->sliceRuns($runs, 0, $start);
-        $after = $this->sliceRuns($runs, $end, mb_strlen($current));
-        $insert = $text !== '' ? [['id' => (string) Str::uuid(), 'text' => $this->normalizePersian($text)]] : [];
-        $runs = array_values(array_filter(array_merge($before, $insert, $after), fn ($r) => ($r['text'] ?? '') !== ''));
-        if (!$runs) $runs = [['id' => (string) Str::uuid(), 'text' => '']];
-        return ['changed_blocks'=>1,'changed_characters'=>abs(mb_strlen($text)-($end-$start)),'before_characters'=>mb_strlen($current),'after_characters'=>mb_strlen($this->runsText($runs)),'block_id'=>$block['id']];
+        $blockId=(string)($range['start']['blockId']??''); $block=&$this->findBlockRef($model,$blockId);
+        if(!$block)throw new RuntimeException('agent_target_not_found');
+        $runs=&$block['runs'];
+        if(isset($range['start']['cellId'])){
+            $cellId=(string)$range['start']['cellId']; $found=false;
+            foreach(($block['rows']??[]) as &$row)foreach(($row['cells']??[]) as &$cell)if((string)($cell['id']??'')===$cellId){$runs=&$cell['runs'];$found=true;break 2;}
+            if(!$found)throw new RuntimeException('agent_target_not_found');
+        }elseif(isset($range['start']['itemId'])){
+            $itemId=(string)$range['start']['itemId']; $found=false;
+            foreach(($block['items']??[]) as &$item)if((string)($item['id']??'')===$itemId){$runs=&$item['runs'];$found=true;break;}
+            if(!$found)throw new RuntimeException('agent_target_not_found');
+        }
+        if(!is_array($runs))throw new RuntimeException('agent_target_not_found');
+        $start=max(0,(int)($range['start']['offset']??0)); $end=max($start,(int)($range['end']['offset']??$start));
+        $current=$this->runsText($runs); $start=min($start,mb_strlen($current)); $end=min($end,mb_strlen($current));
+        $before=$this->sliceRuns($runs,0,$start); $after=$this->sliceRuns($runs,$end,mb_strlen($current));
+        $insert=$text!==''?[['id'=>(string)Str::uuid(),'text'=>$this->normalizePersian($text)]]:[];
+        $runs=array_values(array_filter(array_merge($before,$insert,$after),fn($r)=>($r['text']??'')!==''));
+        if(!$runs)$runs=[['id'=>(string)Str::uuid(),'text'=>'']];
+        return ['changed_blocks'=>1,'changed_characters'=>abs(mb_strlen($text)-($end-$start)),'before_characters'=>mb_strlen($current),'after_characters'=>mb_strlen($this->runsText($runs)),'block_id'=>$blockId];
     }
 
     private function formatRange(array &$model, ?array $range, array $patch): array
     {
-        [$block, $target] = $this->target($model, $range);
-        if (!$block || !$target) throw new RuntimeException('agent_target_not_found');
-        $runs =& $target['runs'];
+        $blockId=(string)($range['start']['blockId']??''); $block=&$this->findBlockRef($model,$blockId);
+        if(!$block)throw new RuntimeException('agent_target_not_found');
+        $runs=&$block['runs'];
+        if(isset($range['start']['cellId'])){
+            $cellId=(string)$range['start']['cellId']; $found=false;
+            foreach(($block['rows']??[]) as &$row)foreach(($row['cells']??[]) as &$cell)if((string)($cell['id']??'')===$cellId){$runs=&$cell['runs'];$found=true;break 2;}
+            if(!$found)throw new RuntimeException('agent_target_not_found');
+        }elseif(isset($range['start']['itemId'])){
+            $itemId=(string)$range['start']['itemId']; $found=false;
+            foreach(($block['items']??[]) as &$item)if((string)($item['id']??'')===$itemId){$runs=&$item['runs'];$found=true;break;}
+            if(!$found)throw new RuntimeException('agent_target_not_found');
+        }
+        if(!is_array($runs))throw new RuntimeException('agent_target_not_found');
         $start=max(0,(int)($range['start']['offset']??0)); $end=max($start,(int)($range['end']['offset']??$start));
         $current=$this->runsText($runs); $start=min($start,mb_strlen($current)); $end=min($end,mb_strlen($current));
         $runs=$this->formatRuns($runs,$start,$end,$patch);
-        return ['changed_blocks'=>1,'changed_characters'=>0,'block_id'=>$block['id']];
+        return ['changed_blocks'=>1,'changed_characters'=>0,'block_id'=>$blockId];
     }
 
     private function setParagraphAlignment(array &$model,array $input):array
@@ -88,16 +105,6 @@ class EditorKernelToolHandler implements FarastToolHandler
         if(!$block)throw new RuntimeException('agent_target_not_found');
         $block['direction']=($input['direction']??'rtl')==='ltr'?'ltr':'rtl';
         return ['changed_blocks'=>1,'changed_characters'=>0,'block_id'=>$id];
-    }
-
-    private function target(array &$model,?array $range):array
-    {
-        $blockId=(string)($range['start']['blockId']??''); $block=&$this->findBlockRef($model,$blockId);
-        if(!$block)return [null,null];
-        $cellId=$range['start']['cellId']??null; $itemId=$range['start']['itemId']??null;
-        if($cellId!==null)foreach(($block['rows']??[]) as &$row)foreach(($row['cells']??[]) as &$cell)if((string)($cell['id']??'')===(string)$cellId)return[$block,$cell];
-        if($itemId!==null)foreach(($block['items']??[]) as &$item)if((string)($item['id']??'')===(string)$itemId)return[$block,$item];
-        return [isset($block['runs'])?$block:null,isset($block['runs'])?$block:null];
     }
 
     private function &findBlockRef(array &$model,string $id):mixed
