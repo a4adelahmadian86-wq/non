@@ -106,7 +106,7 @@ class AdminController extends Controller
             $account->capabilities = ['locales' => $cfg['locales'], 'realtime' => true];
             $account->enabled = $r->boolean($cfg['enabled_key']);
             $account->healthy = true;
-            $account->priority = (int) ($cfg['metadata']['priority'] ?? 100);
+            $account->priority = (int) ($cfg['priority'] ?? 100);
             $account->metadata = array_merge((array)$account->metadata, $cfg['metadata']);
             if (array_key_exists($cfg['quota_key'], $data) && $data[$cfg['quota_key']] !== null && $data[$cfg['quota_key']] !== '') {
                 $quotaSeconds = (int) $data[$cfg['quota_key']];
