@@ -35,6 +35,10 @@ class EditorRuntimeContractTest extends TestCase
         $this->assertStringNotContainsString('editor-tools-complete.js', $blade.$layout);
         $this->assertStringNotContainsString('editor-redesign.js', $blade.$layout);
         $this->assertStringNotContainsString('editor-pro.js', $blade.$layout);
+        $this->assertStringContainsString('/js/editor-layout.js', $layout);
+        $this->assertStringContainsString('/js/editor-agent.js', $layout);
+        $this->assertStringContainsString('/js/farast-voice.js', $layout);
+        $this->assertStringContainsString('id="mic"', $blade);
 
         preg_match('/const toolbar=(.*?);const syncActiveEditorModel=/s', $core, $match);
         $toolbar = $match[1] ?? '';
