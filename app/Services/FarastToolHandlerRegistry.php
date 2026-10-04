@@ -10,6 +10,7 @@ class FarastToolHandlerRegistry
     public function handler(string $code):FarastToolHandler
     {
         return match($code){
+            'editor.kernel'=>app(EditorKernelToolHandler::class),
             'ai.editor'=>app(AiEditorToolHandler::class),
             'ocr.document','ocr.handwriting'=>app(OcrToolHandler::class),
             'speech.transcription'=>app(SpeechToolHandler::class),
