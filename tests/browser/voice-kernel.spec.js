@@ -62,7 +62,7 @@ test('mock final transcript enters Kernel InsertText and supports undo', async (
       undo() { return this.execute('undo'); },
       getTransactions() { return window.__voiceKernelLog.slice(); },
       getSelection() { return { start: { blockId: 'b', offset: 0 }, end: { blockId: 'b', offset: 0 } }; },
-      reload() { return Promise.resolve(); },
+      reload() { document.getElementById('editor').textContent = window.__voiceKernelText; return Promise.resolve(); },
       state: { documentId: 1, revision: 1, model: { sections: [{ blocks: [{ id: 'b', runs: [{ text: '' }] }] }] } }
     };
   </script>
