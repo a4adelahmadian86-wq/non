@@ -36,6 +36,16 @@ class FarastEditorAgentTest extends TestCase{
   $this->assertDatabaseHas('farast_document_versions',['document_id'=>$f->id]);
  }
 
+ public function test_agent_undo_restores_previous_canonical_snapshot():void{
+  $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
+  $p=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'این متن را پررنگ کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]])->json();
+  $this->actingAs($u)->postJson('/editor/agent/tasks/'.$p['task_id'].'/commit',['base_revision'=>$p['base_revision']])->assertOk();
+  $this->actingAs($u)->postJson('/editor/agent/tasks/'.$p['task_id'].'/undo')->assertOk()->assertJsonPath('status','undone');
+  $fresh=$f->fresh();
+  $this->assertSame(3,(int)$fresh->revision);
+  $this->assertFalse((bool)($fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['bold']??false));
+ }
+
  public function test_stale_revision_is_rejected_at_commit():void{
   $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
   $this->mock(EditorAiAssistService::class,function($m){$m->shouldReceive('assist')->andReturn(['text'=>'متن جدید','provider'=>'test','model'=>'mock']);});
