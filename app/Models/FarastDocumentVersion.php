@@ -13,6 +13,7 @@ class FarastDocumentVersion extends Model
         'document_id',
         'user_id',
         'content',
+        'content_json',
         'label',
     ];
 
