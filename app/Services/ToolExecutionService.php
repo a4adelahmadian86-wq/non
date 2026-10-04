@@ -41,7 +41,7 @@ class ToolExecutionService
             'organization_id'=>$actor->organization_id,'project_id'=>$context['project_id']??null,'document_id'=>$context['document_id']??null,
             'capability'=>$d->entitlementPolicy['capability']??$d->tool->capability?->code,'status'=>'running','idempotency_key'=>$idempotency,
             'correlation_id'=>$correlation,'request_id'=>$requestId,'transaction_id'=>$transactionId,
-            'input_meta'=>$this->safeMeta($input),'provenance'=>json_encode(['tool'=>$toolCode,'version'=>$d->version->version]),
+            'input_meta'=>json_encode($this->safeMeta($input),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),'provenance'=>json_encode(['tool'=>$toolCode,'version'=>$d->version->version],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
             'started_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
         ]);
 
