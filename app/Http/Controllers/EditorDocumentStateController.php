@@ -52,7 +52,7 @@ class EditorDocumentStateController extends Controller
             ->where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->limit(100)
-            ->get(['id', 'label', 'created_at', 'content_json']);
+            ->get(['id', 'label', 'created_at']);
 
         return response()->json(['ok' => true, 'versions' => $versions]);
     }
