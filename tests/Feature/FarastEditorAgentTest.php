@@ -37,6 +37,16 @@ class FarastEditorAgentTest extends TestCase{
   $this->assertDatabaseHas('farast_document_versions',['document_id'=>$f->id]);
  }
 
+ public function test_kernel_format_text_applies_bold_range():void{
+  $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
+  $out=app(\App\Services\EditorKernelToolHandler::class)->handle($u,[
+   'document_id'=>$f->id,'base_revision'=>1,
+   'command'=>['name'=>'FormatText','input'=>['patch'=>['bold'=>true],'range'=>['start'=>['blockId'=>'b','offset'=>0],'end'=>['blockId'=>'b','offset'=>3]]]],
+  ],['source'=>'test']);
+  $fresh=$f->fresh();
+  $this->assertSame(2,(int)$fresh->revision);
+  $this->assertTrue((bool)($fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['bold']??false),json_encode($fresh->content_json,JSON_UNESCAPED_UNICODE));
+ }
  public function test_agent_undo_restores_previous_canonical_snapshot():void{
   $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
   $p=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'این متن را پررنگ کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]])->json();
