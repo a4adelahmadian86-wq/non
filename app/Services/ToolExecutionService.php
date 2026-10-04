@@ -54,9 +54,10 @@ class ToolExecutionService
                 ['policy_code'=>$capability,'unit'=>$d->entitlementPolicy['unit']??$d->usageMeter,
                  'allow_payg'=>$context['allow_payg']??true,'idempotency_key'=>'tool-res-'.$idempotency]);
 
+            $handlerContext=array_merge($context,['transaction_id'=>$transactionId,'tool_execution_id'=>$executionId]);
             $output=$d->tool->code==='human.assistance'
-                ? $this->humanTasks->request($actor,(string)$input['capability'],$input['input'],array_merge($context,['sla'=>$input['sla']??[]]))
-                : $this->handlers->handler($d->tool->code)->handle($actor,$input,$context);
+                ? $this->humanTasks->request($actor,(string)$input['capability'],$input['input'],array_merge($handlerContext,['sla'=>$input['sla']??[]]))
+                : $this->handlers->handler($d->tool->code)->handle($actor,$input,$handlerContext);
 
             $this->schemas->validate($output,$d->outputSchema);
             $usage=$this->commerce->commit($reservation,['metadata'=>['tool_execution_id'=>$executionId,'tool_version'=>$d->version->version]]);
