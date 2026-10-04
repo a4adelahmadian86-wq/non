@@ -29,6 +29,7 @@ class FarastEditorAgent{
   $command=$task->plan['commands'][0]??null;
   if(!is_array($command)||empty($command['name']))throw new RuntimeException('agent_invalid_plan');
   $budget=$task->metadata['budget']??[];
+  $metadata=$task->metadata??[];$metadata['before_model']=$document->content_json;$metadata['before_revision']=$document->revision;$task->update(['metadata'=>$metadata]);
   $execution=$this->tools->execute($user,'editor.kernel',[
     'document_id'=>(int)$document->id,
     'base_revision'=>(int)$task->base_revision,
@@ -63,6 +64,17 @@ class FarastEditorAgent{
   ],'agent');
   return $this->out($task);
  }
+ public function undo(User $user,string $id):array{return DB::transaction(function()use($user,$id){
+  $task=FarastAgentTask::where('task_id',$id)->where('user_id',$user->id)->lockForUpdate()->firstOrFail();
+  if($task->status!=='executed')throw new RuntimeException('agent_task_not_undoable');
+  $before=$task->metadata['before_model']??null;if(!is_array($before))throw new RuntimeException('agent_undo_snapshot_missing');
+  $document=FarastDocument::whereKey($task->document_id)->where('user_id',$user->id)->lockForUpdate()->firstOrFail();
+  if((int)$document->revision!==(int)$task->result_revision)throw new RuntimeException('agent_stale_revision');
+  $saved=app(\App\Services\EditorDocumentService::class)->saveCanonicalModel($document,$before,'agent-undo',(int)$task->result_revision);
+  $task->update(['status'=>'undone','result_revision'=>(int)$saved['revision'],'execution'=>array_merge($task->execution??[],['undone'=>true,'undo_revision'=>$saved['revision']])]);
+  $this->audit->record('agent.undone',$user->id,$task->project_id,'farast_agent_task',$task->id,['task_id'=>$task->task_id,'revision'=>$saved['revision']],'agent');
+  return $this->out($task);
+ });}
  private function commandFor(array $intent,array $context):array{$range=['start'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['start']],'end'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['end']]];return match($intent['operation']){'format_bold'=>['name'=>'FormatText','input'=>['patch'=>['bold'=>true],'range'=>$range]],'format_italic'=>['name'=>'FormatText','input'=>['patch'=>['italic'=>true],'range'=>$range]],'format_underline'=>['name'=>'FormatText','input'=>['patch'=>['underline'=>true],'range'=>$range]],'format_align'=>['name'=>'SetParagraphAlignment','input'=>['alignment'=>'right','position'=>$context['selection']['start']??null]],'normalize_spelling'=>['name'=>'NormalizeText','input'=>['text'=>$context['selection']['text'],'range'=>['start'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['start']],'end'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['end']]]]],'delete'=>['name'=>'DeleteRange','input'=>['backward'=>true]],'rewrite'=>['name'=>'InsertText','input'=>[]],default=>throw new RuntimeException('agent_command_not_supported')};}
  private function out(FarastAgentTask $t):array{return ['ok'=>true,'task_id'=>$t->task_id,'status'=>$t->status,'intent'=>$t->intent,'plan'=>$t->plan,'preview'=>$t->preview,'approval'=>$t->approval,'base_revision'=>$t->base_revision,'result_revision'=>$t->result_revision];}
 }
