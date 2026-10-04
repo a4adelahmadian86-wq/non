@@ -40,6 +40,7 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/editor/feedback', [EditorController::class, 'feedback'])->middleware(['throttle:60,10', 'capability:can_feedback'])->name('editor.feedback');
     Route::post('/editor/voice/stream-token', [VoiceController::class, 'streamToken'])->middleware(['throttle:30,10', 'capability:can_voice'])->name('editor.voice.stream-token');
     Route::post('/editor/voice/transcribe', [VoiceController::class, 'transcribe'])->middleware(['throttle:30,10', 'capability:can_voice'])->name('editor.voice.transcribe');
+    Route::post('/editor/voice/insert', [VoiceController::class, 'insertTranscript'])->middleware(['throttle:120,10', 'capability:can_voice'])->name('editor.voice.insert');
     Route::post('/editor/export/{format}', [ExportController::class, 'export'])->whereIn('format', ['docx', 'pdf'])->middleware('throttle:10,10')->name('editor.export');
     Route::post('/editor/heartbeat', [EditorController::class, 'heartbeat'])->middleware('throttle:60,1')->name('editor.heartbeat');
     Route::get('/dashboard', [EditorController::class, 'dashboard'])->name('dashboard');
