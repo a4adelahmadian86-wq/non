@@ -52,7 +52,7 @@ class EditorDocumentStateController extends Controller
             ->where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->limit(100)
-            ->get(['id', 'label', 'created_at']);
+            ->get(['id', 'label', 'created_at', 'content_json']);
 
         return response()->json(['ok' => true, 'versions' => $versions]);
     }
@@ -80,13 +80,21 @@ class EditorDocumentStateController extends Controller
 
         abort_unless($versionRow, 404);
 
-        $result = $documents->save(
-            $legacy,
-            (string) ($versionRow->content ?? '<p><br></p>'),
-            $legacy->title,
-            null,
-            'recovery',
-        );
+        if (!empty($versionRow->content_json)) {
+            $result = $documents->saveCanonicalModel(
+                $legacy->farastDocument,
+                is_string($versionRow->content_json) ? (json_decode($versionRow->content_json, true) ?: []) : (array) $versionRow->content_json,
+                'recovery',
+            );
+        } else {
+            $result = $documents->save(
+                $legacy,
+                (string) ($versionRow->content ?? '<p><br></p>'),
+                $legacy->title,
+                null,
+                'recovery',
+            );
+        }
 
         return response()->json([
             'ok' => true,
