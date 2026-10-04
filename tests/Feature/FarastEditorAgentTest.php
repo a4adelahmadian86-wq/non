@@ -23,6 +23,19 @@ class FarastEditorAgentTest extends TestCase{
   $r=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'این متن را حذف کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]]);
   $r->assertOk()->assertJsonPath('status','awaiting_approval');
  }
+ public function test_accept_executes_command_through_server_kernel():void{
+  $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
+  $p=$this->actingAs($u)->postJson('/editor/agent/plan',['document_id'=>$l->id,'prompt'=>'این متن را پررنگ کن','selection'=>['block_id'=>'b','start'=>0,'end'=>3]])->json();
+  $this->assertSame('preview_ready',$p['status']);
+  $c=$this->actingAs($u)->postJson('/editor/agent/tasks/'.$p['task_id'].'/commit',['base_revision'=>$p['base_revision']]);
+  $c->assertOk()->assertJsonPath('status','executed');
+  $fresh=$f->fresh();
+  $this->assertSame(2,(int)$fresh->revision);
+  $this->assertTrue((bool)($fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['bold']??false));
+  $this->assertDatabaseHas('farast_tool_executions',['document_id'=>$f->id,'status'=>'succeeded']);
+  $this->assertDatabaseHas('farast_document_versions',['document_id'=>$f->id]);
+ }
+
  public function test_stale_revision_is_rejected_at_commit():void{
   $u=User::factory()->create(['role'=>'employee']);[$l,$f]=$this->doc($u);
   $this->mock(EditorAiAssistService::class,function($m){$m->shouldReceive('assist')->andReturn(['text'=>'متن جدید','provider'=>'test','model'=>'mock']);});
