@@ -95,6 +95,59 @@ class EditorDocumentService
         }, 3);
     }
 
+    public function saveCanonicalModel(FarastDocument $document, array $model, string $source = 'tool'): array
+    {
+        $legacy = TypingDocument::where('farast_document_id', $document->id)
+            ->where('user_id', $document->user_id)
+            ->first();
+
+        if (!$legacy) {
+            throw new \RuntimeException('legacy_document_not_found');
+        }
+
+        $normalized = $this->sanitizeDocumentModel($model);
+        $settings = $this->normalizePageSettings($normalized['settings'] ?? $document->page_settings);
+        $normalized['settings'] = $settings;
+        $html = $this->documentModelToHtml($normalized);
+
+        return $this->db->transaction(function () use ($document, $legacy, $normalized, $settings, $html, $source) {
+            $locked = FarastDocument::whereKey($document->id)
+                ->where('user_id', $document->user_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $nextRevision = (int) $locked->revision + 1;
+            $locked->fill([
+                'content' => $html,
+                'content_json' => $normalized,
+                'page_settings' => $settings,
+                'revision' => $nextRevision,
+                'last_saved_at' => now(),
+            ])->save();
+
+            $locked->versions()->create([
+                'user_id' => $legacy->user_id,
+                'content' => $html,
+                'content_json' => $normalized,
+                'label' => $source === 'ai-agent' ? 'اجرای عامل هوشمند' : 'تغییر هسته سند',
+            ]);
+
+            $legacy->update([
+                'content' => $html,
+                'word_count' => $this->wordCount($normalized['plain_text'] ?? ''),
+            ]);
+
+            return [
+                'ok' => true,
+                'document_id' => $locked->id,
+                'revision' => $nextRevision,
+                'saved_at' => now()->toIso8601String(),
+                'document_model' => $normalized,
+                'page_settings' => $settings,
+            ];
+        }, 3);
+    }
+
     public function loadForLegacy(TypingDocument $legacy): array
     {
         if (! $legacy->farast_document_id) {
