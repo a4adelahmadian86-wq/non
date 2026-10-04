@@ -1,9 +1,9 @@
 <?php
 namespace App\Services\Agent;
 use App\Models\FarastAgentTask;use App\Models\FarastDocument;use App\Models\TypingDocument;use App\Models\User;use App\Services\AuditEventService;use App\Services\AuthorizationService;
-use App\Services\CommerceAuthorizationService;use App\Services\EditorAiAssistService;use Illuminate\Support\Facades\DB;use Illuminate\Support\Str;use RuntimeException;
+use App\Services\CommerceAuthorizationService;use App\Services\EditorAiAssistService;use App\Services\ToolExecutionService;use Illuminate\Support\Facades\DB;use Illuminate\Support\Str;use RuntimeException;
 class FarastEditorAgent{
- public function __construct(private AgentContextBuilder $contextBuilder,private AgentIntentInterpreter $interpreter,private AgentToolSelector $selector,private AgentValidationService $validator,private EditorAiAssistService $ai,private AuditEventService $audit,private AuthorizationService $authorization){}
+ public function __construct(private AgentContextBuilder $contextBuilder,private AgentIntentInterpreter $interpreter,private AgentToolSelector $selector,private AgentValidationService $validator,private EditorAiAssistService $ai,private AuditEventService $audit,private AuthorizationService $authorization,private ToolExecutionService $tools){}
  public function plan(User $user,int $legacyId,string $prompt,array $requestContext=[]):array{
   $legacy=TypingDocument::whereKey($legacyId)->where('user_id',$user->id)->firstOrFail();$document=FarastDocument::whereKey($legacy->farast_document_id)->where('user_id',$user->id)->firstOrFail();if(!$this->authorization->allows($user,'documents.edit'))throw new RuntimeException('agent_permission_denied');
   $context=$this->contextBuilder->build($user,$legacy,$document,$requestContext);if(($context['selection']['text']??'')===''&&preg_match('/این متن|this text/iu',$prompt)){foreach(($document->content_json['sections']??[]) as $section){foreach(($section['blocks']??[]) as $block){$text=collect($block['runs']??[])->map(fn($r)=>(string)($r['text']??''))->implode('');if($text!==''){$context['selection']=['target'=>'selection','block_id'=>(string)($block['id']??''),'item_id'=>null,'cell_id'=>null,'start'=>0,'end'=>mb_strlen($text),'text'=>$text];$context['current_block']=$context['selection']['block_id'];break 2;}}}}$intent=$this->interpreter->interpret($prompt,$context);$tool=$this->selector->select($intent);
@@ -20,7 +20,49 @@ class FarastEditorAgent{
   $this->audit->record('agent.plan_created',$user->id,$context['project_id'],'farast_agent_task',$task->id,['task_id'=>$task->task_id,'intent'=>$intent,'tool'=>$tool,'revision'=>$context['document_revision'],'preview'=>$preview,'approval_required'=>$intent['requires_approval']],'agent');return $this->out($task);
  }
  public function approve(User $user,string $id,bool $approved):array{$task=FarastAgentTask::where('task_id',$id)->where('user_id',$user->id)->firstOrFail();if($task->status!=='awaiting_approval')throw new RuntimeException('agent_task_not_awaiting_approval');if(!$approved){$task->update(['status'=>'rejected','approval'=>['approved'=>false,'at'=>now()->toIso8601String()]]);$this->audit->record('agent.approval_rejected',$user->id,$task->project_id,'farast_agent_task',$task->id,['task_id'=>$task->task_id],'agent');return $this->out($task);}$task->update(['status'=>'preview_ready','approval'=>['approved'=>true,'at'=>now()->toIso8601String()]]);$this->audit->record('agent.approval_granted',$user->id,$task->project_id,'farast_agent_task',$task->id,['task_id'=>$task->task_id],'agent');return $this->out($task);}
- public function commit(User $user,string $id,array $result):array{return DB::transaction(function()use($user,$id,$result){$task=FarastAgentTask::where('task_id',$id)->where('user_id',$user->id)->lockForUpdate()->firstOrFail();if($task->status!=='preview_ready')throw new RuntimeException('agent_task_not_approvable');if(($task->intent['requires_approval']??false)&&empty($task->approval['approved']))throw new RuntimeException('agent_approval_required');$document=FarastDocument::whereKey($task->document_id)->where('user_id',$user->id)->lockForUpdate()->firstOrFail();if((int)$document->revision!==(int)$task->base_revision)throw new RuntimeException('agent_stale_revision');$this->validator->validateResult($result,['document_revision'=>$task->base_revision],$task->metadata['budget']??[]);$task->update(['status'=>'executed','result_revision'=>(int)($result['result_revision']??0),'execution'=>$result]);$this->audit->record('agent.executed',$user->id,$task->project_id,'farast_agent_task',$task->id,['task_id'=>$task->task_id,'commands'=>$task->plan['commands'],'transactions'=>$result['transactions']??0,'revision_before'=>$task->base_revision,'revision_after'=>$result['result_revision']??null,'provenance'=>$task->plan['provenance'],'usage'=>$task->plan['usage']],'agent');return $this->out($task);});}
- private function commandFor(array $intent,array $context):array{$range=['start'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['start']],'end'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['end']]];return match($intent['operation']){'format_bold'=>['name'=>'FormatText','input'=>['patch'=>['bold'=>true],'range'=>$range]],'format_italic'=>['name'=>'FormatText','input'=>['patch'=>['italic'=>true],'range'=>$range]],'format_underline'=>['name'=>'FormatText','input'=>['patch'=>['underline'=>true],'range'=>$range]],'format_align'=>['name'=>'right','input'=>[]],'normalize_spelling'=>['name'=>'NormalizeText','input'=>['text'=>$context['selection']['text'],'range'=>['start'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['start']],'end'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['end']]]]],'delete'=>['name'=>'DeleteRange','input'=>['backward'=>true]],'rewrite'=>['name'=>'InsertText','input'=>[]],default=>throw new RuntimeException('agent_command_not_supported')};}
+ public function commit(User $user,string $id,array $result=[]):array{return DB::transaction(function()use($user,$id,$result){
+  $task=FarastAgentTask::where('task_id',$id)->where('user_id',$user->id)->lockForUpdate()->firstOrFail();
+  if($task->status!=='preview_ready')throw new RuntimeException('agent_task_not_approvable');
+  if(($task->intent['requires_approval']??false)&&empty($task->approval['approved']))throw new RuntimeException('agent_approval_required');
+  $document=FarastDocument::whereKey($task->document_id)->where('user_id',$user->id)->lockForUpdate()->firstOrFail();
+  if((int)$document->revision!==(int)$task->base_revision)throw new RuntimeException('agent_stale_revision');
+  $command=$task->plan['commands'][0]??null;
+  if(!is_array($command)||empty($command['name']))throw new RuntimeException('agent_invalid_plan');
+  $budget=$task->metadata['budget']??[];
+  $execution=$this->tools->execute($user,'editor.kernel',[
+    'document_id'=>(int)$document->id,
+    'base_revision'=>(int)$task->base_revision,
+    'command'=>$command,
+  ],[
+    'application'=>'word_processor',
+    'project_id'=>$task->project_id,
+    'document_id'=>$task->document_id,
+    'idempotency_key'=>'agent-kernel-'.$task->task_id,
+    'correlation_id'=>$task->task_id,
+    'quantity'=>1,
+  ]);
+  $effects=$execution['output']['effects']??[];
+  if((int)($effects['changed_blocks']??0)>(int)($budget['max_changed_blocks']??100))throw new RuntimeException('agent_budget_blocks');
+  if((int)($effects['changed_characters']??0)>(int)($budget['max_changed_characters']??100000))throw new RuntimeException('agent_budget_characters');
+  $task->update([
+    'status'=>'executed',
+    'result_revision'=>(int)($execution['output']['revision']??0),
+    'execution'=>[
+      'server_authoritative'=>true,
+      'tool_execution_id'=>$execution['execution_id'],
+      'command'=>$command,
+      'effects'=>$effects,
+      'revision_before'=>$task->base_revision,
+      'revision_after'=>(int)($execution['output']['revision']??0),
+    ],
+  ]);
+  $this->audit->record('agent.executed',$user->id,$task->project_id,'farast_agent_task',$task->id,[
+    'task_id'=>$task->task_id,'commands'=>[$command],'tool_execution_id'=>$execution['execution_id'],
+    'revision_before'=>$task->base_revision,'revision_after'=>(int)($execution['output']['revision']??0),
+    'provenance'=>$task->plan['provenance']??[],'server_authoritative'=>true,
+  ],'agent');
+  return $this->out($task);
+ }
+ private function commandFor(array $intent,array $context):array{$range=['start'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['start']],'end'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['end']]];return match($intent['operation']){'format_bold'=>['name'=>'FormatText','input'=>['patch'=>['bold'=>true],'range'=>$range]],'format_italic'=>['name'=>'FormatText','input'=>['patch'=>['italic'=>true],'range'=>$range]],'format_underline'=>['name'=>'FormatText','input'=>['patch'=>['underline'=>true],'range'=>$range]],'format_align'=>['name'=>'SetParagraphAlignment','input'=>['alignment'=>'right','position'=>$context['selection']['start']??null]],'normalize_spelling'=>['name'=>'NormalizeText','input'=>['text'=>$context['selection']['text'],'range'=>['start'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['start']],'end'=>['blockId'=>$context['selection']['block_id'],'offset'=>$context['selection']['end']]]]],'delete'=>['name'=>'DeleteRange','input'=>['backward'=>true]],'rewrite'=>['name'=>'InsertText','input'=>[]],default=>throw new RuntimeException('agent_command_not_supported')};}
  private function out(FarastAgentTask $t):array{return ['ok'=>true,'task_id'=>$t->task_id,'status'=>$t->status,'intent'=>$t->intent,'plan'=>$t->plan,'preview'=>$t->preview,'approval'=>$t->approval,'base_revision'=>$t->base_revision,'result_revision'=>$t->result_revision];}
 }
