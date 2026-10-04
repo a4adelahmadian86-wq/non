@@ -69,7 +69,7 @@ return new class extends Migration {
         $applicationId = DB::table('farast_applications')->where('code', 'word_processor')->value('id');
         if ($applicationId && !DB::table('farast_tool_applications')->where('tool_id', $toolId)->where('application_id', $applicationId)->exists()) {
             DB::table('farast_tool_applications')->insert([
-                'tool_id' => $toolId, 'application_id' => $applicationId, 'created_at' => now(), 'updated_at' => now(),
+                'tool_id' => $toolId, 'application_id' => $applicationId,
             ]);
         }
     }
