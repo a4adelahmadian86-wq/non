@@ -28,6 +28,11 @@ class FarastEditorAgent{
   if((int)$document->revision!==(int)$task->base_revision)throw new RuntimeException('agent_stale_revision');
   $command=$task->plan['commands'][0]??null;
   if(!is_array($command)||empty($command['name']))throw new RuntimeException('agent_invalid_plan');
+  if(($task->intent['operation']??null)==='format_bold'){
+   $selection=$task->plan['target']??[];
+   $blockId=(string)($selection['block_id']??'');
+   $command=['name'=>'FormatText','input'=>['patch'=>['bold'=>true],'range'=>['start'=>['blockId'=>$blockId,'offset'=>(int)($selection['start']??0)],'end'=>['blockId'=>$blockId,'offset'=>(int)($selection['end']??0)]]]];
+  }
   $budget=$task->metadata['budget']??[];
   $metadata=$task->metadata??[];$metadata['before_model']=$document->content_json;$metadata['before_revision']=$document->revision;$task->update(['metadata'=>$metadata]);
   $execution=$this->tools->execute($user,'editor.kernel',[
