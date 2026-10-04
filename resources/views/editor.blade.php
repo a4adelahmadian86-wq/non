@@ -69,7 +69,7 @@
       <div id="aiPreview" class="ai-preview" hidden></div><div id="aiStatus" class="ai-status" aria-live="polite">برای شروع، متن را انتخاب کنید.</div>
     </aside>
   </main>
-  <footer class="farast-statusbar"><span id="statusText">آماده</span><span>صفحه <b id="currentPage">۱</b> از <b id="totalPages">۱</b></span><span>کلمات <b id="statusWords">۰</b></span><span id="directionStatus">RTL · فارسی</span><span class="status-spacer"></span><button id="exportDocx" type="button">DOCX</button><button id="exportPdf" type="button">PDF</button></footer>
+  <footer class="farast-statusbar"><span id="statusText">آماده</span><span>صفحه <b id="currentPage">۱</b> از <b id="totalPages">۱</b></span><span>کلمات <b id="statusWords">۰</b></span><span id="directionStatus">RTL · فارسی</span><span class="status-spacer"></span><button id="mic" type="button" aria-label="تایپ صوتی" title="تایپ صوتی">تایپ صوتی</button><button id="exportDocx" type="button">DOCX</button><button id="exportPdf" type="button">PDF</button></footer>
 </div>
 <aside id="farastAgentPanel" dir="rtl" aria-label="عامل سند">
  <div class="farast-agent-head"><strong>عامل سند فراست</strong><button id="farastAgentClose" class="farast-agent-close" type="button" aria-label="بستن">×</button></div>
