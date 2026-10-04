@@ -33,12 +33,13 @@ class EditorKernelToolHandler implements FarastToolHandler
             default => throw new RuntimeException('editor_command_not_supported'),
         };
 
-        $saved = $this->documents->saveCanonicalModel($document, $model, 'ai-agent', $expected);
+        $source = (string) ($context['source'] ?? 'ai-agent');
+        $saved = $this->documents->saveCanonicalModel($document, $model, $source, $expected);
 
         return [
             'document_id' => $saved['document_id'],
             'revision' => $saved['revision'],
-            'transaction_id' => (string) Str::uuid(),
+            'transaction_id' => (string) ($context['transaction_id'] ?? Str::uuid()),
             'command' => $name,
             'effects' => $effects,
         ];
