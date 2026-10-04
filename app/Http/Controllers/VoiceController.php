@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\VoiceProviderAccount;
+use App\Models\TypingDocument;
+use App\Services\ToolExecutionService;
 use App\Services\AI\AiPrivacyPolicy;
 use App\Services\AI\AiQuotaService;
 use App\Services\GoogleSpeechToTextService;
@@ -60,6 +62,49 @@ class VoiceController extends Controller
         try{$result=$googleSpeech->enabled()&&in_array($mime,['audio/webm','audio/ogg','audio/wav'],true)?$googleSpeech->transcribe($mime,$bytes,$data['locale'],$context):$voice->transcribe($mime,$bytes,$data['locale'],$context);$rawText=(string)($result['text']??'');$finalText=$corrections->apply($rawText,$data['locale'],$result['engine']??null,$request->user()->id);$result['raw_text']=$rawText;$result['text']=$finalText;$result['correction_applied']=$finalText!==$rawText;}catch(\Throwable $e){try{$commerce->release($voiceReservation);}catch(\Throwable){}Log::warning('farast.voice.transcription_failed',['user_id'=>$request->user()->id,'google_speech_enabled'=>$googleSpeech->enabled(),'error_code'=>preg_match('/^[a-z0-9_.-]+$/i',$e->getMessage())?$e->getMessage():'voice_provider_failure']);return response()->json(['ok'=>false,'message'=>'رونویسی صوتی انجام نشد. دوباره تلاش کنید.'],502);}
         $commerce->commit($voiceReservation,['cost_metadata'=>['provider'=>$result['engine']??'gemini','input_bytes'=>strlen($bytes)],'metadata'=>['locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)]]);
         return response()->json(['ok'=>true,'text'=>$result['text'],'engine'=>$result['engine']??'gemini','interaction_id'=>$result['interaction_id']??null,'request_id'=>$result['request_id']??null,'ai'=>['request_id'=>$result['request_id']??null,'operation'=>'voice.transcribe','provider'=>$result['engine']??'gemini','model'=>$result['model']??null,'processing_mode'=>$processingMode,'status'=>'completed','result'=>['text'=>$result['text']],'suggestions'=>[],'warnings'=>[],'metadata'=>['interaction_id'=>$result['interaction_id']??null,'locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)],'usage'=>null,'error'=>null]]);
+    }
+
+    public function insertTranscript(Request $request, ToolExecutionService $tools)
+    {
+        $data=$request->validate([
+            'document_id'=>['required','integer'],
+            'base_revision'=>['required','integer','min:0'],
+            'text'=>['required','string','max:20000'],
+            'selection'=>['required','array'],
+            'selection.start'=>['required','array'],
+            'selection.end'=>['required','array'],
+            'selection.start.blockId'=>['required','string','max:160'],
+            'selection.end.blockId'=>['required','string','max:160'],
+            'selection.start.offset'=>['required','integer','min:0'],
+            'selection.end.offset'=>['required','integer','min:0'],
+            'selection.start.itemId'=>['nullable','string','max:160'],
+            'selection.end.itemId'=>['nullable','string','max:160'],
+            'selection.start.cellId'=>['nullable','string','max:160'],
+            'selection.end.cellId'=>['nullable','string','max:160'],
+            'idempotency_key'=>['nullable','string','max:180'],
+        ]);
+        $legacy=TypingDocument::whereKey((int)$data['document_id'])->where('user_id',$request->user()->id)->firstOrFail();
+        abort_unless($legacy->farast_document_id,404);
+        $document=$legacy->farastDocument()->where('user_id',$request->user()->id)->firstOrFail();
+        if((int)$document->revision!==(int)$data['base_revision'])return response()->json(['ok'=>false,'error_code'=>'voice_stale_revision','message'=>'سند هم‌زمان تغییر کرده است.'],409);
+        try{
+            $result=$tools->execute($request->user(),'editor.kernel',[
+                'document_id'=>(int)$document->id,
+                'base_revision'=>(int)$data['base_revision'],
+                'command'=>['name'=>'InsertText','input'=>['text'=>$data['text'],'range'=>$data['selection']]],
+            ],[
+                'application'=>'word_processor',
+                'project_id'=>$document->project_id,
+                'document_id'=>$document->id,
+                'idempotency_key'=>$data['idempotency_key']??('voice-kernel-'.$request->user()->id.'-'.$document->id.'-'.hash('sha256',$data['text'].'|'.$data['base_revision'].'|'.json_encode($data['selection'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES))),
+                'quantity'=>1,
+            ]);
+            return response()->json(['ok'=>true,'revision'=>$result['output']['revision']??null,'transaction_id'=>$result['output']['transaction_id']??null,'effects'=>$result['output']['effects']??[]]);
+        }catch(\Throwable $e){
+            $code=preg_match('/^[a-z0-9_.-]{3,100}$/i',$e->getMessage())?$e->getMessage():'voice_kernel_failure';
+            $status=in_array($code,['document_revision_conflict','revision_conflict'],true)?409:422;
+            return response()->json(['ok'=>false,'error_code'=>$code,'message'=>'درج متن صوتی انجام نشد.'],$status);
+        }
     }
 
     private function signStreamPayload(array $payload):string{$encoded=rtrim(strtr(base64_encode(json_encode($payload,JSON_UNESCAPED_SLASHES)),'+/','-_'),'=');return $encoded.'.'.hash_hmac('sha256',$encoded,(string)config('app.key'));}
