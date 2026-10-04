@@ -110,7 +110,7 @@ class EditorDocumentService
         $normalized['settings'] = $settings;
         $html = $this->documentModelToHtml($normalized);
 
-        return $this->db->transaction(function () use ($document, $legacy, $normalized, $settings, $html, $source) {
+        return $this->db->transaction(function () use ($document, $legacy, $normalized, $settings, $html, $source, $expectedRevision) {
             $locked = FarastDocument::whereKey($document->id)
                 ->where('user_id', $document->user_id)
                 ->lockForUpdate()
