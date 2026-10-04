@@ -95,7 +95,7 @@ class EditorDocumentService
         }, 3);
     }
 
-    public function saveCanonicalModel(FarastDocument $document, array $model, string $source = 'tool'): array
+    public function saveCanonicalModel(FarastDocument $document, array $model, string $source = 'tool', ?int $expectedRevision = null): array
     {
         $legacy = TypingDocument::where('farast_document_id', $document->id)
             ->where('user_id', $document->user_id)
@@ -115,6 +115,10 @@ class EditorDocumentService
                 ->where('user_id', $document->user_id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($expectedRevision !== null && (int) $locked->revision !== $expectedRevision) {
+                throw new \RuntimeException('document_revision_conflict');
+            }
 
             $nextRevision = (int) $locked->revision + 1;
             $locked->fill([
