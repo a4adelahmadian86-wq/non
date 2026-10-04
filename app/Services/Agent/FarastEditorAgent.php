@@ -63,7 +63,7 @@ class FarastEditorAgent{
     'provenance'=>$task->plan['provenance']??[],'server_authoritative'=>true,
   ],'agent');
   return $this->out($task);
- }
+ });}
  public function undo(User $user,string $id):array{return DB::transaction(function()use($user,$id){
   $task=FarastAgentTask::where('task_id',$id)->where('user_id',$user->id)->lockForUpdate()->firstOrFail();
   if($task->status!=='executed')throw new RuntimeException('agent_task_not_undoable');
