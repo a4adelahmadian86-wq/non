@@ -32,7 +32,7 @@ class FarastEditorAgentTest extends TestCase{
   $c->assertJsonPath('status','executed');
   $fresh=$f->fresh();
   $this->assertSame(2,(int)$fresh->revision);
-  $this->assertTrue((bool)($fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['bold']??false));
+  $this->assertTrue((bool)($fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['bold']??false),json_encode($fresh->content_json,JSON_UNESCAPED_UNICODE));
   $this->assertDatabaseHas('farast_tool_executions',['document_id'=>$f->id,'status'=>'succeeded']);
   $this->assertDatabaseHas('farast_document_versions',['document_id'=>$f->id]);
  }
