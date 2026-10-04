@@ -24,7 +24,16 @@ class VoiceController extends Controller
         return response()->json(['ok'=>true,'token'=>$this->signStreamPayload($payload),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/')]);
     }
 
-    public function streamConfig(Request $request, VoiceProviderRouter $router)
+    public function streamConfig(Request $request)
+    {
+        $token=(string)$request->input('token','');
+        $payload=$this->verifyStreamToken($token);
+        abort_unless($payload,401);
+        abort_unless(hash_equals($this->gatewaySignature($token),(string)$request->header('X-Farast-Voice-Gateway')),403);
+        return response()->json(['ok'=>true,'gateway'=>true,'uid'=>(int)$payload['uid'],'locale'=>$payload['locale']],200,['Cache-Control'=>'no-store']);
+    }
+
+    public function streamProviderConfig(Request $request, VoiceProviderRouter $router)
     {
         $token=(string)$request->input('token','');
         $payload=$this->verifyStreamToken($token);
@@ -34,7 +43,7 @@ class VoiceController extends Controller
         $exclude=is_array($exclude)?array_values(array_filter(array_map('intval',$exclude))):[];
         $account=$router->best((string)$payload['locale'],$exclude);
         abort_unless($account,503,'voice_provider_unavailable');
-        return response()->json(['ok'=>true,'provider'=>$account->provider,'model'=>$account->model,'region'=>$account->metadata['region']??env('GOOGLE_SPEECH_REGION','us'),'credentials'=>$account->credentials_array,'account_id'=>$account->id,'quality_score'=>(int)$account->quality_score],200,['Cache-Control'=>'no-store']);
+        return response()->json(['ok'=>true,'provider'=>$account->provider,'model'=>$account->model,'region'=>$account->metadata['region']??env('GOOGLE_SPEECH_REGION','us'),'credentials'=>$account->credentials_array,'account_id'=>$account->id,'quality_score'=>(int)$account->quality_score,'capabilities'=>$account->capabilities],200,['Cache-Control'=>'no-store']);
     }
 
     public function streamUsage(Request $request, VoiceQuotaManager $quota)
@@ -94,10 +103,12 @@ class VoiceController extends Controller
                 'command'=>['name'=>'InsertText','input'=>['text'=>$data['text'],'range'=>$data['selection']]],
             ],[
                 'application'=>'word_processor',
+                'source'=>'voice',
                 'project_id'=>$document->project_id,
                 'document_id'=>$document->id,
                 'idempotency_key'=>$data['idempotency_key']??('voice-kernel-'.$request->user()->id.'-'.$document->id.'-'.hash('sha256',$data['text'].'|'.$data['base_revision'].'|'.json_encode($data['selection'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES))),
                 'quantity'=>1,
+                'correlation_id'=>(string)($request->header('X-Farast-Voice-Request') ?: ''),
             ]);
             return response()->json(['ok'=>true,'revision'=>$result['output']['revision']??null,'transaction_id'=>$result['output']['transaction_id']??null,'effects'=>$result['output']['effects']??[]]);
         }catch(\Throwable $e){
