@@ -9,7 +9,8 @@ const path = require('path');
  */
 test('mock final transcript enters Kernel InsertText and supports undo', async ({ page }) => {
   const voiceJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-voice.js'), 'utf8');
-  expect(voiceJs).toContain("kernel.execute('InsertText'");
+  expect(voiceJs).not.toContain("kernel.execute('InsertText'");
+  expect(voiceJs).toContain("'/editor/voice/insert'");
   expect(voiceJs).not.toContain('createTextNode');
 
   await page.setContent(`<!doctype html>
@@ -29,6 +30,17 @@ test('mock final transcript enters Kernel InsertText and supports undo', async (
     window.__voiceKernelLog = [];
     window.__voiceKernelText = '';
     window.__voiceKernelHistory = [];
+    window.fetch = async (url, options = {}) => {
+      if (url === '/editor/voice/insert') {
+        const body = JSON.parse(options.body || '{}');
+        window.__voiceKernelHistory.push(window.__voiceKernelText);
+        window.__voiceKernelText += String(body.text || '');
+        window.__voiceKernelLog.push({ command: 'InsertText', input: body.text, source: 'voice-server-kernel' });
+        window.FarastEditor.state.revision += 1;
+        return new Response(JSON.stringify({ ok: true, revision: window.FarastEditor.state.revision, transaction_id: 'tx-voice' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ ok: false, message: 'unexpected voice request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    };
     window.FarastEditor = {
       execute(name, input) {
         if (name === 'InsertText' || name === 'insertText') {
@@ -49,7 +61,9 @@ test('mock final transcript enters Kernel InsertText and supports undo', async (
       },
       undo() { return this.execute('undo'); },
       getTransactions() { return window.__voiceKernelLog.slice(); },
-      state: { model: { sections: [{ blocks: [] }] } }
+      getSelection() { return { start: { blockId: 'b', offset: 0 }, end: { blockId: 'b', offset: 0 } }; },
+      reload() { return Promise.resolve(); },
+      state: { documentId: 1, revision: 1, model: { sections: [{ blocks: [{ id: 'b', runs: [{ text: '' }] }] }] } }
     };
   </script>
 </body>
@@ -63,7 +77,7 @@ test('mock final transcript enters Kernel InsertText and supports undo', async (
   await page.evaluate(() => window.FarastVoiceRuntime.open());
   await expect(page.locator('#farastVoicePanel')).toHaveClass(/is-open/);
 
-  await page.evaluate(() => window.FarastVoiceRuntime.applyFinalTranscript('سلام فراست'));
+  await page.evaluate(async () => { await window.FarastVoiceRuntime.applyFinalTranscript('سلام فراست'); });
   const afterInsert = await page.evaluate(() => ({
     text: window.__voiceKernelText,
     txs: window.FarastEditor.getTransactions(),
