@@ -26,6 +26,8 @@ class VoiceCredentialIsolationTest extends TestCase
 
         $response = app(VoiceController::class)->streamConfig(Request::create('/editor/voice/stream-config', 'POST', [
             'token' => $token,
+        ], [], [], [
+            'HTTP_X_FARAST_VOICE_GATEWAY' => hash_hmac('sha256', $token, (string) config('app.key')),
         ]));
 
         $data = $response->getData(true);
