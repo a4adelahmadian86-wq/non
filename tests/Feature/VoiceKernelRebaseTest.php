@@ -1,13 +1,13 @@
 <?php
 
-namespace TestsFeature;
+namespace Tests\Feature;
 
-use AppModelsFarastDocument;
-use AppModelsTypingDocument;
-use AppModelsUser;
-use AppServicesEditorKernelToolHandler;
-use IlluminateFoundationTestingRefreshDatabase;
-use TestsTestCase;
+use App\Models\FarastDocument;
+use App\Models\TypingDocument;
+use App\Models\User;
+use App\Services\EditorKernelToolHandler;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class VoiceKernelRebaseTest extends TestCase
 {
@@ -50,7 +50,7 @@ class VoiceKernelRebaseTest extends TestCase
             'content' => '<p>سلام دنیا</p>',
             'content_json' => $model,
             'document_format' => 'farast-v1',
-            'page_settings' => app(AppServicesEditorDocumentService::class)->defaultPageSettings(),
+            'page_settings' => app(\App\Services\EditorDocumentService::class)->defaultPageSettings(),
             'revision' => 1,
             'status' => 'active',
         ]);
