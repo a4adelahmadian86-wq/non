@@ -16,6 +16,7 @@ class VoiceCredentialIsolationTest extends TestCase
 
     public function test_public_stream_config_never_returns_provider_credentials(): void
     {
+        config(['services.voice_stream.gateway_secret' => 'test-gateway-secret']);
         $token = $this->token([
             'uid' => 1,
             'locale' => 'fa-IR',
