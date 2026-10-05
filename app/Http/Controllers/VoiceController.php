@@ -95,12 +95,12 @@ class VoiceController extends Controller
         $legacy=TypingDocument::whereKey((int)$data['document_id'])->where('user_id',$request->user()->id)->firstOrFail();
         abort_unless($legacy->farast_document_id,404);
         $document=$legacy->farastDocument()->where('user_id',$request->user()->id)->firstOrFail();
-        if((int)$document->revision!==(int)$data['base_revision'])return response()->json(['ok'=>false,'error_code'=>'voice_stale_revision','message'=>'سند هم‌زمان تغییر کرده است.'],409);
+        // Voice is allowed to reconcile a stale source revision through the kernel's semantic anchor rebase.
         try{
             $result=$tools->execute($request->user(),'editor.kernel',[
                 'document_id'=>(int)$document->id,
                 'base_revision'=>(int)$data['base_revision'],
-                'command'=>['name'=>'InsertText','input'=>['text'=>$data['text'],'range'=>$data['selection']]],
+                'command'=>['name'=>'InsertText','input'=>['text'=>$data['text'],'range'=>$data['selection'],'anchor'=>$data['anchor']??null]],
             ],[
                 'application'=>'word_processor',
                 'source'=>'voice',
@@ -110,7 +110,7 @@ class VoiceController extends Controller
                 'quantity'=>1,
                 'correlation_id'=>(string)($request->header('X-Farast-Voice-Request') ?: ''),
             ]);
-            return response()->json(['ok'=>true,'revision'=>$result['output']['revision']??null,'transaction_id'=>$result['output']['transaction_id']??null,'effects'=>$result['output']['effects']??[]]);
+            return response()->json(['ok'=>true,'revision'=>$result['output']['revision']??null,'transaction_id'=>$result['output']['transaction_id']??null,'effects'=>$result['output']['effects']??[],'document_model'=>$result['output']['document_model']??null]);
         }catch(\Throwable $e){
             $code=preg_match('/^[a-z0-9_.-]{3,100}$/i',$e->getMessage())?$e->getMessage():'voice_kernel_failure';
             $status=in_array($code,['document_revision_conflict','revision_conflict'],true)?409:422;
