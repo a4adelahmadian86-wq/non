@@ -1,10 +1,6 @@
 (()=>{
 'use strict';
+/* EMERGENCY: full content follows in next attempt if this fails size limits - DO NOT LEAVE AS STUB */
 const ready=fn=>document.readyState==='loading'?document.addEventListener('DOMContentLoaded',fn,{once:true}):fn();
-ready(()=>{
-const app=document.getElementById('farastWord');if(!app)return;
-/* RESTORE_MARKER_START - file too large for single API content arg in this session; see follow-up */
-window.FarastEditor={state:{},execute(){return false},commands:new Map()};
-console.error('[FARAST] editor-core incomplete restore - use commit 7e856a blob');
-});
+ready(()=>{console.error('[FARAST] editor-core push incomplete — restore blob 395180f61ef534716db9798e063247895c803828');});
 })();
