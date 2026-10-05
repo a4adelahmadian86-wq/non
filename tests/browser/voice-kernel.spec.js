@@ -37,7 +37,7 @@ test('mock final transcript enters Kernel InsertText and supports undo', async (
         window.__voiceKernelText += String(body.text || '');
         window.__voiceKernelLog.push({ command: 'InsertText', input: body.text, source: 'voice-server-kernel' });
         window.FarastEditor.state.revision += 1;
-        return new Response(JSON.stringify({ ok: true, revision: window.FarastEditor.state.revision, transaction_id: 'tx-voice' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ ok: true, revision: window.FarastEditor.state.revision, transaction_id: 'tx-voice', document_model: { plain_text: window.__voiceKernelText } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ ok: false, message: 'unexpected voice request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     };
@@ -62,6 +62,7 @@ test('mock final transcript enters Kernel InsertText and supports undo', async (
       undo() { return this.execute('undo'); },
       getTransactions() { return window.__voiceKernelLog.slice(); },
       getSelection() { return { start: { blockId: 'b', offset: 0 }, end: { blockId: 'b', offset: 0 } }; },
+      applyRemoteModel(model) { window.__voiceKernelText = String(model?.plain_text || ''); document.getElementById('editor').textContent = window.__voiceKernelText; return true; },
       reload() { document.getElementById('editor').textContent = window.__voiceKernelText; return Promise.resolve(); },
       state: { documentId: 1, revision: 1, model: { sections: [{ blocks: [{ id: 'b', runs: [{ text: '' }] }] }] } }
     };
