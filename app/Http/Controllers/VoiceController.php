@@ -21,7 +21,7 @@ class VoiceController extends Controller
     {
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
         $payload=['uid'=>(int)$request->user()->id,'locale'=>$request->string('locale')->toString(),'iat'=>time(),'exp'=>time()+120,'nonce'=>bin2hex(random_bytes(12))];
-        return response()->json(['ok'=>true,'token'=>$this->signStreamPayload($payload),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/')]);
+        return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/')]);
     }
 
     public function streamConfig(Request $request)
@@ -29,7 +29,8 @@ class VoiceController extends Controller
         $token=(string)$request->input('token','');
         $payload=$this->verifyStreamToken($token);
         abort_unless($payload,401);
-        abort_unless(hash_equals($this->gatewaySignature($token),(string)$request->header('X-Farast-Voice-Gateway')),403);
+        $gatewaySecret=(string)config('services.voice_stream.gateway_secret','');
+        abort_unless($gatewaySecret!=='' && hash_equals($this->gatewaySignature($token),(string)$request->header('X-Farast-Voice-Gateway')),403);
         return response()->json(['ok'=>true,'gateway'=>true,'uid'=>(int)$payload['uid'],'locale'=>$payload['locale']],200,['Cache-Control'=>'no-store']);
     }
 
@@ -43,6 +44,8 @@ class VoiceController extends Controller
         $exclude=is_array($exclude)?array_values(array_filter(array_map('intval',$exclude))):[];
         $account=$router->best((string)$payload['locale'],$exclude);
         abort_unless($account,503,'voice_provider_unavailable');
+        $gatewaySecret=(string)config('services.voice_stream.gateway_secret','');
+        abort_unless($gatewaySecret!=='' && hash_equals(hash_hmac('sha256',$token,$gatewaySecret),(string)$request->header('X-Farast-Voice-Secret')),403);
         return response()->json(['ok'=>true,'provider'=>$account->provider,'model'=>$account->model,'region'=>$account->metadata['region']??env('GOOGLE_SPEECH_REGION','us'),'credentials'=>$account->credentials_array,'account_id'=>$account->id,'quality_score'=>(int)$account->quality_score,'capabilities'=>$account->capabilities],200,['Cache-Control'=>'no-store']);
     }
 
@@ -120,5 +123,5 @@ class VoiceController extends Controller
 
     private function signStreamPayload(array $payload):string{$encoded=rtrim(strtr(base64_encode(json_encode($payload,JSON_UNESCAPED_SLASHES)),'+/','-_'),'=');return $encoded.'.'.hash_hmac('sha256',$encoded,(string)config('app.key'));}
     private function verifyStreamToken(string $token):?array{if($token===''||!str_contains($token,'.'))return null;[$payload,$signature]=array_pad(explode('.',$token,2),2,'');$expected=hash_hmac('sha256',$payload,(string)config('app.key'));if($signature===''||!hash_equals($expected,$signature))return null;$decoded=base64_decode(strtr($payload,'-_','+/').str_repeat('=',(4-strlen($payload)%4)%4),true);if($decoded===false)return null;$data=json_decode($decoded,true);if(!is_array($data)||empty($data['uid'])||empty($data['locale'])||(int)($data['exp']??0)<time())return null;return $data;}
-    private function gatewaySignature(string $token):string{return hash_hmac('sha256',$token,(string)config('app.key'));}
+    private function gatewaySignature(string $token):string{return hash_hmac('sha256',$token,(string)config('services.voice_stream.gateway_secret',''));}
 }

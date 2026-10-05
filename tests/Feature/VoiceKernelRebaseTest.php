@@ -1,17 +1,29 @@
 <?php
 
-namespace TestsFeature;
+namespace Tests\Feature;
 
-use AppModelsFarastDocument;
-use AppModelsTypingDocument;
-use AppModelsUser;
-use AppServicesEditorKernelToolHandler;
-use IlluminateFoundationTestingRefreshDatabase;
-use TestsTestCase;
+use App\Models\FarastDocument;
+use App\Models\TypingDocument;
+use App\Models\User;
+use App\Services\EditorKernelToolHandler;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class VoiceKernelRebaseTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_kernel_inserts_at_current_semantic_position(): void
+    {
+        $user=User::factory()->create();
+        $model=['schema'=>3,'type'=>'document','direction'=>'rtl','sections'=>[['id'=>'section-1','blocks'=>[['id'=>'b1','type'=>'paragraph','runs'=>[['id'=>'r1','text'=>'سلام دنیا']]]]]],'comments'=>[],'reviewChanges'=>[],'bookmarks'=>[],'resources'=>[],'fields'=>[],'plain_text'=>'سلام دنیا'];
+        $legacy=TypingDocument::create(['user_id'=>$user->id,'title'=>'Current','content'=>'<p>سلام دنیا</p>','status'=>'draft']);
+        $document=FarastDocument::create(['user_id'=>$user->id,'title'=>'Current','content'=>'<p>سلام دنیا</p>','content_json'=>$model,'document_format'=>'farast-v1','page_settings'=>app(\App\Services\EditorDocumentService::class)->defaultPageSettings(),'revision'=>1,'status'=>'active']);
+        $legacy->update(['farast_document_id'=>$document->id]);
+        $result=app(EditorKernelToolHandler::class)->handle($user,['document_id'=>$document->id,'base_revision'=>1,'command'=>['name'=>'InsertText','input'=>['text'=>' فراست','range'=>['start'=>['blockId'=>'b1','offset'=>9],'end'=>['blockId'=>'b1','offset'=>9]]]]],['source'=>'voice']);
+        $this->assertSame(2,$result['revision']);
+        $this->assertSame('سلام دنیا فراست',$result['document_model']['plain_text']);
+    }
 
     public function test_voice_rebases_a_stale_anchor_without_reloading_or_overwriting_concurrent_text(): void
     {
@@ -50,7 +62,7 @@ class VoiceKernelRebaseTest extends TestCase
             'content' => '<p>سلام دنیا</p>',
             'content_json' => $model,
             'document_format' => 'farast-v1',
-            'page_settings' => app(AppServicesEditorDocumentService::class)->defaultPageSettings(),
+            'page_settings' => app(\App\Services\EditorDocumentService::class)->defaultPageSettings(),
             'revision' => 1,
             'status' => 'active',
         ]);
@@ -78,9 +90,9 @@ class VoiceKernelRebaseTest extends TestCase
                     ],
                     'anchor' => [
                         'blockId' => 'b1',
-                        'offset' => 5,
-                        'before' => 'سلام ',
-                        'after' => 'دنیا',
+                        'offset' => 14,
+                        'before' => 'سلام عزیز دنیا',
+                        'after' => '',
                     ],
                 ],
             ],
@@ -89,6 +101,7 @@ class VoiceKernelRebaseTest extends TestCase
         $fresh = $document->fresh();
 
         $this->assertSame(3, $result['revision']);
+        $this->assertSame('سلام عزیز دنیا فراست', $result['document_model']['plain_text']);
         $this->assertSame('سلام عزیز دنیا فراست', $fresh->content_json['plain_text']);
         $this->assertSame('سلام عزیز دنیا فراست', $fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['text']);
         $this->assertNotNull($result['document_model']);

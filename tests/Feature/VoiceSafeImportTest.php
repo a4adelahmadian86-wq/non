@@ -76,8 +76,10 @@ class VoiceSafeImportTest extends TestCase
     {
         $js = file_get_contents(base_path('public/js/farast-voice.js'));
         $this->assertIsString($js);
-        $this->assertStringContainsString("kernel.execute('InsertText'", $js);
+        $this->assertStringContainsString("/editor/voice/insert", $js);
         $this->assertStringContainsString('FarastVoiceRuntime', $js);
+        $this->assertStringContainsString('sessionAnchor', $js);
+        $this->assertStringContainsString('reconcileVoiceAnchor', $js);
         $this->assertStringNotContainsString('createTextNode', $js);
         $this->assertStringNotContainsString('function ensureInterim', $js);
         $this->assertStringNotContainsString('function placeCaret', $js);

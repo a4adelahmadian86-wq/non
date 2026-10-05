@@ -109,26 +109,21 @@ class EditorKernelToolHandler implements FarastToolHandler
 
     private function replaceRange(array &$model, ?array $range, string $text): array
     {
-        $blockId=(string)($range['start']['blockId']??''); $block=&$this->findBlockRef($model,$blockId);
-        if(!$block)throw new RuntimeException('agent_target_not_found');
-        $runs=&$block['runs'];
-        if(isset($range['start']['cellId'])){
-            $cellId=(string)$range['start']['cellId']; $found=false;
-            foreach(($block['rows']??[]) as &$row)foreach(($row['cells']??[]) as &$cell)if((string)($cell['id']??'')===$cellId){$runs=&$cell['runs'];$found=true;break 2;}
-            if(!$found)throw new RuntimeException('agent_target_not_found');
-        }elseif(isset($range['start']['itemId'])){
-            $itemId=(string)$range['start']['itemId']; $found=false;
-            foreach(($block['items']??[]) as &$item)if((string)($item['id']??'')===$itemId){$runs=&$item['runs'];$found=true;break;}
-            if(!$found)throw new RuntimeException('agent_target_not_found');
-        }
-        if(!is_array($runs))throw new RuntimeException('agent_target_not_found');
-        $start=max(0,(int)($range['start']['offset']??0)); $end=max($start,(int)($range['end']['offset']??$start));
-        $current=$this->runsText($runs); $start=min($start,mb_strlen($current)); $end=min($end,mb_strlen($current));
-        $before=$this->sliceRuns($runs,0,$start); $after=$this->sliceRuns($runs,$end,mb_strlen($current));
-        $insert=$text!==''?[['id'=>(string)Str::uuid(),'text'=>$this->normalizePersian($text)]]:[];
-        $runs=array_values(array_filter(array_merge($before,$insert,$after),fn($r)=>($r['text']??'')!==''));
-        if(!$runs)$runs=[['id'=>(string)Str::uuid(),'text'=>'']];
-        return ['changed_blocks'=>1,'changed_characters'=>abs(mb_strlen($text)-($end-$start)),'before_characters'=>mb_strlen($current),'after_characters'=>mb_strlen($this->runsText($runs)),'block_id'=>$blockId];
+        $startPoint=$range['start']??[];$endPoint=$range['end']??$startPoint;$blockId=(string)($startPoint['blockId']??'');
+        if($blockId==='')throw new RuntimeException('agent_target_not_found');
+        $targetPath=null;$runs=[];
+        foreach(($model['sections']??[]) as $si=>$section){foreach(($section['blocks']??[]) as $bi=>$block){if((string)($block['id']??'')!==$blockId)continue;
+            if(isset($startPoint['cellId'])){foreach(($block['rows']??[]) as $ri=>$row)foreach(($row['cells']??[]) as $ci=>$cell)if((string)($cell['id']??'')===(string)$startPoint['cellId']){$targetPath=['si'=>$si,'bi'=>$bi,'ri'=>$ri,'ci'=>$ci,'kind'=>'cell'];$runs=$cell['runs']??[];}}
+            elseif(isset($startPoint['itemId'])){foreach(($block['items']??[]) as $ii=>$item)if((string)($item['id']??'')===(string)$startPoint['itemId']){$targetPath=['si'=>$si,'bi'=>$bi,'ii'=>$ii,'kind'=>'item'];$runs=$item['runs']??[];}}
+            else{$targetPath=['si'=>$si,'bi'=>$bi,'kind'=>'block'];$runs=$block['runs']??[];}
+        }}
+        if(!$targetPath||!is_array($runs))throw new RuntimeException('agent_target_not_found');
+        $start=max(0,(int)($startPoint['offset']??0));$end=max($start,(int)($endPoint['offset']??$start));$current=$this->runsText($runs);$start=min($start,mb_strlen($current));$end=min($end,mb_strlen($current));
+        $before=$this->sliceRuns($runs,0,$start);$after=$this->sliceRuns($runs,$end,mb_strlen($current));$normalizedText=$this->normalizePersian($text);$insert=$normalizedText!==''?[['id'=>(string)Str::uuid(),'text'=>$normalizedText]]:[];$newRuns=array_values(array_filter(array_merge($before,$insert,$after),fn($r)=>($r['text']??'')!==''));if(!$newRuns)$newRuns=[['id'=>(string)Str::uuid(),'text'=>'']];
+        if($targetPath['kind']==='cell')$model['sections'][$targetPath['si']]['blocks'][$targetPath['bi']]['rows'][$targetPath['ri']]['cells'][$targetPath['ci']]['runs']=$newRuns;
+        elseif($targetPath['kind']==='item')$model['sections'][$targetPath['si']]['blocks'][$targetPath['bi']]['items'][$targetPath['ii']]['runs']=$newRuns;
+        else $model['sections'][$targetPath['si']]['blocks'][$targetPath['bi']]['runs']=$newRuns;
+        return ['changed_blocks'=>1,'changed_characters'=>abs(mb_strlen($normalizedText)-($end-$start)),'before_characters'=>mb_strlen($current),'after_characters'=>mb_strlen($this->runsText($newRuns)),'block_id'=>$blockId];
     }
 
     private function formatRange(array &$model, ?array $range, array $patch): array

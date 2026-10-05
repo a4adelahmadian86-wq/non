@@ -6,6 +6,11 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
+    'voice_stream' => [
+        'url' => env('VOICE_STREAM_URL', 'ws://127.0.0.1:6002'),
+        'gateway_secret' => env('VOICE_GATEWAY_SECRET'),
+    ],
+
     'google_speech' => [
         'credentials_file' => env('GOOGLE_SPEECH_CREDENTIALS_FILE', env('GOOGLE_APPLICATION_CREDENTIALS')),
         'project_id' => env('GOOGLE_CLOUD_PROJECT'),

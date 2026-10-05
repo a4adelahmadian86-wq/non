@@ -23,9 +23,9 @@ async function openEditor(page){
 test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
  await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('این متن عامل سند است');await page.locator('[data-command="selectAll"]').click();
  await page.locator('[data-agent-open]') .click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun') .click();
- await expect(page.locator('#farastAgentPlan')).toContainText('format_bold',{timeout:10000});await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
- await expect.poll(async()=>JSON.stringify(await page.evaluate(()=>window.FarastEditor?.getTransactions?.()||[]))).toContain('FormatText');
- await expect.poll(async()=>page.locator('.farast-editor').first().locator('strong').allTextContents()).toEqual(['ا','ی','ن',' ','م','ت','ن',' ','ع','ا','م','ل',' ','س','ن','د',' ','ا','س','ت']);await page.locator('#farastAgentUndo').click();await expect(editor.locator('strong')).toHaveCount(0);
+ await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.intent?.operation)).toBe('format_bold');await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
+ await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.status)).toBe('executed');await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.evidence?.command?.name||window.__farastAgentPlan?.evidence?.command)).toContain('FormatText');
+ await expect.poll(async()=>page.locator('.farast-editor').first().locator('strong').allTextContents()).toEqual(['این متن عامل سند است']);await page.locator('#farastAgentUndo').click();await expect(editor.locator('strong')).toHaveCount(0);
 });
 
 test('high risk agent action requires explicit approval',async({page})=>{
