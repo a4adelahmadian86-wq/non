@@ -23,7 +23,7 @@ async function openEditor(page){
 test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
  await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('این متن عامل سند است');await page.locator('[data-command="selectAll"]').click();
  await page.locator('[data-agent-open]') .click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun') .click();
- await expect(page.locator('#farastAgentPlan')).toContainText('عملیات: format_bold',{timeout:10000});await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
+ await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.intent?.operation)).toBe('format_bold');await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
  await expect.poll(async()=>JSON.stringify(await page.evaluate(()=>window.FarastEditor?.getTransactions?.()||[]))).toContain('FormatText');await expect.poll(async()=>page.evaluate(()=>window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.[0]?.runs?.some(r=>r.bold===true))).toBe(true);
  await expect.poll(async()=>page.locator('.farast-editor').first().locator('strong').allTextContents()).toEqual(['ا','ی','ن',' ','م','ت','ن',' ','ع','ا','م','ل',' ','س','ن','د',' ','ا','س','ت']);await page.locator('#farastAgentUndo').click();await expect(editor.locator('strong')).toHaveCount(0);
 });
