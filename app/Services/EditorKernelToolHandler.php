@@ -82,27 +82,24 @@ class EditorKernelToolHandler implements FarastToolHandler
         $before = mb_substr((string) ($anchor['before'] ?? ''), -48);
         $after = mb_substr((string) ($anchor['after'] ?? ''), 0, 48);
 
-        $candidates = [];
-        if ($before !== '') {
-            $pos = 0;
-            while (($found = mb_strpos($text, $before, $pos)) !== false) {
-                $candidate = $found + mb_strlen($before);
-                if ($after === '' || mb_substr($text, $candidate, mb_strlen($after)) === $after) $candidates[] = $candidate;
-                $pos = $found + 1;
-            }
-        }
-        if (count($candidates) !== 1) {
-            $candidate = $offset;
-            if ($after !== '' && mb_substr($text, $candidate, mb_strlen($after)) !== $after) {
-                $candidate = mb_strpos($text, $after);
-                if ($candidate === false) throw new RuntimeException('voice_anchor_conflict');
-            }
-            if ($before !== '' && $candidate > 0 && !str_ends_with(mb_substr($text, 0, $candidate), $before)) {
+        if ($before !== '' && $after !== '') {
+            $beforePos = mb_strpos($text, $before);
+            $afterPos = mb_strpos($text, $after, $beforePos === false ? 0 : $beforePos + mb_strlen($before));
+            if ($beforePos !== false && $afterPos !== false) {
+                $candidate = $beforePos + mb_strlen($before);
+                if ($afterPos >= $candidate) $offset = $afterPos;
+                else throw new RuntimeException('voice_anchor_conflict');
+            } else {
                 throw new RuntimeException('voice_anchor_conflict');
             }
+        } elseif ($after !== '') {
+            $candidate = mb_strpos($text, $after);
+            if ($candidate === false) throw new RuntimeException('voice_anchor_conflict');
             $offset = $candidate;
-        } else {
-            $offset = $candidates[0];
+        } elseif ($before !== '') {
+            $candidate = mb_strpos($text, $before);
+            if ($candidate === false) throw new RuntimeException('voice_anchor_conflict');
+            $offset = $candidate + mb_strlen($before);
         }
 
         $point = ['blockId' => $blockId, 'offset' => $offset];
