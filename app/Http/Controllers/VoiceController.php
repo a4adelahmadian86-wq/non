@@ -21,7 +21,7 @@ class VoiceController extends Controller
     {
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
         $payload=['uid'=>(int)$request->user()->id,'locale'=>$request->string('locale')->toString(),'iat'=>time(),'exp'=>time()+120,'nonce'=>bin2hex(random_bytes(12))];
-        return response()->json(['ok'=>true,'token'=>$this->signStreamPayload($payload),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/')]);
+        return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/')]);
     }
 
     public function streamConfig(Request $request)
@@ -43,6 +43,8 @@ class VoiceController extends Controller
         $exclude=is_array($exclude)?array_values(array_filter(array_map('intval',$exclude))):[];
         $account=$router->best((string)$payload['locale'],$exclude);
         abort_unless($account,503,'voice_provider_unavailable');
+        $gatewaySecret=(string)config('services.voice_stream.gateway_secret','');
+        abort_unless($gatewaySecret!=='' && hash_equals(hash_hmac('sha256',$token,$gatewaySecret),(string)$request->header('X-Farast-Voice-Secret')),403);
         return response()->json(['ok'=>true,'provider'=>$account->provider,'model'=>$account->model,'region'=>$account->metadata['region']??env('GOOGLE_SPEECH_REGION','us'),'credentials'=>$account->credentials_array,'account_id'=>$account->id,'quality_score'=>(int)$account->quality_score,'capabilities'=>$account->capabilities],200,['Cache-Control'=>'no-store']);
     }
 
