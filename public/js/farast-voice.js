@@ -31,7 +31,7 @@
     return {blockId:point.blockId,offset,before:text.slice(Math.max(0,offset-48),offset),after:text.slice(offset,offset+48),...(point.itemId?{itemId:point.itemId}:{}),...(point.cellId?{cellId:point.cellId}:{})};
   }
   function resolveAnchor(model,anchor){if(!model||!anchor?.blockId)return null;const blocks=(model.sections||[]).flatMap(s=>s.blocks||[]),b=blocks.find(x=>x.id===anchor.blockId);if(!b)return null;let runs=b.runs||[];if(anchor.itemId){const item=(b.items||[]).find(x=>x.id===anchor.itemId);if(item)runs=item.runs||[]}if(anchor.cellId){for(const row of b.rows||[])for(const cell of row.cells||[])if(cell.id===anchor.cellId){runs=cell.runs||[]}}const t=runs.map(r=>r.text||'').join('');let at=Math.max(0,Math.min(t.length,Number(anchor.offset||0)));if(anchor.before&&anchor.after){const p=t.lastIndexOf(anchor.before);if(p>=0){const candidate=p+anchor.before.length;if(t.slice(candidate,candidate+anchor.after.length)===anchor.after)at=candidate}}return {blockId:anchor.blockId,offset:at,...(anchor.itemId?{itemId:anchor.itemId}:{}),...(anchor.cellId?{cellId:anchor.cellId}:{})}}
-  async function reconcileVoiceAnchor(kernel,documentId,anchor){const r=await fetch('/editor/documents/'+documentId+'/state',{headers:{Accept:'application/json'}});const j=await r.json().catch(()=>({}));if(!r.ok||!j.document_model)return null;if(typeof kernel.applyRemoteModel==='function')kernel.applyRemoteModel(j.document_model,{source:'voice-reconcile',preserveSelection:kernel.getSelection?.()||undefined});const resolved=resolveAnchor(j.document_model,anchor);return resolved?{anchor:resolved,revision:Number(j.revision||0)}:null}
+  async function reconcileVoiceAnchor(kernel,documentId,anchor){const r=await fetch('/editor/documents/'+documentId+'/state',{headers:{Accept:'application/json'}});const j=await r.json().catch(()=>({}));if(!r.ok||!j.document_model)return null;if(typeof kernel.applyRemoteModel==='function')kernel.applyRemoteModel(j.document_model,{source:'voice-reconcile',command:'VoiceReconcile',preserveSelection:kernel.getSelection?.()||undefined});const resolved=resolveAnchor(j.document_model,anchor);return resolved?{anchor:resolved,revision:Number(j.revision||0)}:null}
   async function commitFinal(text){
     const value=mergeFinal(text);if(!value)return;
     const fingerprint=normalize(value).toLocaleLowerCase();
@@ -52,7 +52,7 @@
       if(!r.ok)throw Object.assign(new Error(j.message||'درج متن صوتی ناموفق بود.'),{status:r.status,data:j});
       const liveSelection=kernel.getSelection?.();
       if(j.document_model&&typeof kernel.applyRemoteModel==='function'){
-        kernel.applyRemoteModel(j.document_model,{source:'voice',preserveSelection:liveSelection||selection});
+        kernel.applyRemoteModel(j.document_model,{source:'voice',command:'InsertText',preserveSelection:liveSelection||selection});
       }
       kernel.markSaved?.(Number(j.revision||baseRevision+1));
       if(liveSelection?.start?.blockId)kernel.restoreSelection?.(liveSelection);
