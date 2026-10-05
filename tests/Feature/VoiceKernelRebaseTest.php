@@ -89,6 +89,7 @@ class VoiceKernelRebaseTest extends TestCase
         $fresh = $document->fresh();
 
         $this->assertSame(3, $result['revision']);
+        $this->assertSame('سلام عزیز دنیا فراست', $result['document_model']['plain_text']);
         $this->assertSame('سلام عزیز دنیا فراست', $fresh->content_json['plain_text']);
         $this->assertSame('سلام عزیز دنیا فراست', $fresh->content_json['sections'][0]['blocks'][0]['runs'][0]['text']);
         $this->assertNotNull($result['document_model']);
