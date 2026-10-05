@@ -15,6 +15,8 @@ test('mock final transcript enters Kernel InsertText and supports undo', async (
   expect(voiceJs).not.toContain('kernel.reload');
   expect(voiceJs).toContain('sessionAnchor');
   expect(voiceJs).toContain('reconcileVoiceAnchor');
+  expect(voiceJs).not.toContain('/editor/voice/provider-config');
+  expect(voiceJs).not.toContain('credentials_array');
 
   await page.setContent(`<!doctype html>
 <html lang="fa" dir="rtl">
