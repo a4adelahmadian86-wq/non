@@ -122,5 +122,5 @@ class VoiceController extends Controller
 
     private function signStreamPayload(array $payload):string{$encoded=rtrim(strtr(base64_encode(json_encode($payload,JSON_UNESCAPED_SLASHES)),'+/','-_'),'=');return $encoded.'.'.hash_hmac('sha256',$encoded,(string)config('app.key'));}
     private function verifyStreamToken(string $token):?array{if($token===''||!str_contains($token,'.'))return null;[$payload,$signature]=array_pad(explode('.',$token,2),2,'');$expected=hash_hmac('sha256',$payload,(string)config('app.key'));if($signature===''||!hash_equals($expected,$signature))return null;$decoded=base64_decode(strtr($payload,'-_','+/').str_repeat('=',(4-strlen($payload)%4)%4),true);if($decoded===false)return null;$data=json_decode($decoded,true);if(!is_array($data)||empty($data['uid'])||empty($data['locale'])||(int)($data['exp']??0)<time())return null;return $data;}
-    private function gatewaySignature(string $token):string{return hash_hmac('sha256',$token,(string)config('app.key'));}
+    private function gatewaySignature(string $token):string{return hash_hmac('sha256',$token,(string)config('services.voice_stream.gateway_secret',''));}
 }
