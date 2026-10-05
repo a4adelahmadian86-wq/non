@@ -78,9 +78,9 @@ class VoiceKernelRebaseTest extends TestCase
                     ],
                     'anchor' => [
                         'blockId' => 'b1',
-                        'offset' => 5,
-                        'before' => 'سلام ',
-                        'after' => 'دنیا',
+                        'offset' => 14,
+                        'before' => 'سلام عزیز دنیا',
+                        'after' => '',
                     ],
                 ],
             ],
