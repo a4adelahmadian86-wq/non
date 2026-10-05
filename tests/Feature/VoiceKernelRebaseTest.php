@@ -18,7 +18,7 @@ class VoiceKernelRebaseTest extends TestCase
         $user=User::factory()->create();
         $model=['schema'=>3,'type'=>'document','direction'=>'rtl','sections'=>[['id'=>'section-1','blocks'=>[['id'=>'b1','type'=>'paragraph','runs'=>[['id'=>'r1','text'=>'سلام دنیا']]]]]],'comments'=>[],'reviewChanges'=>[],'bookmarks'=>[],'resources'=>[],'fields'=>[],'plain_text'=>'سلام دنیا'];
         $legacy=TypingDocument::create(['user_id'=>$user->id,'title'=>'Current','content'=>'<p>سلام دنیا</p>','status'=>'draft']);
-        $document=FarastDocument::create(['user_id'=>$user->id,'title'=>'Current','content'=>'<p>سلام دنیا</p>','content_json'=>$model,'document_format'=>'farast-v1','page_settings'=>app(\\App\\Services\\EditorDocumentService::class)->defaultPageSettings(),'revision'=>1,'status'=>'active']);
+        $document=FarastDocument::create(['user_id'=>$user->id,'title'=>'Current','content'=>'<p>سلام دنیا</p>','content_json'=>$model,'document_format'=>'farast-v1','page_settings'=>app(\App\Services\EditorDocumentService::class)->defaultPageSettings(),'revision'=>1,'status'=>'active']);
         $legacy->update(['farast_document_id'=>$document->id]);
         $result=app(EditorKernelToolHandler::class)->handle($user,['document_id'=>$document->id,'base_revision'=>1,'command'=>['name'=>'InsertText','input'=>['text'=>' فراست','range'=>['start'=>['blockId'=>'b1','offset'=>9],'end'=>['blockId'=>'b1','offset'=>9]]]]],['source'=>'voice']);
         $this->assertSame(2,$result['revision']);
