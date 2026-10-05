@@ -1,0 +1,1 @@
+{"name":"farast-voice-gateway","private":true,"type":"module","scripts":{"start":"node server.js"},"dependencies":{"@google-cloud/speech":"^7.0.0","microsoft-cognitiveservices-speech-sdk":"^1.44.0","ws":"^8.18.0"},"engines":{"node":">=20"}}
