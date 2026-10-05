@@ -29,7 +29,8 @@ class VoiceController extends Controller
         $token=(string)$request->input('token','');
         $payload=$this->verifyStreamToken($token);
         abort_unless($payload,401);
-        abort_unless(hash_equals($this->gatewaySignature($token),(string)$request->header('X-Farast-Voice-Gateway')),403);
+        $gatewaySecret=(string)config('services.voice_stream.gateway_secret','');
+        abort_unless($gatewaySecret!=='' && hash_equals($this->gatewaySignature($token),(string)$request->header('X-Farast-Voice-Gateway')),403);
         return response()->json(['ok'=>true,'gateway'=>true,'uid'=>(int)$payload['uid'],'locale'=>$payload['locale']],200,['Cache-Control'=>'no-store']);
     }
 
