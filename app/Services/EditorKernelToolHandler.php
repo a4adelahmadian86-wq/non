@@ -16,9 +16,18 @@ class EditorKernelToolHandler implements FarastToolHandler
     {
         $document = FarastDocument::whereKey((int) $input['document_id'])->where('user_id', $actor->id)->firstOrFail();
         $expected = (int) ($input['base_revision'] ?? -1);
-        if ((int) $document->revision !== $expected) throw new RuntimeException('document_revision_conflict');
-
         $command = $input['command'] ?? [];
+        $source = (string) ($context['source'] ?? 'ai-agent');
+        $model = is_array($document->content_json) ? $document->content_json : [];
+        if ((int) $document->revision !== $expected) {
+            if ($source !== 'voice' || !is_array($command['input']['anchor'] ?? null)) {
+                throw new RuntimeException('document_revision_conflict');
+            }
+            $command['input']['range'] = $this->rebaseVoiceRange($model, (array) $command['input']['anchor'], (array) ($command['input']['range'] ?? []));
+            $expected = (int) $document->revision;
+        }
+
+        $model = is_array($document->content_json) ? $document->content_json : [];
         $name = (string) ($command['name'] ?? '');
         $value = is_array($command['input'] ?? null) ? $command['input'] : [];
         $model = is_array($document->content_json) ? $document->content_json : [];
@@ -33,7 +42,6 @@ class EditorKernelToolHandler implements FarastToolHandler
             default => throw new RuntimeException('editor_command_not_supported'),
         };
 
-        $source = (string) ($context['source'] ?? 'ai-agent');
         $saved = $this->documents->saveCanonicalModel($document, $model, $source, $expected);
 
         return [
@@ -42,7 +50,64 @@ class EditorKernelToolHandler implements FarastToolHandler
             'transaction_id' => (string) ($context['transaction_id'] ?? Str::uuid()),
             'command' => $name,
             'effects' => $effects,
+            'document_model' => $saved['document_model'] ?? null,
         ];
+    }
+
+    private function rebaseVoiceRange(array $model, array $anchor, array $fallback): array
+    {
+        $blockId = (string) ($anchor['blockId'] ?? $fallback['start']['blockId'] ?? '');
+        $block = $this->findBlockRef($model, $blockId);
+        if (!$block) throw new RuntimeException('voice_anchor_not_found');
+
+        $runs = $block['runs'] ?? [];
+        if (isset($anchor['itemId'])) {
+            foreach (($block['items'] ?? []) as $item) {
+                if ((string) ($item['id'] ?? '') === (string) $anchor['itemId']) {
+                    $runs = $item['runs'] ?? [];
+                    break;
+                }
+            }
+        } elseif (isset($anchor['cellId'])) {
+            foreach (($block['rows'] ?? []) as $row) foreach (($row['cells'] ?? []) as $cell) {
+                if ((string) ($cell['id'] ?? '') === (string) $anchor['cellId']) {
+                    $runs = $cell['runs'] ?? [];
+                    break 2;
+                }
+            }
+        }
+
+        $text = $this->runsText($runs);
+        $offset = max(0, min(mb_strlen($text), (int) ($anchor['offset'] ?? $fallback['start']['offset'] ?? 0)));
+        $before = mb_substr((string) ($anchor['before'] ?? ''), -48);
+        $after = mb_substr((string) ($anchor['after'] ?? ''), 0, 48);
+
+        $candidates = [];
+        if ($before !== '') {
+            $pos = 0;
+            while (($found = mb_strpos($text, $before, $pos)) !== false) {
+                $candidate = $found + mb_strlen($before);
+                if ($after === '' || mb_substr($text, $candidate, mb_strlen($after)) === $after) $candidates[] = $candidate;
+                $pos = $found + 1;
+            }
+        }
+        if (count($candidates) !== 1) {
+            $candidate = $offset;
+            if ($after !== '' && mb_substr($text, $candidate, mb_strlen($after)) !== $after) {
+                $candidate = mb_strpos($text, $after);
+                if ($candidate === false) throw new RuntimeException('voice_anchor_conflict');
+            }
+            if ($before !== '' && $candidate > 0 && !str_ends_with(mb_substr($text, 0, $candidate), $before)) {
+                throw new RuntimeException('voice_anchor_conflict');
+            }
+            $offset = $candidate;
+        } else {
+            $offset = $candidates[0];
+        }
+
+        $point = ['blockId' => $blockId, 'offset' => $offset];
+        foreach (['itemId','cellId'] as $key) if (isset($anchor[$key])) $point[$key] = (string) $anchor[$key];
+        return ['start' => $point, 'end' => $point];
     }
 
     private function replaceRange(array &$model, ?array $range, string $text): array
