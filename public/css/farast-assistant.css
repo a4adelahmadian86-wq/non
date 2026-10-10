@@ -1,0 +1,71 @@
+/* FARAST global floating assistant — public pages only */
+#farast-global-assistant{position:fixed;z-index:100050;inset:auto 0 0 auto;pointer-events:none;font-family:Vazirmatn,FarastSans,IRANSans,Tahoma,sans-serif;direction:rtl}
+#farast-global-assistant *{box-sizing:border-box}
+.farast-assistant-launcher{
+  pointer-events:auto;position:fixed;right:22px;bottom:22px;z-index:100051;
+  width:56px;height:56px;border:0;border-radius:18px;cursor:pointer;
+  background:linear-gradient(145deg,#1769ff,#3d8bff);color:#fff;
+  box-shadow:0 12px 32px rgba(23,105,255,.32),0 2px 8px rgba(17,43,84,.12);
+  display:grid;place-items:center;font-size:22px;line-height:1;
+  transition:transform .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.farast-assistant-launcher:hover{transform:translateY(-2px);box-shadow:0 16px 36px rgba(23,105,255,.4)}
+.farast-assistant-launcher:focus-visible{outline:2px solid #1769ff;outline-offset:3px}
+.farast-assistant-launcher[aria-expanded="true"]{background:linear-gradient(145deg,#0f57db,#2f7cf0)}
+.farast-assistant-launcher .fa-dot{position:absolute;top:10px;left:12px;width:8px;height:8px;border-radius:50%;background:#19e08a;box-shadow:0 0 0 3px rgba(25,224,138,.25)}
+.farast-assistant-panel{
+  pointer-events:auto;position:fixed;right:22px;bottom:90px;z-index:100052;
+  width:min(360px,calc(100vw - 28px));height:min(520px,calc(100vh - 120px));
+  background:rgba(255,255,255,.98);border:1px solid #dce6f4;border-radius:20px;
+  box-shadow:0 24px 70px rgba(17,43,84,.22);display:flex;flex-direction:column;
+  overflow:hidden;opacity:0;transform:translateY(14px) scale(.98);pointer-events:none;
+  transition:opacity .2s ease,transform .2s ease;color:#172844;
+}
+.farast-assistant-panel.is-open{opacity:1;transform:none;pointer-events:auto}
+.farast-assistant-head{
+  display:flex;align-items:center;gap:12px;padding:14px 16px;
+  border-bottom:1px solid #edf1f6;background:linear-gradient(135deg,#f8fbff,#eef4ff);flex-shrink:0;
+}
+.farast-assistant-avatar{
+  width:40px;height:40px;border-radius:12px;background:#1769ff;color:#fff;
+  display:grid;place-items:center;font-size:16px;box-shadow:0 8px 18px rgba(23,105,255,.22);flex-shrink:0;
+}
+.farast-assistant-head > div{flex:1;min-width:0}
+.farast-assistant-head strong{display:block;font-size:13px}
+.farast-assistant-head small{display:block;margin-top:2px;color:#75849a;font-size:10px}
+.farast-assistant-close{
+  width:34px;height:34px;border:0;border-radius:11px;background:#fff;color:#738096;
+  cursor:pointer;font-size:18px;flex-shrink:0;
+}
+.farast-assistant-close:hover{color:#1769ff}
+.farast-assistant-messages{
+  flex:1;min-height:0;overflow:auto;padding:14px 16px;background:#fafbfd;
+}
+.farast-assistant-msg{max-width:92%;margin:0 0 12px;padding:10px 12px;border-radius:14px;font-size:12.5px;line-height:1.85}
+.farast-assistant-msg.bot{background:#fff;border:1px solid #e8eef8;border-top-right-radius:4px}
+.farast-assistant-msg.user{margin-right:auto;background:#1769ff;color:#fff;border-top-left-radius:4px}
+.farast-assistant-suggestions{display:flex;flex-wrap:wrap;gap:7px;padding:0 14px 12px;background:#fafbfd;flex-shrink:0}
+.farast-assistant-chip{
+  border:1px solid #d5e2f7;background:#fff;color:#1a4fa8;border-radius:10px;
+  padding:7px 10px;font-size:11px;cursor:pointer;font-family:inherit;
+}
+.farast-assistant-chip:hover{background:#eef4ff;border-color:#b8cff5}
+.farast-assistant-form{
+  display:flex;gap:8px;padding:12px;border-top:1px solid #edf1f6;background:#fff;flex-shrink:0;
+}
+.farast-assistant-form input{
+  min-width:0;flex:1;border:1px solid #dce4ef;border-radius:12px;padding:10px 12px;
+  outline:0;background:#f7f9fc;font:inherit;font-size:13px;color:#172844;
+}
+.farast-assistant-form input:focus{border-color:#1769ff;box-shadow:0 0 0 3px rgba(23,105,255,.12)}
+.farast-assistant-form button{
+  width:44px;border:0;border-radius:12px;background:#1769ff;color:#fff;cursor:pointer;font-size:15px;
+}
+.farast-assistant-form button:hover{background:#0f57db}
+.farast-assistant-note{padding:0 16px 12px;font-size:10px;color:#8b98a9;line-height:1.7;background:#fafbfd}
+.farast-assistant-note a{color:#1769ff;text-decoration:none}
+@media(max-width:600px){
+  .farast-assistant-launcher{right:14px;bottom:14px;width:52px;height:52px;border-radius:16px}
+  .farast-assistant-panel{right:10px;left:10px;bottom:76px;width:auto;height:min(540px,calc(100vh - 100px))}
+}
+body.editor-page-body #farast-global-assistant{display:none!important}
