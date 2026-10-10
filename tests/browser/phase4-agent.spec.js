@@ -15,7 +15,7 @@ async function openEditor(page){
  await expect(page).toHaveURL(/\/login\/password/);
  await page.locator('input[name="password"]').fill(password);await page.getByRole('button',{name:'ورود به حساب'}).click();
  await expect(page).toHaveURL(/\/projects\/new/);
- await page.getByRole('button',{name:/تایپ/}).click();await page.getByRole('button',{name:'خودم تایپ می‌کنم'}).click();
+ await page.locator('#choices .project-card').filter({hasText:'تایپ'}).first().click();await page.getByRole('button',{name:'خودم تایپ می‌کنم'}).click();
  await page.locator('#choices .project-card').first().click();await page.getByRole('button',{name:'ایجاد پروژه'}).click();
  await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready','1',{timeout:10000});
 }

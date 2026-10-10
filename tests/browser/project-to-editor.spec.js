@@ -27,7 +27,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(page).toHaveURL(/\/projects\/new/);
   await expect(page.getByRole('heading', { name: 'پروژه جدید' })).toBeVisible();
 
-  await page.getByRole('button', { name: /تایپ/ }).click();
+  await page.locator('#choices .project-card').filter({ hasText: 'تایپ' }).first().click();
   await page.getByRole('button', { name: 'خودم تایپ می‌کنم' }).click();
 
   const templateCards = page.locator('#choices .project-card');
