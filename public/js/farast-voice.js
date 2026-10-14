@@ -100,10 +100,11 @@
     const kernel=window.FarastEditor,selection=kernel?.getSelection?.();
     if(!kernel||!Number(kernel.state?.documentId||0)||!selection?.start?.blockId){showError('ابتدا داخل متن سند کلیک کنید تا محل درج مشخص شود.');return}
     try{
-      nativeRecognition=new SR();nativeRecognition.lang=locale.value;nativeRecognition.continuous=true;nativeRecognition.interimResults=true;
+      starting=true;$('fvNativeStart').disabled=true;locale.disabled=true;setStatus('در حال آماده‌سازی تشخیص گفتار…');
+      nativeRecognition=new SR();const nativeInstance=nativeRecognition;nativeRecognition.lang=locale.value;nativeRecognition.continuous=true;nativeRecognition.interimResults=true;
       sessionAnchor=voiceAnchor(selection);if(!sessionAnchor){showError('محل درج متن مشخص نیست.');nativeRecognition=null;return}
       sessionWords=0;lastFinalText='';finalFingerprints.clear();nativeQueue=Promise.resolve();words.textContent='۰';confidence.textContent='—';engine.textContent='مرورگر';modeLabel.textContent='حالت رایگان مرورگر · بدون API';clearError();
-      nativeRecognition.onstart=()=>{nativeActive=true;setControls(true);pauseBtn.disabled=true;$('fvNativeStart').disabled=true;setStatus('تشخیص گفتار رایگان فعال است');startTimer();panel.classList.add('is-listening');live.textContent='گوش می‌دهم…';live.classList.remove('is-empty')};
+      nativeRecognition.onstart=()=>{starting=false;nativeActive=true;setControls(true);pauseBtn.disabled=true;$('fvNativeStart').disabled=true;setStatus('تشخیص گفتار رایگان فعال است');startTimer();panel.classList.add('is-listening');live.textContent='گوش می‌دهم…';live.classList.remove('is-empty')};
       nativeRecognition.onresult=e=>{
         let interim='';
         for(let i=e.resultIndex;i<e.results.length;i++){
@@ -132,11 +133,12 @@
       }else{
         modeLabel.textContent='تشخیص گفتار مرورگر؛ ممکن است پردازش آنلاین باشد';
       }
+      if(nativeRecognition!==nativeInstance)return;
       nativeRecognition.start();
-    }catch(e){nativeActive=false;nativeRecognition=null;$('fvNativeStart').disabled=false;setControls(false);showError(e.message||'شروع تشخیص گفتار رایگان ناموفق بود.')}
+    }catch(e){starting=false;nativeActive=false;nativeRecognition=null;$('fvNativeStart').disabled=false;setControls(false);showError(e.message||'شروع تشخیص گفتار رایگان ناموفق بود.')}
   }
   function pauseResume(){if(!wanted)return;paused=!paused;if(paused){setStatus('مکث');panel.classList.remove('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-play"></i> ادامه'}else{setStatus('در حال گوش دادن');panel.classList.add('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-pause"></i> مکث'}}
-  function stop(){if(nativeActive&&nativeRecognition){try{nativeRecognition.stop()}catch{}nativeActive=false;return}clearTimeout(reconnectTimer);reconnectTimer=null;reconnectAttempts=0;if(!wanted&&!starting)return;starting=false;wanted=false;paused=false;setStatus('در حال پایان');stopTimer();closeAudio();const socket=ws;ws=null;clearTimeout(stopGraceTimer);if(socket?.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'stop'}))}catch{}clearTimeout(stopGraceTimer);stopGraceTimer=setTimeout(()=>{try{socket.close(1000,'normal')}catch{}},1500)}else{finish(true)}}
+  function stop(){if(nativeRecognition&&!nativeActive){try{nativeRecognition.abort()}catch{}nativeRecognition=null;starting=false;setControls(false);$('fvNativeStart').disabled=false;return}if(nativeActive&&nativeRecognition){try{nativeRecognition.stop()}catch{}nativeActive=false;return}clearTimeout(reconnectTimer);reconnectTimer=null;reconnectAttempts=0;if(!wanted&&!starting)return;starting=false;wanted=false;paused=false;setStatus('در حال پایان');stopTimer();closeAudio();const socket=ws;ws=null;clearTimeout(stopGraceTimer);if(socket?.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'stop'}))}catch{}clearTimeout(stopGraceTimer);stopGraceTimer=setTimeout(()=>{try{socket.close(1000,'normal')}catch{}},1500)}else{finish(true)}}
   function finish(keep){clearTimeout(stopGraceTimer);stopGraceTimer=null;closeAudio();stopTimer();setControls(false);panel.classList.remove('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-pause"></i> مکث';if(interimNode){interimNode.replaceWith('');interimNode=null}if(keep){setStatus('پایان یافت');modeLabel.textContent='تایپ زنده با هوش مصنوعی';Sound()?.play('voiceStop',{gain:.72,cooldown:0})}}
   window.FarastVoiceRuntime={applyFinalTranscript:commitFinal,open,close,isOpen:()=>panel.classList.contains('is-open'),getSessionAnchor:()=>sessionAnchor};
   $('fvNativeStart').addEventListener('click',startNative);startBtn.addEventListener('click',start);pauseBtn.addEventListener('click',pauseResume);stopBtn.addEventListener('click',stop);$('fvClose').addEventListener('click',close);locale.addEventListener('change',()=>{if(wanted)showError('برای تغییر زبان ابتدا تایپ صوتی را متوقف کنید.')});mic.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();open()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('is-open'))close()});
