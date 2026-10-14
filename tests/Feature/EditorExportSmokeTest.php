@@ -50,7 +50,7 @@ class EditorExportSmokeTest extends TestCase
         $reservation = new FarastUsageReservation();
         $commerce = Mockery::mock(CommerceAuthorizationService::class);
         $commerce->shouldReceive('reserve')->once()->andReturn($reservation);
-        $commerce->shouldReceive('commit')->once()->andReturnNull();
+        $commerce->shouldReceive('commit')->once()->andReturn(new FarastUsageEvent());
         $this->app->instance(CommerceAuthorizationService::class, $commerce);
     }
 
