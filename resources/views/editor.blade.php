@@ -76,8 +76,9 @@
 <div id="versionDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>تاریخچه نسخه‌ها</strong><button type="button" data-dialog-close>×</button></header><div id="versionList"></div></div></div>
 @once
 {{-- پوستهٔ گوگل داکس روی هستهٔ فراست (فقط ظاهر؛ داده‌ها همان مسیر Kernel/سرور می‌روند) --}}
-<link rel="stylesheet" href="/css/docs-chrome.css?v=20261015b">
-<script src="/js/editor-docs-chrome.js?v=20261015b" defer></script>
+<link rel="stylesheet" href="/css/docs-chrome.css?v=20261015c">
+<script src="/js/editor-voice-hub.js?v=20261015c" defer></script>
+<script src="/js/editor-docs-chrome.js?v=20261015c" defer></script>
 @endonce
 <div id="commentDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>نظر جدید</strong><button type="button" data-dialog-close>×</button></header><textarea id="commentText" rows="5" placeholder="نظر خود را بنویسید"></textarea><div class="dialog-actions"><button id="commentSave" class="primary" type="button">ثبت نظر</button></div></div></div>
 @endsection

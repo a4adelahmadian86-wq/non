@@ -19,13 +19,34 @@
 }
 body.editor-page-body:has(#farastWord.farast-docs-mode){background:#f8fafc}
 
+/* ---------- فونت فارسی محلی (Vazirmatn از CDN گوگل — با فالبک Tahoma آفلاین) ---------- */
+@font-face{font-family:'Vazirmatn Local';font-style:normal;font-weight:400 700;font-display:swap;src:url('https://fonts.gstatic.com/s/vazirmatn/v18/Qw3a-Z2N52MXGcyUSymAL72LqA.woff2') format('woff2')}
+
 /* ---------- استتار ساختار قدومی (بدون حذف؛ فقط پنهان) ---------- */
+/* صفحه‌بندی مجدد کل اپ ادیتور در حالت داکس: هدر+نوارابزار/بوم/نوارپایین به‌صورت ستون تمام‌قد */
+#farastWord.farast-docs-mode{display:flex !important;flex-direction:column !important;height:100dvh;min-height:100dvh;max-width:none !important;width:auto !important;overflow:hidden !important;margin:0 !important;box-sizing:border-box}
+html:has(#farastWord.farast-docs-mode),body.editor-page-body:has(#farastWord.farast-docs-mode){height:100%;overflow:hidden;background:#f8fafc}
+body.editor-page-body #app-main:has(#farastWord.farast-docs-mode){position:static !important;inset:auto !important;width:auto !important;height:auto !important;max-width:none !important;display:block !important;overflow:hidden !important}
+body.editor-page-body>#app-main:has(#farastWord.farast-docs-mode)>*:not(#farastWord){display:none !important}
+#farastWord.farast-docs-mode *{box-sizing:border-box}
 #farastWord.farast-docs-mode > .farast-appbar,
 #farastWord.farast-docs-mode > .farast-menubar,
 #farastWord.farast-docs-mode > .farast-ribbon,
 #farastWord.farast-docs-mode > .farast-statusbar{display:none !important}
-#farastWord.farast-docs-mode main.farast-workspace{display:block;padding:0;margin:0;background:transparent;border:0}
-#farastWord.farast-docs-mode .farast-canvas-shell{padding:0;background:transparent;border:0}
+#farastWord.farast-docs-mode main.farast-workspace{display:flex !important;flex-direction:row !important;grid-template-columns:none !important;flex:1 1 auto;min-height:0;padding:0;margin:0;background:transparent;border:0;position:relative;z-index:1}
+#farastWord.farast-docs-mode .farast-canvas-shell{padding:0;background:transparent;border:0;flex:1 1 auto;min-width:0;display:flex !important;flex-direction:column !important;grid-template-rows:none !important;overflow:hidden}
+#farastWord.farast-docs-mode .farast-page-viewport{flex:1 1 auto;min-height:0;overflow:auto;background:#f0f4f9;padding:16px 0 80px;display:flex;flex-direction:column;align-items:center;gap:16px}
+#farastWord.farast-docs-mode .farast-nav-panel,#farastWord.farast-docs-mode .farast-ai-panel{z-index:120}
+/* برگهٔ هسته در پوستهٔ داکس: سایه و ابعاد گوگلی، بدون حاشیه‌های سنگین قبلی */
+#farastWord.farast-docs-mode .farast-page{width:min(850px,calc(100% - 32px))!important;min-height:0!important;background:#fff;border:1px solid #e0e0e0!important;border-radius:0!important;box-shadow:0 1px 2px 0 rgba(60,64,67,.30),0 1px 3px 1px rgba(60,64,67,.15)!important;padding:56px 72px 64px!important;margin:0 auto!important}
+#farastWord.farast-docs-mode .farast-editor{font-family:'B Nazanin','Vazirmatn Local',Vazirmatn,Tahoma,sans-serif!important;font-size:16px!important;line-height:1.9!important;color:#1f1f1f;min-height:200px;outline:none;caret-color:#0b57d0}
+#farastWord.farast-docs-mode .farast-editor ::selection{background:#c2ddf9}
+#farastWord.farast-docs-mode .farast-editor blockquote{border-inline-start:4px solid #ddd9d3;margin:8px 24px;padding-inline-start:12px;color:#5f6368}
+#farastWord.farast-docs-mode .farast-editor table{border-collapse:collapse;width:100%}
+#farastWord.farast-docs-mode .farast-editor td,#farastWord.farast-docs-mode .farast-editor th{border:1px solid #8a8a8a;padding:6px 8px;vertical-align:top}
+#farastWord.farast-docs-mode .farast-editor img{max-width:100%}
+#farastWord.farast-docs-mode .farast-editor a{color:#0b57d0;text-decoration:underline}
+#fdFallbackEditor{width:min(850px,calc(100vw - 32px));margin:0 auto;background:#fff;border:1px solid #e0e0e0;box-shadow:0 1px 2px 0 rgba(60,64,67,.30),0 1px 3px 1px rgba(60,64,67,.15);padding:56px 72px 64px}
 
 /* ---------- هدر: لوگو + عنوان + منوها + وضعیت ذخیره ---------- */
 .fd-top{display:flex;align-items:flex-start;gap:12px;padding:8px 16px 4px;background:var(--fd-chrome)}
@@ -68,30 +89,13 @@ body.editor-page-body:has(#farastWord.farast-docs-mode){background:#f8fafc}
 .fd-tb.color{position:relative}
 .fd-cbar{position:absolute;bottom:3px;left:6px;right:6px;height:3px;border-radius:2px;background:#000}
 
-/* ---------- بوم صفحه ---------- */
+/* ---------- بوم صفحه (حالت مستقل/فالبک) ---------- */
 #farastWord.farast-docs-mode .fd-canvas{flex:1;overflow:auto;background:#f0f4f9;padding:16px 0 80px}
 .fd-pages{display:flex;flex-direction:column;align-items:center;gap:16px}
-/* برگه‌های موجودِ هسته (farast-page) را به سبک صفحهٔ گوگل درمی‌آوریم */
-#farastWord.farast-docs-mode .fd-pages .farast-page{
-  width:min(850px,calc(100% - 32px));background:var(--fd-paper);
-  border:1px solid #e0e0e0;border-radius:0;
-  box-shadow:0 1px 2px 0 rgba(60,64,67,.30),0 1px 3px 1px rgba(60,64,67,.15);
-  margin:0 auto;
-}
-#farastWord.farast-docs-mode .fd-pages .farast-editor{
-  font-family:'B Nazanin',Vazirmatn,Tahoma,sans-serif;font-size:16px;line-height:1.9;color:#1f1f1f;
-  min-height:400px;caret-color:#0b57d0;
-}
-#farastWord.farast-docs-mode .fd-pages .farast-editor ::selection{background:#c2ddf9}
-#farastWord.farast-docs-mode .fd-pages .farast-editor blockquote{border-inline-start:4px solid #ddd9d3;margin:8px 24px;padding-inline-start:12px;color:#5f6368}
-#farastWord.farast-docs-mode .fd-pages .farast-editor table{border-collapse:collapse;width:100%}
-#farastWord.farast-docs-mode .fd-pages .farast-editor td,#farastWord.farast-docs-mode .fd-pages .farast-editor th{border:1px solid #8a8a8a;padding:6px 8px;vertical-align:top}
-#farastWord.farast-docs-mode .fd-pages .farast-editor img{max-width:100%}
-#farastWord.farast-docs-mode .fd-pages .farast-editor a{color:var(--fd-accent);text-decoration:underline}
 .fd-vi{color:#6b7a90;background:rgba(11,87,208,.09);border-radius:4px}
 
 /* ---------- نوار پایین ---------- */
-.fd-bottom{position:fixed;inset-inline:0;bottom:0;z-index:60;display:flex;gap:18px;align-items:center;padding:6px 18px;background:var(--fd-chrome);border-top:1px solid #e0e0e0;font-size:12.5px;color:var(--fd-ink2)}
+.fd-bottom{flex:none;z-index:60;display:flex;gap:18px;align-items:center;padding:6px 18px;background:var(--fd-chrome);border-top:1px solid #e0e0e0;font-size:12.5px;color:var(--fd-ink2)}
 .fd-bottom button{border:0;background:transparent;cursor:pointer;font:inherit;color:var(--fd-ink2);border-radius:6px;padding:3px 8px}
 .fd-bottom button:hover{background:var(--fd-hover)}
 
