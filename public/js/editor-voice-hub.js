@@ -85,42 +85,57 @@ function insertIntoDoc(text) {
   return false;
 }
 
-/* نمایش پیش‌نمایش موقت (interim) خاکستری مثل گوگل داکس */
+/* نمایش پیش‌نمایش موقت (interim) — دقیقاً مثل گوگل داکس: متن کم‌رنگ در مکان نشانگر.
+ * با Selection/Range بومی کار می‌کند (نه گرهٔ DOM جعلی) تا با مدل هسته سازگار باشد و پاک‌کردنش ساده و مطمئن باشد. */
 let interimEl = null;
-function clearInterim() { if (interimEl) { try { interimEl.remove(); } catch {} interimEl = null; } }
+function hideInterimSel() { try { const s = getSelection(); if (s && s.rangeCount > 1) s.removeAllRanges(); } catch {} }
+function clearInterim() {
+  hideInterimSel();
+  if (interimEl) { try { interimEl.remove(); } catch {} interimEl = null; }
+}
 function showInterim(t) {
   if (!t) return clearInterim();
   const ed = surfaceEl(); if (!ed) return;
+  restoreSel();
+  const s = getSelection(); if (!s || !s.rangeCount) return;
+  const r = s.getRangeAt(0);
+  if (!ed.contains(r.startContainer)) return;
+  // گرهٔ موقت contenteditable=false (فقط برای استایل زیرخط؛ در مدل سند ذخیره نمی‌شود)
   if (!interimEl || !ed.contains(interimEl)) {
-    restoreSel();
-    const s = getSelection(); if (!s.rangeCount) return;
-    const r = s.getRangeAt(0); r.collapse(false);
+    const c = r.cloneRange(); c.collapse(false);
     interimEl = document.createElement('span'); interimEl.className = 'fd-vi'; interimEl.setAttribute('contenteditable', 'false');
-    try { r.insertNode(interimEl); } catch { return; }
-    const nr = document.createRange(); nr.setStartAfter(interimEl); nr.collapse(true); s.removeAllRanges(); s.addRange(nr);
+    try { c.insertNode(interimEl); } catch { interimEl = null; return; }
   }
   interimEl.textContent = t;
+  try {
+    const b = document.createRange(); b.selectNodeContents(interimEl);
+    s.removeAllRanges(); s.addRange(b); s.addRange(r, 0); // رنج دوم = انتخاب «موقتی» که مرورگر زیرخط می‌کند
+  } catch { /* اگر مرورگر رنج چندگانه را نپذیرفت، فقط متن خاکستری دیده می‌شود */ }
 }
 
 /* ---------- وضعیت موتورهای قابل استفاده ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function isAuthed() { return $('#farastWord')?.dataset.authenticated === '1'; }
 function engines() {
   const list = [];
   if (SR) list.push({ id: 'native', label: 'موتور بومی مرورگر (رایگان)' });
-  const tokenable = !!document.querySelector('meta[name="csrf-token"]') && ($('#farastWord')?.dataset.authenticated === '1');
-  if (!SR && tokenable) list.push({ id: 'cloud', label: 'موتور ابری فراست (WebSocket)' });
-  if (!list.length && navigator.mediaDevices?.getUserMedia) list.push({ id: 'stt-api', label: 'اتصال به سرویس تبدیل گفتار' });
+  // موتور ابری سایت در هر مرورگری کار می‌کند (WebSocket یا HTTP تکه‌ای) — فقط نیازمند ورود به حساب
+  if (isAuthed() && navigator.mediaDevices?.getUserMedia) list.push({ id: 'cloud', label: 'موتور ابری فراست (بدون محدودیت مرورگر)' });
+  if (navigator.mediaDevices?.getUserMedia && !SR && !isAuthed()) list.push({ id: 'stt-api', label: 'اتصال به سرویس تبدیل گفتار' });
   return list;
 }
 window.FarastVoiceHub = {
-  version: '1.0.0',
+  version: '1.1.0',
   hasNative: () => !!SR,
+  isAuthed,
   engines,
-  processFinalText, insertIntoDoc, showInterim, clearInterim, surfaceEl,
+  processFinalText, insertIntoDoc, showInterim, clearInterim, surfaceEl, hideInterimSel,
 };
 
 /* ===================== موتور ابری فراست (فايرفاکس و بقیه) =====================
- * دقیقاً همان پروتکل FarastVoiceRuntime: توکن یک‌بارمصرف + WebSocket + PCM 48k.
+ * دو مسیر، هر دو روی سرور خود سایت (رایگان برای شما تا سهمیهٔ سرویس‌های ابری):
+ *  الف) استریم زندهٔ WebSocket (اگر گیتوی VOICE_STREAM_URL بالا باشد) — interim زنده
+ *  ب) Fallback خودکار: ضبط قطعه‌ها با MediaRecorder → /editor/voice/transcribe (همان موتور Google/Gemini سایت)
  * اگر Runtime اصلی در دسترس باشد، همان باز می‌شود (بدون تکرار پیاده‌سازی). */
 async function startCloud(ctx) {
   const rt = window.FarastVoiceRuntime;
@@ -128,6 +143,15 @@ async function startCloud(ctx) {
   const csrf = $('meta[name="csrf-token"]')?.content || '';
   const app = $('#farastWord');
   if (!app || app.dataset.authenticated !== '1') throw new Error('برای موتور ابری وارد حساب شوید.');
+  try {
+    return await startCloudStream(ctx, csrf);
+  } catch (e) {
+    // گیتوی در دسترس نیست؟ مسیر HTTP chunked را امتحان کن (همیشه کار می‌کند)
+    ctx.onStatus('اتصال زندهٔ وب‌سوکت در دسترس نبود؛ حالت تکه‌ای فعال شد…');
+    return await startCloudChunks(ctx, csrf, e?.message || '');
+  }
+}
+async function startCloudStream(ctx, csrf) {
   ctx.onStatus('در حال اتصال به موتور ابری…');
   const r = await fetch('/editor/voice/stream-token', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ locale: ctx.lang() }) });
   const data = await r.json().catch(() => ({}));
@@ -159,6 +183,64 @@ async function startCloud(ctx) {
   ws.onerror = () => ctx.onError('ارتباط با موتور ابری برقرار نشد.');
   ws.onclose = () => { if (!closed) cleanup(); };
   return { stop: cleanup, mode: 'cloud' };
+}
+
+/* ---------- حالت تکه‌ای ابری (Firefox و هر مرورگر بدون وب‌سوکت/گیتوی) ----------
+ * ضبط قطعه‌قطعه با MediaRecorder، ارسال هر قطعه به /editor/voice/transcribe (موتور Google/Gemini خود سایت).
+ * حلقه بی‌وقفه: همزمان که قطعهٔ n در سرور پردازش می‌شود، قطعهٔ n+1 در حال ضبط است. */
+async function startCloudChunks(ctx, csrf, gwErr) {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error(gwErr || 'این مرورگر امکان ضبط صدا را ندارد.');
+  const pickMime = () => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+  let stopped = false, inflight = Promise.resolve(), lastFinal = '', seq = 0;
+  const transcribe = blob => {
+    if (!blob || blob.size < 2000) return;
+    ctx.onStatus('در حال پردازش…');
+    inflight = inflight.then(async () => {
+      try {
+        const fd = new FormData(); fd.append('audio', blob, 'chunk-' + (++seq) + '.webm'); fd.append('locale', ctx.lang());
+        const r = await fetch('/editor/voice/transcribe', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: fd });
+        const j = await r.json().catch(() => ({}));
+        const text = String(j.text || '').trim();
+        if (j.ok && text) {
+          clearInterim();
+          let t = text; // مرز قطعه‌ها گاهی کلمهٔ مشترک برمی‌دارد؛ تکرار ابتدایی حذف می‌شود
+          if (lastFinal && t.startsWith(lastFinal)) t = t.slice(lastFinal.length).trim();
+          else if (lastFinal && lastFinal.endsWith(t)) t = '';
+          if (t) { lastFinal = text; ctx.onFinal(t); }
+        } else if (!j.ok && j.message) ctx.onError(j.message);
+      } catch (e) { ctx.onError('ارسال صوت ناموفق بود: ' + (e?.message || '')); }
+      if (!stopped) ctx.onStatus('در حال گوش دادن (ابر · تکه‌ای)…');
+    });
+  };
+  const recordOnce = () => new Promise(resolve => {
+    let media;
+    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
+      .then(m => {
+        media = m;
+        const mime = pickMime();
+        const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
+        const chunks = [];
+        rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onerror = () => {};
+        rec.onstop = () => {
+          media.getTracks().forEach(t => { try { t.stop(); } catch {} });
+          resolve(new Blob(chunks, { type: mime || 'audio/webm' }));
+        };
+        try { rec.start(1000); } catch { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
+        setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 2500);
+      })
+      .catch(err => { if (!stopped) ctx.onError('دسترسی به میکروفون ممکن نشد: ' + (err?.message || err?.name || '')); resolve(null); });
+  });
+  const loop = async () => {
+    while (!stopped) {
+      const blob = await recordOnce();
+      if (stopped || !blob) break;
+      transcribe(blob);
+    }
+  };
+  ctx.onStatus('در حال گوش دادن (ابر · تکه‌ای)…'); ctx.onLive(true);
+  loop();
+  return { stop: () => { stopped = true; ctx.onStopped(); }, mode: 'cloud-chunks' };
 }
 
 /* ===================== موتور سوم: میکروفون + سرویس STT قابل پیکربندی =====================

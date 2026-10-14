@@ -274,9 +274,16 @@ const SIZES = [8,9,10,11,12,14,16,18,20,24,28,32,36,48,72];
 
 /* ===================== انتخاب متن محفوظ ===================== */
 let saved = null;
+let wantListen = false; // با startVoice/stopVoice در بخش صوت به‌روز می‌شود
+/* حفظ انتخاب متن هنگام ویرایش دستی در حین گوش دادن (منطق گوگل داکس: تایپ دستی، صوت را قطع نمی‌کند) */
 document.addEventListener('selectionchange', () => {
   const s = getSelection(); const ed = surface();
-  if (ed && s.rangeCount && ed.contains(s.anchorNode)) { saved = s.getRangeAt(0).cloneRange(); window.__fdSavedRange = saved; syncToolStates(); }
+  if (ed && s.rangeCount && ed.contains(s.anchorNode)) {
+    const r = s.getRangeAt(0);
+    saved = r.cloneRange(); window.__fdSavedRange = saved;
+    if (wantListen) hub()?.hideInterimSel?.(); // کاربر با دست نشانگر را جابه‌جا کرد؛ ماسک interim کنار می‌رود
+    syncToolStates();
+  }
 });
 function restoreSel() { const ed = surface(); if (!ed) return; ed.focus({ preventScroll: true }); if (saved) { const s = getSelection(); s.removeAllRanges(); s.addRange(saved); } }
 function currentEl() { const ed = surface(); const s = getSelection(); let n = s && s.anchorNode; if (!n || !ed || !ed.contains(n)) return null; return n.nodeType === 3 ? n.parentElement : n; }
@@ -779,9 +786,9 @@ document.addEventListener('keydown', e => {
 
 /* ===================== تایپ صوتی — معماری چندلایه (Hub) =====================
  * لایهٔ ۱: Web Speech API مرورگر (رایگان، مثل گوگل داکس) — Chrome/Edge/Safari/Opera/Samsung Internet
- * لایهٔ ۲: موتور ابری فراست (WebSocket) — Firefox و هر مرورگر بدون موتور بومی
+ * لایهٔ ۲: موتور ابری فراست (سرور خود سایت: WebSocket زنده یا HTTP تکه‌ای) — Firefox و هر مرورگر دیگر
  * لایهٔ ۳: میکروفون + سرویس STT قابل تنظیم (Whisper محلی و…) — آخرین راه‌حل
- * در همهٔ حالت‌ها: interim خاکستری، commit در مکان نشانگر، دستورات صوتی فارسی، ارقام فارسی. */
+ * در همهٔ حالت‌ها: interim زیرخط‌دار در مکان نشانگر، دستورات صوتی فارسی، ارقام فارسی. */
 const hub = () => window.FarastVoiceHub;
 const vbox = document.createElement('aside');
 vbox.className = 'fd-vbox'; vbox.id = 'fdVoiceBox'; vbox.setAttribute('aria-label', 'تایپ صوتی');
@@ -807,23 +814,22 @@ if ($('#source')) $('#source').setAttribute('accept', 'image/*,.pdf,.zip,.docx,.
 
 let engineMode = 'auto';           // auto | native | cloud | stt-api
 let activeHandle = null;           // {stop(), mode}
-let wantListen = false;
 let rec = null, lastStart = 0, fastEnds = 0;
 
 function engineLabel() {
   const el = $('#fdVEngine'); if (!el) return;
-  const names = { native: 'موتور بومی مرورگر · رایگان', cloud: 'موتور ابری فراست', 'stt-api': 'سرویس تبدیل گفتار شما', runtime: 'پنل حرفه‌ای فراست' };
+  const names = { native: 'موتور بومی مرورگر · رایگان', cloud: 'موتور ابری فراست · زنده', 'cloud-chunks': 'موتور ابری فراست · تکه‌ای', 'stt-api': 'سرویس تبدیل گفتار شما', runtime: 'پنل حرفه‌ای فراست' };
   el.textContent = 'موتور: ' + (names[activeHandle?.mode || currentEngineId()] || '—');
 }
 function currentEngineId() {
   if (engineMode !== 'auto') return engineMode;
-  return hub()?.hasNative?.() ? 'native' : (($('#farastWord')?.dataset.authenticated === '1') ? 'cloud' : 'stt-api');
+  return hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : 'stt-api');
 }
 function pickEngineInteractive() {
   const opts = [
     ['auto', 'خودکار (توصیه می‌شود)'],
-    ['native', 'موتور بومی مرورگر' + (hub()?.hasNative?.() ? '' : ' — در این مرورگر موجود نیست')],
-    ['cloud', 'موتور ابری فراست' + ($('#farastWord')?.dataset.authenticated === '1' ? '' : ' — نیازمند ورود به حساب')],
+    ['native', 'موتور بومی مرورگر' + (hub()?.hasNative?.() ? '' : ' — در این مرورگر موجود نیست؛ به‌صورت خودکار از موتور ابری استفاده می‌شود')],
+    ['cloud', 'موتور ابری فراست' + (hub()?.isAuthed?.() ? '' : ' — نیازمند ورود به حساب')],
     ['stt-api', 'سرویس تبدیل گفتار شخصی (Whisper محلی و…)'],
   ];
   const list = document.createElement('div'); list.className = 'fd-list';
@@ -847,15 +853,20 @@ function toggleVoicePanel() {
   const vb = $('[data-tool=voice]', toolbarEl); if (vb) vb.classList.toggle('on', show);
   $('#fdVEngineBtn').hidden = !show;
   engineLabel();
-  if (show && !hub()?.hasNative?.()) { $('#fdVMsg').textContent = 'موتور بومی این مرورگر فعال است: ابری/شخصی'; }
-  else if (show) { $('#fdVMsg').textContent = 'برای شروع کلیک کنید'; }
+  if (show) {
+    if (!hub()?.hasNative?.()) {
+      $('#fdVMsg').textContent = hub()?.isAuthed?.()
+        ? 'این مرورگر موتور بومی ندارد؛ با کلیک روی دکمه، موتور ابری فراست فعال می‌شود.'
+        : 'این مرورگر موتور بومی ندارد؛ برای استفاده از موتور ابری وارد حساب شوید یا دکمه را بزنید.';
+    } else $('#fdVMsg').textContent = 'برای شروع کلیک کنید';
+  }
   if (!show) stopVoice();
   syncToolStates();
 }
 function voiceUI(on) {
   $('#fdMicBtn').classList.toggle('live', on);
   const vb = $('[data-tool=voice]', toolbarEl); if (vb) vb.classList.toggle('rec', on);
-  $('#fdVMsg').textContent = on ? 'در حال گوش دادن…' : 'برای شروع کلیک کنید';
+  if (on || $('#fdVMsg').textContent.includes('کلیک') || $('#fdVMsg').textContent.includes('موتور')) $('#fdVMsg').textContent = on ? 'در حال گوش دادن…' : ($('#fdVMsg').dataset.keep || 'برای شروع کلیک کنید');
 }
 
 /* context مشترک همهٔ موتورها */
@@ -864,8 +875,8 @@ function hubCtx() {
     lang: () => $('#fdVLang').value,
     onStatus: t => { const m = $('#fdVMsg'); if (m) m.textContent = t; },
     onError: t => { toast(t); const m = $('#fdVMsg'); if (m) m.textContent = t; },
-    onLive: on => voiceUI(!!on),
-    onStopped: () => { wantListen = false; voiceUI(false); hub()?.clearInterim?.(); },
+    onLive: on => { $('#fdMicBtn').classList.toggle('live', !!on); const vb = $('[data-tool=voice]', toolbarEl); if (vb) vb.classList.toggle('rec', !!on); },
+    onStopped: () => { wantListen = false; activeHandle = null; $('#fdMicBtn').classList.remove('live'); const vb = $('[data-tool=voice]', toolbarEl); if (vb) vb.classList.remove('rec'); $('#fdVMsg').textContent = 'برای شروع کلیک کنید'; hub()?.clearInterim?.(); },
     onInterim: t => hub()?.showInterim?.(t),
     onFinal: t => handleFinal(t),
   };
@@ -883,10 +894,10 @@ function handleFinal(raw) {
 
 /* ---------- موتور بومی (Web Speech API) ---------- */
 function startNative() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return false;
-  restoreSel();
-  rec = new SR(); rec.lang = $('#fdVLang').value; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+  const SRn = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SRn) return false;
+  restoreSel(); hub()?.clearInterim?.(); // گرهٔ interim ممکن است در DOM مانده باشد؛ قبل از شروع تازه پاک شود
+  rec = new SRn(); rec.lang = $('#fdVLang').value; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
   rec.onstart = () => { lastStart = Date.now(); voiceUI(true); };
   rec.onresult = e => {
     let interim = '';
@@ -921,13 +932,14 @@ function startNative() {
 async function startVoice() {
   if (wantListen || activeHandle) return;
   const ctx = hubCtx();
-  const prefer = engineMode === 'auto' ? (hub()?.hasNative?.() ? 'native' : (($('#farastWord')?.dataset.authenticated === '1') ? 'cloud' : 'stt-api')) : engineMode;
+  const prefer = engineMode === 'auto' ? (hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : 'stt-api')) : engineMode;
   const order = prefer === 'native' ? ['native', 'cloud', 'stt-api'] : prefer === 'cloud' ? ['cloud', 'native', 'stt-api'] : ['stt-api', 'native', 'cloud'];
+  let lastErr = '';
   for (const id of order) {
     try {
       if (id === 'native') { if (startNative()) { engineLabel(); return; } continue; }
       if (id === 'cloud') {
-        if (!$('#farastWord') || $('#farastWord').dataset.authenticated !== '1') continue;
+        if (!hub()?.isAuthed?.()) continue;
         const h = await hub()?.startCloud?.(ctx);
         if (h) { wantListen = true; activeHandle = h.mode === 'runtime' ? { mode: 'runtime', stop: () => {} } : h; engineLabel(); return; }
       }
@@ -936,8 +948,9 @@ async function startVoice() {
         if (h) { wantListen = true; activeHandle = h; engineLabel(); return; }
       }
     } catch (err) {
-      ctx.onError(err?.message || 'راه‌اندازی موتور ناموفق بود');
-      if (id === order[order.length - 1]) { wantListen = false; voiceUI(false); }
+      lastErr = err?.message || '';
+      // اگر موتور اول شکست بخورد، بی‌صدا به لایهٔ بعد می‌رویم؛ فقط وقتی همه شکست خوردند پیام می‌دهیم
+      if (id === order[order.length - 1]) { ctx.onError(lastErr || 'هیچ موتور تایپ صوتی در دسترس نبود'); wantListen = false; voiceUI(false); }
     }
   }
   wantListen = false; voiceUI(false);
