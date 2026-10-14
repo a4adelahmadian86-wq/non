@@ -77,6 +77,19 @@
 <div id="findDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="findTitle"><header><strong id="findTitle">یافتن و جایگزینی</strong><button type="button" data-dialog-close>×</button></header><label>یافتن<input id="findInput" autocomplete="off"></label><label>جایگزین با<input id="replaceInput" autocomplete="off"></label><div class="dialog-actions"><button id="findNext" type="button">بعدی</button><button id="replaceOne" type="button">جایگزینی</button><button id="replaceAll" type="button" class="primary">جایگزینی همه</button></div></div></div>
 <div id="versionDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>تاریخچه نسخه‌ها</strong><button type="button" data-dialog-close>×</button></header><div id="versionList"></div></div></div>
 <div id="commentDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>نظر جدید</strong><button type="button" data-dialog-close>×</button></header><textarea id="commentText" rows="5" placeholder="نظر خود را بنویسید"></textarea><div class="dialog-actions"><button id="commentSave" class="primary" type="button">ثبت نظر</button></div></div></div>
+<style>
+.voice-dialog-card{width:min(680px,calc(100vw - 28px));max-height:calc(100vh - 36px);overflow:auto}
+.voice-help{color:#475569;font-size:13px;line-height:1.9;margin:8px 0 14px}
+.voice-controls{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:12px 0}
+.voice-controls label,.voice-dialog-card>label{display:grid;gap:6px;flex:1;min-width:150px}
+.voice-controls select,.voice-upload input,.voice-dialog-card textarea{font:inherit;border:1px solid #cbd5e1;border-radius:8px;padding:9px;background:#fff;color:#0f172a}
+.voice-status{min-height:22px;margin:8px 0;color:#334155;font-size:13px}
+.voice-status[data-error="1"]{color:#b91c1c}
+.voice-upload{display:flex;flex-direction:column;gap:7px;margin:12px 0;font-weight:600}
+#voiceTranscript{width:100%;resize:vertical;direction:auto;line-height:1.9}
+.farast-ribbon{display:flex;align-items:stretch;overflow-x:auto;min-height:58px;background:#fff;border-bottom:1px solid #dbe2ea}
+.farast-ribbon-group{flex-shrink:0}
+</style>
 <div id="voiceDialog" class="farast-dialog" hidden>
  <div class="dialog-card voice-dialog-card" role="dialog" aria-modal="true" aria-labelledby="voiceTitle">
   <header><strong id="voiceTitle">تایپ صوتی و تبدیل فایل صوتی به متن</strong><button type="button" data-voice-close aria-label="بستن">×</button></header>
