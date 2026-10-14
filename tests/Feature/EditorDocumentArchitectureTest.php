@@ -362,7 +362,7 @@ class EditorDocumentArchitectureTest extends TestCase
         $service = app(EditorDocumentService::class);
 
         $safe = $service->sanitizeHtml(
-            '<p dir="rtl" style="text-align:right;color:#123456;font-size:16px">سلام '
+            '<p dir="rtl" style="text-align:right;color:#123456;font-size:16px;margin-inline-start:12px">سلام '
             .'<a href="https://example.com/docs" target="_blank">راهنما</a> '
             .'<a href="mailto:help@example.com">پشتیبانی</a> '
             .'<img src="/editor/documents/1/assets/asset-safe.png" alt="تصویر"></p>'
@@ -374,11 +374,13 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertStringContainsString('src="/editor/documents/1/assets/asset-safe.png"', $safe);
         $this->assertStringContainsString('text-align:right', $safe);
         $this->assertStringContainsString('color:#123456', $safe);
+        $this->assertStringContainsString('margin-inline-start:12px', $safe);
         $this->assertStringContainsString('rel="noopener noreferrer"', $safe);
 
         $unsafe = $service->sanitizeHtml(
             '<p><a href="file:///etc/passwd">فایل</a>'
             .'<a href="ftp://example.com/a">FTP</a>'
+            .'<a href="java&#10;script:alert(1)">کنترل نویسه</a>'
             .'<a href="//evil.example/path">پیوند نسبی شبکه‌ای</a>'
             .'<img src="data:image/svg+xml;base64,PHN2Zz4=" alt="ناامن">'
             .'<span style="background-image:url(https://evil.example/pixel);color:red">متن سالم</span></p>'
@@ -387,6 +389,7 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertStringContainsString('متن سالم', $unsafe);
         $this->assertStringNotContainsString('file:///etc/passwd', $unsafe);
         $this->assertStringNotContainsString('ftp://example.com', $unsafe);
+        $this->assertStringNotContainsString('href="java', $unsafe);
         $this->assertStringNotContainsString('href="//evil.example/path"', $unsafe);
         $this->assertStringNotContainsString('data:image/svg+xml', $unsafe);
         $this->assertStringNotContainsString('url(', $unsafe);
