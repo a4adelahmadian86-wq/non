@@ -138,3 +138,14 @@ test('font size controls and default typography use points, not pixels', async (
   await expect.poll(async () => page.locator('.farast-editor').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(21);
   expect(await page.locator('.farast-editor').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThan(22);
 });
+
+test('document workspace starts focused and side panels open on demand', async ({ page }) => {
+  await openEditor(page);
+  await expect(page.locator('#navigationPane')).toHaveClass(/hidden/);
+  await expect(page.locator('#aiSidebar')).toHaveClass(/hidden/);
+  await page.locator('.farast-tab[data-tab="view"]').click();
+  await page.locator('#ribbon button[data-command="ai"]').click();
+  await expect(page.locator('#aiSidebar')).not.toHaveClass(/hidden/);
+  await page.locator('#aiSidebar [data-close-panel="aiSidebar"]').click();
+  await expect(page.locator('#aiSidebar')).toHaveClass(/hidden/);
+});
