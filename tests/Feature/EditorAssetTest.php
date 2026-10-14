@@ -1,15 +1,15 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\FarastStorageObject;
-use App\\Models\\TypingDocument;
-use App\\Models\\User;
-use App\\Services\\EditorDocumentService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Http\\UploadedFile;
-use Illuminate\\Support\\Facades\\Storage;
-use Tests\\TestCase;
+use App\Models\FarastStorageObject;
+use App\Models\TypingDocument;
+use App\Models\User;
+use App\Services\EditorDocumentService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
 class EditorAssetTest extends TestCase
 {
