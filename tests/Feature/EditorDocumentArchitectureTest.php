@@ -166,6 +166,37 @@ class EditorDocumentArchitectureTest extends TestCase
         ]);
     }
 
+    public function test_http_save_rejects_a_stale_second_writer_without_overwriting_newer_content(): void
+    {
+        $user = $this->makeUser();
+        $created = $this->actingAs($user)->postJson('/editor/documents', ['title' => 'تعارض HTTP']);
+        $created->assertOk();
+        $documentId = (int) $created->json('document_id');
+
+        $first = $this->actingAs($user)->postJson('/editor/save', [
+            'document_id' => $documentId,
+            'title' => 'تعارض HTTP',
+            'content' => '<p>نسخه جدید</p>',
+            'revision' => 1,
+            'source' => 'manual',
+        ]);
+        $first->assertOk()->assertJsonPath('revision', 2);
+
+        $stale = $this->actingAs($user)->postJson('/editor/save', [
+            'document_id' => $documentId,
+            'title' => 'تعارض HTTP',
+            'content' => '<p>نسخه قدیمی</p>',
+            'revision' => 1,
+            'source' => 'autosave',
+        ]);
+        $stale->assertStatus(409)->assertJsonPath('conflict', true);
+
+        $saved = TypingDocument::findOrFail($documentId)->farastDocument->fresh();
+        $this->assertSame(2, $saved->revision);
+        $this->assertStringContainsString('نسخه جدید', $saved->content);
+        $this->assertStringNotContainsString('نسخه قدیمی', $saved->content);
+    }
+
     public function test_legacy_schema_is_migrated_to_semantic_runs_without_data_loss(): void
     {
         $user = $this->makeUser();
