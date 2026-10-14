@@ -132,4 +132,13 @@ class EditorAssetTest extends TestCase
 
         $this->actingAs($user)->get($resource['url'])->assertNotFound();
     }
+    public function test_unknown_asset_status_and_missing_storage_record_fail_closed(): void
+    {
+        [$user, , $resource, $object] = $this->makeAsset('scanning');
+        $this->actingAs($user)->get($resource['url'])->assertNotFound();
+
+        $object->delete();
+        $this->actingAs($user)->get($resource['url'])->assertNotFound();
+    }
+
 }
