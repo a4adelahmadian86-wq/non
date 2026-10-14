@@ -149,3 +149,21 @@ test('document workspace starts focused and side panels open on demand', async (
   await page.locator('#aiSidebar [data-close-panel="aiSidebar"]').click();
   await expect(page.locator('#aiSidebar')).toHaveClass(/hidden/);
 });
+
+test('zoom commands update the real viewport and status indicator', async ({ page }) => {
+  await openEditor(page);
+  await page.locator('.farast-tab[data-tab="view"]').click();
+  await page.locator('#ribbon button[data-command="zoomIn"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.zoom)).toBeCloseTo(1.1, 1);
+  await expect(page.locator('#zoomValue')).toHaveText('110%');
+});
+
+test('document page fits supported viewport classes without page-width overflow', async ({ page }) => {
+  await openEditor(page);
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    const pageWidth = await page.locator('.farast-page').first().evaluate(el => el.getBoundingClientRect().width);
+    expect(pageWidth, 'page width at ' + viewport.width + 'px viewport').toBeLessThanOrEqual(viewport.width + 1);
+    await expect(page.locator('.farast-page').first()).toBeVisible();
+  }
+});
