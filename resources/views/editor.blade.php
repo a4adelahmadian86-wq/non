@@ -48,12 +48,7 @@
 #farastAgentPanel.open{pointer-events:auto}
 #farastAgentPanel.open *{pointer-events:auto}
 </style>
-<nav class="farast-tabs" aria-label="نوار فرمان">
-    @foreach(['home'=>'خانه','insert'=>'درج','layout'=>'طرح','design'=>'طراحی','review'=>'بازبینی','view'=>'نمایش','ai'=>'هوش مصنوعی'] as $tab=>$label)
-      <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}" @if($tab === 'ai') data-agent-open="1" @endif>{{ $label }}</button>
-    @endforeach
-  </nav>
-  <section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
+<section class="farast-ribbon" id="ribbon" aria-label="نوار ابزار ویرایش"></section>
   <main class="farast-workspace">
     <aside class="farast-nav-panel hidden" id="navigationPane" aria-label="پیمایش سند">
       <div class="panel-heading"><strong>پیمایش</strong><button type="button" data-close-panel="navigationPane" aria-label="بستن">×</button></div>
@@ -82,4 +77,17 @@
 <div id="findDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="findTitle"><header><strong id="findTitle">یافتن و جایگزینی</strong><button type="button" data-dialog-close>×</button></header><label>یافتن<input id="findInput" autocomplete="off"></label><label>جایگزین با<input id="replaceInput" autocomplete="off"></label><div class="dialog-actions"><button id="findNext" type="button">بعدی</button><button id="replaceOne" type="button">جایگزینی</button><button id="replaceAll" type="button" class="primary">جایگزینی همه</button></div></div></div>
 <div id="versionDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>تاریخچه نسخه‌ها</strong><button type="button" data-dialog-close>×</button></header><div id="versionList"></div></div></div>
 <div id="commentDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>نظر جدید</strong><button type="button" data-dialog-close>×</button></header><textarea id="commentText" rows="5" placeholder="نظر خود را بنویسید"></textarea><div class="dialog-actions"><button id="commentSave" class="primary" type="button">ثبت نظر</button></div></div></div>
+<div id="voiceDialog" class="farast-dialog" hidden>
+ <div class="dialog-card voice-dialog-card" role="dialog" aria-modal="true" aria-labelledby="voiceTitle">
+  <header><strong id="voiceTitle">تایپ صوتی و تبدیل فایل صوتی به متن</strong><button type="button" data-voice-close aria-label="بستن">×</button></header>
+  <p class="voice-help">برای تایپ زنده، میکروفون را روشن کنید. برای تبدیل فایل ضبط‌شده، MP3/WAV/WebM را انتخاب کنید. متن فقط پس از تأیید شما وارد سند می‌شود.</p>
+  <div class="voice-controls"><label>زبان گفتار<select id="voiceLocale"><option value="fa-IR">فارسی</option><option value="en-US">English</option><option value="ar-SA">العربية</option></select></label><button id="voiceLiveStart" type="button" class="primary">شروع تایپ زنده</button><button id="voiceLiveStop" type="button" disabled>توقف</button></div>
+  <div id="voiceLiveStatus" class="voice-status" aria-live="polite">میکروفون هنوز فعال نشده است.</div>
+  <label class="voice-upload">تبدیل فایل صوتی <input id="voiceFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"></label>
+  <div id="voiceFileStatus" class="voice-status" aria-live="polite"></div>
+  <label>پیش‌نمایش متن <textarea id="voiceTranscript" rows="6" placeholder="متن تشخیص‌داده‌شده اینجا نمایش داده می‌شود…"></textarea></label>
+  <div class="dialog-actions"><button id="voiceInsert" type="button" class="primary" disabled>درج در محل مکان‌نما</button><button id="voiceClear" type="button">پاک‌کردن پیش‌نمایش</button></div>
+ </div>
+</div>
+<script src="{{ asset('js/voice-runtime.js') }}" defer></script>
 @endsection
