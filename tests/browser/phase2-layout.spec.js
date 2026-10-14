@@ -9,7 +9,7 @@ async function openEditor(page) {
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'ورود به حساب' }).click();
   await expect(page).toHaveURL(/\/projects\/new/);
-  await page.getByRole('button', { name: /تایپ/ }).click();
+  await page.getByRole('button', { name: /تایپ آماده استفاده/ }).click();
   await page.getByRole('button', { name: 'خودم تایپ می‌کنم' }).click();
   await page.locator('#choices .project-card').first().click();
   await page.getByRole('button', { name: 'ایجاد پروژه' }).click();
