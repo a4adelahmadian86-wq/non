@@ -15,7 +15,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
 @if($isDashboard)<link rel="stylesheet" href="/css/dashboard-navigation.css">@endif
 @if($isEditor)
-<meta name="farast-capabilities" content='@json($farastCapabilities)'><link rel="stylesheet" href="/css/editor-architecture.css?v=20261014a"><link rel="stylesheet" href="/css/editor-layout.css?v=20261014a"><link rel="stylesheet" href="/css/voice.css?v=20261010">
+<meta name="farast-capabilities" content='@json($farastCapabilities)'><link rel="stylesheet" href="/css/editor-architecture.css?v=20261014b"><link rel="stylesheet" href="/css/editor-layout.css?v=20261014a"><link rel="stylesheet" href="/css/voice.css?v=20261010">
 @endif
 @if($isAdmin)<link rel="stylesheet" href="/css/admin.css"><link rel="stylesheet" href="/css/farast-control.css">@endif
 @if($isAuthPage)<link rel="stylesheet" href="/css/auth.css">@endif
