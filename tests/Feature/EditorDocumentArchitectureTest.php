@@ -357,4 +357,41 @@ class EditorDocumentArchitectureTest extends TestCase
         $this->assertSame('rtl', $saved['direction']);
     }
 
+    public function test_html_sanitizer_allows_safe_rtl_content_and_rejects_unsafe_urls_and_css(): void
+    {
+        $service = app(EditorDocumentService::class);
+
+        $safe = $service->sanitizeHtml(
+            '<p dir="rtl" style="text-align:right;color:#123456;font-size:16px">سلام '
+            .'<a href="https://example.com/docs" target="_blank">راهنما</a> '
+            .'<a href="mailto:help@example.com">پشتیبانی</a> '
+            .'<img src="/editor/documents/1/assets/asset-safe.png" alt="تصویر"></p>'
+        );
+
+        $this->assertStringContainsString('سلام', $safe);
+        $this->assertStringContainsString('href="https://example.com/docs"', $safe);
+        $this->assertStringContainsString('href="mailto:help@example.com"', $safe);
+        $this->assertStringContainsString('src="/editor/documents/1/assets/asset-safe.png"', $safe);
+        $this->assertStringContainsString('text-align:right', $safe);
+        $this->assertStringContainsString('color:#123456', $safe);
+        $this->assertStringContainsString('rel="noopener noreferrer"', $safe);
+
+        $unsafe = $service->sanitizeHtml(
+            '<p><a href="file:///etc/passwd">فایل</a>'
+            .'<a href="ftp://example.com/a">FTP</a>'
+            .'<a href="//evil.example/path">پیوند نسبی شبکه‌ای</a>'
+            .'<img src="data:image/svg+xml;base64,PHN2Zz4=" alt="ناامن">'
+            .'<span style="background-image:url(https://evil.example/pixel);color:red">متن سالم</span></p>'
+        );
+
+        $this->assertStringContainsString('متن سالم', $unsafe);
+        $this->assertStringNotContainsString('file:///etc/passwd', $unsafe);
+        $this->assertStringNotContainsString('ftp://example.com', $unsafe);
+        $this->assertStringNotContainsString('href="//evil.example/path"', $unsafe);
+        $this->assertStringNotContainsString('data:image/svg+xml', $unsafe);
+        $this->assertStringNotContainsString('url(', $unsafe);
+        $this->assertStringNotContainsString('background-image', $unsafe);
+        $this->assertStringContainsString('color:red', $unsafe);
+    }
+
 }
