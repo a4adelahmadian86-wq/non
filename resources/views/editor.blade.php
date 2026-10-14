@@ -39,21 +39,14 @@
  <div class="farast-menu"><button type="button" aria-haspopup="true" aria-expanded="false">راهنما</button><div class="farast-menu-panel" role="menu"><a role="menuitem" href="{{ route('support') }}">راهنما و پشتیبانی</a><a role="menuitem" href="{{ route('pricing') }}">قیمت‌گذاری</a></div></div>
 </nav>
   <style>
-.farast-appbar,.farast-menubar,.farast-tabs,.farast-ribbon{position:relative;z-index:20}
+.farast-appbar,.farast-menubar,.farast-ribbon{position:relative;z-index:20}
 .farast-workspace{position:relative;z-index:1}
-.farast-ribbon{min-height:56px;pointer-events:none}
-.farast-ribbon *{pointer-events:none}
-.farast-ribbon button,.farast-ribbon select,.farast-ribbon input,.farast-ribbon a,[data-command]{pointer-events:auto}
+.farast-ribbon{min-height:56px}
 #farastAgentPanel{position:fixed;inset-inline-end:24px;bottom:72px;z-index:2000;pointer-events:none}
 #farastAgentPanel.open{pointer-events:auto}
 #farastAgentPanel.open *{pointer-events:auto}
 </style>
-<nav class="farast-tabs" aria-label="نوار فرمان">
-    @foreach(['home'=>'خانه','insert'=>'درج','layout'=>'طرح','design'=>'طراحی','review'=>'بازبینی','view'=>'نمایش','ai'=>'هوش مصنوعی'] as $tab=>$label)
-      <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}" @if($tab === 'ai') data-agent-open="1" @endif>{{ $label }}</button>
-    @endforeach
-  </nav>
-  <section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
+<section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
   <main class="farast-workspace">
     <aside class="farast-nav-panel hidden" id="navigationPane" aria-label="پیمایش سند">
       <div class="panel-heading"><strong>پیمایش</strong><button type="button" data-close-panel="navigationPane" aria-label="بستن">×</button></div>
