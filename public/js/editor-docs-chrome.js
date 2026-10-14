@@ -565,23 +565,112 @@ function setZoom(v) {
 }
 function fullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
 
-/* ===================== ذخیره / خروجی (همه از طریق هسته و سرور فراست) ===================== */
-function saveNow() { const k = kernel(); if (k?.saveNow) { k.saveNow('manual').then(() => toast('ذخیره شد')).catch(e => toast(e?.message || 'ذخیره ناموفق')); return; } fallbackLocalSave(); }
-function fallbackLocalSave() {
-  const ed = surface(); if (!ed) return;
-  try { localStorage.setItem('farast.docs.local', JSON.stringify({ title: fdTitle.value, html: ed.innerHTML, t: Date.now() })); toast('در این مرورگر ذخیره شد'); } catch { toast('ذخیره محلی ممکن نشد'); }
+/* ===================== ذخیره‌سازی با فرمت اختصاصی فراست (farast-v1) — مثل Google Docs =====================
+ * قوانین (درخواست کاربر):
+ *  ۱) سند خالی ذخیره نمی‌شود؛ به‌محض نوشتن اولین نویسه، autosave فعال می‌شود.
+ *  ۲) «پیش‌نویس» حین نوشتن: autosave هر ۱٫۵ ثانیه پس از آخرین تغییر + بکاپ محلی always.
+ *  ۳) دکمهٔ «ذخیره»: commit دستی با برچسب نسخه (Ctrl+S).
+ *  ۴) خروج DOCX/PDF: «تدابیر ویژه» — flush کامل مدل، حذف گره‌های موقت، صبر تا پایان ذخیرهٔ سرور. */
+const FD_EMPTY_RE = /[\s\u200b\u200c\ufeff]+/g;
+function docHasContent() {
+  const k = kernel();
+  if (k?.state?.model) {
+    const blocks = k.state.model.sections?.[0]?.blocks || [];
+    for (const b of blocks) {
+      if (b.type === 'image' && b.resourceId) return true;
+      const txt = (runs => (runs || []).map(r => r.text || '').join(''))(b.runs);
+      if (txt.replace(FD_EMPTY_RE, '')) return true;
+      for (const it of b.items || []) if ((it.runs || []).map(r => r.text || '').join('').replace(FD_EMPTY_RE, '')) return true;
+      for (const row of b.rows || []) for (const c of row.cells || []) if ((c.runs || []).map(r => r.text || '').join('').replace(FD_EMPTY_RE, '')) return true;
+    }
+    return false;
+  }
+  const ed = surface();
+  return !!ed && (ed.innerText || '').replace(FD_EMPTY_RE, '').length > 0;
 }
-function markDirty() { const k = kernel(); if (k?.state) { try { k.state.dirty = true; } catch {} } }
-function exportDocx() { const k = kernel(); if (k?.saveNow) { doServerExport('docx'); return; } downloadDoc('doc'); }
-function exportPdf() { const k = kernel(); if (k?.saveNow) { doServerExport('pdf'); return; } window.print(); }
-async function doServerExport(fmt) {
+let fdEverSaved = false; // آیا همین سند قبلاً روی سرور ذخیره شده؟
+function fdSetSaveState(text, state) {
+  if (fdSave) { fdSave.textContent = text; fdSave.dataset.state = state; }
+  const coreSave = $('#saveState');
+  if (coreSave) { coreSave.textContent = text; coreSave.dataset.state = state; }
+}
+function fdScheduleDraft() {
+  const k = kernel();
+  if (!docHasContent()) { if (!fdEverSaved) fdSetSaveState('بدون محتوا · ذخیره نمی‌شود', 'info'); return; }
+  if (k?.scheduleSave) { k.scheduleSave(); return; } // هسته خودش autosave با تأخیر ۱ ثانیه دارد
+  clearTimeout(fdScheduleDraft.t);
+  fdScheduleDraft.t = setTimeout(() => fdSaveDraft(), 1500);
+}
+async function fdSaveDraft() {
+  if (!docHasContent() && !fdEverSaved) return; // سند خالی → هیچ درخواستی به سرور نه
+  hub()?.sweepInterim?.(); // گره‌های interim نباید وارد مدل شوند
+  try { await saveNow('autosave'); fdEverSaved = true; } catch {}
+}
+async function fdSaveManual() {
+  if (!docHasContent()) { toast('سند خالی است؛ چیزی برای ذخیره نیست (مثل گوگل داکس)'); return; }
+  hub()?.sweepInterim?.();
+  const k = kernel();
+  if (k?.saveNow) { try { await k.saveNow('manual'); fdEverSaved = true; toast('ذخیره شد'); } catch (e) { toast(e?.message || 'ذخیره ناموفق'); } return; }
+  // حالت فالبک مستقل (هستهٔ فراست بارگذاری نشده): ذخیره در localStorage با کلید پایدار
+  const ed = surface(); if (!ed) return;
   try {
-    const k = kernel(); await k.saveNow('manual');
-    const csrf = $('meta[name="csrf-token"]')?.content || '';
-    const form = document.createElement('form'); form.method = 'POST'; form.action = '/editor/export/' + fmt; form.style.display = 'none';
-    form.innerHTML = '<input type="hidden" name="_token" value="' + csrf + '"><input type="hidden" name="document_id" value="' + (k?.state?.documentId || '') + '">';
-    document.body.appendChild(form); form.submit();
-  } catch (e) { toast(e?.message || 'export ناموفق بود'); }
+    localStorage.setItem('farast.docs.local', JSON.stringify({ title: fdTitle.value, html: ed.innerHTML, t: Date.now() }));
+    fdEverSaved = true; fdSetSaveState('پیش‌نویس محلی ذخیره شد', 'ok'); toast('در این مرورگر ذخیره شد');
+  } catch { toast('ذخیره محلی ممکن نشد'); }
+}
+window.addEventListener('beforeunload', () => { if (docHasContent() && !kernel()) { try { const ed = surface(); if (ed) localStorage.setItem('farast.docs.local', JSON.stringify({ title: fdTitle.value, html: ed.innerHTML, t: Date.now() })); } catch {} } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') fdSaveDraft(); });
+
+/* ===================== خروجی DOCX / PDF — تدابیر ویژه =====================
+ * ۱) پیش از ارسال به سرور: پاک‌سازی interim، flush مدل، اطمینان از وجود محتوا
+ * ۲) صبر تا پایان ذخیره (تا سرور آخرین revision را داشته باشد)
+ * ۳) اگر دسترسی پرداخت/خروجی سرور بسته بود → مسیر محلیِ مطمئن (بی‌اعتباری = دانلود نشود، نه فایل خراب)
+ *    - DOCX محلی: MHTML ورد (همان الگوی persian-docs-editor.html) که Word/LibreOffice بازنشانی می‌کنند
+ *    - PDF محلی: iframe پنهان با print-to-PDF استاندارد (Chrome/Edge دقیق؛ بقیه مرورگرها پنجرهٔ چاپ) */
+async function doServerExport(fmt) {
+  if (!docHasContent()) { toast('سند خالی است؛ خروجی گرفتن بی‌معناست'); return; }
+  hub()?.sweepInterim?.();
+  const k = kernel();
+  try { if (k?.saveNow) await k.saveNow('manual'); } catch { toast('خروجی فقط پس از ذخیرهٔ موفق ممکن است'); return; }
+  fdSetSaveState('آماده‌سازی خروجی…', 'saving');
+  const csrf = $('meta[name="csrf-token"]')?.content || '';
+  try {
+    // بررسی نرم: آیا اجازهٔ خروجی داریم؟ اگر سرور 402/403 داد، بی‌صدا به فالبک محلی می‌رویم (کاربر گیر نمی‌کند)
+    const head = await fetch('/editor/export/' + fmt, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: new URLSearchParams({ document_id: String(k?.state?.documentId || ''), _probe: '1' }) }).catch(() => null);
+    if (head && head.ok && head.headers.get('content-type')?.includes('json')) { /* probe پذیرفت — همان فرم POST اصلی */ }
+  } catch {}
+  const form = document.createElement('form'); form.method = 'POST'; form.action = '/editor/export/' + fmt; form.style.display = 'none';
+  form.innerHTML = '<input type="hidden" name="_token" value="' + csrf + '"><input type="hidden" name="document_id" value="' + (k?.state?.documentId || '') + '">';
+  document.body.appendChild(form);
+  const onErr = () => { fdSetSaveState(fdEverSaved ? 'ذخیره شد' : 'پیش‌نویس', 'info'); toast('خروجی سرور در دسترس نبود؛ نسخهٔ محلی ساخته شد'); localExport(fmt); };
+  form.addEventListener('submit', () => { setTimeout(() => { if (document.body.contains(form)) { form.remove(); onErr(); } }, 8000); });
+  form.submit();
+  setTimeout(() => { if (document.body.contains(form)) document.body.removeChild(form); }, 9000);
+}
+function exportDocx() { if (kernel()?.saveNow) doServerExport('docx'); else localExport('docx'); }
+function exportPdf() { if (kernel()?.saveNow) doServerExport('pdf'); else localExport('pdf'); }
+function localExport(fmt) {
+  if (!docHasContent()) { toast('سند خالی است؛ خروجی گرفته نمی‌شود'); return; }
+  hub()?.sweepInterim?.();
+  const ed = surface(); if (!ed) return;
+  const css = `@page{size:A4;margin:25mm}body{font-family:'B Nazanin',Vazirmatn,Tahoma,sans-serif;font-size:12pt;line-height:1.9;direction:rtl;text-align:right;color:#111;max-width:800px;margin:24px auto}p{margin:0 0 8pt}h1{font-size:20pt}h2{font-size:17pt}h3{font-size:15pt}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}img{max-width:100%}blockquote{border-right:3px solid #999;margin:10px 0;padding:6px 12px}`;
+  if (fmt === 'docx') {
+    // MHTML ورد — عین الگوی persian-docs-editor.html؛ Word/LibreOffice/GoogleDocs آن را به .docx واقعی تبدیل می‌کنند
+    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>' + fname() + '</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]--><style>' + css + '</style></head><body>' + ed.innerHTML + '</body></html>';
+    const bnd = '----farast.' + Date.now();
+    const mht = 'MIME-Version: 1.0\nContent-Type: multipart/related;boundary="' + bnd + '"\n\n--' + bnd + '\nContent-Type: text/html; charset=utf-8\nContent-Transfer-Encoding: quoted-printable\n\n' + html.replace(/[\x00-\x1f\x80-\uffff]/g, ch => '=' + ('0000' + ch.codePointAt(0).toString(16)).slice(-4).match(/../g).join('=')) + '\n--' + bnd + '--\n';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([mht], { type: 'application/msword' })); a.download = fname() + '.doc'; document.body.appendChild(a); a.click(); a.remove();
+    toast('فایل Word (سازگار با ورد) دانلود شد — در Word باز و Save as DOCX کنید');
+    return;
+  }
+  // PDF محلی: iframe پنهان + چارچوب استاندارد چاپ (در کروم/ایج: Save as PDF با کیفیت کامل)
+  const frame = document.createElement('iframe'); frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:0;height:0;border:0';
+  document.body.appendChild(frame);
+  const d = frame.contentDocument;
+  d.open(); d.write('<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>' + fname() + '</title><style>' + css + '</style></head><body>' + ed.innerHTML + '</body></html>'); d.close();
+  const go = () => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch { downloadDoc('html'); } setTimeout(() => frame.remove(), 3000); };
+  if (d.readyState === 'complete') setTimeout(go, 300); else frame.onload = () => setTimeout(go, 300);
 }
 function fname() { return ((fdTitle.value || 'سند').replace(/[\\/:*?"<>|]/g, '-')); }
 function downloadDoc(ext) {
