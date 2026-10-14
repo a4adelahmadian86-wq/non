@@ -223,7 +223,7 @@ class EditorDocumentService
     {
         $html = trim($html);
         if ($html === '') return '<p><br></p>';
-        $dom = new \\DOMDocument('1.0', 'UTF-8');
+        $dom = new \DOMDocument('1.0', 'UTF-8');
         @$dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-root">'.$html.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         $root = $dom->getElementById('farast-root');
         if (!$root) return '<p><br></p>';
@@ -252,10 +252,10 @@ class EditorDocumentService
             return true;
         };
 
-        $walk = function (\\DOMNode $node) use (&$walk, $allowedTags, $allowedAttrs, $allowedStyleProperties, $safeUrl): void {
+        $walk = function (\DOMNode $node) use (&$walk, $allowedTags, $allowedAttrs, $allowedStyleProperties, $safeUrl): void {
             for ($child = $node->firstChild; $child; ) {
                 $next = $child->nextSibling;
-                if ($child instanceof \\DOMElement) {
+                if ($child instanceof \DOMElement) {
                     $tag = strtolower($child->tagName);
                     if (!in_array($tag, $allowedTags, true)) {
                         $node->removeChild($child);
