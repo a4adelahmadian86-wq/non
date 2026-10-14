@@ -91,6 +91,30 @@ test('editing a fragmented paragraph preserves the complete canonical text', asy
   expect(after.length).toBeGreaterThan(before.length);
   expect(after).toContain('FARAST 2026');
 });
+test('committed voice transcript is undoable through the shared kernel history', async ({ page }) => {
+  await openEditor(page);
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.insertText('پیش از صوت FARAST');
+  await page.locator('#saveNow').click();
+  await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('پیش از صوت FARAST');
+
+  await page.evaluate(() => {
+    const kernel = window.FarastEditor;
+    const model = JSON.parse(JSON.stringify(kernel.state.model));
+    const paragraph = model.sections[0].blocks.find(block => block.type === 'paragraph');
+    paragraph.runs = paragraph.runs || [];
+    paragraph.runs.push({ id: 'voice-e2e-run', text: ' متن صوتی' });
+    kernel.applyRemoteModel(model, { source: 'voice', command: 'InsertText' });
+  });
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('متن صوتی');
+
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).not.toContain('متن صوتی');
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('پیش از صوت FARAST');
+});
+
 test('print uses A4 page geometry', async ({ page }) => {
   await openEditor(page);
   const css = await page.evaluate(() => document.getElementById('farastDynamicPrint')?.textContent || '');
