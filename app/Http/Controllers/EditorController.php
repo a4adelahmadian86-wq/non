@@ -204,7 +204,7 @@ class EditorController extends Controller
         abort_unless(is_array($item) && !empty($item['storage_path']), 404);
 
         $path = (string) $item['storage_path'];
-        $asset = \\App\\Models\\FarastStorageObject::query()
+        $asset = \App\Models\FarastStorageObject::query()
             ->where('user_id', $request->user()->id)
             ->where('document_id', $farast->id)
             ->where('disk', 'private')
