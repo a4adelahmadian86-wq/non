@@ -233,7 +233,7 @@ class EditorDocumentService
         $allowedStyleProperties = [
             'text-align','color','background-color','font-family','font-size','font-weight','font-style',
             'text-decoration','line-height','direction','margin','margin-top','margin-right','margin-bottom',
-            'margin-left','padding','padding-top','padding-right','padding-bottom','padding-left','width',
+            'margin-left','margin-inline-start','margin-inline-end','padding','padding-top','padding-right','padding-bottom','padding-left','width',
             'height','min-width','max-width','border','border-width','border-style','border-color',
             'border-collapse','vertical-align','white-space','page-break-before','page-break-after',
         ];
