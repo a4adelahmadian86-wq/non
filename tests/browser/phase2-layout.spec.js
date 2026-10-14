@@ -167,3 +167,15 @@ test('document page fits supported viewport classes without page-width overflow'
     await expect(page.locator('.farast-page').first()).toBeVisible();
   }
 });
+
+test('document direction is independent from paragraph direction and persists', async ({ page }) => {
+  await openEditor(page);
+  const paragraphDirection = await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks[0].direction ?? null);
+  await page.locator('.farast-tab[data-tab="layout"]').click();
+  await page.locator('#ribbon button[data-command="docLtr"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.direction)).toBe('ltr');
+  expect(await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks[0].direction ?? null)).toBe(paragraphDirection);
+  await window.FarastEditor.saveNow('manual');
+  await window.FarastEditor.reload();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.settings.direction)).toBe('ltr');
+});
