@@ -92,7 +92,7 @@
   async function openAudio(){if(!navigator.mediaDevices?.getUserMedia)throw new Error('مرورگر امکان دسترسی به میکروفن را ندارد.');mediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});audioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});await audioContext.audioWorklet.addModule('/js/farast-voice-worklet.js');sourceNode=audioContext.createMediaStreamSource(mediaStream);workletNode=new AudioWorkletNode(audioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:0});workletNode.port.onmessage=e=>{if(ws?.readyState===WebSocket.OPEN&&!paused){const bytes=new Uint8Array(e.data);if(bytes.byteLength>24000){for(let i=0;i<bytes.byteLength;i+=24000)ws.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)))}else ws.send(bytes)}};sourceNode.connect(workletNode);if(audioContext.state==='suspended')await audioContext.resume()}
   function closeAudio(){try{workletNode?.disconnect()}catch{}try{sourceNode?.disconnect()}catch{}try{audioContext?.close()}catch{}workletNode=null;sourceNode=null;audioContext=null;mediaStream?.getTracks().forEach(t=>t.stop());mediaStream=null}
   async function start(isReconnect=false){if(starting||(!isReconnect&&wanted))return;clearError();rememberRange();if(!caps.can_voice){showError('تایپ صوتی برای این حساب فعال نیست.');return}if(!caps.can_type){showError('ویرایش متن برای این حساب فعال نیست.');return}if(!authenticated){location.href='/login?continue='+encodeURIComponent('/editor');return}starting=true;wanted=true;paused=false;if(!isReconnect){sessionWords=0;lastFinalText='';finalFingerprints.clear();voiceSequence=0;sessionAnchor=voiceAnchor(FarastEditor.getSelection?.());}interimNode=null;words.textContent='۰';confidence.textContent='—';engine.textContent='—';time.textContent='00:00';clearTimeout(stopGraceTimer);try{const data=await getStreamToken(),wsUrl=data.websocket_url.replace(/^http:/,'ws:').replace(/^https:/,'wss:');ws=new WebSocket(`${wsUrl}?v=1`);ws.binaryType='arraybuffer';ws.onopen=async()=>{try{ws.send(JSON.stringify({type:'start',token:data.token,locale:locale.value,sequence:voiceSequence}));await openAudio();modeLabel.textContent='جریان زنده AI';setStatus('در حال گوش دادن');engine.textContent='Chirp 3';setControls(true);startTimer();Sound()?.play('voiceStart',{gain:.75,cooldown:0})}catch(e){showError(e.message||'میکروفن قابل شروع نیست.');stop()}};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.type==='ready'){engine.textContent='Live AI'}else if(m.type==='interim'){showInterim(m.text);if(m.stability)confidence.textContent=Math.round(m.stability*100)+'٪'}else if(m.type==='final'){if(Number.isFinite(Number(m.sequence))&&Number(m.sequence)<=voiceSequence)return;voiceSequence=Math.max(voiceSequence,Number(m.sequence||0));commitFinal(m.text);if(m.confidence>0)confidence.textContent=Math.round(m.confidence*100)+'٪';setStatus('در حال گوش دادن')}else if(m.type==='restarting'){setStatus('ادامه جریان زنده…')}else if(m.type==='provider_error'){setStatus('در حال تغییر موتور…')}else if(m.type==='error'){showError(m.message||'ارتباط موتور تشخیص گفتار قطع شد.');stop()}};ws.onerror=()=>{if(wanted&&!stopGraceTimer)showError('ارتباط تایپ صوتی برقرار نشد.')};ws.onclose=()=>{clearTimeout(stopGraceTimer);const wasWanted=wanted;starting=false;closeAudio();stopTimer();setControls(false);if(interimNode){interimNode.remove();interimNode=null}if(wasWanted){scheduleReconnect()}}}catch(e){wanted=false;starting=false;closeAudio();showError(e.message||'شروع تایپ صوتی ممکن نیست.');setControls(false)}}
-  function startNative(){
+  async function startNative(){
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(nativeActive)return;
     if(!SR){showError('این مرورگر تشخیص گفتار رایگان را پشتیبانی نمی‌کند. در Chrome یا Edge به‌روز امتحان کنید؛ حالت آنلاین همچنان جداگانه در دسترس است.');return}
@@ -116,6 +116,22 @@
       };
       nativeRecognition.onerror=e=>{showError('تشخیص گفتار مرورگر: '+(e.error||'خطا')+'. مجوز میکروفون و زبان را بررسی کنید.')};
       nativeRecognition.onend=async()=>{nativeActive=false;nativeRecognition=null;stopTimer();panel.classList.remove('is-listening');setControls(false);$('fvNativeStart').disabled=false;try{await nativeQueue}catch{}setStatus(sessionWords?'تایپ رایگان پایان یافت':'تشخیص گفتار متوقف شد');modeLabel.textContent='حالت رایگان مرورگر · بدون API'};
+      if('processLocally' in nativeRecognition){
+        nativeRecognition.processLocally=true;
+        if(typeof SR.available==='function'){
+          const opts={langs:[locale.value],processLocally:true,quality:'dictation'};
+          let availability=await SR.available(opts);
+          if(availability==='downloadable'||availability==='downloading'){
+            setStatus('در حال آماده‌سازی بستهٔ زبان روی دستگاه…');
+            if(typeof SR.install!=='function'||!await SR.install(opts)){nativeRecognition=null;$('fvNativeStart').disabled=false;showError('بستهٔ زبان محلی نصب نشد. برای این زبان از حالت آنلاین استفاده کنید.');return}
+            availability=await SR.available(opts);
+          }
+          if(availability!=='available'){nativeRecognition=null;$('fvNativeStart').disabled=false;showError('تشخیص گفتار کاملاً محلی برای این زبان در مرورگر شما در دسترس نیست. حالت آنلاین جداگانه قابل انتخاب است.');return}
+          modeLabel.textContent='تشخیص گفتار محلی روی دستگاه';
+        }
+      }else{
+        modeLabel.textContent='تشخیص گفتار مرورگر؛ ممکن است پردازش آنلاین باشد';
+      }
       nativeRecognition.start();
     }catch(e){nativeActive=false;nativeRecognition=null;$('fvNativeStart').disabled=false;setControls(false);showError(e.message||'شروع تشخیص گفتار رایگان ناموفق بود.')}
   }
