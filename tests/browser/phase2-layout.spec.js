@@ -121,3 +121,17 @@ test('print uses A4 page geometry', async ({ page }) => {
   expect(css).toContain('210mm');
   expect(css).toContain('297mm');
 });
+
+test('font size controls and default typography use points, not pixels', async ({ page }) => {
+  await openEditor(page);
+  const editor = page.locator('.farast-editor').first();
+  await editor.click();
+  await page.keyboard.insertText('متن آزمون قلم فارسی');
+  await page.keyboard.press('Shift+Home');
+  const size = page.locator('#ribbon select[data-command="fontSize"]');
+  await expect(size).toBeVisible();
+  await size.selectOption('20pt');
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.flatMap(b => b.runs || []).some(r => r.fontSize === '20pt'))).toBeTruthy();
+  await expect.poll(async () => page.locator('.farast-editor').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(21);
+  expect(await page.locator('.farast-editor').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThan(22);
+});
