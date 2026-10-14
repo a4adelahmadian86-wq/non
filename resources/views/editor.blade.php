@@ -55,14 +55,14 @@
   </nav>
   <section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
   <main class="farast-workspace">
-    <aside class="farast-nav-panel" id="navigationPane" aria-label="پیمایش سند">
+    <aside class="farast-nav-panel hidden" id="navigationPane" aria-label="پیمایش سند">
       <div class="panel-heading"><strong>پیمایش</strong><button type="button" data-close-panel="navigationPane" aria-label="بستن">×</button></div>
       <div id="navigationItems"><span class="muted">عنوان‌های سند اینجا نمایش داده می‌شوند.</span></div>
     </aside>
     <section class="farast-canvas-shell">
       <div class="farast-page-viewport" id="pagesViewport" tabindex="0" aria-label="صفحات سند"></div>
     </section>
-    <aside class="farast-ai-panel" id="aiSidebar" aria-label="دستیار هوش مصنوعی">
+    <aside class="farast-ai-panel hidden" id="aiSidebar" aria-label="دستیار هوش مصنوعی">
       <div class="panel-heading"><div><strong>دستیار هوشمند</strong><small>انتخاب → پیشنهاد → پیش‌نمایش → پذیرش</small></div><button type="button" data-close-panel="aiSidebar" aria-label="بستن">×</button></div>
       <div class="ai-scope"><span>زمینه</span><select id="aiScope"><option value="selection">متن انتخاب‌شده</option><option value="paragraph">پاراگراف</option><option value="page">صفحه</option><option value="document">سند</option></select></div>
       <div class="ai-actions" id="aiActions"><button data-ai-operation="selection.proofread">اصلاح</button><button data-ai-operation="selection.rewrite">بازنویسی</button><button data-ai-operation="selection.tone">رسمی‌سازی</button><button data-ai-operation="selection.shorten">ساده‌سازی</button><button data-ai-operation="selection.summarize">خلاصه</button><button data-ai-operation="selection.translate">ترجمه</button></div>
