@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FarastUsageEvent;
 use App\Models\FarastUsageReservation;
 use App\Models\TypingDocument;
 use App\Models\User;
