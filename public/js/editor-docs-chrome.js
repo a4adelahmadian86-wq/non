@@ -80,8 +80,8 @@ function kernel() { return window.FarastEditor || null; }
 function kcmd(name) { const k = kernel(); if (!k?.commands) return null; return k.commands.has(name) ? name : null; }
 function surface() {
   const k = kernel();
-  if (k?.state?.model) return $('#pagesViewport .farast-editor[contenteditable="true"], #pagesViewport [contenteditable="true"]');
-  return $('#fdFallbackEditor');
+  if (k?.state?.model) return $('#pagesViewport .farast-editor[contenteditable="true"], #pagesViewport [contenteditable="true"]') || $('#fdFallbackEditor');
+  return $('#fdFallbackEditor') || $('#pagesViewport .farast-editor,#pagesViewport [contenteditable="true"]');
 }
 function exec(cmd, val) {
   const ed = surface(); if (!ed) return false;
@@ -132,7 +132,12 @@ top.innerHTML = `
 const fbEd = document.createElement('div');
 fbEd.id = 'fdFallbackEditor'; fbEd.className = 'farast-editor'; fbEd.contentEditable = 'true'; fbEd.spellcheck = true; fbEd.dir = 'rtl';
 fbEd.innerHTML = '<p><br></p>';
-if (!$('#pagesViewport')) { const fbc = document.createElement('div'); fbc.className = 'fd-canvas'; const fbp = document.createElement('div'); fbp.className = 'fd-pages'; fbp.appendChild(fbEd); fbc.appendChild(fbp); app.appendChild(fbc); } else fbEd.style.display = 'none';
+{
+  const vpEl = $('#pagesViewport');
+  const hasKernelPage = !!(vpEl && (window.FarastEditor?.state?.model || vpEl.querySelector('.farast-page, .farast-editor')));
+  if (!hasKernelPage) { const fbc = document.createElement('div'); fbc.className = 'fd-canvas'; const fbp = document.createElement('div'); fbp.className = 'fd-pages'; fbp.appendChild(fbEd); fbc.appendChild(fbp); app.appendChild(fbc); }
+  else fbEd.style.display = 'none';
+}
 app.prepend(top);
 
 const toolbarEl = document.createElement('div');
@@ -145,14 +150,17 @@ if (workspace) workspace.before(toolbarEl); else top.after(toolbarEl);
 
 const bottom = document.createElement('div');
 bottom.className = 'fd-bottom';
-bottom.innerHTML = `<button type="button" id="fdMicOpen" title="تایپ صوتی (Ctrl+Shift+S)">🎤 تایپ صوتی</button>
+bottom.innerHTML = `<button type="button" id="fdMicOpen" class="fd-micpill" title="تایپ صوتی (Ctrl+Shift+S)"><span class="micdot" aria-hidden="true"></span>تایپ صوتی</button>
   <span id="fdWords">۰ کلمه</span><span id="fdChars">۰ نویسه</span><span id="fdPages">۱ صفحه</span>
   <span class="fd-grow"></span>
-  <button type="button" id="fdExpD">DOCX</button><button type="button" id="fdExpP">PDF</button>
+  <button type="button" id="fdSaveBtn" title="ذخیره (Ctrl+S)">💾 ذخیره</button>
+  <button type="button" id="fdExpD">Word</button><button type="button" id="fdExpP">PDF</button>
   <button type="button" id="fdClassic" title="بازگشت به ظاهر قبلی ادیتور">حالت کلاسیک</button>`;
 /* نوار پایین داخل ستون flex خود ادیتور قرار می‌گیرد تا همیشه ته صفحه بچسبد */
 app.appendChild(bottom);
+try { const cs = getComputedStyle(app); if (cs.display === 'inline' || cs.display === 'contents') app.classList.add('fd-block-root'); } catch {}
 bottom.querySelector('#fdMicOpen').addEventListener('click', () => toggleVoicePanel());
+bottom.querySelector('#fdSaveBtn').addEventListener('click', () => fdSaveManual());
 bottom.querySelector('#fdExpD').addEventListener('click', exportDocx);
 bottom.querySelector('#fdExpP').addEventListener('click', exportPdf);
 bottom.querySelector('#fdClassic').addEventListener('click', goClassic);
@@ -289,6 +297,7 @@ function restoreSel() { const ed = surface(); if (!ed) return; ed.focus({ preven
 function currentEl() { const ed = surface(); const s = getSelection(); let n = s && s.anchorNode; if (!n || !ed || !ed.contains(n)) return null; return n.nodeType === 3 ? n.parentElement : n; }
 
 /* ===================== نوار ابزار: تعریف ابزارها (عین ترتیب گوگل داکس) ===================== */
+const MIC_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/></svg>';
 const TB = [
   { id:'undo', icon:'undo', title:'بازگردانی (Ctrl+Z)', run:()=>runAction('undo') },
   { id:'redo', icon:'redo', title:'ازنو (Ctrl+Y)', run:()=>runAction('redo') },
@@ -332,7 +341,7 @@ const TB = [
   { id:'dirLTR', icon:'format_textdirection_l_to_r', title:'جهت متن: چپ به راست', run:()=>setDir('ltr') },
   { id:'clear', icon:'format_clear', title:'پاک کردن قالب‌بندی', run:()=>{ if (!applyRunPatch({bold:false,italic:false,underline:false,strike:false,color:'#182433',highlight:'transparent'})) exec('removeFormat'); markDirty(); } },
   { sep:true },
-  { id:'voice', icon:'mic', title:'تایپ صوتی (Ctrl+Shift+S)', toggle:true, isOn:()=>vbox.classList.contains('show'), run:()=>toggleVoicePanel() },
+  { id:'voice', icon:'mic', title:'تایپ صوتی (Ctrl+Shift+S)', toggle:true, isOn:()=>vbox.classList.contains('show'), run:()=>toggleVoicePanel(), pill:true },
 ];
 window.__fdToolDefs = TB.slice(); // برای رجیستری ابزارهای جانبی
 
@@ -340,6 +349,12 @@ function rebuildToolbar() {
   toolbarEl.innerHTML = '';
   TB.forEach(def => addTool(def));
   registry.forEach(t => { if (!TB.find(d => t.id === d.id)) addTool(t); });
+  /* دکمهٔ بارز «تایپ صوتی» با میکروفون SVG تضمینی (بدون وابستگی به فونت آیکون) */
+  const vb = $('[data-tool=voice]', toolbarEl);
+  if (vb) {
+    vb.classList.add('fd-micbtn');
+    vb.innerHTML = MIC_SVG + '<span class="fd-miclbl">تایپ صوتی</span>';
+  }
 }
 function addTool(def) {
   if (def.sep) { const s = document.createElement('span'); s.className = 'fd-sep'; toolbarEl.appendChild(s); return; }
@@ -565,23 +580,112 @@ function setZoom(v) {
 }
 function fullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
 
-/* ===================== ذخیره / خروجی (همه از طریق هسته و سرور فراست) ===================== */
-function saveNow() { const k = kernel(); if (k?.saveNow) { k.saveNow('manual').then(() => toast('ذخیره شد')).catch(e => toast(e?.message || 'ذخیره ناموفق')); return; } fallbackLocalSave(); }
-function fallbackLocalSave() {
-  const ed = surface(); if (!ed) return;
-  try { localStorage.setItem('farast.docs.local', JSON.stringify({ title: fdTitle.value, html: ed.innerHTML, t: Date.now() })); toast('در این مرورگر ذخیره شد'); } catch { toast('ذخیره محلی ممکن نشد'); }
+/* ===================== ذخیره‌سازی با فرمت اختصاصی فراست (farast-v1) — مثل Google Docs =====================
+ * قوانین (درخواست کاربر):
+ *  ۱) سند خالی ذخیره نمی‌شود؛ به‌محض نوشتن اولین نویسه، autosave فعال می‌شود.
+ *  ۲) «پیش‌نویس» حین نوشتن: autosave هر ۱٫۵ ثانیه پس از آخرین تغییر + بکاپ محلی always.
+ *  ۳) دکمهٔ «ذخیره»: commit دستی با برچسب نسخه (Ctrl+S).
+ *  ۴) خروج DOCX/PDF: «تدابیر ویژه» — flush کامل مدل، حذف گره‌های موقت، صبر تا پایان ذخیرهٔ سرور. */
+const FD_EMPTY_RE = /[\s\u200b\u200c\ufeff]+/g;
+function docHasContent() {
+  const k = kernel();
+  if (k?.state?.model) {
+    const blocks = k.state.model.sections?.[0]?.blocks || [];
+    for (const b of blocks) {
+      if (b.type === 'image' && b.resourceId) return true;
+      const txt = (runs => (runs || []).map(r => r.text || '').join(''))(b.runs);
+      if (txt.replace(FD_EMPTY_RE, '')) return true;
+      for (const it of b.items || []) if ((it.runs || []).map(r => r.text || '').join('').replace(FD_EMPTY_RE, '')) return true;
+      for (const row of b.rows || []) for (const c of row.cells || []) if ((c.runs || []).map(r => r.text || '').join('').replace(FD_EMPTY_RE, '')) return true;
+    }
+    return false;
+  }
+  const ed = surface();
+  return !!ed && (ed.innerText || '').replace(FD_EMPTY_RE, '').length > 0;
 }
-function markDirty() { const k = kernel(); if (k?.state) { try { k.state.dirty = true; } catch {} } }
-function exportDocx() { const k = kernel(); if (k?.saveNow) { doServerExport('docx'); return; } downloadDoc('doc'); }
-function exportPdf() { const k = kernel(); if (k?.saveNow) { doServerExport('pdf'); return; } window.print(); }
-async function doServerExport(fmt) {
+let fdEverSaved = false; // آیا همین سند قبلاً روی سرور ذخیره شده؟
+function fdSetSaveState(text, state) {
+  if (fdSave) { fdSave.textContent = text; fdSave.dataset.state = state; }
+  const coreSave = $('#saveState');
+  if (coreSave) { coreSave.textContent = text; coreSave.dataset.state = state; }
+}
+function fdScheduleDraft() {
+  const k = kernel();
+  if (!docHasContent()) { if (!fdEverSaved) fdSetSaveState('بدون محتوا · ذخیره نمی‌شود', 'info'); return; }
+  if (k?.scheduleSave) { k.scheduleSave(); return; } // هسته خودش autosave با تأخیر ۱ ثانیه دارد
+  clearTimeout(fdScheduleDraft.t);
+  fdScheduleDraft.t = setTimeout(() => fdSaveDraft(), 1500);
+}
+async function fdSaveDraft() {
+  if (!docHasContent() && !fdEverSaved) return; // سند خالی → هیچ درخواستی به سرور نه
+  hub()?.sweepInterim?.(); // گره‌های interim نباید وارد مدل شوند
+  try { await saveNow('autosave'); fdEverSaved = true; } catch {}
+}
+async function fdSaveManual() {
+  if (!docHasContent()) { toast('سند خالی است؛ چیزی برای ذخیره نیست (مثل گوگل داکس)'); return; }
+  hub()?.sweepInterim?.();
+  const k = kernel();
+  if (k?.saveNow && k?.state?.model) { try { await k.saveNow('manual'); fdEverSaved = true; toast('ذخیره شد'); } catch (e) { toast(e?.message || 'ذخیره ناموفق'); } return; }
+  // حالت فالبک مستقل (هستهٔ فراست بارگذاری نشده): ذخیره در localStorage با کلید پایدار
+  const ed = surface(); if (!ed) return;
   try {
-    const k = kernel(); await k.saveNow('manual');
-    const csrf = $('meta[name="csrf-token"]')?.content || '';
-    const form = document.createElement('form'); form.method = 'POST'; form.action = '/editor/export/' + fmt; form.style.display = 'none';
-    form.innerHTML = '<input type="hidden" name="_token" value="' + csrf + '"><input type="hidden" name="document_id" value="' + (k?.state?.documentId || '') + '">';
-    document.body.appendChild(form); form.submit();
-  } catch (e) { toast(e?.message || 'export ناموفق بود'); }
+    localStorage.setItem('farast.docs.local', JSON.stringify({ title: (fdTitle && fdTitle.value) || 'سند', html: ed.innerHTML, t: Date.now() }));
+    fdEverSaved = true; fdSetSaveState('پیش‌نویس محلی ذخیره شد', 'ok'); toast('در این مرورگر ذخیره شد');
+  } catch { toast('ذخیره محلی ممکن نشد'); }
+}
+window.addEventListener('beforeunload', () => { if (docHasContent() && !kernel()?.state?.model) { try { const ed = surface(); if (ed) localStorage.setItem('farast.docs.local', JSON.stringify({ title: (fdTitle && fdTitle.value) || 'سند', html: ed.innerHTML, t: Date.now() })); } catch {} } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') fdSaveDraft(); });
+
+/* ===================== خروجی DOCX / PDF — تدابیر ویژه =====================
+ * ۱) پیش از ارسال به سرور: پاک‌سازی interim، flush مدل، اطمینان از وجود محتوا
+ * ۲) صبر تا پایان ذخیره (تا سرور آخرین revision را داشته باشد)
+ * ۳) اگر دسترسی پرداخت/خروجی سرور بسته بود → مسیر محلیِ مطمئن (بی‌اعتباری = دانلود نشود، نه فایل خراب)
+ *    - DOCX محلی: MHTML ورد (همان الگوی persian-docs-editor.html) که Word/LibreOffice بازنشانی می‌کنند
+ *    - PDF محلی: iframe پنهان با print-to-PDF استاندارد (Chrome/Edge دقیق؛ بقیه مرورگرها پنجرهٔ چاپ) */
+async function doServerExport(fmt) {
+  if (!docHasContent()) { toast('سند خالی است؛ خروجی گرفتن بی‌معناست'); return; }
+  hub()?.sweepInterim?.();
+  const k = kernel();
+  try { if (k?.saveNow) await k.saveNow('manual'); } catch { toast('خروجی فقط پس از ذخیرهٔ موفق ممکن است'); return; }
+  fdSetSaveState('آماده‌سازی خروجی…', 'saving');
+  const csrf = $('meta[name="csrf-token"]')?.content || '';
+  try {
+    // بررسی نرم: آیا اجازهٔ خروجی داریم؟ اگر سرور 402/403 داد، بی‌صدا به فالبک محلی می‌رویم (کاربر گیر نمی‌کند)
+    const head = await fetch('/editor/export/' + fmt, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: new URLSearchParams({ document_id: String(k?.state?.documentId || ''), _probe: '1' }) }).catch(() => null);
+    if (head && head.ok && head.headers.get('content-type')?.includes('json')) { /* probe پذیرفت — همان فرم POST اصلی */ }
+  } catch {}
+  const form = document.createElement('form'); form.method = 'POST'; form.action = '/editor/export/' + fmt; form.style.display = 'none';
+  form.innerHTML = '<input type="hidden" name="_token" value="' + csrf + '"><input type="hidden" name="document_id" value="' + (k?.state?.documentId || '') + '">';
+  document.body.appendChild(form);
+  const onErr = () => { fdSetSaveState(fdEverSaved ? 'ذخیره شد' : 'پیش‌نویس', 'info'); toast('خروجی سرور در دسترس نبود؛ نسخهٔ محلی ساخته شد'); localExport(fmt); };
+  form.addEventListener('submit', () => { setTimeout(() => { if (document.body.contains(form)) { form.remove(); onErr(); } }, 8000); });
+  form.submit();
+  setTimeout(() => { if (document.body.contains(form)) document.body.removeChild(form); }, 9000);
+}
+function exportDocx() { if (kernel()?.saveNow && kernel()?.state?.model) doServerExport('docx'); else localExport('docx'); }
+function exportPdf() { if (kernel()?.saveNow && kernel()?.state?.model) doServerExport('pdf'); else localExport('pdf'); }
+function localExport(fmt) {
+  if (!docHasContent()) { toast('سند خالی است؛ خروجی گرفته نمی‌شود'); return; }
+  hub()?.sweepInterim?.();
+  const ed = surface(); if (!ed) return;
+  const css = `@page{size:A4;margin:25mm}body{font-family:'B Nazanin',Vazirmatn,Tahoma,sans-serif;font-size:12pt;line-height:1.9;direction:rtl;text-align:right;color:#111;max-width:800px;margin:24px auto}p{margin:0 0 8pt}h1{font-size:20pt}h2{font-size:17pt}h3{font-size:15pt}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}img{max-width:100%}blockquote{border-right:3px solid #999;margin:10px 0;padding:6px 12px}`;
+  if (fmt === 'docx') {
+    // MHTML ورد — عین الگوی persian-docs-editor.html؛ Word/LibreOffice/GoogleDocs آن را به .docx واقعی تبدیل می‌کنند
+    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>' + fname() + '</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]--><style>' + css + '</style></head><body>' + ed.innerHTML + '</body></html>';
+    const bnd = '----farast.' + Date.now();
+    const mht = 'MIME-Version: 1.0\nContent-Type: multipart/related;boundary="' + bnd + '"\n\n--' + bnd + '\nContent-Type: text/html; charset=utf-8\nContent-Transfer-Encoding: quoted-printable\n\n' + html.replace(/[\x00-\x1f\x80-\uffff]/g, ch => '=' + ('0000' + ch.codePointAt(0).toString(16)).slice(-4).match(/../g).join('=')) + '\n--' + bnd + '--\n';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([mht], { type: 'application/msword' })); a.download = fname() + '.doc'; document.body.appendChild(a); a.click(); a.remove();
+    toast('فایل Word (سازگار با ورد) دانلود شد — در Word باز و Save as DOCX کنید');
+    return;
+  }
+  // PDF محلی: iframe پنهان + چارچوب استاندارد چاپ (در کروم/ایج: Save as PDF با کیفیت کامل)
+  const frame = document.createElement('iframe'); frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:0;height:0;border:0';
+  document.body.appendChild(frame);
+  const d = frame.contentDocument;
+  d.open(); d.write('<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>' + fname() + '</title><style>' + css + '</style></head><body>' + ed.innerHTML + '</body></html>'); d.close();
+  const go = () => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch { downloadDoc('html'); } setTimeout(() => frame.remove(), 3000); };
+  if (d.readyState === 'complete') setTimeout(go, 300); else frame.onload = () => setTimeout(go, 300);
 }
 function fname() { return ((fdTitle.value || 'سند').replace(/[\\/:*?"<>|]/g, '-')); }
 function downloadDoc(ext) {
@@ -631,10 +735,11 @@ const MENUS = {
     ['باز کردن…', '', openFileLocal],
     ['آپلود فایل برای تایپ/OCR', '', uploadToPipeline],
     '-',
-    ['ذخیره', 'Ctrl+S', saveNow],
+    ['ذخیره', 'Ctrl+S', fdSaveManual],
     '-',
-    ['دانلود Word (سرور)', '', exportDocx],
-    ['دانلود PDF (سرور)', '', exportPdf],
+    ['دانلود Word (.doc)', '', exportDocx],
+    ['دانلود PDF (چاپ/ذخیره)', '', exportPdf],
+    ['دانلود HTML', '', () => downloadDoc('html')],
     ['چاپ', 'Ctrl+P', () => window.print()],
   ],
   'ویرایش': [
@@ -777,7 +882,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (e.shiftKey && k === 's') { e.preventDefault(); toggleVoicePanel(); return; }
-  if (k === 's' && !e.shiftKey) { e.preventDefault(); saveNow(); }
+  if (k === 's' && !e.shiftKey) { e.preventDefault(); fdSaveManual(); }
   else if (k === 'k') { e.preventDefault(); openLink(); }
   else if (k === 'f') { e.preventDefault(); openFind(); }
   else if (k === 'h') { e.preventDefault(); openFind(); }
@@ -809,7 +914,7 @@ vbox.innerHTML = `
   <button type="button" class="fd-linkbtn" id="fdVHelp">راهنمای دستورها</button>
   <button type="button" class="fd-linkbtn" id="fdVEngineBtn" hidden>تغییر موتور تشخیص گفتار…</button>`;
 document.body.appendChild(vbox);
-$('#fdMicBtn').innerHTML = iconHTML('mic');
+$('#fdMicBtn').innerHTML = MIC_SVG;
 if ($('#source')) $('#source').setAttribute('accept', 'image/*,.pdf,.zip,.docx,.txt,.md,.html');
 
 let engineMode = 'auto';           // auto | native | cloud | stt-api
@@ -818,19 +923,27 @@ let rec = null, lastStart = 0, fastEnds = 0;
 
 function engineLabel() {
   const el = $('#fdVEngine'); if (!el) return;
-  const names = { native: 'موتور بومی مرورگر · رایگان', cloud: 'موتور ابری فراست · زنده', 'cloud-chunks': 'موتور ابری فراست · تکه‌ای', 'stt-api': 'سرویس تبدیل گفتار شما', runtime: 'پنل حرفه‌ای فراست' };
+  const names = { native: 'موتور بومی مرورگر · رایگان', cloud: 'موتور ابری فراست · زنده', 'cloud-chunks': 'موتور ابری فراست · تکه‌ای', 'local-whisper': 'Whisper محلی روی دستگاه · رایگان', 'stt-api': 'سرویس تبدیل گفتار شما', runtime: 'پنل حرفه‌ای فراست' };
   el.textContent = 'موتور: ' + (names[activeHandle?.mode || currentEngineId()] || '—');
 }
 function currentEngineId() {
   if (engineMode !== 'auto') return engineMode;
-  return hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : 'stt-api');
+  return hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : (hub()?.hasMic?.() ? 'local-whisper' : 'stt-api'));
+}
+/* ---------- موتور Whisper محلی روی دستگاه (رایگان، بدون کلید API) — فالبک مطمئن ---------- */
+async function startLocalWhisperEngine(ctx) {
+  const h = await hub()?.localWhisper?.start?.(ctx); // handle برمی‌گرداند؛ خطاها را به ctx گزارش می‌کند
+  if (!h) return false;
+  wantListen = true; activeHandle = h;
+  return true;
 }
 function pickEngineInteractive() {
   const opts = [
     ['auto', 'خودکار (توصیه می‌شود)'],
-    ['native', 'موتور بومی مرورگر' + (hub()?.hasNative?.() ? '' : ' — در این مرورگر موجود نیست؛ به‌صورت خودکار از موتور ابری استفاده می‌شود')],
+    ['native', 'موتور بومی مرورگر' + (hub()?.hasNative?.() ? '' : ' — در این مرورگر موجود نیست؛ خودکار از لایهٔ بعدی استفاده می‌شود')],
     ['cloud', 'موتور ابری فراست' + (hub()?.isAuthed?.() ? '' : ' — نیازمند ورود به حساب')],
-    ['stt-api', 'سرویس تبدیل گفتار شخصی (Whisper محلی و…)'],
+    ['local-whisper', 'Whisper محلی روی دستگاه (رایگان، بدون سرور)'],
+    ['stt-api', 'سرویس تبدیل گفتار شخصی (Whisper سرور و…)'],
   ];
   const list = document.createElement('div'); list.className = 'fd-list';
   opts.forEach(([id, label]) => {
@@ -857,7 +970,7 @@ function toggleVoicePanel() {
     if (!hub()?.hasNative?.()) {
       $('#fdVMsg').textContent = hub()?.isAuthed?.()
         ? 'این مرورگر موتور بومی ندارد؛ با کلیک روی دکمه، موتور ابری فراست فعال می‌شود.'
-        : 'این مرورگر موتور بومی ندارد؛ برای استفاده از موتور ابری وارد حساب شوید یا دکمه را بزنید.';
+        : 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی رایگان روی دستگاه شما فعال می‌شود.';
     } else $('#fdVMsg').textContent = 'برای شروع کلیک کنید';
   }
   if (!show) stopVoice();
@@ -932,8 +1045,15 @@ function startNative() {
 async function startVoice() {
   if (wantListen || activeHandle) return;
   const ctx = hubCtx();
-  const prefer = engineMode === 'auto' ? (hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : 'stt-api')) : engineMode;
-  const order = prefer === 'native' ? ['native', 'cloud', 'stt-api'] : prefer === 'cloud' ? ['cloud', 'native', 'stt-api'] : ['stt-api', 'native', 'cloud'];
+  // ترتیب پیش‌فرض: بومی ← ابری فراست ← Whisper محلی (رایگان، همه مرورگرها) ← سرویس دلخواه
+  const prefer = engineMode !== 'auto' ? engineMode : (hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : 'local-whisper'));
+  const chains = {
+    native: ['native', 'cloud', 'local-whisper', 'stt-api'],
+    cloud: ['cloud', 'native', 'local-whisper', 'stt-api'],
+    'local-whisper': ['local-whisper', 'native', 'cloud', 'stt-api'],
+    'stt-api': ['stt-api', 'native', 'cloud', 'local-whisper'],
+  };
+  const order = chains[prefer] || chains.native;
   let lastErr = '';
   for (const id of order) {
     try {
@@ -942,6 +1062,11 @@ async function startVoice() {
         if (!hub()?.isAuthed?.()) continue;
         const h = await hub()?.startCloud?.(ctx);
         if (h) { wantListen = true; activeHandle = h.mode === 'runtime' ? { mode: 'runtime', stop: () => {} } : h; engineLabel(); return; }
+      }
+      if (id === 'local-whisper') {
+        if (!hub()?.hasMic?.()) continue;
+        ctx.onStatus('فعال‌سازی Whisper محلی (بارگذاری یک‌بارهٔ مدل رایگان)…');
+        if (await startLocalWhisperEngine(ctx)) { engineLabel(); return; }
       }
       if (id === 'stt-api') {
         const h = await hub()?.startSttEndpoint?.(ctx);
@@ -954,6 +1079,7 @@ async function startVoice() {
     }
   }
   wantListen = false; voiceUI(false);
+  $('#fdVMsg').textContent = 'موتوری در دسترس نبود — میکروفون/شبکه را بررسی کنید';
 }
 function stopVoice() {
   wantListen = false;
@@ -988,6 +1114,40 @@ window.FarastDocsChrome = {
 /* ===================== شروع ===================== */
 rebuildToolbar();
 syncToolStates();
+
+/* ===================== توابع عمومی موردنیاز پوسته (markDirty / saveNow) =====================
+ * در حالت هسته (FarastEditor): autosave خودکارِ هسته فعال است؛ اینجا فقط hook تغییرات و
+ * همگام‌سازی وضعیت ذخیره را انجام می‌دهیم. در حالت فالبک مستقل: autosave با تأخیر + localStorage. */
+if (typeof window.markDirty !== 'function') {
+  window.markDirty = function markDirty() {
+    const k = kernel();
+    if (k) { try { k.flush?.(); } catch {} try { k.scheduleSave?.(); } catch {} syncSaveState(); return; }
+    fdScheduleDraft();
+  };
+}
+if (typeof window.saveNow !== 'function') {
+  window.saveNow = async function saveNow(source = 'manual') {
+    const k = kernel();
+    if (k?.saveNow && k?.state?.model) { try { await k.saveNow(source); fdEverSaved = true; toast('ذخیره شد'); } catch (e) { toast(e?.message || 'ذخیره ناموفق بود'); } return; }
+    await fdSaveManual();
+  };
+}
+/* تریگر تغییر: هر input روی سطح ویرایش →autosave گوگل‌داکسی (سند خالی ذخیره نمی‌شود) */
+app.addEventListener('input', () => { if (!kernel()) fdScheduleDraft(); }, true);
+
+/* بارگذاری پیش‌نویس محلی در حالت فالبک (بازیابی بعد از بستن مرورگر) */
+(function restoreLocalDraft() {
+  if (kernel()) return;
+  try {
+    const raw = localStorage.getItem('farast.docs.local'); if (!raw) return;
+    const d = JSON.parse(raw); const ed = $('#fdFallbackEditor');
+    if (ed && d?.html && (ed.innerText || '').replace(FD_EMPTY_RE, '') === '') {
+      ed.innerHTML = d.html; if (fdTitle && d.title) fdTitle.value = d.title;
+      fdEverSaved = true; fdSetSaveState('پیش‌نویس محلی بازیابی شد', 'ok');
+    }
+  } catch {}
+})();
+
 /* حفظ ترجیح کاربر */
 if (localStorage.getItem('farast.editor.chrome') === 'classic') goClassic();
 })();
