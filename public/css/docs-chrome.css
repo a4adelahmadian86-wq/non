@@ -1,1 +1,168 @@
-PLACEHOLDER
+/* FARAST · Google Docs-style Chrome (پوسته‌ی گوگل داکس)
+   معماری: این فایل فقط «ظاهر» را می‌سازد؛ هستهٔ سند همان FarastEditor Kernel است.
+   همهٔ قواعد با پیشوند fd- و در دامنهٔ #farastWord / .fd-* ایزوله شده‌اند تا هیچ
+   بخش دیگری از سایت آسیب نبیند. */
+
+/* ---------- Material Symbols (آیکون‌های عین گوگل داکس — فونت محلی، بدون CDN، رایگان و آفلاین) ---------- */
+@font-face{font-family:'Material Symbols Outlined';font-style:normal;font-weight:400;font-display:block;src:url('/fonts/material-symbols-outlined.woff2') format('woff2')}
+.ms{font-family:'Material Symbols Outlined';font-weight:400;font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';-webkit-font-smoothing:antialiased;width:20px;overflow:hidden}
+.ms svg,.fd-logo svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fd-mic .ms svg{width:36px;height:36px}
+
+/* ---------- متغیرهای رنگ کروم گوگل ---------- */
+#farastWord.farast-docs-mode{
+  --fd-chrome:#f8fafc; --fd-bar:#edf2fa; --fd-ink:#1f1f1f; --fd-ink2:#444746;
+  --fd-line:#d1d5db; --fd-accent:#0b57d0; --fd-accent-soft:#d3e3fd; --fd-hover:#dde3ea;
+  --fd-danger:#c5221f; --fd-paper:#fff;
+  background:var(--fd-chrome);color:var(--fd-ink);
+  font-family:Vazirmatn,Tahoma,system-ui,sans-serif;font-size:14px;
+}
+body.editor-page-body:has(#farastWord.farast-docs-mode){background:#f8fafc}
+
+/* ---------- فونت فارسی محلی (Vazirmatn از CDN گوگل — با فالبک Tahoma آفلاین) ---------- */
+@font-face{font-family:'Vazirmatn Local';font-style:normal;font-weight:400 700;font-display:swap;src:url('https://fonts.gstatic.com/s/vazirmatn/v18/Qw3a-Z2N52MXGcyUSymAL72LqA.woff2') format('woff2')}
+
+/* ---------- استتار ساختار قدومی (بدون حذف؛ فقط پنهان) ---------- */
+/* صفحه‌بندی مجدد کل اپ ادیتور در حالت داکس: هدر+نوارابزار/بوم/نوارپایین به‌صورت ستون تمام‌قد */
+#farastWord.farast-docs-mode{display:flex !important;flex-direction:column !important;height:100dvh;min-height:100dvh;max-width:none !important;width:auto !important;overflow:hidden !important;margin:0 !important;box-sizing:border-box}
+html:has(#farastWord.farast-docs-mode),body.editor-page-body:has(#farastWord.farast-docs-mode){height:100%;overflow:hidden;background:#f8fafc}
+body.editor-page-body #app-main:has(#farastWord.farast-docs-mode){position:static !important;inset:auto !important;width:auto !important;height:auto !important;max-width:none !important;display:block !important;overflow:hidden !important}
+body.editor-page-body>#app-main:has(#farastWord.farast-docs-mode)>*:not(#farastWord){display:none !important}
+#farastWord.farast-docs-mode *{box-sizing:border-box}
+#farastWord.farast-docs-mode > .farast-appbar,
+#farastWord.farast-docs-mode > .farast-menubar,
+#farastWord.farast-docs-mode > .farast-ribbon,
+#farastWord.farast-docs-mode > .farast-statusbar{display:none !important}
+#farastWord.farast-docs-mode main.farast-workspace{display:flex !important;flex-direction:row !important;grid-template-columns:none !important;flex:1 1 auto;min-height:0;padding:0;margin:0;background:transparent;border:0;position:relative;z-index:1}
+#farastWord.farast-docs-mode .farast-canvas-shell{padding:0;background:transparent;border:0;flex:1 1 auto;min-width:0;display:flex !important;flex-direction:column !important;grid-template-rows:none !important;overflow:hidden}
+#farastWord.farast-docs-mode .farast-page-viewport{flex:1 1 auto;min-height:0;overflow:auto;background:#f0f4f9;padding:16px 0 80px;display:flex;flex-direction:column;align-items:center;gap:16px}
+#farastWord.farast-docs-mode .farast-nav-panel,#farastWord.farast-docs-mode .farast-ai-panel{z-index:120}
+/* برگهٔ هسته در پوستهٔ داکس: سایه و ابعاد گوگلی، بدون حاشیه‌های سنگین قبلی */
+#farastWord.farast-docs-mode .farast-page{width:min(850px,calc(100% - 32px))!important;min-height:0!important;background:#fff;border:1px solid #e0e0e0!important;border-radius:0!important;box-shadow:0 1px 2px 0 rgba(60,64,67,.30),0 1px 3px 1px rgba(60,64,67,.15)!important;padding:56px 72px 64px!important;margin:0 auto!important}
+#farastWord.farast-docs-mode .farast-editor{font-family:'B Nazanin','Vazirmatn Local',Vazirmatn,Tahoma,sans-serif!important;font-size:16px!important;line-height:1.9!important;color:#1f1f1f;min-height:200px;outline:none;caret-color:#0b57d0}
+#farastWord.farast-docs-mode .farast-editor ::selection{background:#c2ddf9}
+#farastWord.farast-docs-mode .farast-editor blockquote{border-inline-start:4px solid #ddd9d3;margin:8px 24px;padding-inline-start:12px;color:#5f6368}
+#farastWord.farast-docs-mode .farast-editor table{border-collapse:collapse;width:100%}
+#farastWord.farast-docs-mode .farast-editor td,#farastWord.farast-docs-mode .farast-editor th{border:1px solid #8a8a8a;padding:6px 8px;vertical-align:top}
+#farastWord.farast-docs-mode .farast-editor img{max-width:100%}
+#farastWord.farast-docs-mode .farast-editor a{color:#0b57d0;text-decoration:underline}
+#fdFallbackEditor{width:min(850px,calc(100vw - 32px));margin:0 auto;background:#fff;border:1px solid #e0e0e0;box-shadow:0 1px 2px 0 rgba(60,64,67,.30),0 1px 3px 1px rgba(60,64,67,.15);padding:56px 72px 64px}
+
+/* ---------- هدر: لوگو + عنوان + منوها + وضعیت ذخیره ---------- */
+.fd-top{display:flex;align-items:flex-start;gap:12px;padding:8px 16px 4px;background:var(--fd-chrome)}
+.fd-logo{width:36px;height:36px;border-radius:8px;background:var(--fd-accent);color:#fff;display:grid;place-items:center;flex:none;margin-top:2px}
+.fd-logo .ms{font-size:22px}
+.fd-meta{min-width:0;flex:1}
+.fd-title{display:block;width:100%;max-width:420px;font:500 17px/1.4 Vazirmatn,Tahoma,sans-serif;border:1px solid transparent;border-radius:6px;background:transparent;padding:0 8px;color:var(--fd-ink)}
+.fd-title:hover{border-color:var(--fd-line)}
+.fd-title:focus{border-color:var(--fd-accent);outline:none}
+.fd-menus{display:flex;gap:2px;flex-wrap:wrap;position:relative;margin-top:2px}
+.fd-mbtn{padding:2px 10px;border-radius:6px;font-size:13.5px;border:0;background:transparent;color:var(--fd-ink);cursor:pointer;font-family:inherit}
+.fd-mbtn:hover,.fd-mbtn.open{background:var(--fd-hover)}
+.fd-save{font-size:12px;color:var(--fd-ink2);white-space:nowrap;margin-top:12px;display:flex;align-items:center;gap:6px}
+.fd-save::before{content:'';width:8px;height:8px;border-radius:50%;background:#81c995;flex:none}
+.fd-save[data-state='saving']::before{background:#fbbc04}
+.fd-save[data-state='error']::before{background:var(--fd-danger)}
+.fd-save[data-state='ok']::before{background:#34a853}
+
+/* ---------- منوی کشویی ---------- */
+.fd-dd{position:fixed;min-width:250px;background:#fff;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.2),0 8px 24px rgba(0,0,0,.12);padding:6px 0;z-index:9000;direction:rtl}
+.fd-dd .it{display:flex;justify-content:space-between;gap:24px;width:100%;text-align:right;padding:7px 16px;font-size:13.5px;border:0;background:transparent;color:var(--fd-ink);cursor:pointer;font-family:inherit}
+.fd-dd .it:hover{background:#f1f3f4}
+.fd-dd .it bdi{color:var(--fd-ink2);font-size:12px}
+.fd-dd hr{border:0;border-top:1px solid #e3e3e3;margin:6px 0}
+
+/* ---------- نوار ابزار دار شکل ---------- */
+.fd-toolbar{margin:4px 12px 8px;background:var(--fd-bar);border-radius:28px;padding:5px 10px;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:thin;position:relative;z-index:20}
+.fd-tb{width:32px;height:32px;border-radius:6px;display:grid;place-items:center;flex:none;color:var(--fd-ink2);border:0;background:transparent;cursor:pointer;font-family:inherit}
+.fd-tb:hover{background:var(--fd-hover)}
+.fd-tb.on{background:var(--fd-accent-soft);color:#041e49}
+.fd-tb.rec{background:var(--fd-danger);color:#fff}
+.fd-sep{width:1px;height:20px;background:#c4c7c5;margin:0 6px;flex:none}
+.fd-sel{height:30px;border:0;border-radius:6px;background:transparent;padding:0 6px;font:inherit;font-size:13px;color:var(--fd-ink);cursor:pointer;flex:none;font-family:inherit}
+.fd-sel:hover{background:var(--fd-hover)}
+.fd-sel.style{width:118px}.fd-sel.font{width:132px}.fd-sel.zoom{width:64px}
+.fd-size{display:flex;align-items:center;gap:1px;flex:none}
+.fd-size input{width:34px;height:28px;border:1px solid transparent;border-radius:6px;background:transparent;text-align:center;font:inherit;font-size:13px;color:var(--fd-ink)}
+.fd-size input:hover{border-color:var(--fd-line)}
+.fd-size input:focus{border-color:var(--fd-accent);outline:none;background:#fff}
+.fd-tb.color{position:relative}
+.fd-cbar{position:absolute;bottom:3px;left:6px;right:6px;height:3px;border-radius:2px;background:#000}
+
+/* ---------- بوم صفحه (حالت مستقل/فالبک) ---------- */
+#farastWord.farast-docs-mode .fd-canvas{flex:1;overflow:auto;background:#f0f4f9;padding:16px 0 80px}
+.fd-pages{display:flex;flex-direction:column;align-items:center;gap:16px}
+.fd-vi{color:#6b7a90;background:rgba(11,87,208,.09);border-radius:4px}
+
+/* ---------- نوار پایین ---------- */
+.fd-bottom{flex:none;z-index:60;display:flex;gap:18px;align-items:center;padding:6px 18px;background:var(--fd-chrome);border-top:1px solid #e0e0e0;font-size:12.5px;color:var(--fd-ink2)}
+.fd-bottom button{border:0;background:transparent;cursor:pointer;font:inherit;color:var(--fd-ink2);border-radius:6px;padding:3px 8px}
+.fd-bottom button:hover{background:var(--fd-hover)}
+
+/* ---------- پنل تایپ صوتی ---------- */
+.fd-vbox{position:fixed;inset-inline-start:20px;top:150px;width:230px;background:#fff;border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.2),0 8px 24px rgba(0,0,0,.12);padding:12px;z-index:9500;display:none;direction:rtl;font-family:inherit}
+.fd-vbox.show{display:block}
+.fd-vh{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:var(--fd-ink)}
+.fd-vbox select{width:100%;height:32px;border:1px solid var(--fd-line);border-radius:8px;background:#fff;font:inherit;font-size:13px;margin-top:10px;padding:0 6px;color:var(--fd-ink)}
+.fd-mic{display:grid;place-items:center;width:72px;height:72px;margin:14px auto 8px;border-radius:50%;border:0;cursor:pointer;background:var(--fd-accent);color:#fff;transition:transform .12s ease}
+.fd-mic:hover{transform:scale(1.05)}
+.fd-mic.live{background:var(--fd-danger);animation:fd-pulse 1.4s infinite}
+.fd-mic .ms{font-size:36px;width:36px}
+@keyframes fd-pulse{0%,100%{box-shadow:0 0 0 0 rgba(197,34,31,.35)}50%{box-shadow:0 0 0 12px rgba(197,34,31,0)}}
+.fd-vmsg{font-size:12px;color:var(--fd-ink2);text-align:center;min-height:18px}
+.fd-vopt{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--fd-ink2);margin-top:8px;cursor:pointer}
+.fd-vopt input{accent-color:var(--fd-accent)}
+.fd-linkbtn{width:100%;margin-top:10px;border:0;background:transparent;color:var(--fd-accent);font:inherit;font-size:12.5px;cursor:pointer;text-decoration:underline}
+
+/* ---------- دیالوگ و پاپ‌اور مشترک ---------- */
+dialog.fd-dlg{border:0;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:0;max-width:min(560px,92vw);width:100%;direction:rtl;font-family:inherit;color:var(--fd-ink)}
+dialog.fd-dlg::backdrop{background:rgba(32,33,36,.46)}
+.fd-dlg h2{margin:0;padding:18px 22px 8px;font-size:17px;font-weight:600}
+.fd-dlg .dbody{padding:8px 22px;display:grid;gap:10px;font-size:13.5px}
+.fd-dlg label{display:grid;gap:4px;color:var(--fd-ink2);font-size:12.5px}
+.fd-dlg input[type=text],.fd-dlg input[type=url],.fd-dlg input[type=number],.fd-dlg textarea{border:1px solid var(--fd-line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13.5px;background:#fff;color:var(--fd-ink)}
+.fd-dlg input:focus,.fd-dlg textarea:focus{outline:2px solid var(--fd-accent);outline-offset:-1px;border-color:transparent}
+.fd-dlg .dact{display:flex;justify-content:flex-end;gap:8px;padding:12px 22px 18px}
+.fd-btn{border:1px solid var(--fd-line);background:#fff;border-radius:20px;padding:8px 18px;font:inherit;font-size:13.5px;cursor:pointer;color:var(--fd-accent)}
+.fd-btn:hover{background:#f6f8fc;box-shadow:0 1px 1px rgba(0,0,0,.1)}
+.fd-btn.primary{background:var(--fd-accent);border-color:var(--fd-accent);color:#fff}
+.fd-btn.primary:hover{background:#0347b3;color:#fff}
+.fd-pop{position:fixed;z-index:9600;background:#fff;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.2),0 8px 24px rgba(0,0,0,.12);padding:10px;direction:rtl;font-family:inherit;color:var(--fd-ink)}
+.fd-pal{display:grid;grid-template-columns:repeat(10,20px);gap:3px}
+.fd-pal button{width:20px;height:20px;border:1px solid rgba(0,0,0,.12);border-radius:3px;cursor:pointer;padding:0}
+.fd-pal button:hover{outline:2px solid var(--fd-accent);outline-offset:-1px}
+.fd-row{display:flex;gap:8px;align-items:center;margin-top:10px}
+.fd-list{display:grid;gap:2px;min-width:230px}
+.fd-list button{text-align:right;border:0;background:transparent;font:inherit;font-size:13.5px;padding:7px 10px;border-radius:7px;cursor:pointer;color:var(--fd-ink)}
+.fd-list button:hover{background:#f1f3f4}
+.fd-chars{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;max-width:420px}
+.fd-chars button{height:30px;border:0;background:transparent;border-radius:6px;font-size:15px;cursor:pointer;color:var(--fd-ink)}
+.fd-chars button:hover{background:var(--fd-hover)}
+.fd-toast{position:fixed;bottom:48px;inset-inline-start:50%;transform:translateX(50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .25s}
+.fd-toast.show{opacity:1}
+.fd-imgbar{position:fixed;display:none;gap:2px;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.25);padding:4px;z-index:9400}
+.fd-imgbar button{border:0;background:transparent;border-radius:6px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer;color:var(--fd-ink)}
+.fd-imgbar button:hover{background:var(--fd-hover)}
+.fd-imgbar .del{color:var(--fd-danger)}
+
+/* ---------- دکمهٔ میکروفون تضمینی (SVG + متن، بدون وابستگی به فونت آیکون) ---------- */
+#fdMicOpen.fd-micpill{display:inline-flex;align-items:center;gap:7px;background:#c5221f;color:#fff !important;font-weight:700;font-size:13px;padding:6px 16px;border-radius:999px;box-shadow:0 1px 3px rgba(60,64,67,.35)}
+#fdMicOpen.fd-micpill:hover{background:#a50e0b}
+#fdMicOpen.fd-micpill .micdot{width:10px;height:10px;border-radius:50%;background:#fff;flex:none;animation:none}
+#fdMicOpen.fd-micpill.rec .micdot{animation:fd-pulse 1.4s infinite;background:#fff}
+.fd-tb.fd-micbtn{width:auto;min-width:32px;padding:0 10px;gap:6px;display:inline-flex;align-items:center;justify-content:center;background:#fce8e6;color:#c5221f;border-radius:8px;font-weight:700;font-size:12.5px;flex:none}
+.fd-tb.fd-micbtn svg{width:18px;height:18px;display:block;flex:none}
+.fd-tb.fd-micbtn:hover{background:#f9d2cf}
+.fd-tb.fd-micbtn.on{background:var(--fd-accent-soft);color:#041e49}
+.fd-tb.fd-micbtn.rec{background:var(--fd-danger);color:#fff;animation:fd-pulse 1.4s infinite}
+.fd-miclbl{white-space:nowrap}
+@media (max-width:900px){.fd-miclbl{display:none}.fd-tb.fd-micbtn{padding:0;width:32px}}
+
+/* ---------- موبایل ---------- */
+@media (max-width:720px){
+  .fd-top{padding:6px 10px 2px}
+  .fd-logo{display:none}
+  .fd-save{display:none}
+  .fd-toolbar{margin:2px 6px 6px;border-radius:14px}
+  .fd-vbox{inset-inline:12px;width:auto;top:auto;bottom:56px}
+}
