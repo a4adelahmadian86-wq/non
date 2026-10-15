@@ -2,8 +2,14 @@
  * ============================================================
  * لایه‌ها به ترتیب اولویت:
  *  ۱) موتور بومی مرورگر (Web Speech API) — رایگان، بدون سرور (Chrome/Edge/Safari/Opera/Samsung)
- *  ۲) موتور ابری فراست (WebSocket → /editor/voice/stream-token) — برای Firefox و هر مرورگر بدون SR
- *  ۳) دیکته با میکروفون + خروجی متنی (آماده اتصال به هر سرویس STT دلخواه)
+ *     عین الگوی persian-docs-editor.html (نمونهٔ مورد نظر کاربر): continuous + interim،
+ *     قطع نشدن با ویرایش دستی، بازآغاز خودکار در صورت end زودهنگام.
+ *  ۲) موتور ابری فراست (WebSocket → /editor/voice/stream-token یا HTTP تکه‌ای → /editor/voice/transcribe)
+ *     برای Firefox و هر مرورگر بدون SR — همان موتور Google/Gemini سایت.
+ *  ۳) OCR رایگان handwriting: Tesseract.js (محلی در مرورگر، fa+eng) — فایل/تصویر دست‌نویس
+ *  ۴) فالبک نهایی: ضبط صدا و تبدیل گفتار به متن با Whisper محلی (transformers.js + whisper)
+ *     روی دستگاه کاربر — کاملاً رایگان، بدون کلید API؛ در صورت نبود CDN آفلاین،
+ *     راهنمای نصب محلی نمایش داده می‌شود.
  * تشخیص خودکار: اگر موتور ۱ موجود نبود، پنل به‌جای پیام «پشتیبانی نمی‌شود»،
  * مسیر جایگزین را خودش فعال می‌کند. هستهٔ سند از طریق window.FarastEditor دستکاری می‌شود.
  */
@@ -21,7 +27,15 @@ const CMD_MAP = {
   'علامت تعجب': '!', 'دو نقطه': ':', 'نقطه ویرگول': '؛', 'سه نقطه': '…',
   'خط تیره': '–', 'باز کردن پرانتز': '(', 'بستن پرانتز': ')',
   'باز کردن گیومه': '«', 'بستن گیومه': '»',
+  // واژه‌های خالیِ فارسی که موتورهای STT به‌جای علامت برمی‌گردانند → نشانه‌گذاری واقعی
+  'سکوت': '', 'خط جدید': '\n', 'پاراگراف': '\n\n',
+  'پررنگ': '__FMT:bold', 'کج': '__FMT:italic', 'زیرخط': '__FMT:underline',
 };
+// الگوی گوگل‌داکس: هر کلمهٔ خالی فارسی در ورودی STT باید به نشانه تبدیل شود، نه اینکه تایپ شود
+const EMPTY_WORD_RE = /(سکوت|خط جدید|سر خط|پاراگراف جدید|پاراگراف|باز کردن گیومه|بستن گیومه|باز کردن پرانتز|بستن پرانتز|خط تیره|نقطه ویرگول|دو نقطه|سه نقطه|علامت تعجب|علامت سوال|علامت سؤال|علامت پرسش|ویرگول|نقطه)/g;
+function replaceEmptyWords(t) {
+  return t.replace(EMPTY_WORD_RE, m => CMD_MAP[m] !== undefined ? CMD_MAP[m] : (m === 'نقطه' ? '.' : '،'));
+}
 const normalizeFaText = t => t.replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/\s+/g, ' ').trim();
 
 function prevChar() {
@@ -35,7 +49,7 @@ function prevChar() {
 /* پردازش متن نهایی: دستورات صوتی، ارقام فارسی، فاصله‌گذاری هوشمند */
 function processFinalText(raw, opts) {
   const fa = (opts.lang || 'fa-IR').startsWith('fa');
-  let t = fa ? normalizeFaText(raw) : String(raw).trim();
+  let t = fa ? normalizeFaText(replaceEmptyWords(String(raw))) : String(raw).trim();
   if (!t) return null;
   if (fa && opts.commands !== false) {
     if (/^(خط جدید|خط بعد|سر خط)$/.test(t)) return '\n';
@@ -86,12 +100,18 @@ function insertIntoDoc(text) {
 }
 
 /* نمایش پیش‌نمایش موقت (interim) — دقیقاً مثل گوگل داکس: متن کم‌رنگ در مکان نشانگر.
- * با Selection/Range بومی کار می‌کند (نه گرهٔ DOM جعلی) تا با مدل هسته سازگار باشد و پاک‌کردنش ساده و مطمئن باشد. */
+ * الگو از persian-docs-editor.html (نمونهٔ تأییدشدهٔ کاربر): گرهٔ span موقت contenteditable=false.
+ * این گره هرگز در مدل سند ذخیره نمی‌شود (پیش از هر capture حذف می‌گردد). */
 let interimEl = null;
-function hideInterimSel() { try { const s = getSelection(); if (s && s.rangeCount > 1) s.removeAllRanges(); } catch {} }
+function hideInterimSel() { /* نگهبان سازگاری API */ }
 function clearInterim() {
-  hideInterimSel();
-  if (interimEl) { try { interimEl.remove(); } catch {} interimEl = null; }
+  if (interimEl) {
+    try {
+      const p = interimEl.parentNode;
+      if (p) { const nx = interimEl.nextSibling; interimEl.remove(); if (nx && nx.nodeType === 3 && !nx.data) { /* متنی */ } }
+    } catch {}
+    interimEl = null;
+  }
 }
 function showInterim(t) {
   if (!t) return clearInterim();
@@ -100,36 +120,210 @@ function showInterim(t) {
   const s = getSelection(); if (!s || !s.rangeCount) return;
   const r = s.getRangeAt(0);
   if (!ed.contains(r.startContainer)) return;
-  // گرهٔ موقت contenteditable=false (فقط برای استایل زیرخط؛ در مدل سند ذخیره نمی‌شود)
   if (!interimEl || !ed.contains(interimEl)) {
-    const c = r.cloneRange(); c.collapse(false);
-    interimEl = document.createElement('span'); interimEl.className = 'fd-vi'; interimEl.setAttribute('contenteditable', 'false');
-    try { c.insertNode(interimEl); } catch { interimEl = null; return; }
+    clearInterim();
+    interimEl = document.createElement('span');
+    interimEl.className = 'fd-vi';
+    interimEl.setAttribute('contenteditable', 'false');
+    interimEl.setAttribute('data-fd-interim', '1');
+    interimEl.setAttribute('aria-hidden', 'true');
+    try { r.insertNode(interimEl); } catch { interimEl = null; return; }
+    const nr = document.createRange(); nr.setStartAfter(interimEl); nr.collapse(true);
+    s.removeAllRanges(); s.addRange(nr); window.__fdSavedRange = nr.cloneRange();
   }
   interimEl.textContent = t;
-  try {
-    const b = document.createRange(); b.selectNodeContents(interimEl);
-    s.removeAllRanges(); s.addRange(b); s.addRange(r, 0); // رنج دوم = انتخاب «موقتی» که مرورگر زیرخط می‌کند
-  } catch { /* اگر مرورگر رنج چندگانه را نپذیرفت، فقط متن خاکستری دیده می‌شود */ }
+}
+/* پاک‌سازی اضطراری: هر گرهٔ interim جامانده (مثلاً پس از خطا) — قبل از ذخیره/تغییر مدل صدا زده می‌شود */
+function sweepInterim(root) {
+  const scope = root && root.querySelectorAll ? root : document;
+  scope.querySelectorAll('[data-fd-interim], .fd-vi').forEach(n => { try { n.remove(); } catch {} });
+  if (!root) interimEl = null;
 }
 
 /* ---------- وضعیت موتورهای قابل استفاده ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function isAuthed() { return $('#farastWord')?.dataset.authenticated === '1'; }
+function hasMic() { return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder); }
+
+/* ===================== کتابخانه‌های CDN محلی‌پسند (load-once، graceful) ===================== */
+/* چند منبع برای هر کتابخانه: اگر jsdelivr فیلتر/مسدود بود، به unpkg و سپس cdnjs می‌رود.
+ * این کار مشکل «در فلان کشور/شبکه کتابخانه لود نمی‌شود» را حل می‌کند — همچنان رایگان. */
+const CDN = {
+  tesseract: [
+    'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+    'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js',
+  ],
+  transformers: [
+    'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/dist/transformers.min.js',
+    'https://unpkg.com/@huggingface/transformers@3.5.0/dist/transformers.min.js',
+  ],
+};
+const libCache = {};
+function loadOne(src) {
+  return new Promise(res => {
+    const s = document.createElement('script'); s.src = src; s.async = true; s.crossOrigin = 'anonymous';
+    s.onload = () => res(true);
+    s.onerror = () => { s.remove(); res(false); }; // بدون throw؛ منبع بعدی امتحان می‌شود
+    document.head.appendChild(s);
+  });
+}
+async function loadScript(srcOrList) {
+  const urls = Array.isArray(srcOrList) ? srcOrList : [srcOrList];
+  const key = urls.join('|');
+  if (libCache[key]) return libCache[key];
+  libCache[key] = (async () => {
+    for (const u of urls) { if (await loadOne(u)) return true; }
+    delete libCache[key];
+    return false;
+  })();
+  return libCache[key];
+}
+async function ensureTesseract(ctx) {
+  if (window.Tesseract) return true;
+  ctx.onStatus?.('در حال آماده‌سازی OCR رایگان…');
+  return await loadScript(CDN.tesseract);
+}
+
+/* ===================== OCR رایگان دست‌خط (Tesseract.js — fa+eng، محلی روی دستگاه) =====================
+ * مرجع رایگان: https://github.com/naptha/tesseract.js (langPath CDN خودکار، بدون کلید API)
+ * supportsHandwriting: زبان «fas» مدل LSTM تesseract از داده‌های دست‌نویس آموزش دیده است. */
+let tessWorker = null, tessLang = '';
+async function ocrImage(fileOrBlob, opts = {}) {
+  const lang = (opts.lang || 'fas+eng').replace(/،/g, ',');
+  if (!(await ensureTesseract(opts))) throw new Error('کتابخانهٔ OCR بارگذاری نشد (اینترنت لازم است).');
+  if (!tessWorker || tessLang !== lang) {
+    if (tessWorker) { try { await tessWorker.terminate(); } catch {} tessWorker = null; }
+    tessWorker = await window.Tesseract.createWorker(lang, 1, {
+      logger: m => { if (m.status === 'recognizing text' && opts.onProgress) opts.onProgress(Math.round((m.progress || 0) * 100)); },
+    });
+    tessLang = lang;
+  }
+  const { data } = await tessWorker.recognize(fileOrBlob);
+  const words = (data.words || data.segments || []).map(w => ({
+    text: w.text || '', confidence: Number((w.confidence != null ? w.confidence : (w.conf || 0))),
+  })).filter(w => w.text);
+  let text = String(data.text || '').replace(/\n{3,}/g, '\n\n').trim();
+  // ارقام فارسی + نیم‌فاصلهٔ ساده در انتهای OCR (هم‌راستا با پردازش تایپ صوتی)
+  text = toFaDigits(text);
+  return { text, words };
+}
+function guessHandwritten(file) {
+  // راهنمای هوشمند: عکس موبایل/PDF/اسکن → احتمال دست‌نویس؛ کاربر همیشه می‌تواند دستی انتخاب کند
+  const n = (file?.name || '').toLowerCase();
+  return /^image\//.test(file?.type || '') || /\.(jpe?g|png|webp|heic|bmp|tiff?)$/.test(n) || /\.pdf$/i.test(n);
+}
+
+/* ===================== فالبک نهاییِ گفتار: Whisper محلی (transformers.js) =====================
+ * برای مرورگرهایی که Web Speech ندارند و موتور ابری هم در دسترس نیست (آفلاین/بدون حساب):
+ * ضبط با MediaRecorder → دیکد به PCM با AudioContext.decodeAudioData → Whisper tiny/base روی WASM.
+ * رایگان، بدون سرور، بدون کلید. مدل از HF Hub کش می‌شود (first run نیازمند اینترنت). */
+let whr = null, whrName = '';
+async function ensureWhisper(onStatus, model) {
+  const tf = window.transformers || (await loadScript(CDN.transformers) ? window.transformers : null);
+  if (!tf) throw new Error('کتابخانهٔ transformers.js از هیچ CDNای بارگذاری نشد (اینترنت/فیلتر شبکه را بررسی کنید).');
+  if (whr && whrName === model) return whr;
+  onStatus?.('آماده‌سازی مدل گفتار روی دستگاه (بار اول، چند مگابایت…)');
+  /* تلاش با CDN هافینگ‌فیس؛ در شبکه‌های محدود، mirror داخلی (hf-mirror.com) امتحان می‌شود */
+  try {
+    whr = await tf.pipeline('automatic-speech-recognition', { model, quantized: true, device: 'wasm' });
+  } catch (e1) {
+    onStatus?.('مدل از منبع اصلی دانلود نشد؛ در حال امتحان mirror جایگزین…');
+    try {
+      tf.env?.allowRemoteModels && (tf.env.remoteHost = 'https://hf-mirror.com/');
+      tf.env?.remotePathTemplate && (tf.env.remotePathTemplate = '{model}/resolve/{revision}/');
+      whr = await tf.pipeline('automatic-speech-recognition', { model, quantized: true, device: 'wasm' });
+    } catch (e2) {
+      throw new Error('مدل Whisper قابل دانلود نبود (' + (String(e2?.message || e1?.message || '').slice(0, 80)) + '). از موتور ابری یا سرویس شخصی استفاده کنید.');
+    }
+  }
+  whrName = model;
+  return whr;
+}
+async function decodeToWav(audioBlob, onStatus) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) throw new Error('AudioContext در این مرورگر نیست.');
+  const ab = await audioBlob.arrayBuffer();
+  const acx = new AC({ sampleRate: 16000 });
+  let buf;
+  try { buf = await acx.decodeAudioData(ab); } finally { try { acx.close(); } catch {} }
+  const ch = buf.getChannelData(0);
+  const sr = buf.sampleRate;
+  // تبدیل به WAV 16k mono (قالب ورودی whisper)
+  const ratio = Math.max(1, Math.round(sr / 16000));
+  const outRate = Math.floor(sr / ratio);
+  const len = Math.floor(ch.length / ratio);
+  const pcm = new Float32Array(len);
+  for (let i = 0; i < len; i++) { let s = 0; for (let j = 0; j < ratio; j++) s += ch[i * ratio + j] || 0; pcm[i] = s / ratio; }
+  const ns = 44 + pcm.length * 2, b = new DataView(new ArrayBuffer(ns));
+  const str = (o, x) => { for (let i = 0; i < x.length; i++) b.setUint8(o + i, x.charCodeAt(i)); };
+  str(0, 'RIFF'); b.setUint32(4, ns - 8, true); str(8, 'WAVE'); str(12, 'fmt ');
+  b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+  b.setUint32(24, outRate, true); b.setUint32(28, outRate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true);
+  str(36, 'data'); b.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) b.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 32767, true);
+  return new Uint8Array(b.buffer);
+}
+async function startLocalWhisper(ctx) {
+  if (!hasMic()) throw new Error('امکان ضبط صدا در این مرورگر/سیستم وجود ندارد.');
+  const model = localStorage.getItem('farast.whisper.model') || 'Xenova/whisper-base';
+  let stopped = false, inflight = Promise.resolve(), lastFinal = '';
+  const transcribe = async blob => {
+    if (!blob || blob.size < 3000) return;
+    ctx.onStatus('پردازش محلی (Whisper)…');
+    inflight = inflight.then(async () => {
+      try {
+        const wav = await decodeToWav(blob, ctx.onStatus);
+        const pipe = await ensureWhisper(ctx.onStatus, model);
+        const out = await pipe(wav, { task: 'transcribe', language: ctx.lang().startsWith('fa') ? 'farsi' : undefined, chunk_length_s: 10, stride_length_s: 5 });
+        const text = String(out?.text || '').trim();
+        if (text) {
+          clearInterim();
+          let t = text;
+          if (lastFinal && t.startsWith(lastFinal)) t = t.slice(lastFinal.length).trim();
+          else if (lastFinal && lastFinal.endsWith(t)) t = '';
+          if (t) { lastFinal = text; ctx.onFinal(t); }
+        }
+      } catch (e) { ctx.onError('فالبک محلی: ' + (e?.message || '')); }
+      if (!stopped) ctx.onStatus('در حال گوش دادن (محلی)…');
+    });
+  };
+  const recordOnce = () => new Promise(resolve => {
+    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
+      .then(media => {
+        const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+        const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
+        const chunks = [];
+        rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = () => { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(new Blob(chunks, { type: mime || 'audio/webm' })); };
+        try { rec.start(1000); } catch { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
+        setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 4000);
+      })
+      .catch(err => { if (!stopped) ctx.onError('دسترسی به میکروفون ممکن نشد: ' + (err?.message || err?.name || '')); resolve(null); });
+  });
+  (async () => {
+    ctx.onStatus('در حال گوش دادن (محلی)…'); ctx.onLive(true);
+    while (!stopped) { const blob = await recordOnce(); if (stopped || !blob) break; transcribe(blob); }
+  })();
+  return { stop: () => { stopped = true; ctx.onStopped(); }, mode: 'local-whisper' };
+}
+
 function engines() {
   const list = [];
   if (SR) list.push({ id: 'native', label: 'موتور بومی مرورگر (رایگان)' });
   // موتور ابری سایت در هر مرورگری کار می‌کند (WebSocket یا HTTP تکه‌ای) — فقط نیازمند ورود به حساب
-  if (isAuthed() && navigator.mediaDevices?.getUserMedia) list.push({ id: 'cloud', label: 'موتور ابری فراست (بدون محدودیت مرورگر)' });
-  if (navigator.mediaDevices?.getUserMedia && !SR && !isAuthed()) list.push({ id: 'stt-api', label: 'اتصال به سرویس تبدیل گفتار' });
+  if (isAuthed() && hasMic()) list.push({ id: 'cloud', label: 'موتور ابری فراست (بدون محدودیت مرورگر)' });
+  if (hasMic()) list.push({ id: 'local-whisper', label: 'فالبک محلی رایگان (Whisper روی دستگاه شما)' });
+  list.push({ id: 'stt-api', label: 'اتصال به سرویس تبدیل گفتار دلخواه' });
   return list;
 }
 window.FarastVoiceHub = {
-  version: '1.1.0',
+  version: '1.2.0',
   hasNative: () => !!SR,
-  isAuthed,
-  engines,
-  processFinalText, insertIntoDoc, showInterim, clearInterim, surfaceEl, hideInterimSel,
+  isAuthed, hasMic, engines,
+  processFinalText, insertIntoDoc, showInterim, clearInterim, sweepInterim, surfaceEl, hideInterimSel,
+  ocr: { ocrImage, guessHandwritten, ensureTesseract },
+  localWhisper: { ensureWhisper, start: startLocalWhisper },
 };
 
 /* ===================== موتور ابری فراست (فايرفاکس و بقیه) =====================
@@ -137,15 +331,44 @@ window.FarastVoiceHub = {
  *  الف) استریم زندهٔ WebSocket (اگر گیتوی VOICE_STREAM_URL بالا باشد) — interim زنده
  *  ب) Fallback خودکار: ضبط قطعه‌ها با MediaRecorder → /editor/voice/transcribe (همان موتور Google/Gemini سایت)
  * اگر Runtime اصلی در دسترس باشد، همان باز می‌شود (بدون تکرار پیاده‌سازی). */
+/* ---------- شناسایی خطای سطح‌بالای موتور ابری برای پیام دقیق به کاربر ---------- */
+function cloudErrorKind(status, body) {
+  const msg = String(body?.message || '').toLowerCase();
+  if (status === 401 || msg.includes('authenticate')) return 'auth';                 // لاگین لازم است
+  if (status === 402 || status === 403 || msg.includes('quota') || msg.includes('capability') || msg.includes('allow') || msg.includes('pay')) return 'quota'; // سهمیه/سطح حساب
+  if (status === 429) return 'rate';                                                  // محدودیت نرخ
+  return 'server';                                                                    // خرابی سرور/پیکربندی
+}
+
 async function startCloud(ctx) {
   const rt = window.FarastVoiceRuntime;
   if (rt?.open) { rt.open(); ctx.onStatus('پنل حرفه‌ای فراست باز شد'); return { mode: 'runtime' }; }
   const csrf = $('meta[name="csrf-token"]')?.content || '';
   const app = $('#farastWord');
   if (!app || app.dataset.authenticated !== '1') throw new Error('برای موتور ابری وارد حساب شوید.');
+  /* پیش‌بررسی سریع: اگر توکن استریم خطای سطح‌بالا (لاگین/سهمیه) داد، بلافاصله و با پیام درست برگرد.
+   * اگر فقط گیتوی پایین باشد، خطای اتصال می‌دهد و حالت تکه‌ای امتحان می‌شود. */
+  let preflightErr = null;
   try {
+    const pr = await fetch('/editor/voice/stream-token', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ locale: ctx.lang() }) });
+    const pj = await pr.json().catch(() => ({}));
+    if (!pr.ok || !pj.token) {
+      const kind = cloudErrorKind(pr.status, pj);
+      if (kind !== 'server') {
+        const friendly = { auth: 'برای تایپ صوتی ابری، ابتدا وارد حساب خود شوید.', quota: 'این حساب فعلاً اجازهٔ تایپ صوتی ابری ندارد (سهمیه/پلن). از «تنظیمات موتور» می‌توانید Whisper محلی رایگان را انتخاب کنید.', rate: 'چند لحظه صبر کنید؛ محدودیت تعداد درخواست صوت فعال شده است.' }[kind];
+        throw Object.assign(new Error(friendly), { fatal: true });
+      }
+      preflightErr = pj.message || 'gateway-down';
+    }
+  } catch (e) {
+    if (e?.fatal) throw e;
+    preflightErr = e?.message || 'network'; // شبکه/سرور — باز هم حالت تکه‌ای را امتحان می‌کنیم
+  }
+  try {
+    if (preflightErr) throw new Error(preflightErr); // مستقیم به تکه‌ای
     return await startCloudStream(ctx, csrf);
   } catch (e) {
+    if (e?.fatal) throw e;
     // گیتوی در دسترس نیست؟ مسیر HTTP chunked را امتحان کن (همیشه کار می‌کند)
     ctx.onStatus('اتصال زندهٔ وب‌سوکت در دسترس نبود؛ حالت تکه‌ای فعال شد…');
     return await startCloudChunks(ctx, csrf, e?.message || '');
@@ -200,14 +423,27 @@ async function startCloudChunks(ctx, csrf, gwErr) {
         const fd = new FormData(); fd.append('audio', blob, 'chunk-' + (++seq) + '.webm'); fd.append('locale', ctx.lang());
         const r = await fetch('/editor/voice/transcribe', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: fd });
         const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          // خطای سطح‌بالا (سهمیه/لاگین/نرخ): توقف حلقه با پیام دقیق — نه بی‌صدا تکرار هر ۲.۵ ثانیه
+          const kind = cloudErrorKind(r.status, j);
+          if (kind !== 'server') {
+            stopped = true;
+            ctx.onError(kind === 'quota' ? 'این حساب فعلاً اجازهٔ تایپ صوتی ابری ندارد (سهمیه/پلن). از «تنظیمات موتور» → Whisper محلی رایگان استفاده کنید.' : kind === 'rate' ? 'محدودیت تعداد درخواست صوت فعال شد؛ چند لحظه دیگر دوباره امتحان کنید.' : 'برای تایپ صوتی ابری وارد حساب شوید.');
+            ctx.onStopped();
+            return;
+          }
+          if (j.message) ctx.onError(j.message);
+          if (!stopped) ctx.onStatus('در حال گوش دادن (ابر · تکه‌ای)…');
+          return;
+        }
         const text = String(j.text || '').trim();
-        if (j.ok && text) {
+        if (text) {
           clearInterim();
           let t = text; // مرز قطعه‌ها گاهی کلمهٔ مشترک برمی‌دارد؛ تکرار ابتدایی حذف می‌شود
           if (lastFinal && t.startsWith(lastFinal)) t = t.slice(lastFinal.length).trim();
           else if (lastFinal && lastFinal.endsWith(t)) t = '';
           if (t) { lastFinal = text; ctx.onFinal(t); }
-        } else if (!j.ok && j.message) ctx.onError(j.message);
+        }
       } catch (e) { ctx.onError('ارسال صوت ناموفق بود: ' + (e?.message || '')); }
       if (!stopped) ctx.onStatus('در حال گوش دادن (ابر · تکه‌ای)…');
     });
