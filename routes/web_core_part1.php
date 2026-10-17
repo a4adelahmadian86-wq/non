@@ -49,6 +49,7 @@ Route::delete('/assistant/memories',[GlobalAssistantController::class,'clearMemo
 Route::delete('/assistant/history',[GlobalAssistantController::class,'clearHistory'])->middleware(['auth','throttle:5,1'])->name('assistant.history.clear');
 Route::get('/assistant/voice/status',[GlobalAssistantController::class,'voiceStatus'])->middleware(['auth','throttle:60,1'])->name('assistant.voice.status');
 Route::post('/assistant/transcribe',[GlobalAssistantController::class,'transcribe'])->middleware(['auth','throttle:20,1'])->name('assistant.transcribe');
+Route::post('/assistant/speak',[GlobalAssistantController::class,'speak'])->middleware(['auth','throttle:30,1'])->name('assistant.speak');
 Route::get('/announcements',[AnnouncementController::class,'index'])->name('announcements');
 Route::get('/social',[SocialController::class,'index'])->name('social');
 Route::view('/terms','legal.terms')->name('terms');
