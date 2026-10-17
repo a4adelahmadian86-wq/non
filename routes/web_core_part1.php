@@ -62,6 +62,7 @@ Route::get('/login/email/mobile',[AuthController::class,'emailMobileForm'])->nam
 Route::post('/login/email/mobile',[AuthController::class,'requestEmailMobileOtp'])->middleware('throttle:5,10')->name('login.email.mobile.request');
 Route::post('/logout',[AuthController::class,'logout'])->middleware('auth')->name('logout');
 
+Route::get('/editor/voice/status',[VoiceController::class,'voiceStatus'])->middleware(['throttle:60,1','web'])->name('editor.voice.status');
 Route::post('/editor/voice/stream-config',[VoiceController::class,'streamConfig'])->middleware('throttle:120,1')->name('editor.voice.stream-config');
 Route::post('/editor/voice/provider-config',[VoiceController::class,'streamProviderConfig'])->middleware('throttle:120,1')->name('editor.voice.provider-config');
 Route::post('/editor/voice/stream-usage',[VoiceController::class,'streamUsage'])->middleware('throttle:120,1')->name('editor.voice.stream-usage');

@@ -17,6 +17,29 @@ use Illuminate\Support\Facades\Log;
 
 class VoiceController extends Controller
 {
+    public function voiceStatus(Request $request)
+    {
+        // تشخیص وضعیت واقعی موتور ابری از سمت کلاینت (بدون افشای رازها):
+        // chunked = مسیر HTTP تکه‌ای (/transcribe)، gateway = استریم زندهٔ WebSocket،
+        // none = هیچ‌کدام آماده نیست (دلیل دقیق برای پیام راهنمای پنل صوتی).
+        $authed=(bool)($request->user()?->id);
+        if(!$authed)return response()->json(['ok'=>true,'mode'=>'none','reason'=>'auth'],200,['Cache-Control'=>'no-store']);
+        $google=false;
+        try{$google=app(\App\Services\GoogleSpeechToTextService::class)->enabled();}catch(\Throwable){}
+        $gemini=false;
+        try{$gemini=trim((string)(\App\Models\SiteSetting::read('gemini_api_key')?:config('services.gemini.key')))!=='';}catch(\Throwable){}
+        $chunked=$google||$gemini;
+        $gatewayReady=false;$wsUrl='';
+        try{
+            $wsUrl=rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/');
+            $secret=(string)config('services.voice_stream.gateway_secret','');
+            $router=app(\App\Services\VoiceProviderRouter::class);
+            $account=$google?$router->best('fa-IR'):null;
+            $gatewayReady=$secret!==''&&$account!==null;
+        }catch(\Throwable){$gatewayReady=false;}
+        return response()->json(['ok'=>true,'mode'=>$gatewayReady?'gateway':($chunked?'chunked':'none'),'chunked'=>$chunked,'gateway'=>$gatewayReady,'websocket_url'=>$gatewayReady?preg_replace('#^http#','ws',$wsUrl):'','reason'=>$chunked||$gatewayReady?null:'server_not_configured'],200,['Cache-Control'=>'no-store']);
+    }
+
     public function streamToken(Request $request)
     {
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);

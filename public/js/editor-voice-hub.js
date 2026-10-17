@@ -351,13 +351,30 @@ function engines() {
   return list;
 }
 window.FarastVoiceHub = {
-  version: '1.2.0',
+  version: '1.3.0',
   hasNative: () => !!SR,
   isAuthed, hasMic, engines,
   processFinalText, insertIntoDoc, showInterim, clearInterim, sweepInterim, surfaceEl, hideInterimSel,
   ocr: { ocrImage, guessHandwritten, ensureTesseract },
   localWhisper: { ensureWhisper, start: startLocalWhisper },
 };
+
+/* ---------- کش وضعیت موتور ابری (از /editor/voice/status) ----------
+ * تا وقتی پاسخ نیامده undefined است؛ در این حالت رفتار مثل قبل (تلاش و فالبک). */
+let cloudStatusCache = null, cloudStatusTtl = 0;
+async function cloudStatus(force = false) {
+  const now = Date.now();
+  if (!force && cloudStatusCache && now < cloudStatusTtl) return cloudStatusCache;
+  try {
+    const r = await fetch('/editor/voice/status', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+    if (!r.ok) { cloudStatusCache = null; return null; }
+    const j = await r.json();
+    cloudStatusCache = (j && typeof j.mode === 'string') ? j : null;
+    cloudStatusTtl = now + 60000; // یک دقیقه معتبر
+  } catch { cloudStatusCache = null; }
+  return cloudStatusCache;
+}
+window.FarastVoiceHub.cloudStatus = cloudStatus;
 
 /* ===================== موتور ابری فراست (فايرفاکس و بقیه) =====================
  * دو مسیر، هر دو روی سرور خود سایت (رایگان برای شما تا سهمیهٔ سرویس‌های ابری):
@@ -380,8 +397,25 @@ async function startCloud(ctx) {
   const csrf = $('meta[name="csrf-token"]')?.content || '';
   const app = $('#farastWord');
   if (!app || app.dataset.authenticated !== '1') throw new Error('برای موتور ابری وارد حساب شوید.');
-  /* پیش‌بررسی سریع: اگر توکن استریم خطای سطح‌بالا (لاگین/سهمیه) داد، بلافاصله و با پیام درست برگرد.
-   * اگر فقط گیتوی پایین باشد، خطای اتصال می‌دهد و حالت تکه‌ای امتحان می‌شود. */
+  /* پیش‌بررسی با /editor/voice/status: اگر سرور اصلاً برای صوت پیکربندی نشده باشد، بی‌درنگ و صادقانه
+   * خطای «پیکربندی» می‌دهیم (نه پیام مبهم «ارتباط برقرار نشد»). اگر آماده باشد، مسیر توکن/استریم امتحان می‌شود. */
+  let statusInfo = null;
+  try {
+    statusInfo = await cloudStatus();
+    if (statusInfo && statusInfo.mode === 'none') {
+      throw Object.assign(new Error(statusInfo.reason === 'auth'
+        ? 'برای تایپ صوتی ابری، ابتدا وارد حساب خود شوید.'
+        : 'موتور ابری روی این سرور هنوز فعال نیست (کلید Google Speech یا Gemini تنظیم نشده). مدیر سایت می‌تواند آن را در پنل تنظیمات روشن کند؛ فعلاً Whisper محلی رایگان در دسترس است.'), { fatal: true, code: 'server_not_configured' });
+    }
+  } catch (e) {
+    if (e?.fatal) throw e;
+    statusInfo = null; // endpoint در نسخهٔ قدیمی سرور وجود ندارد — مثل قبل رفتار کن
+  }
+  /* حالت تکه‌ای مطمئن‌ترین مسیر است؛ اگر وضعیت گفت gateway زنده نیست، مستقیم به تکه‌ای برو. */
+  if (statusInfo && statusInfo.chunked && !statusInfo.gateway) {
+    ctx.onStatus('حالت تکه‌ای ابری فعال شد…');
+    return await startCloudChunks(ctx, csrf, 'gateway-unavailable');
+  }
   let preflightErr = null;
   try {
     const pr = await fetch('/editor/voice/stream-token', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ locale: ctx.lang() }) });

@@ -1126,8 +1126,19 @@ const ENGINE_NAMES = { native: 'موتور بومی مرورگر', cloud: 'مو�
 async function startVoice() {
   if (wantListen || activeHandle) return;
   const ctx = hubCtx();
-  // ترتیب پیش‌فرض: بومی ← ابری فراست ← Whisper محلی (رایگان، همه مرورگرها) ← سرویس دلخواه
-    const prefer = engineMode !== 'auto' ? engineMode : (hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : 'local-whisper'));
+  /* ترتیب هوشمند بر اساس وضعیت واقعی سرور (/editor/voice/status):
+   * - موتور ابری واقعاً آماده است ← بومی ← ابری ← Whisper محلی ← سرویس شخصی
+   * - ابری پیکربندی نیست ← بومی ← Whisper محلی (رایگان، همهٔ مرورگرها) — بدون تلاش بی‌فایده و پیام خطا
+   * - نامعلوم (سرور قدیمی) ← رفتار قبلی */
+  let prefer;
+  if (engineMode !== 'auto') prefer = engineMode;
+  else if (hub()?.hasNative?.()) prefer = 'native';
+  else {
+    let st = null;
+    try { st = await hub()?.cloudStatus?.(); } catch {}
+    if (hub()?.isAuthed?.()) prefer = (st && st.mode === 'none') ? 'local-whisper' : 'cloud';
+    else prefer = hub()?.hasMic?.() ? 'local-whisper' : 'stt-api';
+  }
   const chains = {
     native: ['native', 'cloud', 'local-whisper', 'stt-api'],
     cloud: ['cloud', 'native', 'local-whisper', 'stt-api'],
@@ -1135,8 +1146,6 @@ async function startVoice() {
     'stt-api': ['stt-api', 'native', 'cloud', 'local-whisper'],
   };
   const order = chains[prefer] || chains.native;
-  /* اگر موتور ابری در دسترس است، Whisper محلی را از ترتیب حذف کن — ابری دقیق‌تر و سبک‌تر است.
-     (startLocalWhisper هم خودش ابری را اول می‌زند؛ این فقط از تلاش دوبارهٔ بی‌مورد جلوگیری می‌کند.) */
   let lastErr = '';
   for (const id of order) {
     try {
@@ -1148,7 +1157,6 @@ async function startVoice() {
       }
       if (id === 'local-whisper') {
         if (!hub()?.hasMic?.()) continue;
-        if (hub()?.isAuthed?.() && order.indexOf('cloud') !== -1) continue; // ابری قبلاً امتحان/اولویت دارد
         ctx.onStatus('فعال‌سازی Whisper محلی (بارگذاری یک‌بارهٔ مدل رایگان)…');
         if (await startLocalWhisperEngine(ctx)) { engineLabel(); return; }
       }
@@ -1159,7 +1167,7 @@ async function startVoice() {
       }
     } catch (err) {
       lastErr = err?.message || '';
-      // اگر موتور اول شکست بخورد، بی‌صدا به لایهٔ بعد می‌رویم؛ فقط وقتی همه شکست خوردند پیام می‌دهیم
+      if (id === 'cloud' && err?.code === 'server_not_configured') continue; // ابری آماده نیست → لایهٔ بعدی بی‌صدا
       if (id === order[order.length - 1]) { ctx.onError(lastErr || 'هیچ موتور تایپ صوتی در دسترس نبود'); wantListen = false; voiceUI(false); }
     }
   }
