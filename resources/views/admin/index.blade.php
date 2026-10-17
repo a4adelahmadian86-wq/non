@@ -96,6 +96,32 @@
             </form>
         </section>
 
+        <section id="groq-settings" class="admin-section admin-panel-wide">
+            <div class="admin-panel-head">
+                <div><span class="panel-eyebrow">FREE-FIRST ASSISTANT</span><h2>موتور همراه هوشمند و تشخیص گفتار</h2>
+                    <p>یک کلید Groq برای گفت‌وگوی دستیار و تبدیل صدای ضبط‌شده به متن استفاده می‌شود. کلید در سرور رمزنگاری می‌شود و به مرورگر ارسال نمی‌شود.</p></div>
+                <span class="status-chip {{ $secretStatus['groq'] ? 'ok' : 'warn' }}"><i class="fa-solid fa-circle"></i>{{ $secretStatus['groq'] ? 'کلید تنظیم شده' : 'نیازمند کلید' }}</span>
+            </div>
+            <form method="post" action="{{ route('admin.providers.groq.update') }}" class="settings-modern">
+                @csrf
+                <label class="modern-field secret" style="grid-column:1/-1">
+                    <span><i class="fa-solid fa-key"></i> کلید API سرویس Groq</span>
+                    <input type="password" name="voice_groq_key" placeholder="{{ $secretStatus['groq'] ? 'کلید ذخیره شده؛ برای جایگزینی وارد کنید' : 'کلید Groq را اینجا وارد کنید' }}" autocomplete="new-password">
+                    <small>خالی گذاشتن این فیلد کلید فعلی را حفظ می‌کند. <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">ساخت کلید در پنل رسمی Groq</a></small>
+                </label>
+                <label class="modern-field">
+                    <span><i class="fa-solid fa-microchip"></i> شناسه مدل گفت‌وگو</span>
+                    <input name="assistant_groq_model" value="{{ $settings['assistant_groq_model'] ?? 'openai/gpt-oss-120b' }}" required maxlength="120">
+                    <small>پیش‌فرض: openai/gpt-oss-120b؛ مدل باید در حساب Groq شما فعال باشد.</small>
+                </label>
+                <div class="settings-submit" style="grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap">
+                    <button class="admin-primary"><i class="fa-solid fa-shield-halved"></i> ذخیره تنظیمات Groq</button>
+                    <a class="admin-outline" href="{{ route('admin.providers.groq.test') }}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-plug-circle-check"></i> آزمایش اتصال و مدل</a>
+                </div>
+            </form>
+            <p class="admin-help-text">رایگان بودن دائمی تضمین‌شده نیست؛ محدودیت‌های پلن رایگان و مدل‌ها تابع سیاست و سهمیه حساب ارائه‌دهنده است. صدای فارسی خروجی فعلاً از صدای دستگاه/مرورگر استفاده می‌کند.</p>
+        </section>
+
         <section id="voice-settings" class="admin-section admin-panel-wide">
             <div class="admin-panel-head">
                 <div>
