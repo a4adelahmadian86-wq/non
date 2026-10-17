@@ -7,7 +7,7 @@
   root.innerHTML =
     '<button class="farast-assistant-launcher" type="button" aria-label="گفت‌وگو با همراه فراست" aria-expanded="false" title="همراه هوشمند فراست"><span class="fa-solid fa-sparkles" aria-hidden="true"></span><span class="farast-assistant-pulse" aria-hidden="true"></span></button>' +
     '<section class="farast-assistant-panel" aria-label="همراه هوشمند فراست" aria-modal="false" hidden>' +
-    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-memory" type="button" data-fa-memory title="ذخیره نکته شخصی برای گفتگوهای بعدی">حافظه +</button><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه" title="پاک کردن سابقه گفتگو">پاک‌کردن سابقه</button><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
+    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-memory" type="button" data-fa-memory title="ذخیره نکته شخصی برای گفتگوهای بعدی">حافظه +</button><button class="farast-assistant-memory-manage" type="button" data-fa-memory-manage title="مشاهده یا پاک‌کردن حافظه شخصی">مدیریت حافظه</button><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه" title="پاک کردن سابقه گفتگو">پاک‌کردن سابقه</button><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
     '<div class="farast-assistant-intro"><b>سلام، خوش اومدی 👋</b><p>بگو دنبال چه چیزی هستی؛ قدم‌به‌قدم کنارت هستم.</p></div>' +
     '<div class="farast-assistant-messages" data-fa-messages aria-live="polite" aria-relevant="additions"></div>' +
     '<div class="farast-assistant-suggestions"><button type="button" data-fa-tour>🧭 راهنمای تعاملی سایت</button><button type="button" data-fa-text="برای خرید فایل راهنمایی‌ام کن">🛍️ خرید فایل</button><button type="button" data-fa-text="چطور از خدمات تایپ استفاده کنم؟">✍️ خدمات تایپ</button><button type="button" data-fa-text="قیمت خدمات چقدر است؟">💎 قیمت‌ها</button></div>' +
@@ -134,7 +134,7 @@
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){setOpen(false);});
   root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
   root.querySelector('[data-fa-memory]').addEventListener('click',saveMemory);
-  root.querySelector('.farast-assistant-brand').addEventListener('dblclick',manageMemories);
+  root.querySelector('[data-fa-memory-manage]').addEventListener('click',manageMemories);
   form.addEventListener('submit',function(e){e.preventDefault();send(input.value);});
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
