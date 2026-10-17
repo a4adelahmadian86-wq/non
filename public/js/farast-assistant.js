@@ -1,121 +1,55 @@
-/* FARAST global floating assistant — public pages.
-   No parallel AI pipeline. Public chat backend is not available on FARAST yet;
-   panel guides users to existing editor AI and site navigation. */
+/* FARAST conversational companion. Authenticated requests use the server AI pipeline; speech is progressive-enhancement. */
 (function () {
   'use strict';
   if (document.getElementById('farast-global-assistant')) return;
-  if (document.body.classList.contains('editor-page-body')) return;
-
-  var OPEN_KEY = 'farast_assistant_open';
   var root = document.createElement('div');
   root.id = 'farast-global-assistant';
   root.innerHTML =
-    '<button class="farast-assistant-launcher" type="button" aria-label="دستیار فراست" aria-expanded="false">' +
-    '<i class="fa-solid fa-sparkles" aria-hidden="true"></i><i class="fa-dot" aria-hidden="true"></i></button>' +
-    '<section class="farast-assistant-panel" aria-label="دستیار فراست" hidden>' +
-    '<header class="farast-assistant-head">' +
-    '<div class="farast-assistant-avatar"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></div>' +
-    '<div><strong>دستیار فراست</strong><small>راهنمای فروشگاه، تایپ و خدمات هوشمند</small></div>' +
-    '<button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
-    '<div class="farast-assistant-messages" data-fa-messages aria-live="polite"></div>' +
-    '<div class="farast-assistant-suggestions">' +
-    '<button type="button" class="farast-assistant-chip" data-fa-text="چطور فایل بخرم؟">خرید فایل</button>' +
-    '<button type="button" class="farast-assistant-chip" data-fa-text="تایپ صوتی کجاست؟">تایپ صوتی</button>' +
-    '<button type="button" class="farast-assistant-chip" data-fa-text="دستیار ویرایشگر">دستیار ویرایشگر</button>' +
-    '<button type="button" class="farast-assistant-chip" data-fa-text="پشتیبانی">پشتیبانی</button>' +
-    '</div>' +
-    '<p class="farast-assistant-note">گفتگوی عمومی هنوز به backend متصل نیست. برای پردازش متن از <a href="/editor">ویرایشگر فراست</a> استفاده کنید.</p>' +
-    '<form class="farast-assistant-form" autocomplete="off">' +
-    '<input name="message" maxlength="500" placeholder="سوالت را بنویس…" aria-label="پیام">' +
-    '<button type="submit" aria-label="ارسال">➤</button></form></section>';
-
+    '<button class="farast-assistant-launcher" type="button" aria-label="گفت‌وگو با همراه فراست" aria-expanded="false" title="همراه هوشمند فراست"><span class="fa-solid fa-sparkles" aria-hidden="true"></span><span class="farast-assistant-pulse" aria-hidden="true"></span></button>' +
+    '<section class="farast-assistant-panel" aria-label="همراه هوشمند فراست" aria-modal="false" hidden>' +
+    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
+    '<div class="farast-assistant-intro"><b>سلام، خوش اومدی 👋</b><p>بگو دنبال چه چیزی هستی؛ قدم‌به‌قدم کنارت هستم.</p></div>' +
+    '<div class="farast-assistant-messages" data-fa-messages aria-live="polite" aria-relevant="additions"></div>' +
+    '<div class="farast-assistant-suggestions"><button type="button" data-fa-text="برای خرید فایل راهنمایی‌ام کن">🛍️ خرید فایل</button><button type="button" data-fa-text="چطور از خدمات تایپ استفاده کنم؟">✍️ خدمات تایپ</button><button type="button" data-fa-text="قیمت خدمات چقدر است؟">💎 قیمت‌ها</button></div>' +
+    '<div class="farast-assistant-status" data-fa-status role="status">برای گفت‌وگو وارد حساب کاربری‌ات شو.</div>' +
+    '<form class="farast-assistant-form" autocomplete="off"><button class="farast-assistant-mic" type="button" aria-label="شروع گفتار" title="گفتار به متن"><i class="fa-solid fa-microphone"></i></button><input name="message" maxlength="1200" placeholder="اینجا بنویس یا صحبت کن…" aria-label="پیام شما"><button class="farast-assistant-send" type="submit" aria-label="ارسال پیام"><i class="fa-solid fa-arrow-up"></i></button></form>' +
+    '<footer class="farast-assistant-foot">پاسخ‌های هوش مصنوعی ممکن است نیاز به بررسی داشته باشند.</footer></section>';
   document.body.appendChild(root);
-
-  var panel = root.querySelector('.farast-assistant-panel');
-  var launcher = root.querySelector('.farast-assistant-launcher');
-  var closeBtn = root.querySelector('.farast-assistant-close');
-  var list = root.querySelector('[data-fa-messages]');
-  var form = root.querySelector('form');
-  var input = form.querySelector('input');
-
-  var WELCOME =
-    'سلام. من دستیار رابط فراست هستم. می‌توانم مسیرهای سایت را راهنمایی کنم. پردازش هوشمند متن در ویرایشگر فراست در دسترس است.';
-
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
+  var panel=root.querySelector('.farast-assistant-panel'), launcher=root.querySelector('.farast-assistant-launcher'),
+      list=root.querySelector('[data-fa-messages]'), form=root.querySelector('form'), input=form.querySelector('input'),
+      status=root.querySelector('[data-fa-status]'), busy=false, recognition=null, history=[];
+  var csrf=document.querySelector('meta[name="csrf-token"]');
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function message(role,text){var el=document.createElement('div');el.className='farast-assistant-msg '+role;el.textContent=String(text||'');list.appendChild(el);list.scrollTop=list.scrollHeight;return el;}
+  function setOpen(v){panel.hidden=!v;panel.classList.toggle('is-open',v);launcher.setAttribute('aria-expanded',v?'true':'false');if(v)setTimeout(function(){input.focus();},120);}
+  function say(text){if(!('speechSynthesis' in window))return;try{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.lang='fa-IR';u.rate=.94;u.pitch=.88;var voices=window.speechSynthesis.getVoices();var fa=voices.filter(function(v){return /^fa(-|$)/i.test(v.lang);});var preferred=fa.find(function(v){return /male|arman|farid|persian/i.test(v.name);});if(preferred)u.voice=preferred;window.speechSynthesis.speak(u);}catch(e){}}
+  async function send(text){
+    text=String(text||'').trim();if(!text||busy)return;
+    if(!document.body.classList.contains('auth-user') && !document.querySelector('a[href="/logout"],form[action="/logout"]')){
+      message('bot','برای گفت‌وگو و نگهداری سابقه، ابتدا وارد حساب کاربری‌ات شو.');
+      status.textContent='ورود برای استفاده از همراه هوشمند الزامی است.';
+      var link=document.createElement('a');link.href='/login?redirect='+encodeURIComponent(location.pathname+location.search);link.className='farast-assistant-login';link.textContent='ورود به حساب کاربری';list.appendChild(link);list.scrollTop=list.scrollHeight;return;
+    }
+    message('user',text);input.value='';busy=true;status.textContent='دارم با دقت فکر می‌کنم…';var pending=message('bot','…');
+    try{
+      var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربر /dashboard. مکالمه اخیر:\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\n')+'\nکاربر: '+text;
+      var response=await fetch('/assistant/chat',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt})});
+      var data=await response.json().catch(function(){return {};});
+      if(response.status===401||response.status===419){pending.textContent='نشست شما منقضی شده است؛ دوباره وارد حساب شوید.';status.textContent='ورود مجدد لازم است.';}
+      else if(!response.ok)throw new Error(data.message||'سرویس گفت‌وگو فعلاً آماده نیست.');
+      else {var answer=String(data.reply||data.text||data.message||'پاسخ خالی دریافت شد.');pending.textContent=answer;history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);status.textContent='آماده‌ام؛ هر وقت خواستی ادامه بده.';if(root.querySelector('[data-fa-voice-output]')?.checked)say(answer);}
+    }catch(e){pending.textContent='الان نتوانستم به سرویس گفت‌وگو وصل شوم. لطفاً کمی بعد دوباره تلاش کن.';status.textContent='اتصال برقرار نشد.';}
+    finally{busy=false;list.scrollTop=list.scrollHeight;}
   }
-
-  function addMsg(role, text) {
-    var el = document.createElement('div');
-    el.className = 'farast-assistant-msg ' + role;
-    el.innerHTML = esc(text);
-    list.appendChild(el);
-    list.scrollTop = list.scrollHeight;
-  }
-
-  function replyFor(text) {
-    var t = String(text || '').trim();
-    var low = t.toLowerCase();
-    if (/خرید|فایل|فروشگاه|سبد/.test(t) || low.indexOf('buy') >= 0) {
-      return 'برای خرید فایل به فروشگاه بروید: /store — سبد خرید در /cart در دسترس است.';
-    }
-    if (/تایپ صوتی|میکروفون|voice|صدا/.test(t)) {
-      return 'تایپ صوتی داخل ویرایشگر فراست است. پس از ورود به /editor از دکمه «تایپ صوتی» در نوار وضعیت یا روبان استفاده کنید.';
-    }
-    if (/دستیار|ویرایشگر|ai|هوش|بازنویسی|خلاصه/.test(t)) {
-      return 'دستیار هوشمند متن در ویرایشگر فعال است: متن را انتخاب کنید و از پنل «دستیار هوشمند» یا ابزارهای AI روبان استفاده کنید. مسیر: /editor';
-    }
-    if (/پشتیبانی|کمک|support|تیکت/.test(t)) {
-      return 'برای پشتیبانی به /support مراجعه کنید. پرسش‌های حساب و کیف پول نیز از داشبورد در دسترس است.';
-    }
-    if (/قیمت|تعرفه|pricing/.test(t)) {
-      return 'تعرفه‌ها در /pricing منتشر شده‌اند.';
-    }
-    return 'گفتگوی عمومی هنوز به backend متصل نیست. برای پردازش متن و تایپ صوتی وارد ویرایشگر شوید: /editor — پشتیبانی: /support';
-  }
-
-  function setOpen(open) {
-    panel.classList.toggle('is-open', open);
-    panel.hidden = !open;
-    launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
-    try {
-      sessionStorage.setItem(OPEN_KEY, open ? '1' : '0');
-    } catch (e) {}
-    if (open) setTimeout(function () { input.focus(); }, 160);
-  }
-
-  list.innerHTML = '';
-  addMsg('bot', WELCOME);
-
-  launcher.addEventListener('click', function () {
-    setOpen(!panel.classList.contains('is-open'));
+  launcher.addEventListener('click',function(){setOpen(panel.hidden);});
+  root.querySelector('.farast-assistant-close').addEventListener('click',function(){setOpen(false);});
+  form.addEventListener('submit',function(e){e.preventDefault();send(input.value);});
+  root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
+  root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
+    var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){status.textContent='تشخیص گفتار در این مرورگر پشتیبانی نمی‌شود؛ پیام را تایپ کن.';return;}
+    try{if(recognition){recognition.stop();recognition=null;return;}recognition=new SR();recognition.lang='fa-IR';recognition.interimResults=true;recognition.continuous=false;status.textContent='گوش می‌دهم…';recognition.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;input.value=t;if(e.results[e.results.length-1].isFinal){recognition=null;send(t);}};recognition.onerror=function(){status.textContent='میکروفون در دسترس نیست؛ مجوز مرورگر را بررسی کن.';recognition=null;};recognition.onend=function(){recognition=null;if(status.textContent==='گوش می‌دهم…')status.textContent='آماده‌ام.';};recognition.start();}catch(e){recognition=null;status.textContent='برای استفاده از میکروفون، مجوز مرورگر را فعال کن.';}
   });
-  closeBtn.addEventListener('click', function () { setOpen(false); });
-
-  root.querySelectorAll('.farast-assistant-chip').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var text = btn.getAttribute('data-fa-text') || btn.textContent;
-      addMsg('user', text);
-      addMsg('bot', replyFor(text));
-    });
-  });
-
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    var text = (input.value || '').trim();
-    if (!text) return;
-    input.value = '';
-    addMsg('user', text);
-    addMsg('bot', replyFor(text));
-  });
-
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && panel.classList.contains('is-open')) setOpen(false);
-  });
-
-  try {
-    if (sessionStorage.getItem(OPEN_KEY) === '1') setOpen(true);
-  } catch (e) {}
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!panel.hidden)setOpen(false);});
+  message('bot','من همراه هوشمند فراستم؛ می‌تونم در پیدا کردن خدمات، خرید و استفاده از سایت راهنمایی‌ات کنم. برای شروع، وارد حساب کاربری شو.');
 })();
