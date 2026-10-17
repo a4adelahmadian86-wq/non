@@ -20,6 +20,6 @@ class UploadSecurityService
         $bytes=$disk->get($path); $hash=hash('sha256',$bytes);
         $clam=(string)env('FARAST_CLAMSCAN_BINARY','');$scan='not_configured';
         if($clam){$command=escapeshellcmd($clam).' --no-summary '.escapeshellarg($disk->path($path));exec($command,$out,$code);if($code!==0)throw new RuntimeException('upload_malware_scan_failed');$scan='clean';}
-        return ['safe'=>true,'mime'=>$mime,'size'=>$size,'checksum'=>$hash,'scan'=>$scan,'sandbox_required'=>true,'storage'=>'private'];
+        return ['safe'=>$scan==='clean','mime'=>$mime,'size'=>$size,'checksum'=>$hash,'scan'=>$scan,'sandbox_required'=>true,'storage'=>'private'];
     }
 }

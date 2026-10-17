@@ -9,7 +9,7 @@ async function openEditor(page) {
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'ورود به حساب' }).click();
   await expect(page).toHaveURL(/\/projects\/new/);
-  await page.getByRole('button', { name: /تایپ/ }).click();
+  await page.getByRole('button', { name: /تایپ آماده استفاده/ }).click();
   await page.getByRole('button', { name: 'خودم تایپ می‌کنم' }).click();
   await page.locator('#choices .project-card').first().click();
   await page.getByRole('button', { name: 'ایجاد پروژه' }).click();
@@ -91,9 +91,91 @@ test('editing a fragmented paragraph preserves the complete canonical text', asy
   expect(after.length).toBeGreaterThan(before.length);
   expect(after).toContain('FARAST 2026');
 });
+test('committed voice transcript is undoable through the shared kernel history', async ({ page }) => {
+  await openEditor(page);
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.insertText('پیش از صوت FARAST');
+  await page.locator('#saveNow').click();
+  await expect(page.locator('#saveState')).toHaveText('ذخیره شد', { timeout: 5000 });
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('پیش از صوت FARAST');
+
+  await page.evaluate(() => {
+    const kernel = window.FarastEditor;
+    const model = JSON.parse(JSON.stringify(kernel.state.model));
+    const paragraph = model.sections[0].blocks.find(block => block.type === 'paragraph');
+    paragraph.runs = paragraph.runs || [];
+    paragraph.runs.push({ id: 'voice-e2e-run', text: ' متن صوتی' });
+    kernel.applyRemoteModel(model, { source: 'voice', command: 'InsertText' });
+  });
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('متن صوتی');
+
+  await page.locator('.farast-editor').first().click();
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).not.toContain('متن صوتی');
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.plain_text)).toContain('پیش از صوت FARAST');
+});
+
 test('print uses A4 page geometry', async ({ page }) => {
   await openEditor(page);
   const css = await page.evaluate(() => document.getElementById('farastDynamicPrint')?.textContent || '');
   expect(css).toContain('210mm');
   expect(css).toContain('297mm');
+});
+
+test('font size controls and default typography use points, not pixels', async ({ page }) => {
+  await openEditor(page);
+  const editor = page.locator('.farast-editor').first();
+  await editor.click();
+  await page.keyboard.insertText('متن آزمون قلم فارسی');
+  await page.keyboard.press('Shift+Home');
+  const size = page.locator('#ribbon select[data-command="fontSize"]');
+  await expect(size).toBeVisible();
+  await size.selectOption('20pt');
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.flatMap(b => b.runs || []).some(r => r.fontSize === '20pt'))).toBeTruthy();
+  await page.evaluate(() => window.FarastEditor.saveNow('manual'));
+  await page.evaluate(() => window.FarastEditor.reload());
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.flatMap(b => b.runs || []).some(r => r.fontSize === '20pt'))).toBeTruthy();
+  await expect.poll(async () => page.locator('.farast-editor').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(21);
+  expect(await page.locator('.farast-editor').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThan(22);
+});
+
+test('document workspace starts focused and side panels open on demand', async ({ page }) => {
+  await openEditor(page);
+  await expect(page.locator('#navigationPane')).toHaveClass(/hidden/);
+  await expect(page.locator('#aiSidebar')).toHaveClass(/hidden/);
+  await page.locator('.farast-tab[data-tab="view"]').click();
+  await page.locator('#ribbon button[data-command="ai"]').click();
+  await expect(page.locator('#aiSidebar')).not.toHaveClass(/hidden/);
+  await page.locator('#aiSidebar [data-close-panel="aiSidebar"]').click();
+  await expect(page.locator('#aiSidebar')).toHaveClass(/hidden/);
+});
+
+test('zoom commands update the real viewport and status indicator', async ({ page }) => {
+  await openEditor(page);
+  await page.locator('.farast-tab[data-tab="view"]').click();
+  await page.locator('#ribbon button[data-command="zoomIn"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.zoom)).toBeCloseTo(1.1, 1);
+  await expect(page.locator('#zoomValue')).toHaveText('110%');
+});
+
+test('document page fits supported viewport classes without page-width overflow', async ({ page }) => {
+  await openEditor(page);
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    const pageWidth = await page.locator('.farast-page').first().evaluate(el => el.getBoundingClientRect().width);
+    expect(pageWidth, 'page width at ' + viewport.width + 'px viewport').toBeLessThanOrEqual(viewport.width + 1);
+    await expect(page.locator('.farast-page').first()).toBeVisible();
+  }
+});
+
+test('document direction is independent from paragraph direction and persists', async ({ page }) => {
+  await openEditor(page);
+  const paragraphDirection = await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks[0].direction ?? null);
+  await page.locator('.farast-tab[data-tab="layout"]').click();
+  await page.locator('#ribbon button[data-command="docLtr"]').click();
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.direction)).toBe('ltr');
+  expect(await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks[0].direction ?? null)).toBe(paragraphDirection);
+  await page.evaluate(() => window.FarastEditor.saveNow('manual'));
+  await page.evaluate(() => window.FarastEditor.reload());
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.settings.direction)).toBe('ltr');
 });

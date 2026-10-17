@@ -39,37 +39,30 @@
  <div class="farast-menu"><button type="button" aria-haspopup="true" aria-expanded="false">راهنما</button><div class="farast-menu-panel" role="menu"><a role="menuitem" href="{{ route('support') }}">راهنما و پشتیبانی</a><a role="menuitem" href="{{ route('pricing') }}">قیمت‌گذاری</a></div></div>
 </nav>
   <style>
-.farast-appbar,.farast-menubar,.farast-tabs,.farast-ribbon{position:relative;z-index:20}
+.farast-appbar,.farast-menubar,.farast-ribbon{position:relative;z-index:20}
 .farast-workspace{position:relative;z-index:1}
-.farast-ribbon{min-height:56px;pointer-events:none}
-.farast-ribbon *{pointer-events:none}
-.farast-ribbon button,.farast-ribbon select,.farast-ribbon input,.farast-ribbon a,[data-command]{pointer-events:auto}
+.farast-ribbon{min-height:56px}
 #farastAgentPanel{position:fixed;inset-inline-end:24px;bottom:72px;z-index:2000;pointer-events:none}
 #farastAgentPanel.open{pointer-events:auto}
 #farastAgentPanel.open *{pointer-events:auto}
 </style>
-<nav class="farast-tabs" aria-label="نوار فرمان">
-    @foreach(['home'=>'خانه','insert'=>'درج','layout'=>'طرح','design'=>'طراحی','review'=>'بازبینی','view'=>'نمایش','ai'=>'هوش مصنوعی'] as $tab=>$label)
-      <button type="button" class="farast-tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $tab }}" @if($tab === 'ai') data-agent-open="1" @endif>{{ $label }}</button>
-    @endforeach
-  </nav>
-  <section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
+<section class="farast-ribbon" id="ribbon" aria-label="ابزارهای ویرایش"></section>
   <main class="farast-workspace">
-    <aside class="farast-nav-panel" id="navigationPane" aria-label="پیمایش سند">
+    <aside class="farast-nav-panel hidden" id="navigationPane" aria-label="پیمایش سند">
       <div class="panel-heading"><strong>پیمایش</strong><button type="button" data-close-panel="navigationPane" aria-label="بستن">×</button></div>
       <div id="navigationItems"><span class="muted">عنوان‌های سند اینجا نمایش داده می‌شوند.</span></div>
     </aside>
     <section class="farast-canvas-shell">
       <div class="farast-page-viewport" id="pagesViewport" tabindex="0" aria-label="صفحات سند"></div>
     </section>
-    <aside class="farast-ai-panel" id="aiSidebar" aria-label="دستیار هوش مصنوعی">
+    <aside class="farast-ai-panel hidden" id="aiSidebar" aria-label="دستیار هوش مصنوعی">
       <div class="panel-heading"><div><strong>دستیار هوشمند</strong><small>انتخاب → پیشنهاد → پیش‌نمایش → پذیرش</small></div><button type="button" data-close-panel="aiSidebar" aria-label="بستن">×</button></div>
       <div class="ai-scope"><span>زمینه</span><select id="aiScope"><option value="selection">متن انتخاب‌شده</option><option value="paragraph">پاراگراف</option><option value="page">صفحه</option><option value="document">سند</option></select></div>
       <div class="ai-actions" id="aiActions"><button data-ai-operation="selection.proofread">اصلاح</button><button data-ai-operation="selection.rewrite">بازنویسی</button><button data-ai-operation="selection.tone">رسمی‌سازی</button><button data-ai-operation="selection.shorten">ساده‌سازی</button><button data-ai-operation="selection.summarize">خلاصه</button><button data-ai-operation="selection.translate">ترجمه</button></div>
       <div id="aiPreview" class="ai-preview" hidden></div><div id="aiStatus" class="ai-status" aria-live="polite">برای شروع، متن را انتخاب کنید.</div>
     </aside>
   </main>
-  <footer class="farast-statusbar"><span id="statusText">آماده</span><span>صفحه <b id="currentPage">۱</b> از <b id="totalPages">۱</b></span><span>کلمات <b id="statusWords">۰</b></span><span id="directionStatus">RTL · فارسی</span><span class="status-spacer"></span><button id="mic" type="button" aria-label="تایپ صوتی" title="تایپ صوتی">تایپ صوتی</button><button id="exportDocx" type="button">DOCX</button><button id="exportPdf" type="button">PDF</button></footer>
+  <footer class="farast-statusbar"><span id="statusText">آماده</span><span>صفحه <b id="currentPage">۱</b> از <b id="totalPages">۱</b></span><span>کلمات <b id="statusWords">۰</b></span><span id="directionStatus">RTL · فارسی</span><span id="zoomStatus">بزرگ‌نمایی <b id="zoomValue">۱۰۰٪</b></span><span class="status-spacer"></span><button id="mic" type="button" class="farast-mic-btn" aria-label="تایپ صوتی فراست" title="تایپ صوتی فراست"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i><span>تایپ صوتی</span></button><button id="exportDocx" type="button">DOCX</button><button id="exportPdf" type="button">PDF</button></footer>
 </div>
 <aside id="farastAgentPanel" dir="rtl" aria-label="عامل سند">
  <div class="farast-agent-head"><strong>عامل سند فراست</strong><button id="farastAgentClose" class="farast-agent-close" type="button" aria-label="بستن">×</button></div>
@@ -81,5 +74,11 @@
 <input id="source" type="file" hidden accept="image/*,.pdf,.zip">
 <div id="findDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="findTitle"><header><strong id="findTitle">یافتن و جایگزینی</strong><button type="button" data-dialog-close>×</button></header><label>یافتن<input id="findInput" autocomplete="off"></label><label>جایگزین با<input id="replaceInput" autocomplete="off"></label><div class="dialog-actions"><button id="findNext" type="button">بعدی</button><button id="replaceOne" type="button">جایگزینی</button><button id="replaceAll" type="button" class="primary">جایگزینی همه</button></div></div></div>
 <div id="versionDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>تاریخچه نسخه‌ها</strong><button type="button" data-dialog-close>×</button></header><div id="versionList"></div></div></div>
+@once
+{{-- پوستهٔ گوگل داکس روی هستهٔ فراست (فقط ظاهر؛ داده‌ها همان مسیر Kernel/سرور می‌روند) --}}
+<link rel="stylesheet" href="/css/docs-chrome.css?v=20261016b">
+<script src="/js/editor-voice-hub.js?v=20261016b" defer></script>
+<script src="/js/editor-docs-chrome.js?v=20261016b" defer></script>
+@endonce
 <div id="commentDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>نظر جدید</strong><button type="button" data-dialog-close>×</button></header><textarea id="commentText" rows="5" placeholder="نظر خود را بنویسید"></textarea><div class="dialog-actions"><button id="commentSave" class="primary" type="button">ثبت نظر</button></div></div></div>
 @endsection

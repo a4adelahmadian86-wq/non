@@ -227,20 +227,65 @@ class EditorDocumentService
         @$dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-root">'.$html.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         $root = $dom->getElementById('farast-root');
         if (!$root) return '<p><br></p>';
+
         $allowedTags = ['div','p','br','span','strong','b','em','i','u','s','strike','sub','sup','h1','h2','h3','h4','h5','h6','blockquote','ul','ol','li','table','thead','tbody','tfoot','tr','th','td','img','a','hr'];
         $allowedAttrs = ['id','class','style','dir','title','alt','width','height','colspan','rowspan','href','target','rel','src'];
-        $walk = function(\DOMNode $node) use (&$walk, $allowedTags, $allowedAttrs): void {
+        $allowedStyleProperties = [
+            'text-align','color','background-color','font-family','font-size','font-weight','font-style',
+            'text-decoration','line-height','direction','margin','margin-top','margin-right','margin-bottom',
+            'margin-left','margin-inline-start','margin-inline-end','padding','padding-top','padding-right','padding-bottom','padding-left','width',
+            'height','min-width','max-width','border','border-width','border-style','border-color',
+            'border-collapse','vertical-align','white-space','page-break-before','page-break-after',
+        ];
+        $safeUrl = static function (string $value, string $attribute): bool {
+            $value = trim($value);
+            if ($value === '') return true;
+            $compact = preg_replace('/[\\x00-\\x20\\x7f]+/u', '', $value) ?? '';
+            if ($compact === '' || preg_match('~^(?:[/\\\\]{2}|\\\\)~', $compact)) return false;
+            if (preg_match('/^([a-z][a-z0-9+.-]*):/i', $compact, $match)) {
+                $scheme = strtolower($match[1]);
+                if ($attribute === 'href') return in_array($scheme, ['http','https','mailto','tel'], true);
+                if (in_array($scheme, ['http','https'], true)) return true;
+                return $attribute === 'src'
+                    && preg_match('~^data:image/(?:png|jpeg|gif|webp);base64,[a-z0-9+/=]+$~i', $compact) === 1;
+            }
+            return true;
+        };
+
+        $walk = function (\DOMNode $node) use (&$walk, $allowedTags, $allowedAttrs, $allowedStyleProperties, $safeUrl): void {
             for ($child = $node->firstChild; $child; ) {
                 $next = $child->nextSibling;
                 if ($child instanceof \DOMElement) {
                     $tag = strtolower($child->tagName);
-                    if (!in_array($tag, $allowedTags, true)) { $node->removeChild($child); $child = $next; continue; }
+                    if (!in_array($tag, $allowedTags, true)) {
+                        $node->removeChild($child);
+                        $child = $next;
+                        continue;
+                    }
                     foreach (iterator_to_array($child->attributes) as $attr) {
                         $name = strtolower($attr->name);
                         $value = trim($attr->value);
-                        if (!in_array($name, $allowedAttrs, true) || str_starts_with($name, 'on')) { $child->removeAttribute($attr->name); continue; }
-                        if (in_array($name, ['href','src'], true) && preg_match('/^\s*(?:javascript:|vbscript:|data:text\/html)/iu', $value)) { $child->removeAttribute($attr->name); continue; }
-                        if ($name === 'style' && preg_match('/(?:expression\s*\(|url\s*\(\s*["\']?\s*(?:javascript:|data:text\/html))/iu', $value)) { $child->removeAttribute($attr->name); }
+                        if (!in_array($name, $allowedAttrs, true) || str_starts_with($name, 'on')) {
+                            $child->removeAttribute($attr->name);
+                            continue;
+                        }
+                        if (in_array($name, ['href','src'], true) && !$safeUrl($value, $name)) {
+                            $child->removeAttribute($attr->name);
+                            continue;
+                        }
+                        if ($name === 'style') {
+                            $declarations = [];
+                            foreach (explode(';', $value) as $declaration) {
+                                if (!str_contains($declaration, ':')) continue;
+                                [$property, $styleValue] = array_map('trim', explode(':', $declaration, 2));
+                                $property = strtolower($property);
+                                if (!in_array($property, $allowedStyleProperties, true) || $styleValue === '') continue;
+                                if (preg_match('/(?:url\\s*\\(|expression\\s*\\(|@import|behavior\\s*:|-moz-binding|javascript:|vbscript:|data:|[<>])/iu', $styleValue)) continue;
+                                $declarations[] = $property.':'.$styleValue;
+                            }
+                            if ($declarations) $child->setAttribute('style', implode(';', $declarations));
+                            else $child->removeAttribute('style');
+                        }
                     }
                     if ($tag === 'a' && $child->hasAttribute('target')) $child->setAttribute('rel', 'noopener noreferrer');
                     $walk($child);

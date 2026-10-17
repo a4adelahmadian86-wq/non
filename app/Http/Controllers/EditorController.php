@@ -204,16 +204,28 @@ class EditorController extends Controller
         abort_unless(is_array($item) && !empty($item['storage_path']), 404);
 
         $path = (string) $item['storage_path'];
-        abort_unless(Storage::disk('private')->exists($path), 404);
+        $asset = \App\Models\FarastStorageObject::query()
+            ->where('user_id', $request->user()->id)
+            ->where('document_id', $farast->id)
+            ->where('disk', 'private')
+            ->where('path', $path)
+            ->where('classification', 'editor_asset')
+            ->where('status', 'approved')
+            ->first();
 
-        $stream = Storage::disk('private')->readStream($path);
+        // Fail closed: a document resource is not proof that its stored object passed review.
+        abort_unless($asset, 404);
+        abort_unless(in_array(strtolower((string) $asset->mime), ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true), 404);
+        abort_unless(Storage::disk('private')->exists($asset->path), 404);
+
+        $stream = Storage::disk('private')->readStream($asset->path);
         abort_unless(is_resource($stream), 404);
 
         return response()->stream(function () use ($stream) {
             fpassthru($stream);
             fclose($stream);
         }, 200, [
-            'Content-Type' => (string) ($item['mime'] ?? 'application/octet-stream'),
+            'Content-Type' => (string) $asset->mime,
             'Cache-Control' => 'private, max-age=3600',
             'X-Content-Type-Options' => 'nosniff',
         ]);
