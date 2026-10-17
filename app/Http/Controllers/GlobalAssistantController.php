@@ -80,11 +80,11 @@ class GlobalAssistantController extends Controller
 
         $content = trim(preg_replace('/\s+/u', ' ', $data['content']));
         if ($content === '') return response()->json(['ok' => false, 'message' => 'متن حافظه خالی است.'], 422, ['Cache-Control' => 'no-store']);
-        $query = \Illuminate\Support\Facades\DB::table('farast_assistant_memories')->where('user_id', $request->user()->id);
-        if ($query->where('content', $content)->exists()) {
+        $userMemories = \Illuminate\Support\Facades\DB::table('farast_assistant_memories')->where('user_id', $request->user()->id);
+        if ((clone $userMemories)->where('content', $content)->exists()) {
             return response()->json(['ok' => true, 'message' => 'این مورد از قبل در حافظه هست.'], 200, ['Cache-Control' => 'no-store']);
         }
-        if ($query->count() >= 20) {
+        if ($userMemories->count() >= 20) {
             return response()->json(['ok' => false, 'message' => 'حافظه حداکثر ۲۰ مورد دارد؛ ابتدا موردی را پاک کنید.'], 422, ['Cache-Control' => 'no-store']);
         }
         \Illuminate\Support\Facades\DB::table('farast_assistant_memories')->insert([
