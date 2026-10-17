@@ -5,23 +5,24 @@
   var root = document.createElement('div');
   root.id = 'farast-global-assistant';
   root.innerHTML =
-    '<button class="farast-assistant-launcher" type="button" aria-label="گفت‌وگو با همراه فراست" aria-expanded="false" title="همراه هوشمند فراست"><span class="fa-solid fa-sparkles" aria-hidden="true"></span><span class="farast-assistant-pulse" aria-hidden="true"></span></button>' +
-    '<section class="farast-assistant-panel" aria-label="همراه هوشمند فراست" aria-modal="false" hidden>' +
-    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-memory" type="button" data-fa-memory title="ذخیره نکته شخصی برای گفتگوهای بعدی">حافظه +</button><button class="farast-assistant-memory-manage" type="button" data-fa-memory-manage title="مشاهده یا پاک‌کردن حافظه شخصی">مدیریت حافظه</button><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه" title="پاک کردن سابقه گفتگو">پاک‌کردن سابقه</button><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
-    '<div class="farast-assistant-intro"><b>سلام، خوش اومدی 👋</b><p>بگو دنبال چه چیزی هستی؛ قدم‌به‌قدم کنارت هستم.</p></div>' +
-    '<div class="farast-assistant-messages" data-fa-messages aria-live="polite" aria-relevant="additions"></div>' +
-    '<div class="farast-assistant-suggestions"><button type="button" data-fa-tour>🧭 راهنمای تعاملی سایت</button><button type="button" data-fa-text="برای خرید فایل راهنمایی‌ام کن">🛍️ خرید فایل</button><button type="button" data-fa-text="چطور از خدمات تایپ استفاده کنم؟">✍️ خدمات تایپ</button><button type="button" data-fa-text="قیمت خدمات چقدر است؟">💎 قیمت‌ها</button></div>' +
-    '<div class="farast-assistant-status" data-fa-status role="status">برای گفت‌وگو وارد حساب کاربری‌ات شو.</div>' +
-    '<form class="farast-assistant-form" autocomplete="off"><button class="farast-assistant-mic" type="button" aria-label="شروع گفتار" title="گفتار به متن"><i class="fa-solid fa-microphone"></i></button><input name="message" maxlength="1200" placeholder="اینجا بنویس یا صحبت کن…" aria-label="پیام شما"><button class="farast-assistant-send" type="submit" aria-label="ارسال پیام"><i class="fa-solid fa-arrow-up"></i></button></form>' +
-    '<footer class="farast-assistant-foot">پاسخ‌های هوش مصنوعی ممکن است نیاز به بررسی داشته باشند.</footer></section>';
-  document.body.appendChild(root);
+    '<button class="farast-assistant-launcher" type="button" aria-label="شروع گفت‌وگوی صوتی با فراست" aria-expanded="false" title="گفت‌وگوی صوتی فراست"><span class="fa-solid fa-microphone-lines" aria-hidden="true"></span><span class="farast-assistant-pulse" aria-hidden="true"></span></button>' +
+    '<section class="farast-assistant-panel farast-assistant-voice-panel" aria-label="گفت‌وگوی صوتی فراست" aria-modal="false" hidden>' +
+    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-wave-square" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه صوتی فراست</strong><small><span class="farast-assistant-online"></span> گفت‌وگوی صوتی</small></div><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
+    '<div class="farast-voice-stage"><div class="farast-voice-orb" aria-hidden="true"><span></span><span></span><span></span></div><strong class="farast-voice-title" data-fa-voice-title>آمادهٔ گفت‌وگو هستم</strong><p class="farast-voice-caption" data-fa-voice-caption>برای شروع، میکروفون را لمس کن و صحبت کن.</p><div class="farast-assistant-status" data-fa-status role="status" aria-live="polite">برای گفت‌وگو وارد حساب کاربری‌ات شو.</div><button class="farast-assistant-mic farast-voice-mic" type="button" aria-label="شروع صحبت" title="برای شروع یا توقف صحبت لمس کن"><i class="fa-solid fa-microphone" aria-hidden="true"></i><span>صحبت کن</span></button><button class="farast-voice-stop" type="button" data-fa-stop-speech>توقف پخش صدا</button></div>' +
+    '<div class="farast-assistant-messages" data-fa-messages hidden aria-live="polite" aria-relevant="additions"></div>' +
+    '<div class="farast-assistant-intro" hidden><b>همراه صوتی فراست</b><p>گفت‌وگوی صوتی</p></div>' +
+    '<div class="farast-assistant-suggestions" hidden><button type="button" data-fa-tour>راهنمای سایت</button><button type="button" data-fa-text="برای خرید فایل راهنمایی‌ام کن">خرید فایل</button></div>' +
+    '<form class="farast-assistant-form" autocomplete="off" hidden><button class="farast-assistant-mic" type="button" aria-label="شروع گفتار"><i class="fa-solid fa-microphone"></i></button><input name="message" maxlength="1200" aria-label="پیام شما"><button class="farast-assistant-send" type="submit" aria-label="ارسال پیام"><i class="fa-solid fa-arrow-up"></i></button></form>' +
+    '<div hidden><button class="farast-assistant-memory" type="button" data-fa-memory>حافظه +</button><button class="farast-assistant-memory-manage" type="button" data-fa-memory-manage>مدیریت حافظه</button><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه">پاک کردن سابقه</button></div>' +
+    '<footer class="farast-assistant-foot">گفت‌وگوی صوتی؛ برای استفاده باید وارد حساب کاربری باشی.</footer></section>';  document.body.appendChild(root);
   var panel=root.querySelector('.farast-assistant-panel'), launcher=root.querySelector('.farast-assistant-launcher'),
       list=root.querySelector('[data-fa-messages]'), form=root.querySelector('form'), input=form.querySelector('input'),
       status=root.querySelector('[data-fa-status]'), busy=false, recognition=null, history=[], historyLoaded=false;
   var csrf=document.querySelector('meta[name="csrf-token"]');
   function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function message(role,text){var el=document.createElement('div');el.className='farast-assistant-msg '+role;el.textContent=String(text||'');list.appendChild(el);list.scrollTop=list.scrollHeight;return el;}
-  function setOpen(v){panel.hidden=!v;panel.classList.toggle('is-open',v);launcher.setAttribute('aria-expanded',v?'true':'false');if(v)setTimeout(function(){input.focus();},120);}
+  var voiceTitle=root.querySelector('[data-fa-voice-title]'), voiceCaption=root.querySelector('[data-fa-voice-caption]');
+  function message(role,text){var el=document.createElement('div');el.className='farast-assistant-msg '+role;el.textContent=String(text||'');list.appendChild(el);voiceCaption.textContent=String(text||'');return el;}
+  function setOpen(v){panel.hidden=!v;panel.classList.toggle('is-open',v);launcher.setAttribute('aria-expanded',v?'true':'false');if(v){voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';if(document.body.dataset.assistantAuth==='1')status.textContent='برای صحبت، میکروفون را لمس کن.';}}
   var tourState={steps:[{href:'/store',title:'فروشگاه فایل',body:'برای دیدن فایل‌ها و محصولات دیجیتال، از این بخش وارد فروشگاه شو.'},{href:'/editor',title:'تایپ و ویرایش',body:'از این بخش می‌توانی وارد فضای تایپ و ویرایش اسناد شوی.'},{href:'/pricing',title:'قیمت خدمات',body:'پیش از استفاده، تعرفه‌ها و شرایط خدمات را اینجا بررسی کن.'},{href:'/dashboard',title:'فضای کاربری',body:'مدیریت اسناد و دسترسی‌های حساب کاربری از این بخش انجام می‌شود.'},{href:'/support',title:'پشتیبانی',body:'اگر به راهنمایی بیشتری نیاز داشتی، مسیر پشتیبانی را باز کن.'}],index:0,element:null,card:null};
   function closeTour(){
     if(tourState.element)tourState.element.classList.remove('farast-tour-highlight');
@@ -119,19 +120,20 @@
       status.textContent='ورود برای استفاده از همراه هوشمند الزامی است.';
       var link=document.createElement('a');link.href='/login?redirect='+encodeURIComponent(location.pathname+location.search);link.className='farast-assistant-login';link.textContent='ورود به حساب کاربری';list.appendChild(link);list.scrollTop=list.scrollHeight;return;
     }
-    message('user',text);input.value='';busy=true;status.textContent='دارم با دقت فکر می‌کنم…';var pending=message('bot','…');
+    input.value='';busy=true;voiceTitle.textContent='در حال پاسخ‌گویی';status.textContent='دارم به حرفت فکر می‌کنم…';var pending=message('bot','در حال آماده‌کردن پاسخ صوتی…');panel.classList.add('is-speaking');
     try{
       var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربر /dashboard. مکالمه اخیر:\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\n')+'\nکاربر: '+text;
       var response=await fetch('/assistant/chat',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt})});
       var data=await response.json().catch(function(){return {};});
       if(response.status===401||response.status===419){pending.textContent='نشست شما منقضی شده است؛ دوباره وارد حساب شوید.';status.textContent='ورود مجدد لازم است.';}
       else if(!response.ok)throw new Error(data.message||'سرویس گفت‌وگو فعلاً آماده نیست.');
-      else {var answer=String(data.reply||data.text||data.message||'پاسخ خالی دریافت شد.');pending.textContent=answer;history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);status.textContent='آماده‌ام؛ هر وقت خواستی ادامه بده.';say(answer);}
-    }catch(e){pending.textContent='الان نتوانستم به سرویس گفت‌وگو وصل شوم. لطفاً کمی بعد دوباره تلاش کن.';status.textContent='اتصال برقرار نشد.';}
-    finally{busy=false;list.scrollTop=list.scrollHeight;}
+      else {var answer=String(data.reply||data.text||data.message||'پاسخ خالی دریافت شد.');pending.textContent=answer;history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);voiceTitle.textContent='پاسخ فراست';status.textContent='در حال پخش پاسخ صوتی…';say(answer);}
+    }catch(e){pending.textContent='';voiceTitle.textContent='اتصال برقرار نشد';voiceCaption.textContent='فعلاً امکان دریافت پاسخ وجود ندارد. اتصال و تنظیمات سرویس هوش مصنوعی باید بررسی شود.';status.textContent='پاسخ‌گویی ناموفق بود.';}
+    finally{busy=false;panel.classList.remove('is-speaking');if(!('speechSynthesis' in window))voiceTitle.textContent='پاسخ آماده است';}
   }
   launcher.addEventListener('click',function(){setOpen(panel.hidden);if(panel.hidden===false)loadHistory();});
-  root.querySelector('.farast-assistant-close').addEventListener('click',function(){setOpen(false);});
+  root.querySelector('.farast-assistant-close').addEventListener('click',function(){if('speechSynthesis' in window)window.speechSynthesis.cancel();setOpen(false);});
+  root.querySelector('[data-fa-stop-speech]').addEventListener('click',function(){if('speechSynthesis' in window)window.speechSynthesis.cancel();panel.classList.remove('is-speaking');voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';status.textContent='پخش صدا متوقف شد.';});
   root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
   root.querySelector('[data-fa-memory]').addEventListener('click',saveMemory);
   root.querySelector('[data-fa-memory-manage]').addEventListener('click',manageMemories);
@@ -142,14 +144,14 @@
   function stopMediaTracks(){if(mediaStream){mediaStream.getTracks().forEach(function(track){track.stop();});mediaStream=null;}}
   function startBrowserRecognition(){
     var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){status.textContent='تشخیص گفتار در این مرورگر فعال نیست؛ لطفاً پیام را تایپ کن.';return;}
+    if(!SR){status.textContent='تشخیص گفتار این مرورگر فعال نیست. در این دستگاه، موتور صوتی سرور باید در دسترس باشد.';voiceTitle.textContent='تشخیص گفتار پشتیبانی نمی‌شود';return;}
     try{
       if(recognition){recognition.stop();recognition=null;return;}
       recognition=new SR();recognition.lang='fa-IR';recognition.interimResults=true;recognition.continuous=false;
       status.textContent='گوش می‌دهم؛ برای توقف، دوباره روی میکروفون بزن.';
       recognition.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;input.value=t;if(e.results[e.results.length-1].isFinal){recognition=null;send(t);}};
-      recognition.onerror=function(){status.textContent='تشخیص گفتار ناموفق بود؛ مجوز میکروفون را بررسی یا پیام را تایپ کن.';recognition=null;};
-      recognition.onend=function(){recognition=null;if(status.textContent.indexOf('گوش می‌دهم')===0)status.textContent='آماده‌ام.';};
+      recognition.onerror=function(){status.textContent='تشخیص گفتار ناموفق بود؛ مجوز میکروفون یا پشتیبانی مرورگر را بررسی کن.';voiceTitle.textContent='میکروفون آماده نیست';panel.classList.remove('is-listening');recognition=null;};
+      recognition.onend=function(){recognition=null;panel.classList.remove('is-listening');if(status.textContent.indexOf('گوش می‌دهم')===0){status.textContent='آماده‌ام.';voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';}};
       recognition.start();
     }catch(e){recognition=null;status.textContent='برای میکروفون، مجوز مرورگر را فعال کن.';}
   }
@@ -168,7 +170,7 @@
       mediaRecorder.ondataavailable=function(e){if(e.data&&e.data.size)recordedChunks.push(e.data);};
       mediaRecorder.onerror=function(){status.textContent='ضبط صدا ناموفق بود؛ دوباره تلاش کن.';stopMediaTracks();mediaRecorder=null;};
       mediaRecorder.onstop=async function(){
-        root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+        root.querySelector('.farast-assistant-mic').classList.remove('is-recording');panel.classList.remove('is-listening');
         if(recordingTimeout)window.clearTimeout(recordingTimeout);recordingTimeout=null;
         stopMediaTracks();
         var recorder=mediaRecorder;mediaRecorder=null;
@@ -186,7 +188,7 @@
         }catch(e){status.textContent=e.message||'تشخیص گفتار فعلاً در دسترس نیست؛ پیام را تایپ کن.';}
       };
       mediaRecorder.start(250);
-      status.textContent='گوش می‌دهم؛ برای توقف دوباره روی میکروفون بزن. صدای ضبط‌شده برای رونویسی به سرویس بیرونی ارسال می‌شود.';
+      voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent='گوش می‌دهم؛ برای توقف دوباره روی میکروفون بزن. صدای ضبط‌شده برای رونویسی به سرویس بیرونی ارسال می‌شود.';
       root.querySelector('.farast-assistant-mic').classList.add('is-recording');
       recordingTimeout=window.setTimeout(function(){if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();},25000);
     }catch(e){stopMediaTracks();mediaRecorder=null;status.textContent='میکروفون در دسترس نیست؛ مجوز مرورگر را بررسی کن.';startBrowserRecognition();}
@@ -197,5 +199,5 @@
     startServerRecording();
   });
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!panel.hidden)setOpen(false);});
-  message('bot','من همراه هوشمند فراستم؛ می‌تونم در پیدا کردن خدمات، خرید و استفاده از سایت راهنمایی‌ات کنم. برای شروع، وارد حساب کاربری شو.');
+  voiceCaption.textContent='برای شروع، میکروفون را لمس کن و به فارسی صحبت کن.';
 })();
