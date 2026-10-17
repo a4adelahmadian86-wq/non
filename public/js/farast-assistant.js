@@ -21,7 +21,7 @@
   var csrf=document.querySelector('meta[name="csrf-token"]');
   function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   var voiceTitle=root.querySelector('[data-fa-voice-title]'), voiceCaption=root.querySelector('[data-fa-voice-caption]');
-  function message(role,text){var el=document.createElement('div');el.className='farast-assistant-msg '+role;el.textContent=String(text||'');list.appendChild(el);voiceCaption.textContent=String(text||'');return el;}
+  function message(role,text){var el=document.createElement('div');el.className='farast-assistant-msg '+role;el.textContent=String(text||'');list.appendChild(el);if(role==='bot')voiceCaption.textContent='پاسخ صوتی در حال آماده‌شدن است.';return el;}
   function setOpen(v){panel.hidden=!v;panel.classList.toggle('is-open',v);launcher.setAttribute('aria-expanded',v?'true':'false');if(v){voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';if(document.body.dataset.assistantAuth==='1')status.textContent='برای صحبت، میکروفون را لمس کن.';}}
   var tourState={steps:[{href:'/store',title:'فروشگاه فایل',body:'برای دیدن فایل‌ها و محصولات دیجیتال، از این بخش وارد فروشگاه شو.'},{href:'/editor',title:'تایپ و ویرایش',body:'از این بخش می‌توانی وارد فضای تایپ و ویرایش اسناد شوی.'},{href:'/pricing',title:'قیمت خدمات',body:'پیش از استفاده، تعرفه‌ها و شرایط خدمات را اینجا بررسی کن.'},{href:'/dashboard',title:'فضای کاربری',body:'مدیریت اسناد و دسترسی‌های حساب کاربری از این بخش انجام می‌شود.'},{href:'/support',title:'پشتیبانی',body:'اگر به راهنمایی بیشتری نیاز داشتی، مسیر پشتیبانی را باز کن.'}],index:0,element:null,card:null};
   function closeTour(){
@@ -112,13 +112,12 @@
       status.textContent='سابقه ذخیره‌شده پاک شد.';
     }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
   }
-  function say(text){if(!('speechSynthesis' in window))return;try{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.lang='fa-IR';u.rate=.94;u.pitch=.88;var voices=window.speechSynthesis.getVoices();var fa=voices.filter(function(v){return /^fa(-|$)/i.test(v.lang);});var preferred=fa.find(function(v){return /male|arman|farid|persian/i.test(v.name);});if(preferred)u.voice=preferred;window.speechSynthesis.speak(u);}catch(e){}}
+  function say(text){if(!('speechSynthesis' in window)){voiceCaption.textContent='پخش صدا در این مرورگر پشتیبانی نمی‌شود.';voiceTitle.textContent='پاسخ آماده است';panel.classList.remove('is-speaking');return;}try{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.lang='fa-IR';u.rate=.94;u.pitch=.88;var voices=window.speechSynthesis.getVoices();var fa=voices.filter(function(v){return /^fa(-|$)/i.test(v.lang);});var preferred=fa.find(function(v){return /male|arman|farid|persian/i.test(v.name);});if(preferred)u.voice=preferred;u.onstart=function(){panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='پاسخ فراست در حال پخش است.';status.textContent='برای قطع صدا، «توقف پخش صدا» را لمس کن.';};u.onend=function(){panel.classList.remove('is-speaking');voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';status.textContent='آماده‌ام؛ دوباره صحبت کن.';};u.onerror=function(){panel.classList.remove('is-speaking');voiceTitle.textContent='پاسخ آماده است';status.textContent='پخش صدا انجام نشد؛ تنظیمات صدای مرورگر را بررسی کن.';};window.speechSynthesis.speak(u);}catch(e){panel.classList.remove('is-speaking');status.textContent='پخش صدا انجام نشد.';}}
   async function send(text){
     text=String(text||'').trim();if(!text||busy)return;
     if(document.body.dataset.assistantAuth !== '1'){
-      message('bot','برای گفت‌وگو و نگهداری سابقه، ابتدا وارد حساب کاربری‌ات شو.');
-      status.textContent='ورود برای استفاده از همراه هوشمند الزامی است.';
-      var link=document.createElement('a');link.href='/login?redirect='+encodeURIComponent(location.pathname+location.search);link.className='farast-assistant-login';link.textContent='ورود به حساب کاربری';list.appendChild(link);list.scrollTop=list.scrollHeight;return;
+      voiceTitle.textContent='ابتدا وارد حساب شو';voiceCaption.textContent='برای استفاده از همراه صوتی، ورود به حساب کاربری لازم است.';status.textContent='ورود برای استفاده از همراه هوشمند الزامی است.';
+      var link=root.querySelector('.farast-voice-login');if(!link){link=document.createElement('a');link.href='/login?redirect='+encodeURIComponent(location.pathname+location.search);link.className='farast-voice-login';link.textContent='ورود به حساب کاربری';root.querySelector('.farast-voice-stage').appendChild(link);}return;
     }
     input.value='';busy=true;voiceTitle.textContent='در حال پاسخ‌گویی';status.textContent='دارم به حرفت فکر می‌کنم…';var pending=message('bot','در حال آماده‌کردن پاسخ صوتی…');panel.classList.add('is-speaking');
     try{
@@ -129,11 +128,11 @@
       else if(!response.ok)throw new Error(data.message||'سرویس گفت‌وگو فعلاً آماده نیست.');
       else {var answer=String(data.reply||data.text||data.message||'پاسخ خالی دریافت شد.');pending.textContent=answer;history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);voiceTitle.textContent='پاسخ فراست';status.textContent='در حال پخش پاسخ صوتی…';say(answer);}
     }catch(e){pending.textContent='';voiceTitle.textContent='اتصال برقرار نشد';voiceCaption.textContent='فعلاً امکان دریافت پاسخ وجود ندارد. اتصال و تنظیمات سرویس هوش مصنوعی باید بررسی شود.';status.textContent='پاسخ‌گویی ناموفق بود.';}
-    finally{busy=false;panel.classList.remove('is-speaking');if(!('speechSynthesis' in window))voiceTitle.textContent='پاسخ آماده است';}
+    finally{busy=false;}
   }
   launcher.addEventListener('click',function(){setOpen(panel.hidden);if(panel.hidden===false)loadHistory();});
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){if('speechSynthesis' in window)window.speechSynthesis.cancel();setOpen(false);});
-  root.querySelector('[data-fa-stop-speech]').addEventListener('click',function(){if('speechSynthesis' in window)window.speechSynthesis.cancel();panel.classList.remove('is-speaking');voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';status.textContent='پخش صدا متوقف شد.';});
+  root.querySelector('[data-fa-stop-speech]').addEventListener('click',function(){if('speechSynthesis' in window)window.speechSynthesis.cancel();panel.classList.remove('is-speaking');voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';status.textContent='پخش صدا متوقف شد.';voiceCaption.textContent='هر وقت آماده بودی، دوباره صحبت کن.';});
   root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
   root.querySelector('[data-fa-memory]').addEventListener('click',saveMemory);
   root.querySelector('[data-fa-memory-manage]').addEventListener('click',manageMemories);
@@ -148,7 +147,7 @@
     try{
       if(recognition){recognition.stop();recognition=null;return;}
       recognition=new SR();recognition.lang='fa-IR';recognition.interimResults=true;recognition.continuous=false;
-      status.textContent='گوش می‌دهم؛ برای توقف، دوباره روی میکروفون بزن.';
+      voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent='گوش می‌دهم؛ برای توقف، دوباره روی میکروفون بزن.';
       recognition.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;input.value=t;if(e.results[e.results.length-1].isFinal){recognition=null;send(t);}};
       recognition.onerror=function(){status.textContent='تشخیص گفتار ناموفق بود؛ مجوز میکروفون یا پشتیبانی مرورگر را بررسی کن.';voiceTitle.textContent='میکروفون آماده نیست';panel.classList.remove('is-listening');recognition=null;};
       recognition.onend=function(){recognition=null;panel.classList.remove('is-listening');if(status.textContent.indexOf('گوش می‌دهم')===0){status.textContent='آماده‌ام.';voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';}};
@@ -185,7 +184,7 @@
           var data=await response.json().catch(function(){return {};});
           if(!response.ok||!data.text)throw new Error(data.message||'رونویسی انجام نشد.');
           input.value=String(data.text).trim();status.textContent='گفتار به متن تبدیل شد؛ در حال ارسال پیام…';send(input.value);
-        }catch(e){status.textContent=e.message||'تشخیص گفتار فعلاً در دسترس نیست؛ پیام را تایپ کن.';}
+        }catch(e){status.textContent=e.message||'تشخیص گفتار سرور در دسترس نیست؛ تلاش می‌کنم از میکروفون مرورگر استفاده کنم.';startBrowserRecognition();}
       };
       mediaRecorder.start(250);
       voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent='گوش می‌دهم؛ برای توقف دوباره روی میکروفون بزن. صدای ضبط‌شده برای رونویسی به سرویس بیرونی ارسال می‌شود.';
