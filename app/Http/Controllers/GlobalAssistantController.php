@@ -11,6 +11,57 @@ use RuntimeException;
 
 class GlobalAssistantController extends Controller
 {
+    public function voiceStatus(Request $request)
+    {
+        $key = trim((string) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')));
+        return response()->json([
+            'ok' => true,
+            'server_stt' => $key !== '',
+            'browser_stt' => isset($_SERVER['HTTP_USER_AGENT']),
+        ], 200, ['Cache-Control' => 'no-store']);
+    }
+
+    public function transcribe(Request $request)
+    {
+        $data = $request->validate([
+            'audio' => ['required', 'file', 'max:15360', 'mimes:webm,ogg,wav,mp3,m4a,mp4'],
+            'locale' => ['nullable', 'string', 'in:fa-IR,en-US,ar-SA'],
+        ]);
+        $key = trim((string) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')));
+        if ($key === '') {
+            return response()->json(['ok' => false, 'message' => 'موتور تشخیص گفتار سمت سرور تنظیم نشده است.'], 503, ['Cache-Control' => 'no-store']);
+        }
+        $file = $data['audio'];
+        $bytes = file_get_contents($file->getRealPath());
+        if ($bytes === false || $bytes === '') {
+            return response()->json(['ok' => false, 'message' => 'فایل صوتی قابل خواندن نیست.'], 422, ['Cache-Control' => 'no-store']);
+        }
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'webm');
+        if (! in_array($extension, ['webm', 'ogg', 'wav', 'mp3', 'm4a', 'mp4'], true)) $extension = 'webm';
+        $locale = $data['locale'] ?? 'fa-IR';
+        try {
+            $response = Http::withToken($key)->acceptJson()->timeout(60)
+                ->attach('file', $bytes, 'farast-assistant.'.$extension, $file->getMimeType() ?: 'audio/webm')
+                ->post('https://api.groq.com/openai/v1/audio/transcriptions', [
+                    'model' => 'whisper-large-v3',
+                    'language' => explode('-', $locale)[0],
+                    'response_format' => 'json',
+                    'temperature' => 0,
+                    'prompt' => $locale === 'fa-IR' ? 'گفتار فارسی معیار. متن را دقیق و بدون ترجمه بنویس.' : '',
+                ]);
+            if (! $response->successful()) {
+                Log::warning('farast.global_assistant_transcription_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
+                return response()->json(['ok' => false, 'message' => $response->status() === 429 ? 'سهمیهٔ تشخیص گفتار موقتاً تمام شده است.' : 'تشخیص گفتار فعلاً در دسترس نیست.'], 503, ['Cache-Control' => 'no-store']);
+            }
+            $text = trim((string) $response->json('text', ''));
+            if ($text === '') return response()->json(['ok' => false, 'message' => 'گفتاری در فایل تشخیص داده نشد.'], 422, ['Cache-Control' => 'no-store']);
+            return response()->json(['ok' => true, 'text' => $text, 'engine' => 'groq-whisper-large-v3'], 200, ['Cache-Control' => 'no-store']);
+        } catch (\\Throwable $e) {
+            Log::warning('farast.global_assistant_transcription_exception', ['user_id' => $request->user()->id, 'error_class' => get_class($e)]);
+            return response()->json(['ok' => false, 'message' => 'ارتباط با موتور صوتی برقرار نشد.'], 502, ['Cache-Control' => 'no-store']);
+        }
+    }
+
     public function chat(Request $request, EditorAiAssistService $ai)
     {
         $data = $request->validate([
