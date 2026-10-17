@@ -75,6 +75,7 @@
       mediaRecorder.ondataavailable=function(e){if(e.data&&e.data.size)recordedChunks.push(e.data);};
       mediaRecorder.onerror=function(){status.textContent='ضبط صدا ناموفق بود؛ دوباره تلاش کن.';stopMediaTracks();mediaRecorder=null;};
       mediaRecorder.onstop=async function(){
+        root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
         if(recordingTimeout)window.clearTimeout(recordingTimeout);recordingTimeout=null;
         stopMediaTracks();
         var recorder=mediaRecorder;mediaRecorder=null;
