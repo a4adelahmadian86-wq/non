@@ -191,12 +191,32 @@ class GlobalAssistantController extends Controller
                         'max_completion_tokens' => 700,
                     ]);
                 if (! $response->successful()) {
+                    // A configured but inaccessible provider (for example HTTP 403 in a restricted
+                    // region) must not disable the site's existing no-PAYG AI orchestration.
                     Log::warning('farast.global_assistant_groq_failed', [
                         'user_id' => $user->id,
                         'status' => $response->status(),
                         'model' => $model,
+                        'fallback' => 'farast_ai',
                     ]);
-                    throw new RuntimeException($response->status() === 429 ? 'ai_provider_rate_limited' : 'ai_provider_failure');
+                    $fallback = $ai->assist('text.generate', $prompt, [
+                        'user' => $user,
+                        'processing_mode' => 'external',
+                        'instruction' => 'پاسخ مکالمه‌ای فارسی برای دستیار عمومی سایت؛ بدون ادعای قابلیت ناموجود.',
+                        'allow_payg' => false,
+                        'idempotency_key' => (string) ($request->header('Idempotency-Key') ?: ('global-assistant-fallback-'.$user->id.'-'.hash('sha256', $prompt.'|'.now()->timestamp))),
+                    ]);
+                    $fallbackReply = data_get($fallback, 'result.text')
+                        ?? data_get($fallback, 'text')
+                        ?? data_get($fallback, 'result')
+                        ?? data_get($fallback, 'output');
+                    if (is_array($fallbackReply)) $fallbackReply = $fallbackReply['text'] ?? $fallbackReply['content'] ?? json_encode($fallbackReply, JSON_UNESCAPED_UNICODE);
+                    if (! is_string($fallbackReply) || trim($fallbackReply) === '') {
+                        throw new RuntimeException($response->status() === 429 ? 'ai_provider_rate_limited' : 'ai_provider_failure');
+                    }
+                    $fallbackReply = trim($fallbackReply);
+                    $this->persistExchange((int) $user->id, $data['message'], $fallbackReply);
+                    return response()->json(['ok' => true, 'reply' => $fallbackReply, 'provider' => 'farast-ai-fallback'], 200, ['Cache-Control' => 'no-store']);
                 }
                 $reply = $response->json('choices.0.message.content');
                 if (! is_string($reply) || trim($reply) === '') throw new RuntimeException('ai_provider_invalid_shape');
