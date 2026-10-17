@@ -1,6 +1,7 @@
 <?php
 
-use App\Http\Controllers\AdminController;\nuse App\Http\Controllers\GlobalAssistantController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\GlobalAssistantController;
 use App\Http\Controllers\AdminPlatformController;
 use App\Http\Controllers\CanvaController;
 use App\Http\Controllers\ProviderAdminController;
