@@ -49,3 +49,31 @@
 .farast-assistant-memory{background:#f1f0ff;border-color:#dcd9ff;color:#5c53c8}
 .farast-assistant-memory:hover,.farast-assistant-memory-manage:hover,.farast-assistant-clear:hover{border-color:#aaa8ef}
 @media(max-width:420px){.farast-assistant-head{gap:5px;padding:10px}.farast-assistant-avatar{width:34px;height:34px;border-radius:11px}.farast-assistant-memory,.farast-assistant-memory-manage,.farast-assistant-clear{padding:6px 5px;font-size:9px}.farast-assistant-brand strong{font-size:12px}}
+
+
+/* Voice-only interaction: no text transcript, message bubbles, or typing controls. */
+.farast-assistant-voice-panel{background:radial-gradient(ellipse at 50% 25%,#f1f0ff 0%,#fbfcff 48%,#fff 100%);height:min(560px,calc(100dvh - 150px));min-height:390px}
+.farast-assistant-voice-panel .farast-assistant-head{background:rgba(255,255,255,.72)}
+.farast-assistant-voice-panel .farast-assistant-foot{background:transparent;padding:0 14px 14px}
+.farast-voice-stage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px 22px 18px;gap:12px}
+.farast-voice-orb{width:124px;height:124px;border-radius:50%;display:flex;align-items:center;justify-content:center;gap:7px;background:radial-gradient(circle at 35% 25%,#b8f4ff,#8279f6 52%,#ac65ed 80%);box-shadow:0 12px 38px #8073ee45,inset 0 2px 10px #ffffff8c;position:relative;margin-bottom:9px}
+.farast-voice-orb:before{content:"";position:absolute;inset:-10px;border:1px solid #a8a1f54d;border-radius:50%}
+.farast-voice-orb span{display:block;width:7px;height:24px;border-radius:9px;background:#fff;opacity:.9}
+.farast-voice-orb span:nth-child(2){height:42px}.farast-voice-orb span:nth-child(3){height:17px}
+.farast-voice-title{font-size:16px;font-weight:800;color:#25284b}
+.farast-voice-caption{max-width:290px;min-height:34px;margin:0;color:#6e7390;font-size:12px;line-height:1.9;overflow-wrap:anywhere}
+.farast-assistant-voice-panel .farast-assistant-status{background:transparent;padding:0;min-height:20px;text-align:center;font-size:11px;color:#777d9a}
+.farast-voice-mic{width:76px;height:76px;border-radius:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin-top:8px;background:linear-gradient(145deg,#6578f6,#9d5de9);color:#fff;box-shadow:0 10px 25px #796be54a;transition:transform .2s ease,box-shadow .2s ease}
+.farast-voice-mic i{font-size:23px}.farast-voice-mic span{font-family:inherit;font-size:10px}
+.farast-voice-mic:hover{transform:translateY(-2px);box-shadow:0 14px 30px #796be55c}
+.farast-voice-stop{border:0;background:transparent;color:#777d9a;font:inherit;font-size:10px;cursor:pointer;padding:5px 12px}
+.farast-assistant-voice-panel.is-listening .farast-voice-orb{animation:farastVoicePulse 1.2s ease-in-out infinite}
+.farast-assistant-voice-panel.is-listening .farast-voice-orb span{animation:farastVoiceWave .8s ease-in-out infinite alternate}
+.farast-assistant-voice-panel.is-listening .farast-voice-orb span:nth-child(2){animation-delay:.15s}
+.farast-assistant-voice-panel.is-listening .farast-voice-orb span:nth-child(3){animation-delay:.3s}
+.farast-assistant-voice-panel.is-listening .farast-voice-mic{background:linear-gradient(145deg,#ed5c78,#d94168);box-shadow:0 0 0 7px #e953751b}
+.farast-assistant-voice-panel.is-speaking .farast-voice-orb{animation:farastVoicePulse 1.6s ease-in-out infinite}
+@keyframes farastVoicePulse{0%,100%{transform:scale(1);box-shadow:0 12px 38px #8073ee45,0 0 0 0 #8279f622}50%{transform:scale(1.045);box-shadow:0 15px 42px #8073ee55,0 0 0 12px #8279f60c}}
+@keyframes farastVoiceWave{from{transform:scaleY(.55)}to{transform:scaleY(1.25)}}
+@media(max-width:600px){.farast-assistant-voice-panel{left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 148px);height:min(570px,calc(100dvh - 155px));min-height:370px}.farast-voice-orb{width:108px;height:108px}.farast-voice-mic{width:70px;height:70px;border-radius:25px}}
+@media(prefers-reduced-motion:reduce){.farast-assistant-voice-panel.is-listening .farast-voice-orb,.farast-assistant-voice-panel.is-speaking .farast-voice-orb,.farast-assistant-voice-panel.is-listening .farast-voice-orb span{animation:none}}
