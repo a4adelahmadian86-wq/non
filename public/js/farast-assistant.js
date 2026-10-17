@@ -7,7 +7,7 @@
   root.innerHTML =
     '<button class="farast-assistant-launcher" type="button" aria-label="گفت‌وگو با همراه فراست" aria-expanded="false" title="همراه هوشمند فراست"><span class="fa-solid fa-sparkles" aria-hidden="true"></span><span class="farast-assistant-pulse" aria-hidden="true"></span></button>' +
     '<section class="farast-assistant-panel" aria-label="همراه هوشمند فراست" aria-modal="false" hidden>' +
-    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
+    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه" title="پاک کردن سابقه گفتگو">پاک‌کردن سابقه</button><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
     '<div class="farast-assistant-intro"><b>سلام، خوش اومدی 👋</b><p>بگو دنبال چه چیزی هستی؛ قدم‌به‌قدم کنارت هستم.</p></div>' +
     '<div class="farast-assistant-messages" data-fa-messages aria-live="polite" aria-relevant="additions"></div>' +
     '<div class="farast-assistant-suggestions"><button type="button" data-fa-text="برای خرید فایل راهنمایی‌ام کن">🛍️ خرید فایل</button><button type="button" data-fa-text="چطور از خدمات تایپ استفاده کنم؟">✍️ خدمات تایپ</button><button type="button" data-fa-text="قیمت خدمات چقدر است؟">💎 قیمت‌ها</button></div>' +
@@ -17,11 +17,36 @@
   document.body.appendChild(root);
   var panel=root.querySelector('.farast-assistant-panel'), launcher=root.querySelector('.farast-assistant-launcher'),
       list=root.querySelector('[data-fa-messages]'), form=root.querySelector('form'), input=form.querySelector('input'),
-      status=root.querySelector('[data-fa-status]'), busy=false, recognition=null, history=[];
+      status=root.querySelector('[data-fa-status]'), busy=false, recognition=null, history=[], historyLoaded=false;
   var csrf=document.querySelector('meta[name="csrf-token"]');
   function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function message(role,text){var el=document.createElement('div');el.className='farast-assistant-msg '+role;el.textContent=String(text||'');list.appendChild(el);list.scrollTop=list.scrollHeight;return el;}
   function setOpen(v){panel.hidden=!v;panel.classList.toggle('is-open',v);launcher.setAttribute('aria-expanded',v?'true':'false');if(v)setTimeout(function(){input.focus();},120);}
+  async function loadHistory(){
+    if(historyLoaded||document.body.dataset.assistantAuth!=='1')return;
+    historyLoaded=true;
+    try{
+      var response=await fetch('/assistant/history',{credentials:'same-origin',headers:{'Accept':'application/json'}});
+      if(!response.ok)return;
+      var data=await response.json();
+      if(!Array.isArray(data.messages)||!data.messages.length)return;
+      list.innerHTML='';
+      data.messages.forEach(function(m){if((m.role==='user'||m.role==='assistant')&&typeof m.text==='string'){message(m.role==='user'?'user':'bot',m.text);history.push({role:m.role==='assistant'?'assistant':'user',text:m.text});}});
+      if(history.length>10)history=history.slice(-10);
+      status.textContent='سابقه گفت‌وگو از نشست‌های قبلی بازیابی شد.';
+    }catch(e){historyLoaded=false;}
+  }
+  async function clearHistory(){
+    if(document.body.dataset.assistantAuth!=='1')return;
+    if(!window.confirm('سابقه گفت‌وگوی ذخیره‌شده در حساب کاربری پاک شود؟'))return;
+    try{
+      var response=await fetch('/assistant/history',{method:'DELETE',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''}});
+      if(!response.ok)throw new Error();
+      list.innerHTML='';history=[];historyLoaded=true;
+      message('bot','سابقه پاک شد. از اینجا می‌توانیم گفت‌وگوی تازه‌ای شروع کنیم.');
+      status.textContent='سابقه ذخیره‌شده پاک شد.';
+    }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
+  }
   function say(text){if(!('speechSynthesis' in window))return;try{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.lang='fa-IR';u.rate=.94;u.pitch=.88;var voices=window.speechSynthesis.getVoices();var fa=voices.filter(function(v){return /^fa(-|$)/i.test(v.lang);});var preferred=fa.find(function(v){return /male|arman|farid|persian/i.test(v.name);});if(preferred)u.voice=preferred;window.speechSynthesis.speak(u);}catch(e){}}
   async function send(text){
     text=String(text||'').trim();if(!text||busy)return;
@@ -41,8 +66,9 @@
     }catch(e){pending.textContent='الان نتوانستم به سرویس گفت‌وگو وصل شوم. لطفاً کمی بعد دوباره تلاش کن.';status.textContent='اتصال برقرار نشد.';}
     finally{busy=false;list.scrollTop=list.scrollHeight;}
   }
-  launcher.addEventListener('click',function(){setOpen(panel.hidden);});
+  launcher.addEventListener('click',function(){setOpen(panel.hidden);if(panel.hidden===false)loadHistory();});
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){setOpen(false);});
+  root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
   form.addEventListener('submit',function(e){e.preventDefault();send(input.value);});
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
   var mediaRecorder=null, mediaStream=null, recordedChunks=[], recordingTimeout=null;
