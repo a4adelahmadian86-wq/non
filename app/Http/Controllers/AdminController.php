@@ -28,7 +28,8 @@ class AdminController extends Controller
         $users = User::latest()->limit(100)->get();
         $settings = [];
         foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
-            $settings[$key] = SiteSetting::read($key, CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
+            $default = $key === 'assistant_groq_model' ? 'openai/gpt-oss-120b' : (CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
+            $settings[$key] = SiteSetting::read($key, $default);
         }
 
         return view('admin.index', [
