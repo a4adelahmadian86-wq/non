@@ -25,7 +25,7 @@
   function say(text){if(!('speechSynthesis' in window))return;try{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.lang='fa-IR';u.rate=.94;u.pitch=.88;var voices=window.speechSynthesis.getVoices();var fa=voices.filter(function(v){return /^fa(-|$)/i.test(v.lang);});var preferred=fa.find(function(v){return /male|arman|farid|persian/i.test(v.name);});if(preferred)u.voice=preferred;window.speechSynthesis.speak(u);}catch(e){}}
   async function send(text){
     text=String(text||'').trim();if(!text||busy)return;
-    if(!document.body.classList.contains('auth-user') && !document.querySelector('a[href="/logout"],form[action="/logout"]')){
+    if(document.body.dataset.assistantAuth !== '1'){
       message('bot','برای گفت‌وگو و نگهداری سابقه، ابتدا وارد حساب کاربری‌ات شو.');
       status.textContent='ورود برای استفاده از همراه هوشمند الزامی است.';
       var link=document.createElement('a');link.href='/login?redirect='+encodeURIComponent(location.pathname+location.search);link.className='farast-assistant-login';link.textContent='ورود به حساب کاربری';list.appendChild(link);list.scrollTop=list.scrollHeight;return;
@@ -37,7 +37,7 @@
       var data=await response.json().catch(function(){return {};});
       if(response.status===401||response.status===419){pending.textContent='نشست شما منقضی شده است؛ دوباره وارد حساب شوید.';status.textContent='ورود مجدد لازم است.';}
       else if(!response.ok)throw new Error(data.message||'سرویس گفت‌وگو فعلاً آماده نیست.');
-      else {var answer=String(data.reply||data.text||data.message||'پاسخ خالی دریافت شد.');pending.textContent=answer;history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);status.textContent='آماده‌ام؛ هر وقت خواستی ادامه بده.';if(root.querySelector('[data-fa-voice-output]')?.checked)say(answer);}
+      else {var answer=String(data.reply||data.text||data.message||'پاسخ خالی دریافت شد.');pending.textContent=answer;history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);status.textContent='آماده‌ام؛ هر وقت خواستی ادامه بده.';say(answer);}
     }catch(e){pending.textContent='الان نتوانستم به سرویس گفت‌وگو وصل شوم. لطفاً کمی بعد دوباره تلاش کن.';status.textContent='اتصال برقرار نشد.';}
     finally{busy=false;list.scrollTop=list.scrollHeight;}
   }
