@@ -219,8 +219,28 @@ function guessHandwritten(file) {
  * ضبط با MediaRecorder → دیکد به PCM با AudioContext.decodeAudioData → Whisper tiny/base روی WASM.
  * رایگان، بدون سرور، بدون کلید. مدل از HF Hub کش می‌شود (first run نیازمند اینترنت). */
 let whr = null, whrName = '';
+/* موتور Whisper محلی — فالبک نهایی. کتابخانهٔ transformers.js به‌صورت باندل IIFE با CDNهای
+ * پشتیبانی‌نشده کار نمی‌کند (خطای dynamic import); لذا ESM از esm.sh بارگذاری و روی window.transformers
+ * قرار داده می‌شود تا کد موجود بدون تغییر کار کند. چند CDN برای شبکه‌های محدود. */
+const WHISPER_ESM = [
+  'https://esm.sh/@huggingface/transformers@3.5.0',
+  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/+esm',
+  'https://unpkg.com/@huggingface/transformers@3.5.0/dist/transformers.js?module',
+];
+async function loadWhisperLib() {
+  if (window.transformers) return true;
+  for (const u of WHISPER_ESM) {
+    try {
+      const mod = await import(/* @vite-ignore */ u);
+      if (mod?.pipeline) { window.transformers = mod; return true; }
+    } catch {}
+  }
+  // تلاش آخر: باندل IIFE (در برخی مرورگرها/شبکه‌ها جواب می‌دهد)
+  return await loadScript(CDN.transformers);
+}
+
 async function ensureWhisper(onStatus, model) {
-  const tf = window.transformers || (await loadScript(CDN.transformers) ? window.transformers : null);
+  const tf = window.transformers || (await loadWhisperLib() ? window.transformers : null);
   if (!tf) throw new Error('کتابخانهٔ transformers.js از هیچ CDNای بارگذاری نشد (اینترنت/فیلتر شبکه را بررسی کنید).');
   if (whr && whrName === model) return whr;
   onStatus?.('آماده‌سازی مدل گفتار روی دستگاه (بار اول، چند مگابایت…)');
@@ -266,6 +286,12 @@ async function decodeToWav(audioBlob, onStatus) {
 }
 async function startLocalWhisper(ctx) {
   if (!hasMic()) throw new Error('امکان ضبط صدا در این مرورگر/سیستم وجود ندارد.');
+  /* اگر موتور ابری فراست (سرور خود سایت) موجود است، اول آن — دقیق‌تر و سبک‌تر از Whisper محلی.
+     فقط وقتی ابری در دسترس نیست یا شکست خورد، Whisper محلی به‌عنوان فالبک رایگان فعال می‌شود. */
+  if (isAuthed()) {
+    try { ctx.onStatus('اتصال به موتور ابری فراست…'); return await startCloud(ctx); }
+    catch (e) { if (e?.fatal) throw e; ctx.onStatus('موتور ابری در دسترس نبود؛ انتقال به Whisper محلی…'); }
+  }
   const model = localStorage.getItem('farast.whisper.model') || 'Xenova/whisper-base';
   let stopped = false, inflight = Promise.resolve(), lastFinal = '';
   const transcribe = async blob => {
@@ -341,8 +367,9 @@ function cloudErrorKind(status, body) {
 }
 
 async function startCloud(ctx) {
-  const rt = window.FarastVoiceRuntime;
-  if (rt?.open) { rt.open(); ctx.onStatus('پنل حرفه‌ای فراست باز شد'); return { mode: 'runtime' }; }
+  /* موتور ابری فراست (WebSocket/تکه‌ای روی سرور خود سایت) در همهٔ مرورگرها کار می‌کند.
+     اگر Runtime قدیمی باز بود، بسته می‌شود تا پنل گوگل‌داكسی تنها رابط فعال بماند. */
+  try { if (window.FarastVoiceRuntime?.isOpen?.()) window.FarastVoiceRuntime.close(); } catch {}
   const csrf = $('meta[name="csrf-token"]')?.content || '';
   const app = $('#farastWord');
   if (!app || app.dataset.authenticated !== '1') throw new Error('برای موتور ابری وارد حساب شوید.');

@@ -404,6 +404,11 @@ function rebuildToolbar() {
   if (vb) {
     vb.classList.add('fd-micbtn');
     vb.innerHTML = MIC_SVG + '<span class="fd-miclbl">تایپ صوتی</span>';
+    /* اتصال مجدد: اگر رویداد قبلی گم شده باشد، کلیک حتماً پنل گوگل‌داكسی را باز کند */
+    const old = vb.cloneNode(true); vb.replaceWith(old);
+    const v2 = $('[data-tool=voice]', toolbarEl);
+    v2.addEventListener('mousedown', e => e.preventDefault());
+    v2.addEventListener('click', () => { closePop(); toggleVoicePanel(); });
   }
   /* پلی که سلکتورهای کلاسیک/تست‌محور را در حالت گوگل‌داكسی زنده نگه می‌دارد */
   const legacy = document.createElement('span');
@@ -1029,7 +1034,9 @@ function toggleVoicePanel() {
     if (!hub()?.hasNative?.()) {
       $('#fdVMsg').textContent = hub()?.isAuthed?.()
         ? 'این مرورگر موتور بومی ندارد؛ با کلیک روی دکمه، موتور ابری فراست فعال می‌شود.'
-        : 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی رایگان روی دستگاه شما فعال می‌شود.';
+        : (hub()?.hasMic?.()
+          ? 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی رایگان روی دستگاه شما فعال می‌شود.'
+          : 'میکروفون در این مرورگر در دسترس نیست. سایت را با HTTPS باز کنید یا از «تغییر موتور» استفاده کنید.');
     } else $('#fdVMsg').textContent = 'برای شروع کلیک کنید';
   }
   if (!show) stopVoice();
@@ -1113,6 +1120,8 @@ async function startVoice() {
     'stt-api': ['stt-api', 'native', 'cloud', 'local-whisper'],
   };
   const order = chains[prefer] || chains.native;
+  /* اگر موتور ابری در دسترس است، Whisper محلی را از ترتیب حذف کن — ابری دقیق‌تر و سبک‌تر است.
+     (startLocalWhisper هم خودش ابری را اول می‌زند؛ این فقط از تلاش دوبارهٔ بی‌مورد جلوگیری می‌کند.) */
   let lastErr = '';
   for (const id of order) {
     try {
@@ -1124,6 +1133,7 @@ async function startVoice() {
       }
       if (id === 'local-whisper') {
         if (!hub()?.hasMic?.()) continue;
+        if (hub()?.isAuthed?.() && order.indexOf('cloud') !== -1) continue; // ابری قبلاً امتحان/اولویت دارد
         ctx.onStatus('فعال‌سازی Whisper محلی (بارگذاری یک‌بارهٔ مدل رایگان)…');
         if (await startLocalWhisperEngine(ctx)) { engineLabel(); return; }
       }
@@ -1209,4 +1219,28 @@ app.addEventListener('input', () => { if (!kernel()) fdScheduleDraft(); }, true)
 
 /* حفظ ترجیح کاربر */
 if (localStorage.getItem('farast.editor.chrome') === 'classic') goClassic();
+
+/* ===================== گارد ضدتداخل با Runtime قدیمی (farast-voice.js) =====================
+ * در حالت گوگل‌داكسی تنها پنل صوتی معتبر، پنل همین فایل است. اگر اسکریپت قدیمی روی دکمهٔ
+ * کلاسیک #mic listener گذاشته باشد (پنل قدیمی را باز می‌کرد)، اینجا خنثی می‌شود:
+ *  - کلیک روی #mic → پنل جدید (نه قدیمی)
+ *  - باز شدن اجباری #farastVoicePanel → فوراً بسته می‌شود
+ *  - observer روی body برای هر باز شدن مجدد پنل قدیمی */
+(function antiLegacyVoice() {
+  const legacyMic = document.getElementById('mic');
+  if (legacyMic) {
+    const fresh = legacyMic.cloneNode(true);
+    legacyMic.replaceWith(fresh);
+    fresh.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleVoicePanel(); });
+  }
+  const killLegacyPanel = () => {
+    const p = document.getElementById('farastVoicePanel');
+    if (p && p.classList.contains('is-open')) {
+      try { window.FarastVoiceRuntime?.close?.(); } catch {}
+      p.classList.remove('is-open');
+    }
+  };
+  killLegacyPanel();
+  new MutationObserver(killLegacyPanel).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+})();
 })();

@@ -38,6 +38,9 @@ body.editor-page-body>#app-main:has(#farastWord.farast-docs-mode)>*:not(#farastW
 #farastWord.farast-docs-mode > .farast-menubar,
 #farastWord.farast-docs-mode > .farast-ribbon,
 #farastWord.farast-docs-mode > .farast-statusbar{display:none !important}
+/* حالت گوگل‌داكسی: پنل صوتی قدیمی و دکمهٔ صدای کلاسیک باید کاملاً ناپدید/غیرفعال شوند
+   تا کلیک روی میکروفون فقط پنل جدید را باز کند (رفع تداخل دو پنل هم‌زمان). */
+body:has(#farastWord.farast-docs-mode) #farastVoicePanel{display:none !important;opacity:0 !important;pointer-events:none !important}
 #farastWord.farast-docs-mode main.farast-workspace{display:flex !important;flex-direction:row !important;grid-template-columns:none !important;flex:1 1 auto;min-height:0;padding:0;margin:0;background:transparent;border:0;position:relative;z-index:1}
 #farastWord.farast-docs-mode .farast-canvas-shell{padding:0;background:transparent;border:0;flex:1 1 auto;min-width:0;display:flex !important;flex-direction:column !important;grid-template-rows:none !important;overflow:hidden}
 #farastWord.farast-docs-mode .farast-page-viewport{flex:1 1 auto;min-height:0;overflow:auto;background:#f0f4f9;padding:16px 0 80px;display:flex;flex-direction:column;align-items:center;gap:16px}
