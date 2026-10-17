@@ -143,7 +143,7 @@
   function stopMediaTracks(){if(mediaStream){mediaStream.getTracks().forEach(function(track){track.stop();});mediaStream=null;}}
   function startBrowserRecognition(){
     var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){status.textContent='تشخیص گفتار این مرورگر فعال نیست. در این دستگاه، موتور صوتی سرور باید در دسترس باشد.';voiceTitle.textContent='تشخیص گفتار پشتیبانی نمی‌شود';return;}
+    if(!SR){var unsupported='این مرورگر تشخیص گفتار داخلی ندارد و سرویس صوتی سرور هم در دسترس نیست. برای گفت‌وگوی صوتی، باید دسترسی موتور صوتی سرور اصلاح شود یا از مرورگر سازگار استفاده کنی.';status.textContent=unsupported;voiceTitle.textContent='تشخیص گفتار در دسترس نیست';voiceCaption.textContent=unsupported;say(unsupported);return;}
     try{
       if(recognition){recognition.stop();recognition=null;return;}
       recognition=new SR();recognition.lang='fa-IR';recognition.interimResults=true;recognition.continuous=false;
@@ -184,7 +184,7 @@
           var data=await response.json().catch(function(){return {};});
           if(!response.ok||!data.text)throw new Error(data.message||'رونویسی انجام نشد.');
           input.value=String(data.text).trim();status.textContent='گفتار به متن تبدیل شد؛ در حال ارسال پیام…';send(input.value);
-        }catch(e){status.textContent=e.message||'تشخیص گفتار سرور در دسترس نیست؛ تلاش می‌کنم از میکروفون مرورگر استفاده کنم.';startBrowserRecognition();}
+        }catch(e){var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){status.textContent='سرویس صوتی سرور پاسخ نداد؛ تلاش برای استفاده از تشخیص گفتار مرورگر.';startBrowserRecognition();}else{var voiceError='سرویس تشخیص گفتار سرور در دسترس نیست و این مرورگر هم تشخیص گفتار داخلی ندارد. احتمالاً دسترسی سرویس خارجی از سرور رد شده است؛ تنظیمات و لاگ سرویس صوتی باید بررسی شود.';status.textContent=voiceError;voiceTitle.textContent='موتور صوتی در دسترس نیست';voiceCaption.textContent=voiceError;say(voiceError);}}
       };
       mediaRecorder.start(250);
       voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent='گوش می‌دهم؛ برای توقف دوباره روی میکروفون بزن. صدای ضبط‌شده برای رونویسی به سرویس بیرونی ارسال می‌شود.';
