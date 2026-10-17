@@ -121,6 +121,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/audit', [AdminPlatformController::class, 'audit'])->name('audit');
     Route::post('/providers/ai', [ProviderAdminController::class, 'updateAi'])->name('providers.ai.update');
     Route::get('/providers/voice/{provider}/test', [ProviderAdminController::class, 'testVoice'])->name('providers.voice.test');
+    Route::post('/providers/groq', [ProviderAdminController::class, 'updateGroq'])->name('providers.groq.update');
+    Route::get('/providers/groq/test', [ProviderAdminController::class, 'testGroq'])->name('providers.groq.test');
 
     Route::post('/tickets/{ticket}/reply', [SupportController::class, 'adminReply'])->name('tickets.reply');
     Route::get('/plans', [PlatformCompletionController::class, 'adminPlans'])->name('plans');

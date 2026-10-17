@@ -22,6 +22,12 @@ class VoiceController extends Controller
         // تشخیص وضعیت واقعی موتور ابری از سمت کلاینت (بدون افشای رازها):
         // chunked = مسیر HTTP تکه‌ای (/transcribe)، gateway = استریم زندهٔ WebSocket،
         // none = هیچ‌کدام آماده نیست (دلیل دقیق برای پیام راهنمای پنل صوتی).
+        // موتورهای ابری سایت: Google STT و Gemini (هر دو از ایران تحریم‌اند — فقط در صورت
+        // وجود پروکسی سمت سرور معتبرند). به‌عنوان گزینهٔ جایگزینِ بدون‌تحریم، Groq Whisper
+        // (رایگان، از ایران قابل دسترس) هم پشتیبانی می‌شود؛ کلیدش را در پنل ادمین بگذارید.
+        $groq=false;
+        try{$groq=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\Throwable){}
+        if($groq)return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['groq']],200,['Cache-Control'=>'no-store']);
         $authed=(bool)($request->user()?->id);
         if(!$authed)return response()->json(['ok'=>true,'mode'=>'none','reason'=>'auth'],200,['Cache-Control'=>'no-store']);
         $google=false;
@@ -94,7 +100,17 @@ class VoiceController extends Controller
         $file=$data['audio'];$bytes=file_get_contents($file->getRealPath());abort_if($bytes===false||$bytes==='',422,'فایل صوتی قابل خواندن نیست.');
         $mime=$file->getMimeType()?:$file->getClientMimeType()?:'audio/webm';$mime=match($mime){ 'video/webm'=>'audio/webm','video/mp4','audio/mp4'=>'audio/m4a','audio/x-wav'=>'audio/wav',default=>$mime};
         $context=['user_id'=>$request->user()->id,'input_bytes'=>strlen($bytes),'processing_mode'=>$processingMode];
-        try{$result=$googleSpeech->enabled()&&in_array($mime,['audio/webm','audio/ogg','audio/wav'],true)?$googleSpeech->transcribe($mime,$bytes,$data['locale'],$context):$voice->transcribe($mime,$bytes,$data['locale'],$context);$rawText=(string)($result['text']??'');$finalText=$corrections->apply($rawText,$data['locale'],$result['engine']??null,$request->user()->id);$result['raw_text']=$rawText;$result['text']=$finalText;$result['correction_applied']=$finalText!==$rawText;}catch(\Throwable $e){try{$commerce->release($voiceReservation);}catch(\Throwable){}Log::warning('farast.voice.transcription_failed',['user_id'=>$request->user()->id,'google_speech_enabled'=>$googleSpeech->enabled(),'error_code'=>preg_match('/^[a-z0-9_.-]+$/i',$e->getMessage())?$e->getMessage():'voice_provider_failure']);return response()->json(['ok'=>false,'message'=>'رونویسی صوتی انجام نشد. دوباره تلاش کنید.'],502);}
+        $groqKey='';try{$groqKey=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')));}catch(\Throwable){}
+        if($groqKey!==''){
+            // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
+            $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$groqKey])
+                ->attach('file',$bytes,'audio.'.$mime,$mime)
+                ->asMultipart()->timeout(60)
+                ->post('https://api.groq.com/openai/v1/audio/transcriptions',['model'=>'whisper-large-v3','language'=>explode('-',$data['locale'])[0],'response_format'=>'json']);
+            if($resp->failed()){Log::warning('farast.voice.groq_failed',['status'=>$resp->status(),'body'=>substr((string)$resp->body(),0,200)]);return response()->json(['ok'=>false,'message'=>'سرویس صوتی فعلاً در دسترس نیست. دوباره تلاش کنید یا از موتور مرورگر استفاده کنید.'],503);}
+            $result=['text'=>(string)$resp->json('text',''),'engine'=>'groq-whisper','model'=>'whisper-large-v3'];
+        }else{$result=$googleSpeech->enabled()&&in_array($mime,['audio/webm','audio/ogg','audio/wav'],true)?$googleSpeech->transcribe($mime,$bytes,$data['locale'],$context):$voice->transcribe($mime,$bytes,$data['locale'],$context);}
+        $rawText=(string)($result['text']??'');$finalText=$corrections->apply($rawText,$data['locale'],$result['engine']??null,$request->user()->id);$result['raw_text']=$rawText;$result['text']=$finalText;$result['correction_applied']=$finalText!==$rawText;}catch(\Throwable $e){try{$commerce->release($voiceReservation);}catch(\Throwable){}Log::warning('farast.voice.transcription_failed',['user_id'=>$request->user()->id,'google_speech_enabled'=>$googleSpeech->enabled(),'error_code'=>preg_match('/^[a-z0-9_.-]+$/i',$e->getMessage())?$e->getMessage():'voice_provider_failure']);return response()->json(['ok'=>false,'message'=>'رونویسی صوتی انجام نشد. دوباره تلاش کنید.'],502);}
         $commerce->commit($voiceReservation,['cost_metadata'=>['provider'=>$result['engine']??'gemini','input_bytes'=>strlen($bytes)],'metadata'=>['locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)]]);
         return response()->json(['ok'=>true,'text'=>$result['text'],'engine'=>$result['engine']??'gemini','interaction_id'=>$result['interaction_id']??null,'request_id'=>$result['request_id']??null,'ai'=>['request_id'=>$result['request_id']??null,'operation'=>'voice.transcribe','provider'=>$result['engine']??'gemini','model'=>$result['model']??null,'processing_mode'=>$processingMode,'status'=>'completed','result'=>['text'=>$result['text']],'suggestions'=>[],'warnings'=>[],'metadata'=>['interaction_id'=>$result['interaction_id']??null,'locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)],'usage'=>null,'error'=>null]]);
     }
