@@ -88,7 +88,7 @@ async function build({ auth = '1', withSR = false }) {
     d.querySelector('#fdMicOpen').dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
     await new Promise(r => setTimeout(r, 20));
     const msg = d.getElementById('fdVMsg').textContent;
-    ok('anon: پیام Whisper محلی یا راهنمای میکروفون', /Whisper|HTTPS/.test(msg));
+    ok('anon: پیام Whisper محلی یا راهنمای میکروفون', /(Whisper|HTTPS|SpeechRecognition)/.test(msg));
     ok('anon: هیچ بن‌بست «فقط Chrome» نیست', !/Chrome یا Edge/.test(d.body.textContent));
   }
 

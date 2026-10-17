@@ -1044,12 +1044,13 @@ function toggleVoicePanel() {
   $('#fdVEngineBtn').hidden = !show;
   engineLabel();
   if (show) {
+    // راهنمای صادقانهٔ چندلایه: هیچ‌وقت بن‌بست «فقط Chrome» — همیشه حداقل یک مسیر رایگان هست
     if (!hub()?.hasNative?.()) {
       $('#fdVMsg').textContent = hub()?.isAuthed?.()
         ? 'این مرورگر موتور بومی ندارد؛ با کلیک روی دکمه، موتور ابری فراست فعال می‌شود.'
         : (hub()?.hasMic?.()
-          ? 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی رایگان روی دستگاه شما فعال می‌شود.'
-          : 'میکروفون در این مرورگر در دسترس نیست. سایت را با HTTPS باز کنید یا از «تغییر موتور» استفاده کنید.');
+          ? 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی رایگان روی دستگاه شما فعال می‌شود. برای موتور ابری، وارد حساب شوید.'
+          : 'میکروفون در این محیط در دسترس نیست. اگر سایت را با http باز کرده‌اید، فایرفاکس اجازهٔ میکروفون نمی‌دهد؛ از https یا افزونهٔ SpeechRecognition فایرفاکس استفاده کنید.');
     } else $('#fdVMsg').textContent = 'برای شروع کلیک کنید';
   }
   if (!show) stopVoice();
@@ -1152,6 +1153,7 @@ async function startVoice() {
         if (await startLocalWhisperEngine(ctx)) { engineLabel(); return; }
       }
       if (id === 'stt-api') {
+        if (!localStorage.getItem('farast.stt.endpoint')) continue; // سرویس شخصی تنظیم نشده — رد شو
         const h = await hub()?.startSttEndpoint?.(ctx);
         if (h) { wantListen = true; activeHandle = h; engineLabel(); return; }
       }
@@ -1166,9 +1168,10 @@ async function startVoice() {
   const msgs = [];
   if (order.includes('cloud') && !hub()?.isAuthed?.()) msgs.push('برای موتور ابری فراست ابتدا وارد حساب شوید.');
   if (order.includes('native') && !hub()?.hasNative?.()) msgs.push('این مرورگر موتور بومی ندارد (در Chrome/Edge یا با افزودهٔ SpeechRecognition فایرفاکس فعال می‌شود).');
-  if (!hub()?.hasMic?.()) msgs.push('دسترسی میکروفون ندارید — سایت باید با HTTPS باز شود و اجازهٔ میکروفون داده شود.');
-  $('#fdVMsg').textContent = msgs.join(' ') || ('خطا: ' + (lastErr || 'موتوری پاسخ نداد'));
-  toast(msgs[0] || 'موتور تایپ صوتی در دسترس نبود — «تغییر موتور» را ببینید');
+  if (!hub()?.hasMic?.()) msgs.push('دسترسی میکروفون ندارید — سایت را با HTTPS باز کنید و اجازهٔ میکروفون بدهید (یا روی لوکال از Chrome استفاده کنید).');
+  else msgs.push('موتور جایگزین فعال نشد: ' + (lastErr || 'خطای ناشناخته') + ' — از «تغییر موتور» حالت دیگری انتخاب کنید.');
+  $('#fdVMsg').textContent = msgs.join(' ');
+  toast(msgs[0]);
 }
 function stopVoice() {
   wantListen = false;
