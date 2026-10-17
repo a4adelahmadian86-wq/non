@@ -45,10 +45,62 @@
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){setOpen(false);});
   form.addEventListener('submit',function(e){e.preventDefault();send(input.value);});
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
-  root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
+  var mediaRecorder=null, mediaStream=null, recordedChunks=[], recordingTimeout=null;
+  function stopMediaTracks(){if(mediaStream){mediaStream.getTracks().forEach(function(track){track.stop();});mediaStream=null;}}
+  function startBrowserRecognition(){
     var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){status.textContent='تشخیص گفتار در این مرورگر پشتیبانی نمی‌شود؛ پیام را تایپ کن.';return;}
-    try{if(recognition){recognition.stop();recognition=null;return;}recognition=new SR();recognition.lang='fa-IR';recognition.interimResults=true;recognition.continuous=false;status.textContent='گوش می‌دهم…';recognition.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;input.value=t;if(e.results[e.results.length-1].isFinal){recognition=null;send(t);}};recognition.onerror=function(){status.textContent='میکروفون در دسترس نیست؛ مجوز مرورگر را بررسی کن.';recognition=null;};recognition.onend=function(){recognition=null;if(status.textContent==='گوش می‌دهم…')status.textContent='آماده‌ام.';};recognition.start();}catch(e){recognition=null;status.textContent='برای استفاده از میکروفون، مجوز مرورگر را فعال کن.';}
+    if(!SR){status.textContent='تشخیص گفتار در این مرورگر فعال نیست؛ لطفاً پیام را تایپ کن.';return;}
+    try{
+      if(recognition){recognition.stop();recognition=null;return;}
+      recognition=new SR();recognition.lang='fa-IR';recognition.interimResults=true;recognition.continuous=false;
+      status.textContent='گوش می‌دهم؛ برای توقف، دوباره روی میکروفون بزن.';
+      recognition.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;input.value=t;if(e.results[e.results.length-1].isFinal){recognition=null;send(t);}};
+      recognition.onerror=function(){status.textContent='تشخیص گفتار ناموفق بود؛ مجوز میکروفون را بررسی یا پیام را تایپ کن.';recognition=null;};
+      recognition.onend=function(){recognition=null;if(status.textContent.indexOf('گوش می‌دهم')===0)status.textContent='آماده‌ام.';};
+      recognition.start();
+    }catch(e){recognition=null;status.textContent='برای میکروفون، مجوز مرورگر را فعال کن.';}
+  }
+  async function startServerRecording(){
+    if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای استفاده از میکروفون ابتدا وارد حساب کاربری شو.';return;}
+    var config=null;
+    try{var sr=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'}});if(sr.ok)config=await sr.json();}catch(e){}
+    if(!config||!config.server_stt||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){startBrowserRecognition();return;}
+    try{
+      mediaStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      var mime='audio/webm';
+      if(window.MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))mime='audio/webm;codecs=opus';
+      else if(window.MediaRecorder.isTypeSupported('audio/mp4'))mime='audio/mp4';
+      mediaRecorder=new MediaRecorder(mediaStream,window.MediaRecorder.isTypeSupported(mime)?{mimeType:mime}:{});
+      recordedChunks=[];
+      mediaRecorder.ondataavailable=function(e){if(e.data&&e.data.size)recordedChunks.push(e.data);};
+      mediaRecorder.onerror=function(){status.textContent='ضبط صدا ناموفق بود؛ دوباره تلاش کن.';stopMediaTracks();mediaRecorder=null;};
+      mediaRecorder.onstop=async function(){
+        if(recordingTimeout)window.clearTimeout(recordingTimeout);recordingTimeout=null;
+        stopMediaTracks();
+        var recorder=mediaRecorder;mediaRecorder=null;
+        if(!recordedChunks.length){status.textContent='صدایی ضبط نشد؛ دوباره تلاش کن.';return;}
+        var blob=new Blob(recordedChunks,{type:recorder&&recorder.mimeType?recorder.mimeType:'audio/webm'});recordedChunks=[];
+        if(blob.size>15*1024*1024){status.textContent='فایل صوتی بیش از حد بزرگ است؛ کوتاه‌تر صحبت کن.';return;}
+        status.textContent='در حال تبدیل گفتار به متن… فایل صوتی برای رونویسی به سرویس صوتی ارسال می‌شود.';
+        var fd=new FormData();var ext=blob.type.indexOf('mp4')!==-1?'mp4':(blob.type.indexOf('ogg')!==-1?'ogg':'webm');
+        fd.append('audio',blob,'farast-assistant.'+ext);fd.append('locale','fa-IR');
+        try{
+          var response=await fetch('/assistant/transcribe',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:fd});
+          var data=await response.json().catch(function(){return {};});
+          if(!response.ok||!data.text)throw new Error(data.message||'رونویسی انجام نشد.');
+          input.value=String(data.text).trim();status.textContent='گفتار به متن تبدیل شد؛ در حال ارسال پیام…';send(input.value);
+        }catch(e){status.textContent=e.message||'تشخیص گفتار فعلاً در دسترس نیست؛ پیام را تایپ کن.';}
+      };
+      mediaRecorder.start(250);
+      status.textContent='گوش می‌دهم؛ برای توقف دوباره روی میکروفون بزن. صدای ضبط‌شده برای رونویسی به سرویس بیرونی ارسال می‌شود.';
+      root.querySelector('.farast-assistant-mic').classList.add('is-recording');
+      recordingTimeout=window.setTimeout(function(){if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();},25000);
+    }catch(e){stopMediaTracks();mediaRecorder=null;status.textContent='میکروفون در دسترس نیست؛ مجوز مرورگر را بررسی کن.';startBrowserRecognition();}
+  }
+  root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
+    if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();root.querySelector('.farast-assistant-mic').classList.remove('is-recording');return;}
+    if(recognition){recognition.stop();recognition=null;return;}
+    startServerRecording();
   });
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!panel.hidden)setOpen(false);});
   message('bot','من همراه هوشمند فراستم؛ می‌تونم در پیدا کردن خدمات، خرید و استفاده از سایت راهنمایی‌ات کنم. برای شروع، وارد حساب کاربری شو.');
