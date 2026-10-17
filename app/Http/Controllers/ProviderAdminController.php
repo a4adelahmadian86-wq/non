@@ -24,7 +24,7 @@ class ProviderAdminController extends Controller {
   try{
    $key=trim((string)(SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')));
    if($key==='')return response()->json(['ok'=>false,'message'=>'کلید Groq وارد نشده است.']);
-   $model=trim((string)SiteSetting::read('assistant_groq_model','openai/gpt-oss-20b'));
+   $model=trim((string)SiteSetting::read('assistant_groq_model','openai/gpt-oss-120b'));
    $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$key])->timeout(20)->get('https://api.groq.com/openai/v1/models');
    if(!$resp->successful())return response()->json(['ok'=>false,'message'=>$resp->status()===401?'کلید Groq معتبر نیست.':'اتصال Groq برقرار نشد (HTTP '.$resp->status().').']);
    $ids=collect($resp->json('data',[]))->pluck('id')->map(fn($id)=>(string)$id);
