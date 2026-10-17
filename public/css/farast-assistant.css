@@ -36,3 +36,10 @@
 .farast-assistant-mic.is-recording{background:#fee9ed;color:#c5304b;box-shadow:0 0 0 4px #c5304b1f;animation:farastMicPulse 1.2s ease-in-out infinite}
 @keyframes farastMicPulse{0%,100%{box-shadow:0 0 0 3px #c5304b18}50%{box-shadow:0 0 0 7px #c5304b24}}
 @media(prefers-reduced-motion:reduce){.farast-assistant-mic.is-recording{animation:none}}
+
+.farast-assistant-clear{border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff;border-radius:9px;padding:5px 7px;font:inherit;font-size:10px;cursor:pointer;white-space:nowrap}
+.farast-assistant-clear:hover{background:rgba(255,255,255,.22)}
+.farast-tour-highlight{position:relative!important;z-index:10001!important;outline:3px solid #8278f5!important;outline-offset:5px!important;border-radius:8px!important;box-shadow:0 0 0 9999px rgba(18,24,48,.48)!important;transition:outline-color .15s ease}
+.farast-tour-card{position:fixed;z-index:10002;left:50%;bottom:24px;transform:translateX(-50%);width:min(360px,calc(100vw - 28px));padding:16px;background:#fff;color:#202744;border:1px solid #e4e6f4;border-radius:16px;box-shadow:0 16px 48px #10152b35;font-family:inherit;direction:rtl}
+.farast-tour-card strong{display:block;font-size:14px;margin-bottom:7px}.farast-tour-card p{font-size:12px;line-height:1.8;margin:0 0 12px}.farast-tour-actions{display:flex;align-items:center;gap:8px}.farast-tour-actions button{border:0;border-radius:9px;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer}.farast-tour-next{background:#7169e8;color:white}.farast-tour-close{background:#f0f1f8;color:#424867}.farast-tour-count{margin-inline-start:auto;color:#777d96;font-size:10px}
+@media(prefers-reduced-motion:reduce){.farast-tour-highlight{transition:none}}
