@@ -25,7 +25,7 @@ class ProviderAdminController extends Controller {
    $key=trim((string)(SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')));
    if($key==='')return response()->json(['ok'=>false,'message'=>'کلید Groq وارد نشده است.']);
    $model=trim((string)SiteSetting::read('assistant_groq_model','openai/gpt-oss-20b'));
-   $resp=\\Illuminate\\Support\\Facades\\Http::withHeaders(['Authorization'=>'Bearer '.$key])->timeout(20)->get('https://api.groq.com/openai/v1/models');
+   $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$key])->timeout(20)->get('https://api.groq.com/openai/v1/models');
    if(!$resp->successful())return response()->json(['ok'=>false,'message'=>$resp->status()===401?'کلید Groq معتبر نیست.':'اتصال Groq برقرار نشد (HTTP '.$resp->status().').']);
    $ids=collect($resp->json('data',[]))->pluck('id')->map(fn($id)=>(string)$id);
    $chatAvailable=$ids->contains($model);
@@ -38,8 +38,8 @@ class ProviderAdminController extends Controller {
       ?('اتصال Groq برقرار است؛ مدل گفت‌وگو '.$model.($whisperAvailable?' و مدل تشخیص گفتار نیز در دسترس است.':'. مدل تشخیص گفتار در فهرست فعلی دیده نشد.'))
       :'کلید پذیرفته شد، اما مدل گفت‌وگوی تنظیم‌شده در فهرست مجاز این حساب نیست. مدل را بررسی کنید.',
    ]);
-  }catch(\\Throwable $e){
-   \\Illuminate\\Support\\Facades\\Log::warning('farast.admin.groq_test_failed',['error_class'=>get_class($e)]);
+  }catch(\Throwable $e){
+   \Illuminate\Support\Facades\Log::warning('farast.admin.groq_test_failed',['error_class'=>get_class($e)]);
    return response()->json(['ok'=>false,'message'=>'خطای شبکه هنگام بررسی Groq؛ بعداً دوباره تلاش کنید.']);
   }
  }
