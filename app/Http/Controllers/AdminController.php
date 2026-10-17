@@ -27,7 +27,7 @@ class AdminController extends Controller
     {
         $users = User::latest()->limit(100)->get();
         $settings = [];
-        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model'] as $key) {
+        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
             $settings[$key] = SiteSetting::read($key, CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
         }
 
@@ -50,6 +50,7 @@ class AdminController extends Controller
             'secretStatus' => [
                 'gemini' => (bool) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key')),
                 'files' => (bool) (SiteSetting::read('files_api_key') ?: env('FILES_API_KEY')),
+                'groq' => (bool) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')),
             ],
             'capabilities' => $capabilities,
             'voiceAccounts' => VoiceProviderAccount::query()->get()->keyBy('provider'),
