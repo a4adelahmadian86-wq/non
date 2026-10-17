@@ -43,3 +43,9 @@
 .farast-tour-card{position:fixed;z-index:10002;left:50%;bottom:24px;transform:translateX(-50%);width:min(360px,calc(100vw - 28px));padding:16px;background:#fff;color:#202744;border:1px solid #e4e6f4;border-radius:16px;box-shadow:0 16px 48px #10152b35;font-family:inherit;direction:rtl}
 .farast-tour-card strong{display:block;font-size:14px;margin-bottom:7px}.farast-tour-card p{font-size:12px;line-height:1.8;margin:0 0 12px}.farast-tour-actions{display:flex;align-items:center;gap:8px}.farast-tour-actions button{border:0;border-radius:9px;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer}.farast-tour-next{background:#7169e8;color:white}.farast-tour-close{background:#f0f1f8;color:#424867}.farast-tour-count{margin-inline-start:auto;color:#777d96;font-size:10px}
 @media(prefers-reduced-motion:reduce){.farast-tour-highlight{transition:none}}
+
+/* Personal-memory controls share the compact, accessible assistant header treatment. */
+.farast-assistant-memory,.farast-assistant-memory-manage,.farast-assistant-clear{flex-shrink:0;border:1px solid #e2e4f3;border-radius:10px;background:#fff;color:#565d83;padding:7px 8px;font:inherit;font-size:10px;line-height:1.4;cursor:pointer}
+.farast-assistant-memory{background:#f1f0ff;border-color:#dcd9ff;color:#5c53c8}
+.farast-assistant-memory:hover,.farast-assistant-memory-manage:hover,.farast-assistant-clear:hover{border-color:#aaa8ef}
+@media(max-width:420px){.farast-assistant-head{gap:5px;padding:10px}.farast-assistant-avatar{width:34px;height:34px;border-radius:11px}.farast-assistant-memory,.farast-assistant-memory-manage,.farast-assistant-clear{padding:6px 5px;font-size:9px}.farast-assistant-brand strong{font-size:12px}}
