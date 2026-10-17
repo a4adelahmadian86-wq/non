@@ -40,7 +40,8 @@ Route::post('/cart/products/{product}/remove',[StoreCartController::class,'remov
 Route::post('/cart/checkout',[StoreCartController::class,'checkout'])->middleware(['auth','throttle:10,10'])->name('cart.checkout');
 Route::post('/cart/coupon',[StoreCartController::class,'applyCoupon'])->middleware('throttle:30,10')->name('cart.coupon');
 Route::post('/cart/coupon/clear',[StoreCartController::class,'clearCoupon'])->middleware('throttle:30,10')->name('cart.coupon.clear');
-Route::get('/pricing',[EditorController::class,'pricing'])->name('pricing');\nRoute::post('/assistant/chat',[GlobalAssistantController::class,'chat'])->middleware(['auth','throttle:20,1'])->name('assistant.chat');
+Route::get('/pricing',[EditorController::class,'pricing'])->name('pricing');
+Route::post('/assistant/chat',[GlobalAssistantController::class,'chat'])->middleware(['auth','throttle:20,1'])->name('assistant.chat');
 Route::get('/announcements',[AnnouncementController::class,'index'])->name('announcements');
 Route::get('/social',[SocialController::class,'index'])->name('social');
 Route::view('/terms','legal.terms')->name('terms');
