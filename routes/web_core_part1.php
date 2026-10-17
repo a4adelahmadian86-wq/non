@@ -42,6 +42,8 @@ Route::post('/cart/coupon',[StoreCartController::class,'applyCoupon'])->middlewa
 Route::post('/cart/coupon/clear',[StoreCartController::class,'clearCoupon'])->middleware('throttle:30,10')->name('cart.coupon.clear');
 Route::get('/pricing',[EditorController::class,'pricing'])->name('pricing');
 Route::post('/assistant/chat',[GlobalAssistantController::class,'chat'])->middleware(['auth','throttle:20,1'])->name('assistant.chat');
+Route::get('/assistant/voice/status',[GlobalAssistantController::class,'voiceStatus'])->middleware(['auth','throttle:60,1'])->name('assistant.voice.status');
+Route::post('/assistant/transcribe',[GlobalAssistantController::class,'transcribe'])->middleware(['auth','throttle:20,1'])->name('assistant.transcribe');
 Route::get('/announcements',[AnnouncementController::class,'index'])->name('announcements');
 Route::get('/social',[SocialController::class,'index'])->name('social');
 Route::view('/terms','legal.terms')->name('terms');
