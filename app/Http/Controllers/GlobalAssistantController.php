@@ -64,8 +64,8 @@ class GlobalAssistantController extends Controller
 
     public function history(Request $request)
     {
-        $messages = \\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_messages')
-            ? \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $request->user()->id)->orderByDesc('id')->limit(40)->get(['role', 'content', 'created_at'])->reverse()->values()
+        $messages = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $request->user()->id)->orderByDesc('id')->limit(40)->get(['role', 'content', 'created_at'])->reverse()->values()
             : collect();
 
         return response()->json(['ok' => true, 'messages' => $messages->map(fn ($item) => [
@@ -75,23 +75,23 @@ class GlobalAssistantController extends Controller
 
     public function clearHistory(Request $request)
     {
-        if (\\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_messages')) {
-            \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $request->user()->id)->delete();
+        if (\Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')) {
+            \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $request->user()->id)->delete();
         }
         return response()->json(['ok' => true, 'message' => 'سابقه گفت‌وگوی شما پاک شد.'], 200, ['Cache-Control' => 'no-store']);
     }
 
     private function persistExchange(int $userId, string $message, string $reply): void
     {
-        if (! \\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_messages')) return;
-        \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($userId, $message, $reply) {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')) return;
+        \Illuminate\Support\Facades\DB::transaction(function () use ($userId, $message, $reply) {
             $now = now();
-            \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->insert([
+            \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->insert([
                 ['user_id' => $userId, 'role' => 'user', 'content' => mb_substr($message, 0, 1200), 'created_at' => $now, 'updated_at' => $now],
                 ['user_id' => $userId, 'role' => 'assistant', 'content' => mb_substr($reply, 0, 6000), 'created_at' => $now, 'updated_at' => $now],
             ]);
-            $keepIds = \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $userId)->orderByDesc('id')->limit(80)->pluck('id');
-            \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $userId)->whereNotIn('id', $keepIds)->delete();
+            $keepIds = \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $userId)->orderByDesc('id')->limit(80)->pluck('id');
+            \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $userId)->whereNotIn('id', $keepIds)->delete();
         });
     }
 
@@ -105,15 +105,15 @@ class GlobalAssistantController extends Controller
         ]);
         $user = $request->user();
         abort_unless($user, 401, 'برای استفاده از همراه فراست وارد حساب شوید.');
-        $storedHistory = \\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_messages')
-            ? \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
+        $storedHistory = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
             : collect();
         $historyItems = $storedHistory->isNotEmpty()
             ? $storedHistory->map(fn ($item) => ['role' => $item->role, 'text' => $item->content])->all()
             : ($data['context'] ?? []);
         $history = collect($historyItems)->map(fn ($item) =>
             ($item['role'] === 'user' ? 'کاربر' : 'همراه') . ': ' . $item['text']
-        )->implode("\\n");
+        )->implode("\n");
         $prompt = "تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، گرم، حرفه‌ای و دقیق پاسخ بده. پاسخ را عملی و ترجیحاً کوتاه بنویس. درباره قابلیت‌هایی که مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، تایپ و ویرایشگر /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربر /dashboard. سابقه اخیر گفتگو:\n"
             . $history . "\nکاربر: " . $data['message'];
         try {
