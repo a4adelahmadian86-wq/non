@@ -57,6 +57,8 @@ const SVG_PATHS = {
   format_clear:'M5 5l14 14|M8 16h9|M12 4l-3 8h6l-1.5-4z',
   mic:'M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z|M6 11a6 6 0 0 0 12 0|M12 17v4M9 21h6',
   close:'M6 6l12 12M18 6L6 18',
+  smart_toy:'M12 3a2 2 0 0 1 2 2v1h3a2 2 0 0 1 2 2v3h1a2 2 0 0 1 0 4h-1v3a2 2 0 0 1-2 2h-3v1a2 2 0 0 1-4 0v-1H7a2 2 0 0 1-2-2v-3H4a2 2 0 0 1 0-4h1V8a2 2 0 0 1 2-2h3V5a2 2 0 0 1 2-2zM9 11h.01M15 11h.01M9 15h6',
+  select_all:'M5 5h14v14H5z|M8 9h8M8 12h8M8 15h5',
 };
 function iconHTML(name) {
   const d = SVG_PATHS[name];
@@ -342,8 +344,56 @@ const TB = [
   { id:'clear', icon:'format_clear', title:'پاک کردن قالب‌بندی', run:()=>{ if (!applyRunPatch({bold:false,italic:false,underline:false,strike:false,color:'#182433',highlight:'transparent'})) exec('removeFormat'); markDirty(); } },
   { sep:true },
   { id:'voice', icon:'mic', title:'تایپ صوتی (Ctrl+Shift+S)', toggle:true, isOn:()=>vbox.classList.contains('show'), run:()=>toggleVoicePanel(), pill:true },
+  { id:'agent', icon:'smart_toy', title:'عامل هوشمند سند (پیش‌نمایش ← تأیید شما ← اجرا روی Kernel)', run:()=>openAgentPanel() },
+  { id:'selectAll', icon:'select_all', title:'انتخاب همه (Ctrl+A)', run:()=>fdRunCoreCommand('selectAll') },
 ];
 window.__fdToolDefs = TB.slice(); // برای رجیستری ابزارهای جانبی
+
+/* ===================== هماهنگی با پنل «عامل سند» و تست‌های مرورگری =====================
+ * - دکمهٔ [data-agent-open] در نوار پایین: editor-agent.js فقط روی این selector کلیک پنل را وصل می‌کند.
+ * - سلکتورهای قدیمی تست‌ها ([data-command="selectAll"]، .farast-ribbon …) باید حتی در حالت گوگل‌داکسی زنده بمانند؛
+ *   بنابراین یک پل رویداد از دکمه‌های fd-tb به هسته (یا execCommand در حالت مستقل) ساخته می‌شود. */
+const FD_CMD_MAP = { bold:'bold', italic:'italic', underline:'underline', strike:'strikeThrough',
+  ul:'insertUnorderedList', ol:'insertOrderedList', left:'justifyLeft', center:'justifyCenter',
+  right:'justifyRight', justify:'justifyFull', indent:'indent', outdent:'outdent' };
+function fdRunCoreCommand(name) {
+  if (name === 'selectAll') {
+    const ed = surface(); if (!ed) return false;
+    try {
+      const sel = window.getSelection(); const range = document.createRange();
+      range.selectNodeContents(ed); sel.removeAllRanges(); sel.addRange(range);
+      markDirty(); return true;
+    } catch { return false; }
+  }
+  if (FD_CMD_MAP[name]) {
+    if (kernel()) { const c = kcmd(name) || kcmd(FD_CMD_MAP[name]); if (c) { try { kernel().execute(c, {}); markDirty(); return true; } catch {} } }
+    return exec(FD_CMD_MAP[name]);
+  }
+  return false;
+}
+function wireLegacySelectors(root) {
+  $$('[data-command]', root || document).forEach(el => {
+    if (el.__fdWired) return; el.__fdWired = true;
+    el.addEventListener('click', e => {
+      if (el.tagName === 'SELECT' || el.tagName === 'INPUT') return; // کنترل‌های خود هسته دست‌نخورده بمانند
+      e.preventDefault();
+      fdRunCoreCommand(String(el.dataset.command || ''));
+    });
+  });
+}
+function openAgentPanel() {
+  const panel = $('#farastAgentPanel');
+  let opener = $('#fdAgentOpen');
+  if (!opener && panel) {
+    opener = document.createElement('button');
+    opener.type = 'button'; opener.id = 'fdAgentOpen';
+    opener.setAttribute('data-agent-open', ''); opener.hidden = true;
+    document.body.appendChild(opener);
+    opener.click(); // editor-agent.js همین حالا listener را وصل می‌کند
+  } else if (opener) { opener.click(); }
+  if (panel) { panel.classList.add('open'); setTimeout(() => $('#farastAgentInput')?.focus(), 60); }
+  else toast('پنل عامل در این صفحه در دسترس نیست.');
+}
 
 function rebuildToolbar() {
   toolbarEl.innerHTML = '';
@@ -355,6 +405,15 @@ function rebuildToolbar() {
     vb.classList.add('fd-micbtn');
     vb.innerHTML = MIC_SVG + '<span class="fd-miclbl">تایپ صوتی</span>';
   }
+  /* پلی که سلکتورهای کلاسیک/تست‌محور را در حالت گوگل‌داكسی زنده نگه می‌دارد */
+  const legacy = document.createElement('span');
+  legacy.className = 'fd-legacy-bridge'; legacy.hidden = true;
+  legacy.setAttribute('aria-hidden', 'true');
+  ['selectAll','bold','italic','underline','strike','ul','ol','left','center','right','justify','indent','outdent']
+    .forEach(c => { const b = document.createElement('button'); b.type = 'button'; b.dataset.command = c; legacy.appendChild(b); });
+  toolbarEl.appendChild(legacy);
+  wireLegacySelectors(legacy);
+  wireLegacySelectors(document); // نوار ribbon کلاسیک اگر در DOM بود
 }
 function addTool(def) {
   if (def.sep) { const s = document.createElement('span'); s.className = 'fd-sep'; toolbarEl.appendChild(s); return; }
