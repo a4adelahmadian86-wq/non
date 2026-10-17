@@ -141,9 +141,16 @@ function sweepInterim(root) {
 }
 
 /* ---------- وضعیت موتورهای قابل استفاده ---------- */
+/* موتور بومی افزودهٔ فایرفاکس (Firefox SpeechRecognition) — رایگان، بدون سرور.
+ * مرجع: https://github.com/Synesthesiallc/Firefox-Speech-Recognition — در Firefox 135+
+ * با فعال‌سازی general.subframe... و speech.enabled در about:config در دسترس است؛ اگر نبود،
+ * خودکار به لایهٔ بعدی (ابری/Whisper محلی) می‌رویم. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function isAuthed() { return $('#farastWord')?.dataset.authenticated === '1'; }
-function hasMic() { return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder); }
+function hasMic() {
+  // در jsdom/تست و محیط‌های بدون mediaDevices، با MediaRecorder چک می‌شود؛ در غیر این صورت false
+  try { return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder); } catch { return false; }
+}
 
 /* ===================== کتابخانه‌های CDN محلی‌پسند (load-once، graceful) ===================== */
 /* چند منبع برای هر کتابخانه: اگر jsdelivr فیلتر/مسدود بود، به unpkg و سپس cdnjs می‌رود.

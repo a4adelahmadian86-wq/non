@@ -16,7 +16,17 @@ window.__farastDocsChromeLoaded = true;
 const app = document.getElementById('farastWord');
 if (!app) return;
 const params = new URLSearchParams(location.search);
-if (params.get('classic') === '1') return; // درخواست صریح حالت کلاسیک
+/* خروج قطعی از حالت کلاسیک: تنها راه بازگشت، حذف صریح پرچم است (دکمهٔ «حالت کلاسیک» در منوی گسترش).
+ * هر بار که پوستهٔ گوگل داکس لود می‌شود، پرچم‌های قدیمی پاک می‌گردند تا صفحه هیچ‌وقت خودکار
+ * به حالت کلاسیک نیفتد (باگ گزارش‌شدهٔ کاربر: «دائم خودکار روی حالت کلاسیک می‌رود»). */
+try {
+  if (params.get('classic') === '1' || (localStorage.getItem('farast.editor.chrome') === 'classic' && params.get('keep-classic') === '1')) {
+    localStorage.removeItem('farast.editor.chrome'); // درخواست صریح/تازهٔ کاربر → حالت کلاسیک
+    return;
+  } else if (localStorage.getItem('farast.editor.chrome') === 'classic') {
+    localStorage.removeItem('farast.editor.chrome'); // پرچم کهنه — پوسته باید فعال بماند
+  }
+} catch {}
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -879,7 +889,10 @@ const MENUS = {
     ['حالت کلاسیک ادیتور', '', goClassic],
   ],
 };
-function goClassic() { localStorage.setItem('farast.editor.chrome', 'classic'); location.search = '?classic=1' + (location.search ? '&' + location.search.slice(1) : ''); }
+/* بازگشت دستی به حالت کلاسیک: با keep-classic=1 انجام می‌شود تا استارتاپ بعدی
+   پوسته، پرچم را پاک نکند و کاربر واقعاً کلاسیک ببیند. برای بازگشت به گوگل داکس
+   کافی است آدرس بدون پارامتر باز شود (پرچم خودکار پاک می‌شود). */
+function goClassic() { localStorage.setItem('farast.editor.chrome', 'classic'); location.search = '?keep-classic=1'; }
 const menusEl = $('#fdMenus'); let openBtn = null, ddEl = null;
 Object.keys(MENUS).forEach(name => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-mbtn'; b.textContent = name; b.setAttribute('aria-haspopup', 'true');
@@ -1108,6 +1121,7 @@ function startNative() {
 }
 
 /* ---------- شروع/توقف عمومی (انتخاب لایه) ---------- */
+const ENGINE_NAMES = { native: 'موتور بومی مرورگر', cloud: 'موتور ابری فراست', 'local-whisper': 'Whisper محلی رایگان روی دستگاه', 'stt-api': 'سرویس تبدیل گفتار شما' };
 async function startVoice() {
   if (wantListen || activeHandle) return;
   const ctx = hubCtx();
@@ -1147,8 +1161,14 @@ async function startVoice() {
       if (id === order[order.length - 1]) { ctx.onError(lastErr || 'هیچ موتور تایپ صوتی در دسترس نبود'); wantListen = false; voiceUI(false); }
     }
   }
+  /* هیچ موتوری فعال نشد → پیام راهنمای واقعی (به‌جای جملهٔ مبهم «موتوری در دسترس نبود») */
   wantListen = false; voiceUI(false);
-  $('#fdVMsg').textContent = 'موتوری در دسترس نبود — میکروفون/شبکه را بررسی کنید';
+  const msgs = [];
+  if (order.includes('cloud') && !hub()?.isAuthed?.()) msgs.push('برای موتور ابری فراست ابتدا وارد حساب شوید.');
+  if (order.includes('native') && !hub()?.hasNative?.()) msgs.push('این مرورگر موتور بومی ندارد (در Chrome/Edge یا با افزودهٔ SpeechRecognition فایرفاکس فعال می‌شود).');
+  if (!hub()?.hasMic?.()) msgs.push('دسترسی میکروفون ندارید — سایت باید با HTTPS باز شود و اجازهٔ میکروفون داده شود.');
+  $('#fdVMsg').textContent = msgs.join(' ') || ('خطا: ' + (lastErr || 'موتوری پاسخ نداد'));
+  toast(msgs[0] || 'موتور تایپ صوتی در دسترس نبود — «تغییر موتور» را ببینید');
 }
 function stopVoice() {
   wantListen = false;
@@ -1217,22 +1237,31 @@ app.addEventListener('input', () => { if (!kernel()) fdScheduleDraft(); }, true)
   } catch {}
 })();
 
-/* حفظ ترجیح کاربر */
-if (localStorage.getItem('farast.editor.chrome') === 'classic') goClassic();
+/* حفظ ترجیح کاربر: حالت کلاسیک فقط با پرچم صریح keep-classic فعال می‌شود (دکمهٔ منوی گسترش).
+   در غیر این صورت همیشه پوستهٔ گوگل داکس — بدون هیچ سقوط خودکاری به کلاسیک. */
+if (localStorage.getItem('farast.editor.chrome') === 'classic' && params.get('keep-classic') === '1') goClassic();
 
-/* ===================== گارد ضدتداخل با Runtime قدیمی (farast-voice.js) =====================
- * در حالت گوگل‌داكسی تنها پنل صوتی معتبر، پنل همین فایل است. اگر اسکریپت قدیمی روی دکمهٔ
- * کلاسیک #mic listener گذاشته باشد (پنل قدیمی را باز می‌کرد)، اینجا خنثی می‌شود:
- *  - کلیک روی #mic → پنل جدید (نه قدیمی)
- *  - باز شدن اجباری #farastVoicePanel → فوراً بسته می‌شود
- *  - observer روی body برای هر باز شدن مجدد پنل قدیمی */
+/* ===================== گارد ضدتداخل با Runtime قدیمی (farast-voice.js) — v3 تضمینی =====================
+ * در حالت گوگل‌داكسی تنها پنل صوتی معتبر، پنل همین فایل است. listenerهای قدیمی روی #mic
+ * حذف می‌شوند (clone)، باز شدن #farastVoicePanel خنثی می‌شود، و یک capture-click سراسری
+ * هر کلیک روی دکمهٔ کلاسیک میکروفون را به پنل جدید هدایت می‌کند. */
 (function antiLegacyVoice() {
-  const legacyMic = document.getElementById('mic');
-  if (legacyMic) {
+  const redirect = e => {
+    const m = e.target && e.target.closest ? e.target.closest('#mic') : null;
+    if (!m) return;
+    e.preventDefault(); e.stopPropagation();
+    toggleVoicePanel();
+  };
+  document.addEventListener('click', redirect, true); // capture: پیش از هر اسکریپت دیگری
+  const disarmMic = () => {
+    const legacyMic = document.getElementById('mic');
+    if (!legacyMic || legacyMic.dataset.fdDisarmed === '1') return;
+    legacyMic.dataset.fdDisarmed = '1';
     const fresh = legacyMic.cloneNode(true);
-    legacyMic.replaceWith(fresh);
+    legacyMic.replaceWith(fresh); // تمام listenerهای قدیمی (از جمله opening پنل قدیمی) حذف می‌شود
     fresh.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleVoicePanel(); });
-  }
+  };
+  disarmMic();
   const killLegacyPanel = () => {
     const p = document.getElementById('farastVoicePanel');
     if (p && p.classList.contains('is-open')) {
@@ -1241,6 +1270,6 @@ if (localStorage.getItem('farast.editor.chrome') === 'classic') goClassic();
     }
   };
   killLegacyPanel();
-  new MutationObserver(killLegacyPanel).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+  new MutationObserver(() => { killLegacyPanel(); disarmMic(); }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
 })();
 })();
