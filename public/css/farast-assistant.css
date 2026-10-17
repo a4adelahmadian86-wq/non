@@ -77,3 +77,6 @@
 @keyframes farastVoiceWave{from{transform:scaleY(.55)}to{transform:scaleY(1.25)}}
 @media(max-width:600px){.farast-assistant-voice-panel{left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 148px);height:min(570px,calc(100dvh - 155px));min-height:370px}.farast-voice-orb{width:108px;height:108px}.farast-voice-mic{width:70px;height:70px;border-radius:25px}}
 @media(prefers-reduced-motion:reduce){.farast-assistant-voice-panel.is-listening .farast-voice-orb,.farast-assistant-voice-panel.is-speaking .farast-voice-orb,.farast-assistant-voice-panel.is-listening .farast-voice-orb span{animation:none}}
+
+.farast-voice-login{display:inline-block;margin-top:6px;padding:10px 16px;border-radius:12px;background:linear-gradient(135deg,#6578f6,#9d5de9);color:#fff!important;text-decoration:none;font-size:12px;font-weight:700}
+.farast-voice-login:focus-visible{outline:3px solid #6b75f5;outline-offset:3px}
