@@ -157,19 +157,6 @@
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var mediaRecorder=null, mediaStream=null, recordedChunks=[], recordingTimeout=null;
   function stopMediaTracks(){if(mediaStream){mediaStream.getTracks().forEach(function(track){track.stop();});mediaStream=null;}}
-  function startBrowserRecognition(){
-    var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){var unsupported='این مرورگر تشخیص گفتار داخلی ندارد و سرویس صوتی سرور هم در دسترس نیست. برای گفت‌وگوی صوتی، باید دسترسی موتور صوتی سرور اصلاح شود یا از مرورگر سازگار استفاده کنی.';status.textContent=unsupported;voiceTitle.textContent='تشخیص گفتار در دسترس نیست';voiceCaption.textContent=unsupported;say(unsupported);return;}
-    try{
-      if(recognition){recognition.stop();recognition=null;return;}
-      recognition=new SR();recognition.lang='fa-IR';recognition.interimResults=true;recognition.continuous=false;
-      voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent='گوش می‌دهم؛ برای توقف، دوباره روی میکروفون بزن.';
-      recognition.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;input.value=t;if(e.results[e.results.length-1].isFinal){recognition=null;send(t);}};
-      recognition.onerror=function(){status.textContent='تشخیص گفتار ناموفق بود؛ مجوز میکروفون یا پشتیبانی مرورگر را بررسی کن.';voiceTitle.textContent='میکروفون آماده نیست';panel.classList.remove('is-listening');recognition=null;};
-      recognition.onend=function(){recognition=null;panel.classList.remove('is-listening');if(status.textContent.indexOf('گوش می‌دهم')===0){status.textContent='آماده‌ام.';voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';}};
-      recognition.start();
-    }catch(e){recognition=null;status.textContent='برای میکروفون، مجوز مرورگر را فعال کن.';}
-  }
   async function startServerRecording(){
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای استفاده از میکروفون ابتدا وارد حساب کاربری شو.';return;}
     var config=null;
@@ -206,7 +193,7 @@
       voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent='گوش می‌دهم؛ برای توقف دوباره روی میکروفون بزن. صدای ضبط‌شده برای رونویسی به سرویس بیرونی ارسال می‌شود.';
       root.querySelector('.farast-assistant-mic').classList.add('is-recording');
       recordingTimeout=window.setTimeout(function(){if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();},25000);
-    }catch(e){stopMediaTracks();mediaRecorder=null;status.textContent='میکروفون در دسترس نیست؛ مجوز مرورگر را بررسی کن.';startBrowserRecognition();}
+    }catch(e){stopMediaTracks();mediaRecorder=null;status.textContent='میکروفون در دسترس نیست؛ مجوز میکروفون و HTTPS سایت را بررسی کن.';voiceTitle.textContent='میکروفون در دسترس نیست';voiceCaption.textContent=status.textContent;}
   }
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();root.querySelector('.farast-assistant-mic').classList.remove('is-recording');return;}
