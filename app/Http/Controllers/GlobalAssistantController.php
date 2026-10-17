@@ -56,7 +56,7 @@ class GlobalAssistantController extends Controller
             $text = trim((string) $response->json('text', ''));
             if ($text === '') return response()->json(['ok' => false, 'message' => 'گفتاری در فایل تشخیص داده نشد.'], 422, ['Cache-Control' => 'no-store']);
             return response()->json(['ok' => true, 'text' => $text, 'engine' => 'groq-whisper-large-v3'], 200, ['Cache-Control' => 'no-store']);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             Log::warning('farast.global_assistant_transcription_exception', ['user_id' => $request->user()->id, 'error_class' => get_class($e)]);
             return response()->json(['ok' => false, 'message' => 'ارتباط با موتور صوتی برقرار نشد.'], 502, ['Cache-Control' => 'no-store']);
         }
