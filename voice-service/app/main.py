@@ -18,8 +18,10 @@ API_TOKEN = os.getenv("FARAST_VOICE_TOKEN", "").strip()
 ASR_MODEL_NAME = os.getenv("FARAST_ASR_MODEL", "small")
 ASR_DEVICE = os.getenv("FARAST_ASR_DEVICE", "cpu")
 ASR_COMPUTE_TYPE = os.getenv("FARAST_ASR_COMPUTE_TYPE", "int8")
-TTS_MODEL_PATH = os.getenv("FARAST_TTS_MODEL_PATH", "/models/persian-tts-male-vits/best_model.pth")
+TTS_MODEL_PATH = os.getenv("FARAST_TTS_MODEL_PATH", "/models/persian-tts-male-vits/best_model_91323.pth")
 TTS_CONFIG_PATH = os.getenv("FARAST_TTS_CONFIG_PATH", "/models/persian-tts-male-vits/config.json")
+TTS_AUTO_DOWNLOAD = os.getenv("FARAST_TTS_AUTO_DOWNLOAD", "true").lower() in {"1", "true", "yes"}
+TTS_MODEL_REPO = os.getenv("FARAST_TTS_MODEL_REPO", "Kamtera/persian-tts-male-vits")
 VOICE_ID = os.getenv("FARAST_VOICE_ID", "farast-fa-male-v1")
 MAX_AUDIO_BYTES = int(os.getenv("FARAST_MAX_AUDIO_BYTES", str(15 * 1024 * 1024)))
 MAX_TEXT_CHARS = int(os.getenv("FARAST_MAX_TEXT_CHARS", "1200"))
@@ -66,9 +68,26 @@ def load_models() -> None:
     try:
         model_path = Path(TTS_MODEL_PATH)
         config_path = Path(TTS_CONFIG_PATH)
+        if TTS_AUTO_DOWNLOAD and (not model_path.is_file() or not config_path.is_file()):
+            # Download model files only; speech inference remains on this host.
+            # Persistent /models storage prevents redownloading the ~1 GB checkpoint on restarts.
+            from huggingface_hub import hf_hub_download
+            model_path.parent.mkdir(parents=True, exist_ok=True)
+            if not model_path.is_file():
+                hf_hub_download(
+                    repo_id=TTS_MODEL_REPO,
+                    filename="best_model_91323.pth",
+                    local_dir=str(model_path.parent),
+                )
+            if not config_path.is_file():
+                hf_hub_download(
+                    repo_id=TTS_MODEL_REPO,
+                    filename="config.json",
+                    local_dir=str(config_path.parent),
+                )
         if not model_path.is_file() or not config_path.is_file():
             raise FileNotFoundError(
-                "Persian TTS model files are missing. Set FARAST_TTS_MODEL_PATH and FARAST_TTS_CONFIG_PATH."
+                "Persian TTS model files are missing. Verify persistent /models storage and model download access."
             )
         from TTS.api import TTS
         tts_model = TTS(model_path=str(model_path), config_path=str(config_path), progress_bar=False, gpu=False)
