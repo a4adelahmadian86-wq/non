@@ -7,7 +7,7 @@
   root.innerHTML =
     '<button class="farast-assistant-launcher" type="button" aria-label="گفت‌وگو با همراه فراست" aria-expanded="false" title="همراه هوشمند فراست"><span class="fa-solid fa-sparkles" aria-hidden="true"></span><span class="farast-assistant-pulse" aria-hidden="true"></span></button>' +
     '<section class="farast-assistant-panel" aria-label="همراه هوشمند فراست" aria-modal="false" hidden>' +
-    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه" title="پاک کردن سابقه گفتگو">پاک‌کردن سابقه</button><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
+    '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong>همراه فراست</strong><small><span class="farast-assistant-online"></span> راهنمای هوشمند شما</small></div><button class="farast-assistant-memory" type="button" data-fa-memory title="ذخیره نکته شخصی برای گفتگوهای بعدی">حافظه +</button><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه" title="پاک کردن سابقه گفتگو">پاک‌کردن سابقه</button><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
     '<div class="farast-assistant-intro"><b>سلام، خوش اومدی 👋</b><p>بگو دنبال چه چیزی هستی؛ قدم‌به‌قدم کنارت هستم.</p></div>' +
     '<div class="farast-assistant-messages" data-fa-messages aria-live="polite" aria-relevant="additions"></div>' +
     '<div class="farast-assistant-suggestions"><button type="button" data-fa-tour>🧭 راهنمای تعاملی سایت</button><button type="button" data-fa-text="برای خرید فایل راهنمایی‌ام کن">🛍️ خرید فایل</button><button type="button" data-fa-text="چطور از خدمات تایپ استفاده کنم؟">✍️ خدمات تایپ</button><button type="button" data-fa-text="قیمت خدمات چقدر است؟">💎 قیمت‌ها</button></div>' +
@@ -65,6 +65,41 @@
       status.textContent='سابقه گفت‌وگو از نشست‌های قبلی بازیابی شد.';
     }catch(e){historyLoaded=false;}
   }
+  async function loadMemories(){
+    if(document.body.dataset.assistantAuth!=='1')return [];
+    try{
+      var response=await fetch('/assistant/memories',{credentials:'same-origin',headers:{'Accept':'application/json'}});
+      if(!response.ok)return [];
+      var data=await response.json();
+      return Array.isArray(data.memories)?data.memories:[];
+    }catch(e){return [];}
+  }
+  async function saveMemory(){
+    if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای ذخیره حافظه ابتدا وارد حساب کاربری شو.';return;}
+    var content=window.prompt('چه نکته‌ای را می‌خواهی برای گفتگوهای بعدی به خاطر بسپارم؟\nمثلاً: پاسخ‌ها را کوتاه و مرحله‌به‌مرحله بده.');
+    if(content===null)return;
+    content=content.trim();
+    if(content.length<2){status.textContent='متن حافظه خیلی کوتاه است.';return;}
+    try{
+      var response=await fetch('/assistant/memories',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({content:content})});
+      var data=await response.json().catch(function(){return {};});
+      if(!response.ok)throw new Error(data.message||'ذخیره حافظه ناموفق بود.');
+      status.textContent=data.message||'نکته برای گفتگوهای بعدی ذخیره شد.';
+    }catch(e){status.textContent=e.message||'ذخیره حافظه انجام نشد.';}
+  }
+  async function manageMemories(){
+    if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای مدیریت حافظه ابتدا وارد حساب کاربری شو.';return;}
+    var memories=await loadMemories();
+    if(!memories.length){status.textContent='هنوز نکته شخصی ذخیره‌شده‌ای وجود ندارد. از «حافظه +» استفاده کن.';return;}
+    var summary=memories.map(function(m,i){return (i+1)+'. '+m.content;}).join('\n');
+    if(!window.confirm('حافظه شخصی ذخیره‌شده:\n\n'+summary+'\n\nبرای پاک‌کردن همه موارد، تأیید کن. برای نگه‌داشتن آن‌ها «لغو» را بزن.'))return;
+    try{
+      var response=await fetch('/assistant/memories',{method:'DELETE',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''}});
+      var data=await response.json().catch(function(){return {};});
+      if(!response.ok)throw new Error(data.message||'پاک‌کردن حافظه ناموفق بود.');
+      status.textContent=data.message||'حافظه شخصی پاک شد.';
+    }catch(e){status.textContent=e.message||'پاک‌کردن حافظه انجام نشد.';}
+  }
   async function clearHistory(){
     if(document.body.dataset.assistantAuth!=='1')return;
     if(!window.confirm('سابقه گفت‌وگوی ذخیره‌شده در حساب کاربری پاک شود؟'))return;
@@ -98,6 +133,8 @@
   launcher.addEventListener('click',function(){setOpen(panel.hidden);if(panel.hidden===false)loadHistory();});
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){setOpen(false);});
   root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
+  root.querySelector('[data-fa-memory]').addEventListener('click',saveMemory);
+  root.querySelector('.farast-assistant-brand').addEventListener('dblclick',manageMemories);
   form.addEventListener('submit',function(e){e.preventDefault();send(input.value);});
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
