@@ -43,6 +43,9 @@ Route::post('/cart/coupon/clear',[StoreCartController::class,'clearCoupon'])->mi
 Route::get('/pricing',[EditorController::class,'pricing'])->name('pricing');
 Route::post('/assistant/chat',[GlobalAssistantController::class,'chat'])->middleware(['auth','throttle:20,1'])->name('assistant.chat');
 Route::get('/assistant/history',[GlobalAssistantController::class,'history'])->middleware(['auth','throttle:30,1'])->name('assistant.history');
+Route::get('/assistant/memories',[GlobalAssistantController::class,'memories'])->middleware(['auth','throttle:30,1'])->name('assistant.memories');
+Route::post('/assistant/memories',[GlobalAssistantController::class,'saveMemory'])->middleware(['auth','throttle:10,1'])->name('assistant.memories.store');
+Route::delete('/assistant/memories',[GlobalAssistantController::class,'clearMemories'])->middleware(['auth','throttle:5,1'])->name('assistant.memories.clear');
 Route::delete('/assistant/history',[GlobalAssistantController::class,'clearHistory'])->middleware(['auth','throttle:5,1'])->name('assistant.history.clear');
 Route::get('/assistant/voice/status',[GlobalAssistantController::class,'voiceStatus'])->middleware(['auth','throttle:60,1'])->name('assistant.voice.status');
 Route::post('/assistant/transcribe',[GlobalAssistantController::class,'transcribe'])->middleware(['auth','throttle:20,1'])->name('assistant.transcribe');
