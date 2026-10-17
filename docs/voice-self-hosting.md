@@ -47,3 +47,10 @@ Return HTTP 200 with raw audio bytes and a valid `Content-Type`, preferably `aud
 ## Important limitation
 
 These Laravel changes define the integration boundary, not a running inference host. The shared host alone cannot supply local Whisper/TTS model inference. Do not mark the assistant production-ready until both private endpoints are deployed, reachable from the hosting server, and tested with Persian audio on the actual production domain. The existing chat/LLM path is still the site's existing Farast AI orchestration and is separate from this ASR/TTS change; full API-independent language generation also requires a separately hosted LLM runtime and corresponding adapter.
+
+
+## Dedicated Python inference service
+
+A deployable FastAPI service has been added under [`voice-service/`](../tree/main/voice-service). It is separate from Laravel and exposes authenticated `/v1/transcribe` and `/v1/synthesize` endpoints. Follow `voice-service/README.md` for deployment and model setup.
+
+**Always-on limitation:** Render Free sleeps after 15 minutes without inbound traffic and has no persistent disk. Do not use a free Render instance for production voice inference or try to defeat sleep with periodic pings. An always-on deployment needs a paid service instance and persistent storage; no live service is created automatically by these Git commits.
