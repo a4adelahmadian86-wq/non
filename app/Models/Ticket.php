@@ -16,6 +16,9 @@ class Ticket extends Model
         'status',
         'priority',
         'department',
+        'topic_area',
+        'related_service',
+        'related_product_id',
         'source',
         'last_reply_at',
     ];
@@ -30,6 +33,11 @@ class Ticket extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function relatedProduct(): BelongsTo
+    {
+        return $this->belongsTo(StoreProduct::class, 'related_product_id');
     }
 
     public function messages(): HasMany
