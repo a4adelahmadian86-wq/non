@@ -127,6 +127,7 @@
   margin-top: 0.35rem;
   font-size: 0.72rem;
   color: var(--sm-muted);
+  flex-wrap: wrap;
 }
 
 .status-dot {
@@ -179,6 +180,7 @@
   display: flex;
   gap: 0.6rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 .avatar.staff {
   width: 42px;
@@ -427,11 +429,12 @@
 }
 .btn.primary:hover { filter: brightness(1.05); }
 
-/* Floating widget (public) */
+/* Floating widget — physical RIGHT side (no overlap with left elements) */
 #farast-support-fab {
   position: fixed;
   bottom: 1.5rem;
-  left: 1.5rem;
+  right: 1.5rem;
+  left: auto;
   z-index: 9990;
   width: 58px;
   height: 58px;
@@ -453,7 +456,7 @@
 #farast-support-fab .badge {
   position: absolute;
   top: -2px;
-  right: -2px;
+  left: -2px;
   min-width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -468,7 +471,8 @@
 #farast-support-widget {
   position: fixed;
   bottom: 5.5rem;
-  left: 1.5rem;
+  right: 1.5rem;
+  left: auto;
   z-index: 9991;
   width: 380px;
   max-width: calc(100vw - 2rem);
@@ -481,7 +485,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--sm-border);
-  transform-origin: bottom left;
+  transform-origin: bottom right;
   animation: smPop 0.22s ease;
 }
 #farast-support-widget.is-open { display: flex; }
@@ -629,10 +633,10 @@
     border-bottom: 1px solid var(--sm-border);
   }
   #farast-support-widget {
-    left: 0.75rem;
     right: 0.75rem;
+    left: 0.75rem;
     width: auto;
     bottom: 5rem;
   }
-  #farast-support-fab { left: 1rem; bottom: 1rem; }
+  #farast-support-fab { right: 1rem; left: auto; bottom: 1rem; }
 }
