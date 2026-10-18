@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -83,6 +84,45 @@ class SupportController extends Controller
         ]);
 
         return view('support.show', compact('ticket'));
+    }
+
+    /** پولینگ پیام‌های جدید برای صفحه جزئیات */
+    public function pollMessages(Request $request, Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        abort_unless($ticket->user_id === auth()->id() || auth()->user()->isAdmin(), 403);
+
+        $afterId = (int) $request->input('after_id', 0);
+
+        $messages = $ticket->messages()
+            ->where('id', '>', $afterId)
+            ->where(function ($w) {
+                if (! auth()->user()->isAdmin()) {
+                    $w->where('is_internal', false)->orWhereNull('is_internal');
+                }
+            })
+            ->orderBy('created_at')
+            ->get()
+            ->map(function ($m) {
+                $isStaff = $m->isFromStaff();
+
+                return [
+                    'id' => $m->id,
+                    'body' => $m->body,
+                    'is_staff' => $isStaff,
+                    'is_internal' => (bool) $m->is_internal,
+                    'is_mine' => $m->user_id === auth()->id() && ! $isStaff,
+                    'time' => $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
+                    'attachments' => $m->attachments ?? [],
+                ];
+            });
+
+        return response()->json([
+            'ok' => true,
+            'messages' => $messages,
+            'status' => $ticket->fresh()->status,
+            'status_label' => $ticket->fresh()->statusLabel(),
+        ]);
     }
 
     public function create(Request $request, CapabilityService $capabilities)
@@ -186,7 +226,7 @@ class SupportController extends Controller
         }
         $ticket->update($update);
 
-        if ($request->wantsJson()) {
+        if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'ok' => true,
                 'message' => [
@@ -217,7 +257,6 @@ class SupportController extends Controller
         return redirect()->route('support')->with('status', 'تیکت بسته شد.');
     }
 
-    /** میز پشتیبانی ادمین */
     public function adminIndex(Request $request)
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
@@ -254,7 +293,6 @@ class SupportController extends Controller
             });
         }
 
-        // اولویت‌بندی صف: پاسخ کاربر و اولویت بالا اول
         $query->orderByRaw("CASE
             WHEN status = 'user_replied' THEN 0
             WHEN status = 'open' THEN 1
@@ -334,7 +372,6 @@ class SupportController extends Controller
 
         $ticket->messages()->create($msgPayload);
 
-        // یادداشت داخلی وضعیت تیکت را عوض نمی‌کند مگر صریحاً ارسال شده باشد
         if (! $isInternal) {
             $update = ['status' => $data['status'] ?? 'answered'];
             if (Schema::hasColumn('tickets', 'last_reply_at')) {
@@ -345,6 +382,22 @@ class SupportController extends Controller
             try {
                 if ($ticket->user) {
                     $emailService->sendTicketReply($ticket->user, $ticket->fresh(), $data['body']);
+                }
+            } catch (\Throwable) {
+            }
+
+            // نوتیفیکیشن داخل پنل
+            try {
+                if ($ticket->user_id && Schema::hasTable('farast_notifications')) {
+                    DB::table('farast_notifications')->insert([
+                        'user_id' => $ticket->user_id,
+                        'type' => 'ticket_reply',
+                        'title' => 'پاسخ جدید به تیکت #'.$ticket->id,
+                        'body' => Str::limit($data['body'], 160),
+                        'data' => json_encode(['ticket_id' => $ticket->id, 'url' => route('support.show', $ticket)], JSON_UNESCAPED_UNICODE),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
                 }
             } catch (\Throwable) {
             }
@@ -369,7 +422,7 @@ class SupportController extends Controller
 
         $ticket->update(['status' => $data['status']]);
 
-        $ticket->messages()->create([
+        $payload = [
             'user_id' => auth()->id(),
             'body' => '[سیستم] وضعیت تیکت به «'.(match ($data['status']) {
                 'open' => 'باز',
@@ -380,8 +433,11 @@ class SupportController extends Controller
                 default => $data['status'],
             }).'» تغییر کرد.',
             'is_internal' => true,
-            'is_staff' => true,
-        ]);
+        ];
+        if (Schema::hasColumn('ticket_messages', 'is_staff')) {
+            $payload['is_staff'] = true;
+        }
+        $ticket->messages()->create($payload);
 
         return back()->with('status', 'وضعیت تیکت به‌روزرسانی شد.');
     }
