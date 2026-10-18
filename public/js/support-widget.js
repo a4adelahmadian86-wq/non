@@ -26,13 +26,12 @@
   };
 
   fab.addEventListener('click', () => {
-    if (widget.classList.contains('is-open')) close();
-    else open();
+    widget.classList.contains('is-open') ? close() : open();
   });
   closeBtn?.addEventListener('click', close);
 
-  document.querySelectorAll('[data-open-support]').forEach(el => {
-    el.addEventListener('click', e => {
+  document.querySelectorAll('[data-open-support]').forEach((el) => {
+    el.addEventListener('click', (e) => {
       e.preventDefault();
       open();
     });
@@ -42,17 +41,10 @@
     const div = document.createElement('div');
     div.className = 'fsw-msg ' + type;
     const time = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-    div.innerHTML = `<div>${escapeHtml(text)}</div><time>${time}</time>`;
+    div.innerHTML = `<div></div><time>${time}</time>`;
+    div.querySelector('div').textContent = text;
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"');
   }
 
   async function sendMessage(body) {
@@ -86,7 +78,7 @@
     }
 
     if (!res.ok || !data.ok) {
-      appendMsg(data.message || 'خطا در ارسال پیام. دوباره تلاش کنید.', 'bot');
+      appendMsg(data.message || 'خطا در ارسال. دوباره تلاش کنید.', 'bot');
       return;
     }
 
@@ -95,13 +87,9 @@
       sessionStorage.setItem('farast_support_ticket_id', ticketId);
     }
     if (data.reply) appendMsg(data.reply, 'bot');
-
-    if (isAuth && data.redirect) {
-      appendMsg('برای ادامه گفتگو می‌توانید به داشبورد → پشتیبانی بروید.', 'bot');
-    }
   }
 
-  form?.addEventListener('submit', async e => {
+  form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = (textarea?.value || '').trim();
     if (!text) return;
@@ -110,11 +98,11 @@
     try {
       await sendMessage(text);
     } catch {
-      appendMsg('ارتباط برقرار نشد. اتصال اینترنت را بررسی کنید.', 'bot');
+      appendMsg('ارتباط برقرار نشد. اینترنت را بررسی کنید.', 'bot');
     }
   });
 
-  contactForm?.addEventListener('submit', async e => {
+  contactForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     contactBox?.classList.remove('is-visible');
     if (pendingBody) {
@@ -127,7 +115,7 @@
   if (messagesEl && messagesEl.children.length === 0) {
     appendMsg(
       isAuth
-        ? 'سلام! پیام خود را بنویسید. تاریخچه کامل در داشبورد → پشتیبانی در دسترس است.'
+        ? 'سلام! پیام خود را بنویسید. تاریخچه کامل در داشبورد ← پشتیبانی در دسترس است.'
         : 'سلام! به پشتیبانی فراست خوش آمدید. پیام خود را بنویسید؛ تیم ما پاسخ می‌دهد.',
       'bot'
     );
