@@ -27,22 +27,6 @@ return new class extends Migration
             }
         });
 
-        // Make user_id nullable for guest tickets (MySQL-safe without doctrine/dbal)
-        try {
-            $driver = Schema::getConnection()->getDriverName();
-            if ($driver === 'mysql') {
-                DB::statement('ALTER TABLE tickets MODIFY user_id BIGINT UNSIGNED NULL');
-                DB::statement('ALTER TABLE ticket_messages MODIFY user_id BIGINT UNSIGNED NULL');
-            } elseif (in_array($driver, ['pgsql', 'postgres'], true)) {
-                DB::statement('ALTER TABLE tickets ALTER COLUMN user_id DROP NOT NULL');
-                DB::statement('ALTER TABLE ticket_messages ALTER COLUMN user_id DROP NOT NULL');
-            } elseif ($driver === 'sqlite') {
-                // SQLite: leave as-is; new columns cover guest flow; strict FK may still require a dummy user in some envs
-            }
-        } catch (\Throwable) {
-            // non-fatal: guest flow still works for logged-in widget users
-        }
-
         Schema::table('ticket_messages', function (Blueprint $table) {
             if (! Schema::hasColumn('ticket_messages', 'attachments')) {
                 $table->json('attachments')->nullable()->after('body');
@@ -51,6 +35,32 @@ return new class extends Migration
                 $table->boolean('is_staff')->default(false)->after('is_internal');
             }
         });
+
+        // Allow guest tickets/messages (nullable user_id). Drop FKs first on MySQL.
+        try {
+            $driver = Schema::getConnection()->getDriverName();
+
+            if ($driver === 'mysql') {
+                $this->dropForeignKeyIfExists('tickets', 'tickets_user_id_foreign');
+                $this->dropForeignKeyIfExists('ticket_messages', 'ticket_messages_user_id_foreign');
+
+                DB::statement('ALTER TABLE tickets MODIFY user_id BIGINT UNSIGNED NULL');
+                DB::statement('ALTER TABLE ticket_messages MODIFY user_id BIGINT UNSIGNED NULL');
+
+                Schema::table('tickets', function (Blueprint $table) {
+                    $table->foreign('user_id')->references('id')->on('users')->nullOnDelete();
+                });
+                Schema::table('ticket_messages', function (Blueprint $table) {
+                    $table->foreign('user_id')->references('id')->on('users')->nullOnDelete();
+                });
+            } elseif (in_array($driver, ['pgsql', 'postgres'], true)) {
+                DB::statement('ALTER TABLE tickets ALTER COLUMN user_id DROP NOT NULL');
+                DB::statement('ALTER TABLE ticket_messages ALTER COLUMN user_id DROP NOT NULL');
+            }
+        } catch (\Throwable $e) {
+            // Non-fatal: logged-in support still works even if guest nullability fails.
+            report($e);
+        }
     }
 
     public function down(): void
@@ -71,5 +81,21 @@ return new class extends Migration
                 $table->dropColumn('is_staff');
             }
         });
+    }
+
+    private function dropForeignKeyIfExists(string $table, string $keyName): void
+    {
+        try {
+            $db = Schema::getConnection()->getDatabaseName();
+            $exists = DB::select(
+                'SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = ?',
+                [$db, $table, $keyName, 'FOREIGN KEY']
+            );
+            if ($exists) {
+                DB::statement("ALTER TABLE `{$table}` DROP FOREIGN KEY `{$keyName}`");
+            }
+        } catch (\Throwable) {
+            // ignore
+        }
     }
 };

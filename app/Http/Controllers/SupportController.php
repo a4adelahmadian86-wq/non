@@ -16,7 +16,6 @@ class SupportController extends Controller
     {
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403, 'پشتیبانی برای این حساب فعال نیست.');
 
-        // ادغام تیکت‌های مهمان در صورت وجود ایمیل
         self::claimGuestTickets(auth()->user());
 
         $query = auth()->user()->tickets()->with(['messages' => fn ($q) => $q->orderBy('created_at')]);
@@ -93,6 +92,7 @@ class SupportController extends Controller
 
         $data = $request->validate([
             'body' => 'required|string|max:5000',
+            'attachment' => 'nullable|file|max:5120|mimes:jpg,jpeg,png,gif,pdf,txt,zip',
         ]);
 
         $msgPayload = [
@@ -101,6 +101,15 @@ class SupportController extends Controller
         ];
         if (Schema::hasColumn('ticket_messages', 'is_staff')) {
             $msgPayload['is_staff'] = false;
+        }
+
+        if ($request->hasFile('attachment') && Schema::hasColumn('ticket_messages', 'attachments')) {
+            $path = $request->file('attachment')->store('ticket-attachments/'.$ticket->id, 'public');
+            $msgPayload['attachments'] = [[
+                'path' => $path,
+                'name' => $request->file('attachment')->getClientOriginalName(),
+                'size' => $request->file('attachment')->getSize(),
+            ]];
         }
 
         $msg = $ticket->messages()->create($msgPayload);
@@ -134,11 +143,14 @@ class SupportController extends Controller
 
         $ticket->update(['status' => 'closed']);
 
-        $ticket->messages()->create([
+        $msgPayload = [
             'user_id' => auth()->id(),
             'body' => '[سیستم] کاربر تیکت را بست.',
-            'is_staff' => false,
-        ]);
+        ];
+        if (Schema::hasColumn('ticket_messages', 'is_staff')) {
+            $msgPayload['is_staff'] = false;
+        }
+        $ticket->messages()->create($msgPayload);
 
         if ($request->wantsJson()) {
             return response()->json(['ok' => true]);
@@ -147,9 +159,6 @@ class SupportController extends Controller
         return redirect()->route('support')->with('status', 'تیکت بسته شد.');
     }
 
-    /**
-     * پیام مهمان از ویجت شناور (بدون لاگین).
-     */
     public function guestMessage(Request $request)
     {
         $data = $request->validate([
@@ -175,7 +184,7 @@ class SupportController extends Controller
             if (! $ticket) {
                 $ticket = Ticket::where('user_id', $user->id)
                     ->where('status', '!=', 'closed')
-                    ->where('source', 'widget')
+                    ->when(Schema::hasColumn('tickets', 'source'), fn ($q) => $q->where('source', 'widget'))
                     ->latest()
                     ->first();
             }
@@ -236,11 +245,10 @@ class SupportController extends Controller
         ]);
 
         $ticket = null;
-        if (! empty($data['ticket_id'])) {
+        if (! empty($data['ticket_id']) && Schema::hasColumn('tickets', 'guest_email')) {
             $ticket = Ticket::where('id', $data['ticket_id'])
-                ->where(function ($q) use ($email) {
-                    $q->whereNull('user_id')->where('guest_email', $email);
-                })
+                ->whereNull('user_id')
+                ->where('guest_email', $email)
                 ->whereIn('status', ['open', 'answered', 'pending'])
                 ->first();
         }
@@ -333,9 +341,6 @@ class SupportController extends Controller
         return back()->with('status', 'پاسخ ثبت و ایمیل اطلاع‌رسانی ارسال شد.');
     }
 
-    /**
-     * ادغام تیکت‌های مهمان با حساب بعد از لاگین.
-     */
     public static function claimGuestTickets(User $user): int
     {
         if (! Schema::hasColumn('tickets', 'guest_email') || ! $user->email) {
