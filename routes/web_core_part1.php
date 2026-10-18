@@ -55,6 +55,12 @@ Route::get('/social',[SocialController::class,'index'])->name('social');
 Route::view('/terms','legal.terms')->name('terms');
 Route::view('/refund-policy','legal.refunds')->name('refunds');
 Route::view('/privacy','legal.privacy')->name('privacy');
+
+// Guest / public support chat widget endpoint
+Route::post('/api/support/guest-message', [SupportController::class, 'guestMessage'])
+    ->middleware('throttle:20,10')
+    ->name('support.guest');
+
 Route::get('/assets/sounds/{file}',function(string $file){abort_unless(preg_match('/^[0-9]{2}-[a-z0-9-]+\.ogg$/',$file)===1);$path=base_path('FARAST-UI-SOUNDS/OGG/'.$file);abort_unless(is_file($path),404);return response()->file($path,['Content-Type'=>'audio/ogg','Cache-Control'=>'public, max-age=31536000, immutable','X-Content-Type-Options'=>'nosniff']);})->where('file','[0-9]{2}-[A-Za-z0-9-]+\.ogg')->name('assets.sounds');
 
 Route::get('/login',[AuthController::class,'showLogin'])->name('login');
