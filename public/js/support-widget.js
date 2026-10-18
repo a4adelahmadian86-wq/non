@@ -3,6 +3,7 @@
   const widget = document.getElementById('farast-support-widget');
   if (!fab || !widget) return;
 
+  const isAuth = widget.getAttribute('data-auth') === '1';
   const closeBtn = widget.querySelector('[data-fsw-close]');
   const messagesEl = widget.querySelector('[data-fsw-messages]');
   const form = widget.querySelector('[data-fsw-form]');
@@ -30,7 +31,6 @@
   });
   closeBtn?.addEventListener('click', close);
 
-  // Footer / any [data-open-support]
   document.querySelectorAll('[data-open-support]').forEach(el => {
     el.addEventListener('click', e => {
       e.preventDefault();
@@ -49,18 +49,20 @@
 
   function escapeHtml(s) {
     return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"');
   }
 
   async function sendMessage(body) {
     const payload = { body, ticket_id: ticketId ? Number(ticketId) : null };
-    const nameInput = contactForm?.querySelector('[name="name"]');
-    const emailInput = contactForm?.querySelector('[name="email"]');
-    if (nameInput?.value) payload.name = nameInput.value;
-    if (emailInput?.value) payload.email = emailInput.value;
+    if (!isAuth) {
+      const nameInput = contactForm?.querySelector('[name="name"]');
+      const emailInput = contactForm?.querySelector('[name="email"]');
+      if (nameInput?.value) payload.name = nameInput.value;
+      if (emailInput?.value) payload.email = emailInput.value;
+    }
 
     const res = await fetch('/api/support/guest-message', {
       method: 'POST',
@@ -76,7 +78,7 @@
 
     const data = await res.json().catch(() => ({}));
 
-    if (res.status === 422 && data.need_contact) {
+    if (res.status === 422 && data.need_contact && !isAuth) {
       pendingBody = body;
       contactBox?.classList.add('is-visible');
       appendMsg(data.message || 'لطفاً نام و ایمیل را وارد کنید.', 'bot');
@@ -93,6 +95,10 @@
       sessionStorage.setItem('farast_support_ticket_id', ticketId);
     }
     if (data.reply) appendMsg(data.reply, 'bot');
+
+    if (isAuth && data.redirect) {
+      appendMsg('برای ادامه گفتگو می‌توانید به داشبورد → پشتیبانی بروید.', 'bot');
+    }
   }
 
   form?.addEventListener('submit', async e => {
@@ -118,8 +124,12 @@
     }
   });
 
-  // Welcome if empty
   if (messagesEl && messagesEl.children.length === 0) {
-    appendMsg('سلام! به پشتیبانی فراست خوش آمدید. پیام خود را بنویسید؛ تیم ما پاسخ می‌دهد.', 'bot');
+    appendMsg(
+      isAuth
+        ? 'سلام! پیام خود را بنویسید. تاریخچه کامل در داشبورد → پشتیبانی در دسترس است.'
+        : 'سلام! به پشتیبانی فراست خوش آمدید. پیام خود را بنویسید؛ تیم ما پاسخ می‌دهد.',
+      'bot'
+    );
   }
 })();
