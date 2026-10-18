@@ -6,7 +6,7 @@
     $active = $tickets->firstWhere('id', (int) $activeId) ?? $tickets->first();
 @endphp
 
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018b">
 
 <div class="support-messenger" dir="rtl">
     <aside class="support-sidebar">
@@ -65,10 +65,9 @@
                     </div>
                 </div>
                 @if($active->status !== 'closed')
-                    <form method="post" action="{{ route('support.message', $active) }}" class="close-form" onsubmit="return confirm('بستن تیکت؟')">
+                    <form method="post" action="{{ route('support.close', $active) }}" onsubmit="return confirm('آیا از بستن این تیکت مطمئن هستید؟')">
                         @csrf
-                        <input type="hidden" name="body" value="[سیستم] کاربر درخواست بستن تیکت را ثبت کرد.">
-                        <button type="button" class="btn-ghost" id="btnCloseTicket" data-ticket="{{ $active->id }}">بستن تیکت</button>
+                        <button type="submit" class="btn-ghost">بستن تیکت</button>
                     </form>
                 @endif
             </header>
@@ -81,7 +80,7 @@
                             <div class="msg-avatar"><i class="fa-solid fa-headset"></i></div>
                         @endunless
                         <div class="msg-bubble">
-                            <div class="msg-body">{{ nl2br(e($m->body)) }}</div>
+                            <div class="msg-body">{!! nl2br(e($m->body)) !!}</div>
                             <time>{{ $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</time>
                         </div>
                     </div>
@@ -111,7 +110,7 @@
                 <div class="placeholder-card">
                     <i class="fa-solid fa-headset"></i>
                     <h2>به پشتیبانی فراست خوش آمدید</h2>
-                    <p>سؤالی دارید؟ تیکت جدید بسازید یا از لیست سمت راست یک گفتگو را انتخاب کنید.</p>
+                    <p>سؤالی دارید؟ تیکت جدید بسازید یا از لیست یک گفتگو را انتخاب کنید.</p>
                     <button type="button" class="btn primary" id="openNewTicketMain">تیکت جدید</button>
                 </div>
             </div>
@@ -119,7 +118,6 @@
     </section>
 </div>
 
-{{-- مودال تیکت جدید --}}
 <dialog id="newTicketModal" class="support-modal">
     <form method="post" action="{{ route('support.create') }}" class="modal-card">
         @csrf
@@ -158,6 +156,6 @@
 </dialog>
 
 @push('scripts')
-<script src="{{ asset('js/support-messenger.js') }}?v=20261018"></script>
+<script src="{{ asset('js/support-messenger.js') }}?v=20261018b"></script>
 @endpush
 @endsection
