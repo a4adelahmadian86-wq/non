@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Services\EditorDocumentService;
+use App\Models\Ticket;
 
 class PlatformCompletionController extends Controller {
  private function doc(Request $r,$id){$d=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->first();abort_unless($d,404);return $d;}
@@ -31,7 +32,7 @@ class PlatformCompletionController extends Controller {
  public function subscribe(Request $r,$plan){$p=DB::table('farast_plans')->where('id',$plan)->where('active',1)->first();abort_unless($p,404);DB::transaction(function()use($p){DB::table('farast_subscriptions')->where('user_id',auth()->id())->where('status','active')->update(['status'=>'replaced','ends_at'=>now(),'updated_at'=>now()]);DB::table('farast_entitlements')->where('user_id',auth()->id())->where('source_type','subscription')->where('status','active')->update(['status'=>'replaced','ends_at'=>now(),'updated_at'=>now()]);DB::table('farast_subscriptions')->insert(['user_id'=>auth()->id(),'plan_id'=>$p->id,'status'=>'active','starts_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);app(\App\Services\SubscriptionEntitlementService::class)->sync(auth()->user(),(int)$p->id);});return back()->with('status','پلن فعال شد. سهمیه‌های آن نیز به‌عنوان entitlement سروری فعال شدند.');}
  public function adminPlans(){abort_unless(auth()->user()->isAdmin(),403);return view('admin.plans',['plans'=>DB::table('farast_plans')->orderBy('price')->get()]);}
  public function savePlan(Request $r){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['code'=>'required|string|max:80','name'=>'required|string|max:120','price'=>'required|integer|min:0','currency'=>'required|string|max:8','quotas'=>'nullable|array']);DB::table('farast_plans')->updateOrInsert(['code'=>$x['code']],['name'=>$x['name'],'price'=>$x['price'],'currency'=>$x['currency'],'quotas'=>json_encode($x['quotas']??[],JSON_UNESCAPED_UNICODE),'active'=>$r->boolean('active',true),'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','پلن ذخیره شد.');}
- public function adminSupport(){abort_unless(auth()->user()->isAdmin(),403);return view('admin.support',['tickets'=>DB::table('tickets')->orderByDesc('updated_at')->paginate(30)]);}
+ public function adminSupport(){abort_unless(auth()->user()->isAdmin(),403);$tickets=Ticket::with(['messages'=>fn($q)=>$q->orderBy('created_at'),'user'])->orderByDesc('updated_at')->paginate(30);return view('admin.support',compact('tickets'));}
  public function usage(){return response()->json(DB::table('farast_usage_counters')->where('user_id',auth()->id())->orderByDesc('period_start')->get());}
  public function createFolder(Request $r){$x=$r->validate(['name'=>'required|string|max:120','parent_id'=>'nullable|integer']);DB::table('document_folders')->insert(['user_id'=>auth()->id(),'name'=>$x['name'],'parent_id'=>$x['parent_id']??null,'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','پوشه ایجاد شد.');}
  public function teamMembers(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$t=DB::table('teams')->find($team);abort_unless($t,404);return response()->json(DB::table('team_user')->join('users','users.id','=','team_user.user_id')->where('team_id',$team)->select('users.id','users.name','users.email','team_user.team_role')->get());}

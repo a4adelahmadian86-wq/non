@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Ticket;
-use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
@@ -17,12 +16,16 @@ class SupportController extends Controller
     {
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403, 'پشتیبانی برای این حساب فعال نیست.');
 
-        $tickets = auth()->user()
-            ->tickets()
-            ->with(['messages' => fn ($q) => $q->orderBy('created_at')])
-            ->latest('last_reply_at')
-            ->latest()
-            ->get();
+        // ادغام تیکت‌های مهمان در صورت وجود ایمیل
+        self::claimGuestTickets(auth()->user());
+
+        $query = auth()->user()->tickets()->with(['messages' => fn ($q) => $q->orderBy('created_at')]);
+
+        if (Schema::hasColumn('tickets', 'last_reply_at')) {
+            $query->orderByDesc('last_reply_at');
+        }
+
+        $tickets = $query->latest()->get();
 
         return view('support', [
             'tickets' => $tickets,
@@ -41,21 +44,34 @@ class SupportController extends Controller
             'priority' => 'nullable|string|in:low,normal,high',
         ]);
 
-        $ticket = Ticket::create([
+        $payload = [
             'user_id' => auth()->id(),
             'subject' => $data['subject'],
             'status' => 'open',
             'priority' => $data['priority'] ?? 'normal',
-            'department' => $data['department'] ?? 'support',
-            'source' => 'dashboard',
-            'last_reply_at' => now(),
-        ]);
+        ];
 
-        $ticket->messages()->create([
+        if (Schema::hasColumn('tickets', 'department')) {
+            $payload['department'] = $data['department'] ?? 'support';
+        }
+        if (Schema::hasColumn('tickets', 'source')) {
+            $payload['source'] = 'dashboard';
+        }
+        if (Schema::hasColumn('tickets', 'last_reply_at')) {
+            $payload['last_reply_at'] = now();
+        }
+
+        $ticket = Ticket::create($payload);
+
+        $msgPayload = [
             'user_id' => auth()->id(),
             'body' => $data['body'],
-            'is_staff' => false,
-        ]);
+        ];
+        if (Schema::hasColumn('ticket_messages', 'is_staff')) {
+            $msgPayload['is_staff'] = false;
+        }
+
+        $ticket->messages()->create($msgPayload);
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -73,21 +89,27 @@ class SupportController extends Controller
     {
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
         abort_unless($ticket->user_id === auth()->id(), 403);
+        abort_if($ticket->status === 'closed', 422, 'این تیکت بسته است.');
 
         $data = $request->validate([
             'body' => 'required|string|max:5000',
         ]);
 
-        $msg = $ticket->messages()->create([
+        $msgPayload = [
             'user_id' => auth()->id(),
             'body' => $data['body'],
-            'is_staff' => false,
-        ]);
+        ];
+        if (Schema::hasColumn('ticket_messages', 'is_staff')) {
+            $msgPayload['is_staff'] = false;
+        }
 
-        $ticket->update([
-            'status' => 'open',
-            'last_reply_at' => now(),
-        ]);
+        $msg = $ticket->messages()->create($msgPayload);
+
+        $update = ['status' => 'open'];
+        if (Schema::hasColumn('tickets', 'last_reply_at')) {
+            $update['last_reply_at'] = now();
+        }
+        $ticket->update($update);
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -97,12 +119,32 @@ class SupportController extends Controller
                     'body' => $msg->body,
                     'is_staff' => false,
                     'created_at' => $msg->created_at->timezone(config('app.timezone'))->format('Y-m-d H:i'),
-                    'time_fa' => jdate($msg->created_at)->format('H:i') ?? $msg->created_at->format('H:i'),
+                    'time' => $msg->created_at->format('H:i'),
                 ],
             ]);
         }
 
         return back();
+    }
+
+    public function close(Request $request, Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        abort_unless($ticket->user_id === auth()->id(), 403);
+
+        $ticket->update(['status' => 'closed']);
+
+        $ticket->messages()->create([
+            'user_id' => auth()->id(),
+            'body' => '[سیستم] کاربر تیکت را بست.',
+            'is_staff' => false,
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['ok' => true]);
+        }
+
+        return redirect()->route('support')->with('status', 'تیکت بسته شد.');
     }
 
     /**
@@ -119,44 +161,64 @@ class SupportController extends Controller
 
         $user = auth()->user();
 
-        // اگر کاربر لاگین است، مستقیم تیکت واقعی بساز
         if ($user) {
+            self::claimGuestTickets($user);
+
             $ticket = null;
             if (! empty($data['ticket_id'])) {
                 $ticket = Ticket::where('id', $data['ticket_id'])
                     ->where('user_id', $user->id)
+                    ->where('status', '!=', 'closed')
                     ->first();
             }
 
             if (! $ticket) {
-                $ticket = Ticket::create([
+                $ticket = Ticket::where('user_id', $user->id)
+                    ->where('status', '!=', 'closed')
+                    ->where('source', 'widget')
+                    ->latest()
+                    ->first();
+            }
+
+            if (! $ticket) {
+                $payload = [
                     'user_id' => $user->id,
                     'subject' => Str::limit($data['body'], 80),
                     'status' => 'open',
                     'priority' => 'normal',
-                    'department' => 'support',
-                    'source' => 'widget',
-                    'last_reply_at' => now(),
-                ]);
+                ];
+                if (Schema::hasColumn('tickets', 'department')) {
+                    $payload['department'] = 'support';
+                }
+                if (Schema::hasColumn('tickets', 'source')) {
+                    $payload['source'] = 'widget';
+                }
+                if (Schema::hasColumn('tickets', 'last_reply_at')) {
+                    $payload['last_reply_at'] = now();
+                }
+                $ticket = Ticket::create($payload);
             }
 
-            $msg = $ticket->messages()->create([
-                'user_id' => $user->id,
-                'body' => $data['body'],
-                'is_staff' => false,
-            ]);
+            $msgPayload = ['user_id' => $user->id, 'body' => $data['body']];
+            if (Schema::hasColumn('ticket_messages', 'is_staff')) {
+                $msgPayload['is_staff'] = false;
+            }
+            $ticket->messages()->create($msgPayload);
 
-            $ticket->update(['last_reply_at' => now(), 'status' => 'open']);
+            $upd = ['status' => 'open'];
+            if (Schema::hasColumn('tickets', 'last_reply_at')) {
+                $upd['last_reply_at'] = now();
+            }
+            $ticket->update($upd);
 
             return response()->json([
                 'ok' => true,
                 'ticket_id' => $ticket->id,
-                'reply' => 'پیام شما ثبت شد. تیم پشتیبانی به زودی پاسخ می‌دهد. می‌توانید تاریخچه کامل را در داشبورد → پشتیبانی ببینید.',
+                'reply' => 'پیام شما ثبت شد. تیم پشتیبانی به‌زودی پاسخ می‌دهد. تاریخچه کامل در داشبورد → پشتیبانی.',
                 'redirect' => route('support', ['ticket' => $ticket->id]),
             ]);
         }
 
-        // مهمان
         $email = $data['email'] ?? session('support_guest_email');
         $name = $data['name'] ?? session('support_guest_name');
 
@@ -176,13 +238,14 @@ class SupportController extends Controller
         $ticket = null;
         if (! empty($data['ticket_id'])) {
             $ticket = Ticket::where('id', $data['ticket_id'])
-                ->whereNull('user_id')
-                ->where('guest_email', $email)
+                ->where(function ($q) use ($email) {
+                    $q->whereNull('user_id')->where('guest_email', $email);
+                })
                 ->whereIn('status', ['open', 'answered', 'pending'])
                 ->first();
         }
 
-        if (! $ticket) {
+        if (! $ticket && Schema::hasColumn('tickets', 'guest_email')) {
             $ticket = Ticket::whereNull('user_id')
                 ->where('guest_email', $email)
                 ->whereIn('status', ['open', 'answered', 'pending'])
@@ -191,37 +254,49 @@ class SupportController extends Controller
         }
 
         if (! $ticket) {
-            $ticket = Ticket::create([
+            $payload = [
                 'user_id' => null,
-                'guest_name' => $name,
-                'guest_email' => $email,
                 'subject' => Str::limit($data['body'], 80),
                 'status' => 'open',
                 'priority' => 'normal',
-                'department' => 'support',
-                'source' => 'widget',
-                'last_reply_at' => now(),
-            ]);
+            ];
+            if (Schema::hasColumn('tickets', 'guest_name')) {
+                $payload['guest_name'] = $name;
+            }
+            if (Schema::hasColumn('tickets', 'guest_email')) {
+                $payload['guest_email'] = $email;
+            }
+            if (Schema::hasColumn('tickets', 'department')) {
+                $payload['department'] = 'support';
+            }
+            if (Schema::hasColumn('tickets', 'source')) {
+                $payload['source'] = 'widget';
+            }
+            if (Schema::hasColumn('tickets', 'last_reply_at')) {
+                $payload['last_reply_at'] = now();
+            }
+            $ticket = Ticket::create($payload);
         }
 
-        $ticket->messages()->create([
-            'user_id' => null,
-            'body' => $data['body'],
-            'is_staff' => false,
-        ]);
+        $msgPayload = ['user_id' => null, 'body' => $data['body']];
+        if (Schema::hasColumn('ticket_messages', 'is_staff')) {
+            $msgPayload['is_staff'] = false;
+        }
+        $ticket->messages()->create($msgPayload);
 
-        $ticket->update(['last_reply_at' => now(), 'status' => 'open']);
+        $upd = ['status' => 'open'];
+        if (Schema::hasColumn('tickets', 'last_reply_at')) {
+            $upd['last_reply_at'] = now();
+        }
+        $ticket->update($upd);
 
         return response()->json([
             'ok' => true,
             'ticket_id' => $ticket->id,
-            'reply' => 'پیام شما ثبت شد. پس از ورود به حساب، تاریخچه کامل در داشبورد → پشتیبانی در دسترس خواهد بود.',
+            'reply' => 'پیام شما ثبت شد. پس از ورود به حساب، تاریخچه در داشبورد → پشتیبانی در دسترس است.',
         ]);
     }
 
-    /**
-     * پاسخ مدیر به تیکت (از پنل ادمین).
-     */
     public function adminReply(Request $request, Ticket $ticket, EmailService $emailService)
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
@@ -231,23 +306,26 @@ class SupportController extends Controller
             'status' => 'nullable|in:open,answered,closed,pending',
         ]);
 
-        $ticket->messages()->create([
+        $msgPayload = [
             'user_id' => auth()->id(),
             'body' => $data['body'],
             'is_internal' => false,
-            'is_staff' => true,
-        ]);
+        ];
+        if (Schema::hasColumn('ticket_messages', 'is_staff')) {
+            $msgPayload['is_staff'] = true;
+        }
 
-        $ticket->update([
-            'status' => $data['status'] ?? 'answered',
-            'last_reply_at' => now(),
-        ]);
+        $ticket->messages()->create($msgPayload);
+
+        $update = ['status' => $data['status'] ?? 'answered'];
+        if (Schema::hasColumn('tickets', 'last_reply_at')) {
+            $update['last_reply_at'] = now();
+        }
+        $ticket->update($update);
 
         try {
             if ($ticket->user) {
                 $emailService->sendTicketReply($ticket->user, $ticket->fresh(), $data['body']);
-            } elseif ($ticket->guest_email) {
-                // optional: send to guest email if mailer supports it
             }
         } catch (\Throwable) {
         }
@@ -256,7 +334,7 @@ class SupportController extends Controller
     }
 
     /**
-     * ادغام تیکت‌های مهمان با حساب بعد از لاگین (قابل فراخوانی از AuthController).
+     * ادغام تیکت‌های مهمان با حساب بعد از لاگین.
      */
     public static function claimGuestTickets(User $user): int
     {
@@ -264,10 +342,10 @@ class SupportController extends Controller
             return 0;
         }
 
-        $count = Ticket::whereNull('user_id')
-            ->where('guest_email', $user->email)
-            ->update(['user_id' => $user->id]);
+        $email = mb_strtolower(trim($user->email));
 
-        return $count;
+        return Ticket::whereNull('user_id')
+            ->whereRaw('LOWER(guest_email) = ?', [$email])
+            ->update(['user_id' => $user->id]);
     }
 }
