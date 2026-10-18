@@ -68,6 +68,7 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::get('/support', [SupportController::class, 'index'])->middleware('capability:can_support')->name('support');
     Route::get('/support/create', [SupportController::class, 'createForm'])->middleware('capability:can_support')->name('support.create.form');
     Route::get('/support/tickets/{ticket}', [SupportController::class, 'show'])->middleware('capability:can_support')->name('support.show');
+    Route::get('/support/tickets/{ticket}/messages', [SupportController::class, 'pollMessages'])->middleware(['capability:can_support', 'throttle:60,1'])->name('support.messages.poll');
     Route::post('/support/tickets', [SupportController::class, 'create'])->middleware(['throttle:10,10', 'capability:can_support'])->name('support.create');
     Route::post('/support/tickets/{ticket}/messages', [SupportController::class, 'message'])->middleware(['throttle:30,10', 'capability:can_support'])->name('support.message');
     Route::post('/support/tickets/{ticket}/close', [SupportController::class, 'close'])->middleware(['throttle:10,10', 'capability:can_support'])->name('support.close');
@@ -77,6 +78,8 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/checkout/{order}/wallet', [PaymentController::class, 'payWithWallet'])->middleware('throttle:10,10')->name('checkout.wallet');
     Route::post('/documents/{document}/checkout', [PaymentController::class, 'createForDocument'])->middleware('throttle:10,10')->name('documents.checkout');
 });
+
+Route::get('/shared/documents/{token}', [PlatformCompletionController::class, 'shared'])->name('platform.documents.shared');
 
 Route::middleware('auth')->group(function () {
     Route::get('/canva/connect', [CanvaController::class, 'connect'])->name('canva.connect');
@@ -89,8 +92,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/canva/imports', [CanvaController::class, 'import'])->name('canva.imports.create');
     Route::get('/canva/imports/{job}', [CanvaController::class, 'importStatus'])->name('canva.imports.status');
 });
-
-Route::get('/shared/documents/{token}', [PlatformCompletionController::class, 'shared'])->name('platform.documents.shared');
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->name('index');

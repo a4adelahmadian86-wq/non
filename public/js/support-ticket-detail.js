@@ -16,6 +16,9 @@
   const messages = document.getElementById('chatMessages');
   const closeDialog = document.getElementById('closeTicketDialog');
 
+  let lastId = Number(page?.dataset.lastId || 0);
+  const pollUrl = page?.dataset.pollUrl || '';
+
   if (messages) messages.scrollTop = messages.scrollHeight;
 
   document.getElementById('openCloseDialog')?.addEventListener('click', () => closeDialog?.showModal());
@@ -65,11 +68,9 @@
   });
   removeBtn?.addEventListener('click', clearFile);
 
-  // Drag & drop anywhere on ticket card
   let dragDepth = 0;
   function showOverlay(on) {
-    if (!overlay) return;
-    overlay.hidden = !on;
+    if (overlay) overlay.hidden = !on;
   }
 
   ['dragenter', 'dragover'].forEach((ev) => {
@@ -79,9 +80,7 @@
       if (ev === 'dragenter') dragDepth++;
       showOverlay(true);
     });
-    page?.addEventListener(ev, (e) => {
-      e.preventDefault();
-    });
+    page?.addEventListener(ev, (e) => e.preventDefault());
   });
 
   zone?.addEventListener('dragleave', (e) => {
@@ -100,11 +99,69 @@
     if (f) setFile(f);
   });
 
-  // Prevent browser open-file on drop outside
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => e.preventDefault());
 
-  // AJAX submit with upload progress when file present
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function appendMessage(m) {
+    if (!messages || document.querySelector('[data-msg-id="' + m.id + '"]')) return;
+    const isMine = !!m.is_mine;
+    const row = document.createElement('div');
+    row.className = 'tk-bubble-row ' + (isMine ? 'is-user' : 'is-staff');
+    row.dataset.msgId = m.id;
+
+    let attachHtml = '';
+    if (Array.isArray(m.attachments) && m.attachments.length) {
+      attachHtml = '<div class="tk-attach-list">' + m.attachments.map((a) => {
+        const path = a.path ? '/storage/' + a.path : '#';
+        return '<a href="' + path + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + escapeHtml(a.name || 'پیوست') + '</a>';
+      }).join('') + '</div>';
+    }
+
+    row.innerHTML =
+      '<div class="tk-bubble-avatar ' + (isMine ? 'tk-av-user' : 'tk-av-staff') + '">' +
+      '<i class="fa-solid ' + (isMine ? 'fa-user' : 'fa-headset') + '"></i></div>' +
+      '<div class="tk-bubble-col">' +
+      '<div class="tk-bubble ' + (isMine ? 'tk-bubble-user' : 'tk-bubble-staff') + '">' +
+      '<pre>' + escapeHtml(m.body || '') + '</pre>' + attachHtml + '</div>' +
+      '<p class="tk-bubble-time ' + (isMine ? '' : 'is-end') + '">' + escapeHtml(m.time || '') + '</p></div>';
+
+    messages.appendChild(row);
+    messages.scrollTop = messages.scrollHeight;
+    lastId = Math.max(lastId, Number(m.id) || 0);
+  }
+
+  async function poll() {
+    if (!pollUrl || document.hidden) return;
+    try {
+      const res = await fetch(pollUrl + (pollUrl.includes('?') ? '&' : '?') + 'after_id=' + lastId, {
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.ok) return;
+      (data.messages || []).forEach(appendMessage);
+      if (data.status_label) {
+        const el = document.getElementById('ticketStatusLabel');
+        if (el) el.textContent = data.status_label;
+      }
+    } catch (_) {}
+  }
+
+  if (pollUrl) {
+    setInterval(poll, 12000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) poll();
+    });
+  }
+
   form?.addEventListener('submit', (e) => {
     e.preventDefault();
     const text = (body?.value || '').trim();
@@ -141,21 +198,29 @@
       if (sendBtn) sendBtn.disabled = false;
 
       if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText || '{}');
+          if (data.message) {
+            appendMessage({
+              id: data.message.id,
+              body: data.message.body,
+              is_mine: true,
+              is_staff: false,
+              time: data.message.created_at || data.message.time || '',
+              attachments: [],
+            });
+          }
+        } catch (_) {}
+        if (body) body.value = '';
+        clearFile();
         if (stateText) stateText.textContent = 'ارسال شد';
-        if (progressBar) progressBar.style.width = '100%';
-        // refresh to show new message + attachment
-        window.location.reload();
         return;
       }
-
-      // fallback full submit
-      if (stateText) stateText.textContent = 'خطا — تلاش مجدد...';
       form.submit();
     };
 
     xhr.onerror = () => {
       if (sendBtn) sendBtn.disabled = false;
-      if (stateText) stateText.textContent = 'خطای شبکه';
       form.submit();
     };
 

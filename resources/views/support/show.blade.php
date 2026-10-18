@@ -1,10 +1,14 @@
 @extends('layouts.app')
 
 @section('content')
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018detail">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018detail">
+@php $lastMsgId = $ticket->messages->last()?->id ?? 0; @endphp
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018live">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018live">
 
-<div class="tk-page" dir="rtl" id="ticketDetailPage">
+<div class="tk-page" dir="rtl" id="ticketDetailPage"
+     data-poll-url="{{ route('support.messages.poll', $ticket) }}"
+     data-last-id="{{ $lastMsgId }}"
+     data-ticket-status="{{ $ticket->status }}">
     <nav class="tk-breadcrumb">
         <div class="tk-breadcrumb-inner">
             <a href="{{ route('support.show', $ticket) }}" class="tk-crumb-strong">
@@ -29,7 +33,7 @@
                         <span class="tk-vsep"></span>
                         <p>زمان ایجاد : <span>{{ $ticket->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</span></p>
                         <span class="tk-vsep"></span>
-                        <p class="tk-status"><span class="tk-dot tk-dot-{{ $ticket->statusColor() }}"></span>{{ $ticket->statusLabel() }}</p>
+                        <p class="tk-status" id="ticketStatusBadge"><span class="tk-dot tk-dot-{{ $ticket->statusColor() }}"></span><span id="ticketStatusLabel">{{ $ticket->statusLabel() }}</span></p>
                     </div>
                 </hgroup>
                 @if($ticket->status !== 'closed')
@@ -40,15 +44,19 @@
             <div class="tk-divider"></div>
 
             <div class="tk-thread" id="chatMessages">
+                @php $prevDay = null; @endphp
                 @foreach($ticket->messages as $m)
-                    @php $isMine = $m->user_id === auth()->id() && ! $m->isFromStaff(); @endphp
-                    <div class="tk-bubble-row {{ $isMine ? 'is-user' : 'is-staff' }}">
+                    @php
+                        $day = $m->created_at->timezone(config('app.timezone'))->format('Y/m/d');
+                        $isMine = $m->user_id === auth()->id() && ! $m->isFromStaff();
+                    @endphp
+                    @if($day !== $prevDay)
+                        <div class="tk-day-sep"><span>{{ $day }}</span></div>
+                        @php $prevDay = $day; @endphp
+                    @endif
+                    <div class="tk-bubble-row {{ $isMine ? 'is-user' : 'is-staff' }}" data-msg-id="{{ $m->id }}">
                         <div class="tk-bubble-avatar {{ $isMine ? 'tk-av-user' : 'tk-av-staff' }}">
-                            @if($isMine)
-                                <i class="fa-solid fa-user"></i>
-                            @else
-                                <i class="fa-solid fa-headset"></i>
-                            @endif
+                            <i class="fa-solid {{ $isMine ? 'fa-user' : 'fa-headset' }}"></i>
                         </div>
                         <div class="tk-bubble-col">
                             <div class="tk-bubble {{ $isMine ? 'tk-bubble-user' : 'tk-bubble-staff' }}">
@@ -80,17 +88,13 @@
                             <textarea name="body" id="composerBody" rows="4" required maxlength="5000" placeholder="متن پاسخ شما ..." dir="auto"></textarea>
                             <input type="file" name="attachment" id="composerFile" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.zip,.doc,.docx" hidden>
                             <div class="tk-reply-actions">
-                                <button type="button" class="tk-icon-btn" id="pickAttachBtn" title="پیوست فایل">
-                                    <i class="fa-solid fa-paperclip"></i>
-                                </button>
-                                <button type="submit" class="tk-send-btn" id="sendBtn" title="ارسال">
-                                    <i class="fa-solid fa-paper-plane"></i>
-                                </button>
+                                <button type="button" class="tk-icon-btn" id="pickAttachBtn" title="پیوست فایل"><i class="fa-solid fa-paperclip"></i></button>
+                                <button type="submit" class="tk-send-btn" id="sendBtn" title="ارسال"><i class="fa-solid fa-paper-plane"></i></button>
                             </div>
                         </div>
                         <div class="tk-upload-status" id="uploadStatus" hidden>
                             <div class="tk-upload-row">
-                                <i class="fa-solid fa-file" id="uploadIcon"></i>
+                                <i class="fa-solid fa-file"></i>
                                 <div class="tk-upload-meta">
                                     <strong id="uploadFileName">—</strong>
                                     <span id="uploadStateText">آماده ارسال</span>
@@ -101,14 +105,13 @@
                                 <div class="tk-progress-bar" id="uploadProgressBar"></div>
                             </div>
                         </div>
-                        <p class="tk-drop-hint" id="dropHint">فایل را بکشید و اینجا رها کنید، یا روی گیره کلیک کنید</p>
+                        <p class="tk-drop-hint">فایل را بکشید و اینجا رها کنید، یا روی گیره کلیک کنید · Ctrl+Enter برای ارسال</p>
                     </form>
                 </div>
             @else
                 <div class="sd-closed">این تیکت بسته شده است. برای موضوع جدید، تیکت تازه ثبت کنید.</div>
             @endif
 
-            {{-- Drag overlay --}}
             <div class="tk-drop-overlay" id="dropOverlay" hidden>
                 <div class="tk-drop-overlay-card">
                     <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -142,6 +145,6 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261018detail"></script>
+<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261018live"></script>
 @endpush
 @endsection
