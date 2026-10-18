@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StoreLibraryItem;
+use App\Models\StoreProduct;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\CapabilityService;
@@ -9,6 +11,7 @@ use App\Services\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class SupportController extends Controller
 {
@@ -52,7 +55,40 @@ class SupportController extends Controller
     {
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
 
-        return view('support.create');
+        $purchasedProducts = collect();
+        if (Schema::hasTable('store_library_items')) {
+            $purchasedProducts = StoreLibraryItem::query()
+                ->where('user_id', auth()->id())
+                ->whereNull('revoked_at')
+                ->with('product:id,title,slug')
+                ->latest('granted_at')
+                ->get()
+                ->filter(fn ($item) => $item->product)
+                ->unique('product_id')
+                ->take(5)
+                ->values()
+                ->map(fn ($item) => $item->product);
+        }
+
+        $catalogProducts = collect();
+        if (Schema::hasTable('store_products')) {
+            $catalogProducts = StoreProduct::query()
+                ->published()
+                ->orderBy('title')
+                ->limit(80)
+                ->get(['id', 'title', 'slug']);
+        }
+
+        $services = [
+            'typing' => 'تایپ آنلاین',
+            'convert' => 'تبدیل فایل',
+            'edit' => 'ویرایش هوشمند',
+            'ocr' => 'OCR / استخراج متن',
+            'voice' => 'ورود صوتی',
+            'other' => 'سایر خدمات',
+        ];
+
+        return view('support.create', compact('purchasedProducts', 'catalogProducts', 'services'));
     }
 
     /** جزئیات گفتگوی یک تیکت */
@@ -73,19 +109,52 @@ class SupportController extends Controller
         $data = $request->validate([
             'subject' => 'required|string|max:160',
             'body' => 'required|string|max:5000',
-            'department' => 'nullable|string|in:support,sales,billing,complaint',
-            'priority' => 'nullable|string|in:low,normal,high',
+            'department' => 'required|string|in:support,sales,billing,complaint',
+            'priority' => 'required|string|in:low,normal,high',
+            'topic_area' => 'required|string|in:services,store',
+            'related_service' => [
+                Rule::requiredIf(fn () => $request->input('topic_area') === 'services'),
+                'nullable',
+                'string',
+                'max:80',
+            ],
+            'related_product_id' => [
+                Rule::requiredIf(fn () => $request->input('topic_area') === 'store'),
+                'nullable',
+                'integer',
+                Rule::exists('store_products', 'id'),
+            ],
+            'attachment' => 'nullable|file|max:5120|mimes:txt,jpg,jpeg,pdf,png',
+        ], [
+            'department.required' => 'دپارتمان را انتخاب کنید.',
+            'priority.required' => 'اولویت را انتخاب کنید.',
+            'topic_area.required' => 'حوزه موضوع (خدمات یا فروشگاه) را انتخاب کنید.',
+            'related_service.required' => 'نوع خدمت را انتخاب کنید.',
+            'related_product_id.required' => 'یک محصول مرتبط انتخاب کنید.',
+            'subject.required' => 'عنوان تیکت را وارد کنید.',
+            'body.required' => 'شرح پیام را بنویسید.',
         ]);
 
         $payload = [
             'user_id' => auth()->id(),
             'subject' => $data['subject'],
             'status' => 'open',
-            'priority' => $data['priority'] ?? 'normal',
+            'priority' => $data['priority'],
+            'department' => $data['department'],
         ];
 
-        if (Schema::hasColumn('tickets', 'department')) {
-            $payload['department'] = $data['department'] ?? 'support';
+        if (Schema::hasColumn('tickets', 'topic_area')) {
+            $payload['topic_area'] = $data['topic_area'];
+        }
+        if (Schema::hasColumn('tickets', 'related_service')) {
+            $payload['related_service'] = $data['topic_area'] === 'services'
+                ? ($data['related_service'] ?? null)
+                : null;
+        }
+        if (Schema::hasColumn('tickets', 'related_product_id')) {
+            $payload['related_product_id'] = $data['topic_area'] === 'store'
+                ? ($data['related_product_id'] ?? null)
+                : null;
         }
         if (Schema::hasColumn('tickets', 'source')) {
             $payload['source'] = 'dashboard';
@@ -96,12 +165,43 @@ class SupportController extends Controller
 
         $ticket = Ticket::create($payload);
 
+        $body = $data['body'];
+        // متادیتا در ابتدای پیام برای پشتیبانی
+        $metaLines = [];
+        if (($data['topic_area'] ?? '') === 'services' && ! empty($data['related_service'])) {
+            $labels = [
+                'typing' => 'تایپ آنلاین',
+                'convert' => 'تبدیل فایل',
+                'edit' => 'ویرایش هوشمند',
+                'ocr' => 'OCR / استخراج متن',
+                'voice' => 'ورود صوتی',
+                'other' => 'سایر خدمات',
+            ];
+            $metaLines[] = 'حوزه: خدمات — '.($labels[$data['related_service']] ?? $data['related_service']);
+        }
+        if (($data['topic_area'] ?? '') === 'store' && ! empty($data['related_product_id'])) {
+            $product = StoreProduct::find($data['related_product_id']);
+            $metaLines[] = 'حوزه: فروشگاه — محصول: '.($product?->title ?? ('#'.$data['related_product_id']));
+        }
+        if ($metaLines) {
+            $body = implode("\n", $metaLines)."\n\n".$body;
+        }
+
         $msgPayload = [
             'user_id' => auth()->id(),
-            'body' => $data['body'],
+            'body' => $body,
         ];
         if (Schema::hasColumn('ticket_messages', 'is_staff')) {
             $msgPayload['is_staff'] = false;
+        }
+
+        if ($request->hasFile('attachment') && Schema::hasColumn('ticket_messages', 'attachments')) {
+            $path = $request->file('attachment')->store('ticket-attachments/'.$ticket->id, 'public');
+            $msgPayload['attachments'] = [[
+                'path' => $path,
+                'name' => $request->file('attachment')->getClientOriginalName(),
+                'size' => $request->file('attachment')->getSize(),
+            ]];
         }
 
         $ticket->messages()->create($msgPayload);
