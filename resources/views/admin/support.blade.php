@@ -2,53 +2,85 @@
 
 @section('content')
 @php
-    $active = $active ?? ($tickets->getCollection()->first());
-    $stats = $stats ?? ['open'=>0,'answered'=>0,'pending'=>0,'closed'=>0];
+    $active = $active ?? null;
+    $stats = $stats ?? ['needs_reply'=>0,'open'=>0,'user_replied'=>0,'answered'=>0,'pending'=>0,'closed'=>0,'high'=>0];
+    $canned = $canned ?? [];
+    $filterQs = array_filter([
+        'q' => request('q'),
+        'status' => request('status'),
+        'department' => request('department'),
+        'priority' => request('priority'),
+    ], fn($v) => $v !== null && $v !== '');
 @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018pro2">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018pro2">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018adm">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018adm">
 
 <div class="sd-shell" dir="rtl">
     <aside class="sd-aside">
         <div class="sd-aside-head">
             <div>
                 <h1>میز پشتیبانی</h1>
-                <p>پاسخ حرفه‌ای به تیکت کاربران و مهمان‌ها</p>
+                <p>مدیریت و پاسخ حرفه‌ای به تیکت‌ها</p>
             </div>
         </div>
 
-        <div class="sd-admin-stats">
-            <div class="sd-admin-stat"><b>{{ $stats['open'] }}</b><span>نیازمند پاسخ</span></div>
-            <div class="sd-admin-stat"><b>{{ $stats['answered'] }}</b><span>پاسخ‌داده‌شده</span></div>
-            <div class="sd-admin-stat"><b>{{ $stats['pending'] }}</b><span>در بررسی</span></div>
-            <div class="sd-admin-stat"><b>{{ $stats['closed'] }}</b><span>بسته</span></div>
+        <div class="sd-admin-stats" style="grid-template-columns:repeat(3,1fr)">
+            <div class="sd-admin-stat"><b>{{ $stats['needs_reply'] ?? 0 }}</b><span>نیازمند پاسخ</span></div>
+            <div class="sd-admin-stat"><b>{{ $stats['high'] ?? 0 }}</b><span>اولویت بالا</span></div>
+            <div class="sd-admin-stat"><b>{{ $stats['pending'] ?? 0 }}</b><span>در بررسی</span></div>
+            <div class="sd-admin-stat"><b>{{ $stats['user_replied'] ?? 0 }}</b><span>پاسخ کاربر</span></div>
+            <div class="sd-admin-stat"><b>{{ $stats['answered'] ?? 0 }}</b><span>پاسخ‌شده</span></div>
+            <div class="sd-admin-stat"><b>{{ $stats['closed'] ?? 0 }}</b><span>بسته</span></div>
         </div>
 
         <div class="sd-search">
             <i class="fa-solid fa-magnifying-glass"></i>
             <form method="get" action="{{ route('admin.support.management') }}" style="width:100%">
-                @if(request('status'))<input type="hidden" name="status" value="{{ request('status') }}">@endif
-                <input type="search" name="q" value="{{ request('q') }}" placeholder="جستجو موضوع، ایمیل، شماره..." autocomplete="off" onchange="this.form.submit()">
+                @foreach(request()->only(['status','department','priority']) as $k=>$v)
+                    @if($v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endif
+                @endforeach
+                <input type="search" name="q" value="{{ request('q') }}" placeholder="جستجو موضوع، ایمیل، شماره..." autocomplete="off">
             </form>
         </div>
 
         <div class="sd-filters">
-            @php $qs = array_filter(['q'=>request('q')]); @endphp
-            <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $qs) }}" style="text-decoration:none">همه</a>
-            <a class="sd-chip {{ request('status')==='open'?'is-on':'' }}" href="{{ route('admin.support.management', $qs+['status'=>'open']) }}" style="text-decoration:none">باز</a>
-            <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $qs+['status'=>'user_replied']) }}" style="text-decoration:none">پاسخ کاربر</a>
-            <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $qs+['status'=>'answered']) }}" style="text-decoration:none">پاسخ‌شده</a>
-            <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $qs+['status'=>'pending']) }}" style="text-decoration:none">بررسی</a>
-            <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $qs+['status'=>'closed']) }}" style="text-decoration:none">بسته</a>
+            @php
+                $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority')]);
+            @endphp
+            <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $base) }}">همه</a>
+            <a class="sd-chip {{ request('status')==='needs_reply'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'needs_reply']) }}">نیازمند پاسخ</a>
+            <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'user_replied']) }}">پاسخ کاربر</a>
+            <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">بررسی</a>
+            <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'answered']) }}">پاسخ‌شده</a>
+            <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
+        </div>
+
+        <div class="sd-filters" style="padding-top:0">
+            @php $base2 = array_filter(['q'=>request('q'),'status'=>request('status'),'priority'=>request('priority')]); @endphp
+            <a class="sd-chip {{ !request('department')?'is-on':'' }}" href="{{ route('admin.support.management', $base2) }}">همه دپارتمان</a>
+            <a class="sd-chip {{ request('department')==='support'?'is-on':'' }}" href="{{ route('admin.support.management', $base2+['department'=>'support']) }}">پشتیبانی</a>
+            <a class="sd-chip {{ request('department')==='sales'?'is-on':'' }}" href="{{ route('admin.support.management', $base2+['department'=>'sales']) }}">فروش</a>
+            <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', $base2+['department'=>'billing']) }}">مالی</a>
+            <a class="sd-chip {{ request('department')==='complaint'?'is-on':'' }}" href="{{ route('admin.support.management', $base2+['department'=>'complaint']) }}">شکایات</a>
+        </div>
+
+        <div class="sd-filters" style="padding-top:0">
+            @php $base3 = array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department')]); @endphp
+            <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', $base3+['priority'=>'high']) }}">اولویت بالا</a>
+            <a class="sd-chip {{ request('priority')==='normal'?'is-on':'' }}" href="{{ route('admin.support.management', $base3+['priority'=>'normal']) }}">متوسط</a>
+            <a class="sd-chip {{ request('priority')==='low'?'is-on':'' }}" href="{{ route('admin.support.management', $base3+['priority'=>'low']) }}">کم</a>
         </div>
 
         <div class="sd-list" id="ticketList">
             @forelse($tickets as $t)
-                @php $last = $t->messages->last(); @endphp
-                <a href="{{ route('admin.support.management', array_filter(['ticket'=>$t->id,'status'=>request('status'),'q'=>request('q')])) }}"
+                @php $last = $t->messages->filter(fn($m)=>!$m->is_internal)->last(); @endphp
+                <a href="{{ route('admin.support.management', $filterQs + ['ticket' => $t->id]) }}"
                    class="sd-item {{ $active && $active->id === $t->id ? 'is-active' : '' }}">
                     <div class="sd-item-top">
-                        <strong>{{ \Illuminate\Support\Str::limit($t->subject, 42) }}</strong>
+                        <strong>
+                            @if($t->priority === 'high')<i class="fa-solid fa-flag" style="color:#dc2626;font-size:.7rem"></i> @endif
+                            {{ \Illuminate\Support\Str::limit($t->subject, 40) }}
+                        </strong>
                         <span class="sd-badge sd-badge-{{ $t->statusColor() }}">{{ $t->statusLabel() }}</span>
                     </div>
                     <div class="sd-item-meta">
@@ -64,12 +96,12 @@
             @empty
                 <div class="sd-empty">
                     <i class="fa-regular fa-inbox"></i>
-                    <p>تیکتی در صف پاسخ نیست</p>
+                    <p>تیکتی با این فیلتر یافت نشد</p>
                 </div>
             @endforelse
         </div>
 
-        @if($tickets->hasPages())
+        @if(method_exists($tickets, 'hasPages') && $tickets->hasPages())
             <div style="padding:12px 14px;border-top:1px solid var(--sd-line)">{{ $tickets->withQueryString()->links() }}</div>
         @endif
     </aside>
@@ -92,6 +124,18 @@
                         </div>
                     </div>
                 </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <form method="post" action="{{ route('admin.tickets.status', $active) }}">
+                        @csrf
+                        <input type="hidden" name="status" value="pending">
+                        <button type="submit" class="sd-btn" style="background:#fef3c7;color:#92400e;font-size:.78rem">در بررسی</button>
+                    </form>
+                    <form method="post" action="{{ route('admin.tickets.status', $active) }}">
+                        @csrf
+                        <input type="hidden" name="status" value="closed">
+                        <button type="submit" class="sd-btn" style="background:#fef2f2;color:#b91c1c;font-size:.78rem" onclick="return confirm('بستن تیکت؟')">بستن</button>
+                    </form>
+                </div>
             </header>
 
             @if($active->topicLabel() || ($active->relatedProduct ?? null) || $active->serviceLabel())
@@ -104,13 +148,19 @@
 
             <div class="sd-messages" id="chatMessages">
                 @foreach($active->messages as $m)
-                    @php $isStaff = $m->isFromStaff(); @endphp
-                    <div class="sd-msg {{ $isStaff ? 'sd-msg-user' : 'sd-msg-staff' }}">
+                    @php
+                        $isStaff = $m->isFromStaff();
+                        $isInternal = (bool) $m->is_internal;
+                    @endphp
+                    <div class="sd-msg {{ $isStaff ? 'sd-msg-user' : 'sd-msg-staff' }}" style="{{ $isInternal ? 'opacity:.9' : '' }}">
                         @unless($isStaff)
                             <div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-user"></i></div>
                         @endunless
                         <div class="sd-msg-col">
-                            <div class="sd-bubble">
+                            <div class="sd-bubble" style="{{ $isInternal ? 'border:1px dashed #f59e0b;background:#fffbeb;color:#78350f' : '' }}">
+                                @if($isInternal)
+                                    <div style="font-size:.72rem;font-weight:800;margin-bottom:4px;opacity:.8">یادداشت داخلی</div>
+                                @endif
                                 <pre>{{ $m->body }}</pre>
                                 @if(!empty($m->attachments))
                                     <div class="tk-attach-list">
@@ -122,25 +172,50 @@
                                     </div>
                                 @endif
                             </div>
-                            <time class="sd-msg-time">{{ $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }} · {{ $isStaff ? 'پشتیبانی' : 'کاربر' }}</time>
+                            <time class="sd-msg-time">
+                                {{ $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                · {{ $isInternal ? 'داخلی' : ($isStaff ? 'پشتیبانی' : 'کاربر') }}
+                            </time>
                         </div>
                     </div>
                 @endforeach
             </div>
 
-            <form class="sd-composer" method="post" action="{{ route('admin.tickets.reply', $active) }}">
+            @if(count($canned))
+            <div style="padding:8px 14px 0;display:flex;flex-wrap:wrap;gap:6px;background:var(--sd-card);border-top:1px solid var(--sd-line)">
+                <span style="font-size:.75rem;color:var(--sd-muted);align-self:center">پاسخ آماده:</span>
+                @foreach($canned as $i => $text)
+                    <button type="button" class="sd-chip canned-btn" data-text="{{ e($text) }}" style="font-size:.72rem">{{ \Illuminate\Support\Str::limit($text, 28) }}</button>
+                @endforeach
+            </div>
+            @endif
+
+            <form class="sd-composer" method="post" action="{{ route('admin.tickets.reply', $active) }}" enctype="multipart/form-data" id="adminReplyForm">
                 @csrf
+                @foreach($filterQs as $k=>$v)
+                    {{-- keep filters after redirect via query on controller --}}
+                @endforeach
                 <div class="sd-composer-inner" style="flex-wrap:wrap">
                     <div class="sd-input-wrap" style="flex:1 1 100%">
-                        <textarea name="body" rows="2" required maxlength="5000" placeholder="پاسخ حرفه‌ای، شفاف و راه‌حل‌محور بنویسید..." dir="auto"></textarea>
+                        <textarea name="body" id="adminReplyBody" rows="3" required maxlength="8000" placeholder="پاسخ حرفه‌ای، شفاف و راه‌حل‌محور بنویسید..." dir="auto"></textarea>
                     </div>
-                    <div style="display:flex;width:100%;gap:8px;align-items:center;justify-content:space-between;margin-top:4px">
-                        <select name="status" style="border:1px solid var(--sd-line);border-radius:11px;padding:8px 12px;font:inherit;font-size:0.86rem">
-                            <option value="answered">پاسخ داده‌شده</option>
-                            <option value="pending">در حال بررسی</option>
-                            <option value="open">باز نگه دار</option>
-                            <option value="closed">بستن تیکت</option>
-                        </select>
+                    <div style="display:flex;width:100%;gap:8px;align-items:center;justify-content:space-between;margin-top:6px;flex-wrap:wrap">
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                            <select name="status" style="border:1px solid var(--sd-line);border-radius:11px;padding:8px 12px;font:inherit;font-size:0.86rem">
+                                <option value="answered">پاسخ داده‌شده</option>
+                                <option value="pending">در حال بررسی</option>
+                                <option value="open">باز نگه دار</option>
+                                <option value="closed">بستن تیکت</option>
+                            </select>
+                            <label style="display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--sd-muted);cursor:pointer">
+                                <input type="checkbox" name="is_internal" value="1"> یادداشت داخلی
+                            </label>
+                            <label class="sd-tool" title="پیوست" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:.82rem;color:var(--sd-blue)">
+                                <i class="fa-solid fa-paperclip"></i>
+                                <span id="adminFileLabel">پیوست</span>
+                                <input type="file" name="attachment" id="adminAttachment" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.zip,.doc,.docx" hidden>
+                            </label>
+                        </div>
                         <button type="submit" class="sd-btn sd-btn-primary">ارسال پاسخ</button>
                     </div>
                 </div>
@@ -150,7 +225,7 @@
                 <div class="sd-placeholder-card">
                     <div class="sd-avatar sd-avatar-lg"><i class="fa-solid fa-inbox"></i></div>
                     <h2>میز پشتیبانی فراست</h2>
-                    <p>از فهرست یک تیکت را انتخاب کنید و پاسخ دقیق ارسال کنید.</p>
+                    <p>از فهرست یک تیکت را انتخاب کنید. صف بر اساس «پاسخ کاربر» و اولویت بالا مرتب شده است.</p>
                 </div>
             </div>
         @endif
@@ -160,4 +235,32 @@
 @if(session('status'))
     <div class="sd-toast">{{ session('status') }}</div>
 @endif
+
+@push('scripts')
+<script>
+(() => {
+  const box = document.getElementById('chatMessages');
+  if (box) box.scrollTop = box.scrollHeight;
+
+  document.querySelectorAll('.canned-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ta = document.getElementById('adminReplyBody');
+      if (!ta) return;
+      const t = btn.getAttribute('data-text') || '';
+      ta.value = (ta.value ? ta.value.trim() + '\n\n' : '') + t;
+      ta.focus();
+    });
+  });
+
+  const file = document.getElementById('adminAttachment');
+  const label = document.getElementById('adminFileLabel');
+  file?.addEventListener('change', () => {
+    if (file.files?.[0] && label) label.textContent = file.files[0].name;
+  });
+
+  const toast = document.querySelector('.sd-toast');
+  if (toast) setTimeout(() => toast.remove(), 4000);
+})();
+</script>
+@endpush
 @endsection

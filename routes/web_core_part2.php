@@ -127,10 +127,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/providers/groq', [ProviderAdminController::class, 'updateGroq'])->name('providers.groq.update');
     Route::get('/providers/groq/test', [ProviderAdminController::class, 'testGroq'])->name('providers.groq.test');
 
+    Route::get('/support-management', [SupportController::class, 'adminIndex'])->name('support.management');
     Route::post('/tickets/{ticket}/reply', [SupportController::class, 'adminReply'])->name('tickets.reply');
+    Route::post('/tickets/{ticket}/status', [SupportController::class, 'adminStatus'])->name('tickets.status');
     Route::get('/plans', [PlatformCompletionController::class, 'adminPlans'])->name('plans');
     Route::post('/plans', [PlatformCompletionController::class, 'savePlan'])->name('plans.save');
-    Route::get('/support-management', [PlatformCompletionController::class, 'adminSupport'])->name('support.management');
     Route::get('/cms', [PlatformCompletionController::class, "cms"])->name('cms');
     Route::get('/teams/{team}/members', [PlatformCompletionController::class, "teamMembers"])->name('teams.members');
     Route::post('/teams/{team}/members', [PlatformCompletionController::class, "addTeamMember"])->name('teams.members.add');
