@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018list">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018list">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018pro2">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018pro2">
 
 <div class="tk-page" dir="rtl">
     <nav class="tk-breadcrumb">
@@ -17,7 +17,7 @@
         </div>
     </nav>
 
-    <main class="tk-main">
+    <main class="tk-main tk-main-wide">
         <article class="tk-card tk-chat-card">
             <div class="tk-card-head">
                 <hgroup>
@@ -25,19 +25,35 @@
                     <div class="tk-meta-line">
                         <span class="tk-status"><span class="tk-dot tk-dot-{{ $ticket->statusColor() }}"></span>{{ $ticket->statusLabel() }}</span>
                         <span>شماره {{ $ticket->id }}</span>
-                        <span>{{ $ticket->departmentLabel() }}</span>
                     </div>
                 </hgroup>
                 <div class="tk-head-actions">
                     <a href="{{ route('support') }}" class="tk-btn-ghost">بازگشت به لیست</a>
                     @if($ticket->status !== 'closed')
-                        <form method="post" action="{{ route('support.close', $ticket) }}" onsubmit="return confirm('بستن تیکت؟')">
+                        <form method="post" action="{{ route('support.close', $ticket) }}" onsubmit="return confirm('آیا از بستن این تیکت مطمئن هستید؟')">
                             @csrf
                             <button type="submit" class="tk-btn-danger">بستن تیکت</button>
                         </form>
                     @endif
                 </div>
             </div>
+
+            <div class="tk-meta-grid">
+                <div class="tk-meta-item"><small>دپارتمان</small><strong>{{ $ticket->departmentLabel() }}</strong></div>
+                <div class="tk-meta-item"><small>اولویت</small><strong>{{ $ticket->priorityLabel() }}</strong></div>
+                <div class="tk-meta-item"><small>تاریخ ایجاد</small><strong>{{ $ticket->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</strong></div>
+                <div class="tk-meta-item"><small>آخرین به‌روزرسانی</small><strong>{{ optional($ticket->last_reply_at ?? $ticket->updated_at)->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</strong></div>
+                @if($ticket->topicLabel())
+                    <div class="tk-meta-item"><small>حوزه</small><strong>{{ $ticket->topicLabel() }}</strong></div>
+                @endif
+                @if($ticket->topic_area === 'services' && $ticket->serviceLabel())
+                    <div class="tk-meta-item"><small>خدمت</small><strong>{{ $ticket->serviceLabel() }}</strong></div>
+                @endif
+                @if($ticket->topic_area === 'store' && $ticket->relatedProduct)
+                    <div class="tk-meta-item"><small>محصول</small><strong>{{ $ticket->relatedProduct->title }}</strong></div>
+                @endif
+            </div>
+
             <div class="tk-divider"></div>
 
             <div class="sd-messages tk-messages" id="chatMessages">
@@ -48,8 +64,23 @@
                             <div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-headset"></i></div>
                         @endunless
                         <div class="sd-msg-col">
-                            <div class="sd-bubble"><pre>{{ $m->body }}</pre></div>
-                            <time class="sd-msg-time">{{ $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</time>
+                            <div class="sd-bubble">
+                                <pre>{{ $m->body }}</pre>
+                                @if(!empty($m->attachments))
+                                    <div class="tk-attach-list">
+                                        @foreach((array) $m->attachments as $att)
+                                            <a href="{{ asset('storage/'.($att['path'] ?? '')) }}" target="_blank" rel="noopener">
+                                                <i class="fa-solid fa-paperclip"></i>
+                                                {{ $att['name'] ?? 'پیوست' }}
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                            <time class="sd-msg-time">
+                                {{ $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}
+                                · {{ $isMine ? 'شما' : 'پشتیبانی' }}
+                            </time>
                         </div>
                     </div>
                 @endforeach
@@ -75,19 +106,23 @@
                     </div>
                     <span class="sd-file-chip" id="composerFileName" hidden></span>
                     <div class="sd-emoji-panel" id="emojiPanel" hidden>
-                        @foreach(['😀','😁','😂','😊','😍','🤔','👍','🙏','🔥','✨','✅','❌','❤️','🎉','💡','📎'] as $e)
+                        @foreach(['😀','😁','😂','😊','😍','🤔','👍','🙏','🔥','✨','✅','❌','❤️','🎉','💡','📎','😅','😢','🤝','👏'] as $e)
                             <button type="button" data-emoji="{{ $e }}">{{ $e }}</button>
                         @endforeach
                     </div>
                 </form>
             @else
-                <div class="sd-closed">این تیکت بسته شده است.</div>
+                <div class="sd-closed">این تیکت بسته شده است. برای موضوع جدید، تیکت تازه ثبت کنید.</div>
             @endif
         </article>
     </main>
 </div>
 
+@if(session('status'))
+    <div class="sd-toast">{{ session('status') }}</div>
+@endif
+
 @push('scripts')
-<script src="{{ asset('js/support-messenger.js') }}?v=20261018pro"></script>
+<script src="{{ asset('js/support-messenger.js') }}?v=20261018pro2"></script>
 @endpush
 @endsection

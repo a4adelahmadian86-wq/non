@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018list">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018list">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018pro2">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018pro2">
 
 <div class="tk-page" dir="rtl">
     <nav class="tk-breadcrumb">
@@ -15,7 +15,7 @@
         </div>
     </nav>
 
-    <main class="tk-main">
+    <main class="tk-main tk-main-wide">
         <article class="tk-card">
             <div class="tk-card-head">
                 <hgroup>
@@ -31,14 +31,14 @@
             <div class="tk-divider"></div>
 
             <div class="tk-toolbar">
-                <form method="get" action="{{ route('support') }}" class="tk-search" id="ticketSearchForm">
+                <form method="get" action="{{ route('support') }}" class="tk-search">
                     @if(request('status'))<input type="hidden" name="status" value="{{ request('status') }}">@endif
                     @if(request('per_page'))<input type="hidden" name="per_page" value="{{ request('per_page') }}">@endif
                     <input type="text" name="q" id="record-search" value="{{ request('q') }}" placeholder="جستجو" autocomplete="off">
                     <button type="submit" class="tk-search-btn" aria-label="جستجو"><i class="fa-solid fa-magnifying-glass"></i></button>
                 </form>
 
-                <div class="tk-filter" id="statusFilterWrap">
+                <div class="tk-filter">
                     <button type="button" class="tk-filter-btn" id="statusFilterBtn">
                         <i class="fa-solid fa-sliders"></i>
                         <span>بر اساس :
@@ -48,6 +48,7 @@
                                     'open' => 'باز',
                                     'closed' => 'بسته شده',
                                     'answered' => 'پاسخ داده شده',
+                                    'user_replied' => 'پاسخ کاربر',
                                     'pending' => 'در حال بررسی',
                                     default => 'بدون فیلتر',
                                 };
@@ -56,11 +57,13 @@
                         </span>
                     </button>
                     <div class="tk-filter-menu" id="statusFilterMenu" hidden>
-                        <a href="{{ route('support', array_filter(['q' => request('q'), 'per_page' => request('per_page')])) }}" class="{{ !request('status') || request('status')==='all' ? 'is-active' : '' }}">بدون فیلتر</a>
-                        <a href="{{ route('support', array_filter(['status' => 'open', 'q' => request('q'), 'per_page' => request('per_page')])) }}" class="{{ request('status')==='open' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-open"></span>باز</a>
-                        <a href="{{ route('support', array_filter(['status' => 'closed', 'q' => request('q'), 'per_page' => request('per_page')])) }}" class="{{ request('status')==='closed' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-closed"></span>بسته شده</a>
-                        <a href="{{ route('support', array_filter(['status' => 'answered', 'q' => request('q'), 'per_page' => request('per_page')])) }}" class="{{ request('status')==='answered' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-answered"></span>پاسخ داده شده</a>
-                        <a href="{{ route('support', array_filter(['status' => 'pending', 'q' => request('q'), 'per_page' => request('per_page')])) }}" class="{{ request('status')==='pending' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-pending"></span>در حال بررسی</a>
+                        @php $base = array_filter(['q' => request('q'), 'per_page' => request('per_page')]); @endphp
+                        <a href="{{ route('support', $base) }}" class="{{ !request('status') || request('status')==='all' ? 'is-active' : '' }}">بدون فیلتر</a>
+                        <a href="{{ route('support', $base + ['status' => 'open']) }}" class="{{ request('status')==='open' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-open"></span>باز</a>
+                        <a href="{{ route('support', $base + ['status' => 'answered']) }}" class="{{ request('status')==='answered' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-answered"></span>پاسخ داده شده</a>
+                        <a href="{{ route('support', $base + ['status' => 'user_replied']) }}" class="{{ request('status')==='user_replied' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-user"></span>پاسخ کاربر</a>
+                        <a href="{{ route('support', $base + ['status' => 'pending']) }}" class="{{ request('status')==='pending' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-pending"></span>در حال بررسی</a>
+                        <a href="{{ route('support', $base + ['status' => 'closed']) }}" class="{{ request('status')==='closed' ? 'is-active' : '' }}"><span class="tk-dot tk-dot-closed"></span>بسته شده</a>
                     </div>
                 </div>
             </div>
@@ -72,7 +75,7 @@
                 </div>
             </div>
 
-            <div class="tk-table-wrap" id="tableContainer">
+            <div class="tk-table-wrap">
                 <table class="tk-table">
                     <thead>
                         <tr>
@@ -100,13 +103,14 @@
                                     </span>
                                 </td>
                                 <td><a class="tk-row-link" href="{{ route('support.show', $t) }}"></a><span>{{ optional($t->last_reply_at ?? $t->updated_at)->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</span></td>
-                                <td>
-                                    <a class="tk-btn-ghost" href="{{ route('support.show', $t) }}">مشاهده</a>
-                                </td>
+                                <td><a class="tk-btn-ghost" href="{{ route('support.show', $t) }}">مشاهده</a></td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="tk-empty-row">هنوز تیکتی ثبت نشده است. برای شروع، «ثبت تیکت جدید» را بزنید.</td>
+                                <td colspan="7" class="tk-empty-row">
+                                    هنوز تیکتی ثبت نشده است.
+                                    <a href="{{ route('support.create.form') }}" style="color:#1769ff;font-weight:700">ثبت تیکت جدید</a>
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -124,9 +128,7 @@
                         @endforeach
                     </select>
                 </form>
-                <div class="tk-pagination">
-                    {{ $tickets->withQueryString()->links() }}
-                </div>
+                <div class="tk-pagination">{{ $tickets->withQueryString()->links() }}</div>
             </div>
         </article>
     </main>
@@ -141,11 +143,7 @@
 (() => {
   const btn = document.getElementById('statusFilterBtn');
   const menu = document.getElementById('statusFilterMenu');
-  btn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!menu) return;
-    menu.hidden = !menu.hidden;
-  });
+  btn?.addEventListener('click', (e) => { e.stopPropagation(); if (menu) menu.hidden = !menu.hidden; });
   document.addEventListener('click', () => { if (menu) menu.hidden = true; });
   const toast = document.querySelector('.sd-toast');
   if (toast) setTimeout(() => toast.remove(), 4000);
