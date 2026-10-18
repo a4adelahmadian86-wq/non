@@ -14,6 +14,14 @@ return [
             ],
         ],
         [
+            'key' => 'support_desk', 'label' => 'پشتیبانی', 'icon' => 'fa-headset',
+            'items' => [
+                ['key' => 'support.my', 'label' => 'گفتگوهای من', 'icon' => 'fa-comments', 'route' => 'support', 'permission' => 'support.use', 'scope' => 'own'],
+                ['key' => 'support.new', 'label' => 'تیکت جدید', 'icon' => 'fa-plus', 'route' => 'support', 'permission' => 'support.use', 'scope' => 'own'],
+                ['key' => 'support.manage', 'label' => 'میز پشتیبانی (تیکت‌ها)', 'icon' => 'fa-inbox', 'route' => 'admin.support.management', 'admin_only' => true],
+            ],
+        ],
+        [
             'key' => 'documents', 'label' => 'اسناد و فایل‌ها', 'icon' => 'fa-folder-open',
             'items' => [
                 ['key' => 'documents.all', 'label' => 'همه اسناد', 'icon' => 'fa-files', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'global', 'admin_only' => true],
@@ -137,7 +145,7 @@ return [
             ],
         ],
         [
-            'key' => 'settings', 'label' => 'تنظیمات و پشتیبانی', 'icon' => 'fa-gear',
+            'key' => 'settings', 'label' => 'تنظیمات', 'icon' => 'fa-gear',
             'items' => [
                 ['key' => 'settings.account', 'label' => 'تنظیمات حساب', 'icon' => 'fa-user-gear', 'planned' => true],
                 ['key' => 'settings.general', 'label' => 'تنظیمات عمومی', 'icon' => 'fa-sliders', 'route' => 'admin.index', 'fragment' => '#settings', 'admin_only' => true],
@@ -146,7 +154,6 @@ return [
                 ['key' => 'settings.security', 'label' => 'امنیت', 'icon' => 'fa-lock', 'planned' => true],
                 ['key' => 'settings.finance', 'label' => 'مالی', 'icon' => 'fa-wallet', 'route' => 'admin.finance', 'admin_only' => true],
                 ['key' => 'settings.email', 'label' => 'ایمیل', 'icon' => 'fa-envelope', 'route' => 'admin.emails', 'admin_only' => true],
-                ['key' => 'settings.support', 'label' => 'پشتیبانی', 'icon' => 'fa-headset', 'route' => 'support', 'permission' => 'support.use', 'scope' => 'own'],
                 ['key' => 'settings.help', 'label' => 'راهنما', 'icon' => 'fa-circle-question', 'planned' => true],
                 ['key' => 'settings.about', 'label' => 'درباره سیستم', 'icon' => 'fa-circle-info', 'planned' => true],
             ],

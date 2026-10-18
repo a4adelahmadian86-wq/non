@@ -1,65 +1,120 @@
 @extends('layouts.app')
 
 @section('content')
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018">
-<div class="container" dir="rtl" style="padding:1.5rem;max-width:1100px;margin:0 auto">
-    <div class="page-head" style="margin-bottom:1.25rem">
-        <h1 style="margin:0;font-size:1.35rem">مدیریت پشتیبانی</h1>
-        <p style="margin:0.35rem 0 0;color:#64748b;font-size:0.9rem">پاسخ به تیکت‌های کاربران و مهمان‌ها</p>
-    </div>
+@php
+    $activeId = (int) request('ticket');
+    $active = $tickets->getCollection()->firstWhere('id', $activeId) ?? $tickets->getCollection()->first();
+@endphp
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018c">
 
-    @if(session('status'))
-        <div style="padding:0.75rem 1rem;background:#dcfce7;color:#166534;border-radius:12px;margin-bottom:1rem">{{ session('status') }}</div>
-    @endif
+<div class="support-messenger admin-desk" dir="rtl">
+    <aside class="support-sidebar">
+        <div class="support-sidebar-head">
+            <div>
+                <h1>میز پشتیبانی</h1>
+                <p>پاسخ به تیکت کاربران و مهمان‌ها</p>
+            </div>
+        </div>
 
-    <div style="display:flex;flex-direction:column;gap:1rem">
-        @forelse($tickets as $t)
-            <article style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.15rem 1.25rem;box-shadow:0 4px 16px rgba(15,23,42,0.04)">
-                <header style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;justify-content:space-between;margin-bottom:0.85rem">
-                    <div>
-                        <strong style="font-size:1rem">#{{ $t->id }} — {{ $t->subject }}</strong>
-                        <div style="font-size:0.8rem;color:#64748b;margin-top:0.25rem">
-                            {{ $t->displayName() }}
-                            @if($t->guest_email)
-                                · {{ $t->guest_email }}
-                            @endif
-                            · {{ $t->statusLabel() }}
-                            · {{ optional($t->last_reply_at ?? $t->updated_at)->diffForHumans() }}
-                        </div>
+        <div class="support-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search" id="ticketSearch" placeholder="جستجو موضوع، ایمیل، شماره..." autocomplete="off">
+        </div>
+
+        <div class="ticket-list" id="ticketList">
+            @forelse($tickets as $t)
+                <a href="{{ route('admin.support.management', ['ticket' => $t->id]) }}"
+                   class="ticket-item {{ $active && $active->id === $t->id ? 'is-active' : '' }}"
+                   data-id="{{ $t->id }}"
+                   data-subject="{{ e($t->subject.' '.$t->displayName().' '.($t->guest_email ?? '')) }}">
+                    <div class="ticket-item-top">
+                        <strong>{{ \Illuminate\Support\Str::limit($t->subject, 42) }}</strong>
+                        <span class="status-dot status-{{ $t->statusColor() }}" title="{{ $t->statusLabel() }}"></span>
                     </div>
-                    <span class="status-pill status-{{ $t->statusColor() }}">{{ $t->statusLabel() }}</span>
-                </header>
-
-                <div style="max-height:220px;overflow-y:auto;background:#f8fafc;border-radius:12px;padding:0.85rem;margin-bottom:0.85rem">
-                    @foreach($t->messages as $m)
-                        <div style="margin-bottom:0.65rem;{{ $m->isFromStaff() ? '' : 'text-align:left' }}">
-                            <div style="display:inline-block;max-width:90%;padding:0.5rem 0.75rem;border-radius:12px;font-size:0.88rem;{{ $m->isFromStaff() ? 'background:#3b5bdb;color:#fff' : 'background:#fff;border:1px solid #e2e8f0' }}">
-                                {{ $m->body }}
-                                <div style="font-size:0.68rem;opacity:0.75;margin-top:0.25rem">{{ $m->created_at->format('Y/m/d H:i') }}</div>
-                            </div>
-                        </div>
-                    @endforeach
+                    <div class="ticket-item-meta">
+                        <span>#{{ $t->id }}</span>
+                        <span>{{ $t->displayName() }}</span>
+                        <span>{{ $t->statusLabel() }}</span>
+                        <span>{{ optional($t->last_reply_at ?? $t->updated_at)->diffForHumans() }}</span>
+                    </div>
+                </a>
+            @empty
+                <div class="ticket-empty">
+                    <i class="fa-regular fa-inbox"></i>
+                    <p>تیکتی برای پاسخ وجود ندارد</p>
                 </div>
+            @endforelse
+        </div>
 
-                <form method="post" action="{{ route('admin.tickets.reply', $t->id) }}" style="display:flex;flex-direction:column;gap:0.6rem">
-                    @csrf
-                    <textarea name="body" required placeholder="پاسخ خود را بنویسید..." rows="3" style="border:1px solid #e2e8f0;border-radius:12px;padding:0.7rem 0.9rem;font-family:inherit;resize:vertical"></textarea>
-                    <div style="display:flex;gap:0.5rem;align-items:center;justify-content:flex-end">
-                        <select name="status" style="border:1px solid #e2e8f0;border-radius:10px;padding:0.45rem 0.7rem">
-                            <option value="answered">پاسخ داده‌شده</option>
-                            <option value="open">باز</option>
-                            <option value="pending">در حال بررسی</option>
-                            <option value="closed">بسته</option>
-                        </select>
-                        <button type="submit" class="btn primary">ارسال پاسخ</button>
+        @if($tickets->hasPages())
+            <div style="padding:0.75rem 1rem;border-top:1px solid var(--sm-border)">{{ $tickets->withQueryString()->links() }}</div>
+        @endif
+    </aside>
+
+    <section class="support-chat">
+        @if($active)
+            <header class="chat-header">
+                <div class="chat-header-info">
+                    <div class="avatar staff"><i class="fa-solid fa-user"></i></div>
+                    <div>
+                        <h2>{{ $active->subject }}</h2>
+                        <p>
+                            <span class="status-pill status-{{ $active->statusColor() }}">{{ $active->statusLabel() }}</span>
+                            <span>{{ $active->displayName() }}</span>
+                            @if($active->guest_email)<span>{{ $active->guest_email }}</span>@endif
+                            <span>#{{ $active->id }}</span>
+                        </p>
                     </div>
-                </form>
-            </article>
-        @empty
-            <p style="color:#64748b">تیکتی وجود ندارد.</p>
-        @endforelse
-    </div>
+                </div>
+            </header>
 
-    <div style="margin-top:1.25rem">{{ $tickets->links() }}</div>
+            <div class="chat-messages" id="chatMessages">
+                @foreach($active->messages as $m)
+                    @php $isStaff = $m->isFromStaff(); @endphp
+                    <div class="msg-row {{ $isStaff ? 'mine' : 'staff' }}">
+                        @unless($isStaff)
+                            <div class="msg-avatar"><i class="fa-solid fa-user"></i></div>
+                        @endunless
+                        <div class="msg-bubble">
+                            <div class="msg-body">{!! nl2br(e($m->body)) !!}</div>
+                            <time>{{ $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }} · {{ $isStaff ? 'پشتیبانی' : 'کاربر' }}</time>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            <form class="chat-composer admin-reply" method="post" action="{{ route('admin.tickets.reply', $active) }}" style="flex-wrap:wrap">
+                @csrf
+                <div class="composer-input-wrap" style="flex:1 1 100%">
+                    <textarea name="body" rows="2" required maxlength="5000" placeholder="پاسخ پشتیبانی را بنویسید..."></textarea>
+                </div>
+                <div style="display:flex;gap:0.5rem;align-items:center;width:100%;justify-content:space-between">
+                    <select name="status" style="border:1px solid var(--sm-border);border-radius:10px;padding:0.45rem 0.7rem;font-family:inherit">
+                        <option value="answered">پاسخ داده‌شده</option>
+                        <option value="open">باز</option>
+                        <option value="pending">در حال بررسی</option>
+                        <option value="closed">بسته</option>
+                    </select>
+                    <button type="submit" class="btn primary">ارسال پاسخ</button>
+                </div>
+            </form>
+        @else
+            <div class="chat-placeholder">
+                <div class="placeholder-card">
+                    <i class="fa-solid fa-inbox"></i>
+                    <h2>میز پشتیبانی فراست</h2>
+                    <p>یک تیکت از فهرست سمت راست انتخاب کنید تا گفتگو و پاسخ نمایش داده شود.</p>
+                </div>
+            </div>
+        @endif
+    </section>
 </div>
+
+@if(session('status'))
+    <div style="position:fixed;bottom:1.25rem;left:50%;transform:translateX(-50%);background:#166534;color:#fff;padding:0.65rem 1.1rem;border-radius:12px;z-index:50;font-size:0.9rem">{{ session('status') }}</div>
+@endif
+
+@push('scripts')
+<script src="{{ asset('js/support-messenger.js') }}?v=20261018c"></script>
+@endpush
 @endsection
