@@ -68,6 +68,7 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::get('/support', [SupportController::class, 'index'])->middleware('capability:can_support')->name('support');
     Route::post('/support/tickets', [SupportController::class, 'create'])->middleware(['throttle:10,10', 'capability:can_support'])->name('support.create');
     Route::post('/support/tickets/{ticket}/messages', [SupportController::class, 'message'])->middleware(['throttle:30,10', 'capability:can_support'])->name('support.message');
+    Route::post('/support/tickets/{ticket}/close', [SupportController::class, 'close'])->middleware(['throttle:10,10', 'capability:can_support'])->name('support.close');
     Route::get('/wallet', [WalletController::class, 'index'])->name('wallet');
     Route::post('/wallet/top-up', [WalletController::class, 'topUp'])->middleware('throttle:10,10')->name('wallet.topup');
     Route::get('/checkout/{order}', [PaymentController::class, 'show'])->name('checkout');
@@ -132,5 +133,5 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/teams/{team}/members', [PlatformCompletionController::class, 'teamMembers'])->name('teams.members');
     Route::post('/teams/{team}/members', [PlatformCompletionController::class, 'addTeamMember'])->name('teams.members.add');
     Route::delete('/teams/{team}/members/{user}', [PlatformCompletionController::class, 'removeTeamMember'])->name('teams.members.remove');
-    Route::post('/cms', [PlatformCompletionController::class, 'saveCms'])->name('cms.save');
+    Route::post('/cms', [PlatformCompletionController::class, 'saveCms])->name('cms.save');
 });
