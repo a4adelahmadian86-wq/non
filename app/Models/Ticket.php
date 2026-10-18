@@ -66,6 +66,7 @@ class Ticket extends Model
             'answered' => 'پاسخ داده شده',
             'closed' => 'بسته شده',
             'pending' => 'در حال بررسی',
+            'user_replied' => 'پاسخ کاربر',
             default => $this->status,
         };
     }
@@ -77,6 +78,7 @@ class Ticket extends Model
             'answered' => 'answered',
             'closed' => 'closed',
             'pending' => 'pending',
+            'user_replied' => 'user',
             default => 'open',
         };
     }
@@ -88,6 +90,37 @@ class Ticket extends Model
             'billing' => 'بخش مالی',
             'complaint' => 'بخش شکایات',
             default => 'بخش پشتیبانی',
+        };
+    }
+
+    public function priorityLabel(): string
+    {
+        return match ($this->priority ?? 'normal') {
+            'low' => 'کم',
+            'high' => 'زیاد',
+            default => 'متوسط',
+        };
+    }
+
+    public function topicLabel(): ?string
+    {
+        return match ($this->topic_area) {
+            'services' => 'خدمات',
+            'store' => 'فروشگاه',
+            default => null,
+        };
+    }
+
+    public function serviceLabel(): ?string
+    {
+        return match ($this->related_service) {
+            'typing' => 'تایپ آنلاین',
+            'convert' => 'تبدیل فایل',
+            'edit' => 'ویرایش هوشمند',
+            'ocr' => 'OCR / استخراج متن',
+            'voice' => 'ورود صوتی',
+            'other' => 'سایر خدمات',
+            default => $this->related_service,
         };
     }
 }
