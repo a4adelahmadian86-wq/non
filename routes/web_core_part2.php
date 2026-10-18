@@ -20,7 +20,7 @@ use App\Http\Controllers\WalletController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/projects/new', [ProjectController::class, 'create'])->middleware('auth')->name('projects.create');
-Route::post('/projects', [ProjectController::class, 'store'])->middleware(['auth','throttle:30,10','capability:can_type'])->name('projects.store');
+Route::post('/projects', [ProjectController::class, 'store'])->middleware(['auth', 'throttle:30,10', 'capability:can_type'])->name('projects.store');
 Route::get('/editor', [EditorController::class, 'create'])->middleware(['auth', 'single.editor'])->name('editor');
 Route::post('/editor/documents', [EditorController::class, 'createDocument'])->middleware(['auth', 'single.editor', 'throttle:60,10'])->name('editor.documents.create');
 
@@ -133,5 +133,5 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/teams/{team}/members', [PlatformCompletionController::class, 'teamMembers'])->name('teams.members');
     Route::post('/teams/{team}/members', [PlatformCompletionController::class, 'addTeamMember'])->name('teams.members.add');
     Route::delete('/teams/{team}/members/{user}', [PlatformCompletionController::class, 'removeTeamMember'])->name('teams.members.remove');
-    Route::post('/cms', [PlatformCompletionController::class, 'saveCms])->name('cms.save');
+    Route::post('/cms', [PlatformCompletionController::class, 'saveCms'])->name('cms.save');
 });
