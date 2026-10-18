@@ -66,6 +66,8 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/workspace/billing/{plan}', [PlatformCompletionController::class, 'subscribe'])->name('platform.billing.subscribe');
 
     Route::get('/support', [SupportController::class, 'index'])->middleware('capability:can_support')->name('support');
+    Route::get('/support/create', [SupportController::class, 'createForm'])->middleware('capability:can_support')->name('support.create.form');
+    Route::get('/support/tickets/{ticket}', [SupportController::class, 'show'])->middleware('capability:can_support')->name('support.show');
     Route::post('/support/tickets', [SupportController::class, 'create'])->middleware(['throttle:10,10', 'capability:can_support'])->name('support.create');
     Route::post('/support/tickets/{ticket}/messages', [SupportController::class, 'message'])->middleware(['throttle:30,10', 'capability:can_support'])->name('support.message');
     Route::post('/support/tickets/{ticket}/close', [SupportController::class, 'close'])->middleware(['throttle:10,10', 'capability:can_support'])->name('support.close');
