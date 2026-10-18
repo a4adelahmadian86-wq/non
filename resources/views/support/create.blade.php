@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018list">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018list">
 
 <div class="tk-page" dir="rtl">
     <nav class="tk-breadcrumb">

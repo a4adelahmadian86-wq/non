@@ -2,6 +2,7 @@
 
 @section('content')
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018list">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018list">
 
 <div class="tk-page" dir="rtl">
     <nav class="tk-breadcrumb">
@@ -67,7 +68,7 @@
             <div class="tk-notice">
                 <div class="tk-notice-text">
                     <span class="tk-notice-tag">توجه</span>
-                    <p>پیشنهاد می‌کنیم پیش از ثبت تیکت، بخش راهنما و سوالات متداول را مرور کنید. ممکن است پاسخ خود را سریع‌تر بیابید.</p>
+                    <p>پیشنهاد می‌کنیم پیش از ثبت تیکت، بخش راهنما را مرور کنید. ممکن است پاسخ خود را سریع‌تر بیابید.</p>
                 </div>
             </div>
 
@@ -124,7 +125,7 @@
                     </select>
                 </form>
                 <div class="tk-pagination">
-                    {{ $tickets->onEachSide(1)->links('pagination::simple-bootstrap-5') }}
+                    {{ $tickets->withQueryString()->links() }}
                 </div>
             </div>
         </article>
