@@ -55,8 +55,8 @@ class Ticket extends Model
     {
         return match ($this->status) {
             'open' => 'باز',
-            'answered' => 'پاسخ داده‌شده',
-            'closed' => 'بسته',
+            'answered' => 'پاسخ داده شده',
+            'closed' => 'بسته شده',
             'pending' => 'در حال بررسی',
             default => $this->status,
         };
@@ -70,6 +70,16 @@ class Ticket extends Model
             'closed' => 'closed',
             'pending' => 'pending',
             default => 'open',
+        };
+    }
+
+    public function departmentLabel(): string
+    {
+        return match ($this->department ?? 'support') {
+            'sales' => 'بخش فروش',
+            'billing' => 'بخش مالی',
+            'complaint' => 'بخش شکایات',
+            default => 'بخش پشتیبانی',
         };
     }
 }

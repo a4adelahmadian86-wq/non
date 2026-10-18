@@ -12,24 +12,58 @@ use Illuminate\Support\Str;
 
 class SupportController extends Controller
 {
-    public function index(CapabilityService $capabilities)
+    /** لیست تیکت‌ها — جدول مشابه ران‌فلر */
+    public function index(Request $request, CapabilityService $capabilities)
     {
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403, 'پشتیبانی برای این حساب فعال نیست.');
 
         self::claimGuestTickets(auth()->user());
 
-        $query = auth()->user()->tickets()->with(['messages' => fn ($q) => $q->orderBy('created_at')]);
+        $query = auth()->user()->tickets();
+
+        if ($request->filled('q')) {
+            $q = $request->string('q');
+            $query->where(function ($w) use ($q) {
+                $w->where('subject', 'like', '%'.$q.'%')
+                    ->orWhere('id', $q);
+            });
+        }
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
 
         if (Schema::hasColumn('tickets', 'last_reply_at')) {
             $query->orderByDesc('last_reply_at');
         }
 
-        $tickets = $query->latest()->get();
+        $perPage = (int) $request->input('per_page', 10);
+        if (! in_array($perPage, [5, 10, 15, 20, 25, 50, 100], true)) {
+            $perPage = 10;
+        }
 
-        return view('support', [
-            'tickets' => $tickets,
-            'activeTicketId' => request('ticket'),
-        ]);
+        $tickets = $query->latest()->paginate($perPage)->withQueryString();
+
+        return view('support.index', compact('tickets'));
+    }
+
+    /** فرم ثبت تیکت جدید */
+    public function createForm(CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+
+        return view('support.create');
+    }
+
+    /** جزئیات گفتگوی یک تیکت */
+    public function show(Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        abort_unless($ticket->user_id === auth()->id(), 403);
+
+        $ticket->load(['messages' => fn ($q) => $q->orderBy('created_at')]);
+
+        return view('support.show', compact('ticket'));
     }
 
     public function create(Request $request, CapabilityService $capabilities)
@@ -72,16 +106,7 @@ class SupportController extends Controller
 
         $ticket->messages()->create($msgPayload);
 
-        if ($request->wantsJson()) {
-            return response()->json([
-                'ok' => true,
-                'ticket_id' => $ticket->id,
-                'message' => 'تیکت شما ثبت شد.',
-            ]);
-        }
-
-        return redirect()->route('support', ['ticket' => $ticket->id])
-            ->with('status', 'تیکت شما ثبت شد.');
+        return redirect()->route('support.show', $ticket)->with('status', 'تیکت شما ثبت شد.');
     }
 
     public function message(Request $request, Ticket $ticket, CapabilityService $capabilities)
@@ -152,10 +177,6 @@ class SupportController extends Controller
         }
         $ticket->messages()->create($msgPayload);
 
-        if ($request->wantsJson()) {
-            return response()->json(['ok' => true]);
-        }
-
         return redirect()->route('support')->with('status', 'تیکت بسته شد.');
     }
 
@@ -223,8 +244,8 @@ class SupportController extends Controller
             return response()->json([
                 'ok' => true,
                 'ticket_id' => $ticket->id,
-                'reply' => 'پیام شما ثبت شد. تیم پشتیبانی به‌زودی پاسخ می‌دهد. تاریخچه کامل در داشبورد → پشتیبانی.',
-                'redirect' => route('support', ['ticket' => $ticket->id]),
+                'reply' => 'پیام شما ثبت شد. تیم پشتیبانی به‌زودی پاسخ می‌دهد. تاریخچه در داشبورد → پشتیبانی.',
+                'redirect' => route('support.show', $ticket),
             ]);
         }
 
@@ -301,7 +322,7 @@ class SupportController extends Controller
         return response()->json([
             'ok' => true,
             'ticket_id' => $ticket->id,
-            'reply' => 'پیام شما ثبت شد. پس از ورود به حساب، تاریخچه در داشبورد → پشتیبانی در دسترس است.',
+            'reply' => 'پیام شما ثبت شد. پس از ورود، تاریخچه در داشبورد → پشتیبانی در دسترس است.',
         ]);
     }
 
@@ -338,7 +359,7 @@ class SupportController extends Controller
         } catch (\Throwable) {
         }
 
-        return back()->with('status', 'پاسخ ثبت و ایمیل اطلاع‌رسانی ارسال شد.');
+        return back()->with('status', 'پاسخ ثبت شد.');
     }
 
     public static function claimGuestTickets(User $user): int
