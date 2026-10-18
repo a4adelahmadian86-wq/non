@@ -129,9 +129,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/plans', [PlatformCompletionController::class, 'adminPlans'])->name('plans');
     Route::post('/plans', [PlatformCompletionController::class, 'savePlan'])->name('plans.save');
     Route::get('/support-management', [PlatformCompletionController::class, 'adminSupport'])->name('support.management');
-    Route::get('/cms', [PlatformCompletionController::class, 'cms'])->name('cms');
-    Route::get('/teams/{team}/members', [PlatformCompletionController::class, 'teamMembers'])->name('teams.members');
-    Route::post('/teams/{team}/members', [PlatformCompletionController::class, 'addTeamMember'])->name('teams.members.add');
-    Route::delete('/teams/{team}/members/{user}', [PlatformCompletionController::class, 'removeTeamMember'])->name('teams.members.remove');
-    Route::post('/cms', [PlatformCompletionController::class, 'saveCms'])->name('cms.save');
+    Route::get('/cms', [PlatformCompletionController::class, "cms"])->name('cms');
+    Route::get('/teams/{team}/members', [PlatformCompletionController::class, "teamMembers"])->name('teams.members');
+    Route::post('/teams/{team}/members', [PlatformCompletionController::class, "addTeamMember"])->name('teams.members.add');
+    Route::delete('/teams/{team}/members/{user}', [PlatformCompletionController::class, "removeTeamMember"])->name('teams.members.remove');
+    Route::post('/cms', [PlatformCompletionController::class, "saveCms"])->name('cms.save');
 });
