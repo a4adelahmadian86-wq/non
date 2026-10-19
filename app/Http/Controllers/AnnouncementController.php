@@ -15,12 +15,46 @@ class AnnouncementController extends Controller
     public function index()
     {
         return view('announcements', [
-            'announcements' => Announcement::visible()->orderByDesc('is_pinned')->latest()->paginate(12),
+            'announcements' => Announcement::visible()
+                ->orderByDesc('is_pinned')
+                ->latest()
+                ->paginate(12),
+        ]);
+    }
+
+    /** پنل مدیریت اعلان‌ها برای ادمین */
+    public function manage(Request $request)
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        $q = Announcement::query()->latest();
+
+        if ($request->filled('status')) {
+            if ($request->status === 'active') {
+                $q->where('is_active', true);
+            } elseif ($request->status === 'inactive') {
+                $q->where('is_active', false);
+            }
+        }
+
+        if ($request->filled('audience') && in_array($request->audience, ['all', 'users', 'admins'], true)) {
+            $q->where('audience', $request->audience);
+        }
+
+        if ($request->filled('type') && in_array($request->type, ['info', 'success', 'warning', 'danger'], true)) {
+            $q->where('type', $request->type);
+        }
+
+        return view('admin.announcements', [
+            'announcements' => $q->paginate(20)->withQueryString(),
+            'filters' => $request->only(['status', 'audience', 'type']),
         ]);
     }
 
     public function store(Request $request)
     {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $data = $this->validated($request);
         $this->announcements->create($data, auth()->id());
 
@@ -29,6 +63,8 @@ class AnnouncementController extends Controller
 
     public function update(Request $request, Announcement $announcement)
     {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $data = $this->validated($request);
         $this->announcements->update($announcement, $data);
 
@@ -37,6 +73,8 @@ class AnnouncementController extends Controller
 
     public function toggle(Announcement $announcement)
     {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $this->announcements->toggle($announcement);
 
         return back()->with('status', $announcement->fresh()->is_active ? 'اعلان فعال شد.' : 'اعلان غیرفعال شد.');
@@ -44,9 +82,22 @@ class AnnouncementController extends Controller
 
     public function destroy(Announcement $announcement)
     {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $announcement->delete();
 
         return back()->with('status', 'اعلان حذف شد.');
+    }
+
+    /** ارسال مجدد اعلان درون‌برنامه / ایمیل برای مخاطبان */
+    public function rebroadcast(Announcement $announcement)
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        $announcement->forceFill(['notified_at' => null])->saveQuietly();
+        $sent = $this->announcements->broadcast($announcement->fresh());
+
+        return back()->with('status', "اعلان مجدداً ارسال شد ({$sent} اعلان درون‌برنامه)." );
     }
 
     protected function validated(Request $request): array
