@@ -2,6 +2,7 @@
 
 @section('content')
 @php
+    $slaService = app(\App\Services\SupportSlaService::class);
     $active = $active ?? null;
     $stats = $stats ?? ['needs_reply'=>0,'open'=>0,'user_replied'=>0,'answered'=>0,'pending'=>0,'closed'=>0,'high'=>0];
     $canned = $canned ?? [];
@@ -15,6 +16,7 @@
 @endphp
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019pro">
 <link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261019pro">
+<link rel="stylesheet" href="{{ asset('css/support-sla.css') }}?v=20261019sla">
 
 <div class="sd-shell" dir="rtl">
     <aside class="sd-aside">
@@ -23,6 +25,7 @@
                 <h1>میز پشتیبانی</h1>
                 <p>مدیریت و پاسخ حرفه‌ای به تیکت‌ها</p>
             </div>
+            <a href="{{ route('admin.support.report') }}" class="sd-btn" style="background:#eef4ff;color:#1769ff;font-size:.78rem;text-decoration:none">گزارش SLA</a>
         </div>
 
         <div class="sd-admin-stats" style="grid-template-columns:repeat(3,1fr)">
@@ -71,6 +74,8 @@
                         <span>{{ $t->displayName() }}</span>
                         <span>{{ $t->departmentLabel() }}</span>
                         <span>{{ optional($t->last_reply_at ?? $t->updated_at)->diffForHumans() }}</span>
+                        @php $sla = $slaService->firstResponseStatus($t); @endphp
+                        <span class="sla-pill sla-{{ $sla['color'] }}">{{ $sla['label'] }}</span>
                     </div>
                     @if($last)
                         <div class="sd-item-preview">{{ \Illuminate\Support\Str::limit($last->body, 55) }}</div>
@@ -102,6 +107,9 @@
                             <span>{{ $active->departmentLabel() }}</span>
                             <span>اولویت: {{ $active->priorityLabel() }}</span>
                             @if($active->assignee)<span>کارشناس: {{ $active->assignee->name ?? $active->assignee->email }}</span>@endif
+                            @php $slaA = $slaService->firstResponseStatus($active); $slaR = $slaService->resolutionStatus($active); @endphp
+                            <span class="sla-pill sla-{{ $slaA['color'] }}">{{ $slaA['label'] }}</span>
+                            <span class="sla-pill sla-{{ $slaR['color'] }}">{{ $slaR['label'] }}</span>
                         </div>
                     </div>
                 </div>
