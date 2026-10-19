@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\OrderPaidMail;
 use App\Mail\OtpMail;
 use App\Mail\PasswordChangedMail;
+use App\Mail\SupportTicketMail;
 use App\Mail\TestMail;
 use App\Mail\TicketReplyMail;
 use App\Mail\WelcomeMail;
@@ -26,6 +27,11 @@ class EmailService
         'welcome' => 'خوش‌آمدگویی',
         'order_paid' => 'تأیید پرداخت',
         'ticket_reply' => 'پاسخ تیکت',
+        'ticket_created' => 'ثبت تیکت',
+        'ticket_created_staff' => 'تیکت جدید (کارشناس)',
+        'ticket_customer_reply' => 'پاسخ کاربر به تیکت',
+        'ticket_closed' => 'بستن تیکت',
+        'ticket_assigned' => 'ارجاع تیکت',
         'password_changed' => 'تغییر رمز',
         'test' => 'ایمیل آزمایشی',
     ];
@@ -94,22 +100,24 @@ class EmailService
 
         $data = [
             'name' => $user->name ?: 'کاربر',
-            'orderId' => (int) $order->id,
-            'amount' => (int) $order->total_rials,
-            'paidAt' => optional($order->paid_at)->format('Y/m/d H:i') ?: now()->format('Y/m/d H:i'),
-            'editorUrl' => route('editor'),
+            'orderId' => $order->id,
+            'amount' => $order->amount ?? null,
         ];
 
-        $this->dispatch(
-            type: 'order_paid',
-            to: $user->email,
-            user: $user,
-            subject: 'تأیید پرداخت سفارش #'.$order->id,
-            mailable: new OrderPaidMail(...$data),
-            htmlView: 'emails.order-paid',
-            viewData: $data,
-            meta: ['order_id' => $order->id, 'amount' => $order->total_rials],
-        );
+        try {
+            $this->dispatch(
+                type: 'order_paid',
+                to: $user->email,
+                user: $user,
+                subject: 'تأیید پرداخت سفارش #'.$order->id,
+                mailable: new OrderPaidMail($user, $order),
+                htmlView: 'emails.order-paid',
+                viewData: $data,
+                meta: ['order_id' => $order->id],
+            );
+        } catch (Throwable $e) {
+            Log::warning('farast.email.order_paid_failed', ['error' => $e->getMessage()]);
+        }
     }
 
     public function sendTicketReply(User $user, Ticket $ticket, string $messageBody): void
@@ -118,29 +126,139 @@ class EmailService
             return;
         }
 
+        $url = $this->ticketUrl($ticket, false);
+        $status = $ticket->statusLabel();
+        $code = $ticket->displayCode();
+
         $data = [
             'name' => $user->name ?: 'کاربر',
             'subject' => $ticket->subject,
-            'status' => $ticket->status,
+            'status' => $status,
             'messageBody' => mb_substr($messageBody, 0, 800),
-            'supportUrl' => route('support'),
+            'supportUrl' => $url,
+            'ticketCode' => $code,
+            'headline' => 'پاسخ جدید به تیکت پشتیبانی',
         ];
 
         $this->dispatch(
             type: 'ticket_reply',
             to: $user->email,
             user: $user,
-            subject: 'پاسخ جدید به تیکت: '.$ticket->subject,
+            subject: 'پاسخ جدید به تیکت '.$code,
             mailable: new TicketReplyMail(
                 name: $data['name'],
                 subjectLine: $ticket->subject,
-                status: $ticket->status,
+                status: $status,
                 messageBody: $data['messageBody'],
-                supportUrl: $data['supportUrl'],
+                supportUrl: $url,
             ),
             htmlView: 'emails.ticket-reply',
             viewData: $data,
             meta: ['ticket_id' => $ticket->id],
+        );
+    }
+
+    public function sendTicketReplyGuest(Ticket $ticket, string $messageBody): void
+    {
+        $email = $ticket->guest_email;
+        if (! $email || ! $this->isEnabled('ticket_reply')) {
+            return;
+        }
+
+        $this->sendSupportMail(
+            type: 'ticket_reply',
+            to: $email,
+            user: null,
+            ticket: $ticket,
+            headline: 'پاسخ جدید به تیکت پشتیبانی',
+            body: mb_substr($messageBody, 0, 800),
+            staffUrl: false,
+            name: $ticket->guest_name ?: 'کاربر',
+        );
+    }
+
+    public function sendTicketCreated(User $user, Ticket $ticket): void
+    {
+        if (! $user->email || ! $this->isEnabled('ticket_created')) {
+            return;
+        }
+
+        $this->sendSupportMail(
+            type: 'ticket_created',
+            to: $user->email,
+            user: $user,
+            ticket: $ticket,
+            headline: 'تیکت شما ثبت شد',
+            body: 'تیکت شما با موفقیت ثبت شد و کارشناسان ما به‌زودی پاسخ می‌دهند.',
+            staffUrl: false,
+        );
+    }
+
+    public function sendTicketCreatedStaff(User $staff, Ticket $ticket): void
+    {
+        if (! $staff->email || ! $this->isEnabled('ticket_created_staff')) {
+            return;
+        }
+
+        $this->sendSupportMail(
+            type: 'ticket_created_staff',
+            to: $staff->email,
+            user: $staff,
+            ticket: $ticket,
+            headline: 'تیکت پشتیبانی جدید',
+            body: 'از طرف '.$ticket->displayName()."\n\n".'موضوع: '.$ticket->subject,
+            staffUrl: true,
+        );
+    }
+
+    public function sendTicketCustomerReply(User $staff, Ticket $ticket, string $body): void
+    {
+        if (! $staff->email || ! $this->isEnabled('ticket_customer_reply')) {
+            return;
+        }
+
+        $this->sendSupportMail(
+            type: 'ticket_customer_reply',
+            to: $staff->email,
+            user: $staff,
+            ticket: $ticket,
+            headline: 'پاسخ جدید کاربر',
+            body: mb_substr($body, 0, 800),
+            staffUrl: true,
+        );
+    }
+
+    public function sendTicketClosed(User $user, Ticket $ticket): void
+    {
+        if (! $user->email || ! $this->isEnabled('ticket_closed')) {
+            return;
+        }
+
+        $this->sendSupportMail(
+            type: 'ticket_closed',
+            to: $user->email,
+            user: $user,
+            ticket: $ticket,
+            headline: 'تیکت بسته شد',
+            body: 'تیکت شما بسته شد. در صورت نیاز می‌توانید تیکت جدیدی ثبت کنید.',
+            staffUrl: false,
+        );
+    }
+
+    public function sendTicketAssigned(User $agent, Ticket $ticket): void
+    {
+        if (! $agent->email || ! $this->isEnabled('ticket_assigned')) {
+            return;
+        }
+
+        $this->sendSupportMail(
+            type: 'ticket_assigned',
+            to: $agent->email,
+            user: $agent,
+            ticket: $ticket,
+            headline: 'تیکت به شما ارجاع شد',
+            body: 'موضوع: '.$ticket->subject,
+            staffUrl: true,
         );
     }
 
@@ -168,24 +286,73 @@ class EmailService
 
     public function sendTest(string $email): void
     {
-        $this->mailConfig->apply();
-        $provider = $this->mailConfig->currentProvider();
-
-        if ($provider === 'sendmail' && ! $this->mailConfig->sendmailBinaryAvailable()) {
-            throw new \RuntimeException(
-                'Sendmail روی این سیستم نصب نیست (روی ویندوز معمول است). در پنل ایمیل، سرویس‌دهنده را روی «لاگ داخلی سایت» بگذارید و دوباره تست کنید. متن ایمیل در storage/logs ذخیره می‌شود.'
-            );
-        }
-
         $this->dispatch(
             type: 'test',
             to: $email,
             user: null,
             subject: 'ایمیل آزمایشی فراست',
-            mailable: new TestMail(),
+            mailable: new TestMail,
             htmlView: 'emails.test',
             viewData: [],
         );
+    }
+
+    protected function sendSupportMail(
+        string $type,
+        string $to,
+        ?User $user,
+        Ticket $ticket,
+        string $headline,
+        string $body,
+        bool $staffUrl,
+        ?string $name = null,
+    ): void {
+        $url = $this->ticketUrl($ticket, $staffUrl);
+        $status = $ticket->statusLabel();
+        $code = $ticket->displayCode();
+        $displayName = $name ?: ($user?->name ?: 'کاربر');
+        $subject = $headline.' — '.$code;
+
+        $data = [
+            'headline' => $headline,
+            'name' => $displayName,
+            'subject' => $ticket->subject,
+            'status' => $status,
+            'messageBody' => $body,
+            'supportUrl' => $url,
+            'ticketCode' => $code,
+        ];
+
+        $this->dispatch(
+            type: $type,
+            to: $to,
+            user: $user,
+            subject: $subject,
+            mailable: new SupportTicketMail(
+                headline: $headline,
+                name: $displayName,
+                subjectLine: $ticket->subject,
+                status: $status,
+                messageBody: $body,
+                supportUrl: $url,
+                ticketCode: $code,
+                mailSubject: $subject,
+            ),
+            htmlView: 'emails.support-ticket',
+            viewData: $data,
+            meta: ['ticket_id' => $ticket->id],
+        );
+    }
+
+    protected function ticketUrl(Ticket $ticket, bool $staff): string
+    {
+        try {
+            return $staff
+                ? route('admin.support.management', ['ticket' => $ticket->id])
+                : route('support.show', $ticket);
+        } catch (Throwable) {
+            return url('/support');
+        }
     }
 
     protected function dispatch(
@@ -252,6 +419,11 @@ class EmailService
                 'email_hash' => $this->hash($to),
                 'error' => $msg,
             ]);
+
+            // Don't break ticket flow on mail failure
+            if ($type !== 'test') {
+                return;
+            }
 
             throw new \RuntimeException($msg, 0, $e);
         }
