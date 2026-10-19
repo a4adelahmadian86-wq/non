@@ -7,7 +7,10 @@
     <div class="farast-dashboard-nav__brand">
         <span class="farast-dashboard-nav__mark" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
         <div class="farast-dashboard-nav__brand-copy"><strong>فراست</strong><small>{{ $isAdminNavigation ? 'مرکز عملیات' : 'فضای کاری' }}</small></div>
-        <button type="button" class="farast-dashboard-nav__collapse" data-dashboard-nav-toggle aria-expanded="true" aria-controls="farast-dashboard-groups" aria-label="جمع کردن منوی داشبورد" title="جمع کردن منو"><i class="fa-solid fa-angles-right" aria-hidden="true"></i></button>
+        <div style="display:flex;align-items:center;gap:6px;margin-inline-start:auto">
+            @include('components.notification-bell')
+            <button type="button" class="farast-dashboard-nav__collapse" data-dashboard-nav-toggle aria-expanded="true" aria-controls="farast-dashboard-groups" aria-label="جمع کردن منوی داشبورد" title="جمع کردن منو"><i class="fa-solid fa-angles-right" aria-hidden="true"></i></button>
+        </div>
     </div>
     <nav id="farast-dashboard-groups" class="farast-dashboard-nav__groups">
         @foreach($navigation as $group)
