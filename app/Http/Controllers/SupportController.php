@@ -217,7 +217,37 @@ class SupportController extends Controller
 
         $this->tickets->changeStatus($ticket, 'closed', auth()->user(), true);
 
-        return redirect()->route('support')->with('status', 'تیکت بسته شد.');
+        return redirect()->route('support.show', $ticket)->with('status', 'تیکت بسته شد. لطفاً به کیفیت پشتیبانی امتیاز دهید.');
+    }
+
+    /**
+     * رضایت‌سنجی پس از بستن تیکت (CSAT 1–5).
+     */
+    public function csat(Request $request, Ticket $ticket, CapabilityService $capabilities)
+    {
+        abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
+        $this->authorize('view', $ticket);
+
+        $data = $request->validate([
+            'score' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $this->tickets->submitCsat($ticket, (int) $data['score'], $data['comment'] ?? null);
+        } catch (\InvalidArgumentException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+            }
+
+            return back()->withErrors(['csat' => $e->getMessage()]);
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(['ok' => true, 'message' => 'از بازخورد شما سپاسگزاریم.']);
+        }
+
+        return back()->with('status', 'از امتیاز شما سپاسگزاریم.');
     }
 
     public function adminIndex(Request $request)
