@@ -101,7 +101,7 @@ class VoiceController extends Controller
         $mime=$file->getMimeType()?:$file->getClientMimeType()?:'audio/webm';$mime=match($mime){ 'video/webm'=>'audio/webm','video/mp4','audio/mp4'=>'audio/m4a','audio/x-wav'=>'audio/wav',default=>$mime};
         $context=['user_id'=>$request->user()->id,'input_bytes'=>strlen($bytes),'processing_mode'=>$processingMode];
         try{$groqKey='';$groqKey=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')));}catch(\Throwable){}
-        if($groqKey!==''){
+        try{if($groqKey!==''){
             // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
             $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$groqKey])
                 ->attach('file',$bytes,'audio.'.$mime,$mime)
