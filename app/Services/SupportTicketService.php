@@ -35,9 +35,6 @@ class SupportTicketService
         return $code;
     }
 
-    /**
-     * @param  array{subject:string,body:string,department?:string,priority?:string,topic_area?:string,related_service?:?string,related_product_id?:?int,source?:string,guest_name?:?string,guest_email?:?string}  $data
-     */
     public function createTicket(?User $user, array $data, ?UploadedFile $attachment = null): Ticket
     {
         $ticket = DB::transaction(function () use ($user, $data, $attachment) {
@@ -92,15 +89,13 @@ class SupportTicketService
         return $ticket;
     }
 
-    /**
-     * @param  array{is_staff?:bool,is_internal?:bool,attachment?:?UploadedFile,status?:?string,touch_status?:bool,notify?:bool}  $options
-     */
     public function addMessage(Ticket $ticket, ?User $actor, string $body, array $options = []): TicketMessage
     {
         $isStaff = (bool) ($options['is_staff'] ?? false);
         $isInternal = (bool) ($options['is_internal'] ?? false);
         $touchStatus = $options['touch_status'] ?? true;
         $notify = $options['notify'] ?? true;
+        $previousStatus = $ticket->status;
 
         $payload = [
             'user_id' => $actor?->id,
@@ -158,6 +153,9 @@ class SupportTicketService
             $fresh = $ticket->fresh();
             if ($isStaff) {
                 $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false));
+                if (($options['status'] ?? null) === 'closed') {
+                    $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $previousStatus, 'closed'));
+                }
             } else {
                 $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body));
             }
