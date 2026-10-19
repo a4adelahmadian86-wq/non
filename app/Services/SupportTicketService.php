@@ -7,11 +7,12 @@ use App\Models\TicketMessage;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * هسته یکپارچه سیستم پشتیبانی — ایجاد، پاسخ، وضعیت، ارجاع، مهمان.
+ * هسته یکپارچه سیستم پشتیبانی — ایجاد، پاسخ، وضعیت، ارجاع، مهمان، اطلاع‌رسانی.
  */
 class SupportTicketService
 {
@@ -20,6 +21,10 @@ class SupportTicketService
     public const DEPARTMENTS = ['support', 'sales', 'billing', 'complaint'];
 
     public const PRIORITIES = ['low', 'normal', 'high'];
+
+    public function __construct(private readonly SupportNotificationService $notifier)
+    {
+    }
 
     public function generateCode(): string
     {
@@ -35,7 +40,7 @@ class SupportTicketService
      */
     public function createTicket(?User $user, array $data, ?UploadedFile $attachment = null): Ticket
     {
-        return DB::transaction(function () use ($user, $data, $attachment) {
+        $ticket = DB::transaction(function () use ($user, $data, $attachment) {
             $payload = [
                 'user_id' => $user?->id,
                 'subject' => $data['subject'],
@@ -76,20 +81,26 @@ class SupportTicketService
                 'is_internal' => false,
                 'attachment' => $attachment,
                 'touch_status' => false,
+                'notify' => false,
             ]);
 
             return $ticket->fresh(['messages', 'user', 'relatedProduct']);
         });
+
+        $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
+
+        return $ticket;
     }
 
     /**
-     * @param  array{is_staff?:bool,is_internal?:bool,attachment?:?UploadedFile,status?:?string,touch_status?:bool}  $options
+     * @param  array{is_staff?:bool,is_internal?:bool,attachment?:?UploadedFile,status?:?string,touch_status?:bool,notify?:bool}  $options
      */
     public function addMessage(Ticket $ticket, ?User $actor, string $body, array $options = []): TicketMessage
     {
         $isStaff = (bool) ($options['is_staff'] ?? false);
         $isInternal = (bool) ($options['is_internal'] ?? false);
         $touchStatus = $options['touch_status'] ?? true;
+        $notify = $options['notify'] ?? true;
 
         $payload = [
             'user_id' => $actor?->id,
@@ -143,6 +154,15 @@ class SupportTicketService
             }
         }
 
+        if ($notify && ! $isInternal) {
+            $fresh = $ticket->fresh();
+            if ($isStaff) {
+                $this->safeNotify(fn () => $this->notifier->staffReplied($fresh, $body, false));
+            } else {
+                $this->safeNotify(fn () => $this->notifier->customerReplied($fresh, $body));
+            }
+        }
+
         return $message;
     }
 
@@ -152,6 +172,7 @@ class SupportTicketService
             throw new \InvalidArgumentException('وضعیت نامعتبر است.');
         }
 
+        $old = $ticket->status;
         $update = ['status' => $status];
         if ($status === 'closed' && Schema::hasColumn('tickets', 'closed_at')) {
             $update['closed_at'] = now();
@@ -167,10 +188,14 @@ class SupportTicketService
                 'is_staff' => true,
                 'is_internal' => true,
                 'touch_status' => false,
+                'notify' => false,
             ]);
         }
 
-        return $ticket->fresh();
+        $fresh = $ticket->fresh();
+        $this->safeNotify(fn () => $this->notifier->statusChanged($fresh, $old, $status));
+
+        return $fresh;
     }
 
     public function assign(Ticket $ticket, ?User $agent, ?User $actor = null): Ticket
@@ -187,10 +212,14 @@ class SupportTicketService
                 'is_staff' => true,
                 'is_internal' => true,
                 'touch_status' => false,
+                'notify' => false,
             ]);
         }
 
-        return $ticket->fresh(['assignee']);
+        $fresh = $ticket->fresh(['assignee']);
+        $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent));
+
+        return $fresh;
     }
 
     public function markCustomerSeen(Ticket $ticket): void
@@ -239,5 +268,14 @@ class SupportTicketService
     public function needsAgentReply(Ticket $ticket): bool
     {
         return in_array($ticket->status, ['open', 'user_replied'], true);
+    }
+
+    protected function safeNotify(callable $fn): void
+    {
+        try {
+            $fn();
+        } catch (\Throwable $e) {
+            Log::warning('farast.support.notify_error', ['error' => $e->getMessage()]);
+        }
     }
 }
