@@ -14,7 +14,7 @@ class NotificationController extends Controller
     public function index(Request $request)
     {
         $filter = $request->string('filter')->toString() ?: 'all';
-        if (! in_array($filter, ['all', 'unread', 'support', 'finance', 'system'], true)) {
+        if (! in_array($filter, ['all', 'unread', 'support', 'finance', 'announcement', 'system'], true)) {
             $filter = 'all';
         }
 

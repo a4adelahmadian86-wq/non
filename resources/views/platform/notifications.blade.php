@@ -3,17 +3,18 @@
 @section('content')
 @php
     $filter = $filter ?? 'all';
-    $counts = $counts ?? ['all'=>0,'unread'=>0,'support'=>0,'finance'=>0,'system'=>0];
+    $counts = $counts ?? ['all'=>0,'unread'=>0,'support'=>0,'finance'=>0,'announcement'=>0,'system'=>0];
 @endphp
-<link rel="stylesheet" href="{{ asset('css/notifications.css') }}?v=20261019n1">
+<link rel="stylesheet" href="{{ asset('css/notifications.css') }}?v=20261019n2">
 
 <div class="nf-page" dir="rtl">
     <header class="nf-head">
         <div>
             <h1>اعلان‌ها</h1>
-            <p>پشتیبانی، مالی، امنیت و رویدادهای حساب — همه‌جا یک‌جا</p>
+            <p>پشتیبانی، مالی، اعلان‌های عمومی و رویدادهای حساب — همه‌جا یک‌جا</p>
         </div>
         <div class="nf-head-actions">
+            <a href="{{ route('announcements') }}" class="nf-link">اعلانات عمومی</a>
             <a href="{{ route('support') }}" class="nf-link">گفتگوهای پشتیبانی</a>
             <form method="post" action="{{ route('platform.notifications.readAll') }}">
                 @csrf
@@ -27,6 +28,7 @@
         <a href="{{ route('platform.notifications', ['filter' => 'unread']) }}" class="{{ $filter==='unread'?'is-on':'' }}">خوانده‌نشده <b>{{ $counts['unread'] }}</b></a>
         <a href="{{ route('platform.notifications', ['filter' => 'support']) }}" class="{{ $filter==='support'?'is-on':'' }}">پشتیبانی <b>{{ $counts['support'] }}</b></a>
         <a href="{{ route('platform.notifications', ['filter' => 'finance']) }}" class="{{ $filter==='finance'?'is-on':'' }}">مالی <b>{{ $counts['finance'] }}</b></a>
+        <a href="{{ route('platform.notifications', ['filter' => 'announcement']) }}" class="{{ $filter==='announcement'?'is-on':'' }}">اعلان‌ها <b>{{ $counts['announcement'] ?? 0 }}</b></a>
         <a href="{{ route('platform.notifications', ['filter' => 'system']) }}" class="{{ $filter==='system'?'is-on':'' }}">سیستم <b>{{ $counts['system'] }}</b></a>
     </div>
 

@@ -56,6 +56,9 @@ class FarastNotification extends Model
         if (str_starts_with($type, 'security_')) {
             return 'security';
         }
+        if (str_starts_with($type, 'announcement_')) {
+            return 'announcement';
+        }
 
         return 'system';
     }
@@ -66,6 +69,7 @@ class FarastNotification extends Model
             'support' => 'fa-headset',
             'finance' => 'fa-wallet',
             'security' => 'fa-shield-halved',
+            'announcement' => 'fa-bullhorn',
             default => 'fa-bell',
         };
     }
@@ -76,6 +80,7 @@ class FarastNotification extends Model
             'support' => 'پشتیبانی',
             'finance' => 'مالی',
             'security' => 'امنیت',
+            'announcement' => 'اعلان',
             default => 'سیستم',
         };
     }
