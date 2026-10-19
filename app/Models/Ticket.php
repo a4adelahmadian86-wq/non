@@ -30,6 +30,9 @@ class Ticket extends Model
         'sla_first_due_at',
         'sla_resolve_due_at',
         'resolved_at',
+        'csat_score',
+        'csat_comment',
+        'csat_at',
     ];
 
     protected function casts(): array
@@ -42,6 +45,7 @@ class Ticket extends Model
             'sla_first_due_at' => 'datetime',
             'sla_resolve_due_at' => 'datetime',
             'resolved_at' => 'datetime',
+            'csat_at' => 'datetime',
         ];
     }
 
@@ -156,6 +160,11 @@ class Ticket extends Model
             'other' => 'سایر خدمات',
             default => $this->related_service,
         };
+    }
+
+    public function canRateCsat(): bool
+    {
+        return $this->status === 'closed' && empty($this->csat_at);
     }
 
     public function scopeNeedsReply(Builder $query): Builder

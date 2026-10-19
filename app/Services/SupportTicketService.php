@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * هسته یکپارچه سیستم پشتیبانی — ایجاد، پاسخ، وضعیت، ارجاع، مهمان، اطلاع‌رسانی، SLA.
+ * هسته یکپارچه سیستم پشتیبانی — ایجاد، پاسخ، وضعیت، ارجاع خودکار، مهمان، اطلاع‌رسانی، SLA، CSAT.
  */
 class SupportTicketService
 {
@@ -73,6 +73,16 @@ class SupportTicketService
                 $payload['last_reply_at'] = now();
             }
 
+            // ارجاع خودکار به کم‌بارترین کارشناس
+            if (Schema::hasColumn('tickets', 'assigned_to') && empty($data['assigned_to'])) {
+                $agent = $this->pickLeastLoadedAgent();
+                if ($agent) {
+                    $payload['assigned_to'] = $agent->id;
+                }
+            } elseif (! empty($data['assigned_to']) && Schema::hasColumn('tickets', 'assigned_to')) {
+                $payload['assigned_to'] = $data['assigned_to'];
+            }
+
             $ticket = Ticket::create($payload);
 
             $this->addMessage($ticket, $user, $data['body'], [
@@ -83,15 +93,48 @@ class SupportTicketService
                 'notify' => false,
             ]);
 
-            $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct']);
+            $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
             $this->sla->applyTargets($ticket);
 
-            return $ticket->fresh(['messages', 'user', 'relatedProduct']);
+            return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
         });
 
         $this->safeNotify(fn () => $this->notifier->ticketCreated($ticket));
 
+        if ($ticket->assignee) {
+            $this->safeNotify(fn () => $this->notifier->assigned($ticket, $ticket->assignee));
+        }
+
         return $ticket;
+    }
+
+    /**
+     * انتخاب کارشناس با کمترین تیکت باز.
+     */
+    public function pickLeastLoadedAgent(): ?User
+    {
+        if (! Schema::hasColumn('tickets', 'assigned_to')) {
+            return null;
+        }
+
+        $admins = User::query()
+            ->where('role', User::ROLE_ADMIN)
+            ->where('is_blocked', false)
+            ->limit(50)
+            ->get();
+
+        if ($admins->isEmpty()) {
+            return null;
+        }
+
+        $openCounts = Ticket::query()
+            ->whereNotIn('status', ['closed'])
+            ->whereNotNull('assigned_to')
+            ->selectRaw('assigned_to, COUNT(*) as c')
+            ->groupBy('assigned_to')
+            ->pluck('c', 'assigned_to');
+
+        return $admins->sortBy(fn (User $u) => (int) ($openCounts[$u->id] ?? 0))->first();
     }
 
     public function addMessage(Ticket $ticket, ?User $actor, string $body, array $options = []): TicketMessage
@@ -229,6 +272,33 @@ class SupportTicketService
         $this->safeNotify(fn () => $this->notifier->assigned($fresh, $agent));
 
         return $fresh;
+    }
+
+    /**
+     * ثبت رضایت‌سنجی (CSAT) پس از بستن تیکت — امتیاز ۱ تا ۵.
+     */
+    public function submitCsat(Ticket $ticket, int $score, ?string $comment = null): Ticket
+    {
+        if ($ticket->status !== 'closed') {
+            throw new \InvalidArgumentException('فقط تیکت بسته‌شده قابل امتیازدهی است.');
+        }
+        if ($score < 1 || $score > 5) {
+            throw new \InvalidArgumentException('امتیاز باید بین ۱ تا ۵ باشد.');
+        }
+        if (! Schema::hasColumn('tickets', 'csat_score')) {
+            return $ticket;
+        }
+        if ($ticket->csat_at) {
+            throw new \InvalidArgumentException('قبلاً امتیاز ثبت شده است.');
+        }
+
+        $ticket->update([
+            'csat_score' => $score,
+            'csat_comment' => $comment ? Str::limit($comment, 500) : null,
+            'csat_at' => now(),
+        ]);
+
+        return $ticket->fresh();
     }
 
     public function markCustomerSeen(Ticket $ticket): void
