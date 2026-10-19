@@ -7,10 +7,8 @@ use App\Models\StoreProduct;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\CapabilityService;
-use App\Services\EmailService;
 use App\Services\SupportTicketService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -85,8 +83,6 @@ class SupportController extends Controller
 
         $ticket->load(['publicMessages.user', 'relatedProduct', 'assignee']);
         $this->tickets->markCustomerSeen($ticket);
-
-        // alias for view
         $ticket->setRelation('messages', $ticket->publicMessages);
 
         return view('support.show', compact('ticket'));
@@ -290,20 +286,7 @@ class SupportController extends Controller
             'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
         ];
 
-        $agents = User::query()
-            ->when(method_exists(User::class, 'scopeAdmins'), fn ($q) => $q->admins())
-            ->when(! method_exists(User::class, 'scopeAdmins'), function ($q) {
-                // fallback: users that can be staff — limit recent
-                $q->orderByDesc('id')->limit(50);
-            })
-            ->limit(40)
-            ->get(['id', 'name', 'email']);
-
-        // Prefer isAdmin filter if available
-        try {
-            $agents = User::all()->filter(fn ($u) => method_exists($u, 'isAdmin') && $u->isAdmin())->take(40)->values();
-        } catch (\Throwable) {
-        }
+        $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);
 
         $canned = [
             'سلام، پیام شما دریافت شد. در حال بررسی هستیم و به‌زودی پاسخ می‌دهیم.',
@@ -315,7 +298,7 @@ class SupportController extends Controller
         return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents'));
     }
 
-    public function adminReply(Request $request, Ticket $ticket, EmailService $emailService)
+    public function adminReply(Request $request, Ticket $ticket)
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
         $this->authorize('manage', $ticket);
@@ -336,30 +319,6 @@ class SupportController extends Controller
             'attachment' => $request->file('attachment'),
             'touch_status' => ! $isInternal || ! empty($data['status']),
         ]);
-
-        if (! $isInternal) {
-            try {
-                if ($ticket->user) {
-                    $emailService->sendTicketReply($ticket->user, $ticket->fresh(), $data['body']);
-                }
-            } catch (\Throwable) {
-            }
-
-            try {
-                if ($ticket->user_id && Schema::hasTable('farast_notifications')) {
-                    DB::table('farast_notifications')->insert([
-                        'user_id' => $ticket->user_id,
-                        'type' => 'ticket_reply',
-                        'title' => 'پاسخ جدید به تیکت '.$ticket->displayCode(),
-                        'body' => Str::limit($data['body'], 160),
-                        'data' => json_encode(['ticket_id' => $ticket->id, 'url' => route('support.show', $ticket)], JSON_UNESCAPED_UNICODE),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-            } catch (\Throwable) {
-            }
-        }
 
         return redirect()
             ->route('admin.support.management', ['ticket' => $ticket->id] + $request->only(['status', 'q', 'department', 'priority']))
