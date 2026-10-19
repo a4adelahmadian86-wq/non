@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,6 +11,8 @@ class Ticket extends Model
 {
     protected $fillable = [
         'user_id',
+        'assigned_to',
+        'ticket_code',
         'guest_name',
         'guest_email',
         'subject',
@@ -21,18 +24,29 @@ class Ticket extends Model
         'related_product_id',
         'source',
         'last_reply_at',
+        'first_response_at',
+        'closed_at',
+        'customer_last_seen_at',
     ];
 
     protected function casts(): array
     {
         return [
             'last_reply_at' => 'datetime',
+            'first_response_at' => 'datetime',
+            'closed_at' => 'datetime',
+            'customer_last_seen_at' => 'datetime',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function assignee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
     }
 
     public function relatedProduct(): BelongsTo
@@ -43,6 +57,15 @@ class Ticket extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(TicketMessage::class)->orderBy('created_at');
+    }
+
+    public function publicMessages(): HasMany
+    {
+        return $this->hasMany(TicketMessage::class)
+            ->where(function ($q) {
+                $q->where('is_internal', false)->orWhereNull('is_internal');
+            })
+            ->orderBy('created_at');
     }
 
     public function isGuest(): bool
@@ -59,6 +82,11 @@ class Ticket extends Model
         return $this->guest_name ?: ($this->guest_email ?: 'مهمان');
     }
 
+    public function displayCode(): string
+    {
+        return $this->ticket_code ?: ('#'.$this->id);
+    }
+
     public function statusLabel(): string
     {
         return match ($this->status) {
@@ -67,7 +95,7 @@ class Ticket extends Model
             'closed' => 'بسته شده',
             'pending' => 'در حال بررسی',
             'user_replied' => 'پاسخ کاربر',
-            default => $this->status,
+            default => (string) $this->status,
         };
     }
 
@@ -122,5 +150,27 @@ class Ticket extends Model
             'other' => 'سایر خدمات',
             default => $this->related_service,
         };
+    }
+
+    public function scopeNeedsReply(Builder $query): Builder
+    {
+        return $query->whereIn('status', ['open', 'user_replied']);
+    }
+
+    public function scopeOpenQueue(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', ['closed']);
+    }
+
+    public function hasUnreadForCustomer(): bool
+    {
+        if ($this->status !== 'answered') {
+            return false;
+        }
+        if (! $this->customer_last_seen_at) {
+            return true;
+        }
+
+        return $this->last_reply_at && $this->last_reply_at->gt($this->customer_last_seen_at);
     }
 }
