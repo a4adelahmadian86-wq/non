@@ -110,6 +110,11 @@
                             @php $slaA = $slaService->firstResponseStatus($active); $slaR = $slaService->resolutionStatus($active); @endphp
                             <span class="sla-pill sla-{{ $slaA['color'] }}">{{ $slaA['label'] }}</span>
                             <span class="sla-pill sla-{{ $slaR['color'] }}">{{ $slaR['label'] }}</span>
+                            @if($active->csat_score)
+                                <span class="sla-pill sla-ok" title="{{ $active->csat_comment }}">CSAT: {{ $active->csat_score }}/5</span>
+                            @elseif($active->status === 'closed')
+                                <span class="sla-pill sla-muted">بدون امتیاز CSAT</span>
+                            @endif
                         </div>
                     </div>
                 </div>
