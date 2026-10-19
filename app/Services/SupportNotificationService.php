@@ -172,9 +172,7 @@ class SupportNotificationService
         }
     }
 
-    /**
-     * @param  'first_response'|'resolution'  $kind
-     */
+    /** @param  'first_response'|'resolution'  $kind */
     public function slaWarning(Ticket $ticket, string $kind, int $minutesLeft): void
     {
         $ticket->loadMissing(['assignee', 'user']);
@@ -186,15 +184,7 @@ class SupportNotificationService
             $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true);
             try {
                 if ($staff->email) {
-                    $this->email->sendSupportMailPublic(
-                        'ticket_sla_warning',
-                        $staff->email,
-                        $staff,
-                        $ticket,
-                        $title,
-                        $body,
-                        true
-                    );
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body);
                 }
             } catch (\Throwable) {
             }
@@ -208,9 +198,7 @@ class SupportNotificationService
         }
     }
 
-    /**
-     * @param  'first_response'|'resolution'  $kind
-     */
+    /** @param  'first_response'|'resolution'  $kind */
     public function slaBreached(Ticket $ticket, string $kind): void
     {
         $ticket->loadMissing(['assignee', 'user']);
@@ -222,15 +210,7 @@ class SupportNotificationService
             $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true);
             try {
                 if ($staff->email) {
-                    $this->email->sendSupportMailPublic(
-                        'ticket_sla_breach',
-                        $staff->email,
-                        $staff,
-                        $ticket,
-                        $title,
-                        $body,
-                        true
-                    );
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body);
                 }
             } catch (\Throwable) {
             }
