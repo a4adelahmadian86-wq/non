@@ -32,6 +32,8 @@ class EmailService
         'ticket_customer_reply' => 'پاسخ کاربر به تیکت',
         'ticket_closed' => 'بستن تیکت',
         'ticket_assigned' => 'ارجاع تیکت',
+        'ticket_sla_warning' => 'هشدار SLA',
+        'ticket_sla_breach' => 'نقض SLA',
         'password_changed' => 'تغییر رمز',
         'test' => 'ایمیل آزمایشی',
     ];
@@ -262,6 +264,23 @@ class EmailService
         );
     }
 
+    public function sendTicketSlaAlert(User $staff, Ticket $ticket, string $headline, string $body): void
+    {
+        if (! $staff->email || ! $this->isEnabled('ticket_sla_warning')) {
+            return;
+        }
+
+        $this->sendSupportMail(
+            type: 'ticket_sla_warning',
+            to: $staff->email,
+            user: $staff,
+            ticket: $ticket,
+            headline: $headline,
+            body: $body,
+            staffUrl: true,
+        );
+    }
+
     public function sendPasswordChanged(User $user): void
     {
         if (! $user->email || ! $this->isEnabled('password_changed')) {
@@ -420,7 +439,6 @@ class EmailService
                 'error' => $msg,
             ]);
 
-            // Don't break ticket flow on mail failure
             if ($type !== 'test') {
                 return;
             }
