@@ -12,7 +12,6 @@ use Illuminate\Support\Str;
 
 /**
  * کانال‌های اطلاع‌رسانی پشتیبانی: اعلان داخل پنل + ایمیل + پیامک
- * مطابق الگوی رایج هلپ‌دسک‌های ایرانی و بین‌المللی.
  */
 class SupportNotificationService
 {
@@ -25,7 +24,6 @@ class SupportNotificationService
     {
         $ticket->loadMissing(['user', 'assignee']);
 
-        // تأیید برای صاحب تیکت
         if ($ticket->user) {
             $this->pushInApp(
                 $ticket->user_id,
@@ -37,7 +35,6 @@ class SupportNotificationService
             $this->email->sendTicketCreated($ticket->user, $ticket);
         }
 
-        // اعلان به ادمین‌ها / کارشناسان
         foreach ($this->staffUsers() as $admin) {
             $this->pushInApp(
                 $admin->id,
@@ -50,7 +47,6 @@ class SupportNotificationService
             $this->email->sendTicketCreatedStaff($admin, $ticket);
         }
 
-        // پیامک به ادمین (اختیاری)
         if ($this->smsEnabled('ticket_created_staff')) {
             $mobile = $this->staffAlertMobile();
             if ($mobile) {
@@ -121,7 +117,6 @@ class SupportNotificationService
                 );
             }
         } elseif ($ticket->guest_email) {
-            // مهمان: فقط ایمیل
             $this->email->sendTicketReplyGuest($ticket, $body);
         }
     }
@@ -175,6 +170,88 @@ class SupportNotificationService
                 'فراست: تیکت '.$ticket->displayCode().' به شما ارجاع شد.'
             );
         }
+    }
+
+    /**
+     * @param  'first_response'|'resolution'  $kind
+     */
+    public function slaWarning(Ticket $ticket, string $kind, int $minutesLeft): void
+    {
+        $ticket->loadMissing(['assignee', 'user']);
+        $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
+        $title = 'هشدار SLA — '.$ticket->displayCode();
+        $body = $label.' حدود '.$minutesLeft.' دقیقه دیگر به پایان می‌رسد. موضوع: '.$ticket->subject;
+
+        foreach ($this->staffTargets($ticket) as $staff) {
+            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true);
+            try {
+                if ($staff->email) {
+                    $this->email->sendSupportMailPublic(
+                        'ticket_sla_warning',
+                        $staff->email,
+                        $staff,
+                        $ticket,
+                        $title,
+                        $body,
+                        true
+                    );
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            if ($mobile) {
+                $this->sms->sendText($mobile, 'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label);
+            }
+        }
+    }
+
+    /**
+     * @param  'first_response'|'resolution'  $kind
+     */
+    public function slaBreached(Ticket $ticket, string $kind): void
+    {
+        $ticket->loadMissing(['assignee', 'user']);
+        $label = $kind === 'resolution' ? 'مهلت حل' : 'اولین پاسخ';
+        $title = 'نقض SLA — '.$ticket->displayCode();
+        $body = $label.' برای این تیکت به پایان رسیده است. موضوع: '.$ticket->subject;
+
+        foreach ($this->staffTargets($ticket) as $staff) {
+            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true);
+            try {
+                if ($staff->email) {
+                    $this->email->sendSupportMailPublic(
+                        'ticket_sla_breach',
+                        $staff->email,
+                        $staff,
+                        $ticket,
+                        $title,
+                        $body,
+                        true
+                    );
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($this->smsEnabled('ticket_sla_breach')) {
+            $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
+            if ($mobile) {
+                $this->sms->sendText($mobile, 'فراست نقض SLA: '.$ticket->displayCode().' — '.$label);
+            }
+        }
+    }
+
+    /** @return \Illuminate\Support\Collection<int, User> */
+    protected function staffTargets(Ticket $ticket)
+    {
+        if ($ticket->assignee) {
+            return collect([$ticket->assignee]);
+        }
+
+        return $this->staffUsers();
     }
 
     protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false): void

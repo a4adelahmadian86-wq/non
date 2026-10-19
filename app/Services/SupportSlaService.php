@@ -20,9 +20,76 @@ class SupportSlaService
         $base = $ticket->created_at ? Carbon::parse($ticket->created_at) : now();
 
         $ticket->forceFill([
-            'sla_first_due_at' => $base->copy()->addMinutes($firstMins),
-            'sla_resolve_due_at' => $base->copy()->addMinutes($resolveMins),
+            'sla_first_due_at' => $this->addSlaMinutes($base->copy(), $firstMins),
+            'sla_resolve_due_at' => $this->addSlaMinutes($base->copy(), $resolveMins),
         ])->saveQuietly();
+    }
+
+    /**
+     * افزودن دقیقه به مهلت — در صورت فعال بودن ساعات کاری، فقط دقایق کاری شمرده می‌شود.
+     */
+    public function addSlaMinutes(Carbon $from, int $minutes): Carbon
+    {
+        if ($minutes <= 0) {
+            return $from->copy();
+        }
+
+        if (! config('support.business_hours_only', true)) {
+            return $from->copy()->addMinutes($minutes);
+        }
+
+        return $this->addBusinessMinutes($from, $minutes);
+    }
+
+    public function addBusinessMinutes(Carbon $from, int $minutes): Carbon
+    {
+        $tz = config('support.business_hours.timezone', config('app.timezone', 'Asia/Tehran'));
+        $startH = (int) config('support.business_hours.start', 9);
+        $endH = (int) config('support.business_hours.end', 18);
+        $weekend = config('support.business_hours.weekend', [4, 5]);
+
+        $cursor = $from->copy()->timezone($tz);
+        $remaining = $minutes;
+        $guard = 0;
+
+        while ($remaining > 0 && $guard < 20000) {
+            $guard++;
+
+            if (in_array((int) $cursor->dayOfWeek, $weekend, true)) {
+                $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
+
+                continue;
+            }
+
+            $dayStart = $cursor->copy()->setTime($startH, 0, 0);
+            $dayEnd = $cursor->copy()->setTime($endH, 0, 0);
+
+            if ($cursor->lt($dayStart)) {
+                $cursor = $dayStart->copy();
+            }
+
+            if ($cursor->gte($dayEnd)) {
+                $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
+
+                continue;
+            }
+
+            $available = (int) $cursor->diffInMinutes($dayEnd);
+            if ($available <= 0) {
+                $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
+
+                continue;
+            }
+
+            if ($remaining <= $available) {
+                return $cursor->copy()->addMinutes($remaining);
+            }
+
+            $remaining -= $available;
+            $cursor->addDay()->startOfDay()->setTime($startH, 0, 0);
+        }
+
+        return $cursor;
     }
 
     /**
@@ -63,7 +130,8 @@ class SupportSlaService
                 'breached' => true,
             ];
         }
-        if ($mins <= 30) {
+        $warnBefore = (int) config('support.warn_before_minutes', 30);
+        if ($mins <= $warnBefore) {
             return [
                 'state' => 'warning',
                 'label' => $mins.'د تا SLA',
@@ -128,10 +196,12 @@ class SupportSlaService
             ];
         }
 
+        $warnBefore = (int) config('support.warn_before_minutes', 30);
+
         return [
             'state' => 'ok',
             'label' => $this->humanMinutes($mins).' تا مهلت حل',
-            'color' => $mins <= 60 ? 'warn' : 'ok',
+            'color' => $mins <= $warnBefore ? 'warn' : 'ok',
             'breached' => false,
         ];
     }
@@ -144,9 +214,7 @@ class SupportSlaService
     }
 
     /**
-     * گزارش عملکرد کارشناسان در بازه زمانی.
-     *
-     * @return array{agents:array<int,array>,totals:array}
+     * @return array{agents:array<int,array>,totals:array,from:Carbon,to:Carbon}
      */
     public function agentReport(?Carbon $from = null, ?Carbon $to = null): array
     {
@@ -198,7 +266,6 @@ class SupportSlaService
                 }
             }
 
-            // اولین پاسخ staff
             $firstStaff = $ticket->messages->first(function ($m) {
                 return $m->isFromStaff() && ! $m->is_internal;
             });
