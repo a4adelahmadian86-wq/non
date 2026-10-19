@@ -5,19 +5,18 @@ namespace App\Services;
 use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * کانال‌های اطلاع‌رسانی پشتیبانی: اعلان داخل پنل + ایمیل + پیامک
+ * اطلاع‌رسانی رویدادهای پشتیبانی از طریق اعلان پنل + ایمیل + پیامک
  */
 class SupportNotificationService
 {
     public function __construct(
         private readonly EmailService $email,
         private readonly SmsService $sms,
+        private readonly NotificationService $notifications,
     ) {}
 
     public function ticketCreated(Ticket $ticket): void
@@ -236,27 +235,15 @@ class SupportNotificationService
 
     protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false): void
     {
-        if (! Schema::hasTable('farast_notifications')) {
-            return;
-        }
-
         try {
             $url = $staff
                 ? route('admin.support.management', ['ticket' => $ticket->id])
                 : route('support.show', $ticket);
 
-            DB::table('farast_notifications')->insert([
-                'user_id' => $userId,
-                'type' => $type,
-                'title' => $title,
-                'body' => $body,
-                'data' => json_encode([
-                    'ticket_id' => $ticket->id,
-                    'ticket_code' => $ticket->ticket_code,
-                    'url' => $url,
-                ], JSON_UNESCAPED_UNICODE),
-                'created_at' => now(),
-                'updated_at' => now(),
+            $this->notifications->push($userId, $type, $title, $body, [
+                'ticket_id' => $ticket->id,
+                'ticket_code' => $ticket->ticket_code,
+                'url' => $url,
             ]);
         } catch (\Throwable $e) {
             Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
