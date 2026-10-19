@@ -27,6 +27,9 @@ class Ticket extends Model
         'first_response_at',
         'closed_at',
         'customer_last_seen_at',
+        'sla_first_due_at',
+        'sla_resolve_due_at',
+        'resolved_at',
     ];
 
     protected function casts(): array
@@ -36,6 +39,9 @@ class Ticket extends Model
             'first_response_at' => 'datetime',
             'closed_at' => 'datetime',
             'customer_last_seen_at' => 'datetime',
+            'sla_first_due_at' => 'datetime',
+            'sla_resolve_due_at' => 'datetime',
+            'resolved_at' => 'datetime',
         ];
     }
 
@@ -160,6 +166,21 @@ class Ticket extends Model
     public function scopeOpenQueue(Builder $query): Builder
     {
         return $query->whereNotIn('status', ['closed']);
+    }
+
+    public function scopeSlaBreached(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', ['closed'])
+            ->where(function ($q) {
+                $q->where(function ($w) {
+                    $w->whereNull('first_response_at')
+                        ->whereNotNull('sla_first_due_at')
+                        ->where('sla_first_due_at', '<', now());
+                })->orWhere(function ($w) {
+                    $w->whereNotNull('sla_resolve_due_at')
+                        ->where('sla_resolve_due_at', '<', now());
+                });
+            });
     }
 
     public function hasUnreadForCustomer(): bool
