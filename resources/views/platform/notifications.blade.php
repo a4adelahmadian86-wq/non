@@ -1,52 +1,82 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container" dir="rtl" style="max-width:820px;margin:24px auto;padding:0 16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px">
+@php
+    $filter = $filter ?? 'all';
+    $counts = $counts ?? ['all'=>0,'unread'=>0,'support'=>0,'finance'=>0,'system'=>0];
+@endphp
+<link rel="stylesheet" href="{{ asset('css/notifications.css') }}?v=20261019n1">
+
+<div class="nf-page" dir="rtl">
+    <header class="nf-head">
         <div>
-            <h1 style="margin:0;font-size:1.35rem">اعلان‌ها</h1>
-            <p style="margin:6px 0 0;color:#64748b;font-size:.9rem">اعلان‌های سیستم، پشتیبانی و رویدادهای حساب شما</p>
+            <h1>اعلان‌ها</h1>
+            <p>پشتیبانی، مالی، امنیت و رویدادهای حساب — همه‌جا یک‌جا</p>
         </div>
-        <a href="{{ route('support') }}" style="font-size:.88rem;color:#1769ff;text-decoration:none;font-weight:600">گفتگوهای پشتیبانی</a>
+        <div class="nf-head-actions">
+            <a href="{{ route('support') }}" class="nf-link">گفتگوهای پشتیبانی</a>
+            <form method="post" action="{{ route('platform.notifications.readAll') }}">
+                @csrf
+                <button type="submit" class="nf-btn">همه را خواندم</button>
+            </form>
+        </div>
+    </header>
+
+    <div class="nf-filters">
+        <a href="{{ route('platform.notifications', ['filter' => 'all']) }}" class="{{ $filter==='all'?'is-on':'' }}">همه <b>{{ $counts['all'] }}</b></a>
+        <a href="{{ route('platform.notifications', ['filter' => 'unread']) }}" class="{{ $filter==='unread'?'is-on':'' }}">خوانده‌نشده <b>{{ $counts['unread'] }}</b></a>
+        <a href="{{ route('platform.notifications', ['filter' => 'support']) }}" class="{{ $filter==='support'?'is-on':'' }}">پشتیبانی <b>{{ $counts['support'] }}</b></a>
+        <a href="{{ route('platform.notifications', ['filter' => 'finance']) }}" class="{{ $filter==='finance'?'is-on':'' }}">مالی <b>{{ $counts['finance'] }}</b></a>
+        <a href="{{ route('platform.notifications', ['filter' => 'system']) }}" class="{{ $filter==='system'?'is-on':'' }}">سیستم <b>{{ $counts['system'] }}</b></a>
     </div>
 
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
+    <div class="nf-list">
         @forelse($items as $n)
             @php
-                $data = is_string($n->data ?? null) ? json_decode($n->data, true) : (array) ($n->data ?? []);
-                $url = $data['url'] ?? null;
-                $isTicket = str_starts_with((string)($n->type ?? ''), 'ticket_');
+                /** @var \App\Models\FarastNotification $n */
+                $url = $n->url();
+                $cat = $n->category();
             @endphp
-            <article style="padding:14px 16px;border-bottom:1px solid #f1f5f9;display:flex;gap:12px;align-items:flex-start;opacity:{{ $n->read_at ? '0.65' : '1' }}">
-                <div style="width:40px;height:40px;border-radius:12px;background:{{ $isTicket ? '#eef4ff' : '#f8fafc' }};display:flex;align-items:center;justify-content:center;color:{{ $isTicket ? '#1769ff' : '#64748b' }};flex:none">
-                    <i class="fa-solid {{ $isTicket ? 'fa-headset' : 'fa-bell' }}"></i>
-                </div>
-                <div style="min-width:0;flex:1">
-                    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-                        <b style="font-size:.95rem">{{ $n->title }}</b>
-                        <time style="font-size:.75rem;color:#94a3b8">{{ \Illuminate\Support\Carbon::parse($n->created_at)->timezone(config('app.timezone'))->diffForHumans() }}</time>
+            <article class="nf-item {{ $n->isRead() ? 'is-read' : 'is-unread' }} nf-cat-{{ $cat }}">
+                <div class="nf-icon"><i class="fa-solid {{ $n->icon() }}"></i></div>
+                <div class="nf-body">
+                    <div class="nf-row">
+                        <strong>{{ $n->title }}</strong>
+                        <time>{{ $n->created_at?->timezone(config('app.timezone'))->diffForHumans() }}</time>
+                    </div>
+                    <div class="nf-meta">
+                        <span class="nf-chip">{{ $n->categoryLabel() }}</span>
+                        @unless($n->isRead())<span class="nf-dot">جدید</span>@endunless
                     </div>
                     @if($n->body)
-                        <p style="margin:6px 0 0;color:#475569;font-size:.88rem;line-height:1.6">{{ $n->body }}</p>
+                        <p>{{ $n->body }}</p>
                     @endif
-                    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                    <div class="nf-actions">
                         @if($url)
-                            <a href="{{ $url }}" style="font-size:.82rem;color:#1769ff;font-weight:700;text-decoration:none">مشاهده</a>
+                            <a href="{{ $url }}" class="nf-action-primary">مشاهده</a>
                         @endif
-                        @unless($n->read_at)
+                        @unless($n->isRead())
                             <form method="post" action="{{ route('platform.notifications.read', $n->id) }}">
                                 @csrf
-                                <button type="submit" style="border:0;background:#f1f5f9;color:#334155;border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer">خوانده شد</button>
+                                <button type="submit" class="nf-action-ghost">خوانده شد</button>
                             </form>
                         @endunless
                     </div>
                 </div>
             </article>
         @empty
-            <div style="padding:40px 16px;text-align:center;color:#94a3b8">اعلانی وجود ندارد.</div>
+            <div class="nf-empty">
+                <i class="fa-regular fa-bell-slash"></i>
+                <p>اعلانی در این فیلتر نیست.</p>
+            </div>
         @endforelse
     </div>
 
-    <div style="margin-top:16px">{{ $items->links() }}</div>
+    <div class="nf-pager">{{ $items->withQueryString()->links() }}</div>
 </div>
+
+@if(session('status'))
+    <div class="nf-toast">{{ session('status') }}</div>
+    <script>setTimeout(()=>document.querySelector('.nf-toast')?.remove(),4000)</script>
+@endif
 @endsection
