@@ -12,6 +12,9 @@ class AnnouncementController extends Controller
     {
     }
 
+    /**
+     * لیست اعلان‌ها فقط برای کاربران واردشده (داشبورد) — نه فرانت‌اند عمومی.
+     */
     public function index()
     {
         return view('announcements', [
@@ -22,7 +25,6 @@ class AnnouncementController extends Controller
         ]);
     }
 
-    /** پنل مدیریت اعلان‌ها برای ادمین */
     public function manage(Request $request)
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
@@ -89,7 +91,6 @@ class AnnouncementController extends Controller
         return back()->with('status', 'اعلان حذف شد.');
     }
 
-    /** ارسال مجدد اعلان درون‌برنامه / ایمیل برای مخاطبان */
     public function rebroadcast(Announcement $announcement)
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
@@ -97,7 +98,7 @@ class AnnouncementController extends Controller
         $announcement->forceFill(['notified_at' => null])->saveQuietly();
         $sent = $this->announcements->broadcast($announcement->fresh());
 
-        return back()->with('status', "اعلان مجدداً ارسال شد ({$sent} اعلان درون‌برنامه)." );
+        return back()->with('status', "اعلان مجدداً ارسال شد ({$sent} اعلان درون‌برنامه).");
     }
 
     protected function validated(Request $request): array
