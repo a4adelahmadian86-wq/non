@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Mail\AnnouncementMail;
 use App\Mail\OrderPaidMail;
 use App\Mail\OtpMail;
 use App\Mail\PasswordChangedMail;
@@ -9,6 +10,7 @@ use App\Mail\SupportTicketMail;
 use App\Mail\TestMail;
 use App\Mail\TicketReplyMail;
 use App\Mail\WelcomeMail;
+use App\Models\Announcement;
 use App\Models\EmailLog;
 use App\Models\Order;
 use App\Models\SiteSetting;
@@ -35,6 +37,7 @@ class EmailService
         'ticket_sla_warning' => 'هشدار SLA',
         'ticket_sla_breach' => 'نقض SLA',
         'password_changed' => 'تغییر رمز',
+        'announcement' => 'اعلان عمومی',
         'test' => 'ایمیل آزمایشی',
     ];
 
@@ -278,6 +281,46 @@ class EmailService
             headline: $headline,
             body: $body,
             staffUrl: true,
+        );
+    }
+
+    public function sendSystemAnnouncement(User $user, Announcement $announcement): void
+    {
+        if (! $user->email || ! $this->isEnabled('announcement')) {
+            return;
+        }
+
+        $subject = match ($announcement->type) {
+            'danger' => 'اعلان مهم: '.$announcement->title,
+            'warning' => 'هشدار: '.$announcement->title,
+            default => 'اعلان فراست: '.$announcement->title,
+        };
+
+        $name = $user->name ?: 'کاربر';
+        $link = $announcement->link_url ?: url('/announcements');
+
+        $this->dispatch(
+            type: 'announcement',
+            to: $user->email,
+            user: $user,
+            subject: $subject,
+            mailable: new AnnouncementMail(
+                name: $name,
+                title: $announcement->title,
+                body: $announcement->body,
+                type: $announcement->type,
+                link: $link,
+                subjectLine: $subject,
+            ),
+            htmlView: 'emails.announcement',
+            viewData: [
+                'name' => $name,
+                'title' => $announcement->title,
+                'body' => $announcement->body,
+                'type' => $announcement->type,
+                'link' => $link,
+            ],
+            meta: ['announcement_id' => $announcement->id],
         );
     }
 
