@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018live">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018live">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019pro">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261019pro">
 
 <div class="tk-page" dir="rtl">
     <nav class="tk-breadcrumb">
@@ -34,7 +34,7 @@
                 <form method="get" action="{{ route('support') }}" class="tk-search">
                     @if(request('status'))<input type="hidden" name="status" value="{{ request('status') }}">@endif
                     @if(request('per_page'))<input type="hidden" name="per_page" value="{{ request('per_page') }}">@endif
-                    <input type="text" name="q" value="{{ request('q') }}" placeholder="جستجو" autocomplete="off">
+                    <input type="text" name="q" value="{{ request('q') }}" placeholder="جستجو کد یا موضوع" autocomplete="off">
                     <button type="submit" class="tk-search-btn" aria-label="جستجو"><i class="fa-solid fa-magnifying-glass"></i></button>
                 </form>
 
@@ -91,11 +91,11 @@
                     <tbody>
                         @forelse($tickets as $t)
                             <tr>
-                                <td><a class="tk-row-link" href="{{ route('support.show', $t) }}"></a><span>{{ $t->id }}</span></td>
+                                <td><a class="tk-row-link" href="{{ route('support.show', $t) }}"></a><span>{{ $t->displayCode() }}</span></td>
                                 <td>
                                     <a class="tk-row-link" href="{{ route('support.show', $t) }}"></a>
                                     <span class="tk-truncate">{{ $t->subject }}</span>
-                                    @if($t->status === 'answered')
+                                    @if($t->hasUnreadForCustomer() || $t->status === 'answered')
                                         <span class="tk-new-reply">پاسخ جدید</span>
                                     @endif
                                 </td>
