@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use App\Services\SupportSlaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class SupportReportController extends Controller
 {
@@ -16,13 +17,37 @@ class SupportReportController extends Controller
         $from = $request->date('from') ?: now()->subDays(30)->toDateString();
         $to = $request->date('to') ?: now()->toDateString();
 
-        $report = $sla->agentReport(
-            Carbon::parse($from)->startOfDay(),
-            Carbon::parse($to)->endOfDay()
-        );
+        $fromAt = Carbon::parse($from)->startOfDay();
+        $toAt = Carbon::parse($to)->endOfDay();
+
+        $report = $sla->agentReport($fromAt, $toAt);
 
         $breached = Ticket::query()->slaBreached()->count();
 
-        return view('admin.support-report', compact('report', 'from', 'to', 'breached'));
+        $csat = [
+            'count' => 0,
+            'avg' => null,
+            'distribution' => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0],
+        ];
+
+        if (Schema::hasColumn('tickets', 'csat_score')) {
+            $rated = Ticket::query()
+                ->whereNotNull('csat_score')
+                ->whereBetween('csat_at', [$fromAt, $toAt])
+                ->get(['csat_score']);
+
+            $csat['count'] = $rated->count();
+            if ($csat['count'] > 0) {
+                $csat['avg'] = round($rated->avg('csat_score'), 2);
+                foreach ($rated as $row) {
+                    $s = (int) $row->csat_score;
+                    if ($s >= 1 && $s <= 5) {
+                        $csat['distribution'][$s]++;
+                    }
+                }
+            }
+        }
+
+        return view('admin.support-report', compact('report', 'from', 'to', 'breached', 'csat'));
     }
 }

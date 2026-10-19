@@ -2,8 +2,8 @@
 
 @section('content')
 @php $lastMsgId = $ticket->messages->last()?->id ?? 0; @endphp
-<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261018live">
-<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261018live">
+<link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019csat">
+<link rel="stylesheet" href="{{ asset('css/support-tickets.css') }}?v=20261019csat">
 
 <div class="tk-page" dir="rtl" id="ticketDetailPage"
      data-poll-url="{{ route('support.messages.poll', $ticket) }}"
@@ -12,14 +12,14 @@
     <nav class="tk-breadcrumb">
         <div class="tk-breadcrumb-inner">
             <a href="{{ route('support.show', $ticket) }}" class="tk-crumb-strong">
-                جزییات تیکت <bdi>{{ $ticket->id }}</bdi>
+                جزییات تیکت <bdi>{{ $ticket->displayCode() }}</bdi>
             </a>
             <span class="tk-crumb-sep"></span>
             <a href="{{ route('dashboard') }}" class="tk-crumb-icon" title="داشبورد"><i class="fa-solid fa-house"></i></a>
             <span class="tk-crumb-dash">-</span>
             <a href="{{ route('support') }}">تیکت ها</a>
             <span class="tk-crumb-dash">-</span>
-            <span>شماره تیکت <bdi>{{ $ticket->id }}</bdi></span>
+            <span>شماره تیکت <bdi>{{ $ticket->displayCode() }}</bdi></span>
         </div>
     </nav>
 
@@ -29,11 +29,15 @@
                 <hgroup>
                     <h1>{{ $ticket->subject }}</h1>
                     <div class="tk-detail-sub">
-                        <p>شماره تیکت : <span>{{ $ticket->id }}</span></p>
+                        <p>شماره تیکت : <span>{{ $ticket->displayCode() }}</span></p>
                         <span class="tk-vsep"></span>
                         <p>زمان ایجاد : <span>{{ $ticket->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</span></p>
                         <span class="tk-vsep"></span>
                         <p class="tk-status" id="ticketStatusBadge"><span class="tk-dot tk-dot-{{ $ticket->statusColor() }}"></span><span id="ticketStatusLabel">{{ $ticket->statusLabel() }}</span></p>
+                        @if($ticket->department)
+                            <span class="tk-vsep"></span>
+                            <p>{{ $ticket->departmentLabel() }}</p>
+                        @endif
                     </div>
                 </hgroup>
                 @if($ticket->status !== 'closed')
@@ -110,6 +114,49 @@
                 </div>
             @else
                 <div class="sd-closed">این تیکت بسته شده است. برای موضوع جدید، تیکت تازه ثبت کنید.</div>
+
+                {{-- رضایت‌سنجی (CSAT) --}}
+                @if($ticket->canRateCsat())
+                    <div class="csat-box" id="csatBox">
+                        <div class="csat-head">
+                            <i class="fa-solid fa-face-smile"></i>
+                            <div>
+                                <strong>از پشتیبانی راضی بودید؟</strong>
+                                <span>با امتیاز ۱ تا ۵ به کیفیت پاسخ‌گویی کمک کنید.</span>
+                            </div>
+                        </div>
+                        <form method="post" action="{{ route('support.csat', $ticket) }}" id="csatForm" class="csat-form">
+                            @csrf
+                            <input type="hidden" name="score" id="csatScore" value="">
+                            <div class="csat-stars" role="group" aria-label="امتیاز رضایت">
+                                @for($i = 1; $i <= 5; $i++)
+                                    <button type="button" class="csat-star" data-score="{{ $i }}" title="{{ $i }} از ۵" aria-label="{{ $i }}">
+                                        <i class="fa-regular fa-star"></i>
+                                    </button>
+                                @endfor
+                            </div>
+                            <textarea name="comment" rows="2" maxlength="500" placeholder="نظر اختیاری (حداکثر ۵۰۰ کاراکتر)" class="csat-comment"></textarea>
+                            <button type="submit" class="csat-submit" id="csatSubmit" disabled>ثبت امتیاز</button>
+                        </form>
+                        @error('csat')
+                            <p class="csat-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @elseif($ticket->csat_score)
+                    <div class="csat-box csat-done">
+                        <div class="csat-head">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <div>
+                                <strong>امتیاز شما: {{ $ticket->csat_score }} از ۵</strong>
+                                @if($ticket->csat_comment)
+                                    <span>{{ $ticket->csat_comment }}</span>
+                                @else
+                                    <span>از بازخورد شما سپاسگزاریم.</span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @endif
             @endif
 
             <div class="tk-drop-overlay" id="dropOverlay" hidden>
@@ -131,7 +178,7 @@
             <button type="button" class="tk-dialog-x" data-close-dialog>&times;</button>
         </div>
         <div class="tk-dialog-line"></div>
-        <p class="tk-dialog-text">آیا از بستن تیکت مطمئن هستید؟</p>
+        <p class="tk-dialog-text">آیا از بستن تیکت مطمئن هستید؟ پس از بستن می‌توانید به کیفیت پشتیبانی امتیاز دهید.</p>
         <div class="tk-dialog-line"></div>
         <div class="tk-dialog-actions">
             <button type="button" class="tk-btn-ghost" data-close-dialog>لغو</button>
@@ -145,6 +192,45 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261018live"></script>
+<script src="{{ asset('js/support-ticket-detail.js') }}?v=20261019csat"></script>
+<script>
+(function () {
+    const form = document.getElementById('csatForm');
+    if (!form) return;
+    const scoreInput = document.getElementById('csatScore');
+    const submitBtn = document.getElementById('csatSubmit');
+    const stars = form.querySelectorAll('.csat-star');
+
+    function paint(n) {
+        stars.forEach(function (btn) {
+            const s = parseInt(btn.dataset.score, 10);
+            const icon = btn.querySelector('i');
+            if (s <= n) {
+                btn.classList.add('is-on');
+                icon.classList.remove('fa-regular');
+                icon.classList.add('fa-solid');
+            } else {
+                btn.classList.remove('is-on');
+                icon.classList.remove('fa-solid');
+                icon.classList.add('fa-regular');
+            }
+        });
+        scoreInput.value = n || '';
+        submitBtn.disabled = !n;
+    }
+
+    stars.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            paint(parseInt(btn.dataset.score, 10));
+        });
+        btn.addEventListener('mouseenter', function () {
+            paint(parseInt(btn.dataset.score, 10));
+        });
+    });
+    form.querySelector('.csat-stars')?.addEventListener('mouseleave', function () {
+        paint(parseInt(scoreInput.value || '0', 10));
+    });
+})();
+</script>
 @endpush
 @endsection
