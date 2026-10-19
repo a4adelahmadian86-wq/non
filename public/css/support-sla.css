@@ -1,0 +1,16 @@
+/* SLA status pills for support desk */
+.sla-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:.68rem;
+  font-weight:700;
+  line-height:1.4;
+  white-space:nowrap;
+}
+.sla-ok{background:#ecfdf5;color:#047857}
+.sla-warn{background:#fffbeb;color:#b45309}
+.sla-danger{background:#fef2f2;color:#b91c1c}
+.sla-muted{background:#f1f5f9;color:#64748b}
