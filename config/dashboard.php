@@ -85,9 +85,9 @@ return [
         [
             'key' => 'notifications', 'label' => 'اعلان‌ها و پیام‌ها', 'icon' => 'fa-bell',
             'items' => [
-                ['key' => 'notifications.alerts', 'label' => 'اعلان‌ها', 'icon' => 'fa-bell', 'route' => 'announcements'],
-                ['key' => 'notifications.messages', 'label' => 'پیام‌ها', 'icon' => 'fa-comments', 'planned' => true],
-                ['key' => 'notifications.system', 'label' => 'اعلان‌های سیستم', 'icon' => 'fa-circle-info', 'planned' => true, 'admin_only' => true],
+                ['key' => 'notifications.inbox', 'label' => 'صندوق اعلان‌ها', 'icon' => 'fa-bell', 'route' => 'platform.notifications'],
+                ['key' => 'notifications.alerts', 'label' => 'اعلانات عمومی', 'icon' => 'fa-bullhorn', 'route' => 'announcements'],
+                ['key' => 'notifications.support', 'label' => 'گفتگوهای پشتیبانی', 'icon' => 'fa-headset', 'route' => 'support'],
             ],
         ],
         [
