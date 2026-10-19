@@ -49,9 +49,14 @@ class SupportNotificationService
         if ($this->smsEnabled('ticket_created_staff')) {
             $mobile = $this->staffAlertMobile();
             if ($mobile) {
-                $this->sms->sendText(
+                $this->sms->sendEvent(
                     $mobile,
-                    'فراست: تیکت جدید '.$ticket->displayCode().' — '.Str::limit($ticket->subject, 40)
+                    'ticket_created_staff',
+                    'فراست: تیکت جدید '.$ticket->displayCode().' — '.Str::limit($ticket->subject, 40),
+                    [
+                        'token' => $ticket->displayCode(),
+                        'token2' => Str::limit($ticket->subject, 30),
+                    ]
                 );
             }
         }
@@ -83,9 +88,11 @@ class SupportNotificationService
         if ($this->smsEnabled('ticket_customer_reply') && $ticket->priority === 'high') {
             $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
             if ($mobile) {
-                $this->sms->sendText(
+                $this->sms->sendEvent(
                     $mobile,
-                    'فراست: پاسخ فوری کاربر روی '.$ticket->displayCode()
+                    'ticket_customer_reply',
+                    'فراست: پاسخ فوری کاربر روی '.$ticket->displayCode(),
+                    ['token' => $ticket->displayCode()]
                 );
             }
         }
@@ -110,9 +117,11 @@ class SupportNotificationService
             $this->email->sendTicketReply($ticket->user, $ticket, $body);
 
             if ($this->smsEnabled('ticket_reply') && $ticket->user?->mobile) {
-                $this->sms->sendText(
+                $this->sms->sendEvent(
                     $ticket->user->mobile,
-                    'فراست: پاسخ جدید برای تیکت '.$ticket->displayCode().'. مشاهده در پنل پشتیبانی.'
+                    'ticket_reply',
+                    'فراست: پاسخ جدید برای تیکت '.$ticket->displayCode().'. مشاهده در پنل پشتیبانی.',
+                    ['token' => $ticket->displayCode()]
                 );
             }
         } elseif ($ticket->guest_email) {
@@ -133,15 +142,17 @@ class SupportNotificationService
                 $ticket->user_id,
                 'ticket_closed',
                 'تیکت '.$ticket->displayCode().' بسته شد',
-                'در صورت نیاز می‌توانید تیکت جدید ثبت کنید.',
+                'در صورت نیاز می‌توانید تیکت جدید ثبت کنید یا به کیفیت پشتیبانی امتیاز دهید.',
                 $ticket
             );
             $this->email->sendTicketClosed($ticket->user, $ticket);
 
             if ($this->smsEnabled('ticket_closed') && $ticket->user?->mobile) {
-                $this->sms->sendText(
+                $this->sms->sendEvent(
                     $ticket->user->mobile,
-                    'فراست: تیکت '.$ticket->displayCode().' بسته شد.'
+                    'ticket_closed',
+                    'فراست: تیکت '.$ticket->displayCode().' بسته شد.',
+                    ['token' => $ticket->displayCode()]
                 );
             }
         }
@@ -164,9 +175,11 @@ class SupportNotificationService
         $this->email->sendTicketAssigned($agent, $ticket);
 
         if ($this->smsEnabled('ticket_assigned') && $agent->mobile) {
-            $this->sms->sendText(
+            $this->sms->sendEvent(
                 $agent->mobile,
-                'فراست: تیکت '.$ticket->displayCode().' به شما ارجاع شد.'
+                'ticket_assigned',
+                'فراست: تیکت '.$ticket->displayCode().' به شما ارجاع شد.',
+                ['token' => $ticket->displayCode()]
             );
         }
     }
@@ -192,7 +205,15 @@ class SupportNotificationService
         if ($ticket->priority === 'high' && $this->smsEnabled('ticket_sla_warning')) {
             $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
             if ($mobile) {
-                $this->sms->sendText($mobile, 'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label);
+                $this->sms->sendEvent(
+                    $mobile,
+                    'ticket_sla_warning',
+                    'فراست SLA: '.$ticket->displayCode().' — '.$minutesLeft.'د تا '.$label,
+                    [
+                        'token' => $ticket->displayCode(),
+                        'token2' => (string) $minutesLeft,
+                    ]
+                );
             }
         }
     }
@@ -218,7 +239,12 @@ class SupportNotificationService
         if ($this->smsEnabled('ticket_sla_breach')) {
             $mobile = $ticket->assignee?->mobile ?: $this->staffAlertMobile();
             if ($mobile) {
-                $this->sms->sendText($mobile, 'فراست نقض SLA: '.$ticket->displayCode().' — '.$label);
+                $this->sms->sendEvent(
+                    $mobile,
+                    'ticket_sla_breach',
+                    'فراست نقض SLA: '.$ticket->displayCode().' — '.$label,
+                    ['token' => $ticket->displayCode()]
+                );
             }
         }
     }

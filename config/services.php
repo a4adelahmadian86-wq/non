@@ -32,6 +32,18 @@ return [
     'kavenegar' => [
         'key' => env('KAVENEGAR_API_KEY'),
         'sender' => env('KAVENEGAR_SENDER'),
+        // نام قالب OTP در پنل کاوه‌نگار (VerifyLookup)
+        'otp_template' => env('KAVENEGAR_OTP_TEMPLATE'),
+        // قالب‌های اختیاری رویدادهای پشتیبانی — یا از config/support.php
+        'templates' => [
+            'ticket_reply' => env('KAVENEGAR_TPL_TICKET_REPLY'),
+            'ticket_closed' => env('KAVENEGAR_TPL_TICKET_CLOSED'),
+            'ticket_assigned' => env('KAVENEGAR_TPL_TICKET_ASSIGNED'),
+            'ticket_created_staff' => env('KAVENEGAR_TPL_TICKET_CREATED_STAFF'),
+            'ticket_customer_reply' => env('KAVENEGAR_TPL_TICKET_CUSTOMER_REPLY'),
+            'ticket_sla_warning' => env('KAVENEGAR_TPL_SLA_WARNING'),
+            'ticket_sla_breach' => env('KAVENEGAR_TPL_SLA_BREACH'),
+        ],
     ],
 
     // سرویس‌های ایمیل رایگان / کم‌هزینه

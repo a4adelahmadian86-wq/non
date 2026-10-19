@@ -38,4 +38,28 @@ return [
     'warn_before_minutes' => (int) env('SUPPORT_SLA_WARN_BEFORE', 30),
 
     'monitor_enabled' => filter_var(env('SUPPORT_SLA_MONITOR', true), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | نام قالب‌های VerifyLookup کاوه‌نگار برای رویدادهای پشتیبانی
+    | خالی = ارسال متنی ساده (اگر sms_*_enabled در تنظیمات سایت روشن باشد)
+    |--------------------------------------------------------------------------
+    |
+    | پیشنهاد توکن‌ها در پنل کاوه‌نگار:
+    |  ticket_reply:        %token = کد تیکت
+    |  ticket_closed:       %token = کد تیکت
+    |  ticket_assigned:     %token = کد تیکت
+    |  ticket_created_staff:%token = کد تیکت ، %token2 = موضوع کوتاه
+    |  ticket_sla_warning:  %token = کد تیکت ، %token2 = دقیقه باقیمانده
+    |  ticket_sla_breach:   %token = کد تیکت
+    */
+    'sms_templates' => [
+        'ticket_reply' => env('KAVENEGAR_TPL_TICKET_REPLY'),
+        'ticket_closed' => env('KAVENEGAR_TPL_TICKET_CLOSED'),
+        'ticket_assigned' => env('KAVENEGAR_TPL_TICKET_ASSIGNED'),
+        'ticket_created_staff' => env('KAVENEGAR_TPL_TICKET_CREATED_STAFF'),
+        'ticket_customer_reply' => env('KAVENEGAR_TPL_TICKET_CUSTOMER_REPLY'),
+        'ticket_sla_warning' => env('KAVENEGAR_TPL_SLA_WARNING'),
+        'ticket_sla_breach' => env('KAVENEGAR_TPL_SLA_BREACH'),
+    ],
 ];
