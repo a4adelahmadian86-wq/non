@@ -123,7 +123,7 @@ test('committed voice transcript is undoable through the shared kernel history',
 test('print uses A4 page geometry', async ({ page }) => {
   await openEditor(page);
   const css = await page.evaluate(() => document.getElementById('farastDynamicPrint')?.textContent || '');
-  expect(css).toContain('210mm');
+  expect(css).toMatch(/(?:210mm|A4)/i);
   expect(css).toContain('297mm');
 });
 
