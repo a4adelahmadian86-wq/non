@@ -1,0 +1,93 @@
+name: FARAST CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: farast-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  laravel-and-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APP_ENV: testing
+      APP_DEBUG: "true"
+      APP_URL: http://127.0.0.1:8000
+      DB_CONNECTION: sqlite
+      DB_DATABASE: database/database.sqlite
+      CACHE_STORE: array
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+      COMPOSER_PROCESS_TIMEOUT: 900
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, bcmath, gd, sqlite3, pdo_sqlite, dom, xml, curl, zip
+          coverage: none
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+        continue-on-error: true
+
+      - name: Prepare Laravel
+        run: |
+          mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+          composer install --no-interaction --prefer-dist --no-progress
+          printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://127.0.0.1:8000' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+          php artisan key:generate
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: PHP tests
+        run: php artisan test
+
+      - name: Seed browser test account
+        env:
+          ADMIN_MOBILE: "09151234567"
+          ADMIN_INITIAL_PASSWORD: ${{ github.run_id }}-farast-e2e
+        run: php artisan db:seed --force
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start Laravel server
+        run: |
+          php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-server.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:8000/up >/dev/null; then
+              echo "Laravel is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/farast-server.log
+          exit 1
+
+      - name: Browser tests
+        run: npx playwright test --workers=1
+
+      - name: Show Laravel logs on failure
+        if: failure()
+        run: |
+          if [ -f /tmp/farast-server.log ]; then cat /tmp/farast-server.log; fi
