@@ -347,12 +347,12 @@ class SupportController extends Controller
 
         $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);
 
-        $canned = [
+        $canned = config('support.canned_replies', [
             'سلام، پیام شما دریافت شد. در حال بررسی هستیم و به‌زودی پاسخ می‌دهیم.',
             'برای پیگیری دقیق‌تر لطفاً اسکرین‌شات یا جزئیات بیشتری ارسال کنید.',
             'مشکل بررسی و برطرف شد. لطفاً مجدداً امتحان کنید و نتیجه را اعلام بفرمایید.',
             'با تشکر از صبوری شما. تیکت بسته شد. در صورت نیاز تیکت جدید ثبت کنید.',
-        ];
+        ]);
 
         return view('admin.support', compact('tickets', 'active', 'stats', 'canned', 'agents'));
     }

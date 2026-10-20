@@ -184,6 +184,7 @@
             @endif
 
             <div class="sd-messages" id="chatMessages">
+                <div id="adminThread" data-poll-url="{{ route('support.messages.poll', $active) }}" data-last-id="{{ $active->messages->last()?->id ?? 0 }}">
                 @foreach($active->messages as $m)
                     @php $isStaff = $m->isFromStaff(); $isInternal = (bool) $m->is_internal; @endphp
                     <div class="sd-msg {{ $isStaff ? 'sd-msg-user' : 'sd-msg-staff' }}">
@@ -208,6 +209,7 @@
                         </div>
                     </div>
                 @endforeach
+                </div>
             </div>
 
             @if(count($canned))
@@ -277,6 +279,38 @@
   });
   const toast = document.querySelector('.sd-toast');
   if (toast) setTimeout(() => toast.remove(), 4000);
+
+  // Poll for new messages on active ticket
+  const thread = document.getElementById('adminThread');
+  if (thread && thread.dataset.pollUrl) {
+    let lastId = parseInt(thread.dataset.lastId || '0', 10) || 0;
+    const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    setInterval(async () => {
+      try {
+        const url = thread.dataset.pollUrl + (thread.dataset.pollUrl.includes('?') ? '&' : '?') + 'after_id=' + lastId;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.ok || !Array.isArray(data.messages) || !data.messages.length) return;
+        data.messages.forEach((m) => {
+          if (m.id <= lastId) return;
+          lastId = m.id;
+          const isStaff = !!m.is_staff;
+          const isInternal = !!m.is_internal;
+          const wrap = document.createElement('div');
+          wrap.className = 'sd-msg ' + (isStaff ? 'sd-msg-user' : 'sd-msg-staff');
+          wrap.innerHTML = (isStaff ? '' : '<div class="sd-avatar sd-avatar-sm"><i class="fa-solid fa-user"></i></div>') +
+            '<div class="sd-msg-col"><div class="sd-bubble"' + (isInternal ? ' style="border:1px dashed #f59e0b;background:#fffbeb;color:#78350f"' : '') + '>' +
+            (isInternal ? '<div style="font-size:.72rem;font-weight:800;margin-bottom:4px">یادداشت داخلی</div>' : '') +
+            '<pre>' + esc(m.body) + '</pre></div>' +
+            '<time class="sd-msg-time">' + esc(m.time) + ' · ' + (isInternal ? 'داخلی' : (isStaff ? 'پشتیبانی' : 'کاربر')) + '</time></div>';
+          thread.appendChild(wrap);
+        });
+        thread.dataset.lastId = String(lastId);
+        if (box) box.scrollTop = box.scrollHeight;
+      } catch (e) {}
+    }, 8000);
+  }
 })();
 </script>
 @endpush

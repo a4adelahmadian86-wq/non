@@ -23,6 +23,13 @@ class SupportReportController extends Controller
         $report = $sla->agentReport($fromAt, $toAt);
 
         $breached = Ticket::query()->slaBreached()->count();
+        $backlog = Ticket::query()->openQueue()->count();
+        $needsReply = Ticket::query()->needsReply()->count();
+        $openInRange = Ticket::query()->whereBetween('created_at', [$fromAt, $toAt])->count();
+        $closedInRange = Ticket::query()->where('status', 'closed')->whereBetween('closed_at', [$fromAt, $toAt])->count();
+        $breachRate = $openInRange > 0
+            ? round(100 * Ticket::query()->whereBetween('created_at', [$fromAt, $toAt])->slaBreached()->count() / max(1, $openInRange), 1)
+            : null;
 
         $csat = [
             'count' => 0,
@@ -48,6 +55,6 @@ class SupportReportController extends Controller
             }
         }
 
-        return view('admin.support-report', compact('report', 'from', 'to', 'breached', 'csat'));
+        return view('admin.support-report', compact('report', 'from', 'to', 'breached', 'csat', 'backlog', 'needsReply', 'openInRange', 'closedInRange', 'breachRate'));
     }
 }

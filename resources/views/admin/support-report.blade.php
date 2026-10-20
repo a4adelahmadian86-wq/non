@@ -50,6 +50,13 @@
                 </div>
             </div>
 
+            <div class="sd-admin-stats" style="margin:0 0 16px;grid-template-columns:repeat(4,1fr)">
+                <div class="sd-admin-stat"><b>{{ $backlog ?? 0 }}</b><span>بک‌لاگ باز (الان)</span></div>
+                <div class="sd-admin-stat"><b>{{ $needsReply ?? 0 }}</b><span>نیازمند پاسخ</span></div>
+                <div class="sd-admin-stat"><b>{{ $openInRange ?? 0 }} / {{ $closedInRange ?? 0 }}</b><span>ایجاد / بسته‌شده در بازه</span></div>
+                <div class="sd-admin-stat"><b>{{ $breachRate !== null ? $breachRate.'%' : '—' }}</b><span>نرخ نقض SLA (بازه)</span></div>
+            </div>
+
             @if($csat['count'] > 0)
                 <div class="csat-dist" style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px">
                     @for($i = 5; $i >= 1; $i--)
@@ -86,6 +93,7 @@
                                 <td>{{ $row['closed'] }}</td>
                                 <td>{{ $row['replies'] }}</td>
                                 <td>{{ $row['avg_first_response_minutes'] !== null ? $row['avg_first_response_minutes'].' دقیقه' : '—' }}</td>
+                                <td>{{ $row['median_first_response_minutes'] !== null ? $row['median_first_response_minutes'].' دقیقه' : '—' }}</td>
                                 <td>
                                     @if($row['sla_rate'] !== null)
                                         <span class="tk-status">
@@ -98,7 +106,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="tk-empty-row">در این بازه داده‌ای نیست.</td></tr>
+                            <tr><td colspan="7" class="tk-empty-row">در این بازه داده‌ای نیست.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
