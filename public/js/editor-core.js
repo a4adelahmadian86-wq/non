@@ -16,7 +16,7 @@ const getEditors=()=>$$('.farast-editor');
 const getSelectionInfo=()=>{
   const s=getSelection(); if(!s||!s.rangeCount)return null;
   const r=s.getRangeAt(0);
-  const blockModelId=node=>node?.dataset?.layoutSourceId||node?.dataset?.blockId;
+  const blockModelId=node=>node?.dataset?.layoutSourceId||node?.closest?.('[data-layout-source-id]')?.dataset?.layoutSourceId||node?.dataset?.blockId;
   const point=(node,offset)=>{
     let el=node?.nodeType===1?node:node?.parentElement;
     let block=el?.closest?.('[data-block-id]');
