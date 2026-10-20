@@ -170,8 +170,8 @@
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای استفاده از میکروفون ابتدا وارد حساب کاربری شو.';return;}
     var config=null;
     try{var sr=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'}});if(sr.ok)config=await sr.json();}catch(e){}
-    if(!config||!config.server_stt||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){var unavailable='موتور گفتار خودمیزبان تنظیم نشده است؛ برای حفظ پایداری، از سرویس ابری یا صدای مرورگر استفاده نمی‌شود.';status.textContent=unavailable;voiceTitle.textContent='موتور گفتار تنظیم نشده';voiceCaption.textContent=unavailable;return;}
-    if(config.server_stt_token_configured===false){conversationActive=false;var tokenError='توکن احراز هویت موتور گفتار در تنظیمات محلی پیدا نشد. مقدار FARAST_VOICE_TOKEN را در فایل .env تنظیم کن و کش تنظیمات لاراول را پاک کن.';status.textContent=tokenError;voiceTitle.textContent='توکن صوتی تنظیم نشده';voiceCaption.textContent=tokenError;return;}
+    if(!config||!config.server_stt||!config.server_tts||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){var unavailable='موتور تشخیص گفتار یا تولید صدای پاسخ تنظیم نشده است؛ وضعیت هر دو سرویس صوتی را بررسی کن.';status.textContent=unavailable;voiceTitle.textContent='موتور گفتار تنظیم نشده';voiceCaption.textContent=unavailable;return;}
+    if(config.server_stt_token_configured===false||config.server_tts_token_configured===false){conversationActive=false;var tokenError='توکن تشخیص گفتار یا صدای پاسخ تنظیم نشده است. FARAST_VOICE_ASR_TOKEN و FARAST_VOICE_TTS_TOKEN را بررسی کن؛ اگر از توکن مشترک استفاده می‌کنی، FARAST_VOICE_TOKEN باید در تنظیمات لاراول باشد و کش تنظیمات پاک شود.';status.textContent=tokenError;voiceTitle.textContent='توکن صوتی تنظیم نشده';voiceCaption.textContent=tokenError;return;}
     try{
       mediaStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
       var mime='audio/webm';
