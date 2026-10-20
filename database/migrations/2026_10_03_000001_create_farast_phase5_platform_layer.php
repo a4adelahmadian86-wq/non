@@ -17,6 +17,54 @@ return new class extends Migration {
             if(!Schema::hasColumn('farast_applications','stable_id'))$t->uuid('stable_id')->nullable();
             foreach(['workflow','project_types','tools','capabilities','templates','agent_profile','export_formats','entitlement_requirements'] as $c)if(!Schema::hasColumn('farast_applications',$c))$t->json($c)->nullable();
         });
+        if(Schema::hasTable('farast_entitlements'))Schema::table('farast_entitlements',function(Blueprint $t){
+            if(!Schema::hasColumn('farast_entitlements','organization_id'))$t->unsignedBigInteger('organization_id')->nullable()->index();
+            if(!Schema::hasColumn('farast_entitlements','mode'))$t->string('mode',40)->default('temporary_purchase');
+            if(!Schema::hasColumn('farast_entitlements','used_quantity'))$t->unsignedInteger('used_quantity')->default(0);
+            if(!Schema::hasColumn('farast_entitlements','unit'))$t->string('unit',40)->nullable();
+            if(!Schema::hasColumn('farast_entitlements','priority'))$t->unsignedInteger('priority')->default(100);
+        });
+        if(Schema::hasTable('farast_feedback_evidence'))Schema::table('farast_feedback_evidence',function(Blueprint $t){
+            if(!Schema::hasColumn('farast_feedback_evidence','feedback_id'))$t->unsignedBigInteger('feedback_id')->nullable()->index();
+            if(!Schema::hasColumn('farast_feedback_evidence','project_id'))$t->unsignedBigInteger('project_id')->nullable()->index();
+            if(!Schema::hasColumn('farast_feedback_evidence','source'))$t->string('source',40)->nullable();
+            if(!Schema::hasColumn('farast_feedback_evidence','tool_id'))$t->unsignedBigInteger('tool_id')->nullable()->index();
+            if(!Schema::hasColumn('farast_feedback_evidence','tool_version_id'))$t->unsignedBigInteger('tool_version_id')->nullable()->index();
+            if(!Schema::hasColumn('farast_feedback_evidence','evidence_type'))$t->string('evidence_type',60)->default('general');
+            if(!Schema::hasColumn('farast_feedback_evidence','input_meta'))$t->json('input_meta')->nullable();
+            if(!Schema::hasColumn('farast_feedback_evidence','output_meta'))$t->json('output_meta')->nullable();
+            if(!Schema::hasColumn('farast_feedback_evidence','confidence'))$t->decimal('confidence',5,4)->nullable();
+            if(!Schema::hasColumn('farast_feedback_evidence','frequency'))$t->unsignedInteger('frequency')->default(1);
+            if(!Schema::hasColumn('farast_feedback_evidence','independent_confirmations'))$t->unsignedInteger('independent_confirmations')->default(0);
+            if(!Schema::hasColumn('farast_feedback_evidence','checksum'))$t->string('checksum',64)->nullable();
+        });
+        if(Schema::hasTable('farast_review_cases'))Schema::table('farast_review_cases',function(Blueprint $t){
+            if(!Schema::hasColumn('farast_review_cases','evidence_id'))$t->unsignedBigInteger('evidence_id')->nullable()->index();
+            if(!Schema::hasColumn('farast_review_cases','reviewer_id'))$t->unsignedBigInteger('reviewer_id')->nullable();
+            if(!Schema::hasColumn('farast_review_cases','decision'))$t->string('decision',30)->nullable();
+            if(!Schema::hasColumn('farast_review_cases','reviewed_at'))$t->timestamp('reviewed_at')->nullable();
+            if(!Schema::hasColumn('farast_review_cases','notes'))$t->text('notes')->nullable();
+        });
+        if(Schema::hasTable('farast_approved_knowledge'))Schema::table('farast_approved_knowledge',function(Blueprint $t){
+            if(!Schema::hasColumn('farast_approved_knowledge','review_case_id'))$t->unsignedBigInteger('review_case_id')->nullable()->index();
+            if(!Schema::hasColumn('farast_approved_knowledge','capability_code'))$t->string('capability_code',100)->nullable()->index();
+            if(!Schema::hasColumn('farast_approved_knowledge','knowledge_version'))$t->string('knowledge_version',40)->nullable();
+            if(!Schema::hasColumn('farast_approved_knowledge','content'))$t->json('content')->nullable();
+            if(!Schema::hasColumn('farast_approved_knowledge','approved_by'))$t->unsignedBigInteger('approved_by')->nullable();
+            if(!Schema::hasColumn('farast_approved_knowledge','approved_at'))$t->timestamp('approved_at')->nullable();
+            if(!Schema::hasColumn('farast_approved_knowledge','checksum'))$t->string('checksum',64)->nullable();
+        });
+        if(Schema::hasTable('farast_evaluation_datasets'))Schema::table('farast_evaluation_datasets',function(Blueprint $t){
+            if(!Schema::hasColumn('farast_evaluation_datasets','version'))$t->string('version',40)->default('1.0.0');
+            if(!Schema::hasColumn('farast_evaluation_datasets','status'))$t->string('status',30)->default('draft');
+            if(!Schema::hasColumn('farast_evaluation_datasets','metadata'))$t->json('metadata')->nullable();
+        });
+        if(Schema::hasTable('farast_evaluation_cases'))Schema::table('farast_evaluation_cases',function(Blueprint $t){
+            if(!Schema::hasColumn('farast_evaluation_cases','tool_id'))$t->unsignedBigInteger('tool_id')->nullable();
+            if(!Schema::hasColumn('farast_evaluation_cases','tool_version_id'))$t->unsignedBigInteger('tool_version_id')->nullable();
+            if(!Schema::hasColumn('farast_evaluation_cases','input_payload'))$t->json('input_payload')->nullable();
+            if(!Schema::hasColumn('farast_evaluation_cases','expected_payload'))$t->json('expected_payload')->nullable();
+        });
         if(Schema::hasTable('farast_capabilities')&&!Schema::hasColumn('farast_capabilities','stable_id'))Schema::table('farast_capabilities',fn(Blueprint $t)=>$t->uuid('stable_id')->nullable());
         if(Schema::hasTable('farast_tools'))Schema::table('farast_tools',function(Blueprint $t){
             if(!Schema::hasColumn('farast_tools','stable_id'))$t->uuid('stable_id')->nullable();
