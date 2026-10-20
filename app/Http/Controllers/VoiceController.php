@@ -56,7 +56,7 @@ class VoiceController extends Controller
     {
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
         $payload=['uid'=>(int)$request->user()->id,'locale'=>$request->string('locale')->toString(),'iat'=>time(),'exp'=>time()+120,'nonce'=>bin2hex(random_bytes(12))];
-        return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','')),'/')]);
+        return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',''),'/')]);
     }
 
     public function streamConfig(Request $request)
@@ -102,7 +102,7 @@ class VoiceController extends Controller
         $quota->assertAllowed($request->user(),'can_voice');
         $data=$request->validate(['audio'=>['required','file','max:15360','mimetypes:audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/mp4'],'locale'=>['required','string','in:fa-IR,en-US,ar-SA'],'processing_mode'=>['nullable','string','in:automatic,local,server,external']]);
         $asrUrl=trim((string)config('services.voice_asr.url',''));
-        $asrToken=trim((string)(config('services.voice_asr.token')?:env('FARAST_VOICE_TOKEN','')));
+        $asrToken=trim((string)(config('services.voice_asr.token','')));
         if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
         $selfHosted=$asrUrl!==''&&$asrToken!=='';
         $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
