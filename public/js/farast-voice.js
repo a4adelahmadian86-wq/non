@@ -30,7 +30,7 @@
   if(!editor){console.error('[FARAST VOICE] Editor surface not found.');return;}
   const meta=document.querySelector('meta[name="farast-capabilities"]');let caps={can_voice:true,can_type:true};try{if(meta?.content)caps={...caps,...JSON.parse(meta.content)}}catch{}
   const authenticated=window.FARAST_AUTHENTICATED===true||root?.dataset.authenticated==='1',csrf=document.querySelector('meta[name="csrf-token"]')?.content||'',Sound=()=>window.FarastSound,$=id=>document.getElementById(id),nf=n=>new Intl.NumberFormat('fa-IR').format(n||0);
-  let panel,ws=null,mediaStream=null,audioContext=null,sourceNode=null,workletNode=null,chunkedRecorder=null,chunkedChunks=[],chunkedStream=null,chunkedStopping=false,chunkedRotate=false,chunkedSegmentTimer=null,chunkedUploadQueue=Promise.resolve(),chunkedFailure=null,voiceInsertSeq=0,voiceSequence=0,wanted=false,paused=false,savedRange=null,sessionAnchor=null,interimNode=null,sessionWords=0,lastFinalText='',finalFingerprints=new Set(),startedAt=0,timer=null,stopGraceTimer=null,starting=false,reconnectTimer=null,reconnectAttempts=0,reconnectInFlight=false,nativeRecognition=null,nativeActive=false,nativeQueue=Promise.resolve();
+  let panel,ws=null,mediaStream=null,audioContext=null,sourceNode=null,workletNode=null,chunkedRecorder=null,chunkedChunks=[],chunkedStream=null,chunkedStopping=false,voiceInsertSeq=0,voiceSequence=0,wanted=false,paused=false,savedRange=null,sessionAnchor=null,interimNode=null,sessionWords=0,lastFinalText='',finalFingerprints=new Set(),startedAt=0,timer=null,stopGraceTimer=null,starting=false,reconnectTimer=null,reconnectAttempts=0,reconnectInFlight=false,nativeRecognition=null,nativeActive=false,nativeQueue=Promise.resolve();
   panel=document.createElement('section');panel.id='farastVoicePanel';panel.className='farast-voice-panel';panel.dir='rtl';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','تایپ صوتی حرفه‌ای فراست');panel.innerHTML=`<div class="farast-voice-head"><div class="farast-voice-orb"><i class="fa-solid fa-microphone-lines"></i></div><div class="farast-voice-title"><b>تایپ صوتی فراست</b><small id="fvMode">تایپ زنده با هوش مصنوعی</small></div><button type="button" class="farast-voice-close" id="fvClose" aria-label="بستن">×</button></div><div class="farast-voice-body"><div class="farast-voice-status"><span><i class="farast-voice-dot"></i><b id="fvStatus" aria-live="polite">آماده</b></span><span class="farast-voice-time" id="fvTime">00:00</span></div><div class="farast-voice-wave" aria-hidden="true">${'<i></i>'.repeat(18)}</div><div class="farast-voice-live is-empty" id="fvLive" aria-live="polite">متن هم‌زمان در برگه نوشته می‌شود.</div><div class="farast-voice-meta"><div><small>کلمات این جلسه</small><b id="fvWords">۰</b></div><div><small>اطمینان</small><b id="fvConfidence">—</b></div><div><small>موتور</small><b id="fvEngine">—</b></div></div><div class="farast-voice-language"><label for="fvLocale">زبان گفتار</label><select id="fvLocale"><option value="fa-IR">فارسی — ایران</option><option value="en-US">English — US</option><option value="ar-SA">العربية — السعودية</option></select></div><div class="farast-voice-actions"><button type="button" class="farast-voice-start" id="fvNativeStart" title="رایگان؛ بدون کلید API فراست"><i class="fa-solid fa-microphone"></i> شروع رایگان</button><button type="button" class="farast-voice-start" id="fvStart" title="استفاده از موتور آنلاین پیکربندی‌شده"><i class="fa-solid fa-cloud"></i> آنلاین</button><button type="button" class="farast-voice-pause" id="fvPause" disabled><i class="fa-solid fa-pause"></i> مکث</button><button type="button" class="farast-voice-stop" id="fvStop" disabled><i class="fa-solid fa-stop"></i> پایان</button></div><p class="farast-voice-note" id="fvFreeNote">حالت رایگان از تشخیص گفتار مرورگر استفاده می‌کند و کلید API یا هزینهٔ سرور فراست ندارد. پردازش صدا را مرورگر/سیستم‌عامل تعیین می‌کند؛ آفلاین بودن در همهٔ مرورگرها تضمین نیست.</p><div class="farast-voice-error" id="fvError" role="alert"></div><div class="farast-voice-note" id="fvPrivacyNote"><i class="fa-solid fa-bolt"></i><span>در حالت جریان زنده، صدا به‌صورت تکه‌ای پردازش می‌شود و فایل صوتی کامل ساخته نمی‌شود.</span></div></div>`;document.body.appendChild(panel);
   const status=$('fvStatus'),live=$('fvLive'),time=$('fvTime'),words=$('fvWords'),confidence=$('fvConfidence'),engine=$('fvEngine'),modeLabel=$('fvMode'),startBtn=$('fvStart'),pauseBtn=$('fvPause'),stopBtn=$('fvStop'),locale=$('fvLocale'),errorBox=$('fvError');
   function rememberRange(){const s=window.getSelection();if(!s||!s.rangeCount)return;const r=s.getRangeAt(0);if(editor.contains(r.commonAncestorContainer))savedRange=r.cloneRange()}
@@ -88,60 +88,38 @@
   }
   function scheduleReconnect(){if(!wanted||paused||reconnectInFlight)return;if(reconnectAttempts>=8){showError('اتصال تایپ صوتی پس از چند تلاش ناموفق برقرار نشد.');wanted=false;return}const delay=Math.min(30000,1000*Math.pow(2,reconnectAttempts));reconnectAttempts++;setStatus('تلاش برای اتصال دوباره…');clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(!wanted)return;reconnectInFlight=true;start(true).finally(()=>{reconnectInFlight=false})},delay)}
   function showInterim(text){const value=String(text||'').trim();if(!value){if(live.classList.contains('is-empty')===false&&!wanted)return;live.textContent=value||'متن هم‌زمان در برگه نوشته می‌شود.';live.classList.toggle('is-empty',!value);return}live.textContent=value;live.classList.remove('is-empty')}
-  function enqueueChunkedBlob(blob){
-    if(!blob?.size)return;
-    chunkedUploadQueue=chunkedUploadQueue.then(async()=>{
-      const body=new FormData();const extension=blob.type.includes('ogg')?'ogg':'webm';body.append('audio',blob,'farast-voice.'+extension);body.append('locale',locale.value);body.append('processing_mode','server');
-      const requestId=(globalThis.crypto?.randomUUID?.()||('voice-'+Date.now()+'-'+Math.random().toString(16).slice(2)));
-      const response=await fetch('/editor/voice/transcribe',{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','X-Farast-Voice-Request':requestId,'Idempotency-Key':requestId},body});
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok||!data.ok){
-        if(response.status===502&&data.message==='گفتاری در این قطعه تشخیص داده نشد.')return;
-        throw new Error(data.message||'رونویسی صدا انجام نشد؛ وضعیت سرویس صوتی را بررسی کنید.');
-      }
-      const transcript=String(data.text||'').trim();
-      if(transcript){const inserted=await commitFinal(transcript);if(inserted===false)throw new Error('گفتار تشخیص داده شد، اما درج متن در سند انجام نشد.');}
-      if(data.engine)engine.textContent=String(data.engine);
-      if(wanted){setStatus('در حال گوش دادن؛ متن به‌روزرسانی شد');if(transcript){live.textContent=transcript;live.classList.remove('is-empty')}}
-    }).catch(e=>{chunkedFailure=chunkedFailure||e;showError(e.message||'رونویسی صوتی انجام نشد.');if(wanted)setStatus('در حال گوش دادن؛ یکی از قطعه‌ها ناموفق بود')});
-  }
-  function createChunkedRecorder(stream,mimeType){
-    const recorder=mimeType?new MediaRecorder(stream,{mimeType}):new MediaRecorder(stream);
-    recorder.ondataavailable=e=>{if(e.data?.size)chunkedChunks.push(e.data)};
-    recorder.onerror=e=>{showError(e.error?.message||'ضبط صدا با خطا مواجه شد.');try{if(recorder.state!=='inactive')recorder.stop()}catch{}};
-    recorder.onstop=()=>{
-      const blob=new Blob(chunkedChunks,{type:recorder.mimeType||'audio/webm'});chunkedChunks=[];
-      const rotate=chunkedRotate;chunkedRotate=false;
-      enqueueChunkedBlob(blob);
-      if(rotate&&wanted&&chunkedStream){
-        try{const next=createChunkedRecorder(chunkedStream,mimeType);chunkedRecorder=next;next.start();return}
-        catch(e){chunkedFailure=chunkedFailure||e;showError('ضبط قطعهٔ بعدی صدا شروع نشد.');wanted=false}
-      }
-      chunkedRecorder=null;clearInterval(chunkedSegmentTimer);chunkedSegmentTimer=null;
-      chunkedStream?.getTracks().forEach(t=>t.stop());chunkedStream=null;stopTimer();panel.classList.remove('is-listening');setControls(false);$('fvNativeStart').disabled=false;
-      const finishAfterUploads=async()=>{
-        await chunkedUploadQueue;
-        wanted=false;starting=false;paused=false;chunkedStopping=false;chunkedRotate=false;setControls(false);$('fvNativeStart').disabled=false;pauseBtn.innerHTML='<i class="fa-solid fa-pause"></i> مکث';
-        if(chunkedFailure){setStatus('رونویسی کامل نشد');return}
-        setStatus(sessionWords?'رونویسی و درج متن انجام شد':'گفتاری تشخیص داده نشد');modeLabel.textContent='رونویسی آنلاین';
-      };
-      finishAfterUploads().catch(e=>{wanted=false;starting=false;showError(e.message||'پایان رونویسی ناموفق بود')});
-    };
-    return recorder;
-  }
   async function startChunked(){
     if(!window.MediaRecorder)throw new Error('ضبط صوت در این مرورگر پشتیبانی نمی‌شود؛ از Chrome یا Edge به‌روز استفاده کنید.');
     if(!navigator.mediaDevices?.getUserMedia)throw new Error('مرورگر امکان دسترسی به میکروفن را ندارد.');
     const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
-    chunkedStream=stream;chunkedChunks=[];chunkedFailure=null;chunkedUploadQueue=Promise.resolve();chunkedRotate=false;chunkedStopping=false;
+    chunkedStream=stream;chunkedChunks=[];chunkedStopping=false;
     const mimeCandidates=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'];
     const mimeType=mimeCandidates.find(t=>MediaRecorder.isTypeSupported?.(t))||'';
     let recorder;
-    try{recorder=createChunkedRecorder(stream,mimeType)}catch(e){stream.getTracks().forEach(t=>t.stop());chunkedStream=null;throw e}
+    try{recorder=mimeType?new MediaRecorder(stream,{mimeType}):new MediaRecorder(stream)}catch(e){stream.getTracks().forEach(t=>t.stop());chunkedStream=null;throw e}
     chunkedRecorder=recorder;
+    recorder.ondataavailable=e=>{if(e.data?.size)chunkedChunks.push(e.data)};
+    recorder.onerror=e=>{showError(e.error?.message||'ضبط صدا با خطا مواجه شد.');try{if(recorder.state!=='inactive')recorder.stop()}catch{}};
+    recorder.onstop=async()=>{
+      const blob=new Blob(chunkedChunks,{type:recorder.mimeType||'audio/webm'});chunkedChunks=[];chunkedRecorder=null;
+      chunkedStream?.getTracks().forEach(t=>t.stop());chunkedStream=null;stopTimer();panel.classList.remove('is-listening');setControls(false);$('fvNativeStart').disabled=false;
+      if(!blob.size){wanted=false;starting=false;chunkedStopping=false;setStatus('صدایی ضبط نشد');showError('صدای قابل پردازشی ضبط نشد. دوباره تلاش کنید.');return}
+      setStatus('در حال تبدیل گفتار به متن…');live.textContent='صدا دریافت شد؛ در حال رونویسی…';live.classList.remove('is-empty');
+      try{
+        const body=new FormData();const extension=blob.type.includes('ogg')?'ogg':'webm';body.append('audio',blob,'farast-voice.'+extension);body.append('locale',locale.value);body.append('processing_mode','server');
+        const requestId=(globalThis.crypto?.randomUUID?.()||('voice-'+Date.now()+'-'+Math.random().toString(16).slice(2)));
+        const response=await fetch('/editor/voice/transcribe',{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','X-Farast-Voice-Request':requestId,'Idempotency-Key':requestId},body});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok||!data.ok||!String(data.text||'').trim())throw new Error(data.message||'رونویسی صدا انجام نشد؛ وضعیت سرویس صوتی را بررسی کنید.');
+        const inserted=await commitFinal(String(data.text).trim());
+        if(inserted===false)throw new Error('گفتار تشخیص داده شد، اما درج متن در سند انجام نشد.');
+        if(data.engine)engine.textContent=String(data.engine);
+        setStatus('رونویسی و درج متن انجام شد');modeLabel.textContent='رونویسی آنلاین';
+      }catch(e){showError(e.message||'رونویسی صدا انجام نشد.');setStatus('رونویسی ناموفق بود')}
+      finally{wanted=false;starting=false;paused=false;chunkedStopping=false;setControls(false);$('fvNativeStart').disabled=false;pauseBtn.innerHTML='<i class="fa-solid fa-pause"></i> مکث';}
+    };
     try{recorder.start()}catch(e){stream.getTracks().forEach(t=>t.stop());chunkedStream=null;chunkedRecorder=null;throw e}
-    starting=false;setControls(true);$('fvNativeStart').disabled=true;modeLabel.textContent='رونویسی آنلاین · سرویس گفتار';engine.textContent='سرویس گفتار';const privacyNote=$('fvPrivacyNote')?.querySelector('span');if(privacyNote)privacyNote.textContent='در این حالت، صدا در قطعه‌های کوتاه برای سرویس گفتار پیکربندی‌شده ارسال می‌شود تا متن هنگام صحبت به سند افزوده شود.';setStatus('در حال گوش دادن؛ متن به‌صورت مرحله‌ای درج می‌شود');live.textContent='گفتار در حال ضبط است؛ متن هر چند ثانیه به‌روزرسانی می‌شود.';live.classList.remove('is-empty');panel.classList.add('is-listening');startTimer();
-    chunkedSegmentTimer=setInterval(()=>{if(wanted&&!paused&&chunkedRecorder?.state==='recording'){chunkedRotate=true;try{chunkedRecorder.stop()}catch(e){chunkedRotate=false;chunkedFailure=chunkedFailure||e;showError('ارسال قطعهٔ صوتی ناموفق بود.')}}},5000);
+    starting=false;setControls(true);$('fvNativeStart').disabled=true;modeLabel.textContent='رونویسی آنلاین · سرویس گفتار';engine.textContent='سرویس گفتار';const privacyNote=$('fvPrivacyNote')?.querySelector('span');if(privacyNote)privacyNote.textContent='در این حالت صدا تا زدن «پایان» ضبط می‌شود و سپس یک‌بار برای رونویسی به سرویس گفتار پیکربندی‌شده ارسال می‌شود.';setStatus('در حال ضبط؛ برای درج متن «پایان» را بزنید');live.textContent='ضبط فعال است؛ متن پس از پایان پردازش درج می‌شود.';live.classList.remove('is-empty');panel.classList.add('is-listening');startTimer();
   }
   async function getStreamToken(){const r=await fetch('/editor/voice/stream-token',{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({locale:locale.value})});const data=await r.json().catch(()=>({}));if(!r.ok||!data.token)throw new Error(data.message||'توکن تایپ صوتی دریافت نشد.');return data}
   async function openAudio(){if(!navigator.mediaDevices?.getUserMedia)throw new Error('مرورگر امکان دسترسی به میکروفن را ندارد.');mediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});audioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});await audioContext.audioWorklet.addModule('/js/farast-voice-worklet.js');sourceNode=audioContext.createMediaStreamSource(mediaStream);workletNode=new AudioWorkletNode(audioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:0});workletNode.port.onmessage=e=>{if(ws?.readyState===WebSocket.OPEN&&!paused){const bytes=new Uint8Array(e.data);if(bytes.byteLength>24000){for(let i=0;i<bytes.byteLength;i+=24000)ws.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)))}else ws.send(bytes)}};sourceNode.connect(workletNode);if(audioContext.state==='suspended')await audioContext.resume()}
@@ -193,7 +171,7 @@
     }catch(e){starting=false;nativeActive=false;nativeRecognition=null;$('fvNativeStart').disabled=false;setControls(false);showError(e.message||'شروع تشخیص گفتار رایگان ناموفق بود.')}
   }
   function pauseResume(){if(!wanted)return;if(chunkedRecorder){try{if(!paused&&chunkedRecorder.state==='recording'){chunkedRecorder.pause();paused=true;setStatus('مکث ضبط');panel.classList.remove('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-play"></i> ادامه'}else if(paused&&chunkedRecorder.state==='paused'){chunkedRecorder.resume();paused=false;setStatus('در حال ضبط؛ برای درج متن «پایان» را بزنید');panel.classList.add('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-pause"></i> مکث'}}catch(e){showError('مکث یا ادامهٔ ضبط ممکن نشد.')}return}paused=!paused;if(paused){setStatus('مکث');panel.classList.remove('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-play"></i> ادامه'}else{setStatus('در حال گوش دادن');panel.classList.add('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-pause"></i> مکث'}}
-  function stop(){if(chunkedRecorder&&chunkedRecorder.state!=='inactive'){wanted=false;starting=false;paused=false;chunkedStopping=true;clearInterval(chunkedSegmentTimer);chunkedSegmentTimer=null;setStatus('در حال تکمیل رونویسی…');try{chunkedRecorder.stop()}catch(e){showError('ضبط صدا متوقف نشد.');chunkedStream?.getTracks().forEach(t=>t.stop());chunkedStream=null;chunkedRecorder=null;setControls(false)}return}if(nativeRecognition&&!nativeActive){try{nativeRecognition.abort()}catch{}nativeRecognition=null;starting=false;setControls(false);$('fvNativeStart').disabled=false;return}if(nativeActive&&nativeRecognition){try{nativeRecognition.stop()}catch{}nativeActive=false;return}clearTimeout(reconnectTimer);reconnectTimer=null;reconnectAttempts=0;if(!wanted&&!starting)return;starting=false;wanted=false;paused=false;setStatus('در حال پایان');stopTimer();closeAudio();const socket=ws;ws=null;clearTimeout(stopGraceTimer);if(socket?.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'stop'}))}catch{}clearTimeout(stopGraceTimer);stopGraceTimer=setTimeout(()=>{try{socket.close(1000,'normal')}catch{}},1500)}else{finish(true)}}
+  function stop(){if(chunkedRecorder&&chunkedRecorder.state!=='inactive'){wanted=false;starting=false;paused=false;chunkedStopping=true;setStatus('در حال تکمیل رونویسی…');try{chunkedRecorder.stop()}catch(e){showError('ضبط صدا متوقف نشد.');chunkedStream?.getTracks().forEach(t=>t.stop());chunkedStream=null;chunkedRecorder=null;setControls(false)}return}if(nativeRecognition&&!nativeActive){try{nativeRecognition.abort()}catch{}nativeRecognition=null;starting=false;setControls(false);$('fvNativeStart').disabled=false;return}if(nativeActive&&nativeRecognition){try{nativeRecognition.stop()}catch{}nativeActive=false;return}clearTimeout(reconnectTimer);reconnectTimer=null;reconnectAttempts=0;if(!wanted&&!starting)return;starting=false;wanted=false;paused=false;setStatus('در حال پایان');stopTimer();closeAudio();const socket=ws;ws=null;clearTimeout(stopGraceTimer);if(socket?.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'stop'}))}catch{}clearTimeout(stopGraceTimer);stopGraceTimer=setTimeout(()=>{try{socket.close(1000,'normal')}catch{}},1500)}else{finish(true)}}
   function finish(keep){clearTimeout(stopGraceTimer);stopGraceTimer=null;closeAudio();stopTimer();setControls(false);panel.classList.remove('is-listening');pauseBtn.innerHTML='<i class="fa-solid fa-pause"></i> مکث';if(interimNode){interimNode.replaceWith('');interimNode=null}if(keep){setStatus('پایان یافت');modeLabel.textContent='تایپ زنده با هوش مصنوعی';Sound()?.play('voiceStop',{gain:.72,cooldown:0})}}
   window.FarastVoiceRuntime={applyFinalTranscript:commitFinal,open,close,isOpen:()=>panel.classList.contains('is-open'),getSessionAnchor:()=>sessionAnchor};
   $('fvNativeStart').addEventListener('click',startNative);startBtn.addEventListener('click',start);pauseBtn.addEventListener('click',pauseResume);stopBtn.addEventListener('click',stop);$('fvClose').addEventListener('click',close);locale.addEventListener('change',()=>{if(wanted)showError('برای تغییر زبان ابتدا تایپ صوتی را متوقف کنید.')});mic.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();open()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('is-open'))close()});
