@@ -16,6 +16,7 @@ const getEditors=()=>$$('.farast-editor');
 const getSelectionInfo=()=>{
   const s=getSelection(); if(!s||!s.rangeCount)return null;
   const r=s.getRangeAt(0);
+  const blockModelId=node=>node?.dataset?.layoutSourceId||node?.dataset?.blockId;
   const point=(node,offset)=>{
     let el=node?.nodeType===1?node:node?.parentElement;
     let block=el?.closest?.('[data-block-id]');
@@ -28,23 +29,23 @@ const getSelectionInfo=()=>{
         let rootOffset=0;
         if(node===editor){for(let i=0;i<Math.min(offset,editor.childNodes.length);i++)rootOffset+=(editor.childNodes[i]?.textContent||'').length}
         else {for(const child of editor.childNodes){if(child===node)break;rootOffset+=(child.textContent||'').length}rootOffset+=Math.max(0,offset)}
-        return {blockId:blocks[0].dataset.blockId,offset:rootOffset};
+        return {blockId:blockModelId(blocks[0]),offset:rootOffset};
       }
       block=offset<=0?blocks[0]:blocks[blocks.length-1];
       const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);
       let n,last=null; while(n=walker.nextNode())last=n;
       const length=block.textContent?.length||0;
-      return {blockId:block.dataset.blockId,offset:offset<=0?0:length};
+      return {blockId:blockModelId(block),offset:offset<=0?0:length};
     }
     const owner=el?.closest?.('[data-cell-id]')||el?.closest?.('[data-item-id]')||block;const rr=document.createRange(); rr.selectNodeContents(owner);
-    try{rr.setEnd(node,offset)}catch{return{blockId:block.dataset.blockId,offset:0}}
-    const itemEl=el?.closest?.('[data-item-id]'),cellEl=el?.closest?.('[data-cell-id]');return{blockId:block.dataset.blockId,offset:rr.toString().length,itemId:itemEl?.dataset.itemId||undefined,cellId:cellEl?.dataset.cellId||undefined};
+    try{rr.setEnd(node,offset)}catch{return{blockId:blockModelId(block),offset:0}}
+    const itemEl=el?.closest?.('[data-item-id]'),cellEl=el?.closest?.('[data-cell-id]');return{blockId:blockModelId(block),offset:rr.toString().length,itemId:itemEl?.dataset.itemId||undefined,cellId:cellEl?.dataset.cellId||undefined};
   };
   const start=point(r.startContainer,r.startOffset),end=point(r.endContainer,r.endOffset);
   if(!start||!end)return null;
   return{start,end,blockId:start.blockId,startOffset:start.offset,endOffset:end.offset,collapsed:r.collapsed,text:s.toString(),range:r.cloneRange()};
 };
-const restoreSelection=info=>{if(!info)return;const start=info.start||{blockId:info.blockId,offset:info.startOffset||0},end=info.end||{blockId:info.blockId,offset:info.endOffset??info.startOffset??0};const resolve=p=>{const block=document.querySelector('[data-block-id="'+CSS.escape(p.blockId)+'"]');if(!block)return null;const owner=p.cellId?block.querySelector('[data-cell-id="'+CSS.escape(p.cellId)+'"]'):p.itemId?block.querySelector('[data-item-id="'+CSS.escape(p.itemId)+'"]'):block;const walker=document.createTreeWalker(owner,NodeFilter.SHOW_TEXT);let n,total=0;while(n=walker.nextNode()){const len=n.nodeValue?.length||0;if(p.offset<=total+len)return{node:n,offset:Math.max(0,p.offset-total)};total+=len}return{node:owner,offset:owner.childNodes.length}};const s=resolve(start),e=resolve(end);if(!s||!e)return;const r=document.createRange();try{r.setStart(s.node,s.offset);r.setEnd(e.node,e.offset);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}catch{}};
+const restoreSelection=info=>{if(!info)return;const start=info.start||{blockId:info.blockId,offset:info.startOffset||0},end=info.end||{blockId:info.blockId,offset:info.endOffset??info.startOffset??0};const resolve=p=>{const block=document.querySelector('[data-layout-source-id="'+CSS.escape(p.blockId)+'"],[data-block-id="'+CSS.escape(p.blockId)+'"]');if(!block)return null;const owner=p.cellId?block.querySelector('[data-cell-id="'+CSS.escape(p.cellId)+'"]'):p.itemId?block.querySelector('[data-item-id="'+CSS.escape(p.itemId)+'"]'):block;const walker=document.createTreeWalker(owner,NodeFilter.SHOW_TEXT);let n,total=0;while(n=walker.nextNode()){const len=n.nodeValue?.length||0;if(p.offset<=total+len)return{node:n,offset:Math.max(0,p.offset-total)};total+=len}return{node:owner,offset:owner.childNodes.length}};const s=resolve(start),e=resolve(end);if(!s||!e)return;const r=document.createRange();try{r.setStart(s.node,s.offset);r.setEnd(e.node,e.offset);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}catch{}};
 const currentRange=()=>{const i=getSelectionInfo();return i?.range||null};
 const blockFromNode=node=>{let x=node?.nodeType===1?node:node?.parentElement;return x?.closest?.('[data-block-id]')||null};
 const cloneModel=model=>model?JSON.parse(JSON.stringify(model)):null;
