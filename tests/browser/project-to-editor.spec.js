@@ -38,6 +38,12 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(page).toHaveURL(/\/editor(?:\?.*)?$/);
   await expect(page.locator('#farastWord')).toBeVisible({ timeout: 5000 });
   await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
+  await expect(page.locator('#fdToolbar')).toBeVisible();
+  await expect(page.locator('#fdMenus')).toBeVisible();
+  const classicUrl = new URL(page.url());
+  classicUrl.searchParams.set('classic', '1');
+  await page.goto(classicUrl.toString());
+  await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
   try {
     await expect(page.locator('#pagesViewport .farast-page')).toBeVisible({ timeout: 5000 });
   } catch (error) {
