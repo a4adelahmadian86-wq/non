@@ -17,11 +17,20 @@ class AnnouncementController extends Controller
      */
     public function index()
     {
+        $user = auth()->user();
+
         return view('announcements', [
-            'announcements' => Announcement::visible()
+            'announcements' => Announcement::query()
+                ->forUser($user)
                 ->orderByDesc('is_pinned')
                 ->latest()
                 ->paginate(12),
+            'pinned' => Announcement::query()
+                ->forUser($user)
+                ->where('is_pinned', true)
+                ->latest()
+                ->limit(3)
+                ->get(),
         ]);
     }
 

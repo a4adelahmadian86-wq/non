@@ -11,7 +11,7 @@
             <span class="tk-crumb-sep"></span>
             <a href="{{ route('admin.index') }}">پنل ادمین</a>
             <span class="tk-crumb-dash">-</span>
-            <a href="{{ route('announcements') }}">صفحه عمومی اعلانات</a>
+            <a href="{{ route('announcements') }}">نمایش اعلانات داشبورد</a>
         </div>
     </nav>
 
@@ -26,7 +26,7 @@
             <div class="tk-card-head">
                 <hgroup>
                     <h1>انتشار اعلان جدید</h1>
-                    <p>هماهنگ با صندوق اعلان‌ها، ایمیل و صفحه عمومی اعلانات</p>
+                    <p>هماهنگ با صندوق اعلان‌ها، ایمیل و صفحه اعلانات داخل داشبورد (نه فرانت عمومی)</p>
                 </hgroup>
             </div>
 

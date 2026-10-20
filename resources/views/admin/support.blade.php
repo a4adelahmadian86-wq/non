@@ -4,7 +4,7 @@
 @php
     $slaService = app(\App\Services\SupportSlaService::class);
     $active = $active ?? null;
-    $stats = $stats ?? ['needs_reply'=>0,'open'=>0,'user_replied'=>0,'answered'=>0,'pending'=>0,'closed'=>0,'high'=>0,'sla_breached'=>0];
+    $stats = $stats ?? ['needs_reply'=>0,'open'=>0,'user_replied'=>0,'answered'=>0,'pending'=>0,'closed'=>0,'high'=>0,'sla_breached'=>0,'sla_at_risk'=>0];
     $canned = $canned ?? [];
     $agents = $agents ?? collect();
     $filterQs = array_filter([
@@ -56,6 +56,7 @@
             <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">بررسی</a>
             <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'answered']) }}">پاسخ‌شده</a>
             <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
+            <a class="sd-chip {{ request('sla')==='at_risk'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'at_risk'])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
             <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
         </div>
 

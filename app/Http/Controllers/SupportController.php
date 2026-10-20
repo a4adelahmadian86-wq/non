@@ -278,6 +278,22 @@ class SupportController extends Controller
         if ($request->filled('sla') && $request->sla === 'breached') {
             $query->slaBreached();
         }
+        if ($request->filled('sla') && $request->sla === 'at_risk') {
+            $warn = (int) config('support.warn_before_minutes', 30);
+            $query->whereNotIn('status', ['closed', 'pending'])
+                ->where(function ($q) use ($warn) {
+                    $q->where(function ($w) use ($warn) {
+                        $w->whereNull('first_response_at')
+                            ->whereNotNull('sla_first_due_at')
+                            ->where('sla_first_due_at', '>', now())
+                            ->where('sla_first_due_at', '<=', now()->addMinutes($warn));
+                    })->orWhere(function ($w) use ($warn) {
+                        $w->whereNotNull('sla_resolve_due_at')
+                            ->where('sla_resolve_due_at', '>', now())
+                            ->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                    });
+                });
+        }
         if ($request->filled('q')) {
             $q = $request->string('q');
             $query->where(function ($w) use ($q) {
@@ -319,6 +335,14 @@ class SupportController extends Controller
             'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
         
             'sla_breached' => Ticket::query()->slaBreached()->count(),
+            'sla_at_risk' => Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
+                $warn = (int) config('support.warn_before_minutes', 30);
+                $q->where(function ($w) use ($warn) {
+                    $w->whereNull('first_response_at')->whereNotNull('sla_first_due_at')->where('sla_first_due_at', '>', now())->where('sla_first_due_at', '<=', now()->addMinutes($warn));
+                })->orWhere(function ($w) use ($warn) {
+                    $w->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                });
+            })->count(),
         ];
 
         $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);

@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('content')
+@include('components.dashboard-announcements')
 <div class="container user-dashboard" dir="rtl">
     <header class="page-head">
         <div><span class="eyebrow"><i class="fa-solid fa-gauge-high"></i> فضای کاری</span><h1>داشبورد شما</h1><p class="dashboard-sub">اسناد، ظرفیت حساب و قابلیت‌های فعال شما در یک نمای ساده و خصوصی.</p></div>

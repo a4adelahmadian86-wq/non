@@ -62,8 +62,8 @@ class CheckSupportSlaCommand extends Command
                 }
             }
 
-            // —— حل کامل ——
-            if ($ticket->status !== 'closed' && $ticket->sla_resolve_due_at) {
+            // —— حل کامل (pending = ساعت متوقف) ——
+            if ($ticket->status !== 'closed' && $ticket->status !== 'pending' && $ticket->sla_resolve_due_at) {
                 $mins = (int) now()->diffInMinutes($ticket->sla_resolve_due_at, false);
 
                 if ($mins < 0 && empty($ticket->sla_resolve_breached_at)) {

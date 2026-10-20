@@ -10,3 +10,9 @@ Schedule::command('support:check-sla')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->when(fn () => config('support.monitor_enabled', true));
+
+
+// انتشار اعلان‌هایی که زمان شروع‌شان رسیده و هنوز broadcast نشده‌اند
+Schedule::command('announcements:broadcast-due')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();

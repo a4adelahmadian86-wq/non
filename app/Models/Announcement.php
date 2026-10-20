@@ -57,6 +57,28 @@ class Announcement extends Model
         return $query->where('is_pinned', true);
     }
 
+    /**
+     * اعلان‌های قابل‌مشاهده برای یک کاربر (با فیلتر مخاطب).
+     */
+    public function scopeForUser($query, $user)
+    {
+        $query = $query->visible();
+
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query->whereIn('audience', ['all', 'admins', 'users']);
+        }
+
+        return $query->where(function ($q) {
+            $q->where('audience', 'all')
+                ->orWhere('audience', 'users')
+                ->orWhereNull('audience');
+        });
+    }
+
     public function typeLabel(): string
     {
         return match ($this->type) {
