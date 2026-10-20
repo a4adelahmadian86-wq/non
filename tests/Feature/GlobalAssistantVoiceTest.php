@@ -13,6 +13,12 @@ class GlobalAssistantVoiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function wavSample(): string
+    {
+        return 'RIFF'.pack('V', 38).'WAVEfmt '.pack('V', 16).pack('v', 1).pack('v', 1)
+            .pack('V', 8000).pack('V', 16000).pack('v', 2).pack('v', 16).'data'.pack('V', 2).pack('v', 0);
+    }
+
     public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
     {
         config([
@@ -25,7 +31,7 @@ class GlobalAssistantVoiceTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->post('/assistant/transcribe', [
-                'audio' => UploadedFile::fake()->create('voice.webm', 10, 'video/webm'),
+                'audio' => UploadedFile::fake()->createWithContent('voice.wav', $this->wavSample()),
                 'locale' => 'fa-IR',
             ])
             ->assertOk()
