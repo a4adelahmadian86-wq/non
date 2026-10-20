@@ -270,3 +270,6 @@
   .an-form-grid { grid-template-columns: 1fr; }
   .an-field.full { grid-column: auto; }
 }
+
+.an-edit-row td { border-bottom: 1px solid #e2e8f0 !important; }
+.an-edit-row .an-form-grid { margin: 0; }

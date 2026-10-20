@@ -113,12 +113,42 @@
                             @php $slaA = $slaService->firstResponseStatus($active); $slaR = $slaService->resolutionStatus($active); @endphp
                             <span class="sla-pill sla-{{ $slaA['color'] }}">{{ $slaA['label'] }}</span>
                             <span class="sla-pill sla-{{ $slaR['color'] }}">{{ $slaR['label'] }}</span>
+                            @php
+                                $slaBars = [];
+                                if ($active->sla_first_due_at && ! $active->first_response_at) {
+                                    $total = max(1, $active->created_at->diffInMinutes($active->sla_first_due_at));
+                                    $used = max(0, $active->created_at->diffInMinutes(now()));
+                                    $pct = min(100, (int) round(100 * $used / $total));
+                                    $slaBars[] = ['label' => 'پاسخ اول', 'pct' => $pct, 'color' => $slaA['color'] ?? 'ok'];
+                                }
+                                if ($active->sla_resolve_due_at && $active->status !== 'closed' && $active->status !== 'pending') {
+                                    $total = max(1, $active->created_at->diffInMinutes($active->sla_resolve_due_at));
+                                    $used = max(0, $active->created_at->diffInMinutes(now()));
+                                    $pct = min(100, (int) round(100 * $used / $total));
+                                    $slaBars[] = ['label' => 'حل', 'pct' => $pct, 'color' => $slaR['color'] ?? 'ok'];
+                                }
+                            @endphp
                             @if($active->csat_score)
                                 <span class="sla-pill sla-ok" title="{{ $active->csat_comment }}">CSAT: {{ $active->csat_score }}/5</span>
                             @elseif($active->status === 'closed')
                                 <span class="sla-pill sla-muted">بدون امتیاز CSAT</span>
                             @endif
                         </div>
+                        @if(!empty($slaBars))
+                            <div style="display:grid;gap:6px;margin-top:10px;max-width:360px">
+                                @foreach($slaBars as $bar)
+                                    <div>
+                                        <div style="display:flex;justify-content:space-between;font-size:.72rem;color:#64748b;margin-bottom:3px">
+                                            <span>{{ $bar['label'] }}</span>
+                                            <span>{{ $bar['pct'] }}٪</span>
+                                        </div>
+                                        <div style="height:6px;background:#e2e8f0;border-radius:999px;overflow:hidden">
+                                            <div style="height:100%;width:{{ $bar['pct'] }}%;background:{{ $bar['color']==='danger'||$bar['color']==='breached' ? '#ef4444' : ($bar['color']==='warn'||$bar['color']==='warning' ? '#f59e0b' : '#1769ff') }};border-radius:999px"></div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                 </div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">

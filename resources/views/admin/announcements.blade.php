@@ -201,6 +201,9 @@
                                 </td>
                                 <td>
                                     <div class="an-row-actions">
+                                        <button type="button" class="an-btn an-btn-ghost an-btn-sm" data-edit-toggle="{{ $a->id }}" title="ویرایش">
+                                            <i class="fa-solid fa-pen"></i>
+                                        </button>
                                         <form method="post" action="{{ route('admin.announcements.toggle', $a) }}">
                                             @csrf
                                             <button class="an-btn an-btn-ghost an-btn-sm" type="submit" title="فعال/غیرفعال">
@@ -221,6 +224,73 @@
                                             </button>
                                         </form>
                                     </div>
+                                </td>
+                            </tr>
+                            <tr id="an-edit-{{ $a->id }}" class="an-edit-row" hidden>
+                                <td colspan="7" style="background:#f8fafc;padding:16px">
+                                    <form method="post" action="{{ route('admin.announcements.update', $a) }}" class="an-form-grid">
+                                        @csrf
+                                        @method('PUT')
+                                        <div class="an-field">
+                                            <label class="an-label">عنوان</label>
+                                            <input class="an-input" name="title" required maxlength="180" value="{{ old('title', $a->title) }}">
+                                        </div>
+                                        <div class="an-field">
+                                            <label class="an-label">نوع</label>
+                                            <select class="an-select" name="type">
+                                                <option value="info" @selected(old('type', $a->type)==='info')>اطلاع‌رسانی</option>
+                                                <option value="success" @selected(old('type', $a->type)==='success')>موفقیت</option>
+                                                <option value="warning" @selected(old('type', $a->type)==='warning')>هشدار</option>
+                                                <option value="danger" @selected(old('type', $a->type)==='danger')>مهم</option>
+                                            </select>
+                                        </div>
+                                        <div class="an-field">
+                                            <label class="an-label">مخاطب</label>
+                                            <select class="an-select" name="audience">
+                                                <option value="all" @selected(old('audience', $a->audience ?? 'all')==='all')>همه</option>
+                                                <option value="users" @selected(old('audience', $a->audience)==='users')>کاربران</option>
+                                                <option value="admins" @selected(old('audience', $a->audience)==='admins')>مدیران</option>
+                                            </select>
+                                        </div>
+                                        <div class="an-field">
+                                            <label class="an-label">لینک</label>
+                                            <input class="an-input" type="url" name="link_url" maxlength="500" value="{{ old('link_url', $a->link_url) }}">
+                                        </div>
+                                        <div class="an-field">
+                                            <label class="an-label">شروع</label>
+                                            <input class="an-input" type="datetime-local" name="starts_at" value="{{ old('starts_at', optional($a->starts_at)->format('Y-m-d\TH:i')) }}">
+                                        </div>
+                                        <div class="an-field">
+                                            <label class="an-label">پایان</label>
+                                            <input class="an-input" type="datetime-local" name="ends_at" value="{{ old('ends_at', optional($a->ends_at)->format('Y-m-d\TH:i')) }}">
+                                        </div>
+                                        <div class="an-field full">
+                                            <label class="an-label">متن</label>
+                                            <textarea class="an-textarea" name="body" required maxlength="5000">{{ old('body', $a->body) }}</textarea>
+                                        </div>
+                                        <div class="an-checks">
+                                            <label class="an-check">
+                                                <input type="hidden" name="is_active" value="0">
+                                                <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $a->is_active))> فعال
+                                            </label>
+                                            <label class="an-check">
+                                                <input type="hidden" name="is_pinned" value="0">
+                                                <input type="checkbox" name="is_pinned" value="1" @checked(old('is_pinned', $a->is_pinned))> پین
+                                            </label>
+                                            <label class="an-check">
+                                                <input type="hidden" name="notify_in_app" value="0">
+                                                <input type="checkbox" name="notify_in_app" value="1" @checked(old('notify_in_app', $a->notify_in_app))> درون‌برنامه
+                                            </label>
+                                            <label class="an-check">
+                                                <input type="hidden" name="notify_email" value="0">
+                                                <input type="checkbox" name="notify_email" value="1" @checked(old('notify_email', $a->notify_email))> ایمیل
+                                            </label>
+                                        </div>
+                                        <div class="an-actions-row">
+                                            <button type="submit" class="an-btn an-btn-primary an-btn-sm"><i class="fa-solid fa-check"></i> ذخیره تغییرات</button>
+                                            <button type="button" class="an-btn an-btn-ghost an-btn-sm" data-edit-toggle="{{ $a->id }}">انصراف</button>
+                                        </div>
+                                    </form>
                                 </td>
                             </tr>
                         @empty
@@ -252,6 +322,14 @@ document.querySelectorAll('.an-check').forEach(function (chip) {
     function sync() { chip.classList.toggle('is-on', box.checked); }
     box.addEventListener('change', sync);
     sync();
+});
+document.querySelectorAll('[data-edit-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-edit-toggle');
+        var row = document.getElementById('an-edit-' + id);
+        if (!row) return;
+        row.hidden = !row.hidden;
+    });
 });
 </script>
 @endsection
