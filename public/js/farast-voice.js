@@ -95,7 +95,10 @@
       const requestId=(globalThis.crypto?.randomUUID?.()||('voice-'+Date.now()+'-'+Math.random().toString(16).slice(2)));
       const response=await fetch('/editor/voice/transcribe',{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','X-Farast-Voice-Request':requestId,'Idempotency-Key':requestId},body});
       const data=await response.json().catch(()=>({}));
-      if(!response.ok||!data.ok)throw new Error(data.message||'رونویسی صدا انجام نشد؛ وضعیت سرویس صوتی را بررسی کنید.');
+      if(!response.ok||!data.ok){
+        if(response.status===502&&data.message==='گفتاری در این قطعه تشخیص داده نشد.')return;
+        throw new Error(data.message||'رونویسی صدا انجام نشد؛ وضعیت سرویس صوتی را بررسی کنید.');
+      }
       const transcript=String(data.text||'').trim();
       if(transcript){const inserted=await commitFinal(transcript);if(inserted===false)throw new Error('گفتار تشخیص داده شد، اما درج متن در سند انجام نشد.');}
       if(data.engine)engine.textContent=String(data.engine);
