@@ -403,9 +403,12 @@ async function startCloud(ctx) {
   try {
     statusInfo = await cloudStatus();
     if (statusInfo && statusInfo.mode === 'none') {
-      throw Object.assign(new Error(statusInfo.reason === 'auth'
-        ? 'برای تایپ صوتی ابری، ابتدا وارد حساب خود شوید.'
-        : 'موتور ابری روی این سرور هنوز فعال نیست (کلید Google Speech یا Gemini تنظیم نشده). مدیر سایت می‌تواند آن را در پنل تنظیمات روشن کند؛ فعلاً Whisper محلی رایگان در دسترس است.'), { fatal: true, code: 'server_not_configured' });
+      const message = statusInfo.reason === 'auth'
+        ? 'برای تایپ صوتی، ابتدا وارد حساب خود شوید.'
+        : statusInfo.reason === 'self_hosted_token_missing'
+          ? 'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید. فالبک مرورگر و Whisper محلی برای این مسیر غیرفعال است.'
+          : 'موتور گفتار روی این سرور هنوز پیکربندی نشده است.';
+      throw Object.assign(new Error(message), { fatal: true, code: 'server_not_configured' });
     }
   } catch (e) {
     if (e?.fatal) throw e;
@@ -413,8 +416,8 @@ async function startCloud(ctx) {
   }
   /* حالت تکه‌ای مطمئن‌ترین مسیر است؛ اگر وضعیت گفت gateway زنده نیست، مستقیم به تکه‌ای برو. */
   if (statusInfo && statusInfo.chunked && !statusInfo.gateway) {
-    ctx.onStatus('حالت تکه‌ای ابری فعال شد…');
-    return await startCloudChunks(ctx, csrf, 'gateway-unavailable');
+    ctx.onStatus(statusInfo.self_hosted ? 'موتور گفتار خودمیزبان فعال شد…' : 'حالت تکه‌ای ابری فعال شد…');
+    return await startCloudChunks(ctx, csrf, statusInfo.self_hosted ? 'self-hosted-unavailable' : 'gateway-unavailable', !!statusInfo.self_hosted);
   }
   let preflightErr = null;
   try {
@@ -479,8 +482,8 @@ async function startCloudStream(ctx, csrf) {
 /* ---------- حالت تکه‌ای ابری (Firefox و هر مرورگر بدون وب‌سوکت/گیتوی) ----------
  * ضبط قطعه‌قطعه با MediaRecorder، ارسال هر قطعه به /editor/voice/transcribe (موتور Google/Gemini خود سایت).
  * حلقه بی‌وقفه: همزمان که قطعهٔ n در سرور پردازش می‌شود، قطعهٔ n+1 در حال ضبط است. */
-async function startCloudChunks(ctx, csrf, gwErr) {
-  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error(gwErr || 'این مرورگر امکان ضبط صدا را ندارد.');
+async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw Object.assign(new Error(gwErr || 'این مرورگر امکان ضبط صدا را ندارد.'), { fatal: strictSelfHosted });
   const pickMime = () => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
   let stopped = false, inflight = Promise.resolve(), lastFinal = '', seq = 0;
   const transcribe = blob => {
@@ -492,6 +495,7 @@ async function startCloudChunks(ctx, csrf, gwErr) {
         const r = await fetch('/editor/voice/transcribe', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: fd });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) {
+          if (strictSelfHosted) { stopped = true; ctx.onError(j.message || 'موتور گفتار خودمیزبان در دسترس نیست.'); ctx.onStopped(); return; }
           // خطای سطح‌بالا (سهمیه/لاگین/نرخ): توقف حلقه با پیام دقیق — نه بی‌صدا تکرار هر ۲.۵ ثانیه
           const kind = cloudErrorKind(r.status, j);
           if (kind !== 'server') {
@@ -512,8 +516,8 @@ async function startCloudChunks(ctx, csrf, gwErr) {
           else if (lastFinal && lastFinal.endsWith(t)) t = '';
           if (t) { lastFinal = text; ctx.onFinal(t); }
         }
-      } catch (e) { ctx.onError('ارسال صوت ناموفق بود: ' + (e?.message || '')); }
-      if (!stopped) ctx.onStatus('در حال گوش دادن (ابر · تکه‌ای)…');
+      } catch (e) { if (strictSelfHosted) { stopped = true; ctx.onError('ارتباط با موتور گفتار خودمیزبان برقرار نشد.'); ctx.onStopped(); return; } ctx.onError('ارسال صوت ناموفق بود: ' + (e?.message || '')); }
+      if (!stopped) ctx.onStatus(strictSelfHosted ? 'در حال گوش دادن (موتور خودمیزبان)…' : 'در حال گوش دادن (ابر · تکه‌ای)…');
     });
   };
   const recordOnce = () => new Promise(resolve => {
