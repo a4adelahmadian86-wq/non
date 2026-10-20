@@ -37,6 +37,7 @@ return new class extends Migration {
             if(!Schema::hasColumn('farast_feedback_evidence','frequency'))$t->unsignedInteger('frequency')->default(1);
             if(!Schema::hasColumn('farast_feedback_evidence','independent_confirmations'))$t->unsignedInteger('independent_confirmations')->default(0);
             if(!Schema::hasColumn('farast_feedback_evidence','checksum'))$t->string('checksum',64)->nullable();
+            if(!Schema::hasColumn('farast_feedback_evidence','status'))$t->string('status',30)->default('raw');
         });
         if(Schema::hasTable('farast_review_cases'))Schema::table('farast_review_cases',function(Blueprint $t){
             if(!Schema::hasColumn('farast_review_cases','evidence_id'))$t->unsignedBigInteger('evidence_id')->nullable()->index();
