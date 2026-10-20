@@ -486,13 +486,14 @@ async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw Object.assign(new Error(gwErr || 'این مرورگر امکان ضبط صدا را ندارد.'), { fatal: strictSelfHosted });
   const pickMime = () => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
   let stopped = false, inflight = Promise.resolve(), lastFinal = '', seq = 0;
+  const sessionRequestId = globalThis.crypto?.randomUUID?.() || ('voice-session-' + Date.now() + '-' + Math.random().toString(16).slice(2));
   const transcribe = blob => {
     if (!blob || blob.size < 2000) return;
     ctx.onStatus('در حال پردازش…');
     inflight = inflight.then(async () => {
       try {
-        const fd = new FormData(); fd.append('audio', blob, 'chunk-' + (++seq) + '.webm'); fd.append('locale', ctx.lang());
-        const r = await fetch('/editor/voice/transcribe', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body: fd });
+        const fd = new FormData(); const ext = String(blob.type || '').includes('ogg') ? 'ogg' : (String(blob.type || '').includes('mp4') ? 'mp4' : 'webm'); fd.append('audio', blob, 'chunk-' + (++seq) + '.' + ext); fd.append('locale', ctx.lang());
+        const r = await fetch('/editor/voice/transcribe', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Farast-Voice-Request': sessionRequestId, 'Idempotency-Key': sessionRequestId }, body: fd });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) {
           if (strictSelfHosted) { stopped = true; ctx.onError(j.message || 'موتور گفتار خودمیزبان در دسترس نیست.'); ctx.onStopped(); return; }
@@ -535,7 +536,7 @@ async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
           resolve(new Blob(chunks, { type: mime || 'audio/webm' }));
         };
         try { rec.start(1000); } catch { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
-        setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 2500);
+        setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 4000);
       })
       .catch(err => { if (!stopped) ctx.onError('دسترسی به میکروفون ممکن نشد: ' + (err?.message || err?.name || '')); resolve(null); });
   });
