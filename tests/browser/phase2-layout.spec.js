@@ -15,7 +15,10 @@ async function openEditor(page) {
   await page.getByRole('button', { name: 'ایجاد پروژه' }).click();
   await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
   await expect(page.locator('#pagesViewport .farast-page').first()).toBeVisible({ timeout: 5000 });
-  const classicUrl = new URL(page.url());
+  const documentId = await page.evaluate(() => window.FarastEditor?.state?.documentId);
+  if (!documentId) throw new Error('Editor document ID missing before classic-mode reload');
+  const classicUrl = new URL('/editor', page.url());
+  classicUrl.searchParams.set('document', String(documentId));
   classicUrl.searchParams.set('classic', '1');
   await page.goto(classicUrl.toString());
   await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
