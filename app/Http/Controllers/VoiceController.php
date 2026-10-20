@@ -114,12 +114,12 @@ class VoiceController extends Controller
         try{if($selfHosted){
             $extension=strtolower($file->getClientOriginalExtension()?:'webm');
             if(!in_array($extension,['webm','ogg','wav','mp3','m4a','mp4'],true))$extension='webm';
-            $response=\\Illuminate\\Support\\Facades\\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
+            $response=\Illuminate\Support\Facades\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
                 ->attach('audio',$bytes,'farast-voice.'.$extension,$mime)
                 ->post($asrUrl,['locale'=>$data['locale']]);
-            if(!$response->successful())throw new \\RuntimeException('voice_self_hosted_http_'.$response->status());
+            if(!$response->successful())throw new \RuntimeException('voice_self_hosted_http_'.$response->status());
             $transcript=trim((string)$response->json('text',''));
-            if($transcript==='')throw new \\RuntimeException('voice_self_hosted_empty_transcript');
+            if($transcript==='')throw new \RuntimeException('voice_self_hosted_empty_transcript');
             $result=['text'=>$transcript,'engine'=>'farast-self-hosted-asr','model'=>'configured-self-hosted'];
         }elseif($groqKey!==''){
             // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
