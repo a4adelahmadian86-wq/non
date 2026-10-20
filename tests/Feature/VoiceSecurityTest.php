@@ -45,6 +45,39 @@ class VoiceSecurityTest extends TestCase
             ->assertJsonPath('self_hosted', true);
     }
 
+    public function test_live_gateway_requires_explicit_url_and_uses_router_provider(): void
+    {
+        Config::set('services.voice_asr.url', '');
+        Config::set('services.voice_asr.token', '');
+        Config::set('services.voice_stream.url', 'wss://voice.example.test');
+        Config::set('services.voice_stream.gateway_secret', 'test-gateway-secret');
+        Config::set('services.google_speech.enabled', false);
+        Config::set('services.gemini.key', '');
+
+        $user = User::factory()->create();
+        $account = new VoiceProviderAccount([
+            'provider' => 'google-cloud-speech',
+            'name' => 'test-live-gateway',
+            'model' => 'chirp_3',
+            'enabled' => true,
+            'healthy' => true,
+            'priority' => 1,
+            'quality_score' => 90,
+            'reliability_score' => 90,
+            'capabilities' => ['locales' => ['fa-IR']],
+        ]);
+        $account->credentials_array = ['project_id' => 'test-project', 'api_key' => 'never-return-this'];
+        $account->save();
+
+        $this->actingAs($user)->getJson('/editor/voice/status')
+            ->assertOk()
+            ->assertJsonPath('mode', 'gateway')
+            ->assertJsonPath('gateway', true)
+            ->assertJsonPath('websocket_url', 'wss://voice.example.test')
+            ->assertJsonMissingPath('credentials')
+            ->assertDontSee('never-return-this');
+    }
+
     public function test_provider_credentials_are_gateway_only(): void
     {
         Config::set('services.voice_stream.gateway_secret','test-gateway-secret');
