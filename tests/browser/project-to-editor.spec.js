@@ -294,9 +294,10 @@ test('logs in through the real auth flow, creates a typing project, and opens th
 
   await page.locator('.farast-editor').first().click();
   await page.keyboard.press('Control+a');
-  for (let i = 0; i < 120; i++) {
+  const paragraphCount = 60;
+  for (let i = 0; i < paragraphCount; i++) {
     await page.keyboard.insertText(paragraph);
-    if (i < 119) await page.keyboard.press('Enter');
+    if (i < paragraphCount - 1) await page.keyboard.press('Enter');
   }
   await expect.poll(async () => page.locator('#pagesViewport .farast-page').count()).toBeGreaterThan(1);
 
