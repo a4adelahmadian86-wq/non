@@ -14,16 +14,21 @@
     }
 @endphp
 @if($dashAnnouncements->isNotEmpty())
-<div class="dash-ann-stack" dir="rtl" style="display:grid;gap:8px;margin:0 0 14px">
+<link rel="stylesheet" href="{{ asset('css/announcements.css') }}?v=20261020a1">
+<div class="an-feed" dir="rtl" style="margin:0 0 14px">
     @foreach($dashAnnouncements as $a)
-        <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;border:1px solid {{ $a->type === 'danger' ? '#fecaca' : ($a->type === 'warning' ? '#fde68a' : '#bfdbfe') }};background:{{ $a->type === 'danger' ? '#fef2f2' : ($a->type === 'warning' ? '#fffbeb' : '#eff6ff') }}">
-            <i class="fa-solid {{ $a->icon() }}" style="margin-top:3px;color:{{ $a->type === 'danger' ? '#b91c1c' : ($a->type === 'warning' ? '#b45309' : '#1d4ed8') }}"></i>
+        <article class="an-feed-item is-pinned type-{{ $a->type }}" style="padding:12px 14px">
+            <div class="an-feed-icon" style="width:36px;height:36px"><i class="fa-solid {{ $a->icon() }}"></i></div>
             <div style="flex:1;min-width:0">
-                <b style="display:block;font-size:.9rem;color:#0f172a">{{ $a->title }}</b>
-                <span style="font-size:.82rem;color:#475569;line-height:1.6">{{ \Illuminate\Support\Str::limit($a->body, 140) }}</span>
+                <div class="an-feed-meta">
+                    <span class="an-badge an-badge-pin"><i class="fa-solid fa-thumbtack"></i> پین</span>
+                    <span class="an-badge an-badge-{{ $a->type }}">{{ $a->typeLabel() }}</span>
+                </div>
+                <h2 style="font-size:.95rem;margin:0 0 4px">{{ $a->title }}</h2>
+                <p class="an-body" style="font-size:.82rem">{{ \Illuminate\Support\Str::limit($a->body, 140) }}</p>
             </div>
-            <a href="{{ route('announcements') }}" style="font-size:.78rem;font-weight:700;color:#1769ff;white-space:nowrap">همه</a>
-        </div>
+            <a href="{{ route('announcements') }}" class="an-feed-link" style="margin:0;white-space:nowrap">همه</a>
+        </article>
     @endforeach
 </div>
 @endif

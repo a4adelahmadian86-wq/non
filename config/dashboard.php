@@ -88,7 +88,7 @@ return [
             'key' => 'notifications', 'label' => 'اعلان‌ها و پیام‌ها', 'icon' => 'fa-bell',
             'items' => [
                 ['key' => 'notifications.inbox', 'label' => 'صندوق اعلان‌ها', 'icon' => 'fa-bell', 'route' => 'platform.notifications'],
-                ['key' => 'notifications.alerts', 'label' => 'اعلانات عمومی', 'icon' => 'fa-bullhorn', 'route' => 'announcements'],
+                ['key' => 'notifications.alerts', 'label' => 'اعلانات سرویس', 'icon' => 'fa-bullhorn', 'route' => 'announcements'],
                 ['key' => 'notifications.manage', 'label' => 'مدیریت اعلان‌ها', 'icon' => 'fa-sliders', 'route' => 'admin.announcements.index', 'admin_only' => true],
                 ['key' => 'notifications.support', 'label' => 'گفتگوهای پشتیبانی', 'icon' => 'fa-headset', 'route' => 'support'],
             ],
