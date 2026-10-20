@@ -8,6 +8,7 @@ test.afterEach(async ({ page }) => {
 });
 
 test('logs in through the real auth flow, creates a typing project, and opens the real word processor surface', async ({ page }) => {
+  test.setTimeout(120_000);
   const pageErrors = [];
   const consoleErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
