@@ -41,7 +41,10 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
   await expect(page.locator('#fdToolbar')).toBeVisible();
   await expect(page.locator('#fdMenus')).toBeVisible();
-  const classicUrl = new URL(page.url());
+  const documentId = await page.evaluate(() => window.FarastEditor?.state?.documentId);
+  if (!documentId) throw new Error('Editor document ID missing before classic-mode reload');
+  const classicUrl = new URL('/editor', page.url());
+  classicUrl.searchParams.set('document', String(documentId));
   classicUrl.searchParams.set('classic', '1');
   await page.goto(classicUrl.toString());
   await expect(page.locator('#farastWord')).toHaveAttribute('data-editor-ready', '1', { timeout: 5000 });
