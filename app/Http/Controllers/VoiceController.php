@@ -29,10 +29,10 @@ class VoiceController extends Controller
         if(!$authed)return response()->json(['ok'=>true,'mode'=>'none','reason'=>'auth'],200,['Cache-Control'=>'no-store']);
         $asrUrl=trim((string)config('services.voice_asr.url',''));
         $asrToken=trim((string)(config('services.voice_asr.token')?:env('FARAST_VOICE_TOKEN','')));
-        if($asrUrl!==''){
-            if($asrToken==='')return response()->json(['ok'=>true,'mode'=>'none','reason'=>'self_hosted_token_missing','self_hosted'=>true,'chunked'=>false,'gateway'=>false,'websocket_url'=>''],200,['Cache-Control'=>'no-store']);
+        if($asrUrl!=='' && $asrToken!==''){
             return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['self-hosted-asr'],'self_hosted'=>true],200,['Cache-Control'=>'no-store']);
         }
+        $selfHostedTokenMissing=$asrUrl!=='' && $asrToken==='';
         $groq=false;
         try{$groq=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\Throwable){}
         if($groq)return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['groq']],200,['Cache-Control'=>'no-store']);
@@ -46,10 +46,10 @@ class VoiceController extends Controller
             $wsUrl=rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/');
             $secret=(string)config('services.voice_stream.gateway_secret','');
             $router=app(\App\Services\VoiceProviderRouter::class);
-            $account=$google?$router->best('fa-IR'):null;
+            $account=$router->best('fa-IR');
             $gatewayReady=$secret!==''&&$account!==null;
         }catch(\Throwable){$gatewayReady=false;}
-        return response()->json(['ok'=>true,'mode'=>$gatewayReady?'gateway':($chunked?'chunked':'none'),'chunked'=>$chunked,'gateway'=>$gatewayReady,'websocket_url'=>$gatewayReady?preg_replace('#^http#','ws',$wsUrl):'','reason'=>$chunked||$gatewayReady?null:'server_not_configured'],200,['Cache-Control'=>'no-store']);
+        return response()->json(['ok'=>true,'mode'=>$gatewayReady?'gateway':($chunked?'chunked':'none'),'chunked'=>$chunked,'gateway'=>$gatewayReady,'websocket_url'=>$gatewayReady?preg_replace('#^http#','ws',$wsUrl):'','reason'=>$chunked||$gatewayReady?null:($selfHostedTokenMissing?'self_hosted_token_missing':'server_not_configured'),'self_hosted'=>false],200,['Cache-Control'=>'no-store']);
     }
 
     public function streamToken(Request $request)
@@ -103,7 +103,8 @@ class VoiceController extends Controller
         $data=$request->validate(['audio'=>['required','file','max:15360','mimetypes:audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/mp4'],'locale'=>['required','string','in:fa-IR,en-US,ar-SA'],'processing_mode'=>['nullable','string','in:automatic,local,server,external']]);
         $asrUrl=trim((string)config('services.voice_asr.url',''));
         $asrToken=trim((string)(config('services.voice_asr.token')?:env('FARAST_VOICE_TOKEN','')));
-        if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
+        // A configured self-hosted URL without its token must not block other configured engines.
+        // Prefer the self-hosted engine only when both URL and token are present.
         $selfHosted=$asrUrl!==''&&$asrToken!=='';
         $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
         $voiceReservation=$commerce->reserve($request->user(),'speech.transcription',1,[],['policy_code'=>'speech.transcription','unit'=>'request','allow_payg'=>true,'idempotency_key'=>$request->header('Idempotency-Key') ?: ('voice-'.$request->user()->id.'-'.hash('sha256',(string)$request->header('X-Farast-Voice-Request','')))]);
