@@ -19,7 +19,7 @@ return [
     ],
 
     'voice_stream' => [
-        'url' => env('VOICE_STREAM_URL', 'ws://127.0.0.1:6002'),
+        'url' => env('VOICE_STREAM_URL', ''),
         'gateway_secret' => env('VOICE_GATEWAY_SECRET'),
     ],
 
