@@ -56,7 +56,7 @@ test('voice control is present and panel opens/closes', async ({ page }) => {
   await expect(panel).toHaveClass(/is-open/);
   await expect(page.locator('#fvStatus')).toBeVisible();
   await expect(page.locator('#fvLive')).toBeVisible();
-  await expect(page.locator('.farast-voice-start')).toBeVisible();
+  await expect(page.locator('.farast-voice-start').first()).toBeVisible();
 
   await page.locator('#fvClose').click();
   await expect(panel).not.toHaveClass(/is-open/);
