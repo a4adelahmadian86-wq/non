@@ -26,7 +26,9 @@ class SupportReportController extends Controller
         $backlog = Ticket::query()->openQueue()->count();
         $needsReply = Ticket::query()->needsReply()->count();
         $openInRange = Ticket::query()->whereBetween('created_at', [$fromAt, $toAt])->count();
-        $closedInRange = Ticket::query()->where('status', 'closed')->whereBetween('closed_at', [$fromAt, $toAt])->count();
+        $closedInRange = Schema::hasColumn('tickets', 'closed_at')
+            ? Ticket::query()->where('status', 'closed')->whereBetween('closed_at', [$fromAt, $toAt])->count()
+            : Ticket::query()->where('status', 'closed')->whereBetween('updated_at', [$fromAt, $toAt])->count();
         $breachRate = $openInRange > 0
             ? round(100 * Ticket::query()->whereBetween('created_at', [$fromAt, $toAt])->slaBreached()->count() / max(1, $openInRange), 1)
             : null;

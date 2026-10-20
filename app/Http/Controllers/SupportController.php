@@ -280,7 +280,7 @@ class SupportController extends Controller
         }
         if ($request->filled('sla') && $request->sla === 'at_risk') {
             $warn = (int) config('support.warn_before_minutes', 30);
-            if (Schema::hasColumn('tickets', 'sla_first_due_at') || Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
+            if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
                 $query->whereNotIn('status', ['closed', 'pending'])
                     ->where(function ($q) use ($warn) {
                         if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
@@ -350,7 +350,7 @@ class SupportController extends Controller
             'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
         
             'sla_breached' => Ticket::query()->slaBreached()->count(),
-            'sla_at_risk' => (Schema::hasColumn('tickets', 'sla_first_due_at') || Schema::hasColumn('tickets', 'sla_resolve_due_at'))
+            'sla_at_risk' => (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at'))
                 ? Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
                     $warn = (int) config('support.warn_before_minutes', 30);
                     if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
