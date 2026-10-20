@@ -11,6 +11,7 @@ dotenv.config({path:path.join(root,'.env')});
 const PORT=Number(process.env.VOICE_STREAM_PORT||6002);
 const HOST=process.env.VOICE_STREAM_HOST||'127.0.0.1';
 const APP_KEY=String(process.env.APP_KEY||'');
+const GATEWAY_SECRET=String(process.env.VOICE_GATEWAY_SECRET||'');
 const APP_URL=String(process.env.VOICE_STREAM_APP_URL||'http://127.0.0.1:8001').replace(/\/$/,'');
 const REGION=String(process.env.GOOGLE_SPEECH_REGION||'us');
 const MAX_FRAME=24000;
@@ -18,11 +19,12 @@ const RESTART_MS=Number(process.env.VOICE_STREAM_RESTART_MS||240000);
 const STOP_GRACE_MS=Number(process.env.VOICE_STREAM_STOP_GRACE_MS||1200);
 const ORIGINS=String(process.env.VOICE_STREAM_ORIGINS||'http://127.0.0.1:8001,http://localhost:8001').split(',').map(x=>x.trim()).filter(Boolean);
 if(!APP_KEY)throw new Error('APP_KEY is required.');
+if(!GATEWAY_SECRET)throw new Error('VOICE_GATEWAY_SECRET is required and must match Laravel VOICE_GATEWAY_SECRET.');
 const b64=v=>Buffer.from(v.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-v.length%4)%4),'base64').toString('utf8');
 function verify(token){const [p,s]=String(token||'').split('.',2);if(!p||!s)throw new Error('invalid_token');const e=crypto.createHmac('sha256',APP_KEY).update(p).digest('hex');if(s.length!==e.length||!crypto.timingSafeEqual(Buffer.from(s),Buffer.from(e)))throw new Error('invalid_signature');const d=JSON.parse(b64(p));if(!d.uid||!d.locale||Number(d.exp)<Math.floor(Date.now()/1000))throw new Error('expired_token');return d;}
-function gatewaySig(token){return crypto.createHmac('sha256',APP_KEY).update(String(token)).digest('hex');}
-async function config(token,exclude=[]){const r=await fetch(`${APP_URL}/editor/voice/stream-config`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-Farast-Voice-Gateway':gatewaySig(token)},body:JSON.stringify({token,exclude_account_ids:exclude})});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.message||`provider_config_${r.status}`);return d;}
-async function usage(token,data){try{await fetch(`${APP_URL}/editor/voice/stream-usage`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-Farast-Voice-Gateway':gatewaySig(token)},body:JSON.stringify(data)})}catch{}}
+function gatewaySig(token){return crypto.createHmac('sha256',GATEWAY_SECRET).update(String(token)).digest('hex');}
+async function config(token,exclude=[]){const signature=gatewaySig(token);const r=await fetch(`${APP_URL}/editor/voice/provider-config`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-Farast-Voice-Gateway':signature,'X-Farast-Voice-Secret':signature},body:JSON.stringify({token,exclude_account_ids:exclude})});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.message||`provider_config_${r.status}`);return d;}
+async function usage(token,data){try{await fetch(`${APP_URL}/editor/voice/stream-usage`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-Farast-Voice-Gateway':gatewaySig(token)},body:JSON.stringify({...data,token})})}catch{}}
 const send=(ws,x)=>{if(ws.readyState===1)ws.send(JSON.stringify(x))};
 function googleRequest(project,region,locale){return {recognizer:`projects/${project}/locations/${region}/recognizers/_`,streamingConfig:{config:{explicitDecodingConfig:{encoding:'LINEAR16',sampleRateHertz:16000,audioChannelCount:1},languageCodes:[locale],model:'chirp_3',features:{enableAutomaticPunctuation:true}},streamingFeatures:{interimResults:true,enableVoiceActivityEvents:true}}}
 class Session{
