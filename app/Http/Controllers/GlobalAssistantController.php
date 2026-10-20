@@ -18,8 +18,8 @@ class GlobalAssistantController extends Controller
             'server_stt' => filled(config('services.voice_asr.url')),
             'server_tts' => filled(config('services.voice_tts.url')),
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
-            'server_stt_token_configured' => filled(config('services.voice_asr.token') ?: env('FARAST_VOICE_TOKEN')),
-            'server_tts_token_configured' => filled(config('services.voice_tts.token') ?: env('FARAST_VOICE_TOKEN')),
+            'server_stt_token_configured' => filled(config('services.voice_asr.token')),
+            'server_tts_token_configured' => filled(config('services.voice_tts.token')),
             'browser_stt' => false,
         ], 200, ['Cache-Control' => 'no-store']);
     }
@@ -48,7 +48,6 @@ class GlobalAssistantController extends Controller
         try {
             $http = Http::acceptJson()->timeout(60);
             $token = trim((string) config('services.voice_asr.token', ''));
-            if ($token === '') $token = trim((string) env('FARAST_VOICE_TOKEN', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->attach('audio', $bytes, 'farast-assistant.'.$extension, $file->getMimeType() ?: 'audio/webm')
                 ->post($url, ['locale' => $data['locale'] ?? 'fa-IR']);
