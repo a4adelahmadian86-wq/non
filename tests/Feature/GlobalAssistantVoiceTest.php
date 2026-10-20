@@ -29,13 +29,13 @@ class GlobalAssistantVoiceTest extends TestCase
             'https://voice.test/v1/transcribe' => Http::response(['text' => 'سلام فراست'], 200),
         ]);
 
-        $this->actingAs(User::factory()->create())
+        $response = $this->actingAs(User::factory()->create())
             ->post('/assistant/transcribe', [
                 'audio' => UploadedFile::fake()->createWithContent('voice.wav', $this->wavSample()),
                 'locale' => 'fa-IR',
-            ])
-            ->assertOk()
-            ->assertJsonPath('text', 'سلام فراست');
+            ]);
+        $this->assertSame(200, $response->status(), 'ASR proxy response: '.json_encode($response->json(), JSON_UNESCAPED_UNICODE));
+        $response->assertJsonPath('text', 'سلام فراست');
 
         Http::assertSent(fn (ClientRequest $request) =>
             $request->url() === 'https://voice.test/v1/transcribe'
