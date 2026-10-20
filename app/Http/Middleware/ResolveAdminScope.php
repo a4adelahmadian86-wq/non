@@ -37,7 +37,15 @@ class ResolveAdminScope
     public function handle(Request $request, Closure $next)
     {
         $user = $request->user();
-        abort_unless($user, 403);
+        if (! $user) {
+            // Public pages and signed-token endpoints may legitimately be guests.
+            // Protected routes enforce auth/admin middleware themselves.
+            $request->attributes->set('farast.scope', self::SCOPE_OWN);
+            view()->share('farastScope', self::SCOPE_OWN);
+            view()->share('farastScopeUser', null);
+
+            return $next($request);
+        }
         abort_if($user->is_blocked, 403, 'حساب شما مسدود شده است.');
 
         $scope = match ($user->role) {
