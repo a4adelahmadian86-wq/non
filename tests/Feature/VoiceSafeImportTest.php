@@ -105,6 +105,21 @@ class VoiceSafeImportTest extends TestCase
         }
     }
 
+    public function test_http_voice_chunks_share_a_session_key_and_silence_does_not_consume_quota(): void
+    {
+        $hub = file_get_contents(base_path('public/js/editor-voice-hub.js'));
+        $controller = file_get_contents(base_path('app/Http/Controllers/VoiceController.php'));
+
+        $this->assertIsString($hub);
+        $this->assertStringContainsString('const sessionRequestId = globalThis.crypto', $hub);
+        $this->assertStringContainsString("'X-Farast-Voice-Request': sessionRequestId", $hub);
+        $this->assertStringContainsString("'Idempotency-Key': sessionRequestId", $hub);
+
+        $this->assertIsString($controller);
+        $this->assertStringContainsString("if($rawText==='')return response()->json(['ok'=>true,'text'=>'','engine'", $controller);
+        $this->assertStringNotContainsString("voice_self_hosted_empty_transcript');", $controller);
+    }
+
     public function test_editor_surface_loads_voice_assets_and_mic_attachment(): void
     {
         $layout = file_get_contents(base_path('resources/views/layouts/app.blade.php'));
