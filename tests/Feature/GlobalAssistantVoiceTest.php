@@ -25,7 +25,7 @@ class GlobalAssistantVoiceTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->post('/assistant/transcribe', [
-                'audio' => UploadedFile::fake()->create('voice.wav', 10, 'audio/wav'),
+                'audio' => UploadedFile::fake()->create('voice.webm', 10, 'video/webm'),
                 'locale' => 'fa-IR',
             ])
             ->assertOk()
