@@ -52,6 +52,10 @@
 .farast-appbar,.farast-menubar,.farast-ribbon{position:relative;z-index:20}
 .farast-workspace{position:relative;z-index:1}
 .farast-ribbon{min-height:56px}
+.farast-agent-launcher{position:fixed;inset-inline-end:24px;bottom:24px;z-index:1999;border:0;border-radius:999px;padding:12px 16px;background:linear-gradient(135deg,#2458a6,#6d5ce8);color:#fff;font:600 13px inherit;box-shadow:0 6px 20px rgba(36,88,166,.28);cursor:pointer}
+.farast-agent-launcher:hover{filter:brightness(1.06);transform:translateY(-1px)}
+#farastAgentPanel.open + .farast-agent-launcher{display:none}
+@media(max-width:700px){.farast-agent-launcher{inset-inline-end:12px;bottom:46px;padding:11px 13px}}
 #farastAgentPanel{position:fixed;inset-inline-end:24px;bottom:72px;z-index:2000;pointer-events:none}
 #farastAgentPanel.open{pointer-events:auto}
 #farastAgentPanel.open *{pointer-events:auto}
@@ -81,6 +85,7 @@
  <div id="farastAgentStatus" class="farast-agent-status" aria-live="polite">سند فضای اصلی کار است؛ عامل فقط فرمان‌های Kernel را پیشنهاد و اجرا می‌کند.</div>
  <div id="farastAgentPlan" class="farast-agent-plan" hidden></div><div id="farastAgentPreview" class="farast-agent-preview" hidden></div>
 </aside>
+<button type="button" class="farast-agent-launcher" data-agent-open aria-label="بازکردن عامل سند" title="عامل هوشمند سند">✦ عامل سند</button>
 <input id="source" type="file" hidden accept="image/*,.pdf,.zip">
 <div id="findDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="findTitle"><header><strong id="findTitle">یافتن و جایگزینی</strong><button type="button" data-dialog-close>×</button></header><label>یافتن<input id="findInput" autocomplete="off"></label><label>جایگزین با<input id="replaceInput" autocomplete="off"></label><div class="dialog-actions"><button id="findNext" type="button">بعدی</button><button id="replaceOne" type="button">جایگزینی</button><button id="replaceAll" type="button" class="primary">جایگزینی همه</button></div></div></div>
 <div id="versionDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>تاریخچه نسخه‌ها</strong><button type="button" data-dialog-close>×</button></header><div id="versionList"></div></div></div>
