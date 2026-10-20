@@ -101,13 +101,27 @@ class VoiceController extends Controller
     {
         $quota->assertAllowed($request->user(),'can_voice');
         $data=$request->validate(['audio'=>['required','file','max:15360','mimetypes:audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/mp4'],'locale'=>['required','string','in:fa-IR,en-US,ar-SA'],'processing_mode'=>['nullable','string','in:automatic,local,server,external']]);
+        $asrUrl=trim((string)config('services.voice_asr.url',''));
+        $asrToken=trim((string)(config('services.voice_asr.token')?:env('FARAST_VOICE_TOKEN','')));
+        if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
+        $selfHosted=$asrUrl!==''&&$asrToken!=='';
+        $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
         $voiceReservation=$commerce->reserve($request->user(),'speech.transcription',1,[],['policy_code'=>'speech.transcription','unit'=>'request','allow_payg'=>true,'idempotency_key'=>$request->header('Idempotency-Key') ?: ('voice-'.$request->user()->id.'-'.hash('sha256',(string)$request->header('X-Farast-Voice-Request','')))]);
-        $processingMode=$privacy->resolve($data['processing_mode']??null,['external']);
         $file=$data['audio'];$bytes=file_get_contents($file->getRealPath());abort_if($bytes===false||$bytes==='',422,'فایل صوتی قابل خواندن نیست.');
         $mime=$file->getMimeType()?:$file->getClientMimeType()?:'audio/webm';$mime=match($mime){ 'video/webm'=>'audio/webm','video/mp4','audio/mp4'=>'audio/m4a','audio/x-wav'=>'audio/wav',default=>$mime};
         $context=['user_id'=>$request->user()->id,'input_bytes'=>strlen($bytes),'processing_mode'=>$processingMode];
         try{$groqKey='';$groqKey=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')));}catch(\Throwable){}
-        try{if($groqKey!==''){
+        try{if($selfHosted){
+            $extension=strtolower($file->getClientOriginalExtension()?:'webm');
+            if(!in_array($extension,['webm','ogg','wav','mp3','m4a','mp4'],true))$extension='webm';
+            $response=\\Illuminate\\Support\\Facades\\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
+                ->attach('audio',$bytes,'farast-voice.'.$extension,$mime)
+                ->post($asrUrl,['locale'=>$data['locale']]);
+            if(!$response->successful())throw new \\RuntimeException('voice_self_hosted_http_'.$response->status());
+            $transcript=trim((string)$response->json('text',''));
+            if($transcript==='')throw new \\RuntimeException('voice_self_hosted_empty_transcript');
+            $result=['text'=>$transcript,'engine'=>'farast-self-hosted-asr','model'=>'configured-self-hosted'];
+        }elseif($groqKey!==''){
             // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
             $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$groqKey])
                 ->attach('file',$bytes,'audio.'.$mime,$mime)
@@ -116,7 +130,9 @@ class VoiceController extends Controller
             if($resp->failed()){Log::warning('farast.voice.groq_failed',['status'=>$resp->status(),'body'=>substr((string)$resp->body(),0,200)]);return response()->json(['ok'=>false,'message'=>'سرویس صوتی فعلاً در دسترس نیست. دوباره تلاش کنید یا از موتور مرورگر استفاده کنید.'],503);}
             $result=['text'=>(string)$resp->json('text',''),'engine'=>'groq-whisper','model'=>'whisper-large-v3'];
         }else{$result=$googleSpeech->enabled()&&in_array($mime,['audio/webm','audio/ogg','audio/wav'],true)?$googleSpeech->transcribe($mime,$bytes,$data['locale'],$context):$voice->transcribe($mime,$bytes,$data['locale'],$context);}
-        $rawText=(string)($result['text']??'');$finalText=$corrections->apply($rawText,$data['locale'],$result['engine']??null,$request->user()->id);$result['raw_text']=$rawText;$result['text']=$finalText;$result['correction_applied']=$finalText!==$rawText;}catch(\Throwable $e){try{$commerce->release($voiceReservation);}catch(\Throwable){}Log::warning('farast.voice.transcription_failed',['user_id'=>$request->user()->id,'google_speech_enabled'=>$googleSpeech->enabled(),'error_code'=>preg_match('/^[a-z0-9_.-]+$/i',$e->getMessage())?$e->getMessage():'voice_provider_failure']);return response()->json(['ok'=>false,'message'=>'رونویسی صوتی انجام نشد. دوباره تلاش کنید.'],502);}
+        $rawText=(string)($result['text']??'');$finalText=$corrections->apply($rawText,$data['locale'],$result['engine']??null,$request->user()->id);$result['raw_text']=$rawText;$result['text']=$finalText;$result['correction_applied']=$finalText!==$rawText;}catch(\Throwable $e){try{$commerce->release($voiceReservation);}catch(\Throwable){}Log::warning('farast.voice.transcription_failed',['user_id'=>$request->user()->id,'google_speech_enabled'=>$googleSpeech->enabled(),'error_code'=>preg_match('/^[a-z0-9_.-]+$/i',$e->getMessage())?$e->getMessage():'voice_provider_failure']);$errorCode=(string)$e->getMessage();
+        $message=match(true){str_starts_with($errorCode,'voice_self_hosted_http_401'),str_starts_with($errorCode,'voice_self_hosted_http_403')=>'احراز هویت موتور گفتار خودمیزبان ناموفق است؛ توکن سرویس و FARAST_VOICE_ASR_TOKEN باید یکسان باشند.',str_starts_with($errorCode,'voice_self_hosted_http_429')=>'موتور گفتار خودمیزبان موقتاً محدودیت درخواست دارد؛ کمی بعد دوباره تلاش کنید.',str_starts_with($errorCode,'voice_self_hosted_http_503')=>'موتور گفتار خودمیزبان هنوز آماده نیست؛ وضعیت سرویس را بررسی کنید.',$errorCode==='voice_self_hosted_empty_transcript'=>'گفتاری در این قطعه تشخیص داده نشد.',default=>'رونویسی صوتی انجام نشد. دوباره تلاش کنید.'};
+        return response()->json(['ok'=>false,'message'=>$message],502,['Cache-Control'=>'no-store']);}
         $commerce->commit($voiceReservation,['cost_metadata'=>['provider'=>$result['engine']??'gemini','input_bytes'=>strlen($bytes)],'metadata'=>['locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)]]);
         return response()->json(['ok'=>true,'text'=>$result['text'],'engine'=>$result['engine']??'gemini','interaction_id'=>$result['interaction_id']??null,'request_id'=>$result['request_id']??null,'ai'=>['request_id'=>$result['request_id']??null,'operation'=>'voice.transcribe','provider'=>$result['engine']??'gemini','model'=>$result['model']??null,'processing_mode'=>$processingMode,'status'=>'completed','result'=>['text'=>$result['text']],'suggestions'=>[],'warnings'=>[],'metadata'=>['interaction_id'=>$result['interaction_id']??null,'locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)],'usage'=>null,'error'=>null]]);
     }
