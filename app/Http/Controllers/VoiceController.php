@@ -34,7 +34,7 @@ class VoiceController extends Controller
             return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['self-hosted-asr'],'self_hosted'=>true],200,['Cache-Control'=>'no-store']);
         }
         $groq=false;
-        try{$groq=trim((string)(\App\Models\\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\Throwable){}
+        try{$groq=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\Throwable){}
         if($groq)return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['groq']],200,['Cache-Control'=>'no-store']);
         $google=false;
         try{$google=app(\App\Services\GoogleSpeechToTextService::class)->enabled();}catch(\Throwable){}
