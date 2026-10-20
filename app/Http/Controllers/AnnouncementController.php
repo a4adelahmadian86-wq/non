@@ -45,6 +45,10 @@ class AnnouncementController extends Controller
                 $q->where('is_active', true);
             } elseif ($request->status === 'inactive') {
                 $q->where('is_active', false);
+            } elseif ($request->status === 'scheduled') {
+                $q->where('is_active', true)->whereNotNull('starts_at')->where('starts_at', '>', now());
+            } elseif ($request->status === 'pinned') {
+                $q->where('is_pinned', true);
             }
         }
 
@@ -56,9 +60,29 @@ class AnnouncementController extends Controller
             $q->where('type', $request->type);
         }
 
+        if ($request->filled('q')) {
+            $term = trim((string) $request->q);
+            $q->where(function ($w) use ($term) {
+                $w->where('title', 'like', '%'.$term.'%')
+                    ->orWhere('body', 'like', '%'.$term.'%');
+            });
+        }
+
+        $stats = [
+            'total' => Announcement::query()->count(),
+            'active' => Announcement::query()->where('is_active', true)->count(),
+            'pinned' => Announcement::query()->where('is_pinned', true)->count(),
+            'scheduled' => Announcement::query()
+                ->where('is_active', true)
+                ->whereNotNull('starts_at')
+                ->where('starts_at', '>', now())
+                ->count(),
+        ];
+
         return view('admin.announcements', [
             'announcements' => $q->paginate(20)->withQueryString(),
-            'filters' => $request->only(['status', 'audience', 'type']),
+            'filters' => $request->only(['status', 'audience', 'type', 'q']),
+            'stats' => $stats,
         ]);
     }
 

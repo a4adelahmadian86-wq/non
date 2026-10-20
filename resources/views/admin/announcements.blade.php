@@ -39,10 +39,8 @@
 
     <article class="an-surface">
         <div class="an-surface-head">
-            <div>
-                <h1>انتشار اعلان جدید</h1>
-                <p>فقط داخل داشبورد کاربران — هماهنگ با صندوق اعلان و ایمیل اختیاری</p>
-            </div>
+            <h2><i class="fa-solid fa-pen-to-square"></i> انتشار اعلان جدید</h2>
+            <span>فقط داشبورد · درون‌برنامه و ایمیل اختیاری</span>
         </div>
         <div class="an-surface-body">
             <form method="post" action="{{ route('admin.announcements.store') }}" class="an-form-grid">
@@ -124,17 +122,18 @@
 
     <article class="an-surface">
         <div class="an-surface-head">
-            <div>
-                <h1>لیست اعلان‌ها</h1>
-                <p>فعال‌سازی، ارسال مجدد به صندوق اعلان، حذف</p>
-            </div>
+            <h2><i class="fa-solid fa-list"></i> لیست اعلان‌ها</h2>
+            <span>فعال‌سازی · ارسال مجدد · حذف</span>
         </div>
         <div class="an-surface-body">
-            <form method="get" class="an-filters">
+            <form method="get" action="{{ route('admin.announcements.index') }}" class="an-filters" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                <input class="an-input" type="search" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="جستجو در عنوان یا متن..." style="max-width:220px" onchange="this.form.submit()">
                 <select class="an-select" name="status" onchange="this.form.submit()">
                     <option value="">همه وضعیت‌ها</option>
                     <option value="active" @selected(($filters['status'] ?? '') === 'active')>فعال</option>
                     <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>غیرفعال</option>
+                    <option value="pinned" @selected(($filters['status'] ?? '') === 'pinned')>پین‌شده</option>
+                    <option value="scheduled" @selected(($filters['status'] ?? '') === 'scheduled')>زمان‌بندی‌شده</option>
                 </select>
                 <select class="an-select" name="audience" onchange="this.form.submit()">
                     <option value="">همه مخاطبان</option>
@@ -149,6 +148,7 @@
                     <option value="warning" @selected(($filters['type'] ?? '') === 'warning')>هشدار</option>
                     <option value="danger" @selected(($filters['type'] ?? '') === 'danger')>مهم</option>
                 </select>
+                <button type="submit" class="an-btn an-btn-ghost an-btn-sm">اعمال</button>
             </form>
 
             <div class="an-table-wrap">
