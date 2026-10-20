@@ -7,8 +7,8 @@ import speech from '@google-cloud/speech';
 import {createAzureStream} from './providers/azure.mjs';
 import {createGladiaStream} from './providers/gladia.mjs';
 
-const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-dotenv.config({path:path.join(root,'.env')});
+const directory=path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({path:path.join(directory,'.env')});
 const PORT=Number(process.env.VOICE_STREAM_PORT||6002);
 const HOST=process.env.VOICE_STREAM_HOST||'127.0.0.1';
 const APP_KEY=String(process.env.APP_KEY||'');
