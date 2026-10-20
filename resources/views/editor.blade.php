@@ -38,6 +38,16 @@
  @endforeach
  <div class="farast-menu"><button type="button" aria-haspopup="true" aria-expanded="false">راهنما</button><div class="farast-menu-panel" role="menu"><a role="menuitem" href="{{ route('support') }}">راهنما و پشتیبانی</a><a role="menuitem" href="{{ route('pricing') }}">قیمت‌گذاری</a></div></div>
 </nav>
+<nav class="farast-tabs" role="tablist" aria-label="تب‌های ابزار ویرایش">
+  <button type="button" class="farast-tab active" role="tab" aria-selected="true" data-tab="home">صفحه اصلی</button>
+  <button type="button" class="farast-tab" role="tab" aria-selected="false" data-tab="insert">درج</button>
+  <button type="button" class="farast-tab" role="tab" aria-selected="false" data-tab="layout">چیدمان</button>
+  <button type="button" class="farast-tab" role="tab" aria-selected="false" data-tab="design">طراحی</button>
+  <button type="button" class="farast-tab" role="tab" aria-selected="false" data-tab="references">مراجع</button>
+  <button type="button" class="farast-tab" role="tab" aria-selected="false" data-tab="review">بازبینی</button>
+  <button type="button" class="farast-tab" role="tab" aria-selected="false" data-tab="view">نمایش</button>
+  <button type="button" class="farast-tab" role="tab" aria-selected="false" data-tab="ai">هوش مصنوعی</button>
+</nav>
   <style>
 .farast-appbar,.farast-menubar,.farast-ribbon{position:relative;z-index:20}
 .farast-workspace{position:relative;z-index:1}
