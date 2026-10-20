@@ -65,7 +65,7 @@ test('online voice uses configured chunked transcription when no websocket gatew
   await expect.poll(async () => page.evaluate(() => !!window.FarastVoiceRuntime?.open)).toBeTruthy();
   await page.evaluate(() => window.FarastVoiceRuntime.open());
   await page.locator('#fvStart').click();
-  await expect(page.locator('#fvStatus')).toContainText('مرحله‌ای');
+  await expect(page.locator('#fvStatus')).toContainText('در حال ضبط');
   await page.locator('#fvStop').click();
   await expect.poll(async () => page.evaluate(() => window.__insertCalled)).toBeTruthy();
   const result = await page.evaluate(() => ({ transcribe: window.__transcribeCalled, inserted: window.__insertedText, engine: document.getElementById('fvEngine').textContent }));
