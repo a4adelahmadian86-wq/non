@@ -136,6 +136,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/tickets/{ticket}/reply', [SupportController::class, 'adminReply'])->name('tickets.reply');
     Route::post('/tickets/{ticket}/status', [SupportController::class, 'adminStatus'])->name('tickets.status');
     Route::post('/tickets/{ticket}/assign', [SupportController::class, 'adminAssign'])->name('tickets.assign');
+    Route::post('/tickets/{ticket}/meta', [SupportController::class, 'adminMeta'])->name('tickets.meta');
     Route::get('/plans', [PlatformCompletionController::class, 'adminPlans'])->name('plans');
     Route::post('/plans', [PlatformCompletionController::class, 'savePlan'])->name('plans.save');
     Route::get('/cms', [PlatformCompletionController::class, "cms"])->name('cms');

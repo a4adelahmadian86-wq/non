@@ -58,6 +58,9 @@
             <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
             <a class="sd-chip {{ request('sla')==='at_risk'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'at_risk'])) }}" style="border-color:#fde68a;color:#b45309">نزدیک نقض ({{ $stats['sla_at_risk'] ?? 0 }})</a>
             <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('priority')==='high'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'sla'=>request('sla')]), ['priority'=>'high'])) }}" style="border-color:#fecaca;color:#b91c1c">اولویت بالا ({{ $stats['high'] ?? 0 }})</a>
+            <a class="sd-chip {{ request('department')==='billing'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'priority'=>request('priority'),'sla'=>request('sla')]), ['department'=>'billing'])) }}">مالی</a>
+            <a class="sd-chip {{ request('assigned')==='me'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge(array_filter(['q'=>request('q'),'status'=>request('status'),'department'=>request('department'),'priority'=>request('priority'),'sla'=>request('sla')]), ['assigned'=>'me'])) }}">ارجاع به من</a>
         </div>
 
         <div class="sd-list" id="ticketList">
@@ -171,6 +174,21 @@
                             @endforeach
                         </select>
                         <button type="submit" class="sd-btn" style="background:#eef4ff;color:#1769ff;font-size:.78rem">ارجاع</button>
+                    </form>
+                    <form method="post" action="{{ route('admin.tickets.meta', $active) }}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                        @csrf
+                        <select name="priority" style="border:1px solid var(--sd-line);border-radius:10px;padding:6px 10px;font:inherit;font-size:.78rem">
+                            <option value="low" @selected(($active->priority ?? '')==='low')>اولویت کم</option>
+                            <option value="normal" @selected(($active->priority ?? 'normal')==='normal')>اولویت متوسط</option>
+                            <option value="high" @selected(($active->priority ?? '')==='high')>اولویت زیاد</option>
+                        </select>
+                        <select name="department" style="border:1px solid var(--sd-line);border-radius:10px;padding:6px 10px;font:inherit;font-size:.78rem">
+                            <option value="support" @selected(($active->department ?? 'support')==='support')>پشتیبانی</option>
+                            <option value="sales" @selected(($active->department ?? '')==='sales')>فروش</option>
+                            <option value="billing" @selected(($active->department ?? '')==='billing')>مالی</option>
+                            <option value="complaint" @selected(($active->department ?? '')==='complaint')>شکایات</option>
+                        </select>
+                        <button type="submit" class="sd-btn" style="background:#f1f5f9;color:#334155;font-size:.78rem">ذخیره متا</button>
                     </form>
                 </div>
             </header>

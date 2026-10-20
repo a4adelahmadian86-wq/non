@@ -275,6 +275,59 @@ class SupportTicketService
     }
 
     /**
+     * به‌روزرسانی اولویت / دپارتمان؛ در صورت تغییر اولویت، مهلت SLA از نو محاسبه می‌شود.
+     */
+    public function updateMeta(Ticket $ticket, array $data, ?User $actor = null): Ticket
+    {
+        $update = [];
+        $notes = [];
+
+        if (array_key_exists('priority', $data) && in_array($data['priority'], self::PRIORITIES, true)
+            && $data['priority'] !== $ticket->priority) {
+            $update['priority'] = $data['priority'];
+            $notes[] = 'اولویت به «'.(match ($data['priority']) {
+                'high' => 'زیاد',
+                'low' => 'کم',
+                default => 'متوسط',
+            }).'»';
+        }
+
+        if (array_key_exists('department', $data) && in_array($data['department'], self::DEPARTMENTS, true)
+            && $data['department'] !== $ticket->department) {
+            $update['department'] = $data['department'];
+            $notes[] = 'دپارتمان به «'.(match ($data['department']) {
+                'sales' => 'فروش',
+                'billing' => 'مالی',
+                'complaint' => 'شکایات',
+                default => 'پشتیبانی',
+            }).'»';
+        }
+
+        if ($update === []) {
+            return $ticket;
+        }
+
+        $ticket->update($update);
+        $ticket = $ticket->fresh();
+
+        if (isset($update['priority'])) {
+            $this->sla->applyTargets($ticket);
+            $ticket = $ticket->fresh();
+        }
+
+        if ($actor && $notes) {
+            $this->addMessage($ticket, $actor, '[سیستم] '.implode(' و ', $notes).' تغییر کرد.', [
+                'is_staff' => true,
+                'is_internal' => true,
+                'touch_status' => false,
+                'notify' => false,
+            ]);
+        }
+
+        return $ticket->fresh(['assignee', 'user']);
+    }
+
+    /**
      * ثبت رضایت‌سنجی (CSAT) پس از بستن تیکت — امتیاز ۱ تا ۵.
      */
     public function submitCsat(Ticket $ticket, int $score, ?string $comment = null): Ticket

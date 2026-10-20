@@ -413,6 +413,22 @@ class SupportController extends Controller
         return back()->with('status', 'ارجاع تیکت ذخیره شد.');
     }
 
+
+    public function adminMeta(Request $request, Ticket $ticket)
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+        $this->authorize('manage', $ticket);
+
+        $data = $request->validate([
+            'priority' => 'nullable|in:'.implode(',', SupportTicketService::PRIORITIES),
+            'department' => 'nullable|in:'.implode(',', SupportTicketService::DEPARTMENTS),
+        ]);
+
+        $this->tickets->updateMeta($ticket, $data, auth()->user());
+
+        return back()->with('status', 'اولویت / دپارتمان به‌روزرسانی شد.');
+    }
+
     public function guestMessage(Request $request)
     {
         $data = $request->validate([
