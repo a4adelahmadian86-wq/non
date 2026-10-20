@@ -19,6 +19,32 @@ class VoiceSecurityTest extends TestCase
         $response->assertOk()->assertJsonMissingPath('credentials')->assertJsonStructure(['session_id','token','expires_at','websocket_url']);
     }
 
+    public function test_configured_self_hosted_asr_is_the_preferred_voice_engine(): void
+    {
+        Config::set('services.voice_asr.url', 'https://voice.example.test/v1/transcribe');
+        Config::set('services.voice_asr.token', 'test-self-hosted-token');
+        $user = User::factory()->create();
+        $this->actingAs($user)->getJson('/editor/voice/status')
+            ->assertOk()
+            ->assertJsonPath('mode', 'chunked')
+            ->assertJsonPath('self_hosted', true)
+            ->assertJsonPath('gateway', false)
+            ->assertJsonPath('engines.0', 'self-hosted-asr');
+    }
+
+    public function test_missing_self_hosted_token_does_not_advertise_a_fallback_engine(): void
+    {
+        Config::set('services.voice_asr.url', 'https://voice.example.test/v1/transcribe');
+        Config::set('services.voice_asr.token', '');
+        Config::set('services.gemini.key', 'test-gemini-key');
+        $user = User::factory()->create();
+        $this->actingAs($user)->getJson('/editor/voice/status')
+            ->assertOk()
+            ->assertJsonPath('mode', 'none')
+            ->assertJsonPath('reason', 'self_hosted_token_missing')
+            ->assertJsonPath('self_hosted', true);
+    }
+
     public function test_provider_credentials_are_gateway_only(): void
     {
         Config::set('services.voice_stream.gateway_secret','test-gateway-secret');
