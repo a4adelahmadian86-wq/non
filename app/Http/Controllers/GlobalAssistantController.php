@@ -96,7 +96,6 @@ class GlobalAssistantController extends Controller
         try {
             $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')->timeout(60);
             $token = trim((string) config('services.voice_tts.token', ''));
-            if ($token === '') $token = trim((string) env('FARAST_VOICE_TOKEN', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->post($url, [
                 'text' => $data['text'],
