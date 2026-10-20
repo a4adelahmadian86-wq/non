@@ -117,7 +117,7 @@ class VoiceController extends Controller
             $extension=strtolower($file->getClientOriginalExtension()?:'webm');
             if(!in_array($extension,['webm','ogg','wav','mp3','m4a','mp4'],true))$extension='webm';
             $response=\Illuminate\Support\Facades\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
-                ->attach('audio',$bytes,'farast-voice.'.$extension,$mime)
+                ->attach('audio',$bytes,'farast-voice.'.$extension,['Content-Type'=>$mime])
                 ->post($asrUrl,['locale'=>$data['locale']]);
             if(!$response->successful())throw new \RuntimeException('voice_self_hosted_http_'.$response->status());
             $transcript=trim((string)$response->json('text',''));
@@ -127,7 +127,7 @@ class VoiceController extends Controller
         }elseif($groqKey!==''){
             // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
             $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$groqKey])
-                ->attach('file',$bytes,'audio.'.$mime,$mime)
+                ->attach('file',$bytes,'audio.'.$mime,['Content-Type'=>$mime])
                 ->asMultipart()->timeout(60)
                 ->post('https://api.groq.com/openai/v1/audio/transcriptions',['model'=>'whisper-large-v3','language'=>explode('-',$data['locale'])[0],'response_format'=>'json']);
             if($resp->failed()){Log::warning('farast.voice.groq_failed',['status'=>$resp->status(),'body'=>substr((string)$resp->body(),0,200)]);return response()->json(['ok'=>false,'message'=>'سرویس صوتی فعلاً در دسترس نیست. دوباره تلاش کنید یا از موتور مرورگر استفاده کنید.'],503);}
