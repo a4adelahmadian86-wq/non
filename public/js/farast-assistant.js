@@ -209,6 +209,10 @@
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();root.querySelector('.farast-assistant-mic').classList.remove('is-recording');return;}
     if(recognition){recognition.stop();recognition=null;return;}
+    if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
+    if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
+    if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
+    panel.classList.remove('is-speaking');
     conversationActive=true;voiceTitle.textContent='شروع گفت‌وگوی پیوسته';voiceCaption.textContent='بعد از هر پاسخ، دوباره گوش می‌دهم. برای پایان، «توقف پخش صدا» را لمس کن.';startServerRecording();
   });
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!panel.hidden){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);}});
