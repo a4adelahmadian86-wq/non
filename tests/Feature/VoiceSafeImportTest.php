@@ -116,7 +116,7 @@ class VoiceSafeImportTest extends TestCase
         $this->assertStringContainsString("'Idempotency-Key': sessionRequestId", $hub);
 
         $this->assertIsString($controller);
-        $this->assertStringContainsString("if($rawText==='')return response()->json(['ok'=>true,'text'=>'','engine'", $controller);
+        $this->assertStringContainsString("if(\$rawText==='')return response()->json(['ok'=>true,'text'=>'','engine'", $controller);
         $this->assertStringNotContainsString("voice_self_hosted_empty_transcript');", $controller);
     }
 
