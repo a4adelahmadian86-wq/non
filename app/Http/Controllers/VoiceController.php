@@ -56,7 +56,7 @@ class VoiceController extends Controller
     {
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
         $payload=['uid'=>(int)$request->user()->id,'locale'=>$request->string('locale')->toString(),'iat'=>time(),'exp'=>time()+120,'nonce'=>bin2hex(random_bytes(12))];
-        return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/')]);
+        return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','')),'/')]);
     }
 
     public function streamConfig(Request $request)
