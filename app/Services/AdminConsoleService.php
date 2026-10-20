@@ -17,6 +17,14 @@ use Illuminate\Support\Facades\Schema;
  */
 class AdminConsoleService
 {
+    /**
+     * ثابت‌های دامنه — هم‌ارز با ResolveAdminScope (برای استفادهٔ راحت در کنترلرها/ویوها).
+     */
+    public const SCOPE_GLOBAL = ResolveAdminScope::SCOPE_GLOBAL;
+    public const SCOPE_ORGANIZATION = ResolveAdminScope::SCOPE_ORGANIZATION;
+    public const SCOPE_TEAM = ResolveAdminScope::SCOPE_TEAM;
+    public const SCOPE_OWN = ResolveAdminScope::SCOPE_OWN;
+
     public function __construct(private readonly AuthorizationService $authorization)
     {
     }
