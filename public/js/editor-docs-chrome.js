@@ -146,7 +146,7 @@ fbEd.id = 'fdFallbackEditor'; fbEd.className = 'farast-editor'; fbEd.contentEdit
 fbEd.innerHTML = '<p><br></p>';
 {
   const vpEl = $('#pagesViewport');
-  const hasKernelPage = !!(vpEl && (window.FarastEditor?.state?.model || vpEl.querySelector('.farast-page, .farast-editor')));
+  const hasKernelPage = !!(window.FarastEditor || (vpEl && vpEl.querySelector('.farast-page, .farast-editor')));
   if (!hasKernelPage) { const fbc = document.createElement('div'); fbc.className = 'fd-canvas'; const fbp = document.createElement('div'); fbp.className = 'fd-pages'; fbp.appendChild(fbEd); fbc.appendChild(fbp); app.appendChild(fbc); }
   else fbEd.style.display = 'none';
 }
