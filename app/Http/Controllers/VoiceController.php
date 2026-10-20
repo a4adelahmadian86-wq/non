@@ -25,11 +25,17 @@ class VoiceController extends Controller
         // موتورهای ابری سایت: Google STT و Gemini (هر دو از ایران تحریم‌اند — فقط در صورت
         // وجود پروکسی سمت سرور معتبرند). به‌عنوان گزینهٔ جایگزینِ بدون‌تحریم، Groq Whisper
         // (رایگان، از ایران قابل دسترس) هم پشتیبانی می‌شود؛ کلیدش را در پنل ادمین بگذارید.
-        $groq=false;
-        try{$groq=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\Throwable){}
-        if($groq)return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['groq']],200,['Cache-Control'=>'no-store']);
         $authed=(bool)($request->user()?->id);
         if(!$authed)return response()->json(['ok'=>true,'mode'=>'none','reason'=>'auth'],200,['Cache-Control'=>'no-store']);
+        $asrUrl=trim((string)config('services.voice_asr.url',''));
+        $asrToken=trim((string)(config('services.voice_asr.token')?:env('FARAST_VOICE_TOKEN','')));
+        if($asrUrl!==''){
+            if($asrToken==='')return response()->json(['ok'=>true,'mode'=>'none','reason'=>'self_hosted_token_missing','self_hosted'=>true,'chunked'=>false,'gateway'=>false,'websocket_url'=>''],200,['Cache-Control'=>'no-store']);
+            return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['self-hosted-asr'],'self_hosted'=>true],200,['Cache-Control'=>'no-store']);
+        }
+        $groq=false;
+        try{$groq=trim((string)(\\App\\Models\\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\\Throwable){}
+        if($groq)return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['groq']],200,['Cache-Control'=>'no-store']);
         $google=false;
         try{$google=app(\App\Services\GoogleSpeechToTextService::class)->enabled();}catch(\Throwable){}
         $gemini=false;
