@@ -40,6 +40,12 @@ class AnnouncementController extends Controller
 
         $q = Announcement::query()->latest();
 
+        if ($request->get('tab') === 'archive') {
+            $q->archived();
+        } else {
+            $q->notArchived();
+        }
+
         if ($request->filled('status')) {
             if ($request->status === 'active') {
                 $q->where('is_active', true);
@@ -69,20 +75,23 @@ class AnnouncementController extends Controller
         }
 
         $stats = [
-            'total' => Announcement::query()->count(),
-            'active' => Announcement::query()->where('is_active', true)->count(),
-            'pinned' => Announcement::query()->where('is_pinned', true)->count(),
+            'total' => Announcement::query()->notArchived()->count(),
+            'active' => Announcement::query()->notArchived()->where('is_active', true)->count(),
+            'pinned' => Announcement::query()->notArchived()->where('is_pinned', true)->count(),
             'scheduled' => Announcement::query()
+                ->notArchived()
                 ->where('is_active', true)
                 ->whereNotNull('starts_at')
                 ->where('starts_at', '>', now())
                 ->count(),
+            'archived' => Announcement::query()->archived()->count(),
         ];
 
         return view('admin.announcements', [
             'announcements' => $q->paginate(20)->withQueryString(),
-            'filters' => $request->only(['status', 'audience', 'type', 'q']),
+            'filters' => $request->only(['status', 'audience', 'type', 'q', 'tab']),
             'stats' => $stats,
+            'tab' => $request->get('tab') === 'archive' ? 'archive' : 'active',
         ]);
     }
 
@@ -132,6 +141,28 @@ class AnnouncementController extends Controller
         $sent = $this->announcements->broadcast($announcement->fresh());
 
         return back()->with('status', "اعلان مجدداً ارسال شد ({$sent} اعلان درون‌برنامه).");
+    }
+
+    public function archive(Announcement $announcement)
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        $announcement->forceFill([
+            'archived_at' => now(),
+            'is_active' => false,
+            'is_pinned' => false,
+        ])->save();
+
+        return back()->with('status', 'اعلان به آرشیو منتقل شد.');
+    }
+
+    public function restore(Announcement $announcement)
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        $announcement->forceFill(['archived_at' => null])->save();
+
+        return back()->with('status', 'اعلان از آرشیو بازگردانی شد.');
     }
 
     protected function validated(Request $request): array

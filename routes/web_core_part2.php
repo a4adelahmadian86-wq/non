@@ -111,6 +111,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/announcements/{announcement}/toggle', [AnnouncementController::class, 'toggle'])->name('announcements.toggle');
     Route::post('/announcements/{announcement}/rebroadcast', [AnnouncementController::class, 'rebroadcast'])->name('announcements.rebroadcast');
     Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
+    Route::post('/announcements/{announcement}/archive', [AnnouncementController::class, 'archive'])->name('announcements.archive');
+    Route::post('/announcements/{announcement}/restore', [AnnouncementController::class, 'restore'])->name('announcements.restore');
     Route::get('/emails', [AdminController::class, 'emails'])->name('emails');
     Route::post('/emails/settings', [AdminController::class, 'updateEmailSettings'])->name('emails.settings');
     Route::post('/emails/test', [AdminController::class, 'sendTestEmail'])->name('emails.test');

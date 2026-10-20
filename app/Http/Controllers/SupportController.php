@@ -280,28 +280,43 @@ class SupportController extends Controller
         }
         if ($request->filled('sla') && $request->sla === 'at_risk') {
             $warn = (int) config('support.warn_before_minutes', 30);
-            $query->whereNotIn('status', ['closed', 'pending'])
-                ->where(function ($q) use ($warn) {
-                    $q->where(function ($w) use ($warn) {
-                        $w->whereNull('first_response_at')
-                            ->whereNotNull('sla_first_due_at')
-                            ->where('sla_first_due_at', '>', now())
-                            ->where('sla_first_due_at', '<=', now()->addMinutes($warn));
-                    })->orWhere(function ($w) use ($warn) {
-                        $w->whereNotNull('sla_resolve_due_at')
-                            ->where('sla_resolve_due_at', '>', now())
-                            ->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+            if (Schema::hasColumn('tickets', 'sla_first_due_at') || Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
+                $query->whereNotIn('status', ['closed', 'pending'])
+                    ->where(function ($q) use ($warn) {
+                        if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
+                            $q->where(function ($w) use ($warn) {
+                                $w->whereNull('first_response_at')
+                                    ->whereNotNull('sla_first_due_at')
+                                    ->where('sla_first_due_at', '>', now())
+                                    ->where('sla_first_due_at', '<=', now()->addMinutes($warn));
+                            });
+                        }
+                        if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
+                            $q->orWhere(function ($w) use ($warn) {
+                                $w->whereNotNull('sla_resolve_due_at')
+                                    ->where('sla_resolve_due_at', '>', now())
+                                    ->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                            });
+                        }
                     });
-                });
+            } else {
+                $query->whereRaw('0 = 1');
+            }
         }
         if ($request->filled('q')) {
             $q = $request->string('q');
             $query->where(function ($w) use ($q) {
                 $w->where('subject', 'like', '%'.$q.'%')
-                    ->orWhere('id', $q)
-                    ->orWhere('ticket_code', 'like', '%'.$q.'%')
-                    ->orWhere('guest_email', 'like', '%'.$q.'%')
-                    ->orWhere('guest_name', 'like', '%'.$q.'%');
+                    ->orWhere('id', $q);
+                if (Schema::hasColumn('tickets', 'ticket_code')) {
+                    $w->orWhere('ticket_code', 'like', '%'.$q.'%');
+                }
+                if (Schema::hasColumn('tickets', 'guest_email')) {
+                    $w->orWhere('guest_email', 'like', '%'.$q.'%');
+                }
+                if (Schema::hasColumn('tickets', 'guest_name')) {
+                    $w->orWhere('guest_name', 'like', '%'.$q.'%');
+                }
             });
         }
 
@@ -335,14 +350,21 @@ class SupportController extends Controller
             'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
         
             'sla_breached' => Ticket::query()->slaBreached()->count(),
-            'sla_at_risk' => Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
-                $warn = (int) config('support.warn_before_minutes', 30);
-                $q->where(function ($w) use ($warn) {
-                    $w->whereNull('first_response_at')->whereNotNull('sla_first_due_at')->where('sla_first_due_at', '>', now())->where('sla_first_due_at', '<=', now()->addMinutes($warn));
-                })->orWhere(function ($w) use ($warn) {
-                    $w->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
-                });
-            })->count(),
+            'sla_at_risk' => (Schema::hasColumn('tickets', 'sla_first_due_at') || Schema::hasColumn('tickets', 'sla_resolve_due_at'))
+                ? Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
+                    $warn = (int) config('support.warn_before_minutes', 30);
+                    if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
+                        $q->where(function ($w) use ($warn) {
+                            $w->whereNull('first_response_at')->whereNotNull('sla_first_due_at')->where('sla_first_due_at', '>', now())->where('sla_first_due_at', '<=', now()->addMinutes($warn));
+                        });
+                    }
+                    if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
+                        $q->orWhere(function ($w) use ($warn) {
+                            $w->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
+                        });
+                    }
+                })->count()
+                : 0,
         ];
 
         $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);

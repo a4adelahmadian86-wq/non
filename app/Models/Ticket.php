@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class Ticket extends Model
 {
@@ -179,17 +180,29 @@ class Ticket extends Model
 
     public function scopeSlaBreached(Builder $query): Builder
     {
+        // اگر migration SLA هنوز اجرا نشده، صف خالی برگردان تا صفحه نشکند
+        if (! Schema::hasColumn('tickets', 'sla_first_due_at')
+            && ! Schema::hasColumn('tickets', 'first_response_at')
+            && ! Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
+            return $query->whereRaw('0 = 1');
+        }
+
         // pending = منتظر کاربر → ساعت حل متوقف؛ فقط نقض پاسخ اول یا حل در وضعیت‌های فعال
         return $query->whereNotIn('status', ['closed', 'pending'])
             ->where(function ($q) {
-                $q->where(function ($w) {
-                    $w->whereNull('first_response_at')
-                        ->whereNotNull('sla_first_due_at')
-                        ->where('sla_first_due_at', '<', now());
-                })->orWhere(function ($w) {
-                    $w->whereNotNull('sla_resolve_due_at')
-                        ->where('sla_resolve_due_at', '<', now());
-                });
+                if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
+                    $q->where(function ($w) {
+                        $w->whereNull('first_response_at')
+                            ->whereNotNull('sla_first_due_at')
+                            ->where('sla_first_due_at', '<', now());
+                    });
+                }
+                if (Schema::hasColumn('tickets', 'sla_resolve_due_at')) {
+                    $q->orWhere(function ($w) {
+                        $w->whereNotNull('sla_resolve_due_at')
+                            ->where('sla_resolve_due_at', '<', now());
+                    });
+                }
             });
     }
 

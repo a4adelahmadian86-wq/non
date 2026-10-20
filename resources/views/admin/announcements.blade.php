@@ -30,11 +30,21 @@
         <div class="an-flash">{{ session('status') }}</div>
     @endif
 
-    <div class="an-stats">
-        <div class="an-stat"><b>{{ $stats['total'] }}</b><span>کل اعلان‌ها</span></div>
-        <div class="an-stat"><b>{{ $stats['active'] }}</b><span>فعال</span></div>
+    <div class="an-stats" style="grid-template-columns:repeat(5,1fr)">
+        <div class="an-stat"><b>{{ $stats['total'] }}</b><span>فعال در لیست</span></div>
+        <div class="an-stat"><b>{{ $stats['active'] }}</b><span>روشن</span></div>
         <div class="an-stat"><b>{{ $stats['pinned'] }}</b><span>پین‌شده</span></div>
         <div class="an-stat"><b>{{ $stats['scheduled'] }}</b><span>زمان‌بندی‌شده</span></div>
+        <div class="an-stat"><b>{{ $stats['archived'] ?? 0 }}</b><span>آرشیو</span></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <a href="{{ route('admin.announcements.index') }}" class="an-btn an-btn-sm {{ ($tab ?? 'active') !== 'archive' ? 'an-btn-primary' : 'an-btn-ghost' }}">
+            <i class="fa-solid fa-inbox"></i> جاری
+        </a>
+        <a href="{{ route('admin.announcements.index', ['tab' => 'archive']) }}" class="an-btn an-btn-sm {{ ($tab ?? '') === 'archive' ? 'an-btn-primary' : 'an-btn-ghost' }}">
+            <i class="fa-solid fa-box-archive"></i> آرشیو ({{ $stats['archived'] ?? 0 }})
+        </a>
     </div>
 
     <article class="an-surface">
@@ -127,6 +137,7 @@
         </div>
         <div class="an-surface-body">
             <form method="get" action="{{ route('admin.announcements.index') }}" class="an-filters" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                @if(($tab ?? '') === 'archive')<input type="hidden" name="tab" value="archive">@endif
                 <input class="an-input" type="search" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="جستجو در عنوان یا متن..." style="max-width:220px" onchange="this.form.submit()">
                 <select class="an-select" name="status" onchange="this.form.submit()">
                     <option value="">همه وضعیت‌ها</option>
@@ -231,7 +242,19 @@
                                                 <i class="fa-solid fa-rotate"></i>
                                             </button>
                                         </form>
-                                        <form method="post" action="{{ route('admin.announcements.destroy', $a) }}" onsubmit="return confirm('حذف این اعلان؟')">
+                                        
+                                        @if($a->isArchived())
+                                        <form method="post" action="{{ route('admin.announcements.restore', $a) }}">
+                                            @csrf
+                                            <button type="submit" class="an-btn an-btn-ghost an-btn-sm" title="بازگردانی از آرشیو"><i class="fa-solid fa-rotate-left"></i></button>
+                                        </form>
+                                        @else
+                                        <form method="post" action="{{ route('admin.announcements.archive', $a) }}" onsubmit="return confirm('انتقال به آرشیو؟')">
+                                            @csrf
+                                            <button type="submit" class="an-btn an-btn-ghost an-btn-sm" title="آرشیو"><i class="fa-solid fa-box-archive"></i></button>
+                                        </form>
+                                        @endif
+<form method="post" action="{{ route('admin.announcements.destroy', $a) }}" onsubmit="return confirm('حذف این اعلان؟')">
                                             @csrf
                                             @method('DELETE')
                                             <button class="an-btn an-btn-ghost an-btn-sm an-btn-danger" type="submit" title="حذف">
