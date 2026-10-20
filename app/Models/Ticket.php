@@ -179,7 +179,8 @@ class Ticket extends Model
 
     public function scopeSlaBreached(Builder $query): Builder
     {
-        return $query->whereNotIn('status', ['closed'])
+        // pending = منتظر کاربر → ساعت حل متوقف؛ فقط نقض پاسخ اول یا حل در وضعیت‌های فعال
+        return $query->whereNotIn('status', ['closed', 'pending'])
             ->where(function ($q) {
                 $q->where(function ($w) {
                     $w->whereNull('first_response_at')

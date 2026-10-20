@@ -20,7 +20,13 @@
                 <div class="farast-dashboard-nav__items">
                     @foreach($group['items'] as $item)
                         @if(!empty($item['href']) && empty($item['disabled']))
-                            <a href="{{ $item['href'] }}" class="{{ !empty($item['active']) ? 'is-active' : '' }}" @if(!empty($item['active'])) aria-current="page" @endif><i class="fa-solid {{ $item['icon'] }}" aria-hidden="true"></i><span>{{ $item['label'] }}</span></a>
+                            <a href="{{ $item['href'] }}" class="{{ !empty($item['active']) ? 'is-active' : '' }}" @if(!empty($item['active'])) aria-current="page" @endif>
+                                <i class="fa-solid {{ $item['icon'] }}" aria-hidden="true"></i>
+                                <span>{{ $item['label'] }}</span>
+                                @if(!empty($item['badge']) && (int)$item['badge'] > 0)
+                                    <em class="farast-nav-badge" aria-label="{{ (int)$item['badge'] }} مورد">{{ (int)$item['badge'] > 99 ? '99+' : (int)$item['badge'] }}</em>
+                                @endif
+                            </a>
                         @else
                             <span class="is-disabled" aria-disabled="true" title="این بخش هنوز در سامانه پیاده‌سازی نشده است"><i class="fa-solid {{ $item['icon'] }}" aria-hidden="true"></i><span>{{ $item['label'] }}</span><small>به‌زودی</small></span>
                         @endif

@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Ticket;
 use App\Models\User;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
 
 class DashboardNavigationService
@@ -68,6 +70,8 @@ class DashboardNavigationService
             }
         }
 
+        $badge = $this->itemBadge($item['key'] ?? null, $user);
+
         return [
             'key' => $item['key'] ?? null,
             'label' => $item['label'],
@@ -78,6 +82,7 @@ class DashboardNavigationService
             'planned' => $href === null,
             'permission' => $item['permission'] ?? null,
             'scope' => $item['scope'] ?? null,
+            'badge' => $badge,
         ];
     }
 
@@ -97,6 +102,44 @@ class DashboardNavigationService
         }
 
         return true;
+    }
+
+
+    /**
+     * نشان عددی عملیاتی برای آیتم‌های پشتیبانی.
+     */
+    private function itemBadge(?string $key, ?User $user): ?int
+    {
+        if (! $user || ! $key || ! Schema::hasTable('tickets')) {
+            return null;
+        }
+
+        try {
+            return match ($key) {
+                'support.my' => $this->customerUnreadCount($user),
+                'support.manage' => $user->isAdmin() ? Ticket::needsReply()->count() : null,
+                default => null,
+            };
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function customerUnreadCount(User $user): int
+    {
+        $q = Ticket::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'answered');
+
+        // اگر ستون seen موجود باشد: فقط پاسخ‌های ندیده
+        if (Schema::hasColumn('tickets', 'customer_last_seen_at') && Schema::hasColumn('tickets', 'last_reply_at')) {
+            $q->where(function ($w) {
+                $w->whereNull('customer_last_seen_at')
+                    ->orWhereColumn('last_reply_at', '>', 'customer_last_seen_at');
+            });
+        }
+
+        return (int) $q->count();
     }
 
     private function allows(User $user, string $permission, string $scope): bool

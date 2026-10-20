@@ -153,3 +153,19 @@
 .csat-submit{justify-self:center;min-width:140px;border:0;border-radius:10px;padding:10px 20px;background:#1769ff;color:#fff;font:inherit;font-size:.88rem;font-weight:700;cursor:pointer}
 .csat-submit:disabled{opacity:.45;cursor:not-allowed}
 .csat-error{margin:8px 0 0;color:#b91c1c;font-size:.82rem;font-weight:600;text-align:center}
+
+.tk-priority { font-size: .8rem; font-weight: 600; }
+.tk-priority-high { color: #b91c1c; }
+.tk-priority-normal { color: #334155; }
+.tk-priority-low { color: #64748b; }
+.tk-new-reply {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: .68rem;
+  font-weight: 700;
+  vertical-align: middle;
+}

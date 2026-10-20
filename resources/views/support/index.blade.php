@@ -83,6 +83,7 @@
                             <th>عنوان</th>
                             <th>تاریخ ایجاد</th>
                             <th>دپارتمان</th>
+                            <th>اولویت</th>
                             <th>وضعیت</th>
                             <th>آخرین به روزرسانی</th>
                             <th>عملیات</th>
@@ -101,6 +102,7 @@
                                 </td>
                                 <td><a class="tk-row-link" href="{{ route('support.show', $t) }}"></a><span>{{ $t->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i') }}</span></td>
                                 <td><a class="tk-row-link" href="{{ route('support.show', $t) }}"></a><span>{{ $t->departmentLabel() }}</span></td>
+                                <td><a class="tk-row-link" href="{{ route('support.show', $t) }}"></a><span class="tk-priority tk-priority-{{ $t->priority ?? 'normal' }}">{{ $t->priorityLabel() }}</span></td>
                                 <td>
                                     <a class="tk-row-link" href="{{ route('support.show', $t) }}"></a>
                                     <span class="tk-status">
@@ -113,7 +115,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="tk-empty-row">
+                                <td colspan="8" class="tk-empty-row">
                                     هنوز تیکتی ثبت نشده است.
                                     <a href="{{ route('support.create.form') }}" style="color:#1769ff;font-weight:700">ثبت تیکت جدید</a>
                                 </td>
