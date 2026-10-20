@@ -49,7 +49,7 @@ class GlobalAssistantController extends Controller
             $http = Http::acceptJson()->timeout(60);
             $token = trim((string) config('services.voice_asr.token', ''));
             if ($token !== '') $http = $http->withToken($token);
-            $response = $http->attach('audio', $bytes, 'farast-assistant.'.$extension, $file->getMimeType() ?: 'audio/webm')
+            $response = $http->attach('audio', $bytes, 'farast-assistant.'.$extension, ['Content-Type' => ($file->getMimeType() ?: 'audio/webm')])
                 ->post($url, ['locale' => $data['locale'] ?? 'fa-IR']);
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_asr_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
