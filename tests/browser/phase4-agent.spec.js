@@ -21,7 +21,7 @@ async function openEditor(page){
 }
 
 test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
- await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('این متن عامل سند است');await page.locator('#fdToolbar [data-tool="selectAll"]').click();
+ await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.insertText('این متن عامل سند است');await expect.poll(async()=>page.evaluate(()=>window.FarastEditor?.state?.model?.plain_text||'')).toContain('این متن عامل سند است');await page.locator('#fdToolbar [data-tool="selectAll"]').click();
  await page.locator('[data-agent-open]').first().click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun').click();await page.waitForTimeout(500);console.log('AGENT_PLAN_DEBUG',JSON.stringify(await page.evaluate(()=>({plan:window.__farastAgentPlan||null,status:document.getElementById('farastAgentStatus')?.textContent||'',planText:document.getElementById('farastAgentPlan')?.textContent||'',modelText:window.FarastEditor?.state?.model?.plain_text||'',blocks:window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(b=>({id:b.id,text:(b.runs||[]).map(r=>r.text||'').join('')}))||[],domText:document.querySelector('#pagesViewport .farast-editor')?.innerText||'',selection:window.FarastEditor?.getSelection?.()||null}))));
  await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.intent?.operation)).toBe('format_bold');await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
  await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.status)).toBe('executed');await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.evidence?.command?.name||window.__farastAgentPlan?.evidence?.command)).toContain('FormatText');
@@ -29,7 +29,7 @@ test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
 });
 
 test('high risk agent action requires explicit approval',async({page})=>{
- await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('حذف شود');await page.keyboard.press('Control+a');
+ await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.insertText('حذف شود');await expect.poll(async()=>page.evaluate(()=>window.FarastEditor?.state?.model?.plain_text||'')).toContain('حذف شود');await page.keyboard.press('Control+a');
  await page.locator('[data-agent-open]').first().click();await page.locator('#farastAgentInput').fill('این متن را حذف کن');await page.locator('#farastAgentRun').click();await page.waitForTimeout(500);console.log('AGENT_RISK_DEBUG',JSON.stringify(await page.evaluate(()=>({plan:window.__farastAgentPlan||null,status:document.getElementById('farastAgentStatus')?.textContent||'',planText:document.getElementById('farastAgentPlan')?.textContent||'',modelText:window.FarastEditor?.state?.model?.plain_text||'',blocks:window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(b=>({id:b.id,text:(b.runs||[]).map(r=>r.text||'').join('')}))||[],domText:document.querySelector('#pagesViewport .farast-editor')?.innerText||'',selection:window.FarastEditor?.getSelection?.()||null}))));
  await expect(page.locator('#farastAgentApprove')).toBeVisible({timeout:10000});await expect(page.locator('#farastAgentAccept')).toBeDisabled();
 });
