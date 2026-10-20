@@ -14,6 +14,8 @@ use App\Models\UserCapability;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\VoiceProviderAccount;
+use App\Services\AdminConsoleService;
+use App\Services\AuditLogService;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
 use App\Services\MailConfigService;
@@ -23,39 +25,278 @@ use Illuminate\Support\Facades\Schema;
 
 class AdminController extends Controller
 {
-    public function index(CapabilityService $capabilities)
+    public function index(Request $request, CapabilityService $capabilities, AdminConsoleService $console)
     {
-        $users = User::latest()->limit(100)->get();
+        $actor = $request->user();
+        abort_unless($actor, 403);
+
+        // دامنهٔ کاربر از middleware یا محاسبهٔ مستقیم نقش.
+        $scope = $request->attributes->get('farast.scope') ?? AdminConsoleService::scopeOf($actor);
+        $visibleIds = $console->visibleUserIds($actor);
+
+        // دسترسی‌های کنسول بر پایهٔ RBAC + Scope — همین‌جا منبع واحد ناوبری است.
+        $allowedSections = $console->allowedSections($actor);
+
+        $search = trim((string) $request->query('q', ''));
+        $statusFilter = $request->query('status');
+
+        $usersQuery = User::with('wallet')->latest();
+        if ($visibleIds !== null) {
+            $usersQuery->whereIn('id', $visibleIds);
+        }
+        if ($search !== '') {
+            $usersQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+        if ($statusFilter === 'blocked') {
+            $usersQuery->where('is_blocked', true);
+        } elseif ($statusFilter === 'active') {
+            $usersQuery->where('is_blocked', false);
+        } elseif ($statusFilter === 'admins') {
+            $usersQuery->where('role', User::ROLE_ADMIN);
+        }
+        $totalScopedUsers = (clone $usersQuery)->count();
+        $users = $usersQuery->limit(100)->get();
+
         $settings = [];
         foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
             $default = $key === 'assistant_groq_model' ? 'openai/gpt-oss-120b' : (CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
             $settings[$key] = SiteSetting::read($key, $default);
         }
 
+        $weekAgo = now()->subWeek();
+        $monthAgo = now()->subMonth();
+
+        // شاخص‌های دامنه‌مند: اگر کاربر ادمین نباشد، فقط دادهٔ کاربران قابل‌مشاهده شمرده می‌شود.
+        $scopedCount = function (string $table, array $filters = [], ?string $userColumn = 'user_id') use ($visibleIds) {
+            if (! Schema::hasTable($table)) {
+                return 0;
+            }
+            $q = DB::table($table);
+            if ($visibleIds !== null && $userColumn !== null && Schema::hasColumn($table, $userColumn)) {
+                $q->whereIn($userColumn, $visibleIds);
+            } elseif ($visibleIds !== null && $table === 'users') {
+                $q->whereIn('id', $visibleIds);
+            }
+            foreach ($filters as $col => $val) {
+                if (Schema::hasColumn($table, is_string($col) ? $col : '')) {
+                    $q->where($col, $val);
+                }
+            }
+
+            return (int) $q->count();
+        };
+
+        $chartDays = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $chartDays[] = now()->subDays($i)->toDateString();
+        }
+        $seriesOf = function (string $table, string $dateCol = 'created_at') use ($chartDays, $visibleIds) {
+            if (! Schema::hasTable($table)) {
+                return array_fill(0, count($chartDays), 0);
+            }
+            $since = $chartDays[0];
+            $q = DB::table($table)->where($dateCol, '>=', $since);
+            if ($visibleIds !== null) {
+                if ($table === 'users') {
+                    $q->whereIn('id', $visibleIds);
+                } elseif (Schema::hasColumn($table, 'user_id')) {
+                    $q->whereIn('user_id', $visibleIds);
+                } else {
+                    // جدول بدون ستون user_id در دامنه‌های محدود شمارش نمی‌شود تا داده نشت نکند.
+                    return array_fill(0, count($chartDays), 0);
+                }
+            }
+            $rows = $q->select(DB::raw("DATE($dateCol) as d"), DB::raw('COUNT(*) as c'))->get();
+            $map = [];
+            foreach ($rows as $row) {
+                $d = \Illuminate\Support\Carbon::parse($row->d)->toDateString();
+                $map[$d] = ($map[$d] ?? 0) + (int) $row->c;
+            }
+            return array_map(fn ($d) => $map[$d] ?? 0, $chartDays);
+        };
+
+        $ticketStats = collect();
+        if (Schema::hasTable('tickets')) {
+            $tq = Ticket::query();
+            if ($visibleIds !== null) {
+                $tq->whereIn('user_id', $visibleIds);
+            }
+            $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
+        }
+
+        $topConsumers = collect();
+        if (Schema::hasTable('typing_documents')) {
+            $tcq = DB::table('typing_documents')
+                ->join('users', 'users.id', '=', 'typing_documents.user_id')
+                ->where('typing_documents.created_at', '>=', $monthAgo)
+                ->groupBy('users.id', 'users.name', 'users.mobile')
+                ->select('users.id', 'users.name', 'users.mobile', DB::raw('COUNT(typing_documents.id) as documents'))
+                ->orderByDesc('documents')
+                ->limit(5);
+            if ($visibleIds !== null) {
+                $tcq->whereIn('typing_documents.user_id', $visibleIds);
+            }
+            $topConsumers = $tcq->get();
+        }
+
         return view('admin.index', [
             'rules' => PricingRule::orderBy('id')->get(),
             'users' => $users,
+            'userTotalForFilter' => $usersQuery->count(),
             'announcements' => Announcement::latest()->limit(20)->get(),
+            'console' => $console,
+            'scope' => $scope,
+            'scopeSummary' => $console->scopeSummary($actor),
+            'allowedSections' => $allowedSections,
             'stats' => [
-                'users' => User::count(),
-                'documents' => \App\Models\TypingDocument::count(),
-                'ai' => AiInteraction::count(),
-                'ai_today' => AiInteraction::whereDate('created_at', today())->count(),
-                'voice_seconds' => (int) (\Illuminate\Support\Facades\DB::table('voice_provider_usage')->sum('audio_seconds')),
-                'voice_requests' => (int) (\Illuminate\Support\Facades\DB::table('voice_provider_usage')->sum('requests')),
+                'users' => $totalScopedUsers,
+                'new_users_week' => $visibleIds === null
+                    ? User::where('created_at', '>=', $weekAgo)->count()
+                    : User::whereIn('id', $visibleIds)->where('created_at', '>=', $weekAgo)->count(),
+                'blocked_users' => $visibleIds === null
+                    ? User::where('is_blocked', true)->count()
+                    : User::whereIn('id', $visibleIds)->where('is_blocked', true)->count(),
+                'documents' => $scopedCount('typing_documents'),
+                'new_documents_week' => Schema::hasTable('typing_documents')
+                    ? (($visibleIds === null ? DB::table('typing_documents') : DB::table('typing_documents')->whereIn('user_id', $visibleIds))->where('created_at', '>=', $weekAgo)->count())
+                    : 0,
+                'ai' => $scopedCount('ai_interactions'),
+                'ai_today' => Schema::hasTable('ai_interactions')
+                    ? (($visibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $visibleIds))->whereDate('created_at', today())->count())
+                    : 0,
+                'voice_seconds' => Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('audio_seconds') : 0,
+                'voice_requests' => Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('requests') : 0,
                 'organizations' => Schema::hasTable('organizations') ? \App\Models\Organization::count() : 0,
                 'teams' => Schema::hasTable('teams') ? \App\Models\Team::count() : 0,
-                'audit_events' => Schema::hasTable('audit_logs') ? \Illuminate\Support\Facades\DB::table('audit_logs')->count() : 0,
+                'audit_events' => Schema::hasTable('audit_logs') ? DB::table('audit_logs')->count() : 0,
+                'revenue_month' => Schema::hasTable('payments') ? (int) DB::table('payments')->where('status', 'paid')->where('created_at', '>=', $monthAgo)->sum('amount_rials') : 0,
+                'revenue_total' => Schema::hasTable('payments') ? (int) DB::table('payments')->where('status', 'paid')->sum('amount_rials') : 0,
+                'tickets_open' => (int) ($ticketStats['open'] ?? 0) + (int) ($ticketStats['user_replied'] ?? 0),
+                'wallet_balance' => Schema::hasTable('wallets') ? (int) DB::table('wallets')->sum('balance_rials') : 0,
             ],
+            'charts' => [
+                'labels' => $chartDays,
+                'users' => Schema::hasTable('users') ? $seriesOf('users') : array_fill(0, 30, 0),
+                'documents' => Schema::hasTable('typing_documents') ? $seriesOf('typing_documents') : array_fill(0, 30, 0),
+                'ai' => Schema::hasTable('ai_interactions') ? $seriesOf('ai_interactions') : array_fill(0, 30, 0),
+            ],
+            'ticketStats' => $ticketStats,
+            'topConsumers' => $topConsumers,
+            'recentAudit' => (Schema::hasTable('audit_logs') && $scope === AdminConsoleService::SCOPE_GLOBAL)
+                ? DB::table('audit_logs')->leftJoin('users', 'users.id', '=', 'audit_logs.user_id')
+                    ->latest('audit_logs.id')->limit(7)
+                    ->get(['audit_logs.action', 'audit_logs.created_at', 'users.name as actor_name'])
+                : collect(),
             'settings' => $settings,
             'secretStatus' => [
                 'gemini' => (bool) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key')),
                 'files' => (bool) (SiteSetting::read('files_api_key') ?: env('FILES_API_KEY')),
                 'groq' => (bool) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')),
             ],
+            'systemHealth' => [
+                'php' => PHP_VERSION,
+                'laravel' => app()->version(),
+                'driver' => config('database.default'),
+                'db_ok' => $this->databaseReachable(),
+                'cache_ok' => $this->cacheReachable(),
+                'queue_connection' => config('queue.default'),
+                'env' => app()->environment(),
+                'debug' => (bool) config('app.debug'),
+                'storage_writable' => is_writable(storage_path()),
+            ],
             'capabilities' => $capabilities,
-            'voiceAccounts' => VoiceProviderAccount::query()->get()->keyBy('provider'),
+            'voiceAccounts' => ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
+                ? VoiceProviderAccount::query()->get()->keyBy('provider')
+                : collect(),
         ]);
+    }
+
+    /**
+     * صفحه مدیریت کاربران — همان کنسول، با دامنه اعمال‌شده.
+     */
+    public function users(Request $request, AdminConsoleService $console)
+    {
+        $actor = $request->user();
+        $console->authorizeAction($actor, 'users');
+
+        $visibleIds = $console->visibleUserIds($actor);
+        $search = trim((string) $request->query('q', ''));
+        $role = (string) $request->query('role', '');
+        $status = (string) $request->query('status', '');
+
+        $query = User::with(['wallet', 'organization'])->latest();
+        if ($visibleIds !== null) {
+            $query->whereIn('id', $visibleIds);
+        }
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+        if ($role !== '' && in_array($role, User::DASHBOARD_ROLES, true)) {
+            $query->where('role', $role);
+        }
+        if ($status === 'blocked') {
+            $query->where('is_blocked', true);
+        } elseif ($status === 'active') {
+            $query->where('is_blocked', false);
+        }
+
+        return view('admin.users', [
+            'users' => $query->paginate(25)->withQueryString(),
+            'filters' => ['q' => $search, 'role' => $role, 'status' => $status],
+            'scopeSummary' => $console->scopeSummary($actor),
+            'console' => $console,
+        ]);
+    }
+
+    /**
+     * تغییر نقش کاربر (فقط سوپرادمین؛ ثبت ممیزی).
+     */
+    public function updateUserRole(Request $request, User $user, AdminConsoleService $console, AuditLogService $audit)
+    {
+        abort_unless($request->user()?->isAdmin(), 403, 'تغییر نقش فقط توسط مدیر اصلی ممکن است.');
+        abort_if($user->isAdmin() && $user->id !== $request->user()->id, 403, 'نقش مدیر اصلی قابل تغییر نیست.');
+
+        $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
+
+        $old = $user->role;
+        $user->update(['role' => $d['role']]);
+
+        if (Schema::hasTable('audit_logs')) {
+            $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
+                'target_user_id' => $user->id, 'from' => $old, 'to' => $d['role'],
+            ]);
+        }
+
+        return back()->with('status', "نقش کاربر «{$user->name}» از {$old} به {$d['role']} تغییر کرد.");
+    }
+
+    private function databaseReachable(): bool
+    {
+        try {
+            DB::connection()->getPdo();
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function cacheReachable(): bool
+    {
+        try {
+            $key = 'farast:health:ping:'.config('app.key');
+            cache()->put($key, 1, 10);
+            return (bool) cache()->get($key);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function supportSms()
@@ -108,14 +349,67 @@ class AdminController extends Controller
         return back()->with('status', 'تنظیمات پیامک پشتیبانی ذخیره شد.');
     }
 
-    public function finance()
+    public function finance(Request $request, AdminConsoleService $console)
     {
+        // ورود به بخش مالی: مجوز RBAC + دامنه (config/farast_admin.php → sections.finance)
+        $console->authorizeAction($request->user(), 'finance');
+
+        $monthAgo = now()->subMonth();
+
+        $chartDays = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $chartDays[] = now()->subDays($i)->toDateString();
+        }
+        $dailyRevenue = array_fill(0, 30, 0);
+        $revenueSeries = [];
+        if (Schema::hasTable('payments')) {
+            $rows = DB::table('payments')
+                ->where('status', 'paid')
+                ->where('created_at', '>=', $chartDays[0])
+                ->select('created_at', 'amount_rials')
+                ->get();
+            foreach ($rows as $row) {
+                $d = \Illuminate\Support\Carbon::parse($row->created_at)->toDateString();
+                $idx = array_search($d, $chartDays, true);
+                if ($idx !== false) {
+                    $dailyRevenue[$idx] += (int) $row->amount_rials;
+                }
+            }
+            $revenueSeries = [
+                'total' => (int) DB::table('payments')->where('status', 'paid')->sum('amount_rials'),
+                'month' => (int) DB::table('payments')->where('status', 'paid')->where('created_at', '>=', $monthAgo)->sum('amount_rials'),
+                'count' => (int) DB::table('payments')->where('status', 'paid')->count(),
+                'pending' => (int) DB::table('payments')->where('status', 'pending')->count(),
+            ];
+        }
+
+        $recentTransactions = collect();
+        if (Schema::hasTable('wallet_transactions')) {
+            $recentTransactions = DB::table('wallet_transactions')
+                ->join('wallets', 'wallets.id', '=', 'wallet_transactions.wallet_id')
+                ->join('users', 'users.id', '=', 'wallets.user_id')
+                ->latest('wallet_transactions.id')
+                ->limit(40)
+                ->get(['wallet_transactions.*', 'users.name as user_name', 'users.mobile as user_mobile']);
+        }
+
+        $invoices = collect();
+        if (Schema::hasTable('farast_invoices')) {
+            $invoices = DB::table('farast_invoices')->latest('id')->limit(20)->get();
+        }
+
         return view('admin.finance', [
             'taxEnabled' => filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN),
             'taxRate' => (float) SiteSetting::read('tax_rate_percent', 10),
             'gateway' => (string) SiteSetting::read('payment_gateway', 'none'),
             'merchantConfigured' => (bool) SiteSetting::read('gateway_merchant_id'),
-            'users' => User::orderBy('name')->limit(100)->get(),
+            'users' => User::with('wallet')->orderBy('name')->limit(100)->get(),
+            'financeStats' => $revenueSeries,
+            'chartDays' => $chartDays,
+            'dailyRevenue' => $dailyRevenue,
+            'recentTransactions' => $recentTransactions,
+            'invoices' => $invoices,
+            'walletTotal' => Schema::hasTable('wallets') ? (int) DB::table('wallets')->sum('balance_rials') : 0,
         ]);
     }
 
@@ -182,10 +476,17 @@ class AdminController extends Controller
         return back()->with('status', 'تنظیمات کلی ذخیره شد.');
     }
 
-    public function toggleUser(User $user)
+    public function toggleUser(User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         abort_if($user->isAdmin(), 403);
+        // دامنه: مدیر سازمان/تیم فقط روی کاربران داخل دامنه خودش می‌تواند اقدام کند.
+        $console->authorizeAction(auth()->user(), 'users', $user->id);
+
         $user->update(['is_blocked' => ! $user->is_blocked]);
+
+        if (Schema::hasTable('audit_logs')) {
+            $audit->record(auth()->id(), $user->is_blocked ? 'admin.user.blocked' : 'admin.user.unblocked', request()->ip(), ['target_user_id' => $user->id]);
+        }
 
         return back();
     }
@@ -326,9 +627,10 @@ class AdminController extends Controller
         return back()->with('status', 'قیمت‌گذاری به‌روزرسانی شد.');
     }
 
-    public function updateUserCapabilities(Request $r, User $user)
+    public function updateUserCapabilities(Request $r, User $user, AdminConsoleService $console)
     {
         abort_if($user->isAdmin(), 403);
+        $console->authorizeAction($r->user(), 'users', $user->id);
 
         $data = $r->validate([
             'active' => ['nullable', 'boolean'],
@@ -357,8 +659,11 @@ class AdminController extends Controller
         return back()->with('status', 'دسترسی‌های کاربر ذخیره شد.');
     }
 
-    public function adjustWallet(Request $r, User $user)
+    public function adjustWallet(Request $r, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
+        // تنظیم مالی فقط با مجوز بخش finance و داخل دامنه کاربر هدف.
+        $console->authorizeAction($r->user(), 'finance', $user->id);
+
         $d = $r->validate([
             'type' => ['required', 'in:credit,debit'],
             'amount_rials' => ['required', 'integer', 'min:1000', 'max:10000000000'],
@@ -389,6 +694,12 @@ class AdminController extends Controller
                 'idempotency_key' => 'admin-'.auth()->id().'-'.bin2hex(random_bytes(12)),
             ]);
         });
+
+        if (Schema::hasTable('audit_logs')) {
+            $audit->record(auth()->id(), 'admin.wallet.adjusted', request()->ip(), [
+                'target_user_id' => $user->id, 'type' => $d['type'], 'amount_rials' => $d['amount_rials'],
+            ]);
+        }
 
         return back()->with('status', 'موجودی کیف پول کاربر به‌روزرسانی شد.');
     }
