@@ -43,11 +43,11 @@ class VoiceController extends Controller
         $chunked=$google||$gemini;
         $gatewayReady=false;$wsUrl='';
         try{
-            $wsUrl=rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','ws://127.0.0.1:6002')),'/');
+            $wsUrl=rtrim((string)config('services.voice_stream.url',env('VOICE_STREAM_URL','')),'/');
             $secret=(string)config('services.voice_stream.gateway_secret','');
             $router=app(\App\Services\VoiceProviderRouter::class);
             $account=$router->best('fa-IR');
-            $gatewayReady=$secret!==''&&$account!==null;
+            $gatewayReady=$secret!==''&&$account!==null&&$wsUrl!=='';
         }catch(\Throwable){$gatewayReady=false;}
         return response()->json(['ok'=>true,'mode'=>$gatewayReady?'gateway':($chunked?'chunked':'none'),'chunked'=>$chunked,'gateway'=>$gatewayReady,'websocket_url'=>$gatewayReady?preg_replace('#^http#','ws',$wsUrl):'','reason'=>$chunked||$gatewayReady?null:'server_not_configured'],200,['Cache-Control'=>'no-store']);
     }
