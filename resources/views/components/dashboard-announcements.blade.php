@@ -14,21 +14,25 @@
     }
 @endphp
 @if($dashAnnouncements->isNotEmpty())
-<link rel="stylesheet" href="{{ asset('css/announcements.css') }}?v=20261020a1">
-<div class="an-feed" dir="rtl" style="margin:0 0 14px">
+<link rel="stylesheet" href="{{ asset('css/announcements.css') }}?v=20261020pro2">
+<div class="an-dash-stack" dir="rtl" role="region" aria-label="اعلانات پین‌شده">
     @foreach($dashAnnouncements as $a)
-        <article class="an-feed-item is-pinned type-{{ $a->type }}" style="padding:12px 14px">
-            <div class="an-feed-icon" style="width:36px;height:36px"><i class="fa-solid {{ $a->icon() }}"></i></div>
-            <div style="flex:1;min-width:0">
-                <div class="an-feed-meta">
-                    <span class="an-badge an-badge-pin"><i class="fa-solid fa-thumbtack"></i> پین</span>
-                    <span class="an-badge an-badge-{{ $a->type }}">{{ $a->typeLabel() }}</span>
-                </div>
-                <h2 style="font-size:.95rem;margin:0 0 4px">{{ $a->title }}</h2>
-                <p class="an-body" style="font-size:.82rem">{{ \Illuminate\Support\Str::limit($a->body, 140) }}</p>
+        <div class="an-dash-item type-{{ $a->type }} an-type-{{ $a->type }}">
+            <div class="an-item-icon" aria-hidden="true">
+                <i class="fa-solid {{ $a->icon() }}"></i>
             </div>
-            <a href="{{ route('announcements') }}" class="an-feed-link" style="margin:0;white-space:nowrap">همه</a>
-        </article>
+            <div class="an-item-body" style="min-width:0">
+                <div class="an-item-meta" style="margin-bottom:2px">
+                    <span class="an-tag an-tag-pin"><i class="fa-solid fa-thumbtack"></i> پین</span>
+                    <span class="an-tag an-tag-{{ $a->type }}">{{ $a->typeLabel() }}</span>
+                </div>
+                <h3 class="an-item-title">{{ $a->title }}</h3>
+                <p class="an-item-text">{{ \Illuminate\Support\Str::limit($a->body, 120) }}</p>
+            </div>
+            <div class="an-item-side">
+                <a href="{{ route('announcements') }}" class="an-btn an-btn-ghost an-btn-sm">مشاهده</a>
+            </div>
+        </div>
     @endforeach
 </div>
 @endif

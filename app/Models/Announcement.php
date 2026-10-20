@@ -102,9 +102,9 @@ class Announcement extends Model
     {
         return match ($this->type) {
             'danger' => 'fa-triangle-exclamation',
-            'warning' => 'fa-circle-exclamation',
+            'warning' => 'fa-bell',
             'success' => 'fa-circle-check',
-            default => 'fa-circle-info',
+            default => 'fa-bullhorn',
         };
     }
 }

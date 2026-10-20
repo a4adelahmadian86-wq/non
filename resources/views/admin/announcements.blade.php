@@ -5,16 +5,26 @@
     $filters = $filters ?? [];
     $stats = $stats ?? ['total' => 0, 'active' => 0, 'pinned' => 0, 'scheduled' => 0];
 @endphp
-<link rel="stylesheet" href="{{ asset('css/announcements.css') }}?v=20261020a1">
+<link rel="stylesheet" href="{{ asset('css/announcements.css') }}?v=20261020pro2">
 
-<div class="an-page" dir="rtl">
-    <nav class="an-breadcrumb">
-        <a href="{{ route('admin.announcements.index') }}" class="an-strong">مدیریت اعلان‌ها</a>
-        ·
+<div class="an-page an-admin-page" dir="rtl">
+    <nav class="an-crumb">
         <a href="{{ route('admin.index') }}">پنل ادمین</a>
-        ·
+        <span class="dot">/</span>
+        <strong>مدیریت اعلان‌ها</strong>
+        <span class="dot">·</span>
         <a href="{{ route('announcements') }}">نمایش برای کاربران</a>
     </nav>
+
+    <header class="an-hero">
+        <div class="an-hero-main">
+            <div class="an-hero-mark" aria-hidden="true"><i class="fa-solid fa-bullhorn"></i></div>
+            <div>
+                <h1>مرکز اعلانات</h1>
+                <p>انتشار، زمان‌بندی و اطلاع‌رسانی فقط داخل داشبورد — بدون نمایش در فرانت عمومی.</p>
+            </div>
+        </div>
+    </header>
 
     @if(session('status'))
         <div class="an-flash">{{ session('status') }}</div>
@@ -27,14 +37,14 @@
         <div class="an-stat"><b>{{ $stats['scheduled'] }}</b><span>زمان‌بندی‌شده</span></div>
     </div>
 
-    <article class="an-card">
-        <div class="an-card-head">
+    <article class="an-surface">
+        <div class="an-surface-head">
             <div>
                 <h1>انتشار اعلان جدید</h1>
                 <p>فقط داخل داشبورد کاربران — هماهنگ با صندوق اعلان و ایمیل اختیاری</p>
             </div>
         </div>
-        <div class="an-card-body">
+        <div class="an-surface-body">
             <form method="post" action="{{ route('admin.announcements.store') }}" class="an-form-grid">
                 @csrf
                 <div class="an-field">
@@ -112,14 +122,14 @@
         </div>
     </article>
 
-    <article class="an-card">
-        <div class="an-card-head">
+    <article class="an-surface">
+        <div class="an-surface-head">
             <div>
                 <h1>لیست اعلان‌ها</h1>
                 <p>فعال‌سازی، ارسال مجدد به صندوق اعلان، حذف</p>
             </div>
         </div>
-        <div class="an-card-body">
+        <div class="an-surface-body">
             <form method="get" class="an-filters">
                 <select class="an-select" name="status" onchange="this.form.submit()">
                     <option value="">همه وضعیت‌ها</option>
@@ -162,23 +172,28 @@
                             @endphp
                             <tr>
                                 <td style="min-width:200px;text-align:right">
-                                    <span class="an-title">{{ $a->title }}</span>
+                                    <span class="an-title-cell">{{ $a->title }}</span>
                                     @if($a->is_pinned)
-                                        <span class="an-badge an-badge-pin"><i class="fa-solid fa-thumbtack"></i> پین</span>
+                                        <span class="an-tag an-tag-pin"><i class="fa-solid fa-thumbtack"></i> پین</span>
                                     @endif
                                     <div class="an-excerpt">{{ \Illuminate\Support\Str::limit($a->body, 100) }}</div>
                                 </td>
-                                <td><span class="an-badge an-badge-{{ $a->type }}">{{ $a->typeLabel() }}</span></td>
+                                <td>
+                                    <div class="an-type-{{ $a->type }}" style="display:flex;align-items:center;gap:8px">
+                                        <span class="an-mini-icon" aria-hidden="true"><i class="fa-solid {{ $a->icon() }}"></i></span>
+                                        <span class="an-tag an-tag-{{ $a->type }}">{{ $a->typeLabel() }}</span>
+                                    </div>
+                                </td>
                                 <td>{{ $a->audienceLabel() }}</td>
                                 <td>
                                     @if($expired)
-                                        <span class="an-badge an-badge-muted">منقضی</span>
+                                        <span class="an-tag an-tag-muted">منقضی</span>
                                     @elseif($sched)
-                                        <span class="an-badge an-badge-sched">زمان‌بندی</span>
+                                        <span class="an-tag an-tag-sched">زمان‌بندی</span>
                                     @elseif($a->is_active)
-                                        <span class="an-badge an-badge-on">فعال</span>
+                                        <span class="an-tag an-tag-on">فعال</span>
                                     @else
-                                        <span class="an-badge an-badge-off">خاموش</span>
+                                        <span class="an-tag an-tag-off">خاموش</span>
                                     @endif
                                 </td>
                                 <td style="font-size:.78rem;color:#64748b;white-space:nowrap">
