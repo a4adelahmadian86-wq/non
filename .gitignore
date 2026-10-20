@@ -1,2 +1,11 @@
-/vendor/
-composer.phar
+.env
+.env.local
+*.env.*
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitkeep
+/storage/framework/views/*
+!/storage/framework/views/.gitkeep
+/bootstrap/cache/packages.php
+/bootstrap/cache/services.php
+database/database.sqlite
+/storage/logs/*.log
