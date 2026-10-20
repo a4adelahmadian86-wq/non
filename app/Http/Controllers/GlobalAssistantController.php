@@ -65,8 +65,21 @@ class GlobalAssistantController extends Controller
             if ($text === '') return response()->json(['ok' => false, 'message' => 'گفتاری در فایل تشخیص داده نشد.'], 422, ['Cache-Control' => 'no-store']);
             return response()->json(['ok' => true, 'text' => $text, 'engine' => 'self-hosted-asr'], 200, ['Cache-Control' => 'no-store']);
         } catch (\Throwable $e) {
-            Log::warning('farast.global_assistant_asr_exception', ['user_id' => $request->user()->id, 'error_class' => get_class($e)]);
-            return response()->json(['ok' => false, 'message' => 'ارتباط با موتور گفتار خودمیزبان برقرار نشد.'], 502, ['Cache-Control' => 'no-store']);
+            $errorClass = class_basename($e);
+            $diagnosticId = (string) \Illuminate\Support\Str::uuid();
+            Log::warning('farast.global_assistant_asr_exception', [
+                'diagnostic_id' => $diagnosticId,
+                'user_id' => $request->user()->id,
+                'error_class' => $errorClass,
+                'error' => mb_substr(preg_replace('/(?:Bearer\\s+)[A-Za-z0-9._~+\\/-]+=*/i', 'Bearer [redacted]', $e->getMessage()), 0, 300),
+                'url_host' => parse_url($url, PHP_URL_HOST),
+            ]);
+            return response()->json([
+                'ok' => false,
+                'message' => 'ارتباط با موتور گفتار خودمیزبان برقرار نشد.',
+                'diagnostic_id' => $diagnosticId,
+                'error_class' => $errorClass,
+            ], 502, ['Cache-Control' => 'no-store']);
         }
     }
 
