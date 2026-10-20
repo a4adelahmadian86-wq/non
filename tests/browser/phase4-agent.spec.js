@@ -22,7 +22,7 @@ async function openEditor(page){
 
 test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
  await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('این متن عامل سند است');await page.locator('#fdToolbar [data-tool="selectAll"]').click();
- await page.locator('[data-agent-open]').first().click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun') .click();
+ await page.locator('[data-agent-open]').first().click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun').click();await page.waitForTimeout(500);console.log('AGENT_PLAN_DEBUG',JSON.stringify(await page.evaluate(()=>({plan:window.__farastAgentPlan||null,status:document.getElementById('farastAgentStatus')?.textContent||'',planText:document.getElementById('farastAgentPlan')?.textContent||''}))));
  await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.intent?.operation)).toBe('format_bold');await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
  await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.status)).toBe('executed');await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.evidence?.command?.name||window.__farastAgentPlan?.evidence?.command)).toContain('FormatText');
  await expect.poll(async()=>page.locator('.farast-editor').first().locator('strong').allTextContents()).toEqual(['این متن عامل سند است']);await page.locator('#farastAgentUndo').click();await expect(editor.locator('strong')).toHaveCount(0);
@@ -30,6 +30,6 @@ test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
 
 test('high risk agent action requires explicit approval',async({page})=>{
  await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('حذف شود');await page.keyboard.press('Control+a');
- await page.locator('[data-agent-open]').first().click();await page.locator('#farastAgentInput').fill('این متن را حذف کن');await page.locator('#farastAgentRun').click();
+ await page.locator('[data-agent-open]').first().click();await page.locator('#farastAgentInput').fill('این متن را حذف کن');await page.locator('#farastAgentRun').click();await page.waitForTimeout(500);console.log('AGENT_RISK_DEBUG',JSON.stringify(await page.evaluate(()=>({plan:window.__farastAgentPlan||null,status:document.getElementById('farastAgentStatus')?.textContent||'',planText:document.getElementById('farastAgentPlan')?.textContent||''}))));
  await expect(page.locator('#farastAgentApprove')).toBeVisible({timeout:10000});await expect(page.locator('#farastAgentAccept')).toBeDisabled();
 });
