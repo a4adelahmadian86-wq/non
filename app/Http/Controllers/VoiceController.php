@@ -127,7 +127,7 @@ class VoiceController extends Controller
         }elseif($groqKey!==''){
             // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
             $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$groqKey])
-                ->attach('file',$bytes,'audio.'.$mime,['Content-Type'=>$mime])
+                ->attach('file',$bytes,'audio.'.$extension,['Content-Type'=>$mime])
                 ->asMultipart()->timeout(60)
                 ->post('https://api.groq.com/openai/v1/audio/transcriptions',['model'=>'whisper-large-v3','language'=>explode('-',$data['locale'])[0],'response_format'=>'json']);
             if($resp->failed()){Log::warning('farast.voice.groq_failed',['status'=>$resp->status(),'body'=>substr((string)$resp->body(),0,200)]);return response()->json(['ok'=>false,'message'=>'سرویس صوتی فعلاً در دسترس نیست. دوباره تلاش کنید یا از موتور مرورگر استفاده کنید.'],503);}
