@@ -18,6 +18,8 @@ class GlobalAssistantController extends Controller
             'server_stt' => filled(config('services.voice_asr.url')),
             'server_tts' => filled(config('services.voice_tts.url')),
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
+            'server_stt_token_configured' => filled(config('services.voice_asr.token') ?: env('FARAST_VOICE_TOKEN')),
+            'server_tts_token_configured' => filled(config('services.voice_tts.token') ?: env('FARAST_VOICE_TOKEN')),
             'browser_stt' => false,
         ], 200, ['Cache-Control' => 'no-store']);
     }
@@ -46,12 +48,18 @@ class GlobalAssistantController extends Controller
         try {
             $http = Http::acceptJson()->timeout(60);
             $token = trim((string) config('services.voice_asr.token', ''));
+            if ($token === '') $token = trim((string) env('FARAST_VOICE_TOKEN', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->attach('audio', $bytes, 'farast-assistant.'.$extension, $file->getMimeType() ?: 'audio/webm')
                 ->post($url, ['locale' => $data['locale'] ?? 'fa-IR']);
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_asr_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
-                return response()->json(['ok' => false, 'message' => 'موتور گفتار خودمیزبان پاسخ معتبر نداد.'], 503, ['Cache-Control' => 'no-store']);
+                $message = match ($response->status()) {
+                    401, 403 => 'احراز هویت موتور گفتار ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
+                    429 => 'سرویس تشخیص گفتار فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
+                    default => 'موتور گفتار خودمیزبان پاسخ معتبر نداد (HTTP '.$response->status().').',
+                };
+                return response()->json(['ok' => false, 'message' => $message, 'upstream_status' => $response->status()], 503, ['Cache-Control' => 'no-store']);
             }
             $text = trim((string) $response->json('text', ''));
             if ($text === '') return response()->json(['ok' => false, 'message' => 'گفتاری در فایل تشخیص داده نشد.'], 422, ['Cache-Control' => 'no-store']);
@@ -76,6 +84,7 @@ class GlobalAssistantController extends Controller
         try {
             $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')->timeout(60);
             $token = trim((string) config('services.voice_tts.token', ''));
+            if ($token === '') $token = trim((string) env('FARAST_VOICE_TOKEN', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->post($url, [
                 'text' => $data['text'],
@@ -84,7 +93,12 @@ class GlobalAssistantController extends Controller
             ]);
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_tts_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
-                return response()->json(['ok' => false, 'message' => 'موتور صدای ثابت پاسخ معتبر نداد.'], 503, ['Cache-Control' => 'no-store']);
+                $message = match ($response->status()) {
+                    401, 403 => 'احراز هویت موتور صدای ثابت ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
+                    429 => 'سرویس تولید صدا فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
+                    default => 'موتور صدای ثابت پاسخ معتبر نداد (HTTP '.$response->status().').',
+                };
+                return response()->json(['ok' => false, 'message' => $message, 'upstream_status' => $response->status()], 503, ['Cache-Control' => 'no-store']);
             }
             $contentType = strtolower((string) $response->header('Content-Type', ''));
             if (! str_contains($contentType, 'audio/') && ! str_contains($contentType, 'application/octet-stream')) {
