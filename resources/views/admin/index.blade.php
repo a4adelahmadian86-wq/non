@@ -6,25 +6,24 @@
             <span class="farast-admin-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
             <div><strong>فراست</strong><small>مرکز عملیات</small></div>
         </div>
-        <div class="farast-admin-nav-label">کنسول مدیریت</div>
+        <div class="farast-admin-nav-label">کنسول مدیریت · دامنه: {{ \App\Services\AdminConsoleService::scopeOf(auth()->user()) }}</div>
         <nav>
             <a class="is-active" href="#overview"><i class="fa-solid fa-grid-2"></i><span>نمای کلی</span></a>
-            <a href="#users"><i class="fa-solid fa-users"></i><span>کاربران</span></a>
+            @if($console->sectionAllowed(auth()->user(), 'users'))<a href="{{ route('admin.users') }}"><i class="fa-solid fa-users"></i><span>کاربران</span></a>@endif
             <a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>
-<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>
+@if($console->sectionAllowed(auth()->user(), 'voice'))<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
-            <a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>
-            <a href="#pricing"><i class="fa-solid fa-tags"></i><span>قیمت‌گذاری</span></a>
-            <a href="{{ route('admin.access') }}"><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>
-            <a href="{{ route('admin.organizations') }}"><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>
-            <a href="{{ route('admin.integrations') }}"><i class="fa-solid fa-plug"></i><span>یکپارچه‌سازی‌ها</span></a>
-            <a href="{{ route('admin.analytics') }}"><i class="fa-solid fa-chart-line"></i><span>تحلیل‌ها</span></a>
-            <a href="{{ route('admin.audit') }}"><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>
+            @if($console->sectionAllowed(auth()->user(), 'announcements'))<a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><span>مالی</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'access'))<a href="{{ route('admin.access') }}"><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'organizations'))<a href="{{ route('admin.organizations') }}"><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'integrations'))<a href="{{ route('admin.integrations') }}"><i class="fa-solid fa-plug"></i><span>یکپارچه‌سازی‌ها</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}"><i class="fa-solid fa-chart-line"></i><span>تحلیل‌ها</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'audit'))<a href="{{ route('admin.audit') }}"><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>@endif
         </nav>
         <div class="farast-admin-nav-bottom">
-            <a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><span>مالی</span></a>
-            <a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><span>ایمیل</span></a>
-            <a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><span>شبکه‌های اجتماعی</span></a>
+            @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><span>ایمیل</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><span>شبکه‌های اجتماعی</span></a>@endif
         </div>
         <div class="farast-admin-live"><span></span><div><b>سامانه عملیاتی</b><small>کنترل‌های زنده فعال هستند</small></div></div>
     </aside>

@@ -10,7 +10,9 @@ return Application::configure(basePath:dirname(__DIR__))
     ->withRouting(web:__DIR__.'/../routes/web.php',commands:__DIR__.'/../routes/console.php',health:'/up')
     ->withMiddleware(function(Middleware $middleware):void{
         TrimStrings::skipWhen(fn(Request $request):bool=>$request->is('editor/save')&&$request->has('document_model'));
-        $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class]);
+        $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'admin.scope'=>App\Http\Middleware\ResolveAdminScope::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class]);
+        // دامنه‌ی کنسول مدیریت برای همه مسیرهای /admin حل می‌شود (معماری داشبورد واحد + Scope).
+        $middleware->web(append: [App\Http\Middleware\ResolveAdminScope::class]);
         $middleware->append(App\Http\Middleware\EnsurePrivateStorageDisk::class);
         if(filter_var(env('FARAST_OBSERVABILITY_ENABLED',true),FILTER_VALIDATE_BOOLEAN))$middleware->append(App\Http\Middleware\FarastObservability::class);
     })

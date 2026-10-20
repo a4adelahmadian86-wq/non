@@ -95,6 +95,8 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->name('index');
+    Route::get('/users', [AdminController::class, 'users'])->name('users');
+    Route::post('/users/{user}/role', [AdminController::class, 'updateUserRole'])->name('users.role');
     Route::get('/finance', [AdminController::class, 'finance'])->name('finance');
     Route::post('/finance', [AdminController::class, 'updateFinance'])->name('finance.update');
     Route::post('/finance/users/{user}/wallet', [AdminController::class, 'adjustWallet'])->name('finance.wallet');
