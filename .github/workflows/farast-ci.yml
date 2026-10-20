@@ -15,7 +15,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, dom, fileinfo, pdo_sqlite
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
           coverage: none
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: composer install --no-interaction --prefer-dist --no-progress
@@ -38,6 +38,7 @@ jobs:
           DB_DATABASE: database/database.sqlite
       - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-farast-e2e php artisan db:seed --force
       - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-server.log 2>&1 &
+      - run: for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/up >/dev/null && exit 0; sleep 1; done; cat /tmp/farast-server.log; exit 1
       - run: npm init -y
       - run: npm install --no-save @playwright/test@1.55.0
       - run: npx playwright install chromium
