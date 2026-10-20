@@ -28,7 +28,7 @@ class VoiceController extends Controller
         $authed=(bool)($request->user()?->id);
         if(!$authed)return response()->json(['ok'=>true,'mode'=>'none','reason'=>'auth'],200,['Cache-Control'=>'no-store']);
         $asrUrl=trim((string)config('services.voice_asr.url',''));
-        $asrToken=trim((string)(config('services.voice_asr.token')?:));
+        $asrToken=trim((string)(config('services.voice_asr.token','')));
         if($asrUrl!==''){
             if($asrToken==='')return response()->json(['ok'=>true,'mode'=>'none','reason'=>'self_hosted_token_missing','self_hosted'=>true,'chunked'=>false,'gateway'=>false,'websocket_url'=>''],200,['Cache-Control'=>'no-store']);
             return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['self-hosted-asr'],'self_hosted'=>true],200,['Cache-Control'=>'no-store']);
