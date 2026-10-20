@@ -121,7 +121,8 @@ class VoiceController extends Controller
                 ->post($asrUrl,['locale'=>$data['locale']]);
             if(!$response->successful())throw new \RuntimeException('voice_self_hosted_http_'.$response->status());
             $transcript=trim((string)$response->json('text',''));
-            if($transcript==='')throw new \RuntimeException('voice_self_hosted_empty_transcript');
+            // Empty transcription is normal for a silent chunk; the shared path below
+            // returns an empty success without reserving quota or stopping the session.
             $result=['text'=>$transcript,'engine'=>'farast-self-hosted-asr','model'=>'configured-self-hosted'];
         }elseif($groqKey!==''){
             // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
