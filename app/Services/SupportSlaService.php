@@ -294,6 +294,7 @@ class SupportSlaService
             $row['avg_first_response_minutes'] = count($samples)
                 ? (int) round(array_sum($samples) / count($samples))
                 : null;
+            $row['median_first_response_minutes'] = $this->median($samples);
             $row['sla_rate'] = $row['first_response_total'] > 0
                 ? round(100 * $row['first_response_met'] / $row['first_response_total'], 1)
                 : null;
@@ -304,6 +305,8 @@ class SupportSlaService
         $totals['avg_first_response_minutes'] = count($allFirst)
             ? (int) round(array_sum($allFirst) / count($allFirst))
             : null;
+        $totals['median_first_response_minutes'] = $this->median($allFirst);
+        $totals['p90_first_response_minutes'] = $this->percentile($allFirst, 90);
         $totals['sla_rate'] = $totals['first_response_total'] > 0
             ? round(100 * $totals['first_response_met'] / $totals['first_response_total'], 1)
             : null;
@@ -316,6 +319,45 @@ class SupportSlaService
             'from' => $from,
             'to' => $to,
         ];
+    }
+
+
+    /** @param list<int|float> $samples */
+    protected function median(array $samples): ?int
+    {
+        if ($samples === []) {
+            return null;
+        }
+        sort($samples);
+        $n = count($samples);
+        $mid = intdiv($n, 2);
+        if ($n % 2 === 1) {
+            return (int) round($samples[$mid]);
+        }
+
+        return (int) round(($samples[$mid - 1] + $samples[$mid]) / 2);
+    }
+
+    /** @param list<int|float> $samples */
+    protected function percentile(array $samples, float $p): ?int
+    {
+        if ($samples === []) {
+            return null;
+        }
+        sort($samples);
+        $n = count($samples);
+        if ($n === 1) {
+            return (int) round($samples[0]);
+        }
+        $rank = ($p / 100) * ($n - 1);
+        $lo = (int) floor($rank);
+        $hi = (int) ceil($rank);
+        if ($lo === $hi) {
+            return (int) round($samples[$lo]);
+        }
+        $w = $rank - $lo;
+
+        return (int) round($samples[$lo] * (1 - $w) + $samples[$hi] * $w);
     }
 
     protected function humanMinutes(int $mins): string

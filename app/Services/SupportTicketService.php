@@ -310,16 +310,34 @@ class SupportTicketService
 
     public function claimGuestTickets(User $user): int
     {
-        if (! Schema::hasColumn('tickets', 'guest_email') || ! $user->email) {
+        if (! Schema::hasColumn('tickets', 'guest_email')) {
             return 0;
         }
 
-        $email = mb_strtolower(trim($user->email));
+        $claimed = 0;
+        $q = Ticket::query()->whereNull('user_id');
 
-        return Ticket::query()
-            ->whereNull('user_id')
-            ->whereRaw('LOWER(guest_email) = ?', [$email])
-            ->update(['user_id' => $user->id]);
+        if (filled($user->email)) {
+            $email = mb_strtolower(trim((string) $user->email));
+            $claimed += (clone $q)->whereRaw('LOWER(guest_email) = ?', [$email])
+                ->update(['user_id' => $user->id]);
+        }
+
+        // تطبیق با ایمیل session ویجت پس از لاگین
+        $sessionEmail = session('support_guest_email');
+        if ($sessionEmail && mb_strtolower(trim((string) $sessionEmail)) !== mb_strtolower(trim((string) ($user->email ?? '')))) {
+            $se = mb_strtolower(trim((string) $sessionEmail));
+            $claimed += Ticket::query()
+                ->whereNull('user_id')
+                ->whereRaw('LOWER(guest_email) = ?', [$se])
+                ->update(['user_id' => $user->id]);
+        }
+
+        if ($claimed > 0) {
+            session()->forget(['support_guest_email', 'support_guest_name']);
+        }
+
+        return $claimed;
     }
 
     public function findOpenGuestTicket(string $email, ?int $ticketId = null): ?Ticket

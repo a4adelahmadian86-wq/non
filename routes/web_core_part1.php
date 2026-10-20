@@ -27,7 +27,7 @@ use App\Models\Announcement;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
-Route::get('/', function () { $announcements=Schema::hasTable('announcements')?Announcement::visible()->latest()->limit(4)->get():collect(); $recentProjects=auth()->check()&&Schema::hasTable('farast_projects')?auth()->user()->projects()->latest()->limit(3)->get():collect(); return view('home',compact('announcements','recentProjects')); })->name('home');
+Route::get('/', function () { $recentProjects=auth()->check()&&Schema::hasTable('farast_projects')?auth()->user()->projects()->latest()->limit(3)->get():collect(); return view('home',compact('recentProjects')); })->name('home');
 Route::get('/store',[StoreController::class,'index'])->name('store');
 Route::get('/store/category/{slug}',[StoreController::class,'category'])->name('store.category');
 Route::get('/store/product/{slug}',[StoreController::class,'product'])->name('store.product');
@@ -50,7 +50,7 @@ Route::delete('/assistant/history',[GlobalAssistantController::class,'clearHisto
 Route::get('/assistant/voice/status',[GlobalAssistantController::class,'voiceStatus'])->middleware(['auth','throttle:60,1'])->name('assistant.voice.status');
 Route::post('/assistant/transcribe',[GlobalAssistantController::class,'transcribe'])->middleware(['auth','throttle:20,1'])->name('assistant.transcribe');
 Route::post('/assistant/speak',[GlobalAssistantController::class,'speak'])->middleware(['auth','throttle:30,1'])->name('assistant.speak');
-Route::get('/announcements',[AnnouncementController::class,'index'])->name('announcements');
+Route::get('/announcements',[AnnouncementController::class,'index'])->middleware('auth')->name('announcements');
 Route::get('/social',[SocialController::class,'index'])->name('social');
 Route::view('/terms','legal.terms')->name('terms');
 Route::view('/refund-policy','legal.refunds')->name('refunds');

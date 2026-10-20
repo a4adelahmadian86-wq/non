@@ -4,7 +4,7 @@
 @php
     $slaService = app(\App\Services\SupportSlaService::class);
     $active = $active ?? null;
-    $stats = $stats ?? ['needs_reply'=>0,'open'=>0,'user_replied'=>0,'answered'=>0,'pending'=>0,'closed'=>0,'high'=>0];
+    $stats = $stats ?? ['needs_reply'=>0,'open'=>0,'user_replied'=>0,'answered'=>0,'pending'=>0,'closed'=>0,'high'=>0,'sla_breached'=>0];
     $canned = $canned ?? [];
     $agents = $agents ?? collect();
     $filterQs = array_filter([
@@ -12,6 +12,7 @@
         'status' => request('status'),
         'department' => request('department'),
         'priority' => request('priority'),
+        'sla' => request('sla'),
     ], fn($v) => $v !== null && $v !== '');
 @endphp
 <link rel="stylesheet" href="{{ asset('css/support-messenger.css') }}?v=20261019pro">
@@ -48,13 +49,14 @@
         </div>
 
         <div class="sd-filters">
-            @php $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority')]); @endphp
+            @php $base = array_filter(['q'=>request('q'),'department'=>request('department'),'priority'=>request('priority'),'sla'=>request('sla')]); @endphp
             <a class="sd-chip {{ !request('status')||request('status')==='all'?'is-on':'' }}" href="{{ route('admin.support.management', $base) }}">همه</a>
             <a class="sd-chip {{ request('status')==='needs_reply'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'needs_reply']) }}">نیازمند پاسخ</a>
             <a class="sd-chip {{ request('status')==='user_replied'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'user_replied']) }}">پاسخ کاربر</a>
             <a class="sd-chip {{ request('status')==='pending'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'pending']) }}">بررسی</a>
             <a class="sd-chip {{ request('status')==='answered'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'answered']) }}">پاسخ‌شده</a>
             <a class="sd-chip {{ request('status')==='closed'?'is-on':'' }}" href="{{ route('admin.support.management', $base+['status'=>'closed']) }}">بسته</a>
+            <a class="sd-chip {{ request('sla')==='breached'?'is-on':'' }}" href="{{ route('admin.support.management', array_merge($base, ['sla'=>'breached'])) }}" style="border-color:#fecaca;color:#b91c1c">نقض SLA ({{ $stats['sla_breached'] ?? 0 }})</a>
         </div>
 
         <div class="sd-list" id="ticketList">

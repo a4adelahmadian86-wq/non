@@ -41,7 +41,8 @@
             <div class="sd-admin-stats" style="margin:16px 0;grid-template-columns:repeat(5,1fr)">
                 <div class="sd-admin-stat"><b>{{ $totals['tickets'] ?? 0 }}</b><span>تیکت در بازه</span></div>
                 <div class="sd-admin-stat"><b>{{ $totals['closed'] ?? 0 }}</b><span>بسته شده</span></div>
-                <div class="sd-admin-stat"><b>{{ $totals['avg_first_response_minutes'] !== null ? $totals['avg_first_response_minutes'].'د' : '—' }}</b><span>میانگین اولین پاسخ</span></div>
+                <div class="sd-admin-stat"><b>{{ $totals['median_first_response_minutes'] !== null ? $totals['median_first_response_minutes'].'د' : ($totals['avg_first_response_minutes'] !== null ? $totals['avg_first_response_minutes'].'د' : '—') }}</b><span>میانه اولین پاسخ (FRT)</span></div>
+                <div class="sd-admin-stat"><b>{{ $totals['p90_first_response_minutes'] !== null ? $totals['p90_first_response_minutes'].'د' : '—' }}</b><span>P90 اولین پاسخ</span></div>
                 <div class="sd-admin-stat"><b>{{ $totals['sla_rate'] !== null ? $totals['sla_rate'].'%' : '—' }}</b><span>رعایت SLA پاسخ</span></div>
                 <div class="sd-admin-stat">
                     <b>{{ $csat['avg'] !== null ? $csat['avg'].' / ۵' : '—' }}</b>
@@ -72,7 +73,8 @@
                             <th>ارجاع‌شده</th>
                             <th>بسته شده</th>
                             <th>پاسخ‌ها</th>
-                            <th>میانگین اولین پاسخ</th>
+                            <th>میانگین FRT</th>
+                            <th>میانه FRT</th>
                             <th>رعایت SLA</th>
                         </tr>
                     </thead>

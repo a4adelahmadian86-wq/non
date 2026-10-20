@@ -20,6 +20,8 @@ return [
                 ['key' => 'support.new', 'label' => 'تیکت جدید', 'icon' => 'fa-plus', 'route' => 'support.create.form', 'permission' => 'support.use', 'scope' => 'own'],
                 ['key' => 'support.manage', 'label' => 'میز پشتیبانی (تیکت‌ها)', 'icon' => 'fa-inbox', 'route' => 'admin.support.management', 'admin_only' => true],
                 ['key' => 'support.report', 'label' => 'گزارش پشتیبانی / SLA', 'icon' => 'fa-chart-line', 'route' => 'admin.support.report', 'admin_only' => true],
+                ['key' => 'support.sms', 'label' => 'تنظیمات پیامک پشتیبانی', 'icon' => 'fa-comment-sms', 'route' => 'admin.support.sms', 'admin_only' => true],
+                ['key' => 'support.announcements', 'label' => 'اعلانات داشبورد', 'icon' => 'fa-bullhorn', 'route' => 'admin.announcements.index', 'admin_only' => true],
             ],
         ],
         [

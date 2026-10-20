@@ -130,6 +130,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/providers/groq', [ProviderAdminController::class, 'updateGroq'])->name('providers.groq.update');
     Route::get('/providers/groq/test', [ProviderAdminController::class, 'testGroq'])->name('providers.groq.test');
 
+    Route::get('/support-sms', [AdminController::class, 'supportSms'])->name('support.sms');
+    Route::post('/support-sms', [AdminController::class, 'updateSupportSms'])->name('support.sms.update');
     Route::get('/support-management', [SupportController::class, 'adminIndex'])->name('support.management');
     Route::post('/tickets/{ticket}/reply', [SupportController::class, 'adminReply'])->name('tickets.reply');
     Route::post('/tickets/{ticket}/status', [SupportController::class, 'adminStatus'])->name('tickets.status');

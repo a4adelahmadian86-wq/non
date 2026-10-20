@@ -275,6 +275,9 @@ class SupportController extends Controller
         if ($request->filled('assigned') && $request->assigned === 'me') {
             $query->where('assigned_to', auth()->id());
         }
+        if ($request->filled('sla') && $request->sla === 'breached') {
+            $query->slaBreached();
+        }
         if ($request->filled('q')) {
             $q = $request->string('q');
             $query->where(function ($w) use ($q) {
@@ -314,6 +317,8 @@ class SupportController extends Controller
             'pending' => Ticket::where('status', 'pending')->count(),
             'closed' => Ticket::where('status', 'closed')->count(),
             'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
+        
+            'sla_breached' => Ticket::query()->slaBreached()->count(),
         ];
 
         $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);
