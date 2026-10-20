@@ -23,7 +23,6 @@ use App\Http\Controllers\UserFileController;
 use App\Http\Controllers\VoiceController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\PlatformCompletionController;
-use App\Models\Announcement;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
@@ -50,7 +49,6 @@ Route::delete('/assistant/history',[GlobalAssistantController::class,'clearHisto
 Route::get('/assistant/voice/status',[GlobalAssistantController::class,'voiceStatus'])->middleware(['auth','throttle:60,1'])->name('assistant.voice.status');
 Route::post('/assistant/transcribe',[GlobalAssistantController::class,'transcribe'])->middleware(['auth','throttle:20,1'])->name('assistant.transcribe');
 Route::post('/assistant/speak',[GlobalAssistantController::class,'speak'])->middleware(['auth','throttle:30,1'])->name('assistant.speak');
-Route::get('/announcements',[AnnouncementController::class,'index'])->middleware('auth')->name('announcements');
 Route::get('/social',[SocialController::class,'index'])->name('social');
 Route::view('/terms','legal.terms')->name('terms');
 Route::view('/refund-policy','legal.refunds')->name('refunds');
@@ -85,6 +83,7 @@ Route::post('/editor/voice/stream-usage',[VoiceController::class,'streamUsage'])
 Route::post('/editor/upload',[EditorController::class,'upload'])->middleware('throttle:20,10')->name('editor.upload');
 
 Route::middleware('auth')->group(function(){
+    Route::get('/announcements',[AnnouncementController::class,'index'])->name('announcements');
     Route::get('/editor/preflight/estimate',[TypingPreflightController::class,'estimate'])->middleware('throttle:30,10')->name('editor.preflight.estimate.get');
     Route::post('/editor/preflight/estimate',[TypingPreflightController::class,'estimate'])->middleware('throttle:30,10')->name('editor.preflight.estimate');
     Route::post('/editor/preflight/accept',[TypingPreflightController::class,'accept'])->middleware('throttle:30,10')->name('editor.preflight.accept');

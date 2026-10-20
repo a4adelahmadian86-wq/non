@@ -6,7 +6,7 @@
 @stack('head')
 @php
 $isEditor=request()->is('editor'); $isAdmin=request()->is('admin*'); $isDashboard=request()->routeIs('dashboard')||request()->routeIs('admin.*')||request()->routeIs('support')||request()->routeIs('support.*'); $isAuthPage=request()->is('login*')||request()->is('register')||request()->is('forgot-password*');
-$headerAnnouncements=collect(); $footerSocial=[]; $farastCapabilities=null;
+$footerSocial=[]; $farastCapabilities=null;
 if($isEditor&&auth()->check()){$farastCapabilities=app(\App\Services\CapabilityService::class)->forUser(auth()->user());}
 if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::hasTable('site_settings')){$footerRaw=\App\Models\SiteSetting::read('social_links','[]');$decodedSocial=json_decode((string)$footerRaw,true);if(is_array($decodedSocial)){$footerSocial=array_values(array_filter($decodedSocial,static fn($item)=>is_array($item)&&filter_var($item['url']??'',FILTER_VALIDATE_URL)));}}}
 @endphp
