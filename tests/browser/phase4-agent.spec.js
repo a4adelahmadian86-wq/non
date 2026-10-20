@@ -21,7 +21,7 @@ async function openEditor(page){
 }
 
 test('agent preview, accept and undo use the Editor Kernel',async({page})=>{
- await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('این متن عامل سند است');await page.locator('[data-command="selectAll"]').click();
+ await openEditor(page);const editor=page.locator('.farast-editor').first();await editor.click();await page.keyboard.type('این متن عامل سند است');await page.locator('[data-command="selectAll"]').first().click();
  await page.locator('[data-agent-open]') .click();await page.locator('#farastAgentInput').fill('این متن را پررنگ کن');await page.locator('#farastAgentRun') .click();
  await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.intent?.operation)).toBe('format_bold');await expect(page.locator('#farastAgentAccept')).toBeEnabled();await page.locator('#farastAgentAccept').click();
  await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.status)).toBe('executed');await expect.poll(async()=>page.evaluate(()=>window.__farastAgentPlan?.evidence?.command?.name||window.__farastAgentPlan?.evidence?.command)).toContain('FormatText');
