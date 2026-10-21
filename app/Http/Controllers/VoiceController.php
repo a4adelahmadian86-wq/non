@@ -19,37 +19,47 @@ class VoiceController extends Controller
 {
     public function voiceStatus(Request $request)
     {
-        // تشخیص وضعیت واقعی موتور ابری از سمت کلاینت (بدون افشای رازها):
-        // chunked = مسیر HTTP تکه‌ای (/transcribe)، gateway = استریم زندهٔ WebSocket،
-        // none = هیچ‌کدام آماده نیست (دلیل دقیق برای پیام راهنمای پنل صوتی).
-        // موتورهای ابری سایت: Google STT و Gemini (هر دو از ایران تحریم‌اند — فقط در صورت
-        // وجود پروکسی سمت سرور معتبرند). به‌عنوان گزینهٔ جایگزینِ بدون‌تحریم، Groq Whisper
-        // (رایگان، از ایران قابل دسترس) هم پشتیبانی می‌شود؛ کلیدش را در پنل ادمین بگذارید.
-        $authed=(bool)($request->user()?->id);
-        if(!$authed)return response()->json(['ok'=>true,'mode'=>'none','reason'=>'auth'],200,['Cache-Control'=>'no-store']);
-        $asrUrl=trim((string)config('services.voice_asr.url',''));
-        $asrToken=trim((string)(config('services.voice_asr.token','')));
-        if($asrUrl!==''){
-            if($asrToken==='')return response()->json(['ok'=>true,'mode'=>'none','reason'=>'self_hosted_token_missing','self_hosted'=>true,'chunked'=>false,'gateway'=>false,'websocket_url'=>''],200,['Cache-Control'=>'no-store']);
-            return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['self-hosted-asr'],'self_hosted'=>true],200,['Cache-Control'=>'no-store']);
+        if (! $request->user()?->id) {
+            return response()->json(['ok' => true, 'mode' => 'none', 'reason' => 'auth'], 200, ['Cache-Control' => 'no-store']);
         }
-        $groq=false;
-        try{$groq=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\Throwable){}
-        if($groq)return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['groq']],200,['Cache-Control'=>'no-store']);
-        $google=false;
-        try{$google=app(\App\Services\GoogleSpeechToTextService::class)->enabled();}catch(\Throwable){}
-        $gemini=false;
-        try{$gemini=trim((string)(\App\Models\SiteSetting::read('gemini_api_key')?:config('services.gemini.key')))!=='';}catch(\Throwable){}
-        $chunked=$google||$gemini;
-        $gatewayReady=false;$wsUrl='';
-        try{
-            $wsUrl=rtrim((string)config('services.voice_stream.url',''),'/');
-            $secret=(string)config('services.voice_stream.gateway_secret','');
-            $router=app(\App\Services\VoiceProviderRouter::class);
-            $account=$router->best('fa-IR');
-            $gatewayReady=$secret!==''&&$account!==null&&$wsUrl!=='';
-        }catch(\Throwable){$gatewayReady=false;}
-        return response()->json(['ok'=>true,'mode'=>$gatewayReady?'gateway':($chunked?'chunked':'none'),'chunked'=>$chunked,'gateway'=>$gatewayReady,'websocket_url'=>$gatewayReady?preg_replace('#^http#','ws',$wsUrl):'','reason'=>$chunked||$gatewayReady?null:'server_not_configured'],200,['Cache-Control'=>'no-store']);
+
+        $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
+        $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+        if ($gatewayUrl !== '' && $gatewayToken !== '') {
+            return response()->json([
+                'ok' => true,
+                'mode' => 'chunked',
+                'chunked' => true,
+                'gateway' => false,
+                'websocket_url' => '',
+                'engines' => ['runflare-gateway'],
+                'server_side' => true,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        $asrUrl = trim((string) config('services.voice_asr.url', ''));
+        $asrToken = trim((string) config('services.voice_asr.token', ''));
+        if ($asrUrl !== '' && $asrToken !== '') {
+            return response()->json([
+                'ok' => true,
+                'mode' => 'chunked',
+                'chunked' => true,
+                'gateway' => false,
+                'websocket_url' => '',
+                'engines' => ['self-hosted-asr'],
+                'server_side' => true,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'mode' => 'none',
+            'reason' => 'server_not_configured',
+            'chunked' => false,
+            'gateway' => false,
+            'websocket_url' => '',
+            'server_side' => true,
+        ], 200, ['Cache-Control' => 'no-store']);
     }
 
     public function streamToken(Request $request)
@@ -97,52 +107,116 @@ class VoiceController extends Controller
         return response()->json(['ok'=>true]);
     }
 
-    public function transcribe(Request $request,GoogleSpeechToTextService $googleSpeech,VoiceTranscriptionService $voice,VoiceCorrectionService $corrections,AiQuotaService $quota,AiPrivacyPolicy $privacy,\App\Services\CommerceAuthorizationService $commerce)
-    {
-        $quota->assertAllowed($request->user(),'can_voice');
-        $data=$request->validate(['audio'=>['required','file','max:15360','mimetypes:audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/mp4'],'locale'=>['required','string','in:fa-IR,en-US,ar-SA'],'processing_mode'=>['nullable','string','in:automatic,local,server,external']]);
-        $asrUrl=trim((string)config('services.voice_asr.url',''));
-        $asrToken=trim((string)(config('services.voice_asr.token','')));
-        if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
-        $selfHosted=$asrUrl!==''&&$asrToken!=='';
-        $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
-        // One idempotency key represents one voice session across its short HTTP audio chunks.
-        // Do not reserve quota until a chunk actually contains speech.
-        $voiceReservation=null;
-        $file=$data['audio'];$bytes=file_get_contents($file->getRealPath());abort_if($bytes===false||$bytes==='',422,'فایل صوتی قابل خواندن نیست.');
-        $mime=$file->getMimeType()?:$file->getClientMimeType()?:'audio/webm';$mime=match($mime){ 'video/webm'=>'audio/webm','video/mp4','audio/mp4'=>'audio/m4a','audio/x-wav'=>'audio/wav',default=>$mime};
-        $context=['user_id'=>$request->user()->id,'input_bytes'=>strlen($bytes),'processing_mode'=>$processingMode];
-        try{$groqKey='';$groqKey=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')));}catch(\Throwable){}
-        try{if($selfHosted){
-            $extension=strtolower($file->getClientOriginalExtension()?:'webm');
-            if(!in_array($extension,['webm','ogg','wav','mp3','m4a','mp4'],true))$extension='webm';
-            $response=\Illuminate\Support\Facades\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
-                ->attach('audio',$bytes,'farast-voice.'.$extension,['Content-Type'=>$mime])
-                ->post($asrUrl,['locale'=>$data['locale']]);
-            if(!$response->successful())throw new \RuntimeException('voice_self_hosted_http_'.$response->status());
-            $transcript=trim((string)$response->json('text',''));
-            // Empty transcription is normal for a silent chunk; the shared path below
-            // returns an empty success without reserving quota or stopping the session.
-            $result=['text'=>$transcript,'engine'=>'farast-self-hosted-asr','model'=>'configured-self-hosted'];
-        }elseif($groqKey!==''){
-            // Groq Whisper (whisper-large-v3): رایگان، بدون تحریم گوگل، از ایران قابل دسترس.
-            $resp=\Illuminate\Support\Facades\Http::withHeaders(['Authorization'=>'Bearer '.$groqKey])
-                ->attach('file',$bytes,'audio.'.$extension,['Content-Type'=>$mime])
-                ->asMultipart()->timeout(60)
-                ->post('https://api.groq.com/openai/v1/audio/transcriptions',['model'=>'whisper-large-v3','language'=>explode('-',$data['locale'])[0],'response_format'=>'json']);
-            if($resp->failed()){Log::warning('farast.voice.groq_failed',['status'=>$resp->status(),'body'=>substr((string)$resp->body(),0,200)]);return response()->json(['ok'=>false,'message'=>'سرویس صوتی فعلاً در دسترس نیست. دوباره تلاش کنید یا از موتور مرورگر استفاده کنید.'],503);}
-            $result=['text'=>(string)$resp->json('text',''),'engine'=>'groq-whisper','model'=>'whisper-large-v3'];
-        }else{$result=$googleSpeech->enabled()&&in_array($mime,['audio/webm','audio/ogg','audio/wav'],true)?$googleSpeech->transcribe($mime,$bytes,$data['locale'],$context):$voice->transcribe($mime,$bytes,$data['locale'],$context);}
-        $rawText=trim((string)($result['text']??''));
-        if($rawText==='')return response()->json(['ok'=>true,'text'=>'','engine'=>$result['engine']??'self-hosted-asr','empty'=>true],200,['Cache-Control'=>'no-store']);
-        $requestKey=trim((string)($request->header('Idempotency-Key')?:$request->header('X-Farast-Voice-Request','')));
-        $idempotencyKey='voice-'.$request->user()->id.'-'.hash('sha256',$requestKey!==''?$requestKey:(string)\Illuminate\Support\Str::uuid());
-        $voiceReservation=$commerce->reserve($request->user(),'speech.transcription',1,[],['policy_code'=>'speech.transcription','unit'=>'request','allow_payg'=>true,'idempotency_key'=>$idempotencyKey]);
-        $finalText=$corrections->apply($rawText,$data['locale'],$result['engine']??null,$request->user()->id);$result['raw_text']=$rawText;$result['text']=$finalText;$result['correction_applied']=$finalText!==$rawText;}catch(\Throwable $e){if($voiceReservation)try{$commerce->release($voiceReservation);}catch(\Throwable){}Log::warning('farast.voice.transcription_failed',['user_id'=>$request->user()->id,'google_speech_enabled'=>$googleSpeech->enabled(),'error_code'=>preg_match('/^[a-z0-9_.-]+$/i',$e->getMessage())?$e->getMessage():'voice_provider_failure']);$errorCode=(string)$e->getMessage();
-        $message=match(true){str_starts_with($errorCode,'voice_self_hosted_http_401'),str_starts_with($errorCode,'voice_self_hosted_http_403')=>'احراز هویت موتور گفتار خودمیزبان ناموفق است؛ توکن سرویس و FARAST_VOICE_ASR_TOKEN باید یکسان باشند.',str_starts_with($errorCode,'voice_self_hosted_http_429')=>'موتور گفتار خودمیزبان موقتاً محدودیت درخواست دارد؛ کمی بعد دوباره تلاش کنید.',str_starts_with($errorCode,'voice_self_hosted_http_503')=>'موتور گفتار خودمیزبان هنوز آماده نیست؛ وضعیت سرویس را بررسی کنید.',$errorCode==='voice_self_hosted_empty_transcript'=>'گفتاری در این قطعه تشخیص داده نشد.',default=>'رونویسی صوتی انجام نشد. دوباره تلاش کنید.'};
-        return response()->json(['ok'=>false,'message'=>$message],502,['Cache-Control'=>'no-store']);}
-        $commerce->commit($voiceReservation,['cost_metadata'=>['provider'=>$result['engine']??'gemini','input_bytes'=>strlen($bytes)],'metadata'=>['locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)]]);
-        return response()->json(['ok'=>true,'text'=>$result['text'],'engine'=>$result['engine']??'gemini','interaction_id'=>$result['interaction_id']??null,'request_id'=>$result['request_id']??null,'ai'=>['request_id'=>$result['request_id']??null,'operation'=>'voice.transcribe','provider'=>$result['engine']??'gemini','model'=>$result['model']??null,'processing_mode'=>$processingMode,'status'=>'completed','result'=>['text'=>$result['text']],'suggestions'=>[],'warnings'=>[],'metadata'=>['interaction_id'=>$result['interaction_id']??null,'locale'=>$data['locale'],'correction_applied'=>(bool)($result['correction_applied']??false)],'usage'=>null,'error'=>null]]);
+    public function transcribe(
+        Request $request,
+        VoiceCorrectionService $corrections,
+        AiQuotaService $quota,
+        AiPrivacyPolicy $privacy,
+        \\App\\Services\\CommerceAuthorizationService $commerce
+    ) {
+        $quota->assertAllowed($request->user(), 'can_voice');
+        $data = $request->validate([
+            'audio' => ['required', 'file', 'max:15360', 'mimetypes:audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/mp4'],
+            'locale' => ['required', 'string', 'in:fa-IR,en-US,ar-SA'],
+            'processing_mode' => ['nullable', 'string', 'in:automatic,local,server,external'],
+        ]);
+
+        $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
+        $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+        $useGateway = $gatewayUrl !== '';
+        $asrUrl = $useGateway ? $gatewayUrl.'/v1/transcribe' : trim((string) config('services.voice_asr.url', ''));
+        $asrToken = $useGateway ? $gatewayToken : trim((string) config('services.voice_asr.token', ''));
+        if ($asrUrl === '' || $asrToken === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'موتور گفتار سمت سرور هنوز به‌درستی پیکربندی نشده است.',
+            ], 503, ['Cache-Control' => 'no-store']);
+        }
+
+        $processingMode = $privacy->resolve($data['processing_mode'] ?? null, ['server']);
+        $voiceReservation = null;
+        $file = $data['audio'];
+        $bytes = file_get_contents($file->getRealPath());
+        abort_if($bytes === false || $bytes === '', 422, 'فایل صوتی قابل خواندن نیست.');
+
+        $mime = $file->getMimeType() ?: $file->getClientMimeType() ?: 'audio/webm';
+        $mime = match ($mime) {
+            'video/webm' => 'audio/webm',
+            'video/mp4', 'audio/mp4' => 'audio/m4a',
+            'audio/x-wav' => 'audio/wav',
+            default => $mime,
+        };
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'webm');
+        if (! in_array($extension, ['webm', 'ogg', 'wav', 'mp3', 'm4a', 'mp4'], true)) $extension = 'webm';
+
+        try {
+            $response = \\Illuminate\\Support\\Facades\\Http::withToken($asrToken)
+                ->acceptJson()->connectTimeout(5)->timeout(100)
+                ->attach('audio', $bytes, 'farast-voice.'.$extension, ['Content-Type' => $mime])
+                ->post($asrUrl, ['locale' => $data['locale']]);
+            if (! $response->successful()) {
+                throw new \\RuntimeException('voice_self_hosted_http_'.$response->status());
+            }
+
+            $rawText = trim((string) $response->json('text', ''));
+            $engine = (string) $response->json('engine', $useGateway ? 'runflare-gateway' : 'self-hosted-asr');
+            $model = $response->json('model');
+            if ($rawText === '') {
+                return response()->json(['ok' => true, 'text' => '', 'engine' => $engine, 'empty' => true], 200, ['Cache-Control' => 'no-store']);
+            }
+
+            $requestKey = trim((string) ($request->header('Idempotency-Key') ?: $request->header('X-Farast-Voice-Request', '')));
+            $idempotencyKey = 'voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \\Illuminate\\Support\\Str::uuid());
+            $voiceReservation = $commerce->reserve($request->user(), 'speech.transcription', 1, [], [
+                'policy_code' => 'speech.transcription',
+                'unit' => 'request',
+                'allow_payg' => true,
+                'idempotency_key' => $idempotencyKey,
+            ]);
+            $finalText = $corrections->apply($rawText, $data['locale'], $engine, $request->user()->id);
+            $correctionApplied = $finalText !== $rawText;
+            $commerce->commit($voiceReservation, [
+                'cost_metadata' => ['provider' => $engine, 'input_bytes' => strlen($bytes)],
+                'metadata' => ['locale' => $data['locale'], 'correction_applied' => $correctionApplied],
+            ]);
+
+            return response()->json([
+                'ok' => true,
+                'text' => $finalText,
+                'engine' => $engine,
+                'ai' => [
+                    'operation' => 'voice.transcribe',
+                    'provider' => $engine,
+                    'model' => $model,
+                    'processing_mode' => $processingMode,
+                    'status' => 'completed',
+                    'result' => ['text' => $finalText],
+                    'suggestions' => [],
+                    'warnings' => [],
+                    'metadata' => ['locale' => $data['locale'], 'correction_applied' => $correctionApplied],
+                    'usage' => null,
+                    'error' => null,
+                ],
+            ], 200, ['Cache-Control' => 'no-store']);
+        } catch (\\Throwable $e) {
+            if ($voiceReservation) {
+                try { $commerce->release($voiceReservation); } catch (\\Throwable) {}
+            }
+            $errorCode = (string) $e->getMessage();
+            Log::warning('farast.voice.transcription_failed', [
+                'user_id' => $request->user()->id,
+                'route' => $useGateway ? 'runflare-gateway' : 'legacy-server-asr',
+                'error_code' => preg_match('/^[a-z0-9_.-]+$/i', $errorCode) ? $errorCode : 'voice_provider_failure',
+            ]);
+            $message = match (true) {
+                str_starts_with($errorCode, 'voice_self_hosted_http_401'),
+                str_starts_with($errorCode, 'voice_self_hosted_http_403') => 'احراز هویت موتور گفتار سمت سرور ناموفق است؛ توکن سرویس را بررسی کنید.',
+                str_starts_with($errorCode, 'voice_self_hosted_http_429') => 'سهمیهٔ فعلی تشخیص گفتار پر شده است؛ کمی بعد دوباره تلاش کنید.',
+                str_starts_with($errorCode, 'voice_self_hosted_http_503') => 'موتور گفتار سمت سرور موقتاً در دسترس نیست.',
+                default => 'رونویسی صوتی انجام نشد. دوباره تلاش کنید.',
+            };
+            return response()->json(['ok' => false, 'message' => $message], 502, ['Cache-Control' => 'no-store']);
+        }
     }
 
     public function insertTranscript(Request $request, ToolExecutionService $tools)
