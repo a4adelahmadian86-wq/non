@@ -17,6 +17,8 @@ on:
       - 'public/js/farast-whisper-worker.js'
       - 'public/js/farast-assistant.js'
       - 'public/js/editor-docs-chrome.js'
+      - 'app/Http/Controllers/GlobalAssistantController.php'
+      - 'routes/web_core_part1.php'
       - '.github/workflows/voice-js-syntax.yml'
 
 jobs:
