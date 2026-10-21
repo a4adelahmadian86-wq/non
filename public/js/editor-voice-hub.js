@@ -1,17 +1,11 @@
-/* FARAST · Voice Hub (معماری چندلایهٔ تایپ صوتی — رایگان، همهٔ مرورگرها)
+/* FARAST · Voice Hub (تایپ صوتی با پردازش سمت سرور)
  * ============================================================
- * لایه‌ها به ترتیب اولویت:
- *  ۱) موتور بومی مرورگر (Web Speech API) — رایگان، بدون سرور (Chrome/Edge/Safari/Opera/Samsung)
- *     عین الگوی persian-docs-editor.html (نمونهٔ مورد نظر کاربر): continuous + interim،
- *     قطع نشدن با ویرایش دستی، بازآغاز خودکار در صورت end زودهنگام.
- *  ۲) موتور ابری فراست (WebSocket → /editor/voice/stream-token یا HTTP تکه‌ای → /editor/voice/transcribe)
- *     برای Firefox و هر مرورگر بدون SR — همان موتور Google/Gemini سایت.
- *  ۳) OCR رایگان handwriting: Tesseract.js (محلی در مرورگر، fa+eng) — فایل/تصویر دست‌نویس
- *  ۴) فالبک نهایی: ضبط صدا و تبدیل گفتار به متن با Whisper محلی (transformers.js + whisper)
- *     روی دستگاه کاربر — کاملاً رایگان، بدون کلید API؛ در صورت نبود CDN آفلاین،
- *     راهنمای نصب محلی نمایش داده می‌شود.
- * تشخیص خودکار: اگر موتور ۱ موجود نبود، پنل به‌جای پیام «پشتیبانی نمی‌شود»،
- * مسیر جایگزین را خودش فعال می‌کند. هستهٔ سند از طریق window.FarastEditor دستکاری می‌شود.
+ * ۱) Web Speech API بومی مرورگر فقط در صورت پشتیبانی مرورگر (سرویس/مدل آن تحت کنترل FARAST نیست).
+ * ۲) موتور ابری فراست: WebSocket یا HTTP به API سمت سرور.
+ * ۳) هیچ مدل اختصاصی گفتار/OCR یا وزن مدل هوش مصنوعی روی دستگاه کاربر دانلود نمی‌شود.
+ *    مصرف CPU/RAM محدود به رابط کاربری، ضبط و پردازش معمول مرورگر است.
+ * OCR باید از API سمت سرور ارائه شود؛ تا زمان آماده شدن endpoint، مسیر محلی غیرفعال است.
+ * هستهٔ سند از طریق window.FarastEditor دستکاری می‌شود.
  */
 (() => {
 'use strict';
@@ -144,7 +138,7 @@ function sweepInterim(root) {
 /* موتور بومی افزودهٔ فایرفاکس (Firefox SpeechRecognition) — رایگان، بدون سرور.
  * مرجع: https://github.com/Synesthesiallc/Firefox-Speech-Recognition — در Firefox 135+
  * با فعال‌سازی general.subframe... و speech.enabled در about:config در دسترس است؛ اگر نبود،
- * خودکار به لایهٔ بعدی (ابری/Whisper محلی) می‌رویم. */
+ * خودکار به لایهٔ ابری می‌رویم. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function isAuthed() { return $('#farastWord')?.dataset.authenticated === '1'; }
 function hasMic() {
@@ -231,7 +225,7 @@ async function startCloud(ctx) {
       const message = statusInfo.reason === 'auth'
         ? 'برای تایپ صوتی، ابتدا وارد حساب خود شوید.'
         : statusInfo.reason === 'self_hosted_token_missing'
-          ? 'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید. فالبک مرورگر و Whisper محلی برای این مسیر غیرفعال است.'
+          ? 'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید. فالبک مرورگر و مدل محلی برای این مسیر غیرفعال است.'
           : 'موتور گفتار روی این سرور هنوز پیکربندی نشده است.';
       throw Object.assign(new Error(message), { fatal: true, code: 'server_not_configured' });
     }
@@ -251,7 +245,7 @@ async function startCloud(ctx) {
     if (!pr.ok || !pj.token) {
       const kind = cloudErrorKind(pr.status, pj);
       if (kind !== 'server') {
-        const friendly = { auth: 'برای تایپ صوتی ابری، ابتدا وارد حساب خود شوید.', quota: 'این حساب فعلاً اجازهٔ تایپ صوتی ابری ندارد (سهمیه/پلن). از «تنظیمات موتور» می‌توانید Whisper محلی رایگان را انتخاب کنید.', rate: 'چند لحظه صبر کنید؛ محدودیت تعداد درخواست صوت فعال شده است.' }[kind];
+        const friendly = { auth: 'برای تایپ صوتی ابری، ابتدا وارد حساب خود شوید.', quota: 'این حساب فعلاً اجازهٔ تایپ صوتی ابری ندارد (سهمیه/پلن). لطفاً وضعیت موتور ابری را بررسی کنید یا بعداً دوباره تلاش کنید.', rate: 'چند لحظه صبر کنید؛ محدودیت تعداد درخواست صوت فعال شده است.' }[kind];
         throw Object.assign(new Error(friendly), { fatal: true });
       }
       preflightErr = pj.message || 'gateway-down';
@@ -435,7 +429,7 @@ async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
 /* ===================== موتور سوم: میکروفون + سرویس STT قابل پیکربندی =====================
  * برای مرورگر/سیستمی که هیچ‌کدام از دو لایهٔ بالا ندارند: صدا را می‌گیرد و
  * قطعه‌های WebM به آدرس تنظیم‌شده توسط کاربر (localStorage farast.stt.endpoint) می‌فرستد.
- * این راه رایگانِ شخصی است (مثلاً اتصال به Whisper محلی روی شبکهٔ خودتان). */
+ * این مسیر فقط به endpoint صریحاً تنظیم‌شده توسط کاربر درخواست می‌فرستد. */
 async function startSttEndpoint(ctx) {
   const endpoint = localStorage.getItem('farast.stt.endpoint');
   if (!endpoint) throw new Error('برای این روش، نشانی سرویس تبدیل گفتار را در تنظیمات وارد کنید.');
