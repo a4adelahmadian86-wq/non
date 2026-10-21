@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SiteSetting;
-use App\Services\EditorAiAssistService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
