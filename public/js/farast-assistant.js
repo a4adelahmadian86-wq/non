@@ -210,6 +210,7 @@
     try{
       stopVadMonitor();
       vadContext=new AC();
+      if(vadContext.state==='suspended')vadContext.resume().catch(function(){});
       vadAnalyser=vadContext.createAnalyser();vadAnalyser.fftSize=512;
       vadSource=vadContext.createMediaStreamSource(mediaStream);vadSource.connect(vadAnalyser);
       var samples=new Uint8Array(vadAnalyser.fftSize),startedAt=Date.now(),speechAt=0,lastVoiceAt=0;
