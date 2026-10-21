@@ -135,11 +135,9 @@ function sweepInterim(root) {
 }
 
 /* ---------- وضعیت موتورهای قابل استفاده ---------- */
-/* موتور بومی افزودهٔ فایرفاکس (Firefox SpeechRecognition) — رایگان، بدون سرور.
- * مرجع: https://github.com/Synesthesiallc/Firefox-Speech-Recognition — در Firefox 135+
- * با فعال‌سازی general.subframe... و speech.enabled در about:config در دسترس است؛ اگر نبود،
- * خودکار به لایهٔ ابری می‌رویم. */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+/* Browser-native SpeechRecognition is intentionally disabled. Some browsers can download
+ * language packs when local processing is requested; FARAST uses server-side inference only. */
+const SR = null;
 function isAuthed() { return $('#farastWord')?.dataset.authenticated === '1'; }
 function hasMic() {
   // در jsdom/تست و محیط‌های بدون mediaDevices، با MediaRecorder چک می‌شود؛ در غیر این صورت false
@@ -163,7 +161,6 @@ function guessHandwritten(file) {
 
 function engines() {
   const list = [];
-  if (SR) list.push({ id: 'native', label: 'موتور بومی مرورگر (رایگان)' });
   // موتور ابری سایت در هر مرورگری کار می‌کند (WebSocket یا HTTP تکه‌ای) — فقط نیازمند ورود به حساب
   if (isAuthed() && hasMic()) list.push({ id: 'cloud', label: 'موتور ابری فراست (بدون محدودیت مرورگر)' });
   // مدل‌های گفتار روی دستگاه بازدیدکننده دانلود نمی‌شوند؛ گفتار باید از API سمت سرور پردازش شود.
@@ -172,7 +169,7 @@ function engines() {
 }
 window.FarastVoiceHub = {
   version: '1.4.0',
-  hasNative: () => !!SR,
+  hasNative: () => false,
   isAuthed, hasMic, engines,
   processFinalText, insertIntoDoc, showInterim, clearInterim, sweepInterim, surfaceEl, hideInterimSel,
   ocr: { ocrImage, guessHandwritten, ensureTesseract },
