@@ -93,7 +93,7 @@
 {{-- پوستهٔ گوگل داکس روی هستهٔ فراست (فقط ظاهر؛ داده‌ها همان مسیر Kernel/سرور می‌روند) --}}
 <link rel="stylesheet" href="/css/docs-chrome.css?v=20261017e">
 
-<script src="/js/editor-docs-chrome.js?v=20261021local2" defer></script>
+<script src="/js/editor-docs-chrome.js?v=20261021local3" defer></script>
 @endonce
 <div id="commentDialog" class="farast-dialog" hidden><div class="dialog-card" role="dialog" aria-modal="true"><header><strong>نظر جدید</strong><button type="button" data-dialog-close>×</button></header><textarea id="commentText" rows="5" placeholder="نظر خود را بنویسید"></textarea><div class="dialog-actions"><button id="commentSave" class="primary" type="button">ثبت نظر</button></div></div></div>
 @endsection
