@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 test('Firefox cloud fallback records continuously and transcribes once on stop', async ({ page }) => {
   const source = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
@@ -150,4 +151,6 @@ test('editor and site voice entry points do not invoke browser speech or local W
   expect(editorChrome).not.toContain('local-whisper');
   expect(siteApp).not.toContain('SpeechRecognition');
   expect(siteApp).not.toContain('processLocally');
+  expect(() => new vm.Script(editorChrome)).not.toThrow();
+  expect(() => new vm.Script(siteApp)).not.toThrow();
 });
