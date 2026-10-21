@@ -18,3 +18,15 @@ FARAST must not download FARAST-managed AI models, model weights, tokenizers, or
 5. Confirm server errors are shown clearly and do not silently switch to local model inference.
 6. Verify saved text persists through the editor's canonical kernel/save path.
 7. Verify OCR clearly reports that server-side OCR is not configured until that endpoint is implemented.
+
+
+## Required deployment configuration
+
+Set these variables in the Laravel server environment (never in browser JavaScript):
+
+- `FARAST_AI_GATEWAY_URL`: the HTTPS base URL of the Runflare gateway, without `/v1/...`.
+- `FARAST_AI_GATEWAY_TOKEN`: the same long random secret configured as `FARAST_GATEWAY_TOKEN` in the Runflare gateway service.
+
+The Runflare gateway needs `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` for Cloudflare Workers AI, plus `FARAST_LOCAL_LLM_URL` and `FARAST_LOCAL_LLM_API_KEY` if the local Qwen fallback is deployed. Cloudflare's free allocation is 10,000 Neurons/day shared across model calls; when exhausted, the gateway falls back to local Qwen or returns a service error if no fallback is configured.
+
+After setting the variables, clear Laravel's cached configuration and verify the authenticated `/editor/voice/status`, `/assistant/voice/status`, `/assistant/transcribe`, `/assistant/speak`, and `/assistant/chat` routes against real deployed services. A green CI run only proves code/contracts; it does not prove that account credentials or upstream network access are working.
