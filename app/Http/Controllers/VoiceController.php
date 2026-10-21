@@ -7,11 +7,9 @@ use App\Models\TypingDocument;
 use App\Services\ToolExecutionService;
 use App\Services\AI\AiPrivacyPolicy;
 use App\Services\AI\AiQuotaService;
-use App\Services\GoogleSpeechToTextService;
 use App\Services\VoiceCorrectionService;
 use App\Services\VoiceProviderRouter;
 use App\Services\VoiceQuotaManager;
-use App\Services\VoiceTranscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
