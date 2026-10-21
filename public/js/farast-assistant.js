@@ -155,6 +155,8 @@
     }catch(e){
       if(speechTurn!==assistantTurn)return;
       panel.classList.remove('is-speaking');
+      if(assistantAudio){try{assistantAudio.pause();}catch(err){}assistantAudio=null;}
+      if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
       if(speakWithBrowser(text,speechTurn)){
         voiceTitle.textContent='صدای سرور در دسترس نیست';
         voiceCaption.textContent='از صدای فارسی نصب‌شده روی دستگاه استفاده می‌کنم.';
@@ -243,8 +245,13 @@
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای استفاده از میکروفون ابتدا وارد حساب کاربری شو.';return;}
     var config=null;
     try{var sr=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'}});if(sr.ok)config=await sr.json();}catch(e){}
-    if(!config||!config.server_tts||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){var unavailable='موتور تولید صدای پاسخ یا دسترسی میکروفون تنظیم نشده است؛ وضعیت سرویس صوتی را بررسی کن.';status.textContent=unavailable;voiceTitle.textContent='موتور صوتی تنظیم نشده';voiceCaption.textContent=unavailable;return;}
-    if(config.server_tts_token_configured===false){conversationActive=false;var tokenError='توکن تولید صدای پاسخ تنظیم نشده است. FARAST_VOICE_TTS_TOKEN را بررسی کن؛ اگر از توکن مشترک استفاده می‌کنی، FARAST_VOICE_TOKEN باید در تنظیمات لاراول باشد و کش تنظیمات پاک شود.';status.textContent=tokenError;voiceTitle.textContent='توکن صوتی تنظیم نشده';voiceCaption.textContent=tokenError;return;}
+    if(!config)config={};
+    var localTtsAvailable=false;
+    try{localTtsAvailable=!!(window.speechSynthesis&&window.SpeechSynthesisUtterance&&(window.speechSynthesis.getVoices()||[]).some(function(voice){return /^fa[-_]/i.test(String(voice.lang||''));}));}catch(e){}
+    if((!config.server_tts||config.server_tts_token_configured===false)&&!localTtsAvailable||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){
+      var unavailable='موتور صدای پاسخ یا دسترسی میکروفون تنظیم نشده است؛ سرویس صوتی را بررسی کن یا صدای فارسی روی دستگاه نصب کن.';
+      status.textContent=unavailable;voiceTitle.textContent='موتور صوتی تنظیم نشده';voiceCaption.textContent=unavailable;return;
+    }
     var localAsrReady=false;
     try{
       var localEngine=window.FarastVoiceHub&&window.FarastVoiceHub.localWhisper;
