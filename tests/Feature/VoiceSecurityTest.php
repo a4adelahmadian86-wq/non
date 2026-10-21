@@ -45,7 +45,7 @@ class VoiceSecurityTest extends TestCase
             ->assertJsonPath('self_hosted', true);
     }
 
-    public function test_live_gateway_requires_explicit_url_and_uses_router_provider(): void
+    public function test_legacy_websocket_provider_is_not_advertised_without_the_central_asr_gateway(): void
     {
         Config::set('services.voice_asr.url', '');
         Config::set('services.voice_asr.token', '');
@@ -71,11 +71,30 @@ class VoiceSecurityTest extends TestCase
 
         $this->actingAs($user)->getJson('/editor/voice/status')
             ->assertOk()
-            ->assertJsonPath('mode', 'gateway')
-            ->assertJsonPath('gateway', true)
-            ->assertJsonPath('websocket_url', 'wss://voice.example.test')
+            ->assertJsonPath('mode', 'none')
+            ->assertJsonPath('reason', 'server_not_configured')
+            ->assertJsonPath('gateway', false)
+            ->assertJsonPath('websocket_url', '')
             ->assertJsonMissingPath('credentials')
             ->assertDontSee('never-return-this');
+    }
+
+    public function test_configured_runflare_gateway_is_preferred_for_voice(): void
+    {
+        Config::set('services.ai_gateway.url', 'https://runflare.example.test');
+        Config::set('services.ai_gateway.token', 'test-runflare-token');
+        Config::set('services.voice_asr.url', 'https://render.example.test/v1/transcribe');
+        Config::set('services.voice_asr.token', 'render-token');
+
+        $user = User::factory()->create();
+        $this->actingAs($user)->getJson('/editor/voice/status')
+            ->assertOk()
+            ->assertJsonPath('mode', 'chunked')
+            ->assertJsonPath('gateway', false)
+            ->assertJsonPath('self_hosted', false)
+            ->assertJsonPath('engines.0', 'runflare-gateway')
+            ->assertJsonMissingPath('credentials')
+            ->assertDontSee('test-runflare-token');
     }
 
     public function test_provider_credentials_are_gateway_only(): void

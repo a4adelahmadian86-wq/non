@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 test('Firefox cloud fallback records continuously and transcribes once on stop', async ({ page }) => {
   const source = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
@@ -89,4 +90,67 @@ test('Firefox cloud fallback records continuously and transcribes once on stop',
   expect(afterStop.requests).toBe(1);
   expect(afterStop.text).toContain('این متن کامل و پیوسته است');
   expect(afterStop.error).toBe('');
+});
+
+
+test('voice hub does not expose a browser-local Whisper model path', async ({ page }) => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
+  await page.setContent('<!doctype html><html><head></head><body><div id="farastWord" data-authenticated="1"></div></body></html>');
+  await page.addScriptTag({ content: source });
+  const result = await page.evaluate(() => ({
+    hasLocalWhisperApi: Object.prototype.hasOwnProperty.call(window.FarastVoiceHub || {}, 'localWhisper'),
+    engineIds: window.FarastVoiceHub?.engines?.().map(engine => engine.id) || []
+  }));
+  expect(result.hasLocalWhisperApi).toBe(false);
+  expect(result.engineIds).not.toContain('local-whisper');
+});
+
+
+test('voice hub does not load browser-side AI model libraries or weights', async ({ page }) => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
+  await page.setContent('<!doctype html><html><head></head><body><div id="farastWord" data-authenticated="1"></div></body></html>');
+  await page.addScriptTag({ content: source });
+  const result = await page.evaluate(() => ({
+    hasLocalWhisperApi: Object.prototype.hasOwnProperty.call(window.FarastVoiceHub || {}, 'localWhisper'),
+    engineIds: window.FarastVoiceHub?.engines?.().map(engine => engine.id) || [],
+    scriptRequests: [...document.scripts].map(script => script.src).filter(Boolean)
+  }));
+  expect(result.hasLocalWhisperApi).toBe(false);
+  expect(result.engineIds).not.toContain('local-whisper');
+  expect(source).not.toContain('@huggingface/transformers');
+  expect(source).not.toContain('Xenova/whisper');
+  expect(source).not.toContain('tesseract.js');
+  expect(source).not.toContain('createWorker(');
+  expect(result.scriptRequests).toEqual([]);
+});
+
+
+test('FARAST voice workflow never invokes browser speech recognition or installs language packs', async ({ page }) => {
+  const voiceSource = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-voice.js'), 'utf8');
+  const hubSource = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
+  expect(voiceSource).not.toContain('SpeechRecognition');
+  expect(voiceSource).not.toContain('processLocally');
+  expect(voiceSource).not.toMatch(/\.install\s*\(/);
+  expect(voiceSource).not.toContain('شروع رایگان');
+  expect(voiceSource).not.toContain('/editor/voice/stream-token');
+  expect(voiceSource).not.toMatch(/new\\s+WebSocket/);
+  expect(hubSource).not.toMatch(/window\.(webkit)?SpeechRecognition/);
+  expect(hubSource).not.toContain('/editor/voice/stream-token');
+  expect(hubSource).not.toMatch(/new\s+WebSocket/);
+  expect(hubSource).not.toContain('processLocally');
+  expect(hubSource).not.toMatch(/\bSR\.install\s*\(/);
+});
+
+
+test('editor and site voice entry points do not invoke browser speech or local Whisper', async ({ page }) => {
+  const editorChrome = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-docs-chrome.js'), 'utf8');
+  const siteApp = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-app.js'), 'utf8');
+  expect(editorChrome).not.toContain('SpeechRecognition');
+  expect(editorChrome).not.toContain('Xenova/whisper');
+  expect(editorChrome).not.toContain('startLocalWhisperEngine');
+  expect(editorChrome).not.toContain('local-whisper');
+  expect(siteApp).not.toContain('SpeechRecognition');
+  expect(siteApp).not.toContain('processLocally');
+  expect(() => new vm.Script(editorChrome)).not.toThrow();
+  expect(() => new vm.Script(siteApp)).not.toThrow();
 });

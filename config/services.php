@@ -1,7 +1,7 @@
 <?php
 
 return [
-    // Optional central multi-provider gateway. Empty by default preserves direct provider behavior.
+    // Central Runflare AI gateway. When configured, chat and voice inference are routed server-to-server through it; no provider credentials go to the browser.
     'ai_gateway' => [
         'url' => env('FARAST_AI_GATEWAY_URL', ''),
         'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
@@ -14,11 +14,11 @@ return [
 
     // Optional private/self-hosted speech services. No third-party cloud API is assumed.
     'voice_asr' => [
-        'url' => env('FARAST_VOICE_ASR_URL', 'https://voice-typing-r5r7.onrender.com/v1/transcribe'),
+        'url' => env('FARAST_VOICE_ASR_URL', ''),
         'token' => env('FARAST_VOICE_ASR_TOKEN', env('FARAST_VOICE_TOKEN')),
     ],
     'voice_tts' => [
-        'url' => env('FARAST_VOICE_TTS_URL', 'https://voice-typing-r5r7.onrender.com/v1/synthesize'),
+        'url' => env('FARAST_VOICE_TTS_URL', ''),
         'token' => env('FARAST_VOICE_TTS_TOKEN', env('FARAST_VOICE_TOKEN')),
         // Keep this identifier pinned to one single-speaker model on the TTS host.
         'voice_id' => env('FARAST_VOICE_TTS_VOICE_ID', 'farast-fa-male-v1'),
