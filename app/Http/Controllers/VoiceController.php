@@ -116,7 +116,7 @@ class VoiceController extends Controller
         VoiceCorrectionService $corrections,
         AiQuotaService $quota,
         AiPrivacyPolicy $privacy,
-        \\App\\Services\\CommerceAuthorizationService $commerce
+        \App\Services\CommerceAuthorizationService $commerce
     ) {
         $quota->assertAllowed($request->user(), 'can_voice');
         $data = $request->validate([
@@ -154,12 +154,12 @@ class VoiceController extends Controller
         if (! in_array($extension, ['webm', 'ogg', 'wav', 'mp3', 'm4a', 'mp4'], true)) $extension = 'webm';
 
         try {
-            $response = \\Illuminate\\Support\\Facades\\Http::withToken($asrToken)
+            $response = \Illuminate\Support\Facades\Http::withToken($asrToken)
                 ->acceptJson()->connectTimeout(5)->timeout(100)
                 ->attach('audio', $bytes, 'farast-voice.'.$extension, ['Content-Type' => $mime])
                 ->post($asrUrl, ['locale' => $data['locale']]);
             if (! $response->successful()) {
-                throw new \\RuntimeException('voice_self_hosted_http_'.$response->status());
+                throw new \RuntimeException('voice_self_hosted_http_'.$response->status());
             }
 
             $rawText = trim((string) $response->json('text', ''));
@@ -170,7 +170,7 @@ class VoiceController extends Controller
             }
 
             $requestKey = trim((string) ($request->header('Idempotency-Key') ?: $request->header('X-Farast-Voice-Request', '')));
-            $idempotencyKey = 'voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \\Illuminate\\Support\\Str::uuid());
+            $idempotencyKey = 'voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \Illuminate\Support\Str::uuid());
             $voiceReservation = $commerce->reserve($request->user(), 'speech.transcription', 1, [], [
                 'policy_code' => 'speech.transcription',
                 'unit' => 'request',
@@ -202,9 +202,9 @@ class VoiceController extends Controller
                     'error' => null,
                 ],
             ], 200, ['Cache-Control' => 'no-store']);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             if ($voiceReservation) {
-                try { $commerce->release($voiceReservation); } catch (\\Throwable) {}
+                try { $commerce->release($voiceReservation); } catch (\Throwable) {}
             }
             $errorCode = (string) $e->getMessage();
             Log::warning('farast.voice.transcription_failed', [
