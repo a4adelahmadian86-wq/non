@@ -1,7 +1,7 @@
 <?php
 
 return [
-    // Optional central multi-provider gateway. Empty by default preserves direct provider behavior.
+    // Central Runflare AI gateway. When configured, chat and voice inference are routed server-to-server through it.
     'ai_gateway' => [
         'url' => env('FARAST_AI_GATEWAY_URL', ''),
         'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
