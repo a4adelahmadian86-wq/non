@@ -113,8 +113,25 @@
     }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
   }
   var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null;
-  function stopConversation(){conversationActive=false;assistantTurn++;busy=false;if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
+  function stopConversation(){conversationActive=false;assistantTurn++;busy=false;if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(e){}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
   function scheduleNextListening(){if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(resumeListeningTimer)window.clearTimeout(resumeListeningTimer);resumeListeningTimer=window.setTimeout(function(){resumeListeningTimer=null;if(conversationActive&&!panel.hidden)startServerRecording();},450);}
+  function speakWithBrowser(text, speechTurn){
+    if(!window.speechSynthesis||!window.SpeechSynthesisUtterance)return false;
+    var voices=[];
+    try{voices=window.speechSynthesis.getVoices()||[];}catch(e){}
+    var persianVoice=voices.find(function(voice){return /^fa[-_]/i.test(String(voice.lang||''));});
+    if(!persianVoice)return false;
+    try{
+      window.speechSynthesis.cancel();
+      var utterance=new SpeechSynthesisUtterance(String(text||'').slice(0,6000));
+      utterance.lang='fa-IR';utterance.voice=persianVoice;
+      utterance.onstart=function(){if(speechTurn!==assistantTurn)return;panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='صدای محلی دستگاه در حال پخش است.';status.textContent='برای قطع صدا، «توقف پخش صدا» را لمس کن.';};
+      utterance.onend=function(){if(speechTurn!==assistantTurn)return;panel.classList.remove('is-speaking');voiceTitle.textContent=conversationActive?'نوبت توست':'آمادهٔ گفت‌وگو هستم';voiceCaption.textContent=conversationActive?'بعد از پاسخ، دوباره گوش می‌دهم.':'هر وقت آماده بودی، دوباره صحبت کن.';status.textContent=conversationActive?'برای ادامهٔ مکالمه دوباره گوش می‌دهم…':'آماده‌ام؛ دوباره صحبت کن.';scheduleNextListening();};
+      utterance.onerror=function(){if(speechTurn!==assistantTurn)return;panel.classList.remove('is-speaking');status.textContent='صدای محلی مرورگر پخش نشد.';if(conversationActive)scheduleNextListening();};
+      window.speechSynthesis.speak(utterance);
+      return true;
+    }catch(e){return false;}
+  }
   async function say(text){
     var speechTurn=assistantTurn;
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای پخش پاسخ صوتی ابتدا وارد حساب شو.';return;}
@@ -135,7 +152,19 @@
       if(speechTurn!==assistantTurn)return;
       if(!assistantAudio.duration||!isFinite(assistantAudio.duration)||assistantAudio.duration<=0)throw new Error('فایل صوتی دریافت شد، اما مدت‌زمان قابل پخش ندارد.');
       await assistantAudio.play();
-    }catch(e){panel.classList.remove('is-speaking');voiceTitle.textContent='موتور صدا آماده نیست';voiceCaption.textContent=e.message||'صدای ثابت فراست فعلاً در دسترس نیست.';status.textContent=voiceCaption.textContent;}
+    }catch(e){
+      if(speechTurn!==assistantTurn)return;
+      panel.classList.remove('is-speaking');
+      if(speakWithBrowser(text,speechTurn)){
+        voiceTitle.textContent='صدای سرور در دسترس نیست';
+        voiceCaption.textContent='از صدای فارسی نصب‌شده روی دستگاه استفاده می‌کنم.';
+        status.textContent=voiceCaption.textContent;
+        return;
+      }
+      voiceTitle.textContent='موتور صدا آماده نیست';
+      voiceCaption.textContent=e.message||'صدای ثابت فراست در دسترس نیست و صدای فارسی محلی هم روی دستگاه پیدا نشد.';
+      status.textContent=voiceCaption.textContent;
+    }
   }
     async function send(text){
     text=String(text||'').trim();if(!text||busy)return;
