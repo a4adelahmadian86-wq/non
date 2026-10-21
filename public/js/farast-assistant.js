@@ -247,8 +247,10 @@
     var config=null;
     try{var sr=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'}});if(sr.ok)config=await sr.json();}catch(e){}
     if(!config)config={};
-    var localTtsAvailable=false;
-    try{localTtsAvailable=!!(window.speechSynthesis&&window.SpeechSynthesisUtterance&&(window.speechSynthesis.getVoices()||[]).some(function(voice){return /^fa[-_]/i.test(String(voice.lang||''));}));}catch(e){}
+    // getVoices() can be empty on the first call; browsers populate it asynchronously.
+    // Permit recording when speech synthesis exists and decide whether a Persian voice is
+    // actually available only if the server TTS request fails.
+    var localTtsAvailable=!!(window.speechSynthesis&&window.SpeechSynthesisUtterance);
     if((!config.server_tts||config.server_tts_token_configured===false)&&!localTtsAvailable||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){
       var unavailable='موتور صدای پاسخ یا دسترسی میکروفون تنظیم نشده است؛ سرویس صوتی را بررسی کن یا صدای فارسی روی دستگاه نصب کن.';
       status.textContent=unavailable;voiceTitle.textContent='موتور صوتی تنظیم نشده';voiceCaption.textContent=unavailable;return;
