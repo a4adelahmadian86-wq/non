@@ -1150,15 +1150,15 @@ const ENGINE_NAMES = { native: 'موتور بومی مرورگر', cloud: 'مو�
 async function startVoice() {
   if (wantListen || activeHandle) return;
   const ctx = hubCtx();
-  // Local inference is the default on every browser. Cloud/native services are opt-in
-  // because they may send audio off-device and are not guaranteed to be free/private.
+  // Local inference is the default. If the model cannot initialize, visibly announce
+  // the switch to the configured Runflare/server speech fallback.
   let prefer;
   if (engineMode !== 'auto') prefer = engineMode;
   else prefer = hub()?.hasMic?.() ? 'local-whisper' : (hub()?.hasNative?.() ? 'native' : 'stt-api');
   const chains = {
     native: ['native'],
     cloud: ['cloud'],
-    'local-whisper': ['local-whisper'],
+    'local-whisper': ['local-whisper', 'cloud', 'stt-api'],
     'stt-api': ['stt-api'],
   };
   const order = chains[prefer] || chains.native;
@@ -1181,10 +1181,12 @@ async function startVoice() {
         const h = await hub()?.startSttEndpoint?.(ctx);
         if (h) { wantListen = true; activeHandle = h; engineLabel(); return; }
       }
+      if (id !== order[order.length - 1]) ctx.onStatus('موتور ' + (ENGINE_NAMES[id] || id) + ' آماده نشد؛ در حال تلاش با ' + (ENGINE_NAMES[order[order.indexOf(id) + 1]] || order[order.indexOf(id) + 1]) + '…');
     } catch (err) {
       lastErr = err?.message || '';
       if (id === 'cloud' && err?.code === 'server_not_configured') continue; // ابری آماده نیست → لایهٔ بعدی بی‌صدا
-      if (id === order[order.length - 1]) { ctx.onError(lastErr || 'هیچ موتور تایپ صوتی در دسترس نبود'); wantListen = false; voiceUI(false); }
+      if (id !== order[order.length - 1]) ctx.onStatus('موتور ' + (ENGINE_NAMES[id] || id) + ' آماده نشد؛ در حال تلاش با ' + (ENGINE_NAMES[order[order.indexOf(id) + 1]] || order[order.indexOf(id) + 1]) + '…');
+      else { ctx.onError(lastErr || 'هیچ موتور تایپ صوتی در دسترس نبود'); wantListen = false; voiceUI(false); }
     }
   }
   /* هیچ موتوری فعال نشد → پیام راهنمای واقعی (به‌جای جملهٔ مبهم «موتوری در دسترس نبود») */

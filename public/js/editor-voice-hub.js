@@ -1,17 +1,8 @@
-/* FARAST · Voice Hub (معماری چندلایهٔ تایپ صوتی — رایگان، همهٔ مرورگرها)
- * ============================================================
- * لایه‌ها به ترتیب اولویت:
- *  ۱) موتور بومی مرورگر (Web Speech API) — رایگان، بدون سرور (Chrome/Edge/Safari/Opera/Samsung)
- *     عین الگوی persian-docs-editor.html (نمونهٔ مورد نظر کاربر): continuous + interim،
- *     قطع نشدن با ویرایش دستی، بازآغاز خودکار در صورت end زودهنگام.
- *  ۲) موتور ابری فراست (WebSocket → /editor/voice/stream-token یا HTTP تکه‌ای → /editor/voice/transcribe)
- *     برای Firefox و هر مرورگر بدون SR — همان موتور Google/Gemini سایت.
- *  ۳) OCR رایگان handwriting: Tesseract.js (محلی در مرورگر، fa+eng) — فایل/تصویر دست‌نویس
- *  ۴) فالبک نهایی: ضبط صدا و تبدیل گفتار به متن با Whisper محلی (transformers.js + whisper)
- *     روی دستگاه کاربر — کاملاً رایگان، بدون کلید API؛ در صورت نبود CDN آفلاین،
- *     راهنمای نصب محلی نمایش داده می‌شود.
- * تشخیص خودکار: اگر موتور ۱ موجود نبود، پنل به‌جای پیام «پشتیبانی نمی‌شود»،
- * مسیر جایگزین را خودش فعال می‌کند. هستهٔ سند از طریق window.FarastEditor دستکاری می‌شود.
+/* FARAST · Voice Hub
+ * Local Whisper is the default speech path. Quantized ONNX model weights are downloaded
+ * once per browser origin and cached by Transformers.js; inference runs on the user's device.
+ * Cloud/native speech engines are explicit opt-in fallbacks. OCR remains local via Tesseract.
+ * The shared local ASR API is also used by the global voice conversation UI.
  */
 (() => {
 'use strict';
@@ -225,72 +216,121 @@ function guessHandwritten(file) {
  * مسیر اصلیِ محلی: صدا روی دستگاه پردازش می‌شود؛ هیچ صوتی به‌طور خودکار به سرور ارسال نمی‌شود.
  * ضبط‌های کوتاه و پی‌درپی، دیکد به PCM و اجرای Whisper quantized روی WASM.
  * رایگان و بدون کلید؛ دانلود اولیه نیازمند اینترنت است و فایل‌ها در کش مرورگر نگه‌داری می‌شوند. */
-let whr = null, whrName = '';
-/* موتور Whisper محلی — فالبک نهایی. کتابخانهٔ transformers.js به‌صورت باندل IIFE با CDNهای
- * پشتیبانی‌نشده کار نمی‌کند (خطای dynamic import); لذا ESM از esm.sh بارگذاری و روی window.transformers
- * قرار داده می‌شود تا کد موجود بدون تغییر کار کند. چند CDN برای شبکه‌های محدود. */
-const WHISPER_ESM = [
-  'https://esm.sh/@huggingface/transformers@3.5.0',
-  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/+esm',
-  'https://unpkg.com/@huggingface/transformers@3.5.0/dist/transformers.js?module',
-];
-async function loadWhisperLib() {
-  if (window.transformers) return true;
-  for (const u of WHISPER_ESM) {
-    try {
-      const mod = await import(/* @vite-ignore */ u);
-      if (mod?.pipeline) { window.transformers = mod; return true; }
-    } catch {}
-  }
-  // تلاش آخر: باندل IIFE (در برخی مرورگرها/شبکه‌ها جواب می‌دهد)
-  return await loadScript(CDN.transformers);
+/* Local Whisper runs in a dedicated Worker so model inference does not block the editor UI. */
+let localWhisperPipeline = null, localWhisperModelName = '', localWhisperLoadPromise = null;
+let whisperWorker = null, whisperRequestId = 0;
+const whisperPending = new Map();
+
+function getWhisperWorker() {
+  if (whisperWorker) return whisperWorker;
+  if (!window.Worker) throw new Error('این مرورگر Web Worker را پشتیبانی نمی‌کند.');
+  whisperWorker = new Worker('/js/farast-whisper-worker.js?v=20261021worker1', { type: 'module' });
+  whisperWorker.onmessage = event => {
+    const message = event.data || {};
+    const pending = whisperPending.get(message.id);
+    if (!pending) return;
+    if (message.type === 'progress') {
+      pending.onStatus?.(message.message || 'در حال بارگذاری مدل محلی…');
+      return;
+    }
+    whisperPending.delete(message.id);
+    if (message.type === 'error') pending.reject(new Error(message.message || 'Whisper محلی ناموفق بود.'));
+    else pending.resolve(message.output ?? true);
+  };
+  whisperWorker.onerror = event => {
+    const error = new Error(event.message || 'کارگر محلی Whisper متوقف شد.');
+    localWhisperPipeline = null; localWhisperModelName = ''; localWhisperLoadPromise = null;
+    whisperPending.forEach(pending => pending.reject(error));
+    whisperPending.clear();
+    whisperWorker = null;
+  };
+  return whisperWorker;
+}
+
+function whisperWorkerRequest(type, payload, onStatus) {
+  const worker = getWhisperWorker();
+  const id = ++whisperRequestId;
+  return new Promise((resolve, reject) => {
+    whisperPending.set(id, { resolve, reject, onStatus });
+    const transfer = payload.audio instanceof Float32Array ? [payload.audio.buffer] : [];
+    try { worker.postMessage({ id, type, ...payload }, transfer); }
+    catch (error) { whisperPending.delete(id); reject(error); }
+  });
 }
 
 async function ensureWhisper(onStatus, model) {
-  const tf = window.transformers || (await loadWhisperLib() ? window.transformers : null);
-  if (!tf) throw new Error('کتابخانهٔ transformers.js از هیچ CDNای بارگذاری نشد (اینترنت/فیلتر شبکه را بررسی کنید).');
-  if (whr && whrName === model) return whr;
-  onStatus?.('آماده‌سازی مدل گفتار روی دستگاه؛ دانلود اولیه ممکن است ده‌ها تا صدها مگابایت باشد…');
-  /* تلاش با CDN هافینگ‌فیس؛ در شبکه‌های محدود، mirror داخلی (hf-mirror.com) امتحان می‌شود */
-  try {
-    whr = await tf.pipeline('automatic-speech-recognition', { model, quantized: true, device: 'wasm' });
-  } catch (e1) {
-    onStatus?.('مدل از منبع اصلی دانلود نشد؛ در حال امتحان mirror جایگزین…');
-    try {
-      tf.env?.allowRemoteModels && (tf.env.remoteHost = 'https://hf-mirror.com/');
-      tf.env?.remotePathTemplate && (tf.env.remotePathTemplate = '{model}/resolve/{revision}/');
-      whr = await tf.pipeline('automatic-speech-recognition', { model, quantized: true, device: 'wasm' });
-    } catch (e2) {
-      throw new Error('مدل Whisper قابل دانلود نبود (' + (String(e2?.message || e1?.message || '').slice(0, 80)) + '). از موتور ابری یا سرویس شخصی استفاده کنید.');
-    }
-  }
-  whrName = model;
-  return whr;
+  if (localWhisperPipeline && localWhisperModelName === model) return localWhisperPipeline;
+  if (localWhisperLoadPromise) return localWhisperLoadPromise;
+  onStatus?.('آماده‌سازی مدل Whisper در Worker؛ دانلود اولیه ممکن است ده‌ها تا صدها مگابایت باشد…');
+  localWhisperLoadPromise = whisperWorkerRequest('load', { model }, onStatus).then(() => {
+    localWhisperModelName = model;
+    localWhisperPipeline = (pcm, options) => whisperWorkerRequest('transcribe', { model, audio: pcm, options }, onStatus);
+    return localWhisperPipeline;
+  }).finally(() => { localWhisperLoadPromise = null; });
+  return localWhisperLoadPromise;
 }
-async function decodeToWav(audioBlob, onStatus) {
+async function decodeToPcm16k(audioBlob, onStatus) {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) throw new Error('AudioContext در این مرورگر نیست.');
   const ab = await audioBlob.arrayBuffer();
-  const acx = new AC({ sampleRate: 16000 });
+  const acx = new AC();
   let buf;
-  try { buf = await acx.decodeAudioData(ab); } finally { try { acx.close(); } catch {} }
-  const ch = buf.getChannelData(0);
-  const sr = buf.sampleRate;
-  // تبدیل به WAV 16k mono (قالب ورودی whisper)
-  const ratio = Math.max(1, Math.round(sr / 16000));
-  const outRate = Math.floor(sr / ratio);
-  const len = Math.floor(ch.length / ratio);
-  const pcm = new Float32Array(len);
-  for (let i = 0; i < len; i++) { let s = 0; for (let j = 0; j < ratio; j++) s += ch[i * ratio + j] || 0; pcm[i] = s / ratio; }
-  const ns = 44 + pcm.length * 2, b = new DataView(new ArrayBuffer(ns));
-  const str = (o, x) => { for (let i = 0; i < x.length; i++) b.setUint8(o + i, x.charCodeAt(i)); };
-  str(0, 'RIFF'); b.setUint32(4, ns - 8, true); str(8, 'WAVE'); str(12, 'fmt ');
-  b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
-  b.setUint32(24, outRate, true); b.setUint32(28, outRate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true);
-  str(36, 'data'); b.setUint32(40, pcm.length * 2, true);
-  for (let i = 0; i < pcm.length; i++) b.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 32767, true);
-  return new Uint8Array(b.buffer);
+  try { buf = await acx.decodeAudioData(ab); } finally { try { await acx.close(); } catch {} }
+  // Transformers.js ASR expects raw Float32 PCM samples at 16 kHz, not WAV-file bytes.
+  // Passing a Uint8Array containing a WAV header can be interpreted as sample values and
+  // produce unrelated/hallucinated words, so decode and resample explicitly.
+  const channels = Math.max(1, Number(buf.numberOfChannels) || 1);
+  const mono = new Float32Array(buf.length);
+  if (!mono.length) return new Float32Array(0);
+  for (let channel = 0; channel < channels; channel++) {
+    const source = buf.getChannelData(channel);
+    for (let i = 0; i < source.length; i++) mono[i] += source[i] / channels;
+  }
+  const sourceRate = Number(buf.sampleRate) || 16000;
+  const targetRate = 16000;
+  if (sourceRate === targetRate) return mono;
+  const outLength = Math.max(1, Math.floor(mono.length * targetRate / sourceRate));
+  const pcm = new Float32Array(outLength);
+  const scale = sourceRate / targetRate;
+  for (let i = 0; i < outLength; i++) {
+    const position = i * scale;
+    const left = Math.min(mono.length - 1, Math.floor(position));
+    const right = Math.min(mono.length - 1, left + 1);
+    const fraction = position - left;
+    pcm[i] = mono[left] * (1 - fraction) + mono[right] * fraction;
+  }
+  return pcm;
 }
+
+function hasUsableSpeech(pcm) {
+  if (!(pcm instanceof Float32Array) || pcm.length < 4000) return false;
+  let energy = 0;
+  const stride = Math.max(1, Math.floor(pcm.length / 12000));
+  let count = 0;
+  for (let i = 0; i < pcm.length; i += stride) { energy += pcm[i] * pcm[i]; count++; }
+  return count > 0 && Math.sqrt(energy / count) >= 0.002;
+}
+
+async function transcribeLocalBlob(blob, locale = 'fa-IR', onStatus) {
+  if (!blob || blob.size < 2000) return '';
+  const model = localStorage.getItem('farast.whisper.model') || 'Xenova/whisper-base';
+  onStatus?.('آماده‌سازی Whisper محلی روی دستگاه…');
+  const whisper = await ensureWhisper(onStatus, model);
+  const pcm = await decodeToPcm16k(blob, onStatus);
+  if (!hasUsableSpeech(pcm)) return '';
+  const languages = {
+    'fa-IR': 'farsi', 'en-US': 'english', 'ar-SA': 'arabic',
+    'tr-TR': 'turkish', 'az-AZ': 'azerbaijani'
+  };
+  const output = await whisper(pcm, {
+    task: 'transcribe',
+    language: languages[locale],
+    chunk_length_s: 30,
+    stride_length_s: 5
+  });
+  return String(output?.text || '').trim();
+}
+
 async function startLocalWhisper(ctx) {
   if (!hasMic()) throw new Error('امکان ضبط صدا در این مرورگر/سیستم وجود ندارد.');
   // Local-first: speech is transcribed on this device. Do not silently upload microphone audio.
@@ -305,8 +345,10 @@ async function startLocalWhisper(ctx) {
     ctx.onStatus('پردازش محلی (Whisper)…');
     inflight = inflight.then(async () => {
       try {
-        const wav = await decodeToWav(blob, ctx.onStatus);
-        const out = await whisper(wav, { task: 'transcribe', language: ctx.lang().startsWith('fa') ? 'farsi' : undefined, chunk_length_s: 10, stride_length_s: 5 });
+        const pcm = await decodeToPcm16k(blob, ctx.onStatus);
+        if (!hasUsableSpeech(pcm)) return;
+        const languages = { 'fa-IR': 'farsi', 'en-US': 'english', 'ar-SA': 'arabic', 'tr-TR': 'turkish', 'az-AZ': 'azerbaijani' };
+        const out = await whisper(pcm, { task: 'transcribe', language: languages[ctx.lang()], chunk_length_s: 10, stride_length_s: 5 });
         const text = String(out?.text || '').trim();
         if (text) {
           clearInterim();
@@ -371,12 +413,12 @@ function engines() {
   return list;
 }
 window.FarastVoiceHub = {
-  version: '1.3.0',
+  version: '1.4.0',
   hasNative: () => !!SR,
   isAuthed, hasMic, engines,
   processFinalText, insertIntoDoc, showInterim, clearInterim, sweepInterim, surfaceEl, hideInterimSel,
   ocr: { ocrImage, guessHandwritten, ensureTesseract },
-  localWhisper: { ensureWhisper, start: startLocalWhisper },
+  localWhisper: { ensureWhisper, start: startLocalWhisper, transcribe: transcribeLocalBlob },
 };
 
 /* ---------- کش وضعیت موتور ابری (از /editor/voice/status) ----------
