@@ -1,17 +1,8 @@
-/* FARAST · Voice Hub (معماری چندلایهٔ تایپ صوتی — رایگان، همهٔ مرورگرها)
- * ============================================================
- * لایه‌ها به ترتیب اولویت:
- *  ۱) موتور بومی مرورگر (Web Speech API) — رایگان، بدون سرور (Chrome/Edge/Safari/Opera/Samsung)
- *     عین الگوی persian-docs-editor.html (نمونهٔ مورد نظر کاربر): continuous + interim،
- *     قطع نشدن با ویرایش دستی، بازآغاز خودکار در صورت end زودهنگام.
- *  ۲) موتور ابری فراست (WebSocket → /editor/voice/stream-token یا HTTP تکه‌ای → /editor/voice/transcribe)
- *     برای Firefox و هر مرورگر بدون SR — همان موتور Google/Gemini سایت.
- *  ۳) OCR رایگان handwriting: Tesseract.js (محلی در مرورگر، fa+eng) — فایل/تصویر دست‌نویس
- *  ۴) فالبک نهایی: ضبط صدا و تبدیل گفتار به متن با Whisper محلی (transformers.js + whisper)
- *     روی دستگاه کاربر — کاملاً رایگان، بدون کلید API؛ در صورت نبود CDN آفلاین،
- *     راهنمای نصب محلی نمایش داده می‌شود.
- * تشخیص خودکار: اگر موتور ۱ موجود نبود، پنل به‌جای پیام «پشتیبانی نمی‌شود»،
- * مسیر جایگزین را خودش فعال می‌کند. هستهٔ سند از طریق window.FarastEditor دستکاری می‌شود.
+/* FARAST · Voice Hub
+ * Local Whisper is the default speech path. Quantized ONNX model weights are downloaded
+ * once per browser origin and cached by Transformers.js; inference runs on the user's device.
+ * Cloud/native speech engines are explicit opt-in fallbacks. OCR remains local via Tesseract.
+ * The shared local ASR API is also used by the global voice conversation UI.
  */
 (() => {
 'use strict';
@@ -279,6 +270,7 @@ async function decodeToPcm16k(audioBlob, onStatus) {
   // produce unrelated/hallucinated words, so decode and resample explicitly.
   const channels = Math.max(1, Number(buf.numberOfChannels) || 1);
   const mono = new Float32Array(buf.length);
+  if (!mono.length) return new Float32Array(0);
   for (let channel = 0; channel < channels; channel++) {
     const source = buf.getChannelData(channel);
     for (let i = 0; i < source.length; i++) mono[i] += source[i] / channels;
