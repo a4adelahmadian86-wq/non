@@ -1,7 +1,7 @@
 /* FARAST · Voice Hub (تایپ صوتی با پردازش سمت سرور)
  * ============================================================
  * ۱) Web Speech API بومی مرورگر فقط در صورت پشتیبانی مرورگر (سرویس/مدل آن تحت کنترل FARAST نیست).
- * ۲) موتور ابری فراست: WebSocket یا HTTP به API سمت سرور.
+ * ۲) موتور ابری فراست: HTTP به API احراز هویت‌شدهٔ سمت سرور.
  * ۳) هیچ مدل اختصاصی گفتار/OCR یا وزن مدل هوش مصنوعی روی دستگاه کاربر دانلود نمی‌شود.
  *    مصرف CPU/RAM محدود به رابط کاربری، ضبط و پردازش معمول مرورگر است.
  * OCR باید از API سمت سرور ارائه شود؛ تا زمان آماده شدن endpoint، مسیر محلی غیرفعال است.
@@ -135,7 +135,7 @@ function sweepInterim(root) {
 }
 
 /* ---------- وضعیت موتورهای قابل استفاده ---------- */
-/* Browser-native SpeechRecognition is intentionally disabled. Some browsers can download
+/* Browser-managed local speech recognition is intentionally disabled. Some browsers can download
  * language packs when local processing is requested; FARAST uses server-side inference only. */
 const SR = null;
 function isAuthed() { return $('#farastWord')?.dataset.authenticated === '1'; }
@@ -161,7 +161,7 @@ function guessHandwritten(file) {
 
 function engines() {
   const list = [];
-  // موتور ابری سایت در هر مرورگری کار می‌کند (WebSocket یا HTTP تکه‌ای) — فقط نیازمند ورود به حساب
+  // موتور گفتار سمت سرور در مرورگرهای دارای ضبط صدا کار می‌کند — فقط نیازمند ورود به حساب
   if (isAuthed() && hasMic()) list.push({ id: 'cloud', label: 'موتور ابری فراست (بدون محدودیت مرورگر)' });
   // مدل‌های گفتار روی دستگاه بازدیدکننده دانلود نمی‌شوند؛ گفتار باید از API سمت سرور پردازش شود.
   list.push({ id: 'stt-api', label: 'اتصال به سرویس تبدیل گفتار دلخواه' });
@@ -243,8 +243,8 @@ async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
 
   // Accuracy-first fallback: keep ONE continuous MediaRecorder session and transcribe the
   // complete recording on stop. Independent 4-second files lose linguistic context and can
-  // cause Whisper/ASR to hallucinate unrelated Persian words. The server-side WebSocket is the live mode;
-  // this HTTP fallback intentionally commits text after Stop. Browser-native speech recognition is disabled.
+  // cause Whisper/ASR to hallucinate unrelated Persian words. This HTTP path commits text after Stop;
+  // the browser only captures/encodes audio, and the server runs inference.
   const pickMime = () => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
     .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
   const sessionRequestId = globalThis.crypto?.randomUUID?.()
