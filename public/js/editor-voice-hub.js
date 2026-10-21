@@ -193,10 +193,7 @@ async function cloudStatus(force = false) {
 window.FarastVoiceHub.cloudStatus = cloudStatus;
 
 /* ===================== موتور ابری فراست (فايرفاکس و بقیه) =====================
- * دو مسیر، هر دو روی سرور خود سایت (رایگان برای شما تا سهمیهٔ سرویس‌های ابری):
- *  الف) استریم زندهٔ WebSocket (اگر گیتوی VOICE_STREAM_URL بالا باشد) — interim زنده
- *  ب) Fallback خودکار: ضبط قطعه‌ها با MediaRecorder → /editor/voice/transcribe (همان موتور Google/Gemini سایت)
- * اگر Runtime اصلی در دسترس باشد، همان باز می‌شود (بدون تکرار پیاده‌سازی). */
+ * تنها مسیر تشخیص گفتار، API احراز هویت‌شدهٔ سمت سرور است. مدل یا بستهٔ زبان روی مرورگر دانلود نمی‌شود. */
 /* ---------- شناسایی خطای سطح‌بالای موتور ابری برای پیام دقیق به کاربر ---------- */
 function cloudErrorKind(status, body) {
   const msg = String(body?.message || '').toLowerCase();
@@ -207,96 +204,37 @@ function cloudErrorKind(status, body) {
 }
 
 async function startCloud(ctx) {
-  /* موتور ابری فراست (WebSocket/تکه‌ای روی سرور خود سایت) در همهٔ مرورگرها کار می‌کند.
-     اگر Runtime قدیمی باز بود، بسته می‌شود تا پنل گوگل‌داكسی تنها رابط فعال بماند. */
   try { if (window.FarastVoiceRuntime?.isOpen?.()) window.FarastVoiceRuntime.close(); } catch {}
   const csrf = $('meta[name="csrf-token"]')?.content || '';
   const app = $('#farastWord');
-  if (!app || app.dataset.authenticated !== '1') throw new Error('برای موتور ابری وارد حساب شوید.');
-  /* پیش‌بررسی با /editor/voice/status: اگر سرور اصلاً برای صوت پیکربندی نشده باشد، بی‌درنگ و صادقانه
-   * خطای «پیکربندی» می‌دهیم (نه پیام مبهم «ارتباط برقرار نشد»). اگر آماده باشد، مسیر توکن/استریم امتحان می‌شود. */
+  if (!app || app.dataset.authenticated !== '1') {
+    throw Object.assign(new Error('برای تایپ صوتی سروری ابتدا وارد حساب شوید.'), { fatal: true, code: 'auth' });
+  }
+
   let statusInfo = null;
   try {
     statusInfo = await cloudStatus();
-    if (statusInfo && statusInfo.mode === 'none') {
-      const message = statusInfo.reason === 'auth'
-        ? 'برای تایپ صوتی، ابتدا وارد حساب خود شوید.'
-        : statusInfo.reason === 'self_hosted_token_missing'
-          ? 'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید. فالبک مرورگر و مدل محلی برای این مسیر غیرفعال است.'
-          : 'موتور گفتار روی این سرور هنوز پیکربندی نشده است.';
-      throw Object.assign(new Error(message), { fatal: true, code: 'server_not_configured' });
-    }
-  } catch (e) {
-    if (e?.fatal) throw e;
-    statusInfo = null; // endpoint در نسخهٔ قدیمی سرور وجود ندارد — مثل قبل رفتار کن
+  } catch {}
+  if (!statusInfo) {
+    throw Object.assign(new Error('وضعیت موتور گفتار سمت سرور قابل بررسی نیست؛ اتصال سرویس را بررسی کنید.'), { fatal: true, code: 'server_status_unavailable' });
   }
-  /* حالت تکه‌ای مطمئن‌ترین مسیر است؛ اگر وضعیت گفت gateway زنده نیست، مستقیم به تکه‌ای برو. */
-  if (statusInfo && statusInfo.chunked && !statusInfo.gateway) {
-    ctx.onStatus(statusInfo.self_hosted ? 'موتور گفتار خودمیزبان فعال شد…' : 'حالت تکه‌ای ابری فعال شد…');
+  if (statusInfo.mode === 'none') {
+    const message = statusInfo.reason === 'gateway_token_missing'
+      ? 'توکن درگاه مرکزی هوش مصنوعی در سرور تنظیم نشده است.'
+      : statusInfo.reason === 'self_hosted_token_missing'
+        ? 'توکن موتور گفتار سمت سرور تنظیم نشده است.'
+        : 'موتور گفتار سمت سرور هنوز پیکربندی نشده است.';
+    throw Object.assign(new Error(message), { fatal: true, code: 'server_not_configured' });
+  }
+  if (statusInfo.chunked) {
+    ctx.onStatus(statusInfo.self_hosted ? 'موتور گفتار خودمیزبان فعال شد…' : 'موتور گفتار سمت سرور فعال شد…');
     return await startCloudChunks(ctx, csrf, statusInfo.self_hosted ? 'self-hosted-unavailable' : 'gateway-unavailable', !!statusInfo.self_hosted);
   }
-  let preflightErr = null;
-  try {
-    const pr = await fetch('/editor/voice/stream-token', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ locale: ctx.lang() }) });
-    const pj = await pr.json().catch(() => ({}));
-    if (!pr.ok || !pj.token) {
-      const kind = cloudErrorKind(pr.status, pj);
-      if (kind !== 'server') {
-        const friendly = { auth: 'برای تایپ صوتی ابری، ابتدا وارد حساب خود شوید.', quota: 'این حساب فعلاً اجازهٔ تایپ صوتی ابری ندارد (سهمیه/پلن). لطفاً وضعیت موتور ابری را بررسی کنید یا بعداً دوباره تلاش کنید.', rate: 'چند لحظه صبر کنید؛ محدودیت تعداد درخواست صوت فعال شده است.' }[kind];
-        throw Object.assign(new Error(friendly), { fatal: true });
-      }
-      preflightErr = pj.message || 'gateway-down';
-    }
-  } catch (e) {
-    if (e?.fatal) throw e;
-    preflightErr = e?.message || 'network'; // شبکه/سرور — باز هم حالت تکه‌ای را امتحان می‌کنیم
-  }
-  try {
-    if (preflightErr) throw new Error(preflightErr); // مستقیم به تکه‌ای
-    return await startCloudStream(ctx, csrf);
-  } catch (e) {
-    if (e?.fatal) throw e;
-    // گیتوی در دسترس نیست؟ مسیر HTTP chunked را امتحان کن (همیشه کار می‌کند)
-    ctx.onStatus('اتصال زندهٔ وب‌سوکت در دسترس نبود؛ حالت تکه‌ای فعال شد…');
-    return await startCloudChunks(ctx, csrf, e?.message || '');
-  }
-}
-async function startCloudStream(ctx, csrf) {
-  ctx.onStatus('در حال اتصال به موتور ابری…');
-  const r = await fetch('/editor/voice/stream-token', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ locale: ctx.lang() }) });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok || !data.token) throw new Error(data.message || 'توکن تایپ صوتی دریافت نشد.');
-  const wsUrl = String(data.websocket_url || '').replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
-  const ws = new WebSocket(`${wsUrl}?v=1`); ws.binaryType = 'arraybuffer';
-  let media = null, ac = null, worklet = null, closed = false;
-  const cleanup = () => { closed = true; try { ws.close(); } catch {} try { worklet?.disconnect(); } catch {} try { ac?.close(); } catch {} media?.getTracks().forEach(t => { try { t.stop(); } catch {} }); ctx.onStopped(); };
-  ws.onopen = async () => {
-    try {
-      ws.send(JSON.stringify({ type: 'start', token: data.token, locale: ctx.lang(), sequence: 0 }));
-      media = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
-      ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive', sampleRate: 48000 });
-      await ac.audioWorklet.addModule('/js/farast-voice-worklet.js');
-      const src = ac.createMediaStreamSource(media);
-      worklet = new AudioWorkletNode(ac, 'farast-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 0 });
-      worklet.port.onmessage = e => { if (ws.readyState === WebSocket.OPEN && !closed) { const b = new Uint8Array(e.data); if (b.byteLength > 24000) { for (let i = 0; i < b.byteLength; i += 24000) ws.send(b.slice(i, Math.min(i + 24000, b.byteLength))); } else ws.send(b); } };
-      src.connect(worklet);
-      if (ac.state === 'suspended') await ac.resume();
-      ctx.onStatus('در حال گوش دادن (ابر)…'); ctx.onLive(true);
-    } catch (e) { ctx.onError(e.message || 'میکروفن قابل شروع نیست.'); cleanup(); }
-  };
-  ws.onmessage = e => {
-    let m; try { m = JSON.parse(e.data); } catch { return; }
-    if (m.type === 'interim') ctx.onInterim(m.text || '');
-    else if (m.type === 'final') ctx.onFinal(m.text || '');
-    else if (m.type === 'error') { ctx.onError(m.message || 'خطای موتور'); cleanup(); }
-  };
-  ws.onerror = () => ctx.onError('ارتباط با موتور ابری برقرار نشد.');
-  ws.onclose = () => { if (!closed) cleanup(); };
-  return { stop: cleanup, mode: 'cloud' };
+  throw Object.assign(new Error('این سرور مسیر گفتار موردنیاز را فعال نکرده است.'), { fatal: true, code: 'server_mode_unsupported' });
 }
 
-/* ---------- حالت تکه‌ای ابری (Firefox و هر مرورگر بدون وب‌سوکت/گیتوی) ----------
- * ضبط قطعه‌قطعه با MediaRecorder، ارسال هر قطعه به /editor/voice/transcribe (موتور Google/Gemini خود سایت).
+/* ---------- ضبط مرورگر و تشخیص گفتار سمت سرور ----------
+ * MediaRecorder فقط صدا را ضبط می‌کند؛ مدل تشخیص گفتار روی سرور اجرا می‌شود.
  * حلقه بی‌وقفه: همزمان که قطعهٔ n در سرور پردازش می‌شود، قطعهٔ n+1 در حال ضبط است. */
 async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
