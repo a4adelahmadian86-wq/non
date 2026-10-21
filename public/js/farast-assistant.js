@@ -359,6 +359,7 @@
       else {var answer=String(data.reply||data.text||data.message||'پاسخی دریافت نشد.');pending.textContent='';history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);voiceTitle.textContent='پاسخ فراست';voiceCaption.textContent='در حال پخش پاسخ صوتی…';status.textContent='در حال پخش پاسخ صوتی…';say(answer);}
     }catch(e){
       if(turn!==assistantTurn)return;
+      if(streamController){try{streamController.abort();}catch(err){}}
       if(streamState)cancelStreamingSpeech(streamState);
       var spokenError='متأسفم، در حال حاضر نمی‌توانم پاسخ را از سرویس هوش مصنوعی دریافت کنم. لطفاً بعداً دوباره تلاش کن.';
       pending.textContent='';voiceTitle.textContent='پاسخ‌گویی موقتاً در دسترس نیست';voiceCaption.textContent=spokenError;status.textContent='اتصال به سرویس پاسخ‌گویی ناموفق بود.';say(spokenError);
