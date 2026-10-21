@@ -994,33 +994,27 @@ document.body.appendChild(vbox);
 $('#fdMicBtn').innerHTML = MIC_SVG;
 if ($('#source')) $('#source').setAttribute('accept', 'image/*,.pdf,.zip,.docx,.txt,.md,.html');
 
-let engineMode = 'auto';           // auto | native | cloud | stt-api
-let activeHandle = null;           // {stop(), mode}
-let rec = null, lastStart = 0, fastEnds = 0;
+let engineMode = localStorage.getItem('farast.voice.engine') || 'auto';
+let activeHandle = null;
+
+if (!['auto', 'cloud', 'stt-api'].includes(engineMode)) {
+  engineMode = 'auto';
+  localStorage.setItem('farast.voice.engine', 'auto');
+}
 
 function engineLabel() {
   const el = $('#fdVEngine'); if (!el) return;
-  const names = { native: 'موتور بومی مرورگر · رایگان', cloud: 'موتور ابری فراست · زنده', 'cloud-chunks': 'موتور ابری فراست · تکه‌ای', 'local-whisper': 'Whisper محلی روی دستگاه · رایگان', 'stt-api': 'سرویس تبدیل گفتار شما', runtime: 'پنل حرفه‌ای فراست' };
+  const names = { cloud: 'موتور سروری فراست', 'cloud-chunks': 'موتور سروری فراست · تکه‌ای', 'stt-api': 'سرویس تبدیل گفتار شخصی', runtime: 'پنل حرفه‌ای فراست' };
   el.textContent = 'موتور: ' + (names[activeHandle?.mode || currentEngineId()] || '—');
 }
 function currentEngineId() {
-  if (engineMode !== 'auto') return engineMode;
-  return hub()?.hasMic?.() ? 'local-whisper' : (hub()?.hasNative?.() ? 'native' : 'stt-api');
-}
-/* ---------- موتور Whisper محلی روی دستگاه (رایگان، بدون کلید API) — فالبک مطمئن ---------- */
-async function startLocalWhisperEngine(ctx) {
-  const h = await hub()?.localWhisper?.start?.(ctx); // handle برمی‌گرداند؛ خطاها را به ctx گزارش می‌کند
-  if (!h) return false;
-  wantListen = true; activeHandle = h;
-  return true;
+  return engineMode === 'stt-api' ? 'stt-api' : 'cloud';
 }
 function pickEngineInteractive() {
   const opts = [
-    ['auto', 'خودکار (توصیه می‌شود)'],
-    ['native', 'موتور بومی مرورگر' + (hub()?.hasNative?.() ? '' : ' — در این مرورگر موجود نیست؛ خودکار از لایهٔ بعدی استفاده می‌شود')],
-    ['cloud', 'موتور ابری فراست' + (hub()?.isAuthed?.() ? '' : ' — نیازمند ورود به حساب')],
-    ['local-whisper', 'Whisper محلی روی دستگاه (رایگان، بدون سرور)'],
-    ['stt-api', 'سرویس تبدیل گفتار شخصی (Whisper سرور و…)'],
+    ['auto', 'خودکار (پردازش سمت سرور فراست)'],
+    ['cloud', 'موتور سروری فراست' + (hub()?.isAuthed?.() ? '' : ' — نیازمند ورود به حساب')],
+    ['stt-api', 'سرویس تبدیل گفتار شخصی'],
   ];
   const list = document.createElement('div'); list.className = 'fd-list';
   opts.forEach(([id, label]) => {
@@ -1028,39 +1022,13 @@ function pickEngineInteractive() {
     b.onclick = () => { engineMode = id; localStorage.setItem('farast.voice.engine', id); closePop(); stopVoice(); engineLabel(); toast('موتور تغییر کرد: ' + label); };
     list.appendChild(b);
   });
-  const modelRow = document.createElement('div'); modelRow.className = 'fd-row';
-  const modelLabel = document.createElement('label'); modelLabel.textContent = 'مدل محلی';
-  const modelSelect = document.createElement('select');
-  modelSelect.setAttribute('aria-label', 'مدل محلی تشخیص گفتار');
-  modelSelect.style.flex = '1'; modelSelect.style.minWidth = '0';
-  [
-    ['Xenova/whisper-base', 'متعادل — دانلود سبک‌تر'],
-    ['Xenova/whisper-small', 'دقت بالاتر — دانلود و پردازش سنگین‌تر']
-  ].forEach(([value, label]) => {
-    const option = document.createElement('option'); option.value = value; option.textContent = label;
-    modelSelect.appendChild(option);
-  });
-  modelSelect.value = localStorage.getItem('farast.whisper.model') || 'Xenova/whisper-base';
-  modelSelect.onchange = () => {
-    localStorage.setItem('farast.whisper.model', modelSelect.value);
-    toast('مدل برای شروع بعدی انتخاب شد؛ دانلود و اجرا روی همین دستگاه انجام می‌شود.');
-  };
-  modelRow.append(modelLabel, modelSelect);
   const ep = document.createElement('div'); ep.className = 'fd-row';
-  const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'نشانی سرویس STT (اختیاری)'; inp.value = localStorage.getItem('farast.stt.endpoint') || ''; inp.dir = 'ltr'; inp.style.flex = '1';
+  const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'نشانی سرویس STT شخصی (اختیاری)'; inp.value = localStorage.getItem('farast.stt.endpoint') || ''; inp.dir = 'ltr'; inp.style.flex = '1';
   inp.onchange = () => localStorage.setItem('farast.stt.endpoint', inp.value.trim());
   ep.appendChild(inp);
-  const wrap = document.createElement('div'); wrap.append(list, modelRow, ep);
+  const wrap = document.createElement('div'); wrap.className = 'fd-list-wrap'; wrap.append(list, ep);
   showPop($('#fdVEngineBtn'), wrap);
 }
-engineMode = localStorage.getItem('farast.voice.engine') || 'auto';
-// Migrate the former cloud-first default to local-first so old browser preferences do not
-// keep sending microphone audio to the server after this privacy-oriented change.
-if (engineMode === 'cloud') {
-  engineMode = 'auto';
-  localStorage.setItem('farast.voice.engine', 'auto');
-}
-
 function toggleVoicePanel() {
   const show = !vbox.classList.contains('show');
   vbox.classList.toggle('show', show);
@@ -1068,14 +1036,9 @@ function toggleVoicePanel() {
   $('#fdVEngineBtn').hidden = !show;
   engineLabel();
   if (show) {
-    // راهنمای صادقانهٔ چندلایه: هیچ‌وقت بن‌بست «فقط Chrome» — همیشه حداقل یک مسیر رایگان هست
-    if (!hub()?.hasNative?.()) {
-      $('#fdVMsg').textContent = hub()?.hasMic?.()
-        ? 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی روی دستگاه شما اجرا می‌شود و مدل پس از دانلود در کش مرورگر می‌ماند.'
-        : (hub()?.isAuthed?.()
-          ? 'Whisper محلی در دسترس نیست؛ برای استفاده از موتور ابری باید آن را دستی از «تغییر موتور» انتخاب کنید.'
-          : 'میکروفون در این محیط در دسترس نیست. سایت را با HTTPS باز کنید و اجازهٔ میکروفون بدهید.');
-    } else $('#fdVMsg').textContent = 'برای شروع کلیک کنید';
+    $('#fdVMsg').textContent = hub()?.isAuthed?.()
+      ? 'صدا از مسیر سرویس سمت سرور فراست پردازش می‌شود؛ مدل هوش مصنوعی روی دستگاه بارگیری نمی‌شود.'
+      : 'برای تایپ صوتی سروری وارد حساب شوید. هیچ مدل هوش مصنوعی روی دستگاه دانلود نمی‌شود.';
   }
   if (!show) stopVoice();
   syncToolStates();
@@ -1109,93 +1072,54 @@ function handleFinal(raw) {
   markDirty();
 }
 
-/* ---------- موتور بومی (Web Speech API) ---------- */
-function startNative() {
-  const SRn = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SRn) return false;
-  restoreSel(); hub()?.clearInterim?.(); // گرهٔ interim ممکن است در DOM مانده باشد؛ قبل از شروع تازه پاک شود
-  rec = new SRn(); rec.lang = $('#fdVLang').value; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
-  rec.onstart = () => { lastStart = Date.now(); voiceUI(true); };
-  rec.onresult = e => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const r = e.results[i];
-      if (r.isFinal) handleFinal(r[0].transcript); else interim += r[0].transcript;
-    }
-    hub()?.showInterim?.(interim);
-  };
-  rec.onerror = e => {
-    if (e.error === 'no-speech' || e.error === 'aborted') return;
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { wantListen = false; $('#fdVMsg').textContent = 'دسترسی به میکروفون مسدود است'; toast('اجازهٔ میکروفون را در مرورگر فعال کنید (سایت باید با https باز شود)'); }
-    else if (e.error === 'audio-capture') { wantListen = false; toast('میکروفونی پیدا نشد'); }
-    else if (e.error === 'language-not-supported') { wantListen = false; toast('این زبان در مرورگر شما پشتیبانی نمی‌شود'); }
-    else if (e.error === 'network') { toast('برای تشخیص گفتار به اینترنت نیاز است'); }
-  };
-  rec.onend = () => {
-    hub()?.clearInterim?.();
-    if (wantListen) {
-      fastEnds = (Date.now() - lastStart < 500) ? fastEnds + 1 : 0;
-      if (fastEnds > 4) { wantListen = false; voiceUI(false); toast('تایپ صوتی متوقف شد'); return; }
-      try { rec.start(); } catch {}
-    } else voiceUI(false);
-  };
-  wantListen = true; fastEnds = 0;
-  try { rec.start(); } catch { wantListen = false; return false; }
-  activeHandle = { mode: 'native', stop: () => { wantListen = false; try { rec.stop(); } catch {} } };
-  return true;
-}
-
-/* ---------- شروع/توقف عمومی (انتخاب لایه) ---------- */
-const ENGINE_NAMES = { native: 'موتور بومی مرورگر', cloud: 'موتور ابری فراست', 'local-whisper': 'Whisper محلی روی دستگاه', 'stt-api': 'سرویس تبدیل گفتار شما' };
+/* ---------- شروع/توقف عمومی؛ تشخیص گفتار فقط سمت سرور ---------- */
+const ENGINE_NAMES = { cloud: 'موتور سروری فراست', 'stt-api': 'سرویس تبدیل گفتار شخصی' };
 async function startVoice() {
   if (wantListen || activeHandle) return;
   const ctx = hubCtx();
-  // Local inference is the default on every browser. Cloud/native services are opt-in
-  // because they may send audio off-device and are not guaranteed to be free/private.
-  let prefer;
-  if (engineMode !== 'auto') prefer = engineMode;
-  else prefer = hub()?.hasMic?.() ? 'local-whisper' : (hub()?.hasNative?.() ? 'native' : 'stt-api');
-  const chains = {
-    native: ['native'],
-    cloud: ['cloud'],
-    'local-whisper': ['local-whisper'],
-    'stt-api': ['stt-api'],
-  };
-  const order = chains[prefer] || chains.native;
+  const prefer = engineMode === 'stt-api' ? 'stt-api' : 'cloud';
+  const order = prefer === 'stt-api' ? ['stt-api'] : ['cloud'];
   let lastErr = '';
   for (const id of order) {
     try {
-      if (id === 'native') { if (startNative()) { engineLabel(); return; } continue; }
       if (id === 'cloud') {
-        if (!hub()?.isAuthed?.()) continue;
+        if (!hub()?.isAuthed?.()) {
+          lastErr = 'برای موتور سروری فراست ابتدا وارد حساب شوید.';
+          continue;
+        }
+        if (!hub()?.hasMic?.()) {
+          lastErr = 'دسترسی میکروفون در دسترس نیست؛ سایت را با HTTPS باز کنید و اجازهٔ میکروفون بدهید.';
+          continue;
+        }
         const h = await hub()?.startCloud?.(ctx);
-        if (h) { wantListen = true; activeHandle = h.mode === 'runtime' ? { mode: 'runtime', stop: () => {} } : h; engineLabel(); return; }
-      }
-      if (id === 'local-whisper') {
-        if (!hub()?.hasMic?.()) continue;
-        ctx.onStatus('فعال‌سازی Whisper محلی (بارگذاری یک‌بارهٔ مدل رایگان)…');
-        if (await startLocalWhisperEngine(ctx)) { engineLabel(); return; }
+        if (h) {
+          wantListen = true;
+          activeHandle = h.mode === 'runtime' ? { mode: 'runtime', stop: () => {} } : h;
+          engineLabel();
+          return;
+        }
       }
       if (id === 'stt-api') {
-        if (!localStorage.getItem('farast.stt.endpoint')) continue; // سرویس شخصی تنظیم نشده — رد شو
+        if (!localStorage.getItem('farast.stt.endpoint')) {
+          lastErr = 'نشانی سرویس STT شخصی را از «تغییر موتور» وارد کنید.';
+          continue;
+        }
         const h = await hub()?.startSttEndpoint?.(ctx);
         if (h) { wantListen = true; activeHandle = h; engineLabel(); return; }
       }
     } catch (err) {
       lastErr = err?.message || '';
-      if (id === 'cloud' && err?.code === 'server_not_configured') continue; // ابری آماده نیست → لایهٔ بعدی بی‌صدا
-      if (id === order[order.length - 1]) { ctx.onError(lastErr || 'هیچ موتور تایپ صوتی در دسترس نبود'); wantListen = false; voiceUI(false); }
+      if (id === order[order.length - 1]) {
+        ctx.onError(lastErr || 'سرویس گفتار سمت سرور در دسترس نیست');
+        wantListen = false;
+        voiceUI(false);
+      }
     }
   }
-  /* هیچ موتوری فعال نشد → پیام راهنمای واقعی (به‌جای جملهٔ مبهم «موتوری در دسترس نبود») */
-  wantListen = false; voiceUI(false);
-  const msgs = [];
-  if (order.includes('cloud') && !hub()?.isAuthed?.()) msgs.push('برای موتور ابری فراست ابتدا وارد حساب شوید.');
-  if (order.includes('native') && !hub()?.hasNative?.()) msgs.push('این مرورگر موتور بومی ندارد (در Chrome/Edge یا با افزودهٔ SpeechRecognition فایرفاکس فعال می‌شود).');
-  if (!hub()?.hasMic?.()) msgs.push('دسترسی میکروفون ندارید — سایت را با HTTPS باز کنید و اجازهٔ میکروفون بدهید (یا روی لوکال از Chrome استفاده کنید).');
-  else msgs.push('موتور جایگزین فعال نشد: ' + (lastErr || 'خطای ناشناخته') + ' — از «تغییر موتور» حالت دیگری انتخاب کنید.');
-  $('#fdVMsg').textContent = msgs.join(' ');
-  toast(msgs[0]);
+  wantListen = false;
+  voiceUI(false);
+  $('#fdVMsg').textContent = lastErr || 'موتور گفتار سمت سرور پیکربندی نشده است.';
+  toast($('#fdVMsg').textContent);
 }
 function stopVoice() {
   wantListen = false;
@@ -1216,7 +1140,7 @@ $('#fdVHelp').addEventListener('click', () => dialog('دستورهای صوتی 
   «<b>دو نقطه</b>» ← :<br>«<b>نقطه ویرگول</b>» ← ؛<br>«<b>سه نقطه</b>» ← …<br>
   «<b>خط جدید</b>» ← رفتن به خط بعد<br>«<b>پاراگراف جدید</b>» ← پاراگراف تازه<br>
   «<b>آخرین کلمه را پاک کن</b>» ← حذف کلمهٔ قبل<br>«<b>بازگردانی</b>» ← بازگردانی آخرین تغییر</p>
-  <p style="font-size:12px;color:#5f6368">میان‌بر باز و بسته کردن تایپ صوتی: Ctrl+Shift+S — در همهٔ مرورگرها، حالت خودکار ابتدا از Whisper محلی استفاده می‌کند؛ برای ارسال صدا به سرور، موتور ابری را دستی انتخاب کنید.</p>`, [{ label: 'بستن', primary: true }]));
+  <p style="font-size:12px;color:#5f6368">میان‌بر باز و بسته کردن تایپ صوتی: Ctrl+Shift+S — تشخیص گفتار از مسیر سرویس سمت سرور انجام می‌شود؛ مدل هوش مصنوعی یا بستهٔ زبان روی دستگاه نصب نمی‌شود.</p>`, [{ label: 'بستن', primary: true }]));
 
 /* ===================== رجیستری عمومی ابزارها (برای استفادهٔ مجدد در سایر اپ‌ها) ===================== */
 window.FarastDocsTools.registerAll = tools => (tools || []).forEach(t => window.FarastDocsTools.register(t));
