@@ -222,9 +222,9 @@ function guessHandwritten(file) {
 }
 
 /* ===================== فالبک نهاییِ گفتار: Whisper محلی (transformers.js) =====================
- * برای مرورگرهایی که Web Speech ندارند و موتور ابری هم در دسترس نیست (آفلاین/بدون حساب):
- * ضبط با MediaRecorder → دیکد به PCM با AudioContext.decodeAudioData → Whisper tiny/base روی WASM.
- * رایگان، بدون سرور، بدون کلید. مدل از HF Hub کش می‌شود (first run نیازمند اینترنت). */
+ * مسیر اصلیِ محلی: صدا روی دستگاه پردازش می‌شود؛ هیچ صوتی به‌طور خودکار به سرور ارسال نمی‌شود.
+ * ضبط‌های کوتاه و پی‌درپی، دیکد به PCM و اجرای Whisper quantized روی WASM.
+ * رایگان و بدون کلید؛ دانلود اولیه نیازمند اینترنت است و فایل‌ها در کش مرورگر نگه‌داری می‌شوند. */
 let whr = null, whrName = '';
 /* موتور Whisper محلی — فالبک نهایی. کتابخانهٔ transformers.js به‌صورت باندل IIFE با CDNهای
  * پشتیبانی‌نشده کار نمی‌کند (خطای dynamic import); لذا ESM از esm.sh بارگذاری و روی window.transformers
@@ -250,7 +250,7 @@ async function ensureWhisper(onStatus, model) {
   const tf = window.transformers || (await loadWhisperLib() ? window.transformers : null);
   if (!tf) throw new Error('کتابخانهٔ transformers.js از هیچ CDNای بارگذاری نشد (اینترنت/فیلتر شبکه را بررسی کنید).');
   if (whr && whrName === model) return whr;
-  onStatus?.('آماده‌سازی مدل گفتار روی دستگاه (بار اول، چند مگابایت…)');
+  onStatus?.('آماده‌سازی مدل گفتار روی دستگاه؛ دانلود اولیه ممکن است ده‌ها تا صدها مگابایت باشد…');
   /* تلاش با CDN هافینگ‌فیس؛ در شبکه‌های محدود، mirror داخلی (hf-mirror.com) امتحان می‌شود */
   try {
     whr = await tf.pipeline('automatic-speech-recognition', { model, quantized: true, device: 'wasm' });
@@ -293,22 +293,20 @@ async function decodeToWav(audioBlob, onStatus) {
 }
 async function startLocalWhisper(ctx) {
   if (!hasMic()) throw new Error('امکان ضبط صدا در این مرورگر/سیستم وجود ندارد.');
-  /* اگر موتور ابری فراست (سرور خود سایت) موجود است، اول آن — دقیق‌تر و سبک‌تر از Whisper محلی.
-     فقط وقتی ابری در دسترس نیست یا شکست خورد، Whisper محلی به‌عنوان فالبک رایگان فعال می‌شود. */
-  if (isAuthed()) {
-    try { ctx.onStatus('اتصال به موتور ابری فراست…'); return await startCloud(ctx); }
-    catch (e) { if (e?.fatal) throw e; ctx.onStatus('موتور ابری در دسترس نبود؛ انتقال به Whisper محلی…'); }
-  }
+  // Local-first: speech is transcribed on this device. Do not silently upload microphone audio.
+  // Transformers.js caches model files in the browser; subsequent sessions reuse that cache.
   const model = localStorage.getItem('farast.whisper.model') || 'Xenova/whisper-base';
+  ctx.onStatus('بارگذاری مدل Whisper روی دستگاه شما (فقط بار اول)…');
+  const whisper = await ensureWhisper(ctx.onStatus, model);
   let stopped = false, inflight = Promise.resolve(), lastFinal = '';
+  let activeStream = null, activeRecorder = null, activeRecordTimer = null;
   const transcribe = async blob => {
     if (!blob || blob.size < 3000) return;
     ctx.onStatus('پردازش محلی (Whisper)…');
     inflight = inflight.then(async () => {
       try {
         const wav = await decodeToWav(blob, ctx.onStatus);
-        const pipe = await ensureWhisper(ctx.onStatus, model);
-        const out = await pipe(wav, { task: 'transcribe', language: ctx.lang().startsWith('fa') ? 'farsi' : undefined, chunk_length_s: 10, stride_length_s: 5 });
+        const out = await whisper(wav, { task: 'transcribe', language: ctx.lang().startsWith('fa') ? 'farsi' : undefined, chunk_length_s: 10, stride_length_s: 5 });
         const text = String(out?.text || '').trim();
         if (text) {
           clearInterim();
@@ -324,13 +322,27 @@ async function startLocalWhisper(ctx) {
   const recordOnce = () => new Promise(resolve => {
     navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
       .then(media => {
+        if (stopped) { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
+        activeStream = media;
         const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
         const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
+        activeRecorder = rec;
         const chunks = [];
         rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-        rec.onstop = () => { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(new Blob(chunks, { type: mime || 'audio/webm' })); };
-        try { rec.start(1000); } catch { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
-        setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 4000);
+        rec.onstop = () => {
+          if (activeRecordTimer) { clearTimeout(activeRecordTimer); activeRecordTimer = null; }
+          media.getTracks().forEach(t => { try { t.stop(); } catch {} });
+          if (activeStream === media) activeStream = null;
+          if (activeRecorder === rec) activeRecorder = null;
+          resolve(new Blob(chunks, { type: mime || 'audio/webm' }));
+        };
+        try { rec.start(1000); } catch {
+          media.getTracks().forEach(t => { try { t.stop(); } catch {} });
+          if (activeStream === media) activeStream = null;
+          if (activeRecorder === rec) activeRecorder = null;
+          resolve(null); return;
+        }
+        activeRecordTimer = setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 5000);
       })
       .catch(err => { if (!stopped) ctx.onError('دسترسی به میکروفون ممکن نشد: ' + (err?.message || err?.name || '')); resolve(null); });
   });
@@ -338,7 +350,15 @@ async function startLocalWhisper(ctx) {
     ctx.onStatus('در حال گوش دادن (محلی)…'); ctx.onLive(true);
     while (!stopped) { const blob = await recordOnce(); if (stopped || !blob) break; transcribe(blob); }
   })();
-  return { stop: () => { stopped = true; ctx.onStopped(); }, mode: 'local-whisper' };
+  return { stop: () => {
+    stopped = true;
+    if (activeRecordTimer) { clearTimeout(activeRecordTimer); activeRecordTimer = null; }
+    try { if (activeRecorder && activeRecorder.state !== 'inactive') activeRecorder.stop(); } catch {}
+    try { activeStream?.getTracks?.().forEach(track => { try { track.stop(); } catch {} }); } catch {}
+    activeStream = null;
+    activeRecorder = null;
+    ctx.onStopped();
+  }, mode: 'local-whisper' };
 }
 
 function engines() {
