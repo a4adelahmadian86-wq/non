@@ -1,7 +1,7 @@
 <?php
 
 return [
-    // Central Runflare AI gateway. When configured, chat and voice inference are routed server-to-server through it.
+    // Central Runflare AI gateway. When configured, chat and voice inference are routed server-to-server through it; no provider credentials go to the browser.
     'ai_gateway' => [
         'url' => env('FARAST_AI_GATEWAY_URL', ''),
         'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
