@@ -26,11 +26,11 @@ test('Firefox cloud fallback records continuously and transcribes once on stop',
       }
       start() {
         this.state = 'recording';
-        this.ondataavailable?.({ data: new Blob(['first-continuous-audio-part'], { type: this.mimeType }) });
+        this.ondataavailable?.({ data: new Blob([new Array(2049).join('a')], { type: this.mimeType }) });
       }
       stop() {
         this.state = 'inactive';
-        this.ondataavailable?.({ data: new Blob(['second-continuous-audio-part'], { type: this.mimeType }) });
+        this.ondataavailable?.({ data: new Blob([new Array(2049).join('b')], { type: this.mimeType }) });
         this.onstop?.();
       }
     };
