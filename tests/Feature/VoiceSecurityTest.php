@@ -79,6 +79,24 @@ class VoiceSecurityTest extends TestCase
             ->assertDontSee('never-return-this');
     }
 
+    public function test_configured_runflare_gateway_is_preferred_for_voice(): void
+    {
+        Config::set('services.ai_gateway.url', 'https://runflare.example.test');
+        Config::set('services.ai_gateway.token', 'test-runflare-token');
+        Config::set('services.voice_asr.url', 'https://render.example.test/v1/transcribe');
+        Config::set('services.voice_asr.token', 'render-token');
+
+        $user = User::factory()->create();
+        $this->actingAs($user)->getJson('/editor/voice/status')
+            ->assertOk()
+            ->assertJsonPath('mode', 'chunked')
+            ->assertJsonPath('gateway', false)
+            ->assertJsonPath('self_hosted', false)
+            ->assertJsonPath('engines.0', 'runflare-gateway')
+            ->assertJsonMissingPath('credentials')
+            ->assertDontSee('test-runflare-token');
+    }
+
     public function test_provider_credentials_are_gateway_only(): void
     {
         Config::set('services.voice_stream.gateway_secret','test-gateway-secret');
