@@ -299,6 +299,7 @@ async function startLocalWhisper(ctx) {
   ctx.onStatus('بارگذاری مدل Whisper روی دستگاه شما (فقط بار اول)…');
   const whisper = await ensureWhisper(ctx.onStatus, model);
   let stopped = false, inflight = Promise.resolve(), lastFinal = '';
+  let activeStream = null, activeRecorder = null, activeRecordTimer = null;
   const transcribe = async blob => {
     if (!blob || blob.size < 3000) return;
     ctx.onStatus('پردازش محلی (Whisper)…');
@@ -321,13 +322,27 @@ async function startLocalWhisper(ctx) {
   const recordOnce = () => new Promise(resolve => {
     navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
       .then(media => {
+        if (stopped) { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
+        activeStream = media;
         const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
         const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
+        activeRecorder = rec;
         const chunks = [];
         rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-        rec.onstop = () => { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(new Blob(chunks, { type: mime || 'audio/webm' })); };
-        try { rec.start(1000); } catch { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
-        setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 5000);
+        rec.onstop = () => {
+          if (activeRecordTimer) { clearTimeout(activeRecordTimer); activeRecordTimer = null; }
+          media.getTracks().forEach(t => { try { t.stop(); } catch {} });
+          if (activeStream === media) activeStream = null;
+          if (activeRecorder === rec) activeRecorder = null;
+          resolve(new Blob(chunks, { type: mime || 'audio/webm' }));
+        };
+        try { rec.start(1000); } catch {
+          media.getTracks().forEach(t => { try { t.stop(); } catch {} });
+          if (activeStream === media) activeStream = null;
+          if (activeRecorder === rec) activeRecorder = null;
+          resolve(null); return;
+        }
+        activeRecordTimer = setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 5000);
       })
       .catch(err => { if (!stopped) ctx.onError('دسترسی به میکروفون ممکن نشد: ' + (err?.message || err?.name || '')); resolve(null); });
   });
@@ -335,7 +350,15 @@ async function startLocalWhisper(ctx) {
     ctx.onStatus('در حال گوش دادن (محلی)…'); ctx.onLive(true);
     while (!stopped) { const blob = await recordOnce(); if (stopped || !blob) break; transcribe(blob); }
   })();
-  return { stop: () => { stopped = true; ctx.onStopped(); }, mode: 'local-whisper' };
+  return { stop: () => {
+    stopped = true;
+    if (activeRecordTimer) { clearTimeout(activeRecordTimer); activeRecordTimer = null; }
+    try { if (activeRecorder && activeRecorder.state !== 'inactive') activeRecorder.stop(); } catch {}
+    try { activeStream?.getTracks?.().forEach(track => { try { track.stop(); } catch {} }); } catch {}
+    activeStream = null;
+    activeRecorder = null;
+    ctx.onStopped();
+  }, mode: 'local-whisper' };
 }
 
 function engines() {
