@@ -240,6 +240,7 @@ function getWhisperWorker() {
   };
   whisperWorker.onerror = event => {
     const error = new Error(event.message || 'کارگر محلی Whisper متوقف شد.');
+    whr = null; whrName = ''; whrLoad = null;
     whisperPending.forEach(pending => pending.reject(error));
     whisperPending.clear();
     whisperWorker = null;
@@ -413,7 +414,7 @@ function engines() {
   return list;
 }
 window.FarastVoiceHub = {
-  version: '1.3.0',
+  version: '1.4.0',
   hasNative: () => !!SR,
   isAuthed, hasMic, engines,
   processFinalText, insertIntoDoc, showInterim, clearInterim, sweepInterim, surfaceEl, hideInterimSel,
