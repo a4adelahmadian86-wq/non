@@ -25,9 +25,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
       - name: Check voice-related JavaScript syntax
         run: |
           node --check public/js/editor-voice-hub.js
           node --check public/js/farast-whisper-worker.js
           node --check public/js/farast-assistant.js
           node --check public/js/editor-docs-chrome.js
+      - name: Check voice streaming PHP syntax
+        run: |
+          php -l app/Http/Controllers/GlobalAssistantController.php
+          php -l routes/web_core_part1.php
