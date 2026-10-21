@@ -366,17 +366,16 @@ function engines() {
   if (SR) list.push({ id: 'native', label: 'موتور بومی مرورگر (رایگان)' });
   // موتور ابری سایت در هر مرورگری کار می‌کند (WebSocket یا HTTP تکه‌ای) — فقط نیازمند ورود به حساب
   if (isAuthed() && hasMic()) list.push({ id: 'cloud', label: 'موتور ابری فراست (بدون محدودیت مرورگر)' });
-  if (hasMic()) list.push({ id: 'local-whisper', label: 'فالبک محلی رایگان (Whisper روی دستگاه شما)' });
+  // مدل‌های گفتار روی دستگاه بازدیدکننده دانلود نمی‌شوند؛ گفتار باید از API سمت سرور پردازش شود.
   list.push({ id: 'stt-api', label: 'اتصال به سرویس تبدیل گفتار دلخواه' });
   return list;
 }
 window.FarastVoiceHub = {
-  version: '1.3.0',
+  version: '1.4.0',
   hasNative: () => !!SR,
   isAuthed, hasMic, engines,
   processFinalText, insertIntoDoc, showInterim, clearInterim, sweepInterim, surfaceEl, hideInterimSel,
   ocr: { ocrImage, guessHandwritten, ensureTesseract },
-  localWhisper: { ensureWhisper, start: startLocalWhisper },
 };
 
 /* ---------- کش وضعیت موتور ابری (از /editor/voice/status) ----------
