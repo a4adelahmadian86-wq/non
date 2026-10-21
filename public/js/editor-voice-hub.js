@@ -305,8 +305,8 @@ async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
 
   // Accuracy-first fallback: keep ONE continuous MediaRecorder session and transcribe the
   // complete recording on stop. Independent 4-second files lose linguistic context and can
-  // cause Whisper/ASR to hallucinate unrelated Persian words. Native browser SR/WebSocket
-  // remain the live modes; this HTTP fallback intentionally commits text after Stop.
+  // cause Whisper/ASR to hallucinate unrelated Persian words. The server-side WebSocket is the live mode;
+  // this HTTP fallback intentionally commits text after Stop. Browser-native speech recognition is disabled.
   const pickMime = () => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
     .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
   const sessionRequestId = globalThis.crypto?.randomUUID?.()
