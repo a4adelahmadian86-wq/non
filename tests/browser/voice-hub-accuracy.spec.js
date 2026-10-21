@@ -122,3 +122,16 @@ test('voice hub does not load browser-side AI model libraries or weights', async
   expect(source).not.toContain('createWorker(');
   expect(result.scriptRequests).toEqual([]);
 });
+
+
+test('FARAST voice workflow never invokes browser speech recognition or installs language packs', async ({ page }) => {
+  const voiceSource = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-voice.js'), 'utf8');
+  const hubSource = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
+  expect(voiceSource).not.toContain('SpeechRecognition');
+  expect(voiceSource).not.toContain('processLocally');
+  expect(voiceSource).not.toMatch(/\\.install\\s*\\(/);
+  expect(voiceSource).not.toContain('شروع رایگان');
+  expect(hubSource).not.toContain('SpeechRecognition');
+  expect(hubSource).not.toContain('processLocally');
+  expect(hubSource).not.toMatch(/\\.install\\s*\\(/);
+});
