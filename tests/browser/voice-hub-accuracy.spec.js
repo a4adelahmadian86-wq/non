@@ -4,7 +4,7 @@ const path = require('path');
 
 test('Firefox cloud fallback records continuously and transcribes once on stop', async ({ page }) => {
   const source = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
-  await page.setContent('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>');
+  await page.setContent('<!doctype html><html><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body><div id="farastWord" data-authenticated="1"></div></body></html>');
   await page.addScriptTag({ content: `
     window.__getUserMediaCalls = 0;
     window.__recorderInstances = 0;
