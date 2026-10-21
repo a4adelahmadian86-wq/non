@@ -275,7 +275,7 @@ class GlobalAssistantController extends Controller
                             'status' => $gatewayResponse->status(),
                             'fallback' => 'groq',
                         ]);
-                    } catch (\\Throwable $gatewayException) {
+                    } catch (\Throwable $gatewayException) {
                         Log::warning('farast.global_assistant_gateway_exception', [
                             'user_id' => $user->id,
                             'error_class' => class_basename($gatewayException),
