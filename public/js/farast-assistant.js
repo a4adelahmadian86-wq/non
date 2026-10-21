@@ -403,7 +403,7 @@
         for(var i=0;i<samples.length;i++){var value=(samples[i]-128)/128;energy+=value*value;}
         var rms=Math.sqrt(energy/samples.length),now=Date.now();
         if(rms>0.015){if(!speechAt)speechAt=now;lastVoiceAt=now;}
-        if(speechAt&&now-speechAt>=500&&now-lastVoiceAt>=1200){
+        if(speechAt&&now-speechAt>=500&&now-lastVoiceAt>=1500){
           status.textContent='مکث تشخیص داده شد؛ گفتار را پردازش می‌کنم…';
           try{recorder.stop();}catch(e){}
           return;
@@ -414,7 +414,7 @@
           try{recorder.stop();}catch(e){}
           return;
         }
-        if(now-startedAt>=25000){
+        if(now-startedAt>=45000){
           status.textContent='به حد زمان گفتار رسیدیم؛ در حال پردازش…';
           try{recorder.stop();}catch(e){}
           return;
@@ -491,9 +491,9 @@
       };
       mediaRecorder.start(250);
       startVadMonitor(mediaRecorder);
-      voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent=conversationActive?'گوش می‌دهم؛ بعد از حدود ۱٫۲ ثانیه مکث، گفتار خودکار پردازش می‌شود.':'گوش می‌دهم؛ بعد از مکث گفتار خودکار پردازش می‌شود.';
+      voiceTitle.textContent='گوش می‌دهم';panel.classList.add('is-listening');status.textContent=conversationActive?'گوش می‌دهم؛ بعد از حدود ۱٫۵ ثانیه مکث، گفتار خودکار پردازش می‌شود.':'گوش می‌دهم؛ بعد از مکث گفتار خودکار پردازش می‌شود.';
       root.querySelector('.farast-assistant-mic').classList.add('is-recording');
-      recordingTimeout=window.setTimeout(function(){if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();},25000);
+      recordingTimeout=window.setTimeout(function(){if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();},45000);
     }catch(e){stopMediaTracks();mediaRecorder=null;status.textContent='میکروفون در دسترس نیست؛ مجوز میکروفون و HTTPS سایت را بررسی کن.';voiceTitle.textContent='میکروفون در دسترس نیست';voiceCaption.textContent=status.textContent;}
   }
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
