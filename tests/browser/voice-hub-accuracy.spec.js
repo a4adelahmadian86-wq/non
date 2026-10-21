@@ -132,6 +132,8 @@ test('FARAST voice workflow never invokes browser speech recognition or installs
   expect(voiceSource).not.toMatch(/\.install\s*\(/);
   expect(voiceSource).not.toContain('شروع رایگان');
   expect(hubSource).not.toMatch(/window\.(webkit)?SpeechRecognition/);
+  expect(hubSource).not.toContain('/editor/voice/stream-token');
+  expect(hubSource).not.toMatch(/new\\s+WebSocket/);
   expect(hubSource).not.toContain('processLocally');
   expect(hubSource).not.toMatch(/\bSR\.install\s*\(/);
 });
