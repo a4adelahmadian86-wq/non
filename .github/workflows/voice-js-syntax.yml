@@ -1,0 +1,33 @@
+name: voice-js-syntax
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/editor-voice-hub.js'
+      - 'public/js/farast-whisper-worker.js'
+      - 'public/js/farast-assistant.js'
+      - 'public/js/editor-docs-chrome.js'
+      - '.github/workflows/voice-js-syntax.yml'
+  pull_request:
+    paths:
+      - 'public/js/editor-voice-hub.js'
+      - 'public/js/farast-whisper-worker.js'
+      - 'public/js/farast-assistant.js'
+      - 'public/js/editor-docs-chrome.js'
+      - '.github/workflows/voice-js-syntax.yml'
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check voice-related JavaScript syntax
+        run: |
+          node --check public/js/editor-voice-hub.js
+          node --check public/js/farast-whisper-worker.js
+          node --check public/js/farast-assistant.js
+          node --check public/js/editor-docs-chrome.js
