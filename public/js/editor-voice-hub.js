@@ -158,7 +158,7 @@ async function ocrImage() {
 }
 function guessHandwritten(file) {
   const n = (file?.name || '').toLowerCase();
-  return /^image\\//.test(file?.type || '') || /\\.(jpe?g|png|webp|heic|bmp|tiff?)$/.test(n) || /\\.pdf$/i.test(n);
+  return /^image\//.test(file?.type || '') || /\.(jpe?g|png|webp|heic|bmp|tiff?)$/.test(n) || /\.pdf$/i.test(n);
 }
 
 function engines() {
