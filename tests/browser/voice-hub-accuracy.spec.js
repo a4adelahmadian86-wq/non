@@ -56,7 +56,7 @@ test('Firefox cloud fallback records continuously and transcribes once on stop',
         status: 400, headers: { 'Content-Type': 'application/json' }
       });
     };
-  `);
+  ` });
   await page.addScriptTag({ content: source });
   await expect.poll(() => page.evaluate(() => typeof window.FarastVoiceHub?.startCloud)).toBe('function');
   await page.evaluate(async () => {
