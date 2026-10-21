@@ -376,11 +376,11 @@ class GlobalAssistantController extends Controller
                         if (is_string($delta)) $reply .= $delta;
                     }
                 };
-                while (! $body->eof()) {
+                while (! $body->eof() && ! connection_aborted()) {
                     $chunk = $body->read(1024);
                     if ($chunk === '') { usleep(10000); continue; }
                     echo $chunk;
-                    $buffer .= $chunk;
+                    $buffer = str_replace("\r\n", "\n", $buffer.$chunk);
                     while (($position = strpos($buffer, "\n\n")) !== false) {
                         $consumeEvent(substr($buffer, 0, $position));
                         $buffer = substr($buffer, $position + 2);
@@ -389,7 +389,7 @@ class GlobalAssistantController extends Controller
                     flush();
                 }
                 if (trim($buffer) !== '') $consumeEvent($buffer);
-                if (trim($reply) !== '') $this->persistExchange((int) $user->id, $data['message'], trim($reply));
+                if (! connection_aborted() && trim($reply) !== '') $this->persistExchange((int) $user->id, $data['message'], trim($reply));
             }, 200, ['Content-Type' => 'text/event-stream; charset=UTF-8', 'Cache-Control' => 'no-cache, no-transform', 'X-Accel-Buffering' => 'no']);
         } catch (\Throwable $e) {
             Log::warning('farast.global_assistant_stream_exception', ['user_id' => $user->id, 'error_class' => class_basename($e)]);
