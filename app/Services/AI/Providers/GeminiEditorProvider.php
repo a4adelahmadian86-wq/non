@@ -24,7 +24,7 @@ class GeminiEditorProvider implements AiProvider
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
             try {
                 return $this->executeViaGateway($gatewayUrl, $gatewayToken, $operation, $payload, $requestId);
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 // Keep the existing direct Gemini route as the next layer when Runflare is unavailable.
                 $gatewayFailure = $e;
             }
