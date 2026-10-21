@@ -248,6 +248,42 @@ class GlobalAssistantController extends Controller
                     ];
                 }
                 $messages[] = ['role' => 'user', 'content' => $data['message']];
+
+                // Prefer the central Runflare gateway when configured; direct Groq below remains
+                // the immediate fallback if the gateway or its upstream providers are unavailable.
+                $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
+                $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+                if ($gatewayUrl !== '' && $gatewayToken !== '') {
+                    try {
+                        $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
+                        $gatewayResponse = Http::withToken($gatewayToken)->acceptJson()->timeout(35)->retry(1, 300, throw: false)
+                            ->withHeaders(['X-Farast-Request-Id' => $gatewayRequestId])
+                            ->post($gatewayUrl.'/v1/chat/completions', [
+                                'model' => 'farast-general',
+                                'messages' => $messages,
+                                'temperature' => 0.2,
+                                'max_tokens' => 700,
+                            ]);
+                        $gatewayReply = $gatewayResponse->json('choices.0.message.content');
+                        if ($gatewayResponse->successful() && is_string($gatewayReply) && trim($gatewayReply) !== '') {
+                            $gatewayReply = trim($gatewayReply);
+                            $this->persistExchange((int) $user->id, $data['message'], $gatewayReply);
+                            return response()->json(['ok' => true, 'reply' => $gatewayReply, 'provider' => 'farast-ai-gateway'], 200, ['Cache-Control' => 'no-store']);
+                        }
+                        Log::warning('farast.global_assistant_gateway_failed', [
+                            'user_id' => $user->id,
+                            'status' => $gatewayResponse->status(),
+                            'fallback' => 'groq',
+                        ]);
+                    } catch (\\Throwable $gatewayException) {
+                        Log::warning('farast.global_assistant_gateway_exception', [
+                            'user_id' => $user->id,
+                            'error_class' => class_basename($gatewayException),
+                            'fallback' => 'groq',
+                        ]);
+                    }
+                }
+
                 $response = Http::withToken($groqKey)->acceptJson()->timeout(30)->retry(1, 300, throw: false)
                     ->post('https://api.groq.com/openai/v1/chat/completions', [
                         'model' => $model,
