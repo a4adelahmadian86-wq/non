@@ -340,7 +340,7 @@
           var oneShot=await streamResponse.json().catch(function(){return {};});
           answer=String(oneShot.reply||oneShot.text||oneShot.message||'');
           if(!answer.trim())throw new Error('پاسخی از سرویس گفت‌وگو دریافت نشد.');
-          pending.textContent=answer;voiceCaption.textContent=answer;
+          streamState.pendingText=answer;pending.textContent=answer;voiceCaption.textContent=answer;
         }
         if(turn!==assistantTurn||streamState.cancelled)return;
         if(!answer.trim())throw new Error('پاسخی از سرویس گفت‌وگو دریافت نشد.');
