@@ -90,3 +90,16 @@ test('Firefox cloud fallback records continuously and transcribes once on stop',
   expect(afterStop.text).toContain('این متن کامل و پیوسته است');
   expect(afterStop.error).toBe('');
 });
+
+
+test('voice hub does not expose a browser-local Whisper model path', async ({ page }) => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
+  await page.setContent('<!doctype html><html><head></head><body><div id="farastWord" data-authenticated="1"></div></body></html>');
+  await page.addScriptTag({ content: source });
+  const result = await page.evaluate(() => ({
+    hasLocalWhisperApi: Object.prototype.hasOwnProperty.call(window.FarastVoiceHub || {}, 'localWhisper'),
+    engineIds: window.FarastVoiceHub?.engines?.().map(engine => engine.id) || []
+  }));
+  expect(result.hasLocalWhisperApi).toBe(false);
+  expect(result.engineIds).not.toContain('local-whisper');
+});
