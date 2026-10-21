@@ -37,6 +37,7 @@ class VoiceController extends Controller
                 'gateway' => false,
                 'websocket_url' => '',
                 'engines' => ['runflare-gateway'],
+                'self_hosted' => false,
                 'server_side' => true,
             ], 200, ['Cache-Control' => 'no-store']);
         }
@@ -51,6 +52,20 @@ class VoiceController extends Controller
                 'gateway' => false,
                 'websocket_url' => '',
                 'engines' => ['self-hosted-asr'],
+                'self_hosted' => true,
+                'server_side' => true,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        if ($asrUrl !== '' && $asrToken === '') {
+            return response()->json([
+                'ok' => true,
+                'mode' => 'none',
+                'reason' => 'self_hosted_token_missing',
+                'self_hosted' => true,
+                'chunked' => false,
+                'gateway' => false,
+                'websocket_url' => '',
                 'server_side' => true,
             ], 200, ['Cache-Control' => 'no-store']);
         }
