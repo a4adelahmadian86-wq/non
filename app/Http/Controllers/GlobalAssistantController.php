@@ -389,6 +389,7 @@ class GlobalAssistantController extends Controller
                     flush();
                 }
                 if (trim($buffer) !== '') $consumeEvent($buffer);
+                try { $body->close(); } catch (\\Throwable $ignored) {}
                 if (! connection_aborted() && trim($reply) !== '') $this->persistExchange((int) $user->id, $data['message'], trim($reply));
             }, 200, ['Content-Type' => 'text/event-stream; charset=UTF-8', 'Cache-Control' => 'no-cache, no-transform', 'X-Accel-Buffering' => 'no']);
         } catch (\Throwable $e) {
