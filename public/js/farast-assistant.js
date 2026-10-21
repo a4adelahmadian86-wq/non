@@ -113,7 +113,20 @@
     }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
   }
   var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null;
-  function stopConversation(){conversationActive=false;assistantTurn++;busy=false;if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(e){}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
+  var assistantStreamAbortController=null, activeSpeechQueue=null;
+  function cancelStreamingSpeech(state){
+    if(state){state.cancelled=true;state.queue.length=0;}
+    if(activeSpeechQueue===state)activeSpeechQueue=null;
+    if(assistantAudio){try{assistantAudio.pause();assistantAudio.currentTime=0;}catch(e){}assistantAudio=null;}
+    if(assistantAudioUrl){try{URL.revokeObjectURL(assistantAudioUrl);}catch(e){}assistantAudioUrl=null;}
+    try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(e){}
+  }
+  function cancelActiveAssistantResponse(){
+    if(assistantStreamAbortController){try{assistantStreamAbortController.abort();}catch(e){}assistantStreamAbortController=null;}
+    if(activeSpeechQueue)cancelStreamingSpeech(activeSpeechQueue);
+    else cancelStreamingSpeech(null);
+  }
+  function stopConversation(){conversationActive=false;assistantTurn++;busy=false;if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}cancelActiveAssistantResponse();if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
   function scheduleNextListening(){if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(resumeListeningTimer)window.clearTimeout(resumeListeningTimer);resumeListeningTimer=window.setTimeout(function(){resumeListeningTimer=null;if(conversationActive&&!panel.hidden)startServerRecording();},450);}
   function speakWithBrowser(text, speechTurn){
     if(!window.speechSynthesis||!window.SpeechSynthesisUtterance)return false;
