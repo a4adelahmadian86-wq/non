@@ -217,46 +217,57 @@ function guessHandwritten(file) {
  * ضبط‌های کوتاه و پی‌درپی، دیکد به PCM و اجرای Whisper quantized روی WASM.
  * رایگان و بدون کلید؛ دانلود اولیه نیازمند اینترنت است و فایل‌ها در کش مرورگر نگه‌داری می‌شوند. */
 let whr = null, whrName = '';
-/* موتور Whisper محلی — فالبک نهایی. کتابخانهٔ transformers.js به‌صورت باندل IIFE با CDNهای
- * پشتیبانی‌نشده کار نمی‌کند (خطای dynamic import); لذا ESM از esm.sh بارگذاری و روی window.transformers
- * قرار داده می‌شود تا کد موجود بدون تغییر کار کند. چند CDN برای شبکه‌های محدود. */
-const WHISPER_ESM = [
-  'https://esm.sh/@huggingface/transformers@3.5.0',
-  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.0/+esm',
-  'https://unpkg.com/@huggingface/transformers@3.5.0/dist/transformers.js?module',
-];
-async function loadWhisperLib() {
-  if (window.transformers) return true;
-  for (const u of WHISPER_ESM) {
-    try {
-      const mod = await import(/* @vite-ignore */ u);
-      if (mod?.pipeline) { window.transformers = mod; return true; }
-    } catch {}
-  }
-  // تلاش آخر: باندل IIFE (در برخی مرورگرها/شبکه‌ها جواب می‌دهد)
-  return await loadScript(CDN.transformers);
+/* Local Whisper runs in a dedicated Worker so model inference does not block the editor UI. */
+let whr = null, whrName = '', whrLoad = null;
+let whisperWorker = null, whisperRequestId = 0;
+const whisperPending = new Map();
+
+function getWhisperWorker() {
+  if (whisperWorker) return whisperWorker;
+  if (!window.Worker) throw new Error('این مرورگر Web Worker را پشتیبانی نمی‌کند.');
+  whisperWorker = new Worker('/js/farast-whisper-worker.js?v=20261021worker1', { type: 'module' });
+  whisperWorker.onmessage = event => {
+    const message = event.data || {};
+    const pending = whisperPending.get(message.id);
+    if (!pending) return;
+    if (message.type === 'progress') {
+      pending.onStatus?.(message.message || 'در حال بارگذاری مدل محلی…');
+      return;
+    }
+    whisperPending.delete(message.id);
+    if (message.type === 'error') pending.reject(new Error(message.message || 'Whisper محلی ناموفق بود.'));
+    else pending.resolve(message.output ?? true);
+  };
+  whisperWorker.onerror = event => {
+    const error = new Error(event.message || 'کارگر محلی Whisper متوقف شد.');
+    whisperPending.forEach(pending => pending.reject(error));
+    whisperPending.clear();
+    whisperWorker = null;
+  };
+  return whisperWorker;
+}
+
+function whisperWorkerRequest(type, payload, onStatus) {
+  const worker = getWhisperWorker();
+  const id = ++whisperRequestId;
+  return new Promise((resolve, reject) => {
+    whisperPending.set(id, { resolve, reject, onStatus });
+    const transfer = payload.audio instanceof Float32Array ? [payload.audio.buffer] : [];
+    try { worker.postMessage({ id, type, ...payload }, transfer); }
+    catch (error) { whisperPending.delete(id); reject(error); }
+  });
 }
 
 async function ensureWhisper(onStatus, model) {
-  const tf = window.transformers || (await loadWhisperLib() ? window.transformers : null);
-  if (!tf) throw new Error('کتابخانهٔ transformers.js از هیچ CDNای بارگذاری نشد (اینترنت/فیلتر شبکه را بررسی کنید).');
   if (whr && whrName === model) return whr;
-  onStatus?.('آماده‌سازی مدل گفتار روی دستگاه؛ دانلود اولیه ممکن است ده‌ها تا صدها مگابایت باشد…');
-  /* تلاش با CDN هافینگ‌فیس؛ در شبکه‌های محدود، mirror داخلی (hf-mirror.com) امتحان می‌شود */
-  try {
-    whr = await tf.pipeline('automatic-speech-recognition', { model, quantized: true, device: 'wasm' });
-  } catch (e1) {
-    onStatus?.('مدل از منبع اصلی دانلود نشد؛ در حال امتحان mirror جایگزین…');
-    try {
-      tf.env?.allowRemoteModels && (tf.env.remoteHost = 'https://hf-mirror.com/');
-      tf.env?.remotePathTemplate && (tf.env.remotePathTemplate = '{model}/resolve/{revision}/');
-      whr = await tf.pipeline('automatic-speech-recognition', { model, quantized: true, device: 'wasm' });
-    } catch (e2) {
-      throw new Error('مدل Whisper قابل دانلود نبود (' + (String(e2?.message || e1?.message || '').slice(0, 80)) + '). از موتور ابری یا سرویس شخصی استفاده کنید.');
-    }
-  }
-  whrName = model;
-  return whr;
+  if (whrLoad) return whrLoad;
+  onStatus?.('آماده‌سازی مدل Whisper در Worker؛ دانلود اولیه ممکن است ده‌ها تا صدها مگابایت باشد…');
+  whrLoad = whisperWorkerRequest('load', { model }, onStatus).then(() => {
+    whrName = model;
+    whr = (pcm, options) => whisperWorkerRequest('transcribe', { model, audio: pcm, options }, onStatus);
+    return whr;
+  }).finally(() => { whrLoad = null; });
+  return whrLoad;
 }
 async function decodeToPcm16k(audioBlob, onStatus) {
   const AC = window.AudioContext || window.webkitAudioContext;
