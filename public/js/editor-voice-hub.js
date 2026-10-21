@@ -217,7 +217,7 @@ function guessHandwritten(file) {
  * ضبط‌های کوتاه و پی‌درپی، دیکد به PCM و اجرای Whisper quantized روی WASM.
  * رایگان و بدون کلید؛ دانلود اولیه نیازمند اینترنت است و فایل‌ها در کش مرورگر نگه‌داری می‌شوند. */
 /* Local Whisper runs in a dedicated Worker so model inference does not block the editor UI. */
-let whr = null, whrName = '', whrLoad = null;
+let localWhisperPipeline = null, localWhisperModelName = '', localWhisperLoadPromise = null;
 let whisperWorker = null, whisperRequestId = 0;
 const whisperPending = new Map();
 
@@ -239,7 +239,7 @@ function getWhisperWorker() {
   };
   whisperWorker.onerror = event => {
     const error = new Error(event.message || 'کارگر محلی Whisper متوقف شد.');
-    whr = null; whrName = ''; whrLoad = null;
+    localWhisperPipeline = null; localWhisperModelName = ''; localWhisperLoadPromise = null;
     whisperPending.forEach(pending => pending.reject(error));
     whisperPending.clear();
     whisperWorker = null;
@@ -259,15 +259,15 @@ function whisperWorkerRequest(type, payload, onStatus) {
 }
 
 async function ensureWhisper(onStatus, model) {
-  if (whr && whrName === model) return whr;
-  if (whrLoad) return whrLoad;
+  if (localWhisperPipeline && localWhisperModelName === model) return localWhisperPipeline;
+  if (localWhisperLoadPromise) return localWhisperLoadPromise;
   onStatus?.('آماده‌سازی مدل Whisper در Worker؛ دانلود اولیه ممکن است ده‌ها تا صدها مگابایت باشد…');
-  whrLoad = whisperWorkerRequest('load', { model }, onStatus).then(() => {
-    whrName = model;
-    whr = (pcm, options) => whisperWorkerRequest('transcribe', { model, audio: pcm, options }, onStatus);
-    return whr;
-  }).finally(() => { whrLoad = null; });
-  return whrLoad;
+  localWhisperLoadPromise = whisperWorkerRequest('load', { model }, onStatus).then(() => {
+    localWhisperModelName = model;
+    localWhisperPipeline = (pcm, options) => whisperWorkerRequest('transcribe', { model, audio: pcm, options }, onStatus);
+    return localWhisperPipeline;
+  }).finally(() => { localWhisperLoadPromise = null; });
+  return localWhisperLoadPromise;
 }
 async function decodeToPcm16k(audioBlob, onStatus) {
   const AC = window.AudioContext || window.webkitAudioContext;
