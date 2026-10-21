@@ -484,7 +484,7 @@
             transcript=String(data.text).trim();
           }
           if(!transcript)throw new Error('گفتار قابل تشخیصی پیدا نشد؛ دوباره واضح‌تر صحبت کن.');
-          if(!conversationActive)return;input.value=transcript;status.textContent='گفتار تشخیص داده شد؛ در حال ارسال پیام…';send(input.value);
+          if(!conversationActive)return;input.value=transcript;status.textContent='گفتار تشخیص داده شد؛ پاسخ زنده را دریافت می‌کنم…';send(input.value,true);
         }catch(e){conversationActive=false;var voiceError=e&&e.message?e.message:'رونویسی گفتار انجام نشد.';status.textContent=voiceError;voiceTitle.textContent='موتور صوتی در دسترس نیست';voiceCaption.textContent=voiceError;}
       };
       mediaRecorder.start(250);
@@ -498,10 +498,9 @@
     if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();root.querySelector('.farast-assistant-mic').classList.remove('is-recording');return;}
     if(recognition){recognition.stop();recognition=null;return;}
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
-    if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
-    if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
+    assistantTurn++;busy=false;cancelActiveAssistantResponse();
     panel.classList.remove('is-speaking');
-    conversationActive=true;voiceTitle.textContent='شروع گفت‌وگوی پیوسته';voiceCaption.textContent='بعد از هر پاسخ، دوباره گوش می‌دهم. برای پایان، «توقف پخش صدا» را لمس کن.';startServerRecording();
+    conversationActive=true;voiceTitle.textContent='شروع گفت‌وگوی پیوسته';voiceCaption.textContent='بعد از مکث، پاسخ به‌صورت جریانی پخش می‌شود. برای قطع‌کردن پاسخ، صحبت را شروع کن.';startServerRecording();
   });
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!panel.hidden){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);}});
   voiceCaption.textContent='برای شروع، میکروفون را لمس کن و به فارسی صحبت کن.';
