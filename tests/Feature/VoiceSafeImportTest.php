@@ -116,10 +116,12 @@ class VoiceSafeImportTest extends TestCase
         $this->assertStringContainsString("'Idempotency-Key': sessionRequestId", $hub);
 
         $this->assertIsString($controller);
-        $this->assertStringContainsString("if(\$rawText==='')return response()->json(['ok'=>true,'text'=>'','engine'", $controller);
+        $this->assertStringContainsString("if (\$rawText === '')", $controller);
         $this->assertStringNotContainsString("voice_self_hosted_empty_transcript');", $controller);
-        $this->assertStringContainsString("->attach('audio',\$bytes,'farast-voice.'.\$extension,['Content-Type'=>\$mime])", $controller);
-        $this->assertStringContainsString("->attach('file',\$bytes,'audio.'.\$extension,['Content-Type'=>\$mime])", $controller);
+        $this->assertStringContainsString("->attach('audio', \$bytes, 'farast-voice.'.\$extension", $controller);
+        $this->assertStringNotContainsString('api.groq.com', $controller);
+        $this->assertStringNotContainsString('googleSpeech->transcribe', $controller);
+        $this->assertStringNotContainsString('VoiceTranscriptionService', $controller);
     }
 
     public function test_editor_surface_loads_voice_assets_and_mic_attachment(): void
