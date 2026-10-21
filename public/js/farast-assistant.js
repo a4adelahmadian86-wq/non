@@ -188,7 +188,7 @@
         var energy=0;
         for(var i=0;i<samples.length;i++){var value=(samples[i]-128)/128;energy+=value*value;}
         var rms=Math.sqrt(energy/samples.length),now=Date.now();
-        if(rms>0.025){if(!speechAt)speechAt=now;lastVoiceAt=now;}
+        if(rms>0.015){if(!speechAt)speechAt=now;lastVoiceAt=now;}
         if(speechAt&&now-speechAt>=500&&now-lastVoiceAt>=1200){
           status.textContent='مکث تشخیص داده شد؛ گفتار را پردازش می‌کنم…';
           try{recorder.stop();}catch(e){}
@@ -250,7 +250,7 @@
         try{
           var transcript='';
           var localEngine=window.FarastVoiceHub&&window.FarastVoiceHub.localWhisper;
-          if(localEngine&&localEngine.transcribe){
+          if(localAsrReady&&localEngine&&localEngine.transcribe){
             status.textContent='در حال تشخیص گفتار روی دستگاه شما…';
             try{transcript=await localEngine.transcribe(blob,'fa-IR',function(message){if(conversationActive)status.textContent=message;});}
             catch(localError){status.textContent='تشخیص محلی ناموفق بود؛ بررسی سرویس پشتیبان…';}
