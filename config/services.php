@@ -1,6 +1,12 @@
 <?php
 
 return [
+    // Optional central multi-provider gateway. Empty by default preserves direct provider behavior.
+    'ai_gateway' => [
+        'url' => env('FARAST_AI_GATEWAY_URL', ''),
+        'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
+    ],
+
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
