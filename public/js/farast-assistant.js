@@ -115,7 +115,7 @@
   var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null;
   var assistantStreamAbortController=null, activeSpeechQueue=null;
   function cancelStreamingSpeech(state){
-    if(state){state.cancelled=true;state.queue.length=0;}
+    if(state){state.cancelled=true;state.queue.length=0;if(state.ttsController){try{state.ttsController.abort();}catch(e){}state.ttsController=null;}}
     if(activeSpeechQueue===state)activeSpeechQueue=null;
     if(assistantAudio){try{assistantAudio.pause();assistantAudio.currentTime=0;}catch(e){}assistantAudio=null;}
     if(assistantAudioUrl){try{URL.revokeObjectURL(assistantAudioUrl);}catch(e){}assistantAudioUrl=null;}
@@ -243,6 +243,7 @@
     var text=state.queue.shift();
     state.playing=true;
     var response=null, blob=null, url=null, audio=null, failureHandled=false;
+    var ttsController=new AbortController();state.ttsController=ttsController;
     function cleanupAudio(){
       if(audio){audio.onended=null;audio.onerror=null;try{audio.pause();}catch(e){}if(assistantAudio===audio)assistantAudio=null;}
       if(url){try{URL.revokeObjectURL(url);}catch(e){}if(assistantAudioUrl===url)assistantAudioUrl=null;}
@@ -260,7 +261,7 @@
       response=await fetch('/assistant/speak',{
         method:'POST',credentials:'same-origin',
         headers:{'Content-Type':'application/json','Accept':'audio/mpeg','X-CSRF-TOKEN':csrf?csrf.content:''},
-        body:JSON.stringify({text:text,language:'fa-IR',voice_id:'farast-fa-male-v1'})
+        body:JSON.stringify({text:text,language:'fa-IR',voice_id:'farast-fa-male-v1'}),signal:ttsController.signal
       });
       if(!response.ok)throw new Error('سرویس تولید صوت پاسخ نداد.');
       blob=await response.blob();
