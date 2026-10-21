@@ -1028,11 +1028,29 @@ function pickEngineInteractive() {
     b.onclick = () => { engineMode = id; localStorage.setItem('farast.voice.engine', id); closePop(); stopVoice(); engineLabel(); toast('موتور تغییر کرد: ' + label); };
     list.appendChild(b);
   });
+  const modelRow = document.createElement('div'); modelRow.className = 'fd-row';
+  const modelLabel = document.createElement('label'); modelLabel.textContent = 'مدل محلی';
+  const modelSelect = document.createElement('select');
+  modelSelect.setAttribute('aria-label', 'مدل محلی تشخیص گفتار');
+  modelSelect.style.flex = '1'; modelSelect.style.minWidth = '0';
+  [
+    ['Xenova/whisper-base', 'متعادل — دانلود سبک‌تر'],
+    ['Xenova/whisper-small', 'دقت بالاتر — دانلود و پردازش سنگین‌تر']
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option'); option.value = value; option.textContent = label;
+    modelSelect.appendChild(option);
+  });
+  modelSelect.value = localStorage.getItem('farast.whisper.model') || 'Xenova/whisper-base';
+  modelSelect.onchange = () => {
+    localStorage.setItem('farast.whisper.model', modelSelect.value);
+    toast('مدل برای شروع بعدی انتخاب شد؛ دانلود و اجرا روی همین دستگاه انجام می‌شود.');
+  };
+  modelRow.append(modelLabel, modelSelect);
   const ep = document.createElement('div'); ep.className = 'fd-row';
   const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'نشانی سرویس STT (اختیاری)'; inp.value = localStorage.getItem('farast.stt.endpoint') || ''; inp.dir = 'ltr'; inp.style.flex = '1';
   inp.onchange = () => localStorage.setItem('farast.stt.endpoint', inp.value.trim());
   ep.appendChild(inp);
-  const wrap = document.createElement('div'); wrap.append(list, ep);
+  const wrap = document.createElement('div'); wrap.append(list, modelRow, ep);
   showPop($('#fdVEngineBtn'), wrap);
 }
 engineMode = localStorage.getItem('farast.voice.engine') || 'auto';
