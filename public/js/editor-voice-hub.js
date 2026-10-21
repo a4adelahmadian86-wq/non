@@ -483,73 +483,128 @@ async function startCloudStream(ctx, csrf) {
  * ضبط قطعه‌قطعه با MediaRecorder، ارسال هر قطعه به /editor/voice/transcribe (موتور Google/Gemini خود سایت).
  * حلقه بی‌وقفه: همزمان که قطعهٔ n در سرور پردازش می‌شود، قطعهٔ n+1 در حال ضبط است. */
 async function startCloudChunks(ctx, csrf, gwErr, strictSelfHosted = false) {
-  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw Object.assign(new Error(gwErr || 'این مرورگر امکان ضبط صدا را ندارد.'), { fatal: strictSelfHosted });
-  const pickMime = () => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
-  let stopped = false, inflight = Promise.resolve(), lastFinal = '', seq = 0;
-  const sessionRequestId = globalThis.crypto?.randomUUID?.() || ('voice-session-' + Date.now() + '-' + Math.random().toString(16).slice(2));
-  const transcribe = blob => {
-    if (!blob || blob.size < 2000) return;
-    ctx.onStatus('در حال پردازش…');
-    inflight = inflight.then(async () => {
-      try {
-        const fd = new FormData(); const ext = String(blob.type || '').includes('ogg') ? 'ogg' : (String(blob.type || '').includes('mp4') ? 'mp4' : 'webm'); fd.append('audio', blob, 'chunk-' + (++seq) + '.' + ext); fd.append('locale', ctx.lang());
-        const r = await fetch('/editor/voice/transcribe', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Farast-Voice-Request': sessionRequestId, 'Idempotency-Key': sessionRequestId }, body: fd });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          if (strictSelfHosted) { stopped = true; ctx.onError(j.message || 'موتور گفتار خودمیزبان در دسترس نیست.'); ctx.onStopped(); return; }
-          // خطای سطح‌بالا (سهمیه/لاگین/نرخ): توقف حلقه با پیام دقیق — نه بی‌صدا تکرار هر ۲.۵ ثانیه
-          const kind = cloudErrorKind(r.status, j);
-          if (kind !== 'server') {
-            stopped = true;
-            ctx.onError(kind === 'quota' ? 'این حساب فعلاً اجازهٔ تایپ صوتی ابری ندارد (سهمیه/پلن). از «تنظیمات موتور» → Whisper محلی رایگان استفاده کنید.' : kind === 'rate' ? 'محدودیت تعداد درخواست صوت فعال شد؛ چند لحظه دیگر دوباره امتحان کنید.' : 'برای تایپ صوتی ابری وارد حساب شوید.');
-            ctx.onStopped();
-            return;
-          }
-          if (j.message) ctx.onError(j.message);
-          if (!stopped) ctx.onStatus('در حال گوش دادن (ابر · تکه‌ای)…');
-          return;
-        }
-        const text = String(j.text || '').trim();
-        if (text) {
-          clearInterim();
-          let t = text; // مرز قطعه‌ها گاهی کلمهٔ مشترک برمی‌دارد؛ تکرار ابتدایی حذف می‌شود
-          if (lastFinal && t.startsWith(lastFinal)) t = t.slice(lastFinal.length).trim();
-          else if (lastFinal && lastFinal.endsWith(t)) t = '';
-          if (t) { lastFinal = text; ctx.onFinal(t); }
-        }
-      } catch (e) { if (strictSelfHosted) { stopped = true; ctx.onError('ارتباط با موتور گفتار خودمیزبان برقرار نشد.'); ctx.onStopped(); return; } ctx.onError('ارسال صوت ناموفق بود: ' + (e?.message || '')); }
-      if (!stopped) ctx.onStatus(strictSelfHosted ? 'در حال گوش دادن (موتور خودمیزبان)…' : 'در حال گوش دادن (ابر · تکه‌ای)…');
-    });
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    throw Object.assign(new Error(gwErr || 'این مرورگر امکان ضبط صدا را ندارد.'), { fatal: strictSelfHosted });
+  }
+
+  // Accuracy-first fallback: keep ONE continuous MediaRecorder session and transcribe the
+  // complete recording on stop. Independent 4-second files lose linguistic context and can
+  // cause Whisper/ASR to hallucinate unrelated Persian words. Native browser SR/WebSocket
+  // remain the live modes; this HTTP fallback intentionally commits text after Stop.
+  const pickMime = () => ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+    .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+  const sessionRequestId = globalThis.crypto?.randomUUID?.()
+    || ('voice-session-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+  const maxAudioBytes = 12 * 1024 * 1024;
+  let stopped = false, finalizing = false, limitReached = false, stream = null, recorder = null;
+  let chunks = [], byteCount = 0;
+
+  const stopTracks = () => {
+    try { stream?.getTracks?.().forEach(track => { try { track.stop(); } catch {} }); } catch {}
+    stream = null;
   };
-  const recordOnce = () => new Promise(resolve => {
-    let media;
-    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
-      .then(m => {
-        media = m;
-        const mime = pickMime();
-        const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
-        const chunks = [];
-        rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-        rec.onerror = () => {};
-        rec.onstop = () => {
-          media.getTracks().forEach(t => { try { t.stop(); } catch {} });
-          resolve(new Blob(chunks, { type: mime || 'audio/webm' }));
-        };
-        try { rec.start(1000); } catch { media.getTracks().forEach(t => { try { t.stop(); } catch {} }); resolve(null); return; }
-        setTimeout(() => { try { if (rec.state !== 'inactive') rec.stop(); } catch {} }, 4000);
-      })
-      .catch(err => { if (!stopped) ctx.onError('دسترسی به میکروفون ممکن نشد: ' + (err?.message || err?.name || '')); resolve(null); });
-  });
-  const loop = async () => {
-    while (!stopped) {
-      const blob = await recordOnce();
-      if (stopped || !blob) break;
-      transcribe(blob);
+
+  const transcribeCompleteRecording = async blob => {
+    if (!blob || blob.size < 2000) {
+      ctx.onError('صدای کافی ضبط نشد. کمی طولانی‌تر صحبت کنید و دوباره تلاش کنید.');
+      ctx.onStopped();
+      return;
+    }
+    ctx.onStatus('در حال تبدیل کل گفتار به متن برای دقت بیشتر…');
+    try {
+      const fd = new FormData();
+      const type = String(blob.type || '');
+      const ext = type.includes('ogg') ? 'ogg' : (type.includes('mp4') ? 'mp4' : 'webm');
+      fd.append('audio', blob, 'farast-voice-session.' + ext);
+      fd.append('locale', ctx.lang());
+      const r = await fetch('/editor/voice/transcribe', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': csrf,
+          'Accept': 'application/json',
+          'X-Farast-Voice-Request': sessionRequestId,
+          'Idempotency-Key': sessionRequestId
+        },
+        body: fd
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const kind = cloudErrorKind(r.status, j);
+        if (strictSelfHosted) {
+          throw new Error(j.message || 'موتور گفتار خودمیزبان در دسترس نیست.');
+        }
+        throw new Error(kind === 'quota'
+          ? 'این حساب فعلاً اجازهٔ تایپ صوتی ابری ندارد (سهمیه/پلن).'
+          : kind === 'rate'
+            ? 'محدودیت تعداد درخواست صوت فعال شد؛ کمی بعد دوباره امتحان کنید.'
+            : j.message || 'رونویسی ابری انجام نشد؛ وضعیت سرویس گفتار را بررسی کنید.');
+      }
+      const text = String(j.text || '').trim();
+      if (!text) throw new Error('متن قابل تشخیصی پیدا نشد. در محیط آرام‌تر و با صحبت واضح‌تر دوباره امتحان کنید.');
+      clearInterim();
+      ctx.onFinal(text);
+      if (limitReached) ctx.onError('برای جلوگیری از ارسال فایل بیش از حد بزرگ، ضبط پس از رسیدن به حد مجاز متوقف شد؛ متن ضبط‌شده تا آن لحظه درج شد.');
+      ctx.onStatus('رونویسی کامل شد');
+    } catch (e) {
+      ctx.onError(e?.message || (strictSelfHosted ? 'ارتباط با موتور گفتار خودمیزبان برقرار نشد.' : 'رونویسی ابری ناموفق بود.'));
+    } finally {
+      ctx.onStopped();
     }
   };
-  ctx.onStatus('در حال گوش دادن (ابر · تکه‌ای)…'); ctx.onLive(true);
-  loop();
-  return { stop: () => { stopped = true; ctx.onStopped(); }, mode: 'cloud-chunks' };
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false
+    });
+    const mime = pickMime();
+    recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    recorder.ondataavailable = event => {
+      if (!event.data?.size || finalizing) return;
+      chunks.push(event.data);
+      byteCount += event.data.size;
+      if (byteCount >= maxAudioBytes && !finalizing) {
+        limitReached = true;
+        ctx.onStatus('حجم ضبط به حد مجاز رسید؛ در حال پایان ضبط و رونویسی…');
+        stop();
+      }
+    };
+    recorder.onerror = event => {
+      ctx.onError(event?.error?.message || 'ضبط صدا با خطا مواجه شد.');
+      stop();
+    };
+    recorder.onstop = async () => {
+      if (finalizing) return;
+      finalizing = true;
+      stopTracks();
+      const blob = new Blob(chunks, { type: recorder?.mimeType || mime || 'audio/webm' });
+      chunks = [];
+      await transcribeCompleteRecording(blob);
+    };
+    recorder.start(1000);
+    ctx.onStatus('در حال گوش دادن (ابر · ضبط پیوسته؛ درج پس از پایان برای دقت بیشتر)…');
+    ctx.onLive(true);
+  } catch (error) {
+    stopTracks();
+    throw Object.assign(error instanceof Error ? error : new Error(String(error)), { fatal: strictSelfHosted });
+  }
+
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.stop(); return; } catch {}
+    }
+    if (!finalizing) {
+      finalizing = true;
+      stopTracks();
+      const blob = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' });
+      chunks = [];
+      transcribeCompleteRecording(blob);
+    }
+  }
+
+  return { stop, mode: 'cloud-chunks' };
 }
 
 /* ===================== موتور سوم: میکروفون + سرویس STT قابل پیکربندی =====================
