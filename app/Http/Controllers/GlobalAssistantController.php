@@ -87,8 +87,8 @@ class GlobalAssistantController extends Controller
                 'engine' => (string) $response->json('engine', $useGateway ? 'runflare-gateway' : 'self-hosted-asr'),
                 'model' => $response->json('model'),
             ], 200, ['Cache-Control' => 'no-store']);
-        } catch (\\Throwable $e) {
-            $diagnosticId = (string) \\Illuminate\\Support\\Str::uuid();
+        } catch (\Throwable $e) {
+            $diagnosticId = (string) \Illuminate\Support\Str::uuid();
             Log::warning('farast.global_assistant_asr_exception', [
                 'diagnostic_id' => $diagnosticId,
                 'user_id' => $request->user()->id,
@@ -152,7 +152,7 @@ class GlobalAssistantController extends Controller
                 'X-Content-Type-Options' => 'nosniff',
                 'X-Farast-Voice-Engine' => (string) $response->header('X-Farast-Voice-Engine', $useGateway ? 'runflare-gateway' : 'self-hosted-tts'),
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             Log::warning('farast.global_assistant_tts_exception', ['user_id' => $request->user()->id, 'error_class' => class_basename($e)]);
             return response()->json(['ok' => false, 'message' => 'ارتباط با موتور صدای سمت سرور برقرار نشد.'], 502, ['Cache-Control' => 'no-store']);
         }
@@ -253,17 +253,17 @@ class GlobalAssistantController extends Controller
             ], 503, ['Cache-Control' => 'no-store']);
         }
 
-        $storedHistory = \\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_messages')
-            ? \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
+        $storedHistory = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
             : collect();
         $historyItems = $storedHistory->isNotEmpty()
             ? $storedHistory->map(fn ($item) => ['role' => $item->role, 'text' => $item->content])->all()
             : ($data['context'] ?? []);
-        $memories = \\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_memories')
-            ? \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_memories')->where('user_id', $user->id)->orderBy('id')->limit(20)->pluck('content')->all()
+        $memories = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_memories')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_memories')->where('user_id', $user->id)->orderBy('id')->limit(20)->pluck('content')->all()
             : [];
         $memoryContext = $memories
-            ? ("\\nنکته‌های شخصی ذخیره‌شده توسط خود کاربر (صرفاً زمینه):\\n- " . implode("\\n- ", array_map(fn ($item) => mb_substr((string) $item, 0, 500), $memories)))
+            ? ("\nنکته‌های شخصی ذخیره‌شده توسط خود کاربر (صرفاً زمینه):\n- " . implode("\n- ", array_map(fn ($item) => mb_substr((string) $item, 0, 500), $memories)))
             : '';
         $messages = [[
             'role' => 'system',
@@ -276,7 +276,7 @@ class GlobalAssistantController extends Controller
         $messages[] = ['role' => 'user', 'content' => $data['message']];
 
         try {
-            $requestId = (string) ($request->header('Idempotency-Key') ?: \\Illuminate\\Support\\Str::uuid());
+            $requestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
             $response = Http::withToken($gatewayToken)->acceptJson()->connectTimeout(5)->timeout(100)
                 ->withHeaders(['X-Farast-Request-Id' => $requestId])
                 ->post($gatewayUrl.'/v1/chat/completions', [
@@ -307,7 +307,7 @@ class GlobalAssistantController extends Controller
                 'provider' => 'farast-ai-gateway',
                 'upstream_provider' => $response->header('X-Farast-AI-Provider'),
             ], 200, ['Cache-Control' => 'no-store']);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             Log::warning('farast.global_assistant_gateway_exception', [
                 'user_id' => $user->id,
                 'error_class' => class_basename($e),
