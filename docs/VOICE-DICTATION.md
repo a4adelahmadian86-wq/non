@@ -2,12 +2,12 @@
 
 FARAST must not download FARAST-managed AI models, model weights, tokenizers, or language data to a visitor's device.
 
-- **Browser-native SpeechRecognition** may be offered only as a browser-managed capability. Its processing location, network use, and language-pack behavior are controlled by the browser/vendor, not FARAST; it is not a guaranteed fallback and must not be described as a FARAST-hosted or private inference path.
-- **FARAST cloud dictation** sends microphone audio to the authenticated FARAST server API. The server selects a configured speech provider/runtime. The browser does not load Whisper/transformers.js or model weights.
+- **Browser-native SpeechRecognition is disabled** for the FARAST voice workflow. Some browser implementations can install/download language packs for local processing; FARAST does not call these APIs or install packs.
+- **FARAST cloud dictation** sends microphone audio to the authenticated Laravel endpoint, which proxies to Runflare's authenticated gateway. The gateway selects Cloudflare Workers AI Whisper, with a configured Render ASR fallback. The browser never loads Whisper/transformers.js or model weights.
 - **Local OCR is disabled.** Tesseract.js and its language data must not be loaded in the browser. Image/handwriting OCR should be restored only through a server-side OCR endpoint. Until that endpoint is configured, the UI should show a clear unavailable message rather than download a model.
 - **Custom STT endpoint** is an explicit user-configured server endpoint; it is not an automatic local-model fallback.
 - The browser may use ordinary CPU/RAM for rendering, audio capture, encoding, and normal interface work. FARAST AI inference runs server-side.
-- The visitor should not need a VPN. Any restricted upstream access must be handled from the server side where legally and technically available; Colab is temporary and cannot be treated as an always-on production dependency.
+- The visitor should not need a VPN. Upstream inference is called from the server side where technically and legally available. Free managed Colab is not used as a production inference server because its official terms allow termination of web-UI content-generation workloads.
 
 ## Verification checklist
 
