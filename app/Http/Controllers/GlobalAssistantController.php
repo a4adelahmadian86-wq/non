@@ -14,18 +14,21 @@ class GlobalAssistantController extends Controller
     {
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-        $gatewayReady = $gatewayUrl !== '' && $gatewayToken !== '';
-        $legacyAsrReady = filled(config('services.voice_asr.url')) && filled(config('services.voice_asr.token'));
-        $legacyTtsReady = filled(config('services.voice_tts.url')) && filled(config('services.voice_tts.token'));
+        $gatewayUrlConfigured = $gatewayUrl !== '';
+        $gatewayReady = $gatewayUrlConfigured && $gatewayToken !== '';
+        $gatewayMisconfigured = $gatewayUrlConfigured && $gatewayToken === '';
+        $legacyAsrReady = ! $gatewayUrlConfigured && filled(config('services.voice_asr.url')) && filled(config('services.voice_asr.token'));
+        $legacyTtsReady = ! $gatewayUrlConfigured && filled(config('services.voice_tts.url')) && filled(config('services.voice_tts.token'));
 
         return response()->json([
             'ok' => true,
-            'server_stt' => $gatewayReady || $legacyAsrReady,
-            'server_tts' => $gatewayReady || $legacyTtsReady,
+            'server_stt' => ! $gatewayMisconfigured && ($gatewayReady || $legacyAsrReady),
+            'server_tts' => ! $gatewayMisconfigured && ($gatewayReady || $legacyTtsReady),
             'gateway' => $gatewayReady,
+            'reason' => $gatewayMisconfigured ? 'gateway_token_missing' : null,
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
-            'server_stt_token_configured' => $gatewayReady || filled(config('services.voice_asr.token')),
-            'server_tts_token_configured' => $gatewayReady || filled(config('services.voice_tts.token')),
+            'server_stt_token_configured' => $gatewayReady || (! $gatewayUrlConfigured && filled(config('services.voice_asr.token'))),
+            'server_tts_token_configured' => $gatewayReady || (! $gatewayUrlConfigured && filled(config('services.voice_tts.token'))),
             'browser_stt' => false,
         ], 200, ['Cache-Control' => 'no-store']);
     }
