@@ -135,3 +135,15 @@ test('FARAST voice workflow never invokes browser speech recognition or installs
   expect(hubSource).not.toContain('processLocally');
   expect(hubSource).not.toMatch(/\bSR\.install\s*\(/);
 });
+
+
+test('editor and site voice entry points do not invoke browser speech or local Whisper', async ({ page }) => {
+  const editorChrome = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-docs-chrome.js'), 'utf8');
+  const siteApp = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-app.js'), 'utf8');
+  expect(editorChrome).not.toContain('SpeechRecognition');
+  expect(editorChrome).not.toContain('Xenova/whisper');
+  expect(editorChrome).not.toContain('startLocalWhisperEngine');
+  expect(editorChrome).not.toContain('local-whisper');
+  expect(siteApp).not.toContain('SpeechRecognition');
+  expect(siteApp).not.toContain('processLocally');
+});
