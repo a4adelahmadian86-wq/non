@@ -103,3 +103,22 @@ test('voice hub does not expose a browser-local Whisper model path', async ({ pa
   expect(result.hasLocalWhisperApi).toBe(false);
   expect(result.engineIds).not.toContain('local-whisper');
 });
+
+
+test('voice hub does not load browser-side AI model libraries or weights', async ({ page }) => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
+  await page.setContent('<!doctype html><html><head></head><body><div id="farastWord" data-authenticated="1"></div></body></html>');
+  await page.addScriptTag({ content: source });
+  const result = await page.evaluate(() => ({
+    hasLocalWhisperApi: Object.prototype.hasOwnProperty.call(window.FarastVoiceHub || {}, 'localWhisper'),
+    engineIds: window.FarastVoiceHub?.engines?.().map(engine => engine.id) || [],
+    scriptRequests: [...document.scripts].map(script => script.src).filter(Boolean)
+  }));
+  expect(result.hasLocalWhisperApi).toBe(false);
+  expect(result.engineIds).not.toContain('local-whisper');
+  expect(source).not.toContain('@huggingface/transformers');
+  expect(source).not.toContain('Xenova/whisper');
+  expect(source).not.toContain('tesseract.js');
+  expect(source).not.toContain('createWorker(');
+  expect(result.scriptRequests).toEqual([]);
+});
