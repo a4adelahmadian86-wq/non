@@ -181,14 +181,174 @@
       status.textContent=voiceCaption.textContent;
     }
   }
-    async function send(text){
+    function speakStreamChunkLocally(text, state){
+    if(!window.speechSynthesis||!window.SpeechSynthesisUtterance)return false;
+    var voices=[];
+    try{voices=window.speechSynthesis.getVoices()||[];}catch(e){}
+    var voice=voices.find(function(item){return /^fa[-_]/i.test(String(item.lang||''));});
+    if(!voice)return false;
+    try{
+      window.speechSynthesis.cancel();
+      var utterance=new SpeechSynthesisUtterance(String(text||'').slice(0,1800));
+      utterance.lang='fa-IR';utterance.voice=voice;
+      utterance.onstart=function(){if(state.cancelled||state.turn!==assistantTurn)return;voiceTitle.textContent='در حال صحبت';status.textContent='پاسخ صوتی با صدای فارسی دستگاه پخش می‌شود.';};
+      utterance.onend=function(){if(state.cancelled||state.turn!==assistantTurn)return;state.playing=false;pumpStreamingSpeech(state);};
+      utterance.onerror=function(){if(state.cancelled||state.turn!==assistantTurn)return;state.playing=false;status.textContent='پخش یک بخش صوتی انجام نشد؛ ادامه می‌دهم.';pumpStreamingSpeech(state);};
+      window.speechSynthesis.speak(utterance);
+      return true;
+    }catch(e){return false;}
+  }
+  function queueStreamSpeechText(state, delta, finalChunk){
+    if(state.cancelled)return;
+    state.pendingText+=String(delta||'');
+    while(state.pendingText){
+      var cut=-1;
+      ['؟','!','?','.','؛','\n'].forEach(function(mark){cut=Math.max(cut,state.pendingText.lastIndexOf(mark));});
+      if(cut>=28){
+        var sentence=state.pendingText.slice(0,cut+1).trim();
+        state.pendingText=state.pendingText.slice(cut+1).trimStart();
+        if(sentence)state.queue.push(sentence);
+        continue;
+      }
+      if(state.pendingText.length>150){
+        var space=state.pendingText.lastIndexOf(' ',140);
+        if(space>70){
+          state.queue.push(state.pendingText.slice(0,space).trim());
+          state.pendingText=state.pendingText.slice(space).trimStart();
+          continue;
+        }
+      }
+      break;
+    }
+    if(finalChunk){
+      var tail=state.pendingText.trim();
+      if(tail)state.queue.push(tail);
+      state.pendingText='';state.done=true;
+    }
+    pumpStreamingSpeech(state);
+  }
+  async function pumpStreamingSpeech(state){
+    if(!state||state.cancelled||state.playing)return;
+    if(!state.queue.length){
+      if(state.done&&!state.finished){
+        state.finished=true;
+        if(activeSpeechQueue===state)activeSpeechQueue=null;
+        panel.classList.remove('is-speaking');
+        voiceTitle.textContent=conversationActive?'نوبت توست':'پاسخ آماده شد';
+        status.textContent=conversationActive?'در انتظار صحبت بعدی…':'پاسخ صوتی تمام شد.';
+        if(conversationActive)scheduleNextListening();
+      }
+      return;
+    }
+    var text=state.queue.shift();
+    state.playing=true;
+    var response=null, blob=null, url=null, audio=null, failureHandled=false;
+    function cleanupAudio(){
+      if(audio){audio.onended=null;audio.onerror=null;try{audio.pause();}catch(e){}if(assistantAudio===audio)assistantAudio=null;}
+      if(url){try{URL.revokeObjectURL(url);}catch(e){}if(assistantAudioUrl===url)assistantAudioUrl=null;}
+    }
+    function handleAudioFailure(){
+      if(failureHandled)return;
+      failureHandled=true;cleanupAudio();
+      if(state.cancelled||state.turn!==assistantTurn)return;
+      if(speakStreamChunkLocally(text,state))return;
+      state.playing=false;
+      status.textContent='سرویس صوتی و صدای فارسی محلی در دسترس نیست؛ متن پاسخ را می‌توانی بخوانی.';
+      pumpStreamingSpeech(state);
+    }
+    try{
+      response=await fetch('/assistant/speak',{
+        method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','Accept':'audio/mpeg','X-CSRF-TOKEN':csrf?csrf.content:''},
+        body:JSON.stringify({text:text,language:'fa-IR',voice_id:'farast-fa-male-v1'})
+      });
+      if(!response.ok)throw new Error('سرویس تولید صوت پاسخ نداد.');
+      blob=await response.blob();
+      if(state.cancelled||state.turn!==assistantTurn)return;
+      url=URL.createObjectURL(blob);assistantAudioUrl=url;
+      audio=new Audio(url);assistantAudio=audio;
+      audio.onplay=function(){if(state.cancelled||state.turn!==assistantTurn)return;panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';status.textContent='پاسخ صوتی به‌صورت بخش‌به‌بخش پخش می‌شود.';};
+      audio.onended=function(){if(failureHandled)return;cleanupAudio();state.playing=false;pumpStreamingSpeech(state);};
+      audio.onerror=handleAudioFailure;
+      await audio.play();
+    }catch(e){
+      if(state.cancelled||state.turn!==assistantTurn){cleanupAudio();return;}
+      handleAudioFailure();
+    }
+  }
+  async function send(text, streamVoice){
     text=String(text||'').trim();if(!text||busy)return;
     if(document.body.dataset.assistantAuth !== '1'){
       voiceTitle.textContent='ابتدا وارد حساب شو';voiceCaption.textContent='برای استفاده از همراه صوتی، ورود به حساب کاربری لازم است.';status.textContent='ورود برای استفاده از همراه هوشمند الزامی است.';
       var link=root.querySelector('.farast-voice-login');if(!link){link=document.createElement('a');link.href='/login?redirect='+encodeURIComponent(location.pathname+location.search);link.className='farast-voice-login';link.textContent='ورود به حساب کاربری';root.querySelector('.farast-voice-stage').appendChild(link);}return;
     }
-    input.value='';busy=true;var turn=++assistantTurn;voiceTitle.textContent='در حال پاسخ‌گویی';status.textContent='دارم به حرفت فکر می‌کنم…';var pending=message('bot','در حال آماده‌کردن پاسخ صوتی…');panel.classList.add('is-speaking');
+    input.value='';busy=true;var turn=++assistantTurn;var pending=message('bot','در حال آماده‌کردن پاسخ صوتی…');panel.classList.add('is-speaking');
+    var streamController=null, streamState=null;
+    voiceTitle.textContent=streamVoice?'در حال دریافت پاسخ زنده':'در حال پاسخ‌گویی';
+    status.textContent=streamVoice?'در حال دریافت پاسخ به‌صورت جریانی…':'دارم به حرفت فکر می‌کنم…';
     try{
+      if(streamVoice){
+        streamController=new AbortController();assistantStreamAbortController=streamController;
+        var streamResponse=await fetch('/assistant/chat/stream',{
+          method:'POST',credentials:'same-origin',signal:streamController.signal,
+          headers:{'Content-Type':'application/json','Accept':'text/event-stream, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},
+          body:JSON.stringify({message:text,context:history.slice(-8)})
+        });
+        if(turn!==assistantTurn)return;
+        if(streamResponse.status===401||streamResponse.status===419){
+          var loginMessage='نشست شما منقضی شده است. لطفاً دوباره وارد حساب کاربری شوید.';
+          pending.textContent='';voiceTitle.textContent='ورود دوباره لازم است';voiceCaption.textContent=loginMessage;status.textContent='ورود مجدد لازم است.';say(loginMessage);return;
+        }
+        if(!streamResponse.ok){
+          var streamError=await streamResponse.json().catch(function(){return {};});
+          throw new Error(streamError.message||'سرویس گفت‌وگو فعلاً آماده نیست.');
+        }
+        streamState={turn:turn,queue:[],pendingText:'',playing:false,done:false,cancelled:false,finished:false};
+        activeSpeechQueue=streamState;
+        var answer='', contentType=String(streamResponse.headers.get('content-type')||'').toLowerCase();
+        if(contentType.indexOf('text/event-stream')!==-1&&streamResponse.body&&streamResponse.body.getReader){
+          var reader=streamResponse.body.getReader(), decoder=new TextDecoder(), buffer='';
+          function consumeSseEvent(event){
+            var lines=event.split(/\r?\n/);
+            for(var li=0;li<lines.length;li++){
+              if(!lines[li].startsWith('data:'))continue;
+              var payload=lines[li].slice(5).trim();
+              if(!payload||payload==='[DONE]')continue;
+              var item;
+              try{item=JSON.parse(payload);}catch(e){continue;}
+              var delta=item&&item.choices&&item.choices[0]&&item.choices[0].delta&&item.choices[0].delta.content;
+              if(typeof delta==='string'&&delta){
+                answer+=delta;pending.textContent=answer;voiceCaption.textContent=answer;
+                queueStreamSpeechText(streamState,delta,false);
+              }
+            }
+          }
+          while(true){
+            var part=await reader.read();
+            if(turn!==assistantTurn||streamState.cancelled){try{await reader.cancel();}catch(e){}return;}
+            if(part.done)break;
+            buffer=(buffer+decoder.decode(part.value,{stream:true})).replace(/\r\n/g,'\n');
+            var separator;
+            while((separator=buffer.indexOf('\n\n'))!==-1){
+              consumeSseEvent(buffer.slice(0,separator));buffer=buffer.slice(separator+2);
+            }
+          }
+          buffer=(buffer+decoder.decode()).replace(/\r\n/g,'\n');
+          if(buffer.trim())consumeSseEvent(buffer);
+        }else{
+          var oneShot=await streamResponse.json().catch(function(){return {};});
+          answer=String(oneShot.reply||oneShot.text||oneShot.message||'');
+          if(!answer.trim())throw new Error('پاسخی از سرویس گفت‌وگو دریافت نشد.');
+          pending.textContent=answer;voiceCaption.textContent=answer;
+        }
+        if(turn!==assistantTurn||streamState.cancelled)return;
+        if(!answer.trim())throw new Error('پاسخی از سرویس گفت‌وگو دریافت نشد.');
+        history.push({role:'user',text:text},{role:'assistant',text:answer});
+        if(history.length>20)history=history.slice(-20);
+        voiceTitle.textContent='پاسخ فراست';voiceCaption.textContent=answer;status.textContent='در حال پخش بخش‌های صوتی پاسخ…';
+        queueStreamSpeechText(streamState,'',true);
+        return;
+      }
       var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربر /dashboard. مکالمه اخیر:\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\n')+'\nکاربر: '+text;
       var response=await fetch('/assistant/chat',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt})});
       var data=await response.json().catch(function(){return {};});
@@ -196,8 +356,15 @@
       if(response.status===401||response.status===419){var loginMessage='نشست شما منقضی شده است. لطفاً دوباره وارد حساب کاربری شوید.';pending.textContent='';voiceTitle.textContent='ورود دوباره لازم است';voiceCaption.textContent=loginMessage;status.textContent='ورود مجدد لازم است.';say(loginMessage);}
       else if(!response.ok){throw new Error(data.message||'سرویس گفت‌وگو فعلاً آماده نیست.');}
       else {var answer=String(data.reply||data.text||data.message||'پاسخی دریافت نشد.');pending.textContent='';history.push({role:'user',text:text},{role:'assistant',text:answer});if(history.length>20)history=history.slice(-20);voiceTitle.textContent='پاسخ فراست';voiceCaption.textContent='در حال پخش پاسخ صوتی…';status.textContent='در حال پخش پاسخ صوتی…';say(answer);}
-    }catch(e){if(turn!==assistantTurn)return;var spokenError='متأسفم، در حال حاضر نمی‌توانم پاسخ را از سرویس هوش مصنوعی دریافت کنم. لطفاً بعداً دوباره تلاش کن.';pending.textContent='';voiceTitle.textContent='پاسخ‌گویی موقتاً در دسترس نیست';voiceCaption.textContent=spokenError;status.textContent='اتصال به سرویس پاسخ‌گویی ناموفق بود.';say(spokenError);}
-    finally{busy=false;}
+    }catch(e){
+      if(turn!==assistantTurn)return;
+      if(streamState)cancelStreamingSpeech(streamState);
+      var spokenError='متأسفم، در حال حاضر نمی‌توانم پاسخ را از سرویس هوش مصنوعی دریافت کنم. لطفاً بعداً دوباره تلاش کن.';
+      pending.textContent='';voiceTitle.textContent='پاسخ‌گویی موقتاً در دسترس نیست';voiceCaption.textContent=spokenError;status.textContent='اتصال به سرویس پاسخ‌گویی ناموفق بود.';say(spokenError);
+    }finally{
+      busy=false;
+      if(streamController&&assistantStreamAbortController===streamController)assistantStreamAbortController=null;
+    }
   }
   launcher.addEventListener('click',function(){var opening=panel.hidden;if(!opening){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}}setOpen(opening);if(opening)loadHistory();});
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);});
