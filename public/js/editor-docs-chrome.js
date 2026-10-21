@@ -967,9 +967,9 @@ document.addEventListener('keydown', e => {
 });
 
 /* ===================== تایپ صوتی — معماری چندلایه (Hub) =====================
- * لایهٔ ۱: Web Speech API مرورگر (رایگان، مثل گوگل داکس) — Chrome/Edge/Safari/Opera/Samsung Internet
- * لایهٔ ۲: موتور ابری فراست (سرور خود سایت: WebSocket زنده یا HTTP تکه‌ای) — Firefox و هر مرورگر دیگر
- * لایهٔ ۳: میکروفون + سرویس STT قابل تنظیم (Whisper محلی و…) — آخرین راه‌حل
+ * اولویت خودکار: Whisper محلی روی دستگاه کاربر؛ فایل مدل در کش مرورگر ذخیره می‌شود.
+ * مسیرهای بومی مرورگر، ابری و سرویس شخصی فقط با انتخاب صریح کاربر فعال می‌شوند.
+ * هیچ صدایی بدون انتخاب کاربر به سرویس بیرونی ارسال نمی‌شود.
  * در همهٔ حالت‌ها: interim زیرخط‌دار در مکان نشانگر، دستورات صوتی فارسی، ارقام فارسی. */
 const hub = () => window.FarastVoiceHub;
 const vbox = document.createElement('aside');
@@ -1005,7 +1005,7 @@ function engineLabel() {
 }
 function currentEngineId() {
   if (engineMode !== 'auto') return engineMode;
-  return hub()?.hasNative?.() ? 'native' : (hub()?.isAuthed?.() ? 'cloud' : (hub()?.hasMic?.() ? 'local-whisper' : 'stt-api'));
+  return hub()?.hasMic?.() ? 'local-whisper' : (hub()?.hasNative?.() ? 'native' : 'stt-api');
 }
 /* ---------- موتور Whisper محلی روی دستگاه (رایگان، بدون کلید API) — فالبک مطمئن ---------- */
 async function startLocalWhisperEngine(ctx) {
@@ -1036,6 +1036,12 @@ function pickEngineInteractive() {
   showPop($('#fdVEngineBtn'), wrap);
 }
 engineMode = localStorage.getItem('farast.voice.engine') || 'auto';
+// Migrate the former cloud-first default to local-first so old browser preferences do not
+// keep sending microphone audio to the server after this privacy-oriented change.
+if (engineMode === 'cloud') {
+  engineMode = 'auto';
+  localStorage.setItem('farast.voice.engine', 'auto');
+}
 
 function toggleVoicePanel() {
   const show = !vbox.classList.contains('show');
@@ -1046,11 +1052,11 @@ function toggleVoicePanel() {
   if (show) {
     // راهنمای صادقانهٔ چندلایه: هیچ‌وقت بن‌بست «فقط Chrome» — همیشه حداقل یک مسیر رایگان هست
     if (!hub()?.hasNative?.()) {
-      $('#fdVMsg').textContent = hub()?.isAuthed?.()
-        ? 'این مرورگر موتور بومی ندارد؛ با کلیک روی دکمه، موتور ابری فراست فعال می‌شود.'
-        : (hub()?.hasMic?.()
-          ? 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی رایگان روی دستگاه شما فعال می‌شود. برای موتور ابری، وارد حساب شوید.'
-          : 'میکروفون در این محیط در دسترس نیست. اگر سایت را با http باز کرده‌اید، فایرفاکس اجازهٔ میکروفون نمی‌دهد؛ از https یا افزونهٔ SpeechRecognition فایرفاکس استفاده کنید.');
+      $('#fdVMsg').textContent = hub()?.hasMic?.()
+        ? 'این مرورگر موتور بومی ندارد؛ با کلیک، Whisper محلی روی دستگاه شما اجرا می‌شود و مدل پس از دانلود در کش مرورگر می‌ماند.'
+        : (hub()?.isAuthed?.()
+          ? 'Whisper محلی در دسترس نیست؛ برای استفاده از موتور ابری باید آن را دستی از «تغییر موتور» انتخاب کنید.'
+          : 'میکروفون در این محیط در دسترس نیست. سایت را با HTTPS باز کنید و اجازهٔ میکروفون بدهید.');
     } else $('#fdVMsg').textContent = 'برای شروع کلیک کنید';
   }
   if (!show) stopVoice();
@@ -1122,28 +1128,20 @@ function startNative() {
 }
 
 /* ---------- شروع/توقف عمومی (انتخاب لایه) ---------- */
-const ENGINE_NAMES = { native: 'موتور بومی مرورگر', cloud: 'موتور ابری فراست', 'local-whisper': 'Whisper محلی رایگان روی دستگاه', 'stt-api': 'سرویس تبدیل گفتار شما' };
+const ENGINE_NAMES = { native: 'موتور بومی مرورگر', cloud: 'موتور ابری فراست', 'local-whisper': 'Whisper محلی روی دستگاه', 'stt-api': 'سرویس تبدیل گفتار شما' };
 async function startVoice() {
   if (wantListen || activeHandle) return;
   const ctx = hubCtx();
-  /* ترتیب هوشمند بر اساس وضعیت واقعی سرور (/editor/voice/status):
-   * - موتور ابری واقعاً آماده است ← بومی ← ابری ← Whisper محلی ← سرویس شخصی
-   * - ابری پیکربندی نیست ← بومی ← Whisper محلی (رایگان، همهٔ مرورگرها) — بدون تلاش بی‌فایده و پیام خطا
-   * - نامعلوم (سرور قدیمی) ← رفتار قبلی */
+  // Local inference is the default on every browser. Cloud/native services are opt-in
+  // because they may send audio off-device and are not guaranteed to be free/private.
   let prefer;
   if (engineMode !== 'auto') prefer = engineMode;
-  else if (hub()?.hasNative?.()) prefer = 'native';
-  else {
-    let st = null;
-    try { st = await hub()?.cloudStatus?.(); } catch {}
-    if (hub()?.isAuthed?.()) prefer = (st && st.mode === 'none') ? 'local-whisper' : 'cloud';
-    else prefer = hub()?.hasMic?.() ? 'local-whisper' : 'stt-api';
-  }
+  else prefer = hub()?.hasMic?.() ? 'local-whisper' : (hub()?.hasNative?.() ? 'native' : 'stt-api');
   const chains = {
-    native: ['native', 'cloud', 'local-whisper', 'stt-api'],
-    cloud: ['cloud', 'native', 'local-whisper', 'stt-api'],
-    'local-whisper': ['local-whisper', 'native', 'cloud', 'stt-api'],
-    'stt-api': ['stt-api', 'native', 'cloud', 'local-whisper'],
+    native: ['native'],
+    cloud: ['cloud'],
+    'local-whisper': ['local-whisper'],
+    'stt-api': ['stt-api'],
   };
   const order = chains[prefer] || chains.native;
   let lastErr = '';
@@ -1200,7 +1198,7 @@ $('#fdVHelp').addEventListener('click', () => dialog('دستورهای صوتی 
   «<b>دو نقطه</b>» ← :<br>«<b>نقطه ویرگول</b>» ← ؛<br>«<b>سه نقطه</b>» ← …<br>
   «<b>خط جدید</b>» ← رفتن به خط بعد<br>«<b>پاراگراف جدید</b>» ← پاراگراف تازه<br>
   «<b>آخرین کلمه را پاک کن</b>» ← حذف کلمهٔ قبل<br>«<b>بازگردانی</b>» ← بازگردانی آخرین تغییر</p>
-  <p style="font-size:12px;color:#5f6368">میان‌بر باز و بسته کردن تایپ صوتی: Ctrl+Shift+S — در مرورگرهایی که موتور بومی ندارند (مثل فایرفاکس) به‌صورت خودکار از موتور ابری فراست یا سرویس دلخواه شما استفاده می‌شود.</p>`, [{ label: 'بستن', primary: true }]));
+  <p style="font-size:12px;color:#5f6368">میان‌بر باز و بسته کردن تایپ صوتی: Ctrl+Shift+S — در همهٔ مرورگرها، حالت خودکار ابتدا از Whisper محلی استفاده می‌کند؛ برای ارسال صدا به سرور، موتور ابری را دستی انتخاب کنید.</p>`, [{ label: 'بستن', primary: true }]));
 
 /* ===================== رجیستری عمومی ابزارها (برای استفادهٔ مجدد در سایر اپ‌ها) ===================== */
 window.FarastDocsTools.registerAll = tools => (tools || []).forEach(t => window.FarastDocsTools.register(t));
