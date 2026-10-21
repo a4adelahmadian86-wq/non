@@ -129,9 +129,9 @@ test('FARAST voice workflow never invokes browser speech recognition or installs
   const hubSource = fs.readFileSync(path.join(process.cwd(), 'public/js/editor-voice-hub.js'), 'utf8');
   expect(voiceSource).not.toContain('SpeechRecognition');
   expect(voiceSource).not.toContain('processLocally');
-  expect(voiceSource).not.toMatch(/\\.install\\s*\\(/);
+  expect(voiceSource).not.toMatch(/\.install\s*\(/);
   expect(voiceSource).not.toContain('شروع رایگان');
-  expect(hubSource).not.toMatch(/window\\.(webkit)?SpeechRecognition/);
+  expect(hubSource).not.toMatch(/window\.(webkit)?SpeechRecognition/);
   expect(hubSource).not.toContain('processLocally');
-  expect(hubSource).not.toMatch(/\\bSR\\.install\\s*\\(/);
+  expect(hubSource).not.toMatch(/\bSR\.install\s*\(/);
 });
