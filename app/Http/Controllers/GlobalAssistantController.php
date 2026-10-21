@@ -213,21 +213,21 @@ class GlobalAssistantController extends Controller
         $user = $request->user();
         abort_unless($user, 401, 'برای استفاده از همراه فراست وارد حساب شوید.');
 
-        $storedHistory = \\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_messages')
-            ? \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
+        $storedHistory = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
             : collect();
         $historyItems = $storedHistory->isNotEmpty()
             ? $storedHistory->map(fn ($item) => ['role' => $item->role, 'text' => $item->content])->all()
             : ($data['context'] ?? []);
-        $memories = \\Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_memories')
-            ? \\Illuminate\\Support\\Facades\\DB::table('farast_assistant_memories')->where('user_id', $user->id)->orderBy('id')->limit(20)->pluck('content')->all()
+        $memories = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_memories')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_memories')->where('user_id', $user->id)->orderBy('id')->limit(20)->pluck('content')->all()
             : [];
-        $memoryContext = $memories ? ("\\nنکته‌های شخصی ذخیره‌شده توسط خود کاربر (صرفاً زمینه):\\n- " . implode("\\n- ", array_map(fn ($item) => mb_substr((string) $item, 0, 500), $memories))) : '';
+        $memoryContext = $memories ? ("\nنکته‌های شخصی ذخیره‌شده توسط خود کاربر (صرفاً زمینه):\n- " . implode("\n- ", array_map(fn ($item) => mb_substr((string) $item, 0, 500), $memories))) : '';
         $history = collect($historyItems)->map(fn ($item) =>
             (($item['role'] ?? '') === 'user' ? 'کاربر' : 'همراه') . ': ' . (string) ($item['text'] ?? '')
-        )->implode("\\n");
-        $prompt = "تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، گرم، حرفه‌ای و دقیق پاسخ بده. پاسخ را عملی و ترجیحاً کوتاه بنویس. درباره قابلیت‌هایی که مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، تایپ و ویرایشگر /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربر /dashboard." . $memoryContext . " سابقه اخیر گفتگو:\\n"
-            . $history . "\\nکاربر: " . $data['message'];
+        )->implode("\n");
+        $prompt = "تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، گرم، حرفه‌ای و دقیق پاسخ بده. پاسخ را عملی و ترجیحاً کوتاه بنویس. درباره قابلیت‌هایی که مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، تایپ و ویرایشگر /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربر /dashboard." . $memoryContext . " سابقه اخیر گفتگو:\n"
+            . $history . "\nکاربر: " . $data['message'];
 
         $messages = [[
             'role' => 'system',
@@ -248,7 +248,7 @@ class GlobalAssistantController extends Controller
             // The central Runflare gateway is the primary route even when no Groq key exists.
             if ($gatewayUrl !== '' && $gatewayToken !== '') {
                 try {
-                    $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \\Illuminate\\Support\\Str::uuid());
+                    $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
                     $gatewayResponse = Http::withToken($gatewayToken)->acceptJson()->timeout(65)->retry(1, 300, throw: false)
                         ->withHeaders(['X-Farast-Request-Id' => $gatewayRequestId])
                         ->post($gatewayUrl.'/v1/chat/completions', [
@@ -267,7 +267,7 @@ class GlobalAssistantController extends Controller
                         'user_id' => $user->id, 'status' => $gatewayResponse->status(),
                         'fallback' => $groqKey !== '' ? 'groq' : 'farast_ai',
                     ]);
-                } catch (\\Throwable $gatewayException) {
+                } catch (\Throwable $gatewayException) {
                     Log::warning('farast.global_assistant_gateway_exception', [
                         'user_id' => $user->id, 'error_class' => class_basename($gatewayException),
                         'fallback' => $groqKey !== '' ? 'groq' : 'farast_ai',
@@ -303,11 +303,11 @@ class GlobalAssistantController extends Controller
             ]);
             $fallbackReply = data_get($fallback, 'result.text') ?? data_get($fallback, 'text') ?? data_get($fallback, 'result') ?? data_get($fallback, 'output');
             if (is_array($fallbackReply)) $fallbackReply = $fallbackReply['text'] ?? $fallbackReply['content'] ?? json_encode($fallbackReply, JSON_UNESCAPED_UNICODE);
-            if (! is_string($fallbackReply) || trim($fallbackReply) === '') throw new \\RuntimeException('ai_provider_failure');
+            if (! is_string($fallbackReply) || trim($fallbackReply) === '') throw new \RuntimeException('ai_provider_failure');
             $fallbackReply = trim($fallbackReply);
             $this->persistExchange((int) $user->id, $data['message'], $fallbackReply);
             return response()->json(['ok' => true, 'reply' => $fallbackReply, 'provider' => 'farast-ai-fallback'], 200, ['Cache-Control' => 'no-store']);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             $code = preg_match('/^ai_[a-z0-9_]+$/', $e->getMessage()) ? $e->getMessage() : 'assistant_unavailable';
             Log::warning('farast.global_assistant_failed', ['user_id' => $user->id, 'error_code' => $code]);
             return response()->json(['ok' => false, 'message' => 'سرویس گفت‌وگو فعلاً در دسترس نیست. تنظیمات هوش مصنوعی و دسترسی حساب را بررسی کنید.'], 503, ['Cache-Control' => 'no-store']);
