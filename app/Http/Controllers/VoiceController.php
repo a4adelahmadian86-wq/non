@@ -25,6 +25,12 @@ class VoiceController extends Controller
 
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+        if ($gatewayUrl !== '' && $gatewayToken === '') {
+            return response()->json([
+                'ok' => true, 'mode' => 'none', 'reason' => 'gateway_token_missing',
+                'chunked' => false, 'gateway' => false, 'websocket_url' => '', 'server_side' => true,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
             return response()->json([
                 'ok' => true,
