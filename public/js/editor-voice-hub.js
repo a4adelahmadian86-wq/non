@@ -216,7 +216,6 @@ function guessHandwritten(file) {
  * مسیر اصلیِ محلی: صدا روی دستگاه پردازش می‌شود؛ هیچ صوتی به‌طور خودکار به سرور ارسال نمی‌شود.
  * ضبط‌های کوتاه و پی‌درپی، دیکد به PCM و اجرای Whisper quantized روی WASM.
  * رایگان و بدون کلید؛ دانلود اولیه نیازمند اینترنت است و فایل‌ها در کش مرورگر نگه‌داری می‌شوند. */
-let whr = null, whrName = '';
 /* Local Whisper runs in a dedicated Worker so model inference does not block the editor UI. */
 let whr = null, whrName = '', whrLoad = null;
 let whisperWorker = null, whisperRequestId = 0;
