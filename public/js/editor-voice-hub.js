@@ -267,30 +267,67 @@ async function ensureWhisper(onStatus, model) {
   whrName = model;
   return whr;
 }
-async function decodeToWav(audioBlob, onStatus) {
+async function decodeToPcm16k(audioBlob, onStatus) {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) throw new Error('AudioContext در این مرورگر نیست.');
   const ab = await audioBlob.arrayBuffer();
-  const acx = new AC({ sampleRate: 16000 });
+  const acx = new AC();
   let buf;
-  try { buf = await acx.decodeAudioData(ab); } finally { try { acx.close(); } catch {} }
-  const ch = buf.getChannelData(0);
-  const sr = buf.sampleRate;
-  // تبدیل به WAV 16k mono (قالب ورودی whisper)
-  const ratio = Math.max(1, Math.round(sr / 16000));
-  const outRate = Math.floor(sr / ratio);
-  const len = Math.floor(ch.length / ratio);
-  const pcm = new Float32Array(len);
-  for (let i = 0; i < len; i++) { let s = 0; for (let j = 0; j < ratio; j++) s += ch[i * ratio + j] || 0; pcm[i] = s / ratio; }
-  const ns = 44 + pcm.length * 2, b = new DataView(new ArrayBuffer(ns));
-  const str = (o, x) => { for (let i = 0; i < x.length; i++) b.setUint8(o + i, x.charCodeAt(i)); };
-  str(0, 'RIFF'); b.setUint32(4, ns - 8, true); str(8, 'WAVE'); str(12, 'fmt ');
-  b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
-  b.setUint32(24, outRate, true); b.setUint32(28, outRate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true);
-  str(36, 'data'); b.setUint32(40, pcm.length * 2, true);
-  for (let i = 0; i < pcm.length; i++) b.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 32767, true);
-  return new Uint8Array(b.buffer);
+  try { buf = await acx.decodeAudioData(ab); } finally { try { await acx.close(); } catch {} }
+  // Transformers.js ASR expects raw Float32 PCM samples at 16 kHz, not WAV-file bytes.
+  // Passing a Uint8Array containing a WAV header can be interpreted as sample values and
+  // produce unrelated/hallucinated words, so decode and resample explicitly.
+  const channels = Math.max(1, Number(buf.numberOfChannels) || 1);
+  const mono = new Float32Array(buf.length);
+  for (let channel = 0; channel < channels; channel++) {
+    const source = buf.getChannelData(channel);
+    for (let i = 0; i < source.length; i++) mono[i] += source[i] / channels;
+  }
+  const sourceRate = Number(buf.sampleRate) || 16000;
+  const targetRate = 16000;
+  if (sourceRate === targetRate) return mono;
+  const outLength = Math.max(1, Math.floor(mono.length * targetRate / sourceRate));
+  const pcm = new Float32Array(outLength);
+  const scale = sourceRate / targetRate;
+  for (let i = 0; i < outLength; i++) {
+    const position = i * scale;
+    const left = Math.min(mono.length - 1, Math.floor(position));
+    const right = Math.min(mono.length - 1, left + 1);
+    const fraction = position - left;
+    pcm[i] = mono[left] * (1 - fraction) + mono[right] * fraction;
+  }
+  return pcm;
 }
+
+function hasUsableSpeech(pcm) {
+  if (!(pcm instanceof Float32Array) || pcm.length < 4000) return false;
+  let energy = 0;
+  const stride = Math.max(1, Math.floor(pcm.length / 12000));
+  let count = 0;
+  for (let i = 0; i < pcm.length; i += stride) { energy += pcm[i] * pcm[i]; count++; }
+  return count > 0 && Math.sqrt(energy / count) >= 0.002;
+}
+
+async function transcribeLocalBlob(blob, locale = 'fa-IR', onStatus) {
+  if (!blob || blob.size < 2000) return '';
+  const model = localStorage.getItem('farast.whisper.model') || 'Xenova/whisper-base';
+  onStatus?.('آماده‌سازی Whisper محلی روی دستگاه…');
+  const whisper = await ensureWhisper(onStatus, model);
+  const pcm = await decodeToPcm16k(blob, onStatus);
+  if (!hasUsableSpeech(pcm)) return '';
+  const languages = {
+    'fa-IR': 'farsi', 'en-US': 'english', 'ar-SA': 'arabic',
+    'tr-TR': 'turkish', 'az-AZ': 'azerbaijani'
+  };
+  const output = await whisper(pcm, {
+    task: 'transcribe',
+    language: languages[locale],
+    chunk_length_s: 30,
+    stride_length_s: 5
+  });
+  return String(output?.text || '').trim();
+}
+
 async function startLocalWhisper(ctx) {
   if (!hasMic()) throw new Error('امکان ضبط صدا در این مرورگر/سیستم وجود ندارد.');
   // Local-first: speech is transcribed on this device. Do not silently upload microphone audio.
@@ -305,8 +342,10 @@ async function startLocalWhisper(ctx) {
     ctx.onStatus('پردازش محلی (Whisper)…');
     inflight = inflight.then(async () => {
       try {
-        const wav = await decodeToWav(blob, ctx.onStatus);
-        const out = await whisper(wav, { task: 'transcribe', language: ctx.lang().startsWith('fa') ? 'farsi' : undefined, chunk_length_s: 10, stride_length_s: 5 });
+        const pcm = await decodeToPcm16k(blob, ctx.onStatus);
+        if (!hasUsableSpeech(pcm)) return;
+        const languages = { 'fa-IR': 'farsi', 'en-US': 'english', 'ar-SA': 'arabic', 'tr-TR': 'turkish', 'az-AZ': 'azerbaijani' };
+        const out = await whisper(pcm, { task: 'transcribe', language: languages[ctx.lang()], chunk_length_s: 10, stride_length_s: 5 });
         const text = String(out?.text || '').trim();
         if (text) {
           clearInterim();
@@ -376,7 +415,7 @@ window.FarastVoiceHub = {
   isAuthed, hasMic, engines,
   processFinalText, insertIntoDoc, showInterim, clearInterim, sweepInterim, surfaceEl, hideInterimSel,
   ocr: { ocrImage, guessHandwritten, ensureTesseract },
-  localWhisper: { ensureWhisper, start: startLocalWhisper },
+  localWhisper: { ensureWhisper, start: startLocalWhisper, transcribe: transcribeLocalBlob },
 };
 
 /* ---------- کش وضعیت موتور ابری (از /editor/voice/status) ----------
