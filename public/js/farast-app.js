@@ -43,7 +43,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-cart-add]'
 
 const search=q('#farastGlobalSearch');
 search?.addEventListener('input',()=>{const term=search.value.trim().toLocaleLowerCase('fa');document.querySelectorAll('[data-searchable]').forEach(el=>{el.hidden=!!term&&!el.textContent.toLocaleLowerCase('fa').includes(term)})});
-q('#farastVoiceSearch')?.addEventListener('click',()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){notice('جستجوی صوتی مستقیم در این مرورگر در دسترس نیست','در بخش تایپ صوتی، مسیر جایگزین سروری فعال است.');return}const r=new SR();r.lang='fa-IR';r.interimResults=false;r.maxAlternatives=1;r.onresult=e=>{search.value=e.results[0][0].transcript;search.dispatchEvent(new Event('input'))};r.onerror=()=>notice('جستجوی صوتی انجام نشد','دسترسی میکروفن و اتصال مرورگر را بررسی کنید.');r.start()});
+q('#farastVoiceSearch')?.addEventListener('click',()=>notice('جستجوی صوتی مستقیم غیرفعال است','برای جلوگیری از وابستگی به موتور بومی مرورگر، از تایپ صوتی سمت سرور در حساب کاربری استفاده کنید.'));
 
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
 document.addEventListener('click',async e=>{const a=e.target.closest('a[href]');if(!a||a.target==='_blank'||a.hasAttribute('download')||a.origin!==location.origin||navigator.onLine)return;try{if(await caches.match(a.href))return}catch{}e.preventDefault();showConnectivity(false)},{capture:true});
