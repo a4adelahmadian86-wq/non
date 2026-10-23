@@ -137,37 +137,47 @@
     return chunks;
   }
   async function say(text){
-    var speechTurn=assistantTurn;
+    var speechTurn=++speechGeneration,requestTurn=assistantTurn;
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای پخش پاسخ صوتی ابتدا وارد حساب شو.';return;}
     var chunks=splitSpeechChunks(text);
     if(!chunks.length)return;
+    async function synthesizeChunk(chunk){
+      try{
+        var response=await fetch('/assistant/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'audio/*, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({text:chunk})});
+        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return {cancelled:true};
+        if(!response.ok){var err=await response.json().catch(function(){return {};});throw new Error(err.message||'موتور صدای ثابت در دسترس نیست.');}
+        var blob=await response.blob();
+        if(!blob.size||(!/^audio\\//i.test(blob.type)&&blob.type!=='application/octet-stream'))throw new Error('موتور صدا فایل صوتی معتبر برنگرداند.');
+        return {blob:blob};
+      }catch(error){return {error:error};}
+    }
     try{
       if(assistantAudio){assistantAudio.pause();assistantAudio=null;}
       if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
+      var pendingBlob=synthesizeChunk(chunks[0]);
       for(var i=0;i<chunks.length;i++){
         if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
-        // Synthesize sentence-sized pieces so playback can begin before the full
-        // answer audio has been rendered, while retaining the same pinned server voice.
-        var response=await fetch('/assistant/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'audio/*, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({text:chunks[i]})});
-        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
-        if(!response.ok){var err=await response.json().catch(function(){return {};});throw new Error(err.message||'موتور صدای ثابت در دسترس نیست.');}
-        var blob=await response.blob();
-        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
-        if(!blob.size||(!/^audio\\//i.test(blob.type)&&blob.type!=='application/octet-stream'))throw new Error('موتور صدا فایل صوتی معتبر برنگرداند.');
+        var result=await pendingBlob;
+        if(result.cancelled||speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
+        if(result.error)throw result.error;
+        var blob=result.blob;
         assistantAudioUrl=URL.createObjectURL(blob);
         var audio=new Audio();assistantAudio=audio;audio.preload='auto';audio.src=assistantAudioUrl;
         audio.onplay=function(){panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='پاسخ صوتی فراست به‌صورت پیوسته پخش می‌شود.';status.textContent='برای قطع صدا، «توقف پخش صدا» را لمس کن.';};
         var readyPromise=new Promise(function(resolve,reject){
-          var settled=false;
-          function done(error){if(settled)return;settled=true;audio.removeEventListener('canplay',ready);audio.removeEventListener('error',failed);if(error)reject(error);else resolve();}
+          var settled=false,timeout;
+          function done(error){if(settled)return;settled=true;if(timeout)window.clearTimeout(timeout);audio.removeEventListener('canplay',ready);audio.removeEventListener('error',failed);if(error)reject(error);else resolve();}
           function ready(){done();}
           function failed(){done(new Error('فایل دریافت شد، اما مرورگر نمی‌تواند آن را به صدای قابل پخش تبدیل کند.'));}
           audio.addEventListener('canplay',ready,{once:true});audio.addEventListener('error',failed,{once:true});audio.load();
-          window.setTimeout(function(){if(!settled)done(new Error('بارگذاری صدای فارسی بیش از حد طول کشید؛ دوباره تلاش کن.'));},130000);
+          timeout=window.setTimeout(function(){done(new Error('بارگذاری صدای فارسی بیش از حد طول کشید؛ دوباره تلاش کن.'));},130000);
         });
         await readyPromise;
         if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
         if(!audio.duration||!isFinite(audio.duration)||audio.duration<=0)throw new Error('فایل صوتی دریافت شد، اما مدت‌زمان قابل پخش ندارد.');
+        // Fetch the next sentence while this one is playing to minimize silence
+        // between segments without buffering the whole reply before playback.
+        if(i+1<chunks.length)pendingBlob=synthesizeChunk(chunks[i+1]);
         await audio.play();
         await new Promise(function(resolve){
           var finished=false;
