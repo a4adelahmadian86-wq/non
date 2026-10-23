@@ -534,6 +534,8 @@
     if(busy){assistantTurn++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}if(activePendingMessage){activePendingMessage.textContent='پاسخ قبلی قطع شد؛ دارم به صحبتت گوش می‌دهم.';activePendingMessage=null;}panel.classList.remove('is-speaking');}
     if(recognition){recognition.stop();recognition=null;return;}
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
+    if(speechRequestController){speechRequestController.abort();speechRequestController=null;}
+    if(window.speechSynthesis)window.speechSynthesis.cancel();
     speechGeneration++;
     if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
     if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
