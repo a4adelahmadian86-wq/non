@@ -294,6 +294,35 @@ test('opening the assistant keeps the microphone off until the user taps', async
 });
 
 
+
+test('gateway connection startup failure does not auto-start browser recognition', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__recognitionStarts = 0;
+  class FakeWebSocket extends EventTarget {
+    constructor(url) { super(); this.url=url; this.readyState=0; setTimeout(()=>this.dispatchEvent(new Event('error')),0); }
+    send() {}
+    close() { this.readyState=3; }
+  }
+  window.WebSocket=FakeWebSocket;
+  window.SpeechRecognition = class { start() { window.__recognitionStarts++; this.onstart?.(); } stop() { this.onend?.(); } };
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}});
+  window.AudioContext = class { constructor(){this.state='running';this.sampleRate=48000;this.destination={};} createMediaStreamSource(){return {connect(){},disconnect(){}};} close(){this.state='closed';return Promise.resolve();} };
+  window.fetch=async(url)=> {
+    if(url==='/editor/voice/status') return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token') return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/history') return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('میکروفون خاموش');
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
+});
+
 test('gateway failure keeps the microphone off until the user taps again', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
