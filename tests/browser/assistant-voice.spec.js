@@ -36,7 +36,7 @@ test('closing the global voice assistant stops microphone capture and discards p
 </body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
-  await page.locator('.farast-voice-mic').click();
+
   await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBe('recording');
   await page.keyboard.press('Escape');
   await expect(page.locator('.farast-assistant-panel')).toBeHidden();
@@ -71,7 +71,7 @@ test('live conversation streams interim transcript and sends the completed utter
 </script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
-  await page.locator('.farast-voice-mic').click();
+
   await expect.poll(async () => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
   await page.evaluate(() => window.__liveRecognition.onresult({
     resultIndex: 0,
@@ -108,7 +108,7 @@ test('unsupported voice browsers can continue through an accessible text fallbac
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await expect(page.locator('.farast-assistant-form')).toBeHidden();
-  await page.locator('.farast-voice-mic').click();
+
   await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await expect(page.locator('[data-fa-messages]')).toBeVisible();
   await page.locator('.farast-assistant-form input[name="message"]').fill('سلام، کمک می‌خواهم');
@@ -161,7 +161,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
 </script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
-  await page.locator('.farast-voice-mic').click();
+
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
@@ -213,7 +213,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
 </script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
-  await page.locator('.farast-voice-mic').click();
+
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
   await page.evaluate(() => {
