@@ -85,3 +85,31 @@ test('live conversation streams interim transcript and sends the completed utter
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
 });
+
+
+test('unsupported voice browsers can continue through an accessible text fallback', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__chatPayloads = [];
+  Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: undefined });
+  Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: undefined });
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+  window.fetch = async (url, options = {}) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/chat') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response(JSON.stringify({ ok: true, reply: 'پاسخ متنی قابل مشاهده است.' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+    if (url === '/assistant/speak') return new Response(JSON.stringify({ ok: false, message: 'TTS unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  await expect(page.locator('[data-fa-messages]')).toBeVisible();
+  await page.locator('.farast-assistant-form input[name="message"]').fill('سلام، کمک می‌خواهم');
+  await page.locator('.farast-assistant-send').click();
+  await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
+  await expect(page.locator('[data-fa-messages]')).toContainText('پاسخ متنی قابل مشاهده است.');
+});
