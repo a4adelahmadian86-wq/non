@@ -152,15 +152,13 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   }
   window.WebSocket = FakeWebSocket;
   window.AudioContext = class {
-    constructor() { this.state = 'running'; this.audioWorklet = { addModule: async () => {} }; }
+    constructor() { this.state = 'running'; this.sampleRate = 48000; this.destination = {}; }
     createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
+    createScriptProcessor() { window.__scriptProcessor = { onaudioprocess: null, connect() {}, disconnect() {} }; return window.__scriptProcessor; }
     resume() { return Promise.resolve(); }
     close() { this.state = 'closed'; return Promise.resolve(); }
   };
-  window.AudioWorkletNode = class {
-    constructor() { this.port = { onmessage: null }; window.__worklet = this; }
-    disconnect() {}
-  };
+  window.AudioWorkletNode = undefined;
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } });
   window.Audio = class {
     constructor() { this.duration = 2; this.handlers = {}; }
