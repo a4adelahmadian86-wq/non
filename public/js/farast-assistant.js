@@ -136,8 +136,8 @@
     if(pending)chunks.push(pending);
     return chunks;
   }
-  async function say(text){
-    var speechTurn=++speechGeneration,requestTurn=assistantTurn;
+  async function say(text,streamState){
+    var speechTurn=streamState&&streamState.speechTurn?streamState.speechTurn:++speechGeneration,requestTurn=assistantTurn;
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای پخش پاسخ صوتی ابتدا وارد حساب شو.';return;}
     var chunks=splitSpeechChunks(text);
     if(!chunks.length)return;
@@ -157,7 +157,7 @@
     try{
       if(assistantAudio){assistantAudio.pause();assistantAudio=null;}
       if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
-      var pendingBlob=synthesizeChunk(chunks[0]);
+      var pendingBlob=streamState&&streamState.prefetched&&streamState.prefetched.chunk===chunks[0]?streamState.prefetched.promise:synthesizeChunk(chunks[0]);if(streamState&&streamState.prefetched&&streamState.prefetched.chunk===chunks[0])streamState.prefetched=null;
       for(var i=0;i<chunks.length;i++){
         if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
         var result=await pendingBlob;
@@ -180,7 +180,19 @@
         if(!audio.duration||!isFinite(audio.duration)||audio.duration<=0)throw new Error('فایل صوتی دریافت شد، اما مدت‌زمان قابل پخش ندارد.');
         // Fetch the next sentence while this one is playing to minimize silence
         // between segments without buffering the whole reply before playback.
+        var streamPrefetch=null;
         if(i+1<chunks.length)pendingBlob=synthesizeChunk(chunks[i+1]);
+        else if(streamState){
+          streamPrefetch=(async function(){
+            while(!streamState.queue.length&&!streamState.done&&speechTurn===speechGeneration&&requestTurn===assistantTurn){
+              await new Promise(function(resolve){streamState.notify=resolve;});
+            }
+            if(streamState.queue.length&&speechTurn===speechGeneration&&requestTurn===assistantTurn){
+              var nextChunk=streamState.queue[0];return {chunk:nextChunk,promise:synthesizeChunk(nextChunk)};
+            }
+            return null;
+          })();
+        }
         await audio.play();
         await new Promise(function(resolve){
           var finished=false;
@@ -188,6 +200,7 @@
           audio.addEventListener('ended',done,{once:true});audio.addEventListener('pause',done,{once:true});audio.addEventListener('error',done,{once:true});
           if(audio.ended)done();
         });
+        if(streamPrefetch){var prepared=await streamPrefetch;if(prepared)streamState.prefetched=prepared;}
         if(assistantAudio===audio)assistantAudio=null;
         if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
         if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
@@ -228,12 +241,12 @@
     input.value='';busy=true;var turn=++assistantTurn;var requestController=new AbortController();chatAbortController=requestController;
     voiceTitle.textContent='در حال پاسخ‌گویی';status.textContent='دارم به حرفت فکر می‌کنم…';
     var pending=message('bot','دارم گوش می‌دهم و پاسخ را آماده می‌کنم…');activePendingMessage=pending;panel.classList.add('is-speaking');
-    var queueState={queue:[],done:false,notify:null};
+    var queueState={queue:[],done:false,notify:null,prefetched:null,speechTurn:++speechGeneration};
     function wakeQueue(){if(queueState.notify){var wake=queueState.notify;queueState.notify=null;wake();}}
     function enqueueSpeech(chunk){chunk=String(chunk||'').trim();if(chunk){queueState.queue.push(chunk);wakeQueue();}}
     async function drainSpeechQueue(){
       while(turn===assistantTurn){
-        if(queueState.queue.length){await say(queueState.queue.shift());continue;}
+        if(queueState.queue.length){await say(queueState.queue.shift(),queueState);continue;}
         if(queueState.done)return;
         await new Promise(function(resolve){queueState.notify=resolve;});
       }
