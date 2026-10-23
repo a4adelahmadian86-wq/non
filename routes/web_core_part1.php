@@ -40,6 +40,7 @@ Route::post('/cart/checkout',[StoreCartController::class,'checkout'])->middlewar
 Route::post('/cart/coupon',[StoreCartController::class,'applyCoupon'])->middleware('throttle:30,10')->name('cart.coupon');
 Route::post('/cart/coupon/clear',[StoreCartController::class,'clearCoupon'])->middleware('throttle:30,10')->name('cart.coupon.clear');
 Route::get('/pricing',[EditorController::class,'pricing'])->name('pricing');
+Route::post('/assistant/chat/stream',[GlobalAssistantController::class,'chatStream'])->middleware(['auth','throttle:20,1'])->name('assistant.chat.stream');
 Route::post('/assistant/chat',[GlobalAssistantController::class,'chat'])->middleware(['auth','throttle:20,1'])->name('assistant.chat');
 Route::get('/assistant/history',[GlobalAssistantController::class,'history'])->middleware(['auth','throttle:30,1'])->name('assistant.history');
 Route::get('/assistant/memories',[GlobalAssistantController::class,'memories'])->middleware(['auth','throttle:30,1'])->name('assistant.memories');
