@@ -243,7 +243,13 @@
       gatewayStarting=false;return true;
     }catch(e){
       if(generation===gatewayGeneration)stopGatewayRecognition();
-      gatewayStarting=false;return false;
+      gatewayStarting=false;
+      if(e&&(e.name==='NotAllowedError'||e.name==='SecurityError')){
+        conversationActive=false;
+        enableTextFallback('دسترسی میکروفون مجاز نیست؛ می‌توانی همین‌جا با نوشتن پیام ادامه بدهی.');
+        return true;
+      }
+      return false;
     }
   }
   function finishGatewayTurn(generation){
