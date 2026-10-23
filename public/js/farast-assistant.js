@@ -188,7 +188,13 @@
       instance.onerror=function(event){
         if(liveRecognition!==instance)return;
         if(event&&event.error==='not-allowed'){conversationActive=false;liveRecognition=null;liveStarting=false;panel.classList.remove('is-listening');status.textContent='مجوز میکروفون یا تشخیص گفتار داده نشد.';voiceTitle.textContent='دسترسی میکروفون لازم است';voiceCaption.textContent=status.textContent;return;}
-        if(event&&event.error==='service-not-allowed'){conversationActive=false;liveRecognition=null;liveStarting=false;panel.classList.remove('is-listening');status.textContent='سرویس تشخیص زندهٔ مرورگر در این محیط مجاز نیست.';voiceTitle.textContent='تشخیص زنده در دسترس نیست';voiceCaption.textContent='می‌توانی از مسیر ضبط و رونویسی سمت سرور استفاده کنی.';return;}
+        if(event&&(event.error==='service-not-allowed'||event.error==='network'||event.error==='language-not-supported')){
+          liveRecognition=null;liveStarting=false;liveTurnEnding=true;clearLiveSilence();panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+          status.textContent='تشخیص زندهٔ مرورگر در دسترس نیست؛ مسیر سمت سرور را امتحان می‌کنم.';
+          voiceTitle.textContent='تغییر مسیر تشخیص گفتار';voiceCaption.textContent='گفت‌وگو ادامه می‌یابد؛ صدا برای رونویسی به سرویس سمت سرور ارسال می‌شود.';
+          try{instance.onresult=null;instance.onerror=null;instance.onend=null;instance.stop();}catch(e){}
+          window.setTimeout(function(){if(conversationActive&&!panel.hidden)startServerRecording();},150);return;
+        }
       };
       instance.onend=function(){
         if(liveRecognition!==instance)return;
