@@ -166,7 +166,72 @@
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var mediaRecorder=null, mediaStream=null, recordedChunks=[], recordingTimeout=null, discardCurrentRecording=false;
   var liveRecognition=null, liveFinalText='', liveSilenceTimer=null, liveStarting=false, liveTurnEnding=false;
+  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayGeneration=0;
   var LiveSpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  function stopGatewayRecognition(){
+    gatewayGeneration++;gatewayStarting=false;
+    if(gatewaySilenceTimer){window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=null;}
+    if(gatewayWorkletNode){try{gatewayWorkletNode.disconnect();}catch(e){}gatewayWorkletNode=null;}
+    if(gatewaySourceNode){try{gatewaySourceNode.disconnect();}catch(e){}gatewaySourceNode=null;}
+    if(gatewayAudioContext){try{gatewayAudioContext.close();}catch(e){}gatewayAudioContext=null;}
+    if(gatewayMediaStream){gatewayMediaStream.getTracks().forEach(function(track){track.stop();});gatewayMediaStream=null;}
+    var socket=gatewayWs;gatewayWs=null;
+    if(socket){try{socket.onopen=socket.onmessage=socket.onerror=socket.onclose=null;if(socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'stop'}));socket.close(1000,'assistant_turn_end');}catch(e){}}
+    gatewayFinalText='';
+  }
+  async function startGatewayLiveRecognition(){
+    if(gatewayStarting||gatewayWs)return true;
+    if(!window.WebSocket||!(window.AudioContext||window.webkitAudioContext)||!window.AudioWorkletNode||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return false;
+    gatewayStarting=true;var generation=++gatewayGeneration;
+    try{
+      var statusResponse=await fetch('/editor/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
+      var service=await statusResponse.json().catch(function(){return {};});
+      if(!statusResponse.ok||service.mode!=='gateway'){gatewayStarting=false;return false;}
+      var tokenResponse=await fetch('/editor/voice/stream-token',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({locale:'fa-IR'})});
+      var tokenData=await tokenResponse.json().catch(function(){return {};});
+      if(!tokenResponse.ok||!tokenData.token||!tokenData.websocket_url)throw new Error(tokenData.message||'درگاه تشخیص زنده آماده نیست.');
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){gatewayStarting=false;return true;}
+      var wsUrl=tokenData.websocket_url.replace(/^http:/,'ws:').replace(/^https:/,'wss:');
+      var socket=new WebSocket(wsUrl+'?v=1');gatewayWs=socket;socket.binaryType='arraybuffer';
+      await new Promise(function(resolve,reject){
+        var settled=false;var timer=window.setTimeout(function(){finish(new Error('مهلت اتصال درگاه صوتی تمام شد.'));},12000);
+        function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);if(error)reject(error);else resolve();}
+        function opened(){finish();}
+        function failed(){finish(new Error('اتصال درگاه گفتار برقرار نشد.'));}
+        socket.addEventListener('open',opened,{once:true});socket.addEventListener('error',failed,{once:true});
+      });
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
+      socket.send(JSON.stringify({type:'start',token:tokenData.token,locale:'fa-IR',sequence:0}));
+      gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      gatewayAudioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});
+      await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js');
+      gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
+      gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:0});
+      gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000)socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));}else if(bytes.byteLength)socket.send(bytes);};
+      gatewaySourceNode.connect(gatewayWorkletNode);
+      if(gatewayAudioContext.state==='suspended')await gatewayAudioContext.resume();
+      socket.onmessage=function(event){
+        if(generation!==gatewayGeneration||typeof event.data!=='string')return;var data;try{data=JSON.parse(event.data);}catch(e){return;}
+        if(data.type==='ready'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتار زنده از مسیر سرور پردازش می‌شود؛ صحبت کن.';status.textContent='گفت‌وگوی زنده فعال است.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');}
+        else if(data.type==='interim'){var visible=(gatewayFinalText+' '+String(data.text||'')).trim();if(visible){voiceCaption.textContent=visible;status.textContent='در حال تشخیص زندهٔ گفتار…';}}
+        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart)gatewayFinalText+=(gatewayFinalText?' ':'')+finalPart;if(gatewayFinalText.trim()){if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},950);}}
+        else if(data.type==='provider_error'){status.textContent='در حال تغییر موتور تشخیص گفتار…';}
+        else if(data.type==='error'){status.textContent='درگاه گفتار موقتاً در دسترس نیست؛ مسیر جایگزین را امتحان می‌کنم.';stopGatewayRecognition();if(conversationActive&&!panel.hidden)startLiveRecognition(true);}
+      };
+      socket.onerror=function(){if(generation===gatewayGeneration&&conversationActive){stopGatewayRecognition();startLiveRecognition(true);}};
+      socket.onclose=function(){if(generation===gatewayGeneration&&conversationActive&&!liveTurnEnding){stopGatewayRecognition();startLiveRecognition(true);}};
+      gatewayStarting=false;return true;
+    }catch(e){
+      if(generation===gatewayGeneration)stopGatewayRecognition();
+      gatewayStarting=false;return false;
+    }
+  }
+  function finishGatewayTurn(generation){
+    if(generation!==gatewayGeneration||!conversationActive||liveTurnEnding)return;
+    var text=gatewayFinalText.trim();if(!text)return;
+    liveTurnEnding=true;panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+    stopGatewayRecognition();send(text);
+  }
   function enableTextFallback(reason){
     form.hidden=false;list.hidden=false;
     var formMic=form.querySelector('.farast-assistant-mic');if(formMic)formMic.hidden=true;
@@ -176,9 +241,10 @@
     status.textContent='گفت‌وگو با متن فعال است؛ پاسخ‌ها همچنان از مسیر دستیار فراست دریافت می‌شوند.';
   }
   function clearLiveSilence(){if(liveSilenceTimer){window.clearTimeout(liveSilenceTimer);liveSilenceTimer=null;}}
-  function stopLiveRecognition(){clearLiveSilence();liveTurnEnding=true;liveStarting=false;var current=liveRecognition;liveRecognition=null;if(current){try{current.onresult=null;current.onerror=null;current.onend=null;current.stop();}catch(e){}}}
-  function startLiveRecognition(){
+  function stopLiveRecognition(){clearLiveSilence();stopGatewayRecognition();liveTurnEnding=true;liveStarting=false;var current=liveRecognition;liveRecognition=null;if(current){try{current.onresult=null;current.onerror=null;current.onend=null;current.stop();}catch(e){}}}
+  function startLiveRecognition(useFallback){
     if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;
+    if(!useFallback&&!gatewayWs&&!gatewayStarting){startGatewayLiveRecognition().then(function(started){if(!started&&conversationActive&&!panel.hidden)startLiveRecognition(true);}).catch(function(){if(conversationActive&&!panel.hidden)startLiveRecognition(true);});return;}
     if(!LiveSpeechRecognition){startServerRecording();return;}
     if(liveRecognition||liveStarting)return;
     liveStarting=true;liveTurnEnding=false;liveFinalText='';
