@@ -425,7 +425,8 @@
     if(busy){assistantTurn++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}if(activePendingMessage){activePendingMessage.textContent='پاسخ قبلی قطع شد؛ دارم به صحبتت گوش می‌دهم.';activePendingMessage=null;}panel.classList.remove('is-speaking');}
     if(recognition){recognition.stop();recognition=null;return;}
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
-    if(assistantAudio){speechGeneration++;assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
+    speechGeneration++;
+    if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
     if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
     panel.classList.remove('is-speaking');
     conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='شروع گفت‌وگوی زنده';voiceCaption.textContent='گفتار به‌صورت زنده تشخیص داده می‌شود و بعد از مکث کوتاه پاسخ می‌دهم. برای پایان، «توقف پخش صدا» را لمس کن.';startLiveRecognition();
