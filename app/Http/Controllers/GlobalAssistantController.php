@@ -238,7 +238,9 @@ class GlobalAssistantController extends Controller
         abort_unless($user, 401, 'برای استفاده از همراه فراست وارد حساب شوید.');
 
         $groqKey = trim((string) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')));
-        if ($groqKey === '') {
+        $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
+        $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+        if ($groqKey === '' && ($gatewayUrl === '' || $gatewayToken === '')) {
             return $this->chat($request, $ai);
         }
 
@@ -263,23 +265,46 @@ class GlobalAssistantController extends Controller
         $messages[] = ['role' => 'user', 'content' => $data['message']];
         $model = trim((string) SiteSetting::read('assistant_groq_model', 'openai/gpt-oss-120b'));
 
-        try {
-            $upstream = Http::withToken($groqKey)->accept('text/event-stream')
-                ->withOptions(['stream' => true])
-                ->connectTimeout(8)->timeout(45)
-                ->post('https://api.groq.com/openai/v1/chat/completions', [
-                    'model' => $model,
-                    'messages' => $messages,
-                    'temperature' => 0.2,
-                    'max_completion_tokens' => 700,
-                    'stream' => true,
-                ]);
-        } catch (\Throwable $e) {
-            Log::warning('farast.global_assistant_stream_connect_failed', ['user_id' => $user->id, 'error_class' => class_basename($e)]);
-            return $this->chat($request, $ai);
+        $targets = [];
+        if ($gatewayUrl !== '' && $gatewayToken !== '') {
+            $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
         }
-        if (!$upstream->successful()) {
-            Log::warning('farast.global_assistant_stream_failed', ['user_id' => $user->id, 'status' => $upstream->status(), 'model' => $model]);
+        if ($groqKey !== '') {
+            $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq'];
+        }
+        $upstream = null;
+        foreach ($targets as $target) {
+            $payload = [
+                'model' => $target['model'],
+                'messages' => $messages,
+                'temperature' => 0.2,
+                'stream' => true,
+            ];
+            $payload[$target['limit_key']] = 700;
+            try {
+                $candidate = Http::withToken($target['token'])->accept('text/event-stream')
+                    ->withOptions(['stream' => true])
+                    ->connectTimeout(8)->timeout(45)
+                    ->post($target['url'], $payload);
+                if ($candidate->successful() && str_contains(strtolower((string) $candidate->header('Content-Type', '')), 'text/event-stream')) {
+                    $upstream = $candidate;
+                    break;
+                }
+                Log::warning('farast.global_assistant_stream_provider_failed', [
+                    'user_id' => $user->id,
+                    'provider' => $target['name'],
+                    'status' => $candidate->status(),
+                    'content_type' => (string) $candidate->header('Content-Type', ''),
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('farast.global_assistant_stream_connect_failed', [
+                    'user_id' => $user->id,
+                    'provider' => $target['name'],
+                    'error_class' => class_basename($e),
+                ]);
+            }
+        }
+        if (!$upstream) {
             return $this->chat($request, $ai);
         }
 
