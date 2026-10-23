@@ -19,6 +19,20 @@ class GlobalAssistantVoiceTest extends TestCase
             .pack('V', 8000).pack('V', 16000).pack('v', 2).pack('v', 16).'data'.pack('V', 2).pack('v', 0);
     }
 
+    public function test_global_assistant_can_issue_a_scoped_live_voice_token_outside_the_editor(): void
+    {
+        config(['services.voice_stream.url' => 'wss://voice.example.test']);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('websocket_url', 'wss://voice.example.test');
+        $this->assertNotEmpty($response->json('token'));
+        $this->assertStringNotContainsString((string) config('app.key'), $response->getContent());
+    }
+
     public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
     {
         config([
