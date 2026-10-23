@@ -379,8 +379,8 @@ test('assistant starts speaking while the response is still streaming and queues
       const encoder=new TextEncoder();
       return new Response(new ReadableStream({start(controller){
         controller.enqueue(encoder.encode('data: {"delta":"جمله اول. "}\\n\\n'));
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),180);
-        setTimeout(()=>{window.__streamSentAll=true;controller.enqueue(encoder.encode('data: {"delta":"جمله سوم."}\\n\\ndata: {"done":true}\\n\\n'));controller.close();},360);
+        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),500);
+        setTimeout(()=>{window.__streamSentAll=true;controller.enqueue(encoder.encode('data: {"delta":"جمله سوم."}\\n\\ndata: {"done":true}\\n\\n'));controller.close();},1000);
       }}),{status:200,headers:{'Content-Type':'text/event-stream'}});
     }
     if(url==='/assistant/speak'){window.__spokenChunks.push(JSON.parse(options.body).text);return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});}
