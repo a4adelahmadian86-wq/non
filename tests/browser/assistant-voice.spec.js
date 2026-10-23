@@ -180,7 +180,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   window.__wsInstances = [];
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url = url; this.readyState = 0; this.sent = []; window.__wsInstances.push(this); setTimeout(() => { this.readyState = 1; this.dispatchEvent(new Event('open')); }, 0); }
-    send(data) { this.sent.push(data); if (JSON.parse(data).type === 'start') queueMicrotask(() => this.emit({ type: 'ready', provider: 'mock-provider' })); }
+    send(data) { this.sent.push(data); if (typeof data === 'string' && JSON.parse(data).type === 'start') queueMicrotask(() => this.emit({ type: 'ready', provider: 'mock-provider' })); }
     close() { this.readyState = 3; }
     emit(data) { this.onmessage?.({ data: JSON.stringify(data) }); }
   }
