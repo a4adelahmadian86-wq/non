@@ -87,6 +87,28 @@ test('live conversation streams interim transcript and sends the completed utter
 });
 
 
+test('microphone permission failure switches to text without a second audio attempt', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__micRequests = 0;
+  window.__recognitionStarts = 0;
+  window.SpeechRecognition = class { start() { window.__recognitionStarts++; } };
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+    getUserMedia: async () => { window.__micRequests++; const error = new Error('Not available'); error.name = 'NotAllowedError'; throw error; }
+  }});
+  window.fetch = async (url) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('گفت‌وگوی متنی');
+  await expect.poll(() => page.evaluate(() => window.__micRequests)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
+});
+
 test('unsupported voice browsers can continue through an accessible text fallback', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   const assistantCss = fs.readFileSync(path.join(process.cwd(), 'public/css/farast-assistant.css'), 'utf8');
