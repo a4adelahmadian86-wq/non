@@ -356,3 +356,34 @@ test('gateway failure keeps the microphone off until the user taps again', async
   await expect(page.locator('[data-fa-voice-caption]')).toContainText('پردازش این بخش از صدا ناموفق بود');
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
+
+
+test('assistant starts speaking before synthesizing the full reply by playing sentence-sized audio chunks', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__spokenChunks = [];
+  window.SpeechRecognition = class { constructor(){window.__liveRecognition=this;} start(){this.onstart?.();} stop(){this.onend?.();} };
+  window.Audio = class {
+    constructor(){this.duration=2;this.handlers={};this.ended=false;this.paused=false;}
+    addEventListener(name,fn){this.handlers[name]=fn;}
+    removeEventListener(name){delete this.handlers[name];}
+    load(){this.handlers.canplay?.();}
+    play(){setTimeout(()=>{this.ended=true;this.handlers.ended?.();},0);return Promise.resolve();}
+    pause(){this.paused=true;this.handlers.pause?.();}
+  };
+  window.fetch = async (url, options={}) => {
+    if(url==='/assistant/history') return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/chat') return new Response(JSON.stringify({ok:true,reply:'جمله اول. جمله دوم. جمله سوم.'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/speak'){window.__spokenChunks.push(JSON.parse(options.body).text);return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});}
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(() => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
+  await page.evaluate(() => window.__liveRecognition.onresult({resultIndex:0,results:[{0:{transcript:'سلام فراست'},isFinal:true}]}));
+  await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(3);
+  expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول.','جمله دوم.','جمله سوم.']);
+});
