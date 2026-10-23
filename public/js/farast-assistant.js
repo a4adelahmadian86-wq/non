@@ -112,8 +112,8 @@
       status.textContent='سابقه ذخیره‌شده پاک شد.';
     }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
   }
-  var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null, chatAbortController=null, activePendingMessage=null;
-  function stopConversation(){conversationActive=false;assistantTurn++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}stopLiveRecognition();if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
+  var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null, chatAbortController=null, activePendingMessage=null, speechGeneration=0;
+  function stopConversation(){conversationActive=false;assistantTurn++;speechGeneration++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}stopLiveRecognition();if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
   function scheduleNextListening(){if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;voiceTitle.textContent='نوبت توست';voiceCaption.textContent='میکروفون خاموش است؛ برای پیام بعدی دکمهٔ «صحبت کن» را لمس کن.';status.textContent='برای حفظ حریم خصوصی، میکروفون تا لمس دوبارهٔ دکمه خاموش می‌ماند.';}
   function splitSpeechChunks(value){
     var text=String(value||'').replace(/\\s+/g,' ').trim();
@@ -145,14 +145,14 @@
       if(assistantAudio){assistantAudio.pause();assistantAudio=null;}
       if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
       for(var i=0;i<chunks.length;i++){
-        if(speechTurn!==assistantTurn)return;
-        // Synthesize sentence-sized pieces so playback can begin before the entire
-        // answer has been rendered, while retaining the same pinned server voice.
+        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
+        // Synthesize sentence-sized pieces so playback can begin before the full
+        // answer audio has been rendered, while retaining the same pinned server voice.
         var response=await fetch('/assistant/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'audio/*, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({text:chunks[i]})});
-        if(speechTurn!==assistantTurn)return;
+        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
         if(!response.ok){var err=await response.json().catch(function(){return {};});throw new Error(err.message||'موتور صدای ثابت در دسترس نیست.');}
         var blob=await response.blob();
-        if(speechTurn!==assistantTurn)return;
+        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
         if(!blob.size||(!/^audio\\//i.test(blob.type)&&blob.type!=='application/octet-stream'))throw new Error('موتور صدا فایل صوتی معتبر برنگرداند.');
         assistantAudioUrl=URL.createObjectURL(blob);
         var audio=new Audio();assistantAudio=audio;audio.preload='auto';audio.src=assistantAudioUrl;
@@ -166,7 +166,7 @@
           window.setTimeout(function(){if(!settled)done(new Error('بارگذاری صدای فارسی بیش از حد طول کشید؛ دوباره تلاش کن.'));},130000);
         });
         await readyPromise;
-        if(speechTurn!==assistantTurn)return;
+        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
         if(!audio.duration||!isFinite(audio.duration)||audio.duration<=0)throw new Error('فایل صوتی دریافت شد، اما مدت‌زمان قابل پخش ندارد.');
         await audio.play();
         await new Promise(function(resolve){
@@ -177,7 +177,7 @@
         });
         if(assistantAudio===audio)assistantAudio=null;
         if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
-        if(speechTurn!==assistantTurn)return;
+        if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
       }
       panel.classList.remove('is-speaking');
       voiceTitle.textContent=conversationActive?'نوبت توست':'آمادهٔ گفت‌وگو هستم';
@@ -185,7 +185,7 @@
       status.textContent=conversationActive?'میکروفون خاموش است و تا لمس دکمه دوباره فعال نمی‌شود.':'آماده‌ام؛ دوباره صحبت کن.';
       scheduleNextListening();
     }catch(e){
-      if(speechTurn!==assistantTurn)return;
+      if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
       if(assistantAudio){try{assistantAudio.pause();}catch(ignore){}assistantAudio=null;}
       if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
       panel.classList.remove('is-speaking');enableTextFallback(e.message||'صدای ثابت فراست فعلاً در دسترس نیست؛ پاسخ را می‌توانی به‌صورت متنی بخوانی.');scheduleNextListening();
@@ -425,7 +425,7 @@
     if(busy){assistantTurn++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}if(activePendingMessage){activePendingMessage.textContent='پاسخ قبلی قطع شد؛ دارم به صحبتت گوش می‌دهم.';activePendingMessage=null;}panel.classList.remove('is-speaking');}
     if(recognition){recognition.stop();recognition=null;return;}
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
-    if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
+    if(assistantAudio){speechGeneration++;assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
     if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
     panel.classList.remove('is-speaking');
     conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='شروع گفت‌وگوی زنده';voiceCaption.textContent='گفتار به‌صورت زنده تشخیص داده می‌شود و بعد از مکث کوتاه پاسخ می‌دهم. برای پایان، «توقف پخش صدا» را لمس کن.';startLiveRecognition();
