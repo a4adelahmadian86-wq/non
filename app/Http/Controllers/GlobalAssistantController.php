@@ -242,14 +242,14 @@ class GlobalAssistantController extends Controller
             return $this->chat($request, $ai);
         }
 
-        $storedHistory = \Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_messages')
-            ? \Illuminate\\Support\\Facades\\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
+        $storedHistory = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_messages')->where('user_id', $user->id)->orderByDesc('id')->limit(8)->get(['role', 'content'])->reverse()->values()
             : collect();
         $historyItems = $storedHistory->isNotEmpty()
             ? $storedHistory->map(fn ($item) => ['role' => $item->role, 'text' => $item->content])->all()
             : ($data['context'] ?? []);
-        $memories = \Illuminate\\Support\\Facades\\Schema::hasTable('farast_assistant_memories')
-            ? \Illuminate\\Support\\Facades\\DB::table('farast_assistant_memories')->where('user_id', $user->id)->orderBy('id')->limit(20)->pluck('content')->all()
+        $memories = \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_memories')
+            ? \Illuminate\Support\Facades\DB::table('farast_assistant_memories')->where('user_id', $user->id)->orderBy('id')->limit(20)->pluck('content')->all()
             : [];
         $memoryContext = $memories ? ("\nنکته‌های شخصی ذخیره‌شده توسط خود کاربر (صرفاً زمینه):\n- " . implode("\n- ", array_map(fn ($item) => mb_substr((string) $item, 0, 500), $memories))) : '';
         $messages = [[
