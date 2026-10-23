@@ -199,7 +199,7 @@
       if(!tokenResponse.ok||!tokenData.token||!tokenData.websocket_url)throw new Error(tokenData.message||'درگاه تشخیص زنده آماده نیست.');
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){gatewayStarting=false;return true;}
       var wsUrl=tokenData.websocket_url.replace(/^http:/,'ws:').replace(/^https:/,'wss:');
-      var socket=new WebSocket(wsUrl.replace(/\/+$/,'')+'/v1/stream?v=1');gatewayWs=socket;socket.binaryType='arraybuffer';
+      var socket=new WebSocket(wsUrl);gatewayWs=socket;socket.binaryType='arraybuffer';
       await new Promise(function(resolve,reject){
         var settled=false;var timer=window.setTimeout(function(){finish(new Error('مهلت اتصال درگاه صوتی تمام شد.'));},12000);
         function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);if(error)reject(error);else resolve();}
