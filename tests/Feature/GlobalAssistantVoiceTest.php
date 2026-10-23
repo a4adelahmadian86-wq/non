@@ -51,13 +51,20 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.voice_tts.voice_id' => 'farast-fa-male-v1',
         ]);
         Http::fake([
-            'https://voice.test/v1/synthesize' => Http::response('fake-mp3-bytes', 200, ['Content-Type' => 'audio/mpeg']),
+            'https://voice.test/v1/synthesize' => Http::response('fake-mp3-bytes', 200, [
+                'Content-Type' => 'audio/mpeg',
+                'X-Farast-Voice-Id' => 'farast-fa-male-v1',
+                'X-Farast-TTS-Provider' => 'microsoft-edge-tts',
+            ]),
         ]);
 
         $response = $this->actingAs(User::factory()->create())
             ->postJson('/assistant/speak', ['text' => 'سلام، به فراست خوش آمدید.']);
 
-        $response->assertOk()->assertHeader('Content-Type', 'audio/mpeg');
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'audio/mpeg')
+            ->assertHeader('X-Farast-Voice-Id', 'farast-fa-male-v1')
+            ->assertHeader('X-Farast-TTS-Provider', 'microsoft-edge-tts');
         $this->assertSame('fake-mp3-bytes', $response->getContent());
 
         Http::assertSent(fn (ClientRequest $request) =>
@@ -65,6 +72,24 @@ class GlobalAssistantVoiceTest extends TestCase
             && $request->hasHeader('Authorization', 'Bearer tts-test-token')
             && ($request->data()['voice_id'] ?? null) === 'farast-fa-male-v1'
         );
+    }
+
+    public function test_assistant_synthesis_rejects_empty_audio_payloads(): void
+    {
+        config([
+            'services.voice_tts.url' => 'https://voice.test/v1/synthesize',
+            'services.voice_tts.token' => 'tts-test-token',
+            'services.voice_tts.voice_id' => 'farast-fa-male-v1',
+        ]);
+        Http::fake([
+            'https://voice.test/v1/synthesize' => Http::response('', 200, ['Content-Type' => 'audio/mpeg']),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/speak', ['text' => 'سلام']);
+
+        $response->assertStatus(502)
+            ->assertJsonPath('ok', false);
     }
 
     public function test_voice_status_exposes_readiness_booleans_but_never_provider_tokens(): void

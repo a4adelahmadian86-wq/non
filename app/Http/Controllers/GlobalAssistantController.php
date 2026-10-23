@@ -94,7 +94,12 @@ class GlobalAssistantController extends Controller
             return response()->json(['ok' => false, 'message' => 'موتور صدای ثابت خودمیزبان هنوز تنظیم نشده است.'], 503, ['Cache-Control' => 'no-store']);
         }
         try {
-            $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')->timeout(60);
+            // The free Render service can cold-start; keep a bounded connection timeout
+            // separate from the longer inference/read timeout so the browser does not
+            // fail before the upstream has a chance to wake up.
+            $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')
+                ->connectTimeout(10)
+                ->timeout(120);
             $token = trim((string) config('services.voice_tts.token', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->post($url, [
@@ -116,11 +121,25 @@ class GlobalAssistantController extends Controller
                 Log::warning('farast.global_assistant_tts_invalid_content_type', ['user_id' => $request->user()->id, 'content_type' => $contentType]);
                 return response()->json(['ok' => false, 'message' => 'خروجی موتور صدا، فایل صوتی معتبر نیست.'], 502, ['Cache-Control' => 'no-store']);
             }
-            return response($response->body(), 200, [
+            $audio = $response->body();
+            if ($audio === '') {
+                Log::warning('farast.global_assistant_tts_empty_audio', ['user_id' => $request->user()->id]);
+                return response()->json(['ok' => false, 'message' => 'موتور صدا فایل صوتی خالی برگرداند؛ دوباره تلاش کن.'], 502, ['Cache-Control' => 'no-store']);
+            }
+
+            $headers = [
                 'Content-Type' => $contentType,
                 'Cache-Control' => 'no-store',
                 'X-Content-Type-Options' => 'nosniff',
-            ]);
+            ];
+            // Preserve non-secret diagnostics so the client and monitoring can confirm
+            // which pinned voice/provider actually produced the audio.
+            foreach (['X-Farast-Voice-Id', 'X-Farast-TTS-Provider'] as $header) {
+                $value = trim((string) $response->header($header, ''));
+                if ($value !== '') $headers[$header] = $value;
+            }
+
+            return response($audio, 200, $headers);
         } catch (\Throwable $e) {
             Log::warning('farast.global_assistant_tts_exception', ['user_id' => $request->user()->id, 'error_class' => get_class($e)]);
             return response()->json(['ok' => false, 'message' => 'ارتباط با موتور صدای ثابت برقرار نشد.'], 502, ['Cache-Control' => 'no-store']);
