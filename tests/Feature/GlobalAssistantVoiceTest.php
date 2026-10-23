@@ -30,7 +30,10 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('ok', true)
             ->assertJsonPath('websocket_url', 'wss://voice.example.test');
         $this->assertNotEmpty($response->json('token'));
-        $this->assertStringNotContainsString((string) config('app.key'), $response->getContent());
+        $appKey = (string) config('app.key');
+        if ($appKey !== '') {
+            $this->assertStringNotContainsString($appKey, $response->getContent());
+        }
     }
 
     public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
