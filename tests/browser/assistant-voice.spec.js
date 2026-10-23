@@ -11,6 +11,8 @@ test('closing the global voice assistant stops microphone capture and discards p
 <script>
   window.__stoppedTracks = 0;
   window.__transcribeCalled = false;
+  Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: undefined });
+  Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: undefined });
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
     getUserMedia: async () => ({ getTracks: () => [{ stop() { window.__stoppedTracks++; } }] })
   }});
