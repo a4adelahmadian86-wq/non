@@ -360,10 +360,30 @@ class GlobalAssistantController extends Controller
             if (! is_string($reply) || trim($reply) === '') throw new RuntimeException('ai_provider_invalid_shape');
             $this->persistExchange((int) $user->id, $data['message'], trim($reply));
             return response()->json(['ok' => true, 'reply' => trim($reply), 'provider' => 'farast-ai'], 200, ['Cache-Control' => 'no-store']);
-        } catch (\Throwable $e) {
+        } catch (\\Throwable $e) {
             $code = preg_match('/^ai_[a-z0-9_]+$/', $e->getMessage()) ? $e->getMessage() : 'assistant_unavailable';
-            Log::warning('farast.global_assistant_failed', ['user_id' => $user->id, 'error_code' => $code]);
-            return response()->json(['ok' => false, 'message' => 'سرویس گفت‌وگو فعلاً در دسترس نیست. تنظیمات هوش مصنوعی و دسترسی حساب را بررسی کنید.'], 503, ['Cache-Control' => 'no-store']);
+            $diagnosticId = (string) \\Illuminate\\Support\\Str::uuid();
+            Log::warning('farast.global_assistant_failed', [
+                'diagnostic_id' => $diagnosticId,
+                'user_id' => $user->id,
+                'error_code' => $code,
+                'error_class' => class_basename($e),
+            ]);
+            $message = match ($code) {
+                'ai_provider_not_configured' => 'سرویس هوش مصنوعی روی سرور تنظیم نشده است؛ مدیر سایت باید تنظیمات ارائه‌دهنده را بررسی کند.',
+                'ai_provider_auth_failed' => 'احراز هویت سرویس هوش مصنوعی ناموفق است؛ مدیر سایت باید کلید سرویس را بررسی کند.',
+                'ai_provider_rate_limited' => 'سرویس هوش مصنوعی فعلاً به سقف درخواست رسیده است؛ کمی بعد دوباره تلاش کن.',
+                'ai_provider_service_unavailable', 'ai_provider_unavailable' => 'سرویس هوش مصنوعی موقتاً در دسترس نیست یا ارائه‌دهنده فعالی پیکربندی نشده است.',
+                'ai_provider_model_unavailable' => 'مدل هوش مصنوعی تنظیم‌شده در دسترس نیست؛ مدیر سایت باید نام مدل را بررسی کند.',
+                'ai_provider_invalid_json', 'ai_provider_invalid_shape' => 'سرویس هوش مصنوعی پاسخ قابل‌استفاده‌ای برنگرداند؛ دوباره تلاش کن.',
+                default => 'سرویس پاسخ‌گویی نتوانست پاسخ را آماده کند. شناسهٔ پیگیری: '.$diagnosticId,
+            };
+            return response()->json([
+                'ok' => false,
+                'message' => $message,
+                'error_code' => $code,
+                'diagnostic_id' => $diagnosticId,
+            ], 503, ['Cache-Control' => 'no-store']);
         }
     }
 }
