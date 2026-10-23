@@ -216,6 +216,13 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   await page.locator('.farast-voice-mic').click();
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
+  await page.evaluate(() => {
+    const inputBuffer = { getChannelData: () => new Float32Array(4096).fill(0.1) };
+    const outputBuffer = { getChannelData: () => new Float32Array(4096) };
+    window.__scriptProcessor.onaudioprocess({ inputBuffer, outputBuffer });
+    window.__scriptProcessor.onaudioprocess({ inputBuffer, outputBuffer });
+  });
+  expect(await page.evaluate(() => window.__wsInstances[0].sent.some((item) => typeof item !== 'string'))).toBe(true);
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
   await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام فراست');
