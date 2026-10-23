@@ -249,6 +249,7 @@
   }
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();root.querySelector('.farast-assistant-mic').classList.remove('is-recording');return;}
+    if(liveRecognition){if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}panel.classList.remove('is-speaking');return;}
     if(recognition){recognition.stop();recognition=null;return;}
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
     if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
