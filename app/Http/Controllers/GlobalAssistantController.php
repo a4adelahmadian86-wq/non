@@ -297,7 +297,7 @@ class GlobalAssistantController extends Controller
                     if (connection_aborted()) return;
                     $part = $body->read(2048);
                     if ($part === '') { usleep(10000); continue; }
-                    $buffer .= $part;
+                    $buffer .= str_replace("\\r\\n", "\\n", $part);
                     while (($boundary = strpos($buffer, "\n\n")) !== false) {
                         $block = substr($buffer, 0, $boundary);
                         $buffer = substr($buffer, $boundary + 2);
