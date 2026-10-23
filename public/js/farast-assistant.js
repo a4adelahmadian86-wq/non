@@ -222,7 +222,7 @@
       gatewayAudioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});
       gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
       if(window.AudioWorkletNode&&gatewayAudioContext.audioWorklet&&typeof gatewayAudioContext.audioWorklet.addModule==='function'){
-        await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js');
+        await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261023live15');
         if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
         gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:0});
         gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000)socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));}else if(bytes.byteLength)socket.send(bytes);};
