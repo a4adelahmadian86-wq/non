@@ -116,7 +116,7 @@
   function stopConversation(){conversationActive=false;assistantTurn++;speechGeneration++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}stopLiveRecognition();if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
   function scheduleNextListening(){if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;voiceTitle.textContent='نوبت توست';voiceCaption.textContent='میکروفون خاموش است؛ برای پیام بعدی دکمهٔ «صحبت کن» را لمس کن.';status.textContent='برای حفظ حریم خصوصی، میکروفون تا لمس دوبارهٔ دکمه خاموش می‌ماند.';}
   function splitSpeechChunks(value){
-    var text=String(value||'').replace(/\\s+/g,' ').trim();
+    var text=String(value||'').replace(/\s+/g,' ').trim();
     if(!text)return [];
     var sentences=text.match(/[^.!?؟۔]+[.!?؟۔]*/gu)||[text];
     var chunks=[],pending='';
@@ -124,7 +124,7 @@
       sentence=sentence.trim();if(!sentence)return;
       if(sentence.length>260){
         if(pending){chunks.push(pending);pending='';}
-        var words=sentence.split(/\\s+/),part='';
+        var words=sentence.split(/\s+/),part='';
         words.forEach(function(word){
           if(part&&((part+' '+word).length>260)){chunks.push(part);part=word;}
           else part=part?(part+' '+word):word;
@@ -227,7 +227,7 @@
       answer+=delta;pending.textContent=answer;voiceCaption.textContent='پاسخ در حال تولید است؛ صدا به‌تدریج پخش می‌شود.';
       pendingSpeech+=delta;
       while(true){
-        var match=pendingSpeech.match(/^([\\s\\S]*?[.!?؟۔])(?:\\s+|$)/u);
+        var match=pendingSpeech.match(/^([\s\S]*?[.!?؟۔])(?:\s+|$)/u);
         if(match&&match[1].trim()){
           enqueueSpeech(match[1].trim());pendingSpeech=pendingSpeech.slice(match[0].length).trimStart();continue;
         }
@@ -239,7 +239,7 @@
       }
     }
     try{
-      var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربری /dashboard. مکالمه اخیر:\\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\\n')+'\\nکاربر: '+text;
+      var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربری /dashboard. مکالمه اخیر:\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\n')+'\nکاربر: '+text;
       var response=await fetch('/assistant/chat/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'text/event-stream, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt}),signal:requestController.signal});
       if(turn!==assistantTurn)return;
       if(response.status===401||response.status===419)throw new Error('نشست شما منقضی شده است. لطفاً دوباره وارد حساب کاربری شوید.');
@@ -254,9 +254,9 @@
           var part=await reader.read();if(part.done)break;
           buffer+=decoder.decode(part.value,{stream:true});
           var boundary;
-          while((boundary=buffer.indexOf('\\n\\n'))!==-1){
+          while((boundary=buffer.indexOf('\n\n'))!==-1){
             var block=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);
-            block.split(/\\r?\\n/).forEach(function(line){
+            block.split(/\r?\n/).forEach(function(line){
               if(line.indexOf('data:')!==0)return;
               var event;try{event=JSON.parse(line.slice(5).trim());}catch(ignore){return;}
               if(event.error)throw new Error(event.error);
@@ -267,7 +267,7 @@
           if(turn!==assistantTurn)return;
         }
         if(buffer.trim()){
-          buffer.split(/\\r?\\n/).forEach(function(line){if(line.indexOf('data:')!==0)return;try{var event=JSON.parse(line.slice(5).trim());if(event.delta)acceptDelta(event.delta);if(event.error)throw new Error(event.error);if(event.done){if(pendingSpeech.trim())enqueueSpeech(pendingSpeech);pendingSpeech='';queueState.done=true;wakeQueue();}}catch(error){if(error&&error.message)throw error;}});
+          buffer.split(/\r?\n/).forEach(function(line){if(line.indexOf('data:')!==0)return;try{var event=JSON.parse(line.slice(5).trim());if(event.delta)acceptDelta(event.delta);if(event.error)throw new Error(event.error);if(event.done){if(pendingSpeech.trim())enqueueSpeech(pendingSpeech);pendingSpeech='';queueState.done=true;wakeQueue();}}catch(error){if(error&&error.message)throw error;}});
         }
         if(pendingSpeech.trim())enqueueSpeech(pendingSpeech);
         queueState.done=true;wakeQueue();
