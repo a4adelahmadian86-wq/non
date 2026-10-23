@@ -274,7 +274,7 @@ class GlobalAssistantController extends Controller
                     'max_completion_tokens' => 700,
                     'stream' => true,
                 ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             Log::warning('farast.global_assistant_stream_connect_failed', ['user_id' => $user->id, 'error_class' => class_basename($e)]);
             return $this->chat($request, $ai);
         }
