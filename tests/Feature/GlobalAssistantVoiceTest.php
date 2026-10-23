@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\VoiceProviderRouter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\UploadedFile;
@@ -34,6 +35,30 @@ class GlobalAssistantVoiceTest extends TestCase
         if ($appKey !== '') {
             $this->assertStringNotContainsString($appKey, $response->getContent());
         }
+    }
+
+    public function test_live_gateway_takes_priority_over_configured_batch_asr(): void
+    {
+        config([
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.gateway_secret' => 'gateway-secret',
+            'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
+            'services.voice_asr.token' => 'asr-token',
+        ]);
+
+        $router = \Mockery::mock(VoiceProviderRouter::class);
+        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn((object) ['id' => 123]);
+        $this->app->instance(VoiceProviderRouter::class, $router);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('mode', 'gateway')
+            ->assertJsonPath('gateway', true)
+            ->assertJsonPath('chunked', false)
+            ->assertJsonPath('websocket_url', 'wss://voice.example.test');
+        $this->assertStringNotContainsString('gateway-secret', $response->getContent());
+        $this->assertStringNotContainsString('asr-token', $response->getContent());
     }
 
     public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
