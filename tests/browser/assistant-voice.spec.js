@@ -288,4 +288,7 @@ test('opening the assistant keeps the microphone off until the user taps', async
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
   await page.locator('.farast-voice-mic').click();
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
+  await page.locator('.farast-voice-mic').click();
+  await expect(page.locator('.farast-assistant-panel')).not.toHaveClass(/is-listening/);
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
 });
