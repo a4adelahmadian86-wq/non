@@ -251,7 +251,14 @@
         enableTextFallback('دسترسی میکروفون مجاز نیست؛ می‌توانی همین‌جا با نوشتن پیام ادامه بدهی.');
         return true;
       }
-      return false;
+      // A failed live gateway must not silently start a second recognizer or re-open
+      // the microphone. Keep the mic off and require an explicit retry from the user.
+      panel.classList.remove('is-listening');
+      root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+      voiceTitle.textContent='میکروفون خاموش است';
+      voiceCaption.textContent='اتصال گفتار برقرار نشد؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';
+      status.textContent='میکروفون خاموش شد؛ مسیر جایگزین به‌صورت خودکار فعال نمی‌شود.';
+      return true;
     }
   }
   function finishGatewayTurn(generation){
