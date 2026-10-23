@@ -126,7 +126,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   window.__wsInstances = [];
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url = url; this.readyState = 0; this.sent = []; window.__wsInstances.push(this); setTimeout(() => { this.readyState = 1; this.dispatchEvent(new Event('open')); }, 0); }
-    send(data) { this.sent.push(data); }
+    send(data) { this.sent.push(data); if (JSON.parse(data).type === 'start') queueMicrotask(() => this.emit({ type: 'ready', provider: 'mock-provider' })); }
     close() { this.readyState = 3; }
     emit(data) { this.onmessage?.({ data: JSON.stringify(data) }); }
   }
@@ -163,8 +163,6 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
-  await expect.poll(async () => page.evaluate(() => typeof window.__wsInstances[0].onmessage)).toBe('function');
-  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'ready', provider: 'mock-provider' }));
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
   await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام فراست');
