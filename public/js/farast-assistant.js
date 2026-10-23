@@ -212,12 +212,16 @@
         else if(data.type==='provider_error'){status.textContent='در حال تغییر موتور تشخیص گفتار…';}
         else if(data.type==='error'){status.textContent='درگاه گفتار موقتاً در دسترس نیست؛ مسیر جایگزین را امتحان می‌کنم.';stopGatewayRecognition();if(conversationActive&&!panel.hidden)startLiveRecognition(true);}
       };
+      socket.onerror=function(){if(generation===gatewayGeneration&&conversationActive){stopGatewayRecognition();startLiveRecognition(true);}};
+      socket.onclose=function(){if(generation===gatewayGeneration&&conversationActive&&!liveTurnEnding){stopGatewayRecognition();startLiveRecognition(true);}};
       socket.send(JSON.stringify({type:'start',token:tokenData.token,locale:'fa-IR',sequence:0}));
       gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
       gatewayAudioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});
       gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
       if(window.AudioWorkletNode&&gatewayAudioContext.audioWorklet&&typeof gatewayAudioContext.audioWorklet.addModule==='function'){
         await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js');
+        if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
         gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:0});
         gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000)socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));}else if(bytes.byteLength)socket.send(bytes);};
         gatewaySourceNode.connect(gatewayWorkletNode);
@@ -233,8 +237,7 @@
         gatewaySourceNode.connect(gatewayScriptProcessorNode);gatewayScriptProcessorNode.connect(gatewayAudioContext.destination);
       }
       if(gatewayAudioContext.state==='suspended')await gatewayAudioContext.resume();
-      socket.onerror=function(){if(generation===gatewayGeneration&&conversationActive){stopGatewayRecognition();startLiveRecognition(true);}};
-      socket.onclose=function(){if(generation===gatewayGeneration&&conversationActive&&!liveTurnEnding){stopGatewayRecognition();startLiveRecognition(true);}};
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
       gatewayStarting=false;return true;
     }catch(e){
       if(generation===gatewayGeneration)stopGatewayRecognition();
