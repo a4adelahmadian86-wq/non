@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\VoiceProviderAccount;
 use App\Services\VoiceProviderRouter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
@@ -47,7 +48,9 @@ class GlobalAssistantVoiceTest extends TestCase
         ]);
 
         $router = \Mockery::mock(VoiceProviderRouter::class);
-        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn((object) ['id' => 123]);
+        $account = new VoiceProviderAccount();
+        $account->setAttribute('id', 123);
+        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn($account);
         $this->app->instance(VoiceProviderRouter::class, $router);
 
         $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
