@@ -166,7 +166,7 @@
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var mediaRecorder=null, mediaStream=null, recordedChunks=[], recordingTimeout=null, discardCurrentRecording=false;
   var liveRecognition=null, liveFinalText='', liveSilenceTimer=null, liveStarting=false, liveTurnEnding=false;
-  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayGeneration=0;
+  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayLastVoiceAt=0,gatewayGeneration=0;
   var LiveSpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   function stopGatewayRecognition(){
     gatewayGeneration++;gatewayStarting=false;
@@ -179,9 +179,10 @@
     if(gatewayMediaStream){gatewayMediaStream.getTracks().forEach(function(track){track.stop();});gatewayMediaStream=null;}
     var socket=gatewayWs;gatewayWs=null;
     if(socket){try{socket.onopen=socket.onmessage=socket.onerror=socket.onclose=null;if(socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'stop'}));socket.close(1000,'assistant_turn_end');}catch(e){}}
-    gatewayFinalText='';
+    gatewayFinalText='';gatewayLastVoiceAt=0;
   }
-  function noteGatewayAudioActivity(generation,pcm){if(generation!==gatewayGeneration||!gatewayFinalText.trim()||!pcm)return;var samples=pcm instanceof Int16Array?pcm:new Int16Array(pcm);if(!samples.length)return;var total=0;for(var i=0;i<samples.length;i++)total+=Math.abs(samples[i]);if(total/samples.length<420)return;if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},1400);}
+  function scheduleGatewayTurnEnd(generation){if(generation!==gatewayGeneration||!gatewayFinalText.trim()||!gatewayLastVoiceAt)return;if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);var remaining=Math.max(0,1400-(Date.now()-gatewayLastVoiceAt));gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},remaining);}
+  function noteGatewayAudioActivity(generation,pcm){if(generation!==gatewayGeneration||!pcm)return;var samples=pcm instanceof Int16Array?pcm:new Int16Array(pcm);if(!samples.length)return;var total=0;for(var i=0;i<samples.length;i++)total+=Math.abs(samples[i]);if(total/samples.length<420)return;gatewayLastVoiceAt=Date.now();scheduleGatewayTurnEnd(generation);}
   async function startGatewayLiveRecognition(){
     if(gatewayStarting||gatewayWs)return true;
     var AudioContextClass=window.AudioContext||window.webkitAudioContext;
@@ -211,8 +212,8 @@
       socket.onmessage=function(event){
         if(generation!==gatewayGeneration||typeof event.data!=='string')return;var data;try{data=JSON.parse(event.data);}catch(e){return;}
         if(data.type==='ready'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتار زنده از مسیر سرور پردازش می‌شود؛ صحبت کن.';status.textContent='گفت‌وگوی زنده فعال است.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');}
-        else if(data.type==='interim'){var visible=(gatewayFinalText+' '+String(data.text||'')).trim();if(visible){voiceCaption.textContent=visible;status.textContent='در حال تشخیص زندهٔ گفتار…';}if(gatewayFinalText.trim()){if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},1400);}}
-        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart)gatewayFinalText+=(gatewayFinalText?' ':'')+finalPart;if(gatewayFinalText.trim()){if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},1400);}}
+        else if(data.type==='interim'){var visible=(gatewayFinalText+' '+String(data.text||'')).trim();if(visible){voiceCaption.textContent=visible;status.textContent='در حال تشخیص زندهٔ گفتار…';}}
+        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart)gatewayFinalText+=(gatewayFinalText?' ':'')+finalPart;if(gatewayFinalText.trim())scheduleGatewayTurnEnd(generation);}
         else if(data.type==='provider_error'){status.textContent='در حال تغییر موتور تشخیص گفتار…';}
         else if(data.type==='error'){status.textContent='درگاه گفتار موقتاً در دسترس نیست؛ مسیر جایگزین را امتحان می‌کنم.';stopGatewayRecognition();if(conversationActive&&!panel.hidden)startLiveRecognition(true);}
       };
