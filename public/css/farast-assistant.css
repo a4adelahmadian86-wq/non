@@ -21,6 +21,7 @@
 .farast-assistant-suggestions button{border:1px solid #e2e4f3;background:#fff;color:#4a5180;border-radius:11px;padding:7px 10px;font-size:10px;cursor:pointer;font-family:inherit;transition:all .15s}
 .farast-assistant-suggestions button:hover{border-color:#b7b9f4;background:#f4f2ff}
 .farast-assistant-status{padding:7px 14px 0;background:#fff;color:#81869b;font-size:10px;min-height:24px}
+.farast-assistant-form[hidden],.farast-assistant-suggestions[hidden]{display:none!important}
 .farast-assistant-form{display:flex;align-items:center;gap:7px;padding:10px 12px 12px;background:#fff;flex-shrink:0}
 .farast-assistant-form input{min-width:0;flex:1;border:1px solid #e0e4f0;border-radius:14px;padding:12px 13px;outline:0;background:#f8f9fc;font:inherit;font-size:12px;color:#202744}
 .farast-assistant-form input:focus{border-color:#8d8bf1;box-shadow:0 0 0 3px #8580ed18}
