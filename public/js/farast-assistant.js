@@ -177,7 +177,7 @@
     try{
       var instance=new LiveSpeechRecognition();liveRecognition=instance;
       instance.lang='fa-IR';instance.continuous=true;instance.interimResults=true;instance.maxAlternatives=1;
-      instance.onstart=function(){liveStarting=false;voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='متن صحبتت هم‌زمان نمایش داده می‌شود؛ بعد از مکث کوتاه پاسخ می‌دهم.';status.textContent='گفت‌وگوی زنده فعال است؛ صحبت کن.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');};
+      instance.onstart=function(){liveStarting=false;voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='متن صحبتت هم‌زمان نمایش داده می‌شود؛ بعد از مکث کوتاه پاسخ می‌دهم. تشخیص گفتار را مرورگر فراهم می‌کند و ممکن است آنلاین باشد.';status.textContent='گفت‌وگوی زنده فعال است؛ صحبت کن.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');};
       instance.onresult=function(event){
         var interim='';
         for(var i=event.resultIndex;i<event.results.length;i++){var part=String(event.results[i][0]&&event.results[i][0].transcript||'').trim();if(!part)continue;if(event.results[i].isFinal)liveFinalText+=(liveFinalText?' ':'')+part;else interim+=(interim?' ':'')+part;}
