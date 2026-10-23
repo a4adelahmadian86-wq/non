@@ -105,6 +105,7 @@ test('unsupported voice browsers can continue through an accessible text fallbac
 </script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
+  await expect(page.locator('.farast-assistant-form')).toBeHidden();
   await page.locator('.farast-voice-mic').click();
   await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await expect(page.locator('[data-fa-messages]')).toBeVisible();
