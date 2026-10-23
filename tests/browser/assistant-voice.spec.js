@@ -163,6 +163,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
+  await expect.poll(async () => page.evaluate(() => typeof window.__wsInstances[0].onmessage)).toBe('function');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'ready', provider: 'mock-provider' }));
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
