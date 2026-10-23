@@ -47,6 +47,7 @@ Route::post('/assistant/memories',[GlobalAssistantController::class,'saveMemory'
 Route::delete('/assistant/memories',[GlobalAssistantController::class,'clearMemories'])->middleware(['auth','throttle:5,1'])->name('assistant.memories.clear');
 Route::delete('/assistant/history',[GlobalAssistantController::class,'clearHistory'])->middleware(['auth','throttle:5,1'])->name('assistant.history.clear');
 Route::get('/assistant/voice/status',[GlobalAssistantController::class,'voiceStatus'])->middleware(['auth','throttle:60,1'])->name('assistant.voice.status');
+Route::post('/assistant/voice/stream-token',[VoiceController::class,'streamToken'])->middleware(['auth','throttle:30,1','capability:can_voice'])->name('assistant.voice.stream-token');
 Route::post('/assistant/transcribe',[GlobalAssistantController::class,'transcribe'])->middleware(['auth','throttle:20,1'])->name('assistant.transcribe');
 Route::post('/assistant/speak',[GlobalAssistantController::class,'speak'])->middleware(['auth','throttle:30,1'])->name('assistant.speak');
 Route::get('/social',[SocialController::class,'index'])->name('social');
