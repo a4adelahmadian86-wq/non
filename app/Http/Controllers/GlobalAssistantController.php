@@ -294,30 +294,76 @@ class GlobalAssistantController extends Controller
                             'status' => $gatewayResponse->status(),
                             'fallback' => 'groq',
                         ]);
-                    } catch (\\Throwable $e) {
-            $code = preg_match('/^ai_[a-z0-9_]+$/', $e->getMessage()) ? $e->getMessage() : 'assistant_unavailable';
-            $diagnosticId = (string) \\Illuminate\\Support\\Str::uuid();
-            Log::warning('farast.global_assistant_failed', [
-                'diagnostic_id' => $diagnosticId,
-                'user_id' => $user->id,
-                'error_code' => $code,
-                'error_class' => class_basename($e),
+                    } catch (\Throwable $gatewayException) {
+                        Log::warning('farast.global_assistant_gateway_exception', [
+                            'user_id' => $user->id,
+                            'error_class' => class_basename($gatewayException),
+                            'fallback' => 'groq',
+                        ]);
+                    }
+                }
+
+                $response = Http::withToken($groqKey)->acceptJson()->timeout(30)->retry(1, 300, throw: false)
+                    ->post('https://api.groq.com/openai/v1/chat/completions', [
+                        'model' => $model,
+                        'messages' => $messages,
+                        'temperature' => 0.2,
+                        'max_completion_tokens' => 700,
+                    ]);
+                if (! $response->successful()) {
+                    // A configured but inaccessible provider (for example HTTP 403 in a restricted
+                    // region) must not disable the site's existing no-PAYG AI orchestration.
+                    Log::warning('farast.global_assistant_groq_failed', [
+                        'user_id' => $user->id,
+                        'status' => $response->status(),
+                        'model' => $model,
+                        'fallback' => 'farast_ai',
+                    ]);
+                    $fallback = $ai->assist('text.generate', $prompt, [
+                        'user' => $user,
+                        'processing_mode' => 'external',
+                        'instruction' => 'پاسخ مکالمه‌ای فارسی برای دستیار عمومی سایت؛ بدون ادعای قابلیت ناموجود.',
+                        'allow_payg' => false,
+                        'idempotency_key' => (string) ($request->header('Idempotency-Key') ?: ('global-assistant-fallback-'.$user->id.'-'.hash('sha256', $prompt.'|'.now()->timestamp))),
+                    ]);
+                    $fallbackReply = data_get($fallback, 'result.text')
+                        ?? data_get($fallback, 'text')
+                        ?? data_get($fallback, 'result')
+                        ?? data_get($fallback, 'output');
+                    if (is_array($fallbackReply)) $fallbackReply = $fallbackReply['text'] ?? $fallbackReply['content'] ?? json_encode($fallbackReply, JSON_UNESCAPED_UNICODE);
+                    if (! is_string($fallbackReply) || trim($fallbackReply) === '') {
+                        throw new RuntimeException($response->status() === 429 ? 'ai_provider_rate_limited' : 'ai_provider_failure');
+                    }
+                    $fallbackReply = trim($fallbackReply);
+                    $this->persistExchange((int) $user->id, $data['message'], $fallbackReply);
+                    return response()->json(['ok' => true, 'reply' => $fallbackReply, 'provider' => 'farast-ai-fallback'], 200, ['Cache-Control' => 'no-store']);
+                }
+                $reply = $response->json('choices.0.message.content');
+                if (! is_string($reply) || trim($reply) === '') throw new RuntimeException('ai_provider_invalid_shape');
+                $this->persistExchange((int) $user->id, $data['message'], trim($reply));
+                return response()->json(['ok' => true, 'reply' => trim($reply), 'provider' => 'groq'], 200, ['Cache-Control' => 'no-store']);
+            }
+
+            // Keep the existing Farast AI orchestration as the compatibility path when Groq is not configured.
+            $result = $ai->assist('text.generate', $prompt, [
+                'user' => $user,
+                'processing_mode' => 'external',
+                'instruction' => 'پاسخ مکالمه‌ای فارسی برای دستیار عمومی سایت؛ بدون ادعای قابلیت ناموجود.',
+                'allow_payg' => false,
+                'idempotency_key' => (string) ($request->header('Idempotency-Key') ?: ('global-assistant-'.$user->id.'-'.hash('sha256', $prompt.'|'.now()->timestamp))),
             ]);
-            $message = match ($code) {
-                'ai_provider_not_configured' => 'سرویس هوش مصنوعی روی سرور تنظیم نشده است. مدیر سایت باید تنظیمات ارائه‌دهنده را بررسی کند.',
-                'ai_provider_auth_failed' => 'احراز هویت سرویس هوش مصنوعی ناموفق است. مدیر سایت باید کلید سرویس را بررسی کند.',
-                'ai_provider_rate_limited' => 'سرویس هوش مصنوعی فعلاً به سقف درخواست رسیده است؛ کمی بعد دوباره تلاش کن.',
-                'ai_provider_service_unavailable', 'ai_provider_unavailable' => 'سرویس هوش مصنوعی موقتاً در دسترس نیست یا ارائه‌دهنده فعالی پیکربندی نشده است.',
-                'ai_provider_model_unavailable' => 'مدل هوش مصنوعی تنظیم‌شده در دسترس نیست؛ مدیر سایت باید نام مدل را بررسی کند.',
-                'ai_provider_invalid_json', 'ai_provider_invalid_shape' => 'سرویس هوش مصنوعی پاسخ قابل‌استفاده‌ای برنگرداند؛ دوباره تلاش کن.',
-                default => 'سرویس پاسخ‌گویی نتوانست پاسخ را آماده کند. مدیر سایت می‌تواند گزارش را با شناسهٔ '.$diagnosticId.' بررسی کند.',
-            };
-            return response()->json([
-                'ok' => false,
-                'message' => $message,
-                'error_code' => $code,
-                'diagnostic_id' => $diagnosticId,
-            ], 503, ['Cache-Control' => 'no-store']);
+            $reply = data_get($result, 'result.text')
+                ?? data_get($result, 'text')
+                ?? data_get($result, 'result')
+                ?? data_get($result, 'output');
+            if (is_array($reply)) $reply = $reply['text'] ?? $reply['content'] ?? json_encode($reply, JSON_UNESCAPED_UNICODE);
+            if (! is_string($reply) || trim($reply) === '') throw new RuntimeException('ai_provider_invalid_shape');
+            $this->persistExchange((int) $user->id, $data['message'], trim($reply));
+            return response()->json(['ok' => true, 'reply' => trim($reply), 'provider' => 'farast-ai'], 200, ['Cache-Control' => 'no-store']);
+        } catch (\Throwable $e) {
+            $code = preg_match('/^ai_[a-z0-9_]+$/', $e->getMessage()) ? $e->getMessage() : 'assistant_unavailable';
+            Log::warning('farast.global_assistant_failed', ['user_id' => $user->id, 'error_code' => $code]);
+            return response()->json(['ok' => false, 'message' => 'سرویس گفت‌وگو فعلاً در دسترس نیست. تنظیمات هوش مصنوعی و دسترسی حساب را بررسی کنید.'], 503, ['Cache-Control' => 'no-store']);
         }
     }
 }
