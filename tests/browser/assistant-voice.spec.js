@@ -186,6 +186,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
     const inputBuffer = { getChannelData: () => new Float32Array(4096).fill(0.1) };
     const outputBuffer = { getChannelData: () => new Float32Array(4096) };
     window.__scriptProcessor.onaudioprocess({ inputBuffer, outputBuffer });
+    window.__scriptProcessor.onaudioprocess({ inputBuffer, outputBuffer });
   });
   expect(await page.evaluate(() => window.__wsInstances[0].sent.some((item) => typeof item !== 'string'))).toBe(true);
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
