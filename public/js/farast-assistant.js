@@ -282,7 +282,7 @@
       }else{
         var reader=response.body.getReader(),decoder=new TextDecoder(),buffer='';
         while(true){
-          var part=await reader.read();if(part.done)break;
+          var part=await reader.read();if(part.done){buffer+=decoder.decode();break;}
           buffer+=decoder.decode(part.value,{stream:true});
           var boundary;
           while((boundary=buffer.indexOf('\n\n'))!==-1){
