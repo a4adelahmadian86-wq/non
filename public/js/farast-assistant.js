@@ -184,10 +184,10 @@
     if(!window.WebSocket||!(window.AudioContext||window.webkitAudioContext)||!window.AudioWorkletNode||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return false;
     gatewayStarting=true;var generation=++gatewayGeneration;
     try{
-      var statusResponse=await fetch('/editor/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
+      var statusResponse=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
       var service=await statusResponse.json().catch(function(){return {};});
       if(!statusResponse.ok||service.mode!=='gateway'){gatewayStarting=false;return false;}
-      var tokenResponse=await fetch('/editor/voice/stream-token',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({locale:'fa-IR'})});
+      var tokenResponse=await fetch('/assistant/voice/stream-token',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({locale:'fa-IR'})});
       var tokenData=await tokenResponse.json().catch(function(){return {};});
       if(!tokenResponse.ok||!tokenData.token||!tokenData.websocket_url)throw new Error(tokenData.message||'درگاه تشخیص زنده آماده نیست.');
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){gatewayStarting=false;return true;}
