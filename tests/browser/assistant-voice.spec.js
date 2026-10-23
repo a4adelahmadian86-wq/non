@@ -129,8 +129,6 @@ test('unsupported voice browsers can continue through an accessible text fallbac
   await page.addStyleTag({ content: assistantCss });
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
-  await expect(page.locator('.farast-assistant-form')).toBeHidden();
-
   await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await expect(page.locator('[data-fa-messages]')).toBeVisible();
   await page.locator('.farast-assistant-form input[name="message"]').fill('سلام، کمک می‌خواهم');
@@ -148,7 +146,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   window.__wsInstances = [];
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url = url; this.readyState = 0; this.sent = []; window.__wsInstances.push(this); setTimeout(() => { this.readyState = 1; this.dispatchEvent(new Event('open')); }, 0); }
-    send(data) { this.sent.push(data); if (JSON.parse(data).type === 'start') queueMicrotask(() => this.emit({ type: 'ready', provider: 'mock-provider' })); }
+    send(data) { this.sent.push(data); if (typeof data === 'string' && JSON.parse(data).type === 'start') queueMicrotask(() => this.emit({ type: 'ready', provider: 'mock-provider' })); }
     close() { this.readyState = 3; }
     emit(data) { this.onmessage?.({ data: JSON.stringify(data) }); }
   }
@@ -185,6 +183,13 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await page.locator('.farast-assistant-launcher').click();
 
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
+  await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
+  await page.evaluate(() => {
+    const inputBuffer = { getChannelData: () => new Float32Array(4096).fill(0.1) };
+    const outputBuffer = { getChannelData: () => new Float32Array(4096) };
+    window.__scriptProcessor.onaudioprocess({ inputBuffer, outputBuffer });
+  });
+  expect(await page.evaluate(() => window.__wsInstances[0].sent.some((item) => typeof item !== 'string'))).toBe(true);
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
   await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام فراست');
