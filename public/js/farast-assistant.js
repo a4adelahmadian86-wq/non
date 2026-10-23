@@ -113,8 +113,8 @@
     }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
   }
   var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null;
-  function stopConversation(){conversationActive=false;assistantTurn++;busy=false;if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
-  function scheduleNextListening(){if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(resumeListeningTimer)window.clearTimeout(resumeListeningTimer);resumeListeningTimer=window.setTimeout(function(){resumeListeningTimer=null;if(conversationActive&&!panel.hidden)startServerRecording();},450);}
+  function stopConversation(){conversationActive=false;assistantTurn++;busy=false;stopLiveRecognition();if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(mediaRecorder&&mediaRecorder.state==='recording'){discardCurrentRecording=true;try{mediaRecorder.stop();}catch(e){}}stopMediaTracks();panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
+  function scheduleNextListening(){if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(resumeListeningTimer)window.clearTimeout(resumeListeningTimer);resumeListeningTimer=window.setTimeout(function(){resumeListeningTimer=null;if(conversationActive&&!panel.hidden)startLiveRecognition();},450);}
   async function say(text){
     var speechTurn=assistantTurn;
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای پخش پاسخ صوتی ابتدا وارد حساب شو.';return;}
@@ -165,6 +165,47 @@
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var mediaRecorder=null, mediaStream=null, recordedChunks=[], recordingTimeout=null, discardCurrentRecording=false;
+  var liveRecognition=null, liveFinalText='', liveSilenceTimer=null, liveStarting=false, liveTurnEnding=false;
+  var LiveSpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  function clearLiveSilence(){if(liveSilenceTimer){window.clearTimeout(liveSilenceTimer);liveSilenceTimer=null;}}
+  function stopLiveRecognition(){clearLiveSilence();liveTurnEnding=true;liveStarting=false;var current=liveRecognition;liveRecognition=null;if(current){try{current.onresult=null;current.onerror=null;current.onend=null;current.stop();}catch(e){}}}
+  function startLiveRecognition(){
+    if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;
+    if(!LiveSpeechRecognition){startServerRecording();return;}
+    if(liveRecognition||liveStarting)return;
+    liveStarting=true;liveTurnEnding=false;liveFinalText='';
+    try{
+      var instance=new LiveSpeechRecognition();liveRecognition=instance;
+      instance.lang='fa-IR';instance.continuous=true;instance.interimResults=true;instance.maxAlternatives=1;
+      instance.onstart=function(){liveStarting=false;voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='متن صحبتت هم‌زمان نمایش داده می‌شود؛ بعد از مکث کوتاه پاسخ می‌دهم.';status.textContent='گفت‌وگوی زنده فعال است؛ صحبت کن.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');};
+      instance.onresult=function(event){
+        var interim='';
+        for(var i=event.resultIndex;i<event.results.length;i++){var part=String(event.results[i][0]&&event.results[i][0].transcript||'').trim();if(!part)continue;if(event.results[i].isFinal)liveFinalText+=(liveFinalText?' ':'')+part;else interim+=(interim?' ':'')+part;}
+        var visible=(liveFinalText+' '+interim).trim();
+        if(visible){voiceCaption.textContent=visible;status.textContent=interim?'در حال تشخیص زندهٔ گفتار…':'گفتار تشخیص داده شد؛ منتظر پایان جمله…';}
+        if(liveFinalText.trim()){clearLiveSilence();liveSilenceTimer=window.setTimeout(function(){finishLiveTurn();},1100);}
+      };
+      instance.onerror=function(event){
+        if(liveRecognition!==instance)return;
+        if(event&&event.error==='not-allowed'){conversationActive=false;liveRecognition=null;liveStarting=false;panel.classList.remove('is-listening');status.textContent='مجوز میکروفون یا تشخیص گفتار داده نشد.';voiceTitle.textContent='دسترسی میکروفون لازم است';voiceCaption.textContent=status.textContent;return;}
+        if(event&&event.error==='service-not-allowed'){conversationActive=false;liveRecognition=null;liveStarting=false;panel.classList.remove('is-listening');status.textContent='سرویس تشخیص زندهٔ مرورگر در این محیط مجاز نیست.';voiceTitle.textContent='تشخیص زنده در دسترس نیست';voiceCaption.textContent='می‌توانی از مسیر ضبط و رونویسی سمت سرور استفاده کنی.';return;}
+      };
+      instance.onend=function(){
+        if(liveRecognition!==instance)return;
+        liveRecognition=null;liveStarting=false;panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+        if(liveFinalText.trim()&&!liveTurnEnding){finishLiveTurn();return;}
+        if(conversationActive&&!busy&&!panel.classList.contains('is-speaking')&&!liveTurnEnding){window.setTimeout(startLiveRecognition,250);}
+      };
+      instance.start();
+    }catch(e){liveRecognition=null;liveStarting=false;startServerRecording();}
+  }
+  function finishLiveTurn(){
+    clearLiveSilence();if(!conversationActive||liveTurnEnding)return;
+    var text=liveFinalText.trim();if(!text)return;
+    liveTurnEnding=true;var current=liveRecognition;liveRecognition=null;liveStarting=false;panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+    if(current){try{current.onresult=null;current.onerror=null;current.onend=null;current.stop();}catch(e){}}
+    liveFinalText='';send(text);
+  }
   function stopMediaTracks(){if(mediaStream){mediaStream.getTracks().forEach(function(track){track.stop();});mediaStream=null;}}
   async function startServerRecording(){
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای استفاده از میکروفون ابتدا وارد حساب کاربری شو.';return;}
@@ -213,7 +254,7 @@
     if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
     if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
     panel.classList.remove('is-speaking');
-    conversationActive=true;voiceTitle.textContent='شروع گفت‌وگوی پیوسته';voiceCaption.textContent='بعد از هر پاسخ، دوباره گوش می‌دهم. برای پایان، «توقف پخش صدا» را لمس کن.';startServerRecording();
+    conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='شروع گفت‌وگوی زنده';voiceCaption.textContent='گفتار به‌صورت زنده تشخیص داده می‌شود و بعد از مکث کوتاه پاسخ می‌دهم. برای پایان، «توقف پخش صدا» را لمس کن.';startLiveRecognition();
   });
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!panel.hidden){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);}});
   voiceCaption.textContent='برای شروع، میکروفون را لمس کن و به فارسی صحبت کن.';
