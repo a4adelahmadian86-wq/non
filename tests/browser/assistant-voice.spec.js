@@ -265,3 +265,27 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length), { timeout: 5000 }).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
 });
+
+
+test('opening the assistant keeps the microphone off until the user taps', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.WebSocket = undefined;
+  window.__recognitionStarts = 0;
+  window.SpeechRecognition = class {
+    constructor() { window.__recognition = this; }
+    start() { window.__recognitionStarts++; this.onstart?.(); }
+    stop() { this.onend?.(); }
+  };
+  window.fetch = async (url) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
+});
