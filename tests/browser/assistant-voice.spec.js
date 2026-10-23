@@ -150,6 +150,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
     close() { this.readyState = 3; }
     emit(data) { this.onmessage?.({ data: JSON.stringify(data) }); }
   }
+  FakeWebSocket.OPEN = 1;
   window.WebSocket = FakeWebSocket;
   window.AudioContext = class {
     constructor() { this.state = 'running'; this.sampleRate = 48000; this.destination = {}; }
@@ -210,6 +211,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
     close() { this.readyState = 3; }
     emit(data) { this.onmessage?.({ data: JSON.stringify(data) }); }
   }
+  FakeWebSocket.OPEN = 1;
   window.WebSocket = FakeWebSocket;
   window.AudioContext = class {
     constructor() { this.state = 'running'; this.sampleRate = 48000; this.destination = {}; }
