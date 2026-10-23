@@ -19,37 +19,71 @@ class VoiceController extends Controller
 {
     public function voiceStatus(Request $request)
     {
-        // تشخیص وضعیت واقعی موتور ابری از سمت کلاینت (بدون افشای رازها):
-        // chunked = مسیر HTTP تکه‌ای (/transcribe)، gateway = استریم زندهٔ WebSocket،
-        // none = هیچ‌کدام آماده نیست (دلیل دقیق برای پیام راهنمای پنل صوتی).
-        // موتورهای ابری سایت: Google STT و Gemini (هر دو از ایران تحریم‌اند — فقط در صورت
-        // وجود پروکسی سمت سرور معتبرند). به‌عنوان گزینهٔ جایگزینِ بدون‌تحریم، Groq Whisper
-        // (رایگان، از ایران قابل دسترس) هم پشتیبانی می‌شود؛ کلیدش را در پنل ادمین بگذارید.
-        $authed=(bool)($request->user()?->id);
-        if(!$authed)return response()->json(['ok'=>true,'mode'=>'none','reason'=>'auth'],200,['Cache-Control'=>'no-store']);
-        $asrUrl=trim((string)config('services.voice_asr.url',''));
-        $asrToken=trim((string)(config('services.voice_asr.token','')));
-        if($asrUrl!==''){
-            if($asrToken==='')return response()->json(['ok'=>true,'mode'=>'none','reason'=>'self_hosted_token_missing','self_hosted'=>true,'chunked'=>false,'gateway'=>false,'websocket_url'=>''],200,['Cache-Control'=>'no-store']);
-            return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['self-hosted-asr'],'self_hosted'=>true],200,['Cache-Control'=>'no-store']);
+        // Prefer the live WebSocket gateway when fully configured. Batch ASR
+        // providers remain available as a fallback, but must not mask live mode.
+        $authed = (bool) ($request->user()?->id);
+        if (! $authed) {
+            return response()->json(['ok' => true, 'mode' => 'none', 'reason' => 'auth'], 200, ['Cache-Control' => 'no-store']);
         }
-        $groq=false;
-        try{$groq=trim((string)(\App\Models\SiteSetting::read('voice_groq_key')?:env('GROQ_API_KEY','')))!=='';}catch(\Throwable){}
-        if($groq)return response()->json(['ok'=>true,'mode'=>'chunked','chunked'=>true,'gateway'=>false,'websocket_url'=>'','engines'=>['groq']],200,['Cache-Control'=>'no-store']);
-        $google=false;
-        try{$google=app(\App\Services\GoogleSpeechToTextService::class)->enabled();}catch(\Throwable){}
-        $gemini=false;
-        try{$gemini=trim((string)(\App\Models\SiteSetting::read('gemini_api_key')?:config('services.gemini.key')))!=='';}catch(\Throwable){}
-        $chunked=$google||$gemini;
-        $gatewayReady=false;$wsUrl='';
-        try{
-            $wsUrl=rtrim((string)config('services.voice_stream.url',''),'/');
-            $secret=(string)config('services.voice_stream.gateway_secret','');
-            $router=app(\App\Services\VoiceProviderRouter::class);
-            $account=$router->best('fa-IR');
-            $gatewayReady=$secret!==''&&$account!==null&&$wsUrl!=='';
-        }catch(\Throwable){$gatewayReady=false;}
-        return response()->json(['ok'=>true,'mode'=>$gatewayReady?'gateway':($chunked?'chunked':'none'),'chunked'=>$chunked,'gateway'=>$gatewayReady,'websocket_url'=>$gatewayReady?preg_replace('#^http#','ws',$wsUrl):'','reason'=>$chunked||$gatewayReady?null:'server_not_configured'],200,['Cache-Control'=>'no-store']);
+
+        $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
+        $gatewayReady = false;
+        try {
+            $secret = (string) config('services.voice_stream.gateway_secret', '');
+            $account = app(\App\Services\VoiceProviderRouter::class)->best('fa-IR');
+            $gatewayReady = $secret !== '' && $account !== null && $wsUrl !== '';
+        } catch (\Throwable) {
+            $gatewayReady = false;
+        }
+        if ($gatewayReady) {
+            return response()->json([
+                'ok' => true,
+                'mode' => 'gateway',
+                'chunked' => false,
+                'gateway' => true,
+                'websocket_url' => preg_replace('#^http#', 'ws', $wsUrl),
+                'reason' => null,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        $asrUrl = trim((string) config('services.voice_asr.url', ''));
+        $asrToken = trim((string) config('services.voice_asr.token', ''));
+        if ($asrUrl !== '') {
+            if ($asrToken === '') {
+                return response()->json(['ok' => true, 'mode' => 'none', 'reason' => 'self_hosted_token_missing', 'self_hosted' => true, 'chunked' => false, 'gateway' => false, 'websocket_url' => ''], 200, ['Cache-Control' => 'no-store']);
+            }
+            return response()->json(['ok' => true, 'mode' => 'chunked', 'chunked' => true, 'gateway' => false, 'websocket_url' => '', 'engines' => ['self-hosted-asr'], 'self_hosted' => true], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        $groq = false;
+        try {
+            $groq = trim((string) (\App\Models\SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', ''))) !== '';
+        } catch (\Throwable) {
+        }
+        if ($groq) {
+            return response()->json(['ok' => true, 'mode' => 'chunked', 'chunked' => true, 'gateway' => false, 'websocket_url' => '', 'engines' => ['groq']], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        $google = false;
+        try {
+            $google = app(\App\Services\GoogleSpeechToTextService::class)->enabled();
+        } catch (\Throwable) {
+        }
+        $gemini = false;
+        try {
+            $gemini = trim((string) (\App\Models\SiteSetting::read('gemini_api_key') ?: config('services.gemini.key'))) !== '';
+        } catch (\Throwable) {
+        }
+        $chunked = $google || $gemini;
+
+        return response()->json([
+            'ok' => true,
+            'mode' => $chunked ? 'chunked' : 'none',
+            'chunked' => $chunked,
+            'gateway' => false,
+            'websocket_url' => '',
+            'reason' => $chunked ? null : 'server_not_configured',
+        ], 200, ['Cache-Control' => 'no-store']);
     }
 
     public function streamToken(Request $request)
