@@ -41,3 +41,45 @@ test('closing the global voice assistant stops microphone capture and discards p
   await expect.poll(async () => page.evaluate(() => window.__stoppedTracks)).toBeGreaterThan(0);
   await expect.poll(async () => page.evaluate(() => window.__transcribeCalled)).toBe(false);
 });
+
+test('live conversation streams interim transcript and sends the completed utterance automatically', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__chatPayloads = [];
+  window.SpeechRecognition = class {
+    constructor() { window.__liveRecognition = this; }
+    start() { this.onstart?.(); }
+    stop() { this.onend?.(); }
+  };
+  window.Audio = class {
+    constructor() { this.duration = 2; this.handlers = {}; this.paused = false; }
+    addEventListener(name, fn) { this.handlers[name] = fn; }
+    removeEventListener(name) { delete this.handlers[name]; }
+    load() { this.handlers.canplay?.(); }
+    play() { return Promise.resolve(); }
+    pause() { this.paused = true; }
+  };
+  window.fetch = async (url, options = {}) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/chat') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response(JSON.stringify({ ok: true, reply: 'سلام، در خدمتم.' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+    if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
+    return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(async () => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
+  await page.evaluate(() => window.__liveRecognition.onresult({
+    resultIndex: 0,
+    results: [{ 0: { transcript: 'سلام' }, isFinal: false }]
+  }));
+  await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام');
+  await page.evaluate(() => window.__liveRecognition.onresult({
+    resultIndex: 0,
+    results: [{ 0: { transcript: 'سلام فراست' }, isFinal: true }]
+  }));
+  await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
+  expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+});
