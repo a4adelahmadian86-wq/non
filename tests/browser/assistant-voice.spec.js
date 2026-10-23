@@ -292,3 +292,37 @@ test('opening the assistant keeps the microphone off until the user taps', async
   await expect(page.locator('.farast-assistant-panel')).not.toHaveClass(/is-listening/);
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
 });
+
+
+test('gateway failure keeps the microphone off until the user taps again', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__recognitionStarts = 0;
+  window.__wsInstances = [];
+  window.SpeechRecognition = class { start() { window.__recognitionStarts++; this.onstart?.(); } stop() { this.onend?.(); } };
+  class FakeWebSocket extends EventTarget {
+    constructor(url) { super(); this.url=url; this.readyState=0; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
+    send(data) { if(typeof data==='string' && JSON.parse(data).type==='start') queueMicrotask(()=>this.emit({type:'ready'})); }
+    close() { this.readyState=3; }
+    emit(data) { this.onmessage?.({data:JSON.stringify(data)}); }
+  }
+  FakeWebSocket.OPEN=1; window.WebSocket=FakeWebSocket;
+  window.AudioContext = class { constructor(){this.state='running';this.sampleRate=48000;this.destination={};this.audioWorklet=null;} createMediaStreamSource(){return {connect(){},disconnect(){}};} createScriptProcessor(){return {onaudioprocess:null,connect(){},disconnect(){}};} resume(){return Promise.resolve();} close(){this.state='closed';return Promise.resolve();} };
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}});
+  window.fetch=async(url)=> {
+    if(url==='/editor/voice/status') return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token') return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/history') return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(() => page.evaluate(() => window.__wsInstances.length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__wsInstances[0].readyState)).toBe(1);
+  await page.evaluate(() => window.__wsInstances[0].emit({type:'error',code:'provider_unavailable'}));
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('میکروفون خاموش');
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
+});
