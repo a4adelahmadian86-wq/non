@@ -263,7 +263,27 @@ class GlobalAssistantController extends Controller
         $messages[] = ['role' => 'user', 'content' => $data['message']];
         $model = trim((string) SiteSetting::read('assistant_groq_model', 'openai/gpt-oss-120b'));
 
-        return response()->stream(function () use ($groqKey, $model, $messages, $request, $user, $data) {
+        try {
+            $upstream = Http::withToken($groqKey)->accept('text/event-stream')
+                ->withOptions(['stream' => true])
+                ->connectTimeout(8)->timeout(45)
+                ->post('https://api.groq.com/openai/v1/chat/completions', [
+                    'model' => $model,
+                    'messages' => $messages,
+                    'temperature' => 0.2,
+                    'max_completion_tokens' => 700,
+                    'stream' => true,
+                ]);
+        } catch (\\Throwable $e) {
+            Log::warning('farast.global_assistant_stream_connect_failed', ['user_id' => $user->id, 'error_class' => class_basename($e)]);
+            return $this->chat($request, $ai);
+        }
+        if (!$upstream->successful()) {
+            Log::warning('farast.global_assistant_stream_failed', ['user_id' => $user->id, 'status' => $upstream->status(), 'model' => $model]);
+            return $this->chat($request, $ai);
+        }
+
+        return response()->stream(function () use ($upstream, $user, $data) {
             $emit = static function (array $event): void {
                 echo 'data: ' . json_encode($event, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
                 if (ob_get_level() > 0) @ob_flush();
@@ -271,23 +291,7 @@ class GlobalAssistantController extends Controller
             };
             $reply = '';
             try {
-                $response = Http::withToken($groqKey)->accept('text/event-stream')
-                    ->withOptions(['stream' => true])
-                    ->connectTimeout(8)->timeout(45)
-                    ->post('https://api.groq.com/openai/v1/chat/completions', [
-                        'model' => $model,
-                        'messages' => $messages,
-                        'temperature' => 0.2,
-                        'max_completion_tokens' => 700,
-                        'stream' => true,
-                    ]);
-                if (!$response->successful()) {
-                    Log::warning('farast.global_assistant_stream_failed', ['user_id' => $user->id, 'status' => $response->status(), 'model' => $model]);
-                    $emit(['error' => 'سرویس گفت‌وگو در حال حاضر پاسخ جریانی نمی‌دهد. دوباره تلاش کن.']);
-                    return;
-                }
-
-                $body = $response->toPsrResponse()->getBody();
+                $body = $upstream->toPsrResponse()->getBody();
                 $buffer = '';
                 while (!$body->eof()) {
                     if (connection_aborted()) return;
