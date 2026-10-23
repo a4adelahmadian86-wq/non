@@ -130,12 +130,12 @@
       assistantAudioUrl=URL.createObjectURL(blob);assistantAudio=new Audio();assistantAudio.preload='auto';assistantAudio.src=assistantAudioUrl;
       assistantAudio.onplay=function(){panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='پاسخ با صدای ثابت فراست در حال پخش است.';status.textContent='برای قطع صدا، «توقف پخش صدا» را لمس کن.';};
       assistantAudio.onended=function(){panel.classList.remove('is-speaking');voiceTitle.textContent=conversationActive?'نوبت توست':'آمادهٔ گفت‌وگو هستم';voiceCaption.textContent=conversationActive?'بعد از پاسخ، دوباره گوش می‌دهم؛ صحبتت را شروع کن.':'هر وقت آماده بودی، دوباره صحبت کن.';status.textContent=conversationActive?'برای ادامهٔ مکالمه دوباره گوش می‌دهم…':'آماده‌ام؛ دوباره صحبت کن.';scheduleNextListening();};
-      assistantAudio.onerror=function(){panel.classList.remove('is-speaking');status.textContent='مرورگر نتوانست فایل صوتی را رمزگشایی کند.';};
+      assistantAudio.onerror=function(){panel.classList.remove('is-speaking');voiceTitle.textContent='پخش صدا ناموفق بود';voiceCaption.textContent='مرورگر نتوانست فایل صوتی را رمزگشایی کند.';status.textContent=voiceCaption.textContent;scheduleNextListening();};
       await new Promise(function(resolve,reject){var settled=false;function done(error){if(settled)return;settled=true;assistantAudio.removeEventListener('canplay',ready);assistantAudio.removeEventListener('error',failed);if(error)reject(error);else resolve();}function ready(){done();}function failed(){done(new Error('فایل دریافت شد، اما مرورگر نمی‌تواند آن را به صدای قابل پخش تبدیل کند.'));}assistantAudio.addEventListener('canplay',ready,{once:true});assistantAudio.addEventListener('error',failed,{once:true});assistantAudio.load();window.setTimeout(function(){if(!settled)done(new Error('بارگذاری صدای فارسی بیش از حد طول کشید؛ دوباره تلاش کن.'));},130000);});
       if(speechTurn!==assistantTurn)return;
       if(!assistantAudio.duration||!isFinite(assistantAudio.duration)||assistantAudio.duration<=0)throw new Error('فایل صوتی دریافت شد، اما مدت‌زمان قابل پخش ندارد.');
       await assistantAudio.play();
-    }catch(e){if(speechTurn!==assistantTurn)return;panel.classList.remove('is-speaking');voiceTitle.textContent='موتور صدا آماده نیست';voiceCaption.textContent=e.message||'صدای ثابت فراست فعلاً در دسترس نیست.';status.textContent=voiceCaption.textContent;}
+    }catch(e){if(speechTurn!==assistantTurn)return;panel.classList.remove('is-speaking');voiceTitle.textContent='موتور صدا آماده نیست';voiceCaption.textContent=e.message||'صدای ثابت فراست فعلاً در دسترس نیست.';status.textContent=voiceCaption.textContent;scheduleNextListening();}
   }
     async function send(text){
     text=String(text||'').trim();if(!text||busy)return;
