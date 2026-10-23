@@ -187,7 +187,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await page.locator('.farast-voice-mic').click();
 
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
-  expect(await page.evaluate(() => window.__wsInstances[0].url)).toBe('wss://voice.example.test');
+  expect(await page.evaluate(() => window.__wsInstances[0].url)).toBe('wss://voice.example.test/v1/stream');
   await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
   await page.evaluate(() => {
     const inputBuffer = { getChannelData: () => new Float32Array(4096).fill(0.1) };
