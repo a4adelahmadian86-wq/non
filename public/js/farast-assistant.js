@@ -173,7 +173,7 @@
           function ready(){done();}
           function failed(){done(new Error('فایل دریافت شد، اما مرورگر نمی‌تواند آن را به صدای قابل پخش تبدیل کند.'));}
           audio.addEventListener('canplay',ready,{once:true});audio.addEventListener('error',failed,{once:true});audio.load();
-          timeout=window.setTimeout(function(){done(new Error('بارگذاری صدای فارسی بیش از حد طول کشید؛ دوباره تلاش کن.'));},130000);
+          timeout=window.setTimeout(function(){done(new Error('بارگذاری صدای فارسی بیش از حد طول کشید؛ دوباره تلاش کن.'));},7000);
         });
         await readyPromise;
         if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
