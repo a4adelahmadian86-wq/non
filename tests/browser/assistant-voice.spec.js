@@ -188,7 +188,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   window.AudioContext = class {
     constructor() { this.state = 'running'; this.sampleRate = 48000; this.destination = {}; }
     createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
-    createScriptProcessor() { return { onaudioprocess: null, connect() {}, disconnect() {} }; }
+    createScriptProcessor() { window.__scriptProcessor = { onaudioprocess: null, connect() {}, disconnect() {} }; return window.__scriptProcessor; }
     resume() { return Promise.resolve(); }
     close() { this.state = 'closed'; return Promise.resolve(); }
   };
@@ -215,6 +215,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
+  await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
   await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام فراست');
