@@ -207,8 +207,8 @@
       socket.onmessage=function(event){
         if(generation!==gatewayGeneration||typeof event.data!=='string')return;var data;try{data=JSON.parse(event.data);}catch(e){return;}
         if(data.type==='ready'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتار زنده از مسیر سرور پردازش می‌شود؛ صحبت کن.';status.textContent='گفت‌وگوی زنده فعال است.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');}
-        else if(data.type==='interim'){var visible=(gatewayFinalText+' '+String(data.text||'')).trim();if(visible){voiceCaption.textContent=visible;status.textContent='در حال تشخیص زندهٔ گفتار…';}}
-        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart)gatewayFinalText+=(gatewayFinalText?' ':'')+finalPart;if(gatewayFinalText.trim()){if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},950);}}
+        else if(data.type==='interim'){var visible=(gatewayFinalText+' '+String(data.text||'')).trim();if(visible){voiceCaption.textContent=visible;status.textContent='در حال تشخیص زندهٔ گفتار…';}if(gatewayFinalText.trim()){if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},1400);}}
+        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart)gatewayFinalText+=(gatewayFinalText?' ':'')+finalPart;if(gatewayFinalText.trim()){if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},1400);}}
         else if(data.type==='provider_error'){status.textContent='در حال تغییر موتور تشخیص گفتار…';}
         else if(data.type==='error'){status.textContent='درگاه گفتار موقتاً در دسترس نیست؛ مسیر جایگزین را امتحان می‌کنم.';stopGatewayRecognition();if(conversationActive&&!panel.hidden)startLiveRecognition(true);}
       };
