@@ -351,7 +351,8 @@ test('gateway failure keeps the microphone off until the user taps again', async
   await page.locator('.farast-voice-mic').click();
   await expect.poll(() => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__wsInstances[0].readyState)).toBe(1);
-  await page.evaluate(() => window.__wsInstances[0].emit({type:'error',code:'provider_unavailable'}));
+  await page.evaluate(() => window.__wsInstances[0].emit({type:'provider_error',status:503}));
   await expect(page.locator('[data-fa-voice-title]')).toContainText('میکروفون خاموش');
+  await expect(page.locator('[data-fa-voice-caption]')).toContainText('پردازش این بخش از صدا ناموفق بود');
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
