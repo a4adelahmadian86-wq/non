@@ -89,6 +89,7 @@ test('live conversation streams interim transcript and sends the completed utter
 
 test('unsupported voice browsers can continue through an accessible text fallback', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  const assistantCss = fs.readFileSync(path.join(process.cwd(), 'public/css/farast-assistant.css'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__chatPayloads = [];
@@ -103,6 +104,7 @@ test('unsupported voice browsers can continue through an accessible text fallbac
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
 </script></body></html>`);
+  await page.addStyleTag({ content: assistantCss });
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await expect(page.locator('.farast-assistant-form')).toBeHidden();
