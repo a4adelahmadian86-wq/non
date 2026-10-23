@@ -199,7 +199,10 @@
       var tokenData=await tokenResponse.json().catch(function(){return {};});
       if(!tokenResponse.ok||!tokenData.token||!tokenData.websocket_url)throw new Error(tokenData.message||'درگاه تشخیص زنده آماده نیست.');
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){gatewayStarting=false;return true;}
-      var wsUrl=tokenData.websocket_url.replace(/^http:/,'ws:').replace(/^https:/,'wss:');
+      var wsUrl=tokenData.websocket_url.replace(/^http:/,'ws:').replace(/^https:/,'wss:').replace(/\/$/,'');
+      // Laravel intentionally stores the gateway origin; the ASGI stream lives at /v1/stream.
+      // Accept a full endpoint too, so deployments that already include the path are not doubled.
+      if(!/\/v1\/stream(?:\?|$)/.test(wsUrl))wsUrl+='/v1/stream';
       var socket=new WebSocket(wsUrl);gatewayWs=socket;socket.binaryType='arraybuffer';
       await new Promise(function(resolve,reject){
         var settled=false;var timer=window.setTimeout(function(){finish(new Error('مهلت اتصال درگاه صوتی تمام شد.'));},12000);
