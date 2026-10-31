@@ -316,4 +316,59 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('asr-secret-never-return', $response->getContent());
         $this->assertStringNotContainsString('tts-secret-never-return', $response->getContent());
     }
+
+    public function test_local_only_chat_returns_actionable_missing_gateway_configuration(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.ai_gateway.url' => '',
+            'services.ai_gateway.token' => '',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/chat/stream', ['message' => 'سلام']);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('code', 'private_ai_gateway_not_configured')
+            ->assertJsonFragment(['message' => 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: FARAST_AI_GATEWAY_URL، FARAST_AI_GATEWAY_TOKEN. هیچ سرویس ابری فراخوانی نمی‌شود.']);
+    }
+
+    public function test_local_only_voice_status_lists_missing_stream_dependencies_without_secrets(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_stream.url' => '',
+            'services.voice_stream.gateway_secret' => '',
+        ]);
+        $router = \Mockery::mock(VoiceProviderRouter::class);
+        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn(null);
+        $this->app->instance(VoiceProviderRouter::class, $router);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('mode', 'none')
+            ->assertJsonFragment(['missing' => [
+                'VOICE_STREAM_URL',
+                'VOICE_GATEWAY_SECRET',
+                'موتور Sherpa-ONNX فارسی فعال و سالم (اجرای seeder و بررسی ظرفیت)',
+            ]]);
+    }
+
+    public function test_local_only_assistant_status_does_not_claim_chat_is_ready_without_a_private_llm_gateway(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.ai_gateway.url' => '',
+            'services.ai_gateway.token' => '',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('local_only', true)
+            ->assertJsonPath('chat_gateway_ready', false)
+            ->assertJsonFragment(['chat_gateway_message' => 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: FARAST_AI_GATEWAY_URL، FARAST_AI_GATEWAY_TOKEN. هیچ سرویس ابری فراخوانی نمی‌شود.']);
+    }
+
 }
