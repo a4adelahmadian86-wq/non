@@ -379,6 +379,8 @@ class GlobalAssistantVoiceTest extends TestCase
         config([
             'services.voice.local_only' => true,
             'services.voice.remote_batch_enabled' => true,
+            'services.ai_gateway.url' => '',
+            'services.ai_gateway.token' => '',
             'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
             'services.voice_asr.token' => 'asr-test-token',
             'services.voice_tts.url' => 'https://voice.test/v1/synthesize',
