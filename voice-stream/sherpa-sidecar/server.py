@@ -63,11 +63,11 @@ async def handle_connection(socket, recognizer):
             if len(message) % 4:
                 raise ValueError("invalid_float32_frame")
 
-            samples = np.frombuffer(message, dtype=np.float32)
+            samples = np.frombuffer(message, dtype='<f4')
             if samples.size == 0:
                 continue
 
-            stream.accept_waveform(SAMPLE_RATE, samples)
+            stream.accept_waveform(sample_rate=SAMPLE_RATE, waveform=samples)
             await decode_ready(recognizer, stream)
             result = recognizer.get_result(stream)
 
@@ -79,7 +79,7 @@ async def handle_connection(socket, recognizer):
                 await send_result(socket, result, segment, False)
 
         tail = np.zeros(int(SAMPLE_RATE * 0.3), dtype=np.float32)
-        stream.accept_waveform(SAMPLE_RATE, tail)
+        stream.accept_waveform(sample_rate=SAMPLE_RATE, waveform=tail)
         stream.input_finished()
         await decode_ready(recognizer, stream)
         await send_result(socket, recognizer.get_result(stream), segment, True)
