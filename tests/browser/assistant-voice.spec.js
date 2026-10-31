@@ -477,6 +477,8 @@ test('assistant panel keeps every control inside desktop and mobile viewports', 
     await page.locator('.farast-assistant-launcher').click();
     const panel = page.locator('.farast-assistant-panel');
     await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute('role', 'dialog');
+    await expect(page.locator('.farast-assistant-launcher')).toHaveAttribute('aria-controls', 'farast-assistant-panel');
     await expect(page.locator('.farast-voice-mic')).toBeVisible();
     await expect(page.locator('[data-fa-stop-speech]')).toBeVisible();
     await expect(page.locator('.farast-assistant-form input[name="message"]')).toBeVisible();
