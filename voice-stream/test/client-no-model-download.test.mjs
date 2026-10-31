@@ -32,6 +32,9 @@ test('all browser voice clients use server recognition and never install speech 
   assert.match(clients[0], /new WebSocket/);
   assert.match(clients[1], /getUserMedia/);
   assert.match(clients[1], /new WebSocket/);
+  assert.doesNotMatch(clients[0], /MediaRecorder|startChunked|\\/editor\\/voice\\/transcribe/);
+  assert.doesNotMatch(clients[1], /MediaRecorder|startServerRecording|\\/assistant\\/transcribe/);
+  assert.match(clients[3], /output\\.fill\\(0\\)/);
 });
 
 test('local-only Laravel mode refuses batch transcription rather than falling back', async () => {
