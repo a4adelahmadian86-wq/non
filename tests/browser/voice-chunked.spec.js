@@ -4,7 +4,7 @@ const path = require('path');
 
 test('live editor dictation refuses batch mode and never opens the microphone without a gateway', async ({ page }) => {
   const voiceJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-voice.js'), 'utf8');
-  await page.setContent(\`<!doctype html>
+  await page.setContent(`<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -35,7 +35,7 @@ test('live editor dictation refuses batch mode and never opens the microphone wi
     };
   </script>
 </body>
-</html>\`);
+</html>`);
   await page.addScriptTag({ content: voiceJs });
   await expect.poll(async () => !!(await page.evaluate(() => window.FarastVoiceRuntime?.open))).toBeTruthy();
   await page.evaluate(() => window.FarastVoiceRuntime.open());
