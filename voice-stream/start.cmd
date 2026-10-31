@@ -26,7 +26,7 @@ if errorlevel 1 (
 echo.
 echo Farast voice services are starting.
 echo Live gateway: ws://127.0.0.1:6002
-echo Private Piper TTS: http://127.0.0.1:6007
+echo Private Piper TTS: http://127.0.0.1:7007
 echo Models stay in Docker volumes and are never downloaded to the browser.
 echo Use stop.cmd to stop the services without deleting their model volumes.
 pause

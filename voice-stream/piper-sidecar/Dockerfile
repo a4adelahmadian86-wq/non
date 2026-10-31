@@ -2,19 +2,18 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIPER_MODEL_PATH=/models/fa_IR-amir-medium.onnx \
-    PIPER_NUM_THREADS=2 \
-    FARAST_TTS_HOST=0.0.0.0 \
-    FARAST_TTS_PORT=6007
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libespeak-ng1 libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+    PIPER_MODEL_DIR=/models \
+    PIPER_HOST=0.0.0.0 \
+    PIPER_PORT=7007
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY server.py download_model.py ./
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libespeak-ng1 espeak-ng-data \
+    && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 6007
-CMD ["sh", "-c", "python download_model.py && exec uvicorn server:app --host 0.0.0.0 --port 6007"]
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY download_model.py server.py ./
+
+EXPOSE 7007
+CMD ["sh", "-c", "python download_model.py && exec python server.py"]

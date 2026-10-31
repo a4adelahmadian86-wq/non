@@ -52,8 +52,9 @@ test('local-only voice defaults to the private Piper TTS sidecar', async () => {
   const services = await readFile(resolve(project, 'config/services.php'), 'utf8');
   const piper = await readFile(resolve(project, 'voice-stream/piper-sidecar/server.py'), 'utf8');
   const compose = await readFile(resolve(project, 'voice-stream/compose.yaml'), 'utf8');
-  assert.match(services, /http:\/\/127\.0\.0\.1:6007\/v1\/synthesize/);
+  assert.match(services, /http:\/\/127\.0\.0\.1:7007\/v1\/synthesize/);
   assert.match(piper, /PiperVoice\.load/);
+  assert.match(piper, /piper-mana-local/);
   assert.match(piper, /synthesize_wav/);
   assert.match(compose, /farast-piper-models/);
 });

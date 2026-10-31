@@ -54,7 +54,7 @@ $composeLines = @(
     'VOICE_STREAM_BIND_ADDRESS=127.0.0.1',
     'VOICE_TTS_BIND_ADDRESS=127.0.0.1',
     'VOICE_STREAM_PORT=6002',
-    'VOICE_TTS_PORT=6007',
+    'VOICE_TTS_PORT=7007',
     'SHERPA_NUM_THREADS=2',
     'SHERPA_MAX_CONCURRENT_SESSIONS=2',
     'PIPER_NUM_THREADS=2',
@@ -78,7 +78,7 @@ function Set-LaravelValue([string]$Key, [string]$Value) {
 }
 Set-LaravelValue 'FARAST_VOICE_LOCAL_SPEECH_ENABLED' 'true'
 Set-LaravelValue 'VOICE_STREAM_URL' 'ws://127.0.0.1:6002'
-Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:6007/v1/synthesize'
+Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:7007/v1/synthesize'
 [System.IO.File]::WriteAllLines($laravelEnv, $laravelLines, [System.Text.UTF8Encoding]::new($false))
 
 $php = Get-Command php -ErrorAction SilentlyContinue

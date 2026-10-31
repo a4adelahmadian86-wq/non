@@ -29,16 +29,15 @@ services:
     env_file:
       - .env.runtime
     environment:
-      PIPER_MODEL_PATH: /models/fa_IR-amir-medium.onnx
-      PIPER_NUM_THREADS: ${PIPER_NUM_THREADS:-2}
-      FARAST_TTS_HOST: 0.0.0.0
-      FARAST_TTS_PORT: 6007
+      PIPER_MODEL_DIR: /models
+      PIPER_HOST: 0.0.0.0
+      PIPER_PORT: 7007
     volumes:
       - farast-piper-models:/models
     ports:
-      - "${VOICE_TTS_BIND_ADDRESS:-127.0.0.1}:6007:6007"
+      - "${VOICE_TTS_BIND_ADDRESS:-127.0.0.1}:7007:7007"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:6007/health', timeout=3).read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7007/health', timeout=3).read()"]
       interval: 15s
       timeout: 4s
       retries: 20

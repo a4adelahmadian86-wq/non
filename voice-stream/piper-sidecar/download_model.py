@@ -1,15 +1,16 @@
 import hashlib
 import os
+import tempfile
+import urllib.request
 from pathlib import Path
 
-from huggingface_hub import hf_hub_download
-
 MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/models"))
-REPO_ID = "rhasspy/piper-voices"
-REVISION = "b22aa2aa275d5e8d528994782814cd8bf9d0337f"
-MODEL_FILE = "fa/fa_IR/amir/medium/fa_IR-amir-medium.onnx"
-CONFIG_FILE = "fa/fa_IR/amir/medium/fa_IR-amir-medium.onnx.json"
-MODEL_SHA256 = "fb815380d969ea372b0b21d0de14421f58fe481047e153e69685d079b6e1a9d1"
+REVISION = "cafdcbdb455e4a9ab2ef18dccb3e21dce6a25ee9"
+REPOSITORY = "MahtaFetrat/Mana-Persian-Piper"
+FILES = {
+    "fa_IR-mana-medium.onnx": "e390c0e74ba71fd97c49ba662ee0c6e1724b462ba2d4561698af4f564840f126",
+    "fa_IR-mana-medium.onnx.json": None,
+}
 
 
 def sha256(path: Path) -> str:
@@ -20,49 +21,31 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def fetch(filename: str, destination: Path) -> None:
-    downloaded = Path(
-        hf_hub_download(
-            repo_id=REPO_ID,
-            filename=filename,
-            revision=REVISION,
-            local_dir=str(MODEL_DIR),
-        )
-    )
-    if downloaded.resolve() != destination.resolve():
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(downloaded.read_bytes())
-
-
-def main() -> None:
+def download(name: str, expected_sha256: str | None) -> None:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    model_path = MODEL_DIR / "fa_IR-amir-medium.onnx"
-    config_path = MODEL_DIR / "fa_IR-amir-medium.onnx.json"
+    destination = MODEL_DIR / name
+    if destination.exists():
+        digest = sha256(destination)
+        if expected_sha256 is None or digest == expected_sha256:
+            return
+        destination.unlink()
 
-    if not model_path.is_file() or sha256(model_path) != MODEL_SHA256:
-        downloaded = Path(
-            hf_hub_download(
-                repo_id=REPO_ID,
-                filename=MODEL_FILE,
-                revision=REVISION,
-                local_dir=str(MODEL_DIR),
-                force_download=True,
-            )
-        )
-        actual = sha256(downloaded)
-        if actual != MODEL_SHA256:
-            raise RuntimeError(f"piper_model_checksum_mismatch:{actual}")
-        if downloaded.resolve() != model_path.resolve():
-            model_path.write_bytes(downloaded.read_bytes())
+    url = f"https://huggingface.co/{REPOSITORY}/resolve/{REVISION}/{name}"
+    request = urllib.request.Request(url, headers={"User-Agent": "FARAST-self-hosted-voice/1.0"})
+    with tempfile.NamedTemporaryFile(dir=MODEL_DIR, delete=False) as temp:
+        temporary = Path(temp.name)
+        with urllib.request.urlopen(request, timeout=90) as response:
+            while chunk := response.read(1024 * 1024):
+                temp.write(chunk)
 
-    if not config_path.is_file():
-        fetch(CONFIG_FILE, config_path)
-
-    if not config_path.is_file() or not model_path.is_file():
-        raise RuntimeError("piper_model_assets_missing")
-
-    print(f"Verified Persian Piper model is ready in {MODEL_DIR}", flush=True)
+    digest = sha256(temporary)
+    if expected_sha256 and digest != expected_sha256:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError(f"sha256_mismatch:{name}")
+    temporary.replace(destination)
 
 
 if __name__ == "__main__":
-    main()
+    for filename, checksum in FILES.items():
+        download(filename, checksum)
+    print(f"Persian Piper Mana voice ready in {MODEL_DIR}", flush=True)

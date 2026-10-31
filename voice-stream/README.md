@@ -26,7 +26,7 @@
 
 - FARAST_VOICE_LOCAL_SPEECH_ENABLED=true
 - VOICE_STREAM_URL=ws://127.0.0.1:6002
-- FARAST_VOICE_TTS_URL=http://127.0.0.1:6007/v1/synthesize
+- FARAST_VOICE_TTS_URL=http://127.0.0.1:7007/v1/synthesize
 
 درگاه زنده فقط روی loopback میزبان منتشر می‌شود. سرویس Piper نیز فقط روی loopback میزبان در دسترس Laravel است؛ Sherpa فقط در شبکهٔ خصوصی Docker به درگاه متصل می‌شود. فهرست Originهای مجاز از APP_URL لاراول ساخته می‌شود.
 
@@ -40,15 +40,17 @@
 - VOICE_STREAM_APP_URL باید از داخل کانتینر درگاه به Laravel دسترسی داشته باشد.
 - VOICE_STREAM_ORIGINS باید دقیقاً مبدأ HTTPS سایت باشد.
 - VOICE_STREAM_URL را به نشانی wss://your-domain.example/v1/stream پشت reverse proxy با پشتیبانی WebSocket Upgrade تغییر بده؛ نمونهٔ location برای Nginx در فایل nginx-websocket.conf قرار دارد.
-- اگر Laravel روی همان میزبان اجرا می‌شود، نشانی خصوصی Piper می‌تواند http://127.0.0.1:6007/v1/synthesize بماند؛ اگر Laravel در کانتینر جداگانه است، آن را به نام سرویس Piper در شبکهٔ خصوصی Docker تغییر بده.
+- اگر Laravel روی همان میزبان اجرا می‌شود، نشانی خصوصی Piper می‌تواند http://127.0.0.1:7007/v1/synthesize بماند؛ اگر Laravel در کانتینر جداگانه است، آن را به نام سرویس Piper در شبکهٔ خصوصی Docker تغییر بده.
 - volumeهای farast-sherpa-models و farast-piper-models را روی فضای پایدار نگه دار.
 
-اگر PHP در PATH سیستم نباشد، اسکریپت هشدار می‌دهد؛ در آن حالت باید seeder با نام Database\\Seeders\\SherpaOnnxVoiceProviderSeeder را از Artisan اجرا کنی و سپس config را پاک‌سازی کنی. این seeder فقط حساب موتور گفتار محلی را ثبت می‌کند و اجرای دوبارهٔ آن میزان مصرف قبلی را صفر نمی‌کند.\n\nبرای پاسخ هوشمند در حالت کاملاً محلی، درگاه خصوصی مدل زبانی که از قبل در تنظیمات Laravel پشتیبانی می‌شود نیز باید پیکربندی باشد. این تغییر، موتور پاسخ‌گویی هوش مصنوعی را جایگزین یا به سرویس ابری متصل نمی‌کند.
+اگر PHP در PATH سیستم نباشد، اسکریپت هشدار می‌دهد؛ در آن حالت باید seeder با نام Database\Seeders\SherpaOnnxVoiceProviderSeeder را از Artisan اجرا کنی و سپس config را پاک‌سازی کنی. این seeder فقط حساب موتور گفتار محلی را ثبت می‌کند و اجرای دوبارهٔ آن میزان مصرف قبلی را صفر نمی‌کند.
+
+برای پاسخ هوشمند در حالت کاملاً محلی، درگاه خصوصی مدل زبانی که از قبل در تنظیمات Laravel پشتیبانی می‌شود نیز باید پیکربندی باشد. این تغییر، موتور پاسخ‌گویی هوش مصنوعی را جایگزین یا به سرویس ابری متصل نمی‌کند.
 
 ## نکات مدل
 
 - مدل ASR فارسی و شیوهٔ نگهداری آن در sherpa-sidecar/README.md مستند شده است.
-- صدای Piper از مدل فارسی fa_IR-amir-medium استفاده می‌کند. فایل ONNX با SHA-256 ثابت بررسی می‌شود و مدل فقط داخل volume سرور قرار می‌گیرد.
+- صدای Piper از مدل فارسی Mana استفاده می‌کند. فایل ONNX با SHA-256 ثابت و revision مشخص بررسی می‌شود و مدل فقط داخل volume سرور قرار می‌گیرد.
 - سرویس TTS درخواست‌های فارسی را با شناسهٔ ثابت farast-fa-male-v1 می‌پذیرد و فایل WAV را از طریق Laravel به مرورگر می‌رساند.
 
 ## رفتار رابط کاربری

@@ -24,7 +24,7 @@ return [
         'token' => env('FARAST_VOICE_ASR_TOKEN', env('FARAST_VOICE_TOKEN')),
     ],
     'voice_tts' => [
-        'url' => env('FARAST_VOICE_TTS_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 'http://127.0.0.1:6007/v1/synthesize' : 'https://voice-typing-r5r7.onrender.com/v1/synthesize'),
+        'url' => env('FARAST_VOICE_TTS_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 'http://127.0.0.1:7007/v1/synthesize' : 'https://voice-typing-r5r7.onrender.com/v1/synthesize'),
         'token' => env('FARAST_VOICE_TTS_TOKEN', env('FARAST_VOICE_TOKEN')),
         // Keep this identifier pinned to one single-speaker model on the TTS host.
         'voice_id' => env('FARAST_VOICE_TTS_VOICE_ID', 'farast-fa-male-v1'),
