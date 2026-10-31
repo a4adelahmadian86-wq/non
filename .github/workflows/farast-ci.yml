@@ -88,5 +88,5 @@ jobs:
             sleep 1
           done
           if [ "$ready" -ne 1 ]; then cat /tmp/farast-sherpa.log; exit 1; fi
-          SHERPA_ONNX_WS_URL=ws://127.0.0.1:6006 node voice-stream/test/sherpa-sidecar.integration.mjs
+          SHERPA_ONNX_WS_URL=ws://127.0.0.1:6006 node voice-stream/scripts/sherpa-sidecar-smoke.mjs
           cat /tmp/farast-sherpa.log
