@@ -87,7 +87,7 @@
 .farast-assistant-panel.farast-assistant-voice-panel{
   width:min(440px,calc(100vw - 28px));
   height:min(700px,calc(100dvh - 178px));
-  min-height:480px;
+  min-height:min(480px,calc(100dvh - 178px));
   background:linear-gradient(180deg,#fbfcff 0%,#f7f8ff 100%);
 }
 .farast-assistant-voice-panel .farast-voice-stage{
@@ -154,6 +154,9 @@
 .farast-assistant-voice-panel .farast-voice-mic i{font-size:19px}
 .farast-assistant-voice-panel .farast-voice-mic span{font-size:9px}
 .farast-assistant-voice-panel .farast-voice-stop{
+  grid-column:1 / -1;
+  grid-row:4;
+  justify-self:center;
   align-self:center;
   color:#6d7390;
   font-size:9px;
@@ -197,8 +200,9 @@
     bottom:calc(env(safe-area-inset-bottom,0px) + 148px);
     width:auto;
     height:min(720px,calc(100dvh - 165px));
-    min-height:420px;
+    min-height:min(420px,calc(100dvh - 165px));
   }
+  .farast-assistant-voice-panel .farast-assistant-messages{min-height:70px}
   .farast-assistant-voice-panel .farast-voice-stage{grid-template-columns:62px minmax(0,1fr) 56px;padding:11px 12px;gap:4px 9px}
   .farast-assistant-voice-panel .farast-voice-orb{width:56px;height:56px}
   .farast-assistant-voice-panel .farast-voice-mic{width:50px;height:50px;border-radius:16px}
