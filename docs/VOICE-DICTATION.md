@@ -1,20 +1,24 @@
-# Voice dictation: free-first behavior
+# FARAST live voice dictation
 
-FARAST uses a free-first voice workflow:
+Speech recognition for voice dictation runs on the FARAST server through the authenticated WebSocket gateway.
 
-- **Start free** uses the browser's Web Speech API and inserts recognized final segments through the existing `/editor/voice/insert` endpoint and canonical editor kernel. It does not call FARAST's paid transcription provider or require a FARAST API key.
-- Where the browser exposes on-device recognition (`processLocally`, `available()`, and `install()`), the free mode requests local processing and can install the browser's language pack. Once installed, a supported browser can recognize speech offline.
-- The Web Speech API is not implemented consistently across browsers or languages. When on-device recognition is not exposed, the browser may use a remote speech service; the UI explicitly labels this possibility. FARAST cannot guarantee that browser fallback is offline.
-- **Online** remains an explicit alternative using the configured server-side voice stream provider. **File transcription** continues to use the existing authenticated provider/quota flow and may incur provider or account charges.
+## Client/server boundary
+
+- The browser asks for microphone permission and captures mono audio.
+- Browser echo cancellation, noise suppression, automatic gain control, and the shipped AudioWorklet may perform lightweight signal preparation and PCM resampling.
+- Audio frames are streamed to the server while the user speaks. Interim text is shown during speech; final segments are inserted through the existing `/editor/voice/insert` endpoint and canonical editor kernel.
+- ASR model weights, ONNX Runtime, WASM inference packages, and speech language packs are stored and executed on the server only. The browser must not use Web Speech API recognition, install language packs, or download speech models.
+- If the live server gateway is unavailable, voice dictation reports that it is unavailable. It must not silently switch to browser recognition or batch recording after the user expects live dictation.
 
 ## Verification checklist
 
 1. Open an editable document in a secure context (HTTPS or localhost).
-2. Put the caret at the intended insertion point, open **تایپ صوتی**, and select **شروع رایگان**.
-3. Grant microphone permission and speak Persian or another listed language.
-4. Confirm final segments enter the document and persist through the editor's canonical kernel/save path.
-5. Stop dictation and reopen the document to confirm persistence.
-6. In a browser supporting on-device recognition, verify the local language pack is available/installed and the UI says local recognition.
-7. Verify unsupported browser/language errors do not silently switch the local-only path to a cloud provider.
+2. Put the caret at the intended insertion point and open **تایپ صوتی**.
+3. Start the server live gateway and grant microphone permission.
+4. Speak Persian continuously; confirm interim text appears before stopping.
+5. Pause naturally; confirm a final segment is inserted once and is not duplicated.
+6. Continue speaking without restarting the microphone; confirm subsequent segments are inserted in order.
+7. Stop dictation and reopen the document to confirm persistence.
+8. Inspect browser network/storage to verify that no speech model, ONNX/WASM model package, or language pack was downloaded or cached on the device.
 
-This feature does not make all FARAST AI or file-transcription operations free. It removes FARAST provider/API costs from the free browser-dictation path; browser support and processing location remain platform-dependent.
+This feature uses client CPU only for lightweight microphone capture and audio preparation. Speech inference remains on the server.
