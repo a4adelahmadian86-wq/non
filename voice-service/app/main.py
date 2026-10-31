@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hmac
 import hashlib
@@ -287,7 +288,6 @@ async def live_stream(websocket: WebSocket) -> None:
             nonlocal usage_reported
             if not reservation_id or usage_reported:
                 return
-            usage_reported = True
             try:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0)) as client:
                     response = await client.post(
