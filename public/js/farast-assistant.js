@@ -58,7 +58,7 @@
       var response=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
       if(!response.ok)return;
       var data=await response.json();
-      if(data.local_only&&data.chat_gateway_ready===false){
+      if(data.local_only&&data.chat_gateway_ready===false&&!gatewayStarting&&!gatewayWs&&!busy){
         voiceTitle.textContent='درگاه پاسخ‌گویی تنظیم نشده';
         voiceCaption.textContent=data.chat_gateway_message||'برای پاسخ‌گویی خصوصی، درگاه مدل زبانی خودمیزبان باید تنظیم شود.';
         status.textContent='هیچ درخواست ابری ارسال نمی‌شود؛ تنظیمات خصوصی سرور لازم است.';
@@ -476,7 +476,7 @@
     form.hidden=false;list.hidden=false;
     var formMic=form.querySelector('.farast-assistant-mic');if(formMic)formMic.hidden=true;
     input.placeholder='پیامت را اینجا بنویس…';input.setAttribute('aria-label','پیام متنی شما');
-    voiceTitle.textContent='گفت‌وگوی متنی در دسترس است';
+    voiceTitle.textContent='ورودی متنی در دسترس است';
     voiceCaption.textContent=reason||'این مرورگر امکان ضبط یا تشخیص گفتار را فراهم نکرد؛ می‌توانی با متن ادامه بدهی.';
     status.textContent='ورودی متنی در دسترس است؛ اتصال موتور پاسخ‌گویی هنگام ارسال بررسی می‌شود.';
   }
