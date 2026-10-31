@@ -113,7 +113,7 @@ class GlobalAssistantVoiceTest extends TestCase
         putenv('GROQ_API_KEY=must-not-be-used');
         $_ENV['GROQ_API_KEY'] = 'must-not-be-used';
         $_SERVER['GROQ_API_KEY'] = 'must-not-be-used';
-        config(['services.ai_gateway.url' => '', 'services.ai_gateway.token' => '']);
+        config(['services.ai_gateway.url' => 'https://api.groq.com', 'services.ai_gateway.token' => 'must-not-be-used']);
         Http::fake();
 
         try {
@@ -124,7 +124,7 @@ class GlobalAssistantVoiceTest extends TestCase
             $legacy = $this->actingAs($user)->postJson('/assistant/chat', ['message' => 'سلام']);
             $legacy->assertStatus(503)->assertJsonPath('ok', false);
 
-            config(['services.voice_tts.url' => '']);
+            config(['services.voice_tts.url' => 'https://voice-typing-r5r7.onrender.com/v1/synthesize']);
             $speech = $this->actingAs($user)->postJson('/assistant/speak', ['text' => 'سلام']);
             $speech->assertStatus(503)->assertJsonPath('ok', false);
 
