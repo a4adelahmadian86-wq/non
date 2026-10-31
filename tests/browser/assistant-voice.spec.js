@@ -436,3 +436,26 @@ test('assistant streams sentence-sized server audio chunks without browser speec
   expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول.','جمله دوم.','جمله سوم.']);
   expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
 });
+
+test('assistant keeps the conversation composer visible and shows the private gateway error returned by the server', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  const diagnostic = 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: FARAST_AI_GATEWAY_URL، FARAST_AI_GATEWAY_TOKEN. هیچ سرویس ابری فراخوانی نمی‌شود.';
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.fetch = async (url) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ok:true,messages:[]}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ok:true,local_only:true,chat_gateway_ready:false,chat_gateway_message: ${JSON.stringify(diagnostic)}}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/assistant/chat/stream') return new Response(JSON.stringify({ok:false,code:'private_ai_gateway_not_configured',message: ${JSON.stringify(diagnostic)}}), {status:503,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({ok:false}), {status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  await expect(page.locator('[data-fa-messages]')).toBeVisible();
+  await expect(page.locator('[data-fa-status]')).toContainText('هیچ سرویس ابری فراخوانی نمی‌شود');
+  await page.locator('.farast-assistant-form input[name="message"]').fill('سلام');
+  await page.locator('.farast-assistant-send').click();
+  await expect(page.locator('[data-fa-messages]')).toContainText('FARAST_AI_GATEWAY_URL');
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('درگاه پاسخ‌گویی تنظیم نشده');
+});
