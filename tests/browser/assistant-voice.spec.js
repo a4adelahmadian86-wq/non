@@ -29,6 +29,7 @@ test('closing the global voice assistant stops microphone capture and discards p
   window.fetch = async (url) => {
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/transcribe') { window.__transcribeCalled = true; return new Response(JSON.stringify({ ok: true, text: 'این متن نباید ارسال شود' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
     return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   };
@@ -45,19 +46,17 @@ test('closing the global voice assistant stops microphone capture and discards p
   await expect.poll(async () => page.evaluate(() => window.__transcribeCalled)).toBe(false);
 });
 
-test('live conversation streams interim transcript and sends the completed utterance automatically', async ({ page }) => {
+test('does not fall back to browser speech recognition when the live gateway is unavailable', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__chatPayloads = [];
   window.WebSocket = undefined;
   window.AudioContext = undefined;
-  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
-  window.SpeechRecognition = class {
-    constructor() { window.__liveRecognition = this; }
-    start() { this.onstart?.(); }
-    stop() { this.onend?.(); }
-  };
+  window.__recognitionStarted = false;
+  window.SpeechRecognition = class { constructor() { window.__recognitionStarted = true; } start() { window.__recognitionStarted = true; } };
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } });
+  window.MediaRecorder = class { static isTypeSupported() { return true; } constructor(stream, options = {}) { this.stream = stream; this.mimeType = options.mimeType || 'audio/webm'; this.state = 'inactive'; window.__recorder = this; } start() { this.state = 'recording'; } stop() { this.state = 'inactive'; this.onstop?.(); } };
   window.Audio = class {
     constructor() { this.duration = 2; this.handlers = {}; this.paused = false; }
     addEventListener(name, fn) { this.handlers[name] = fn; }
@@ -68,6 +67,7 @@ test('live conversation streams interim transcript and sends the completed utter
   };
   window.fetch = async (url, options = {}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"سلام، در خدمتم."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
@@ -77,18 +77,8 @@ test('live conversation streams interim transcript and sends the completed utter
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
 
-  await expect.poll(async () => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام' }, isFinal: false }]
-  }));
-  await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام');
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام فراست' }, isFinal: true }]
-  }));
-  await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
-  expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+  await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBe('recording');
+  expect(await page.evaluate(() => window.__recognitionStarted)).toBe(false);
 });
 
 
@@ -125,6 +115,9 @@ test('unsupported voice browsers can continue through an accessible text fallbac
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__chatPayloads = [];
+  window.__deviceSpeechCalls = 0;
+  window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  window.speechSynthesis = { cancel() {}, getVoices() { return []; }, speak() { window.__deviceSpeechCalls++; } };
   window.WebSocket = undefined;
   window.AudioContext = undefined;
   Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: undefined });
@@ -148,6 +141,7 @@ test('unsupported voice browsers can continue through an accessible text fallbac
   await page.locator('.farast-assistant-send').click();
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
   await expect(page.locator('[data-fa-messages]')).toContainText('پاسخ متنی قابل مشاهده است.');
+  expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
 });
 
 
@@ -282,11 +276,8 @@ test('opening the assistant keeps the microphone off until the user taps', async
 <script>
   window.WebSocket = undefined;
   window.__recognitionStarts = 0;
-  window.SpeechRecognition = class {
-    constructor() { window.__recognition = this; }
-    start() { window.__recognitionStarts++; this.onstart?.(); }
-    stop() { this.onend?.(); }
-  };
+  window.SpeechRecognition = class { start() { window.__recognitionStarts++; } };
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
   window.fetch = async (url) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
@@ -296,12 +287,9 @@ test('opening the assistant keeps the microphone off until the user taps', async
   await page.locator('.farast-assistant-launcher').click();
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
   await page.locator('.farast-voice-mic').click();
-  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
-  await page.locator('.farast-voice-mic').click();
-  await expect(page.locator('.farast-assistant-panel')).not.toHaveClass(/is-listening/);
-  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
-
 
 
 test('gateway connection startup failure does not auto-start browser recognition', async ({ page }) => {
@@ -367,13 +355,19 @@ test('gateway failure keeps the microphone off until the user taps again', async
 });
 
 
-test('assistant starts speaking while the response is still streaming and queues sentence-sized audio chunks', async ({ page }) => {
+test('assistant streams sentence-sized server audio chunks without browser speech APIs', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__spokenChunks = [];
   window.__streamSentAll = false;
-  window.SpeechRecognition = class { constructor(){window.__liveRecognition=this;} start(){this.onstart?.();} stop(){this.onend?.();} };
+  window.__deviceSpeechCalls = 0;
+  window.SpeechRecognition = class { start() { throw new Error('browser recognition must not run'); } };
+  window.SpeechSynthesisUtterance = class {};
+  window.speechSynthesis = { cancel() {}, speak() { window.__deviceSpeechCalls++; } };
+  window.WebSocket = undefined;
+  window.AudioContext = undefined;
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
   window.Audio = class {
     constructor(){this.duration=2;this.handlers={};this.ended=false;this.paused=false;}
     addEventListener(name,fn){this.handlers[name]=fn;}
@@ -399,10 +393,12 @@ test('assistant starts speaking while the response is still streaming and queues
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-  await expect.poll(() => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
-  await page.evaluate(() => window.__liveRecognition.onresult({resultIndex:0,results:[{0:{transcript:'سلام فراست'},isFinal:true}]}));
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
+  await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBeGreaterThanOrEqual(1);
   expect(await page.evaluate(() => window.__streamSentAll)).toBe(false);
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(3);
   expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول.','جمله دوم.','جمله سوم.']);
+  expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
 });
