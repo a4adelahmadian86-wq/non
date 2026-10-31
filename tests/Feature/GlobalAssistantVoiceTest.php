@@ -76,12 +76,12 @@ class GlobalAssistantVoiceTest extends TestCase
         Http::fake([
             'https://voice.test/v1/transcribe' => Http::response(['text' => 'سلام فراست'], 200),
         ]);
-        $quota = \\Mockery::mock(AiQuotaService::class);
+        $quota = \Mockery::mock(AiQuotaService::class);
         $quota->shouldReceive('assertAllowed')->once();
         $this->app->instance(AiQuotaService::class, $quota);
-        $commerce = \\Mockery::mock(CommerceAuthorizationService::class);
+        $commerce = \Mockery::mock(CommerceAuthorizationService::class);
         $commerce->shouldReceive('reserve')->once()->andReturn('voice-reservation');
-        $commerce->shouldReceive('commit')->once()->with('voice-reservation', \\Mockery::type('array'));
+        $commerce->shouldReceive('commit')->once()->with('voice-reservation', \Mockery::type('array'));
         $this->app->instance(CommerceAuthorizationService::class, $commerce);
 
         $response = $this->actingAs(User::factory()->create())
