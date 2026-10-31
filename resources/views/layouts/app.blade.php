@@ -19,7 +19,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @endif
 @if($isAdmin)<link rel="stylesheet" href="/css/admin.css"><link rel="stylesheet" href="/css/farast-control.css">@endif
 @if($isAuthPage)<link rel="stylesheet" href="/css/auth.css">@endif
-<link rel="stylesheet" href="/css/farast-assistant.css?v=20261023crossbrowser1">
+<link rel="stylesheet" href="/css/farast-assistant.css?v=20261031conversationui1">
 @stack('styles')
 </head>
 <body data-assistant-auth="{{ auth()->check() ? '1' : '0' }}" class="{{ $isEditor?'editor-page-body':'' }} {{ $isAuthPage?'auth-page':'' }}">
@@ -36,7 +36,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)<footer class="site-footer" dir="rtl"><div class="footer-top"><div class="footer-about"><div class="footer-brand"><span class="brand-mark farast-symbol"><i></i><i></i><i></i><i></i><b></b></span><b>فراست</b></div><p>فراست یک فضای یکپارچه برای فروش فایل‌های دیجیتال و ارائه خدمات تایپ، تبدیل، ویرایش و پردازش هوشمند است.</p></div><div class="footer-column"><h3>محصول و خدمات</h3><a href="/store">فروش فایل</a><a href="/editor">تایپ و تبدیل</a><a href="/pricing">قیمت‌گذاری</a><a href="#" data-open-support>پشتیبانی</a></div><div class="footer-column"><h3>فضای کاربر</h3><a href="/dashboard">داشبورد</a><a href="/wallet">کیف پول</a></div></div><div class="footer-bottom"><span>© {{ now()->year }} فراست — تمامی حقوق محفوظ است.</span><div><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a><a href="/refund-policy">شرایط بازگشت وجه</a></div></footer>@endif
 @include('components.support-chat-widget')
 <script src="/js/farast-tab-lock.js"></script><script src="/js/farast.js"></script><script src="/js/farast-sound.js"></script>@if(!$isAdmin&&!$isDashboard)<script src="/js/farast-app.js"></script><script src="/js/store-cart.js?v=20260929c1"></script>@endif
-<script src="/js/farast-assistant.js?v=20261031serverbargein5"></script>
+<script src="/js/farast-assistant.js?v=20261031gatewaydiagnostics1"></script>
 @if($isEditor)<script src="/js/editor-layout.js?v=20261014a"></script><script src="/js/editor-core.js?v=20261014g"></script><script src="/js/editor-agent.js?v=20261010a"></script><script src="/js/farast-voice.js?v=20261031serveronly5"></script>@endif
 @stack('scripts')<script>document.documentElement.classList.add('js-ready');</script>
 </body></html>
