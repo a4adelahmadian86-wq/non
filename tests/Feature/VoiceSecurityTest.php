@@ -124,7 +124,9 @@ class VoiceSecurityTest extends TestCase
         Config::set('services.voice_stream.mode', 'self_hosted');
         Config::set('services.voice_stream.gateway_secret', 'local-stream-secret');
         $user = User::factory()->create();
-        $token = $this->actingAs($user)->postJson('/editor/voice/stream-token', ['locale' => 'fa-IR'])->json('token');
+        $payload = ['uid' => $user->id, 'locale' => 'fa-IR', 'iat' => time() - 300, 'exp' => time() - 180, 'nonce' => 'expired-live-session'];
+        $encoded = rtrim(strtr(base64_encode(json_encode($payload, JSON_UNESCAPED_SLASHES)), '+/', '-_'), '=');
+        $token = $encoded.'.'.hash_hmac('sha256', $encoded, (string) config('app.key'));
 
         $commerce = \Mockery::mock(CommerceAuthorizationService::class);
         $commerce->shouldReceive('commit')->once()->with(
