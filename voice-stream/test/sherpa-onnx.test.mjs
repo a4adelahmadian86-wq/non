@@ -22,14 +22,20 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
 
   let receivedAudio;
   let receivedDone;
+  let resolveDone;
+  const done = new Promise(resolve => { resolveDone = resolve; });
+  let resolveTranscript;
+  const transcriptReceived = new Promise(resolve => { resolveTranscript = resolve; });
   server.on('connection', socket => {
     socket.on('message', (data, isBinary) => {
       if (isBinary) {
         receivedAudio = Buffer.from(data);
         socket.send(JSON.stringify({ text: 'سلام', segment: 0, is_final: false }));
         socket.send(JSON.stringify({ text: 'سلام فراست', segment: 0, is_final: true }));
+        if (events.length >= 2) resolveTranscript();
       } else if (data.toString() === 'Done') {
         receivedDone = true;
+        resolveDone();
       }
     });
   });
@@ -50,14 +56,14 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
   pcm.writeInt16LE(-16384, 2);
   stream.write(pcm);
 
-  await new Promise(resolve => setTimeout(resolve, 30));
+  await transcriptReceived;
   assert.ok(receivedAudio);
   assert.equal(receivedAudio.readFloatLE(0), 0.5);
   assert.equal(receivedAudio.readFloatLE(4), -0.5);
   assert.deepEqual(events, [['interim', 'سلام'], ['final', 'سلام فراست']]);
 
   stream.close();
-  await new Promise(resolve => setTimeout(resolve, 20));
+  await done;
   assert.equal(receivedDone, true);
 });
 
