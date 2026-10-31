@@ -100,7 +100,7 @@ class VoiceController extends Controller
         return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',''),'/')]);
     }
 
-    public function streamConfig(Request $request, \\App\\Services\\CommerceAuthorizationService $commerce)
+    public function streamConfig(Request $request, \App\Services\CommerceAuthorizationService $commerce)
     {
         $token=(string)$request->input('token','');
         $payload=$this->verifyStreamToken($token);
@@ -110,7 +110,7 @@ class VoiceController extends Controller
         $reservationId = null;
         if ((string) config('services.voice_stream.mode', 'router') === 'self_hosted') {
             try {
-                $user = User::findOrFail((int) $payload['uid']);
+                $user = \App\Models\User::findOrFail((int) $payload['uid']);
                 $reservation = $commerce->reserve($user, 'speech.transcription', 1, [], [
                     'policy_code' => 'speech.transcription',
                     'unit' => 'request',
@@ -118,7 +118,7 @@ class VoiceController extends Controller
                     'idempotency_key' => 'voice-live-'.$payload['uid'].'-'.$payload['nonce'],
                 ]);
                 $reservationId = $reservation->reservation_id;
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 Log::warning('farast.voice.live_reservation_failed', ['user_id' => (int) $payload['uid'], 'error_code' => preg_match('/^[a-z0-9_.-]+$/i', $e->getMessage()) ? $e->getMessage() : 'reservation_failed']);
                 return response()->json(['ok' => false, 'message' => 'voice_quota_unavailable'], 402, ['Cache-Control' => 'no-store']);
             }
@@ -141,7 +141,7 @@ class VoiceController extends Controller
         return response()->json(['ok'=>true,'provider'=>$account->provider,'model'=>$account->model,'region'=>$account->metadata['region']??env('GOOGLE_SPEECH_REGION','us'),'credentials'=>$account->credentials_array,'account_id'=>$account->id,'quality_score'=>(int)$account->quality_score,'capabilities'=>$account->capabilities],200,['Cache-Control'=>'no-store']);
     }
 
-    public function streamUsage(Request $request, VoiceQuotaManager $quota, \\App\\Services\\CommerceAuthorizationService $commerce)
+    public function streamUsage(Request $request, VoiceQuotaManager $quota, \App\Services\CommerceAuthorizationService $commerce)
     {
         $token=(string)$request->input('token','');
         $payload=$this->verifyStreamToken($token);
