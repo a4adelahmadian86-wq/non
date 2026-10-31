@@ -35,7 +35,7 @@ def create_recognizer():
 
 async def decode_ready(recognizer, stream):
     while recognizer.is_ready(stream):
-        recognizer.decode_stream(stream)
+        await asyncio.to_thread(recognizer.decode_stream, stream)
 
 
 async def send_result(socket, text: str, segment: int, is_final: bool):
@@ -74,6 +74,7 @@ async def handle_connection(socket, recognizer):
             if recognizer.is_endpoint(stream):
                 await send_result(socket, result, segment, True)
                 recognizer.reset(stream)
+                stream.set_option('language', LOCALE)
                 segment += 1
             else:
                 await send_result(socket, result, segment, False)
