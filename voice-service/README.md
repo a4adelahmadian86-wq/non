@@ -32,7 +32,7 @@ All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_
 
 ## Local live WebSocket stream
 
-The same Python service exposes `ws://HOST:8010/v1/stream` for authenticated live PCM input. It accepts 16 kHz mono signed 16-bit PCM frames after a short-lived Laravel token, verifies the token with the exact Laravel `APP_KEY`, and transcribes bounded chunks using the already-loaded local faster-whisper model. No third-party speech inference API is called by this WebSocket route. The browser origin allowlist is mandatory: set `VOICE_STREAM_ORIGINS` to the exact local/deployed Laravel origin(s). Set Laravel `VOICE_STREAM_MODE=self_hosted` and `VOICE_STREAM_URL` to this service origin; for local HTTP development use `ws://127.0.0.1:8010`, and for an HTTPS site use a `wss://` endpoint. In this mode Laravel does not require a cloud `VoiceProviderAccount` for the live stream. Set the same Laravel `APP_KEY` in this service's environment. Also set `FARAST_APP_URL` to the Laravel base URL and `FARAST_VOICE_GATEWAY_SECRET` to the same value as Laravel `VOICE_GATEWAY_SECRET`. The gateway requests a server-side usage reservation before accepting audio and settles or releases it when the session ends; it does not bypass the existing speech-transcription entitlement. Keep both secrets private.
+The same Python service exposes `ws://HOST:8010/v1/stream` for authenticated live PCM input. It accepts 16 kHz mono signed 16-bit PCM frames after a short-lived Laravel token, verifies the token with the exact Laravel `APP_KEY`, and transcribes bounded chunks using the already-loaded local faster-whisper model. The browser keeps one WebSocket/microphone session open between user turns; speech during assistant playback can interrupt the current TTS/answer and be sent through that same session. The browser does not fall back to its managed SpeechRecognition service or device TTS. No third-party speech inference API is called by this WebSocket route. The browser origin allowlist is mandatory: set `VOICE_STREAM_ORIGINS` to the exact local/deployed Laravel origin(s). Set Laravel `VOICE_STREAM_MODE=self_hosted` and `VOICE_STREAM_URL` to this service origin; for local HTTP development use `ws://127.0.0.1:8010`, and for an HTTPS site use a `wss://` endpoint. In this mode Laravel does not require a cloud `VoiceProviderAccount` for the live stream. Set the same Laravel `APP_KEY` in this service's environment. Also set `FARAST_APP_URL` to the Laravel base URL and `FARAST_VOICE_GATEWAY_SECRET` to the same value as Laravel `VOICE_GATEWAY_SECRET`. The gateway requests a server-side usage reservation before accepting audio and settles or releases it when the session ends; it does not bypass the existing speech-transcription entitlement. Keep both secrets private.
 
 Laravel environment values for the live path:
 
@@ -42,7 +42,17 @@ VOICE_STREAM_URL=ws://127.0.0.1:8010
 VOICE_GATEWAY_SECRET=the-same-random-secret-as-FARAST_VOICE_GATEWAY_SECRET
 ```
 
-Use the actual local service address and the exact page origin in `VOICE_STREAM_ORIGINS`; do not copy these example localhost values to a public deployment.
+Use the actual local service address and the exact page origin in `VOICE_STREAM_ORIGINS`; do not copy these example localhost values to a public deployment. The Laravel host should also point its batch fallback and fixed TTS proxy at this same service:
+
+```dotenv
+FARAST_VOICE_ASR_URL=http://127.0.0.1:8010/v1/transcribe
+FARAST_VOICE_ASR_TOKEN=the-same-FARAST_VOICE_TOKEN-as-the-service
+FARAST_VOICE_TTS_URL=http://127.0.0.1:8010/v1/synthesize
+FARAST_VOICE_TTS_TOKEN=the-same-FARAST_VOICE_TOKEN-as-the-service
+FARAST_VOICE_TTS_VOICE_ID=farast-fa-male-v1
+```
+
+These Laravel ASR/TTS URLs default to empty and are never silently redirected to a third-party speech provider. If the Python service runs in Docker while Laravel runs on the host, `FARAST_APP_URL` inside the container must use a host-reachable address (for example `http://host.docker.internal:8000` where supported), not the container's own `127.0.0.1`. Configure all secrets only in local environment files or the host dashboard, never in Git or chat.
 
 This is chunked local inference, not token-by-token neural streaming: it flushes on a short silence or a five-second maximum chunk. Real Persian accuracy, end-of-turn timing, CPU/RAM use, and barge-in still require browser/device E2E tests. TTS remains the separate fixed local model endpoint described below.
 
