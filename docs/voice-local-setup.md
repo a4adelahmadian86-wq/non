@@ -29,13 +29,24 @@ FARAST_AI_GATEWAY_MODEL=qwen3:4b
 
 ## ۲) تشخیص گفتار زندهٔ فارسی
 
-این موارد باید هم‌زمان تنظیم باشند:
+این تنظیمات در دو محیط جداگانه لازم‌اند:
 
-- `VOICE_STREAM_URL`: آدرس پایهٔ درگاه WebSocket زندهٔ فراست.
-- `VOICE_GATEWAY_SECRET`: راز مشترک Laravel و درگاه WebSocket.
-- رکورد موتور `sherpa-onnx` باید در `voice_provider_accounts` فعال و سالم باشد.
+**محیط Laravel**
+- `VOICE_STREAM_URL`: آدرس WebSocket درگاه زنده؛ برای نمونه `ws://127.0.0.1:6002`.
+- `VOICE_GATEWAY_SECRET`: راز مشترک Laravel و درگاه Node.
 
-پس از فعال‌کردن `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true`، رکورد Sherpa را بساز یا به‌روزرسانی کن:
+**محیط فرایند Node در `voice-stream`**
+- `APP_KEY`: دقیقاً همان مقدار `APP_KEY` در Laravel؛ برای اعتبارسنجی توکن نشست.
+- `VOICE_GATEWAY_SECRET`: دقیقاً همان راز تنظیم‌شده در Laravel.
+- `VOICE_STREAM_APP_URL`: مبدأ Laravel؛ برای نمونه `http://127.0.0.1:8000`.
+- `VOICE_STREAM_ORIGINS`: مبدأ دقیق مرورگرِ مجاز، شامل scheme و port؛ برای نمونه `http://127.0.0.1:8000`.
+- `SHERPA_ONNX_WS_URL`: نشانی WebSocket خصوصی sidecar تشخیص گفتار؛ برای نمونه `ws://127.0.0.1:6006` یا نام میزبان خصوصی در شبکهٔ Docker.
+
+**محیط sidecar تشخیص گفتار**
+- مدل فارسی باید در `SHERPA_MODEL_DIR` وجود داشته باشد؛ دانلودکنندهٔ پروژه فایل‌ها را با SHA-256 بررسی می‌کند.
+- پورت پیش‌فرض sidecar برابر `6006` است.
+
+رکورد موتور `sherpa-onnx` نیز باید در `voice_provider_accounts` فعال و سالم باشد. پس از فعال‌کردن `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true`، رکورد Sherpa را بساز یا به‌روزرسانی کن:
 
 ```bash
 php artisan config:clear
