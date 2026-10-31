@@ -19,7 +19,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @endif
 @if($isAdmin)<link rel="stylesheet" href="/css/admin.css"><link rel="stylesheet" href="/css/farast-control.css">@endif
 @if($isAuthPage)<link rel="stylesheet" href="/css/auth.css">@endif
-<link rel="stylesheet" href="/css/farast-assistant.css?v=20261031conversationui2">
+<link rel="stylesheet" href="/css/farast-assistant.css?v=20261031conversationui3">
 @stack('styles')
 </head>
 <body data-assistant-auth="{{ auth()->check() ? '1' : '0' }}" class="{{ $isEditor?'editor-page-body':'' }} {{ $isAuthPage?'auth-page':'' }}">
