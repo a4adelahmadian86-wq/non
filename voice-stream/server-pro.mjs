@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
+import {createServer} from 'node:http';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {WebSocketServer} from 'ws';
+import WebSocket, {WebSocketServer} from 'ws';
 import dotenv from 'dotenv';
 import speech from '@google-cloud/speech';
 import {createAzureStream} from './providers/azure.mjs';
@@ -46,6 +47,40 @@ class Session{
  audio(buf){if(this.closed||!buf?.length)return;const seconds=buf.length/32000;this.audioSeconds+=seconds;this.inputBytes+=buf.length;this.providerAudioSeconds+=seconds;this.providerInputBytes+=buf.length;if(this.provider==='google'&&this.stream)for(let i=0;i<buf.length;i+=MAX_FRAME)this.stream.write({audio:buf.subarray(i,Math.min(i+MAX_FRAME,buf.length))});else if(this.provider==='azure'&&this.azure)this.azure.write(buf);else if(this.provider==='gladia'&&this.gladia)this.gladia.write(buf);else if(this.provider==='sherpa-onnx'&&this.sherpa)this.sherpa.write(buf);}
  async stop(){if(this.closed)return;this.closed=true;await this.reportProviderUsage(true);await this.closeProvider();}
 }
-const wss=new WebSocketServer({host:HOST,port:PORT,maxPayload:MAX_FRAME+2048});
+async function probeSherpa(timeoutMs=1800){
+  const target=String(process.env.SHERPA_ONNX_WS_URL||'').trim();
+  if(!target)throw new Error('sherpa_url_missing');
+  await new Promise((resolve,reject)=>{
+    const socket=new WebSocket(target,{handshakeTimeout:timeoutMs,perMessageDeflate:false});
+    let settled=false;
+    const timer=setTimeout(()=>finish(new Error('sherpa_health_timeout')),timeoutMs);
+    function finish(error){if(settled)return;settled=true;clearTimeout(timer);try{socket.close(1000,'health_check');}catch{}if(error)reject(error);else resolve();}
+    socket.once('open',()=>finish());
+    socket.once('error',finish);
+    socket.once('unexpected-response',()=>finish(new Error('sherpa_health_rejected')));
+  });
+}
+const httpServer=createServer(async(req,res)=>{
+  if(req.method==='GET'&&req.url==='/health'){
+    try{
+      await probeSherpa();
+      const body=JSON.stringify({ok:true,gateway:'ready',asr_ready:true,provider:'sherpa-onnx',locale:'fa-IR'});
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(body)}).end(body);
+    }catch(error){
+      const body=JSON.stringify({ok:false,gateway:'ready',asr_ready:false,provider:'sherpa-onnx',code:String(error?.message||'asr_unavailable').slice(0,100)});
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(body)}).end(body);
+    }
+    return;
+  }
+  const body=JSON.stringify({ok:false,message:'not_found'});
+  res.writeHead(404,{'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)}).end(body);
+});
+const wss=new WebSocketServer({noServer:true,maxPayload:MAX_FRAME+2048});
+httpServer.on('upgrade',(req,socket,head)=>{
+  let pathname='/';
+  try{pathname=new URL(req.url||'/', 'http://localhost').pathname;}catch{}
+  if(pathname!=='/v1/stream'){socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');socket.destroy();return;}
+  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));
+});
 wss.on('connection',(ws,req)=>{const origin=String(req.headers.origin||'');if(origin&&ORIGINS.length&&!ORIGINS.includes(origin)){ws.close(1008,'origin_not_allowed');return;}let s=null;let stopTimer=null;ws.on('message',async(data,binary)=>{try{if(!s){if(binary)throw new Error('start_required');const m=JSON.parse(data.toString());if(m.type!=='start')throw new Error('start_required');const token=String(m.token||'');const a=verify(token);if(m.locale!==a.locale)throw new Error('locale_mismatch');s=new Session(ws,a,token);await s.start();return;}if(binary)s.audio(Buffer.from(data));else{const m=JSON.parse(data.toString());if(m.type==='stop'){await s.stop();clearTimeout(stopTimer);stopTimer=setTimeout(()=>{try{ws.close(1000,'normal');}catch{}},STOP_GRACE_MS);}}}catch(e){send(ws,{type:'error',code:e?.message||'stream_error'});try{ws.close(1008,'voice_stream_error');}catch{}}});ws.on('close',()=>{clearTimeout(stopTimer);if(s&&!s.closed)s.stop();});ws.on('error',()=>{clearTimeout(stopTimer);if(s&&!s.closed)s.stop();});});
-console.log(`Farast voice stream: ws://${HOST}:${PORT} | provider router`);
+httpServer.listen(PORT,HOST,()=>console.log(`Farast voice stream and health endpoint listening on ${HOST}:${PORT}`));

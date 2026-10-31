@@ -74,7 +74,9 @@ class GlobalAssistantVoiceTest extends TestCase
         config([
             'services.voice_stream.url' => 'wss://voice.example.test',
             'services.voice_stream.gateway_secret' => 'gateway-secret',
+            'services.voice_stream.health_url' => 'http://127.0.0.1:6002/health',
         ]);
+        Http::fake(['http://127.0.0.1:6002/health' => Http::response(['ok' => true, 'asr_ready' => true], 200)]);
 
         $router = \Mockery::mock(VoiceProviderRouter::class);
         $account = new VoiceProviderAccount();
@@ -100,6 +102,59 @@ class GlobalAssistantVoiceTest extends TestCase
                 $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
             }
         }
+    }
+
+
+    public function test_local_live_gateway_status_requires_a_real_healthy_asr_service(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_stream.url' => 'ws://127.0.0.1:6002',
+            'services.voice_stream.gateway_secret' => 'gateway-secret',
+            'services.voice_stream.health_url' => 'http://127.0.0.1:6002/health',
+        ]);
+        Http::fake(['http://127.0.0.1:6002/health' => Http::response(['ok' => false, 'asr_ready' => false], 503)]);
+        $router = \Mockery::mock(VoiceProviderRouter::class);
+        $account = new VoiceProviderAccount();
+        $account->setAttribute('id', 322);
+        $account->setAttribute('provider', 'sherpa-onnx');
+        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn($account);
+        $this->app->instance(VoiceProviderRouter::class, $router);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('mode', 'none')
+            ->assertJsonPath('reason', 'local_voice_gateway_unavailable')
+            ->assertJsonFragment(['missing' => ['سرویس زنده یا موتور Sherpa اجرا نشده است؛ start.cmd را اجرا کن و سلامت /health را بررسی کن']]);
+        Http::assertSent(fn (ClientRequest $request) => $request->url() === 'http://127.0.0.1:6002/health');
+    }
+
+    public function test_local_only_chat_stream_uses_the_private_qwen_gateway_without_cloud_fallback(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.ai_gateway.url' => 'http://127.0.0.1:7008',
+            'services.ai_gateway.token' => 'local-ai-token',
+            'services.ai_gateway.model' => 'qwen3:1.7b',
+        ]);
+        $streamBody = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'سلام از مدل محلی']]]], JSON_UNESCAPED_UNICODE)."\n\ndata: [DONE]\n\n";
+        Http::fake([
+            'http://127.0.0.1:7008/v1/chat/completions' => Http::response($streamBody, 200, ['Content-Type' => 'text/event-stream']),
+            '*' => Http::response(['choices' => [['message' => ['content' => 'cloud fallback']]]], 200),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post('/assistant/chat/stream', ['message' => 'سلام']);
+
+        $response->assertOk();
+        $this->assertStringContainsString('سلام از مدل محلی', $response->streamedContent());
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'http://127.0.0.1:7008/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer local-ai-token')
+            && ($request->data()['model'] ?? null) === 'qwen3:1.7b'
+        );
     }
 
     public function test_local_only_assistant_never_falls_back_to_groq_or_non_streaming_ai(): void
@@ -323,6 +378,25 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('tts-secret-never-return', $response->getContent());
     }
 
+
+    public function test_local_chat_status_checks_the_real_qwen_gateway_health(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.ai_gateway.url' => 'http://127.0.0.1:7008',
+            'services.ai_gateway.token' => 'local-ai-token',
+            'services.ai_gateway.health_url' => 'http://127.0.0.1:7008/ready',
+        ]);
+        Http::fake(['http://127.0.0.1:7008/ready' => Http::response(['ok' => false, 'model' => 'qwen3:1.7b'], 503)]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('chat_gateway_ready', false)
+            ->assertJsonFragment(['chat_gateway_message' => 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: مدل زبانی محلی آماده نیست؛ start.cmd را اجرا کن و سلامت /ready را بررسی کن. هیچ سرویس ابری فراخوانی نمی‌شود.']);
+        Http::assertSent(fn (ClientRequest $request) => $request->url() === 'http://127.0.0.1:7008/ready');
+    }
+
     public function test_local_only_chat_returns_actionable_missing_gateway_configuration(): void
     {
         config([
@@ -356,7 +430,8 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('mode', 'none')
             ->assertJsonPath('missing.0', 'VOICE_STREAM_URL')
             ->assertJsonPath('missing.1', 'VOICE_GATEWAY_SECRET')
-            ->assertJsonPath('missing.2', 'موتور Sherpa-ONNX فارسی فعال و سالم (اجرای seeder و بررسی ظرفیت)');
+            ->assertJsonPath('missing.2', 'حساب موتور Sherpa-ONNX فارسی در پایگاه داده')
+            ->assertJsonPath('missing.3', 'سرویس زنده یا موتور Sherpa اجرا نشده است؛ start.cmd را اجرا کن و سلامت /health را بررسی کن');
     }
 
     public function test_local_only_assistant_status_does_not_claim_chat_is_ready_without_a_private_llm_gateway(): void

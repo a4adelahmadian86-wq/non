@@ -18,13 +18,24 @@ class GlobalAssistantController extends Controller
         $gatewayUrl = trim((string) config('services.ai_gateway.url', ''));
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
         $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
-        $chatGatewayReady = ! $localOnly || ($gatewayPrivate && $gatewayToken !== '');
+        $gatewayHealthy = ! $localOnly;
+        $gatewayHealthUrl = trim((string) config('services.ai_gateway.health_url', ''));
+        if ($localOnly && $gatewayPrivate && $gatewayToken !== '' && $gatewayHealthUrl !== '') {
+            try {
+                $health = Http::acceptJson()->connectTimeout(1)->timeout(2)->get($gatewayHealthUrl);
+                $gatewayHealthy = $health->successful() && (bool) $health->json('ok');
+            } catch (\Throwable) {
+                $gatewayHealthy = false;
+            }
+        }
+        $chatGatewayReady = ! $localOnly || ($gatewayPrivate && $gatewayToken !== '' && $gatewayHealthy);
         $chatGatewayMessage = '';
         if ($localOnly && ! $chatGatewayReady) {
             $missing = [];
             if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
             elseif (! $gatewayPrivate) $missing[] = 'آدرس خصوصی برای FARAST_AI_GATEWAY_URL';
             if ($gatewayToken === '') $missing[] = 'FARAST_AI_GATEWAY_TOKEN';
+            if ($gatewayPrivate && $gatewayToken !== '' && ! $gatewayHealthy) $missing[] = 'مدل زبانی محلی آماده نیست؛ start.cmd را اجرا کن و سلامت /ready را بررسی کن';
             $chatGatewayMessage = 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: '.implode('، ', $missing).'. هیچ سرویس ابری فراخوانی نمی‌شود.';
         }
 

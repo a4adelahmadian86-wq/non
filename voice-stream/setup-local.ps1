@@ -39,20 +39,32 @@ if ($appUri.Host -in @('localhost', '127.0.0.1', '::1')) {
 $callbackUrl = $callbackBuilder.Uri.GetLeftPart([System.UriPartial]::Authority)
 
 # Keep only the secrets the voice containers actually need; never copy the whole Laravel .env.
+$aiToken = [string]$values['FARAST_AI_GATEWAY_TOKEN']
+if ([string]::IsNullOrWhiteSpace($aiToken)) {
+    $randomBytes = New-Object byte[] 32
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($randomBytes) } finally { $rng.Dispose() }
+    $aiToken = [Convert]::ToBase64String($randomBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+
 $ttsToken = [string]$values['FARAST_VOICE_TTS_TOKEN']
 if ([string]::IsNullOrWhiteSpace($ttsToken)) { $ttsToken = [string]$values['FARAST_VOICE_TOKEN'] }
 $runtimeLines = @(
     "APP_KEY=$($values['APP_KEY'])",
     "VOICE_GATEWAY_SECRET=$($values['VOICE_GATEWAY_SECRET'])",
-    "FARAST_VOICE_TTS_TOKEN=$ttsToken"
+    "FARAST_VOICE_TTS_TOKEN=$ttsToken",
+    "FARAST_AI_GATEWAY_TOKEN=$aiToken"
 )
-[System.IO.File]::WriteAllLines((Join-Path $voiceDir '.env.runtime'), $runtimeLines, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllLines((Join-Path $voiceDir '.env.runtime'), $runtimeLines[0..2], [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllLines((Join-Path $voiceDir '.env.ai-runtime'), @("FARAST_AI_GATEWAY_TOKEN=$aiToken"), [System.Text.UTF8Encoding]::new($false))
 
 $composeLines = @(
     "VOICE_STREAM_APP_URL=$callbackUrl",
     "VOICE_STREAM_ORIGINS=$($origins -join ',')",
     'VOICE_STREAM_BIND_ADDRESS=127.0.0.1',
     'VOICE_TTS_BIND_ADDRESS=127.0.0.1',
+    'AI_GATEWAY_BIND_ADDRESS=127.0.0.1',
+    'OLLAMA_MODEL=qwen3:1.7b',
     'VOICE_STREAM_PORT=6002',
     'VOICE_TTS_PORT=7007',
     'SHERPA_NUM_THREADS=2',
@@ -78,23 +90,43 @@ function Set-LaravelValue([string]$Key, [string]$Value) {
 }
 if (-not [string]::IsNullOrWhiteSpace($ttsToken)) { Set-LaravelValue 'FARAST_VOICE_TTS_TOKEN' $ttsToken }
 Set-LaravelValue 'FARAST_VOICE_LOCAL_SPEECH_ENABLED' 'true'
+Set-LaravelValue 'VOICE_STREAM_HEALTH_URL' 'http://127.0.0.1:6002/health'
+Set-LaravelValue 'FARAST_AI_GATEWAY_URL' 'http://127.0.0.1:7008'
+Set-LaravelValue 'FARAST_AI_GATEWAY_HEALTH_URL' 'http://127.0.0.1:7008/ready'
+Set-LaravelValue 'FARAST_AI_GATEWAY_TOKEN' $aiToken
+Set-LaravelValue 'FARAST_AI_GATEWAY_MODEL' 'qwen3:1.7b'
 Set-LaravelValue 'VOICE_STREAM_URL' 'ws://127.0.0.1:6002'
 Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:7007/v1/synthesize'
 [System.IO.File]::WriteAllLines($laravelEnv, $laravelLines, [System.Text.UTF8Encoding]::new($false))
 
-$php = Get-Command php -ErrorAction SilentlyContinue
-if ($php) {
-    Push-Location $projectRoot
-    try {
-        & $php.Source artisan db:seed --class='Database\Seeders\SherpaOnnxVoiceProviderSeeder' --force | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'ثبت موتور محلی Sherpa در پایگاه داده انجام نشد.' }
-        & $php.Source artisan config:clear | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'پاک‌سازی تنظیمات Laravel انجام نشد.' }
-    } finally {
-        Pop-Location
+$phpCommand = Get-Command php -ErrorAction SilentlyContinue
+$phpExe = if ($phpCommand) { $phpCommand.Source } else { $null }
+if ([string]::IsNullOrWhiteSpace($phpExe)) {
+    $phpCandidates = @('C:\xampp\php\php.exe', 'C:\wamp64\bin\php\php.exe', (Join-Path $projectRoot 'php\php.exe'))
+    foreach ($candidate in $phpCandidates) {
+        if (Test-Path -LiteralPath $candidate) { $phpExe = $candidate; break }
     }
-} else {
-    Write-Warning 'PHP در PATH پیدا نشد؛ برای فعال‌شدن موتور محلی باید seeder موتور Sherpa اجرا شود.'
+}
+if ([string]::IsNullOrWhiteSpace($phpExe)) {
+    foreach ($phpRoot in @('C:\laragon\bin\php', 'C:\wamp64\bin\php')) {
+        if (Test-Path -LiteralPath $phpRoot) {
+            $found = Get-ChildItem -LiteralPath $phpRoot -Filter php.exe -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $phpExe = $found.FullName; break }
+        }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($phpExe)) {
+    throw 'PHP CLI پیدا نشد. PHP پروژه باید نصب باشد و php.exe در PATH، XAMPP، WAMP یا Laragon در دسترس باشد تا حساب موتور گفتار ثبت شود.'
 }
 
-Write-Host 'تنظیمات محلی گفتار آماده شد. کلیدها و توکن‌ها نمایش داده یا تغییر داده نشدند.'
+Push-Location $projectRoot
+try {
+    & $phpExe artisan db:seed --class='Database\Seeders\SherpaOnnxVoiceProviderSeeder' --force | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'ثبت موتور محلی Sherpa در پایگاه داده انجام نشد.' }
+    & $phpExe artisan config:clear | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'پاک‌سازی تنظیمات Laravel انجام نشد.' }
+} finally {
+    Pop-Location
+}
+
+Write-Host 'تنظیمات محلی گفتار و مدل زبانی آماده شد. کلیدها و توکن‌ها نمایش داده یا تغییر داده نشدند.'

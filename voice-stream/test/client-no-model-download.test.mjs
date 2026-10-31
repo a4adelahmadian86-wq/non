@@ -65,3 +65,28 @@ test('local Sherpa provider seeding is safe to rerun', async () => {
   assert.match(seeder, /\$isNewAccount\s*=\s*!\s*\$account->exists/);
   assert.match(seeder, /if\s*\(\$isNewAccount\)\s*\$account->quota_used_seconds\s*=\s*0/);
 });
+
+
+test('local deployment includes a private Qwen gateway and waits for healthy voice services', async () => {
+  const compose = await readFile(resolve(project, 'voice-stream/compose.yaml'), 'utf8');
+  const setup = await readFile(resolve(project, 'voice-stream/setup-local.ps1'), 'utf8');
+  const start = await readFile(resolve(project, 'voice-stream/start.cmd'), 'utf8');
+  const localGateway = await readFile(resolve(project, 'voice-stream/local-ai-gateway/server.mjs'), 'utf8');
+  assert.match(compose, /ollama\/ollama:0\.40\.13/);
+  assert.match(compose, /qwen3:1\.7b/);
+  assert.match(compose, /service_completed_successfully/);
+  assert.match(compose, /farast-ollama-models:\/root\/\.ollama/);
+  assert.match(compose, /\.env\.ai-runtime/);
+  assert.match(compose, /\/health/);
+  assert.match(setup, /FARAST_AI_GATEWAY_TOKEN/);
+  assert.match(setup, /VOICE_STREAM_HEALTH_URL/);
+  assert.match(setup, /\.env\.ai-runtime/);
+  assert.match(start, /--profile local-ai up -d --build/);
+  assert.match(start, /wait-ready\.ps1/);
+  const waitReady = await readFile(resolve(project, 'voice-stream/wait-ready.ps1'), 'utf8');
+  assert.match(waitReady, /6002\/health/);
+  assert.match(waitReady, /7007\/health/);
+  assert.match(waitReady, /7008\/ready/);
+  assert.match(localGateway, /\/v1\/chat\/completions/);
+  assert.match(localGateway, /authorization/i);
+});

@@ -14,6 +14,7 @@ use App\Services\VoiceQuotaManager;
 use App\Services\VoiceTranscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class VoiceController extends Controller
 {
@@ -36,7 +37,22 @@ class VoiceController extends Controller
         } catch (\Throwable) {
             $providerLookupFailed = true;
         }
-        $gatewayReady = $secret !== '' && $account !== null && $wsUrl !== '';
+        $gatewayHealthy = true;
+        $gatewayHealthUrl = trim((string) config('services.voice_stream.health_url', ''));
+        if ($localVoiceOnly) {
+            $gatewayHealthy = false;
+            if ($gatewayHealthUrl !== '') {
+                try {
+                    $health = Http::acceptJson()->connectTimeout(1)->timeout(2)->get($gatewayHealthUrl);
+                    $gatewayHealthy = $health->successful()
+                        && (bool) $health->json('ok')
+                        && (bool) $health->json('asr_ready');
+                } catch (\Throwable) {
+                    $gatewayHealthy = false;
+                }
+            }
+        }
+        $gatewayReady = $secret !== '' && $account !== null && $wsUrl !== '' && $gatewayHealthy;
         if ($gatewayReady) {
             return response()->json([
                 'ok' => true,
@@ -54,7 +70,8 @@ class VoiceController extends Controller
             $missing = [];
             if ($wsUrl === '') $missing[] = 'VOICE_STREAM_URL';
             if ($secret === '') $missing[] = 'VOICE_GATEWAY_SECRET';
-            if ($account === null) $missing[] = 'موتور Sherpa-ONNX فارسی فعال و سالم (اجرای seeder و بررسی ظرفیت)';
+            if ($account === null) $missing[] = 'حساب موتور Sherpa-ONNX فارسی در پایگاه داده';
+            if (! $gatewayHealthy) $missing[] = 'سرویس زنده یا موتور Sherpa اجرا نشده است؛ start.cmd را اجرا کن و سلامت /health را بررسی کن';
             $reason = $providerLookupFailed ? 'voice_provider_lookup_failed' : 'local_voice_gateway_unavailable';
             $message = 'درگاه زندهٔ گفتار خودمیزبان آماده نیست. موارد لازم: '.implode('، ', $missing).'.';
 

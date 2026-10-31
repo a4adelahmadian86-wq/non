@@ -5,6 +5,7 @@ return [
     'ai_gateway' => [
         'url' => env('FARAST_AI_GATEWAY_URL', ''),
         'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
+        'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 'http://127.0.0.1:7008/ready' : ''),
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
     ],
 
@@ -33,6 +34,7 @@ return [
     'voice_stream' => [
         'url' => env('VOICE_STREAM_URL', ''),
         'gateway_secret' => env('VOICE_GATEWAY_SECRET'),
+        'health_url' => env('VOICE_STREAM_HEALTH_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 'http://127.0.0.1:6002/health' : ''),
     ],
 
     'google_speech' => [
