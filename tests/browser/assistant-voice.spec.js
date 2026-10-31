@@ -50,6 +50,7 @@ test('live conversation streams interim transcript and sends the completed utter
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__chatPayloads = [];
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
   window.SpeechRecognition = class {
     constructor() { window.__liveRecognition = this; }
     start() { this.onstart?.(); }
