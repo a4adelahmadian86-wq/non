@@ -19,8 +19,8 @@ class VoiceController extends Controller
 {
     public function voiceStatus(Request $request)
     {
-        // Prefer the live WebSocket gateway when fully configured. Batch ASR
-        // providers remain available as a fallback, but must not mask live mode.
+        // Prefer the live WebSocket gateway when fully configured. The live browser client
+        // never switches to batch ASR if this gateway is unavailable.
         $authed = (bool) ($request->user()?->id);
         if (! $authed) {
             return response()->json(['ok' => true, 'mode' => 'none', 'reason' => 'auth'], 200, ['Cache-Control' => 'no-store']);
@@ -44,6 +44,8 @@ class VoiceController extends Controller
                 'gateway' => true,
                 'websocket_url' => preg_replace('#^http#', 'ws', $wsUrl),
                 'reason' => null,
+                'self_hosted' => $localVoiceOnly,
+                'locale' => $localVoiceOnly ? 'fa-IR' : null,
             ], 200, ['Cache-Control' => 'no-store']);
         }
 
