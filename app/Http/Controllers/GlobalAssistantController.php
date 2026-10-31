@@ -136,7 +136,7 @@ class GlobalAssistantController extends Controller
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_tts_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
                 $message = match ($response->status()) {
-                    401, 403 => 'احراز هویت موتور صدای ثابت ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
+                    401, 403 => 'احراز هویت موتور صدای خصوصی ناموفق است؛ مقدار FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN را در تنظیمات Laravel بررسی کن.',
                     429 => 'سرویس تولید صدا فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
                     default => 'موتور صدای ثابت پاسخ معتبر نداد (HTTP '.$response->status().').',
                 };

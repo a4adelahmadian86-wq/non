@@ -76,6 +76,7 @@ function Set-LaravelValue([string]$Key, [string]$Value) {
     }
     if (-not $found) { $laravelLines.Add("$Key=$Value") }
 }
+if (-not [string]::IsNullOrWhiteSpace($ttsToken)) { Set-LaravelValue 'FARAST_VOICE_TTS_TOKEN' $ttsToken }
 Set-LaravelValue 'FARAST_VOICE_LOCAL_SPEECH_ENABLED' 'true'
 Set-LaravelValue 'VOICE_STREAM_URL' 'ws://127.0.0.1:6002'
 Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:7007/v1/synthesize'
