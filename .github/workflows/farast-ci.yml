@@ -28,6 +28,7 @@ jobs:
       - run: node --check public/js/farast-voice-worklet.js && node --check voice-stream/server-pro.mjs && node --check voice-stream/server.mjs && node --check voice-stream/providers/sherpa-onnx.mjs
       - run: npm ci --prefix voice-stream
       - run: npm test --prefix voice-stream
+      - run: python -m py_compile voice-stream/sherpa-sidecar/server.py
       - run: node --check public/js/farast-voice.js
       - run: php artisan key:generate
       - run: touch database/database.sqlite
