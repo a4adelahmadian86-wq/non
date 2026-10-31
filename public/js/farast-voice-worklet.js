@@ -8,7 +8,7 @@ class FarastPcmProcessor extends AudioWorkletProcessor {
     this.position = 0;
     this.targetSamples = 1600;
     this.output = [];
-    this.vadThreshold = 0.013;
+    this.vadThreshold = 0.006;
     this.vadHangoverFrames = 15;
     this.vadHangover = 0;
   }
