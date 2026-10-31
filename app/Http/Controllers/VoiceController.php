@@ -46,6 +46,18 @@ class VoiceController extends Controller
             ], 200, ['Cache-Control' => 'no-store']);
         }
 
+        $localVoiceOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+        if ($localVoiceOnly) {
+            return response()->json([
+                'ok' => true,
+                'mode' => 'none',
+                'reason' => 'local_voice_gateway_unavailable',
+                'gateway' => false,
+                'websocket_url' => '',
+                'self_hosted' => true,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
         $asrUrl = trim((string) config('services.voice_asr.url', ''));
         $asrToken = trim((string) config('services.voice_asr.token', ''));
         if ($asrUrl !== '') {
@@ -139,6 +151,8 @@ class VoiceController extends Controller
         $asrToken=trim((string)(config('services.voice_asr.token','')));
         if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
         $selfHosted=$asrUrl!==''&&$asrToken!=='';
+        $localVoiceOnly=filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+        if($localVoiceOnly&&!$selfHosted)return response()->json(['ok'=>false,'message'=>'در حالت محلی، موتور رونویسی دسته‌ای خودمیزبان تنظیم نشده است؛ برای جلوگیری از ارسال صدا به سرویس ابری، ضبط سمت سرور متوقف شد.'],503,['Cache-Control'=>'no-store']);
         $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
         // One idempotency key represents one voice session across its short HTTP audio chunks.
         // Do not reserve quota until a chunk actually contains speech.
