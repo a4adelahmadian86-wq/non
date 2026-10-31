@@ -13,6 +13,10 @@ test('converts signed 16-bit little-endian PCM to float32 samples', () => {
   assert.equal(converted.readFloatLE(4), -0.5);
 });
 
+test('rejects malformed odd-length PCM frames', () => {
+  assert.throws(() => pcm16ToFloat32Buffer(Buffer.from([1, 2, 3])), /invalid_pcm16_frame/);
+});
+
 test('uses a private local WebSocket and forwards streaming transcripts', async t => {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   t.after(() => new Promise(resolve => server.close(resolve)));
@@ -40,16 +44,13 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
   });
 
   const events = [];
-  let markReady;
-  const ready = new Promise(resolve => { markReady = resolve; });
   const stream = createSherpaOnnxStream({}, 'fa-IR', {
-    ready: markReady,
     interim: text => events.push(['interim', text]),
     final: text => { events.push(['final', text]); resolveTranscript(); },
     error: error => events.push(['error', error.message]),
   });
 
-  await ready;
+  await stream.ready;
   const pcm = Buffer.alloc(4);
   pcm.writeInt16LE(16384, 0);
   pcm.writeInt16LE(-16384, 2);
@@ -66,6 +67,44 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
   assert.equal(receivedDone, true);
 });
 
+test('allows an explicitly allowlisted private service hostname', () => {
+  const originalUrl = process.env.SHERPA_ONNX_WS_URL;
+  const originalHosts = process.env.SHERPA_ONNX_ALLOWED_HOSTS;
+  process.env.SHERPA_ONNX_WS_URL = 'ws://farast-sherpa:6006';
+  process.env.SHERPA_ONNX_ALLOWED_HOSTS = 'farast-sherpa';
+  try {
+    const stream = createSherpaOnnxStream({}, 'fa-IR');
+    assert.equal(typeof stream.ready.then, 'function');
+    stream.close();
+  } finally {
+    if (originalUrl === undefined) delete process.env.SHERPA_ONNX_WS_URL;
+    else process.env.SHERPA_ONNX_WS_URL = originalUrl;
+    if (originalHosts === undefined) delete process.env.SHERPA_ONNX_ALLOWED_HOSTS;
+    else process.env.SHERPA_ONNX_ALLOWED_HOSTS = originalHosts;
+  }
+});
+
+test('rejects a non-Persian locale for the Persian-only model', () => {
+  const original = process.env.SHERPA_ONNX_WS_URL;
+  process.env.SHERPA_ONNX_WS_URL = 'ws://127.0.0.1:6006';
+  try {
+    assert.throws(() => createSherpaOnnxStream({}, 'en-US'), /locale_unsupported/);
+  } finally {
+    if (original === undefined) delete process.env.SHERPA_ONNX_WS_URL;
+    else process.env.SHERPA_ONNX_WS_URL = original;
+  }
+});
+
+test('rejects non-private WebSocket endpoints', () => {
+  const original = process.env.SHERPA_ONNX_WS_URL;
+  process.env.SHERPA_ONNX_WS_URL = 'ws://example.com:6006';
+  try {
+    assert.throws(() => createSherpaOnnxStream({}, 'fa-IR'), /must_be_private/);
+  } finally {
+    if (original === undefined) delete process.env.SHERPA_ONNX_WS_URL;
+    else process.env.SHERPA_ONNX_WS_URL = original;
+  }
+});
 test('rejects non-private WebSocket endpoints', () => {
   const original = process.env.SHERPA_ONNX_WS_URL;
   process.env.SHERPA_ONNX_WS_URL = 'ws://example.com:6006';
