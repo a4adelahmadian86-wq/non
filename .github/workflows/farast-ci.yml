@@ -32,7 +32,10 @@ jobs:
       - run: node --check public/js/farast-voice-worklet.js && node --check voice-stream/server-pro.mjs && node --check voice-stream/server.mjs && node --check voice-stream/providers/sherpa-onnx.mjs && node --check voice-stream/scripts/sherpa-sidecar-smoke.mjs
       - run: npm install --prefix voice-stream --no-audit --no-fund
       - run: npm test --prefix voice-stream
-      - run: python -m py_compile voice-stream/sherpa-sidecar/server.py voice-stream/sherpa-sidecar/download_model.py voice-stream/sherpa-sidecar/smoke_test.py
+      - run: python -m py_compile voice-stream/sherpa-sidecar/server.py voice-stream/sherpa-sidecar/download_model.py voice-stream/sherpa-sidecar/smoke_test.py voice-stream/piper-sidecar/server.py voice-stream/piper-sidecar/download_model.py voice-stream/piper-sidecar/smoke_test.py
+      - run: pip install --no-cache-dir -r voice-stream/piper-sidecar/requirements.txt
+      - run: python voice-stream/piper-sidecar/download_model.py
+      - run: python voice-stream/piper-sidecar/smoke_test.py
       - run: node --check public/js/farast-voice.js
       - run: php artisan key:generate
       - run: touch database/database.sqlite
