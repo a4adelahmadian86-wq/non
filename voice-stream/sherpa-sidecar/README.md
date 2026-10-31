@@ -33,7 +33,7 @@ On systems where host networking is unavailable, put the gateway and sidecar on 
 
 ## Connect the gateway
 
-Set `SHERPA_ONNX_WS_URL=ws://127.0.0.1:6006` in the Node voice gateway environment. In Laravel, enable the local Sherpa voice-provider account (the provider must be named `sherpa-onnx` and support locale `fa-IR`). Do not enable that account until the sidecar is running and reachable from the gateway.
+Set `SHERPA_ONNX_WS_URL=ws://127.0.0.1:6006` in the Node voice gateway environment. In Laravel, set `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` and run `php artisan db:seed --class=SherpaOnnxVoiceProviderSeeder` (or run the normal database seeder). This creates an unlimited local-only `sherpa-onnx` provider account for `fa-IR`. Do not enable that account until the sidecar is running and reachable from the gateway. The local provider is prioritized ahead of cloud accounts.
 
 The adapter deliberately refuses public WebSocket hosts and does not fail over from a failed local Sherpa session to a cloud provider. If local recognition is unavailable, the session reports an error rather than silently sending audio to a third party.
 
