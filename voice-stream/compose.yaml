@@ -1,0 +1,72 @@
+name: farast-voice
+
+services:
+  sherpa-asr:
+    build:
+      context: ./sherpa-sidecar
+    restart: unless-stopped
+    environment:
+      SHERPA_HOST: 0.0.0.0
+      SHERPA_PORT: 6006
+      SHERPA_MODEL_DIR: /models
+      SHERPA_NUM_THREADS: ${SHERPA_NUM_THREADS:-2}
+      SHERPA_MAX_CONCURRENT_SESSIONS: ${SHERPA_MAX_CONCURRENT_SESSIONS:-2}
+    volumes:
+      - farast-sherpa-models:/models
+    expose:
+      - "6006"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from websockets.sync.client import connect; ws=connect('ws://127.0.0.1:6006',open_timeout=2); ws.close()"]
+      interval: 15s
+      timeout: 4s
+      retries: 30
+      start_period: 90s
+
+  piper-tts:
+    build:
+      context: ./piper-sidecar
+    restart: unless-stopped
+    env_file:
+      - .env.runtime
+    environment:
+      PIPER_MODEL_PATH: /models/fa_IR-amir-medium.onnx
+      PIPER_NUM_THREADS: ${PIPER_NUM_THREADS:-2}
+      FARAST_TTS_HOST: 0.0.0.0
+      FARAST_TTS_PORT: 6007
+    volumes:
+      - farast-piper-models:/models
+    ports:
+      - "${VOICE_TTS_BIND_ADDRESS:-127.0.0.1}:6007:6007"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:6007/health', timeout=3).read()"]
+      interval: 15s
+      timeout: 4s
+      retries: 20
+      start_period: 60s
+
+  gateway:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env.runtime
+    environment:
+      PORT: "6002"
+      VOICE_STREAM_HOST: 0.0.0.0
+      VOICE_STREAM_PORT: "6002"
+      VOICE_STREAM_APP_URL: ${VOICE_STREAM_APP_URL:?Run start.cmd or set VOICE_STREAM_APP_URL}
+      VOICE_STREAM_ORIGINS: ${VOICE_STREAM_ORIGINS:?Run start.cmd or set VOICE_STREAM_ORIGINS}
+      SHERPA_ONNX_WS_URL: ws://sherpa-asr:6006
+      SHERPA_ONNX_ALLOWED_HOSTS: sherpa-asr
+      VOICE_STREAM_RESTART_MS: ${VOICE_STREAM_RESTART_MS:-270000}
+    ports:
+      - "${VOICE_STREAM_BIND_ADDRESS:-127.0.0.1}:6002:6002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      sherpa-asr:
+        condition: service_healthy
+
+volumes:
+  farast-sherpa-models:
+  farast-piper-models:
