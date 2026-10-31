@@ -105,7 +105,7 @@ class VoiceSecurityTest extends TestCase
         $token = $this->actingAs($user)->postJson('/editor/voice/stream-token', ['locale' => 'fa-IR'])->json('token');
 
         $reservation = new FarastUsageReservation(['reservation_id' => 'reservation-live-test']);
-        $commerce = \\Mockery::mock(CommerceAuthorizationService::class);
+        $commerce = \Mockery::mock(CommerceAuthorizationService::class);
         $commerce->shouldReceive('reserve')->once()->andReturn($reservation);
         $this->app->instance(CommerceAuthorizationService::class, $commerce);
 
@@ -123,10 +123,10 @@ class VoiceSecurityTest extends TestCase
         $user = User::factory()->create();
         $token = $this->actingAs($user)->postJson('/editor/voice/stream-token', ['locale' => 'fa-IR'])->json('token');
 
-        $commerce = \\Mockery::mock(CommerceAuthorizationService::class);
+        $commerce = \Mockery::mock(CommerceAuthorizationService::class);
         $commerce->shouldReceive('commit')->once()->with(
             'reservation-live-test',
-            \\Mockery::on(fn (array $context) => ($context['cost_metadata']['provider'] ?? null) === 'self-hosted-whisper')
+            \Mockery::on(fn (array $context) => ($context['cost_metadata']['provider'] ?? null) === 'self-hosted-whisper')
         )->andReturn(new FarastUsageEvent());
         $this->app->instance(CommerceAuthorizationService::class, $commerce);
 
