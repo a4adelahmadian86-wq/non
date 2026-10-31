@@ -43,8 +43,7 @@ class VoiceProviderRouter
 
     public function classRank(VoiceProviderAccount $account): int
     {
-        // Only force local-only routing when explicitly enabled. Otherwise keep the
-        // local provider available, but do not let an unconfigured sidecar shadow healthy providers.
+        // The candidate query excludes Sherpa unless local-only mode is enabled.
         if (strtolower($account->provider) === 'sherpa-onnx') {
             return filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 0 : 25;
         }
