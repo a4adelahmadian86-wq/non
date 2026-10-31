@@ -29,7 +29,7 @@ class VoiceCredentialIsolationTest extends TestCase
             'token' => $token,
         ], [], [], [
             'HTTP_X_FARAST_VOICE_GATEWAY' => hash_hmac('sha256', $token, (string) config('services.voice_stream.gateway_secret','test-gateway-secret')),
-        ]), app(\\App\\Services\\CommerceAuthorizationService::class));
+        ]), app(\App\Services\CommerceAuthorizationService::class));
 
         $data = $response->getData(true);
 
