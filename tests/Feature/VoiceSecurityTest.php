@@ -78,6 +78,23 @@ class VoiceSecurityTest extends TestCase
             ->assertDontSee('never-return-this');
     }
 
+
+    public function test_self_hosted_live_gateway_does_not_require_a_cloud_provider_account(): void
+    {
+        Config::set('services.voice_stream.mode', 'self_hosted');
+        Config::set('services.voice_stream.url', 'ws://127.0.0.1:8000');
+        Config::set('services.voice_stream.gateway_secret', '');
+        Config::set('services.voice_asr.url', '');
+        Config::set('services.voice_asr.token', '');
+
+        $user = User::factory()->create();
+        $this->actingAs($user)->getJson('/editor/voice/status')
+            ->assertOk()
+            ->assertJsonPath('mode', 'gateway')
+            ->assertJsonPath('gateway', true)
+            ->assertJsonPath('websocket_url', 'ws://127.0.0.1:8000');
+    }
+
     public function test_provider_credentials_are_gateway_only(): void
     {
         Config::set('services.voice_stream.gateway_secret','test-gateway-secret');
