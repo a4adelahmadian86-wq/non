@@ -8,9 +8,10 @@ import sherpa_onnx
 import websockets
 
 MODEL_DIR = Path(os.getenv("SHERPA_MODEL_DIR", "/models"))
-HOST = os.getenv("SHERPA_HOST", "127.0.0.1")
+HOST = os.getenv("SHERPA_HOST", "0.0.0.0")
 PORT = int(os.getenv("SHERPA_PORT", "6006"))
-NUM_THREADS = max(1, int(os.getenv("SHERPA_NUM_THREADS", "4")))
+NUM_THREADS = max(1, int(os.getenv("SHERPA_NUM_THREADS", "2")))
+MAX_CONCURRENT_SESSIONS = max(1, int(os.getenv("SHERPA_MAX_CONCURRENT_SESSIONS", "2")))
 SAMPLE_RATE = 16000
 LOCALE = "fa-IR"
 
@@ -90,13 +91,25 @@ async def handle_connection(socket, recognizer):
 
 async def main():
     recognizer = create_recognizer()
+    active_sessions = 0
+
+    async def handle(socket):
+        nonlocal active_sessions
+        if active_sessions >= MAX_CONCURRENT_SESSIONS:
+            await socket.close(1013, "server_busy")
+            return
+        active_sessions += 1
+        try:
+            await handle_connection(socket, recognizer)
+        finally:
+            active_sessions -= 1
     print(
         f"Sherpa-ONNX Persian streaming ASR listening on ws://{HOST}:{PORT} "
-        f"(threads={NUM_THREADS}, locale={LOCALE})",
+        f"(threads={NUM_THREADS}, max_sessions={MAX_CONCURRENT_SESSIONS}, locale={LOCALE})",
         flush=True,
     )
     async with websockets.serve(
-        lambda socket: handle_connection(socket, recognizer),
+        handle,
         HOST,
         PORT,
         max_size=1024 * 1024,
