@@ -18,6 +18,20 @@ class GlobalAssistantController extends Controller
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
         $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
         $chatGatewayReady = ! $localOnly || ($gatewayPrivate && $gatewayToken !== '');
+        $ttsUrl = trim((string) config('services.voice_tts.url', ''));
+        $ttsToken = trim((string) config('services.voice_tts.token', ''));
+        $ttsPrivate = $ttsUrl !== '' && $this->isPrivateServiceUrl($ttsUrl);
+        $serverTtsReady = $localOnly
+            ? ($ttsPrivate && $ttsToken !== '')
+            : ($ttsUrl !== '');
+        $serverTtsMessage = '';
+        if ($localOnly && ! $serverTtsReady) {
+            $missingTts = [];
+            if ($ttsUrl === '') $missingTts[] = 'FARAST_VOICE_TTS_URL';
+            elseif (! $ttsPrivate) $missingTts[] = 'آدرس خصوصی برای FARAST_VOICE_TTS_URL';
+            if ($ttsToken === '') $missingTts[] = 'FARAST_VOICE_TTS_TOKEN';
+            $serverTtsMessage = 'برای صدای خودمیزبان این تنظیمات لازم است: '.implode('، ', $missingTts).'. هیچ سرویس عمومی فراخوانی نمی‌شود.';
+        }
         $chatGatewayMessage = '';
         if ($localOnly && ! $chatGatewayReady) {
             $missing = [];
@@ -32,11 +46,12 @@ class GlobalAssistantController extends Controller
             'local_only' => $localOnly,
             'chat_gateway_ready' => $chatGatewayReady,
             'chat_gateway_message' => $chatGatewayMessage,
-            'server_stt' => filled(config('services.voice_asr.url')),
-            'server_tts' => filled(config('services.voice_tts.url')),
+            'server_stt' => ! $localOnly && filled(config('services.voice_asr.url')),
+            'server_tts' => $serverTtsReady,
+            'server_tts_message' => $serverTtsMessage,
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
             'server_stt_token_configured' => filled(config('services.voice_asr.token')),
-            'server_tts_token_configured' => filled(config('services.voice_tts.token')),
+            'server_tts_token_configured' => $ttsToken !== '',
             'browser_stt' => false,
         ], 200, ['Cache-Control' => 'no-store']);
     }
