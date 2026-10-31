@@ -81,3 +81,126 @@
 
 .farast-voice-login{display:inline-block;margin-top:6px;padding:10px 16px;border-radius:12px;background:linear-gradient(135deg,#6578f6,#9d5de9);color:#fff!important;text-decoration:none;font-size:12px;font-weight:700}
 .farast-voice-login:focus-visible{outline:3px solid #6b75f5;outline-offset:3px}
+
+
+/* Conversation-first assistant panel: transcript and text input stay available beside live voice. */
+.farast-assistant-panel.farast-assistant-voice-panel{
+  width:min(440px,calc(100vw - 28px));
+  height:min(700px,calc(100dvh - 178px));
+  min-height:480px;
+  background:linear-gradient(180deg,#fbfcff 0%,#f7f8ff 100%);
+}
+.farast-assistant-voice-panel .farast-voice-stage{
+  flex:0 0 auto;
+  min-height:0;
+  display:grid;
+  grid-template-columns:76px minmax(0,1fr) 64px;
+  grid-template-rows:auto auto auto;
+  align-items:center;
+  justify-items:stretch;
+  gap:5px 12px;
+  padding:14px 16px 12px;
+  text-align:right;
+  border-bottom:1px solid #e9ebf5;
+  background:linear-gradient(115deg,#f1f7ff,#f7f0ff 70%,#fff);
+}
+.farast-assistant-voice-panel .farast-voice-orb{
+  grid-column:1;
+  grid-row:1 / span 2;
+  width:68px;
+  height:68px;
+  gap:4px;
+  margin:0;
+}
+.farast-assistant-voice-panel .farast-voice-orb span{width:5px;height:17px}
+.farast-assistant-voice-panel .farast-voice-orb span:nth-child(2){height:29px}
+.farast-assistant-voice-panel .farast-voice-orb span:nth-child(3){height:13px}
+.farast-assistant-voice-panel .farast-voice-title{
+  grid-column:2;
+  grid-row:1;
+  align-self:end;
+  font-size:13px;
+  line-height:1.6;
+}
+.farast-assistant-voice-panel .farast-voice-caption{
+  grid-column:2;
+  grid-row:2;
+  max-width:none;
+  min-height:0;
+  font-size:10px;
+  line-height:1.8;
+  text-align:right;
+}
+.farast-assistant-voice-panel .farast-assistant-status{
+  grid-column:1 / -1;
+  grid-row:3;
+  min-height:0;
+  padding:5px 9px;
+  border:1px solid #e5e8f3;
+  border-radius:9px;
+  background:rgba(255,255,255,.76);
+  color:#646d89;
+  text-align:right;
+  font-size:10px;
+}
+.farast-assistant-voice-panel .farast-voice-mic{
+  grid-column:3;
+  grid-row:1 / span 2;
+  width:58px;
+  height:58px;
+  margin:0;
+  border-radius:19px;
+}
+.farast-assistant-voice-panel .farast-voice-mic i{font-size:19px}
+.farast-assistant-voice-panel .farast-voice-mic span{font-size:9px}
+.farast-assistant-voice-panel .farast-voice-stop{
+  align-self:center;
+  color:#6d7390;
+  font-size:9px;
+  padding:4px 8px;
+}
+.farast-assistant-voice-panel .farast-assistant-messages{
+  display:block;
+  flex:1 1 auto;
+  min-height:110px;
+  padding:14px 14px 8px;
+  background:transparent;
+}
+.farast-assistant-voice-panel .farast-assistant-msg{font-size:12px;line-height:1.9}
+.farast-assistant-voice-panel .farast-assistant-suggestions{
+  display:flex;
+  padding:8px 12px;
+  background:transparent;
+  border-top:1px solid #eceef6;
+}
+.farast-assistant-voice-panel .farast-assistant-form{
+  display:flex;
+  padding:9px 12px 11px;
+  background:#fff;
+  border-top:1px solid #eceef6;
+}
+.farast-assistant-voice-panel .farast-assistant-form input{
+  min-height:43px;
+  border-radius:13px;
+  background:#f7f8fc;
+}
+.farast-assistant-voice-panel .farast-assistant-foot{
+  padding:0 12px 9px;
+  background:#fff;
+  color:#858ba1;
+  font-size:9px;
+}
+@media(max-width:600px){
+  .farast-assistant-panel.farast-assistant-voice-panel{
+    left:10px;
+    right:10px;
+    bottom:calc(env(safe-area-inset-bottom,0px) + 148px);
+    width:auto;
+    height:min(720px,calc(100dvh - 165px));
+    min-height:420px;
+  }
+  .farast-assistant-voice-panel .farast-voice-stage{grid-template-columns:62px minmax(0,1fr) 56px;padding:11px 12px;gap:4px 9px}
+  .farast-assistant-voice-panel .farast-voice-orb{width:56px;height:56px}
+  .farast-assistant-voice-panel .farast-voice-mic{width:50px;height:50px;border-radius:16px}
+  .farast-assistant-voice-panel .farast-assistant-msg{max-width:96%}
+}
