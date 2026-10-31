@@ -463,3 +463,48 @@ test('assistant keeps the conversation composer visible and shows the private ga
   await expect(page.locator('[data-fa-voice-title]')).toContainText('پاسخ‌گویی ناموفق بود');
   await expect(page.locator('[data-fa-status]')).toContainText('FARAST_AI_GATEWAY_URL');
 });
+
+
+test('assistant panel keeps every control inside desktop and mobile viewports', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  const assistantCss = fs.readFileSync(path.join(process.cwd(), 'public/css/farast-assistant.css'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="0"></body></html>`);
+  await page.addStyleTag({ content: assistantCss });
+  await page.addScriptTag({ content: assistantJs });
+
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(viewport);
+    await page.locator('.farast-assistant-launcher').click();
+    const panel = page.locator('.farast-assistant-panel');
+    await expect(panel).toBeVisible();
+    await expect(page.locator('.farast-voice-mic')).toBeVisible();
+    await expect(page.locator('[data-fa-stop-speech]')).toBeVisible();
+    await expect(page.locator('.farast-assistant-form input[name="message"]')).toBeVisible();
+
+    const geometry = await page.evaluate(() => {
+      const panel = document.querySelector('.farast-assistant-panel').getBoundingClientRect();
+      const controls = [
+        document.querySelector('.farast-voice-mic'),
+        document.querySelector('[data-fa-stop-speech]'),
+        document.querySelector('.farast-assistant-form input[name="message"]')
+      ].map((element) => element.getBoundingClientRect());
+      return {
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        panel: { top: panel.top, right: panel.right, bottom: panel.bottom, left: panel.left },
+        controls: controls.map((rect) => ({ top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left }))
+      };
+    });
+
+    expect(geometry.panel.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.panel.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.panel.right).toBeLessThanOrEqual(geometry.viewport.width);
+    expect(geometry.panel.bottom).toBeLessThanOrEqual(geometry.viewport.height);
+    for (const control of geometry.controls) {
+      expect(control.top).toBeGreaterThanOrEqual(geometry.panel.top);
+      expect(control.left).toBeGreaterThanOrEqual(geometry.panel.left);
+      expect(control.right).toBeLessThanOrEqual(geometry.panel.right);
+      expect(control.bottom).toBeLessThanOrEqual(geometry.panel.bottom);
+    }
+    await page.locator('.farast-assistant-close').click();
+  }
+});
