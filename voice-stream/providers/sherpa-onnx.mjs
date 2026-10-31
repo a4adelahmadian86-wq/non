@@ -52,16 +52,36 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
   const url = resolveLocalUrl();
   const socket = new WebSocket(url, { perMessageDeflate: false, maxPayload: 1024 * 1024 });
   let closed = false;
+  let closing = false;
   let ready = false;
   let failed = false;
+  let closePromise = null;
+  let resolveClose = null;
+  let closeTimer = null;
   const pending = [];
   let resolveReady;
   let rejectReady;
   const readyPromise = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
   readyPromise.catch(() => {});
 
+  function finishClose() {
+    if (closed) return;
+    closed = true;
+    clearTimeout(closeTimer);
+    try {
+      if (socket.readyState === WebSocket.OPEN) socket.close(1000, 'normal');
+      else if (socket.readyState === WebSocket.CONNECTING) socket.terminate();
+    } catch {}
+    resolveClose?.();
+    resolveClose = null;
+  }
+
   const fail = error => {
     if (closed || failed) return;
+    if (closing) {
+      finishClose();
+      return;
+    }
     failed = true;
     const failure = error instanceof Error ? error : new Error(String(error || 'sherpa_onnx_error'));
     if (!ready) {
@@ -89,8 +109,14 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
   });
 
   socket.on('message', raw => {
+    const rawText = raw.toString();
+    if (rawText.trim() === 'Done!') {
+      handlers.end?.();
+      if (closing) finishClose();
+      return;
+    }
     try {
-      const message = JSON.parse(raw.toString());
+      const message = JSON.parse(rawText);
       const text = String(message?.text || '').trim();
       if (!text) return;
 
@@ -107,7 +133,11 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
 
   socket.on('error', fail);
   socket.on('close', (code, reason) => {
-    if (!closed && (!ready || code !== 1000)) {
+    if (closing) {
+      finishClose();
+      return;
+    }
+    if (!closed) {
       fail(new Error(`sherpa_onnx_ws_closed_${code}_${String(reason || '')}`));
     }
   });
@@ -115,7 +145,7 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
   return {
     ready: readyPromise,
     write(buffer) {
-      if (closed || failed || !buffer?.length) return;
+      if (closed || closing || failed || !buffer?.length) return;
       const chunk = pcm16ToFloat32Buffer(buffer);
       if (!chunk.length) return;
 
@@ -137,20 +167,24 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
       pending.push(chunk);
     },
     close() {
-      if (closed) return;
-      closed = true;
+      if (closePromise) return closePromise;
+      if (closed) return Promise.resolve();
+      closing = true;
       pending.length = 0;
-      if (socket.readyState === WebSocket.OPEN) {
-        try {
-          socket.send('Done');
-        } catch {}
-        const closeTimer = setTimeout(() => {
-          try { socket.close(1000, 'normal'); } catch {}
-        }, 300);
+      closePromise = new Promise(resolve => {
+        resolveClose = resolve;
+        closeTimer = setTimeout(finishClose, 5000);
         closeTimer.unref?.();
-      } else {
-        try { socket.terminate(); } catch {}
-      }
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send('Done', error => {
+            if (error) finishClose();
+          });
+        } else {
+          if (!ready) rejectReady(new Error('sherpa_onnx_closed_before_ready'));
+          finishClose();
+        }
+      });
+      return closePromise;
     },
   };
 }
