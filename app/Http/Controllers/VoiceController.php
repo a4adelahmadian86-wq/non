@@ -152,7 +152,7 @@ class VoiceController extends Controller
         if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
         $selfHosted=$asrUrl!==''&&$asrToken!=='';
         $localVoiceOnly=filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
-        if($localVoiceOnly&&!$selfHosted)return response()->json(['ok'=>false,'message'=>'در حالت محلی، موتور رونویسی دسته‌ای خودمیزبان تنظیم نشده است؛ برای جلوگیری از ارسال صدا به سرویس ابری، ضبط سمت سرور متوقف شد.'],503,['Cache-Control'=>'no-store']);
+        if($localVoiceOnly)return response()->json(['ok'=>false,'message'=>'در حالت پردازش محلی فراست، رونویسی دسته‌ای غیرفعال است. برای جلوگیری از ارسال ناخواستهٔ صدا به مسیر جایگزین، فقط جریان زندهٔ موتور محلی سرور مجاز است.'],503,['Cache-Control'=>'no-store']);
         $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
         // One idempotency key represents one voice session across its short HTTP audio chunks.
         // Do not reserve quota until a chunk actually contains speech.
