@@ -5,7 +5,7 @@ import urllib.request
 from pathlib import Path
 
 MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/models"))
-REVISION = "d7ec7b55362a11c2b79907188bd6e71acc19d9b0"
+REVISION = "cafdcbdb455e4a9ab2ef18dccb3e21dce6a25ee9"
 REPOSITORY = "MahtaFetrat/Mana-Persian-Piper"
 FILES = {
     "fa_IR-mana-medium.onnx": "e390c0e74ba71fd97c49ba662ee0c6e1724b462ba2d4561698af4f564840f126",
