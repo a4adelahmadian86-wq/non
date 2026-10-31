@@ -83,7 +83,7 @@ class VoiceSecurityTest extends TestCase
     {
         Config::set('services.voice_stream.mode', 'self_hosted');
         Config::set('services.voice_stream.url', 'ws://127.0.0.1:8000');
-        Config::set('services.voice_stream.gateway_secret', '');
+        Config::set('services.voice_stream.gateway_secret', 'test-self-hosted-gateway-secret');
         Config::set('services.voice_asr.url', '');
         Config::set('services.voice_asr.token', '');
 
