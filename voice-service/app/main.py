@@ -283,23 +283,6 @@ async def live_stream(websocket: WebSocket) -> None:
             )
         config_data = config_response.json() if config_response.is_success else {}
         reservation_id = str(config_data.get("reservation_id") or "")
-        if not config_response.is_success or not config_data.get("gateway") or not reservation_id:
-            await websocket.send_json({"type": "error", "code": "voice_quota_unavailable"})
-            await websocket.close(code=1008)
-            return
-        if asr_model is None:
-            await websocket.send_json({"type": "error", "code": "asr_not_ready"})
-            await websocket.close(code=1013)
-            return
-
-        language = {"fa-IR": "fa", "en-US": "en", "ar-SA": "ar"}[locale]
-        await websocket.send_json({"type": "ready", "sample_rate": 16000, "format": "pcm_s16le", "provider": "self-hosted-whisper"})
-        buffer = bytearray()
-        silence_bytes = 0
-        speech_seen = False
-        max_chunk_bytes = 16000 * 2 * 5
-        silence_limit_bytes = 24000  # 750 ms at 16 kHz, mono, signed 16-bit PCM.
-
         async def report_usage(success: bool) -> None:
             nonlocal usage_reported
             if not reservation_id or usage_reported:
@@ -321,6 +304,24 @@ async def live_stream(websocket: WebSocket) -> None:
                     )
             except Exception as exc:
                 print(f"LIVE_USAGE_REPORT_FAILED: {type(exc).__name__}", flush=True)
+
+        if not config_response.is_success or not config_data.get("gateway") or not reservation_id:
+            await websocket.send_json({"type": "error", "code": "voice_quota_unavailable"})
+            await websocket.close(code=1008)
+            return
+        if asr_model is None:
+            await report_usage(False)
+            await websocket.send_json({"type": "error", "code": "asr_not_ready"})
+            await websocket.close(code=1013)
+            return
+
+        language = {"fa-IR": "fa", "en-US": "en", "ar-SA": "ar"}[locale]
+        await websocket.send_json({"type": "ready", "sample_rate": 16000, "format": "pcm_s16le", "provider": "self-hosted-whisper"})
+        buffer = bytearray()
+        silence_bytes = 0
+        speech_seen = False
+        max_chunk_bytes = 16000 * 2 * 5
+        silence_limit_bytes = 24000  # 750 ms at 16 kHz, mono, signed 16-bit PCM.
 
         async def flush_chunk() -> None:
             nonlocal buffer, silence_bytes, speech_seen, transcript_count
@@ -396,3 +397,7 @@ async def live_stream(websocket: WebSocket) -> None:
             await websocket.close(code=1011)
         except Exception:
             pass
+
+    finally:
+        if reservation_id and not usage_reported:
+            await report_usage(transcript_count > 0)
