@@ -16,6 +16,7 @@ return [
     // Optional private/self-hosted speech services. No third-party cloud API is assumed.
     'voice' => [
         'local_only' => filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'remote_batch_enabled' => filter_var(env('FARAST_VOICE_REMOTE_BATCH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
     'voice_asr' => [
