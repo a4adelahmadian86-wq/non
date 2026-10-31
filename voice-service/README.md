@@ -32,13 +32,14 @@ All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_
 
 ## Local live WebSocket stream
 
-The same Python service exposes `ws://HOST:8000/v1/stream` for authenticated live PCM input. It accepts 16 kHz mono signed 16-bit PCM frames after a short-lived Laravel token, verifies the token with the exact Laravel `APP_KEY`, and transcribes bounded chunks using the already-loaded local faster-whisper model. No third-party speech inference API is called by this WebSocket route. The browser origin allowlist is mandatory: set `VOICE_STREAM_ORIGINS` to the exact local/deployed Laravel origin(s). Set Laravel `VOICE_STREAM_MODE=self_hosted` and `VOICE_STREAM_URL` to this service origin; for local HTTP development use `ws://127.0.0.1:8000`, and for an HTTPS site use a `wss://` endpoint. In this mode Laravel does not require a cloud `VoiceProviderAccount` for the live stream. Set the same Laravel `APP_KEY` in this service's environment. Keep the key private.
+The same Python service exposes `ws://HOST:8000/v1/stream` for authenticated live PCM input. It accepts 16 kHz mono signed 16-bit PCM frames after a short-lived Laravel token, verifies the token with the exact Laravel `APP_KEY`, and transcribes bounded chunks using the already-loaded local faster-whisper model. No third-party speech inference API is called by this WebSocket route. The browser origin allowlist is mandatory: set `VOICE_STREAM_ORIGINS` to the exact local/deployed Laravel origin(s). Set Laravel `VOICE_STREAM_MODE=self_hosted` and `VOICE_STREAM_URL` to this service origin; for local HTTP development use `ws://127.0.0.1:8000`, and for an HTTPS site use a `wss://` endpoint. In this mode Laravel does not require a cloud `VoiceProviderAccount` for the live stream. Set the same Laravel `APP_KEY` in this service's environment. Also set `FARAST_APP_URL` to the Laravel base URL and `FARAST_VOICE_GATEWAY_SECRET` to the same value as Laravel `VOICE_GATEWAY_SECRET`. The gateway requests a server-side usage reservation before accepting audio and settles or releases it when the session ends; it does not bypass the existing speech-transcription entitlement. Keep both secrets private.
 
 Laravel environment values for the live path:
 
 ```dotenv
 VOICE_STREAM_MODE=self_hosted
-VOICE_STREAM_URL=ws://127.0.0.1:8000
+VOICE_STREAM_URL=ws://127.0.0.1:8010
+VOICE_GATEWAY_SECRET=the-same-random-secret-as-FARAST_VOICE_GATEWAY_SECRET
 ```
 
 Use the actual local service address and the exact page origin in `VOICE_STREAM_ORIGINS`; do not copy these example localhost values to a public deployment.
@@ -72,8 +73,8 @@ cd voice-service
 cp .env.example .env
 # Edit .env and set FARAST_VOICE_TOKEN to a long random secret.
 docker build -t farast-voice .
-docker run --rm --env-file .env -p 8000:8000 -v "$PWD/models:/models" farast-voice
-curl -fsS http://127.0.0.1:8000/health
+docker run --rm --env-file .env -p 8010:8000 -v "$PWD/models:/models" farast-voice
+curl -fsS http://127.0.0.1:8010/health
 ```
 
 The service attempts to download the pinned TTS model on first startup when `FARAST_TTS_AUTO_DOWNLOAD=true`. For local use, ensure the host can reach Hugging Face and mount `voice-service/models` at `/models`; alternatively, place the verified checkpoint and config under `voice-service/models/persian-tts-male-vits/`. Never commit model weights or secrets to Git.
