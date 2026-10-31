@@ -238,7 +238,7 @@ def _transcribe_pcm_chunk(raw: bytes, language: str) -> str:
 async def live_stream(websocket: WebSocket) -> None:
     """Receive 16 kHz PCM frames and return local Whisper chunk transcripts."""
     origin = str(websocket.headers.get("origin", "")).strip()
-    if origin and STREAM_ORIGINS and origin not in STREAM_ORIGINS:
+    if not origin or not STREAM_ORIGINS or origin not in STREAM_ORIGINS:
         await websocket.close(code=1008)
         return
     await websocket.accept()
