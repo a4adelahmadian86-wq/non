@@ -352,9 +352,8 @@
     if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor))||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return false;
     gatewayStarting=true;var generation=++gatewayGeneration;
     try{
-      // Ask for microphone access immediately from the user's tap, before any network waits.
-      gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
-      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
+      // Check server readiness before requesting microphone permission. This avoids
+      // opening the microphone when this deployment has no live gateway configured.
       var statusResponse=await fetch('/editor/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
       var service=await statusResponse.json().catch(function(){return {};});
       if(!statusResponse.ok||service.mode!=='gateway'){stopGatewayRecognition();return false;}
@@ -362,6 +361,8 @@
       var tokenData=await tokenResponse.json().catch(function(){return {};});
       if(!tokenResponse.ok||!tokenData.token||!tokenData.websocket_url)throw new Error(tokenData.message||'درگاه تشخیص زنده آماده نیست.');
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){gatewayStarting=false;return true;}
+      gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
       var wsUrl=tokenData.websocket_url.replace(/^http:/,'ws:').replace(/^https:/,'wss:').replace(/\/$/,'');
       // Laravel intentionally stores the gateway origin; the ASGI stream lives at /v1/stream.
       // Accept a full endpoint too, so deployments that already include the path are not doubled.
@@ -490,9 +491,10 @@
   function stopMediaTracks(){if(mediaStream){mediaStream.getTracks().forEach(function(track){track.stop();});mediaStream=null;}}
   async function startServerRecording(){
     if(document.body.dataset.assistantAuth!=='1'){status.textContent='برای استفاده از میکروفون ابتدا وارد حساب کاربری شو.';return;}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){enableTextFallback('این مرورگر امکان ضبط صوت را فراهم نکرد؛ می‌توانی گفت‌وگو را با نوشتن پیام ادامه بدهی.');return;}
     var config=null;
     try{var sr=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'}});if(sr.ok)config=await sr.json();}catch(e){}
-    if(!config||!config.server_stt||!config.server_tts||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){var unavailable='ضبط یا سرویس صوتی در این مرورگر در دسترس نیست. می‌توانی گفت‌وگو را با نوشتن پیام ادامه بدهی.';enableTextFallback(unavailable);return;}
+    if(!config||!config.server_stt||!config.server_tts){var unavailable='سرویس صوتی در این مرورگر در دسترس نیست. می‌توانی گفت‌وگو را با نوشتن پیام ادامه بدهی.';enableTextFallback(unavailable);return;}
     if(config.server_stt_token_configured===false||config.server_tts_token_configured===false){conversationActive=false;var tokenError='تنظیمات احراز هویت سرویس صوتی کامل نیست؛ گفت‌وگو را فعلاً با متن ادامه بده.';enableTextFallback(tokenError);return;}
     try{
       mediaStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
