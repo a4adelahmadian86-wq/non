@@ -17,7 +17,7 @@ This folder is a separate Python API for speech inference. It does not replace t
 - `POST /v1/transcribe`: authenticated multipart form with `audio` and `locale`; returns `{"text":"..." }`.
 - `POST /v1/synthesize`: authenticated JSON `{"text":"...","language":"fa-IR","voice_id":"farast-fa-male-v1"}`; returns WAV audio.
 
-All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_TOKEN>`. Health intentionally discloses only readiness booleans. Put the same token in Laravel's `FARAST_VOICE_ASR_TOKEN` and `FARAST_VOICE_TTS_TOKEN`, and point both URLs at this service's `/v1/transcribe` and `/v1/synthesize` endpoints. Generate a long random token; never commit it.
+All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_TOKEN>`. Health intentionally discloses only readiness booleans. Put the same token in Laravel's `FARAST_VOICE_ASR_TOKEN` and `FARAST_VOICE_TTS_TOKEN`, and point both URLs at this service's `/v1/transcribe` and `/v1/synthesize` endpoints. Reuse the existing FARAST_VOICE_TOKEN already configured for FARAST; do not rotate an existing token just for this service. Never commit it.
 
 ## Deploy on Render
 
@@ -27,7 +27,7 @@ All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_
 4. Choose **Docker** as runtime if the dashboard offers it for this repository.
 5. Do not select Free for production. Review the current price and select a paid always-on instance only if you accept the charge. For a real model service, evaluate 8 GB RAM rather than the Free tier; the combined memory demand and latency still must be measured.
 6. Add a persistent disk mounted at `/models`. Without persistent storage, model files may need to be downloaded again after redeploy/restart.
-7. Add environment variable `FARAST_VOICE_TOKEN` (a unique random secret), plus the settings in `.env.example`.
+7. Add the existing `FARAST_VOICE_TOKEN` to the service environment, plus the settings in `.env.example`; keep it identical to Laravel and do not rotate it.
 8. Deploy, then check `https://YOUR-SERVICE.onrender.com/health`. It must show `asr_ready: true` and `tts_ready: true` before connecting Laravel. A 200 from `/health` alone does not mean the models are ready.
 
 ## Local live WebSocket stream
@@ -81,7 +81,7 @@ With Docker and persistent model files available:
 ```sh
 cd voice-service
 cp .env.example .env
-# Edit .env and set FARAST_VOICE_TOKEN to a long random secret.
+# Edit .env and reuse the existing FARAST_VOICE_TOKEN already configured for FARAST.
 docker build -t farast-voice .
 docker run --rm --env-file .env -p 8010:8000 -v "$PWD/models:/models" farast-voice
 curl -fsS http://127.0.0.1:8010/health
@@ -95,9 +95,9 @@ Set these server-side environment values in the Laravel hosting panel:
 
 ```dotenv
 FARAST_VOICE_ASR_URL=https://YOUR-SERVICE.onrender.com/v1/transcribe
-FARAST_VOICE_ASR_TOKEN=the-same-long-random-secret
+FARAST_VOICE_ASR_TOKEN=the-same-existing-FARAST_VOICE_TOKEN
 FARAST_VOICE_TTS_URL=https://YOUR-SERVICE.onrender.com/v1/synthesize
-FARAST_VOICE_TTS_TOKEN=the-same-long-random-secret
+FARAST_VOICE_TTS_TOKEN=the-same-existing-FARAST_VOICE_TOKEN
 FARAST_VOICE_TTS_VOICE_ID=farast-fa-male-v1
 ```
 
