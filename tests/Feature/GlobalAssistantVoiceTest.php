@@ -304,6 +304,7 @@ class GlobalAssistantVoiceTest extends TestCase
     public function test_voice_status_exposes_readiness_booleans_but_never_provider_tokens(): void
     {
         config([
+            'services.voice.remote_batch_enabled' => true,
             'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
             'services.voice_asr.token' => 'asr-secret-never-return',
             'services.voice_tts.url' => 'https://voice.test/v1/synthesize',
@@ -316,7 +317,8 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('server_stt', true)
             ->assertJsonPath('server_tts', true)
             ->assertJsonPath('server_stt_token_configured', true)
-            ->assertJsonPath('server_tts_token_configured', true);
+            ->assertJsonPath('server_tts_token_configured', true)
+            ->assertJsonPath('remote_batch_enabled', true);
         $this->assertStringNotContainsString('asr-secret-never-return', $response->getContent());
         $this->assertStringNotContainsString('tts-secret-never-return', $response->getContent());
     }
