@@ -475,6 +475,7 @@ test('assistant panel keeps every control inside desktop and mobile viewports', 
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
     await page.setViewportSize(viewport);
     await page.locator('.farast-assistant-launcher').click();
+    await expect(page.locator('.farast-assistant-close')).toBeFocused();
     const panel = page.locator('.farast-assistant-panel');
     await expect(panel).toBeVisible();
     await expect(panel).toHaveAttribute('role', 'dialog');
@@ -510,6 +511,7 @@ test('assistant panel keeps every control inside desktop and mobile viewports', 
       expect(control.bottom).toBeLessThanOrEqual(geometry.panel.bottom);
     }
     await page.locator('.farast-assistant-close').click();
+    await expect(page.locator('.farast-assistant-launcher')).toBeFocused();
   }
 });
 
