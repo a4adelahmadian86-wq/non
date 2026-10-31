@@ -124,6 +124,18 @@ class VoiceSecurityTest extends TestCase
         Config::set('services.voice_stream.mode', 'self_hosted');
         Config::set('services.voice_stream.gateway_secret', 'local-stream-secret');
         $user = User::factory()->create();
+        FarastUsageReservation::create([
+            'reservation_id' => 'reservation-live-test',
+            'idempotency_key' => 'voice-live-test',
+            'actor_id' => $user->id,
+            'capability' => 'speech.transcription',
+            'quantity' => 1,
+            'unit' => 'request',
+            'mode' => 'free',
+            'status' => 'reserved',
+            'expires_at' => now()->addMinutes(10),
+            'metadata' => [],
+        ]);
         $payload = ['uid' => $user->id, 'locale' => 'fa-IR', 'iat' => time() - 300, 'exp' => time() - 180, 'nonce' => 'expired-live-session'];
         $encoded = rtrim(strtr(base64_encode(json_encode($payload, JSON_UNESCAPED_SLASHES)), '+/', '-_'), '=');
         $token = $encoded.'.'.hash_hmac('sha256', $encoded, (string) config('app.key'));
@@ -158,4 +170,39 @@ class VoiceSecurityTest extends TestCase
         $gateway=hash_hmac('sha256',$token,(string)config('services.voice_stream.gateway_secret'));
         $this->withHeaders(['X-Farast-Voice-Gateway'=>$gateway,'X-Farast-Voice-Secret'=>$gateway])->postJson('/editor/voice/provider-config',['token'=>$token])->assertOk()->assertJsonPath('credentials.api_key','super-secret-test-key');
     }
+
+    public function test_self_hosted_stream_usage_cannot_settle_another_users_reservation(): void
+    {
+        Config::set('services.voice_stream.mode', 'self_hosted');
+        Config::set('services.voice_stream.gateway_secret', 'local-stream-secret');
+        $caller = User::factory()->create();
+        $owner = User::factory()->create();
+        FarastUsageReservation::create([
+            'reservation_id' => 'reservation-owned-by-other-user',
+            'idempotency_key' => 'voice-live-other-user',
+            'actor_id' => $owner->id,
+            'capability' => 'speech.transcription',
+            'quantity' => 1,
+            'unit' => 'request',
+            'mode' => 'free',
+            'status' => 'reserved',
+            'expires_at' => now()->addMinutes(10),
+            'metadata' => [],
+        ]);
+
+        $payload = ['uid' => $caller->id, 'locale' => 'fa-IR', 'iat' => time(), 'exp' => time() + 120, 'nonce' => 'caller-session'];
+        $encoded = rtrim(strtr(base64_encode(json_encode($payload, JSON_UNESCAPED_SLASHES)), '+/', '-_'), '=');
+        $token = $encoded.'.'.hash_hmac('sha256', $encoded, (string) config('app.key'));
+        $signature = hash_hmac('sha256', $token, 'local-stream-secret');
+
+        $this->postJson('/editor/voice/stream-usage', [
+            'token' => $token,
+            'reservation_id' => 'reservation-owned-by-other-user',
+            'audio_seconds' => 3.2,
+            'input_bytes' => 102400,
+            'success' => true,
+            'latency_ms' => 1800,
+        ], ['X-Farast-Voice-Gateway' => $signature])->assertNotFound();
+    }
+
 }
