@@ -4,7 +4,7 @@ const path = require('path');
 
 test('closing the global voice assistant closes its live WebSocket and microphone', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
-  await page.setContent(\`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__stoppedTracks = 0;
   window.__wsInstances = [];
@@ -29,7 +29,7 @@ test('closing the global voice assistant closes its live WebSocket and microphon
     if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
     return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
   };
-</script></body></html>\`);
+</script></body></html>`);
   await page.addScriptTag({content:assistantJs});
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
@@ -39,7 +39,9 @@ test('closing the global voice assistant closes its live WebSocket and microphon
   await expect(page.locator('.farast-assistant-panel')).toBeHidden();
   await expect.poll(()=>page.evaluate(()=>window.__stoppedTracks)).toBe(1);
   expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(3);
-});\n\ntest('gateway-unavailable live assistant keeps the microphone closed instead of batch recording', async ({ page }) => {
+});
+
+test('gateway-unavailable live assistant keeps the microphone closed instead of batch recording', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
