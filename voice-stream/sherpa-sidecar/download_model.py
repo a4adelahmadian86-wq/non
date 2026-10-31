@@ -55,12 +55,13 @@ def main() -> None:
         print(f"verified server-side ASR asset: {filename}", flush=True)
 
     for notice in ("LICENSE", "NOTICE"):
-        hf_hub_download(
-            repo_id=REPO_ID,
-            filename=notice,
-            revision=REVISION,
-            local_dir=str(MODEL_DIR),
-        )
+        if not (MODEL_DIR / notice).is_file():
+            hf_hub_download(
+                repo_id=REPO_ID,
+                filename=notice,
+                revision=REVISION,
+                local_dir=str(MODEL_DIR),
+            )
 
     print(f"all Persian ASR model files and notices are ready in {MODEL_DIR}", flush=True)
 
