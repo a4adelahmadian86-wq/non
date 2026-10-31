@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+import base64
+import hmac
 import io
+import json
 import os
 import secrets
+import struct
 import tempfile
 from pathlib import Path
 from threading import Lock
 from typing import Optional
 
 import soundfile as sf
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 APP_NAME = "FARAST Self-hosted Voice"
 API_TOKEN = os.getenv("FARAST_VOICE_TOKEN", "").strip()
+STREAM_APP_KEY = os.getenv("APP_KEY", "").strip()
+STREAM_ORIGINS = {item.strip() for item in os.getenv("VOICE_STREAM_ORIGINS", "").split(",") if item.strip()}
 ASR_MODEL_NAME = os.getenv("FARAST_ASR_MODEL", "small")
 ASR_DEVICE = os.getenv("FARAST_ASR_DEVICE", "cpu")
 ASR_COMPUTE_TYPE = os.getenv("FARAST_ASR_COMPUTE_TYPE", "int8")
@@ -182,3 +188,148 @@ def synthesize(request: SynthesizeRequest) -> Response:
     except Exception as exc:
         print(f"TTS_REQUEST_FAILED: {type(exc).__name__}: {exc}", flush=True)
         raise HTTPException(status_code=500, detail="Speech synthesis failed") from exc
+
+
+def verify_stream_token(token: str) -> Optional[dict]:
+    """Verify the short-lived Laravel HMAC token without exposing API credentials."""
+    if not STREAM_APP_KEY or not token or "." not in token:
+        return None
+    encoded, signature = token.split(".", 1)
+    if not encoded or not signature:
+        return None
+    expected = hmac.new(STREAM_APP_KEY.encode(), encoded.encode(), "sha256").hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        return None
+    try:
+        padded = encoded + "=" * ((4 - len(encoded) % 4) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode()).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if not payload.get("uid") or not payload.get("nonce"):
+        return None
+    if payload.get("locale") not in {"fa-IR", "en-US", "ar-SA"}:
+        return None
+    if int(payload.get("exp", 0)) < int(__import__("time").time()):
+        return None
+    return payload
+
+
+def _transcribe_pcm_chunk(raw: bytes, language: str) -> str:
+    """Run one bounded 16 kHz mono PCM chunk through the already-loaded local model."""
+    import numpy as np
+
+    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if samples.size < 8000 or asr_model is None:
+        return ""
+    with model_lock:
+        segments, _info = asr_model.transcribe(
+            samples,
+            language=language,
+            vad_filter=True,
+            beam_size=3,
+            condition_on_previous_text=False,
+        )
+        return " ".join(segment.text.strip() for segment in segments).strip()
+
+
+@app.websocket("/v1/stream")
+async def live_stream(websocket: WebSocket) -> None:
+    """Receive 16 kHz PCM frames and return local Whisper chunk transcripts."""
+    origin = str(websocket.headers.get("origin", "")).strip()
+    if origin and STREAM_ORIGINS and origin not in STREAM_ORIGINS:
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+    try:
+        start = await asyncio.wait_for(websocket.receive_json(), timeout=10)
+        token = str(start.get("token", "")) if isinstance(start, dict) else ""
+        locale = str(start.get("locale", "")) if isinstance(start, dict) else ""
+        payload = verify_stream_token(token)
+        if not payload or payload.get("locale") != locale:
+            await websocket.send_json({"type": "error", "code": "unauthorized"})
+            await websocket.close(code=1008)
+            return
+        if asr_model is None:
+            await websocket.send_json({"type": "error", "code": "asr_not_ready"})
+            await websocket.close(code=1013)
+            return
+
+        language = {"fa-IR": "fa", "en-US": "en", "ar-SA": "ar"}[locale]
+        await websocket.send_json({"type": "ready", "sample_rate": 16000, "format": "pcm_s16le", "provider": "self-hosted-whisper"})
+        buffer = bytearray()
+        silence_bytes = 0
+        speech_seen = False
+        max_chunk_bytes = 16000 * 2 * 5
+        silence_limit_bytes = 24000  # 750 ms at 16 kHz, mono, signed 16-bit PCM.
+
+        async def flush_chunk() -> None:
+            nonlocal buffer, silence_bytes, speech_seen
+            raw = bytes(buffer)
+            buffer.clear()
+            silence_bytes = 0
+            speech_seen = False
+            if len(raw) < 16000:
+                return
+            try:
+                transcript = await asyncio.to_thread(_transcribe_pcm_chunk, raw, language)
+            except Exception as exc:
+                print(f"LIVE_ASR_FAILED: {type(exc).__name__}", flush=True)
+                await websocket.send_json({"type": "provider_error", "provider": "self-hosted-whisper", "code": "local_asr_failed"})
+                return
+            if transcript:
+                await websocket.send_json({"type": "final", "text": transcript, "provider": "self-hosted-whisper"})
+
+        while True:
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
+            if message.get("text") is not None:
+                try:
+                    command = json.loads(message["text"])
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(command, dict) and command.get("type") == "stop":
+                    await flush_chunk()
+                    break
+                continue
+
+            frame = message.get("bytes")
+            if not frame:
+                continue
+            if len(frame) > 48000:
+                await websocket.send_json({"type": "error", "code": "audio_frame_too_large"})
+                await websocket.close(code=1009)
+                return
+            frame = frame[: len(frame) - (len(frame) % 2)]
+            if not frame:
+                continue
+            mean_abs = sum(abs(sample[0]) for sample in struct.iter_unpack("<h", frame)) / max(1, len(frame) // 2)
+            if mean_abs >= 420:
+                speech_seen = True
+                silence_bytes = 0
+                buffer.extend(frame)
+            elif speech_seen:
+                buffer.extend(frame)
+                silence_bytes += len(frame)
+
+            if speech_seen and (silence_bytes >= silence_limit_bytes or len(buffer) >= max_chunk_bytes):
+                await flush_chunk()
+
+        await websocket.close(code=1000)
+    except WebSocketDisconnect:
+        return
+    except asyncio.TimeoutError:
+        try:
+            await websocket.send_json({"type": "error", "code": "stream_start_timeout"})
+            await websocket.close(code=1008)
+        except Exception:
+            pass
+    except Exception as exc:
+        print(f"LIVE_STREAM_FAILED: {type(exc).__name__}", flush=True)
+        try:
+            await websocket.send_json({"type": "error", "code": "live_stream_failed"})
+            await websocket.close(code=1011)
+        except Exception:
+            pass
