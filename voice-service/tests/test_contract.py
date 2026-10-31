@@ -83,3 +83,28 @@ def test_stream_token_verification_rejects_expired_or_unsupported_tokens():
     }
     assert main.verify_stream_token(_signed_stream_token(expired)) is None
     assert main.verify_stream_token(_signed_stream_token(unsupported)) is None
+
+
+def test_websocket_origin_allowlist_fails_closed(monkeypatch):
+    monkeypatch.setattr(main, "STREAM_ORIGINS", {"http://localhost:8000"})
+    assert main.is_allowed_stream_origin("http://localhost:8000") is True
+    assert main.is_allowed_stream_origin("https://attacker.example") is False
+    assert main.is_allowed_stream_origin("") is False
+    monkeypatch.setattr(main, "STREAM_ORIGINS", set())
+    assert main.is_allowed_stream_origin("http://localhost:8000") is False
+
+
+def test_live_pcm_transcription_uses_loaded_local_model(monkeypatch):
+    class Segment:
+        text = "سلام فراست"
+
+    class FakeModel:
+        def transcribe(self, samples, **kwargs):
+            assert samples.dtype.name == "float32"
+            assert kwargs["language"] == "fa"
+            return iter([Segment()]), None
+
+    monkeypatch.setattr(main, "asr_model", FakeModel())
+    import numpy as np
+    raw = (np.ones(8000, dtype=np.int16) * 1000).tobytes()
+    assert main._transcribe_pcm_chunk(raw, "fa") == "سلام فراست"
