@@ -373,4 +373,45 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonFragment(['chat_gateway_message' => 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: FARAST_AI_GATEWAY_URL، FARAST_AI_GATEWAY_TOKEN. هیچ سرویس ابری فراخوانی نمی‌شود.']);
     }
 
+
+    public function test_explicit_remote_batch_voice_opt_in_allows_render_voice_without_enabling_cloud_chat(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice.remote_batch_enabled' => true,
+            'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
+            'services.voice_asr.token' => 'asr-test-token',
+            'services.voice_tts.url' => 'https://voice.test/v1/synthesize',
+            'services.voice_tts.token' => 'tts-test-token',
+            'services.voice_tts.voice_id' => 'farast-fa-male-v1',
+        ]);
+        Http::fake([
+            'https://voice.test/v1/transcribe' => Http::response(['text' => 'سلام فراست'], 200),
+            'https://voice.test/v1/synthesize' => Http::response('fake-mp3-bytes', 200, ['Content-Type' => 'audio/mpeg']),
+        ]);
+
+        $user = User::factory()->create();
+        $transcription = $this->actingAs($user)->post('/assistant/transcribe', [
+            'audio' => UploadedFile::fake()->createWithContent('voice.wav', $this->wavSample()),
+            'locale' => 'fa-IR',
+        ]);
+        $transcription->assertOk()->assertJsonPath('text', 'سلام فراست');
+
+        $speech = $this->actingAs($user)->postJson('/assistant/speak', ['text' => 'سلام']);
+        $speech->assertOk()->assertHeader('Content-Type', 'audio/mpeg');
+
+        $chat = $this->actingAs($user)->postJson('/assistant/chat/stream', ['message' => 'سلام']);
+        $chat->assertStatus(503)->assertJsonPath('code', 'private_ai_gateway_not_configured');
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.test/v1/transcribe'
+            && $request->hasHeader('Authorization', 'Bearer asr-test-token')
+        );
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.test/v1/synthesize'
+            && $request->hasHeader('Authorization', 'Bearer tts-test-token')
+        );
+    }
+
 }
