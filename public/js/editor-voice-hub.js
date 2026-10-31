@@ -277,10 +277,18 @@ async function startCloudStream(ctx, csrf, data) {
   const wsUrl = String(data.websocket_url || '').replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
   const ws = new WebSocket(`${wsUrl}?v=1`); ws.binaryType = 'arraybuffer';
   let media = null, ac = null, worklet = null, closed = false;
+  let readyResolve = null, readyReject = null;
+  const readyPromise = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+  readyPromise.catch(() => {});
   const cleanup = () => { closed = true; try { ws.close(); } catch {} try { worklet?.disconnect(); } catch {} try { ac?.close(); } catch {} media?.getTracks().forEach(t => { try { t.stop(); } catch {} }); ctx.onStopped(); };
   ws.onopen = async () => {
     try {
       ws.send(JSON.stringify({ type: 'start', token: data.token, locale: ctx.lang(), sequence: 0 }));
+      let timer;
+      try {
+        await Promise.race([readyPromise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('موتور گفتار روی سرور آماده نشد.')), 15000); })]);
+      } finally { clearTimeout(timer); }
+      if (closed) return;
       media = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
       ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive', sampleRate: 48000 });
       await ac.audioWorklet.addModule('/js/farast-voice-worklet.js');
@@ -295,12 +303,16 @@ async function startCloudStream(ctx, csrf, data) {
   };
   ws.onmessage = e => {
     let m; try { m = JSON.parse(e.data); } catch { return; }
-    if (m.type === 'interim') ctx.onInterim(m.text || '');
+    if (m.type === 'ready') { if (readyResolve) { readyResolve(); readyResolve = null; readyReject = null; } }
+    else if (m.type === 'interim') ctx.onInterim(m.text || '');
     else if (m.type === 'final') ctx.onFinal(m.text || '');
-    else if (m.type === 'error') { ctx.onError(m.message || 'خطای موتور'); cleanup(); }
+    else if (m.type === 'provider_error' || m.type === 'error') {
+      if (readyReject) readyReject(new Error(m.message || 'موتور گفتار سرور در دسترس نیست.'));
+      ctx.onError(m.message || 'خطای موتور'); cleanup();
+    }
   };
-  ws.onerror = () => ctx.onError('ارتباط با موتور ابری برقرار نشد.');
-  ws.onclose = () => { if (!closed) cleanup(); };
+  ws.onerror = () => { if (readyReject) readyReject(new Error('ارتباط با موتور گفتار برقرار نشد.')); ctx.onError('ارتباط با موتور گفتار برقرار نشد.'); };
+  ws.onclose = () => { if (readyReject) readyReject(new Error('درگاه گفتار پیش از آماده‌شدن بسته شد.')); if (!closed) cleanup(); };
   return { stop: cleanup, mode: 'cloud' };
 }
 
