@@ -117,14 +117,19 @@ class GlobalAssistantController extends Controller
         if ($url === '') {
             return response()->json(['ok' => false, 'message' => 'موتور صدای ثابت خودمیزبان هنوز تنظیم نشده است.'], 503, ['Cache-Control' => 'no-store']);
         }
+        $token = trim((string) config('services.voice_tts.token', ''));
+        if ((bool) config('services.voice.local_only', false) && $token === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'توکن موتور صدای خودمیزبان تنظیم نشده است؛ FARAST_VOICE_TTS_TOKEN باید با PIPER_TTS_TOKEN یکسان باشد. هیچ درخواست بدون احراز هویت ارسال نشد.',
+            ], 503, ['Cache-Control' => 'no-store']);
+        }
+
         try {
-            // The free Render service can cold-start; keep a bounded connection timeout
-            // separate from the longer inference/read timeout so the browser does not
-            // fail before the upstream has a chance to wake up.
+            // Keep a bounded connection timeout separate from the longer inference/read timeout.
             $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')
                 ->connectTimeout(10)
                 ->timeout(120);
-            $token = trim((string) config('services.voice_tts.token', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->post($url, [
                 'text' => $data['text'],
@@ -134,7 +139,7 @@ class GlobalAssistantController extends Controller
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_tts_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
                 $message = match ($response->status()) {
-                    401, 403 => 'احراز هویت موتور صدای ثابت ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
+                    401, 403 => 'احراز هویت موتور صدای ثابت ناموفق است؛ FARAST_VOICE_TTS_TOKEN در Laravel باید با PIPER_TTS_TOKEN در سرویس Piper یکسان باشد.',
                     429 => 'سرویس تولید صدا فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
                     default => 'موتور صدای ثابت پاسخ معتبر نداد (HTTP '.$response->status().').',
                 };
