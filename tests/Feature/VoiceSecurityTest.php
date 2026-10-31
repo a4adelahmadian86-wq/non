@@ -95,6 +95,52 @@ class VoiceSecurityTest extends TestCase
             ->assertJsonPath('websocket_url', 'ws://127.0.0.1:8000');
     }
 
+
+    public function test_self_hosted_stream_config_reserves_transcription_usage_before_audio(): void
+    {
+        Config::set('services.voice_stream.mode', 'self_hosted');
+        Config::set('services.voice_stream.url', 'ws://127.0.0.1:8010');
+        Config::set('services.voice_stream.gateway_secret', 'local-stream-secret');
+        $user = User::factory()->create();
+        $token = $this->actingAs($user)->postJson('/editor/voice/stream-token', ['locale' => 'fa-IR'])->json('token');
+
+        $reservation = new FarastUsageReservation(['reservation_id' => 'reservation-live-test']);
+        $commerce = \\Mockery::mock(CommerceAuthorizationService::class);
+        $commerce->shouldReceive('reserve')->once()->andReturn($reservation);
+        $this->app->instance(CommerceAuthorizationService::class, $commerce);
+
+        $signature = hash_hmac('sha256', $token, 'local-stream-secret');
+        $this->postJson('/editor/voice/stream-config', ['token' => $token], ['X-Farast-Voice-Gateway' => $signature])
+            ->assertOk()
+            ->assertJsonPath('gateway', true)
+            ->assertJsonPath('reservation_id', 'reservation-live-test');
+    }
+
+    public function test_self_hosted_stream_usage_commits_the_reserved_transcription(): void
+    {
+        Config::set('services.voice_stream.mode', 'self_hosted');
+        Config::set('services.voice_stream.gateway_secret', 'local-stream-secret');
+        $user = User::factory()->create();
+        $token = $this->actingAs($user)->postJson('/editor/voice/stream-token', ['locale' => 'fa-IR'])->json('token');
+
+        $commerce = \\Mockery::mock(CommerceAuthorizationService::class);
+        $commerce->shouldReceive('commit')->once()->with(
+            'reservation-live-test',
+            \\Mockery::on(fn (array $context) => ($context['cost_metadata']['provider'] ?? null) === 'self-hosted-whisper')
+        )->andReturn(new FarastUsageEvent());
+        $this->app->instance(CommerceAuthorizationService::class, $commerce);
+
+        $signature = hash_hmac('sha256', $token, 'local-stream-secret');
+        $this->postJson('/editor/voice/stream-usage', [
+            'token' => $token,
+            'reservation_id' => 'reservation-live-test',
+            'audio_seconds' => 3.2,
+            'input_bytes' => 102400,
+            'success' => true,
+            'latency_ms' => 1800,
+        ], ['X-Farast-Voice-Gateway' => $signature])->assertOk()->assertJsonPath('ok', true);
+    }
+
     public function test_provider_credentials_are_gateway_only(): void
     {
         Config::set('services.voice_stream.gateway_secret','test-gateway-secret');
