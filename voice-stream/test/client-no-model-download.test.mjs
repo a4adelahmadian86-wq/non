@@ -92,4 +92,8 @@ test('local deployment includes a private Qwen gateway and waits for healthy voi
   assert.match(localGateway, /\/v1\/chat\/completions/);
   assert.match(localGateway, /authorization/i);
   assert.match(localGateway, /reasoning_effort:'none'/);
+  const voiceGateway = await readFile(resolve(project, 'voice-stream/server-pro.mjs'), 'utf8');
+  assert.match(voiceGateway, /laravel_ready/);
+  assert.match(voiceGateway, /VOICE_STREAM_APP_URL/);
+  assert.match(waitReady, /laravel_ready/);
 });

@@ -60,16 +60,23 @@ async function probeSherpa(timeoutMs=1800){
     socket.once('unexpected-response',()=>finish(new Error('sherpa_health_rejected')));
   });
 }
+async function probeLaravel(timeoutMs=1800){
+  const base=String(process.env.VOICE_STREAM_APP_URL||'').replace(/\/+$/,'');
+  if(!base)throw new Error('laravel_app_url_missing');
+  const response=await fetch(base+'/up',{signal:AbortSignal.timeout(timeoutMs)});
+  if(!response.ok)throw new Error(`laravel_health_http_${response.status}`);
+}
 const httpServer=createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/health'){
-    try{
-      await probeSherpa();
-      const body=JSON.stringify({ok:true,gateway:'ready',asr_ready:true,provider:'sherpa-onnx',locale:'fa-IR'});
-      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(body)}).end(body);
-    }catch(error){
-      const body=JSON.stringify({ok:false,gateway:'ready',asr_ready:false,provider:'sherpa-onnx',code:String(error?.message||'asr_unavailable').slice(0,100)});
-      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(body)}).end(body);
-    }
+    const checks=await Promise.allSettled([probeSherpa(),probeLaravel()]);
+    const asrReady=checks[0].status==='fulfilled';
+    const laravelReady=checks[1].status==='fulfilled';
+    const ready=asrReady&&laravelReady;
+    const failed=checks.find(item=>item.status==='rejected');
+    const payload={ok:ready,gateway:'ready',asr_ready:asrReady,laravel_ready:laravelReady,provider:'sherpa-onnx',locale:'fa-IR'};
+    if(failed)payload.code=String(failed.reason?.message||'voice_dependency_unavailable').slice(0,100);
+    const body=JSON.stringify(payload);
+    res.writeHead(ready?200:503,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(body)}).end(body);
     return;
   }
   const body=JSON.stringify({ok:false,message:'not_found'});

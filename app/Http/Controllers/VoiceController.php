@@ -46,7 +46,8 @@ class VoiceController extends Controller
                     $health = Http::acceptJson()->connectTimeout(2)->timeout(4)->get($gatewayHealthUrl);
                     $gatewayHealthy = $health->successful()
                         && (bool) $health->json('ok')
-                        && (bool) $health->json('asr_ready');
+                        && (bool) $health->json('asr_ready')
+                        && (bool) $health->json('laravel_ready');
                 } catch (\Throwable) {
                     $gatewayHealthy = false;
                 }

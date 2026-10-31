@@ -76,7 +76,7 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.voice_stream.gateway_secret' => 'gateway-secret',
             'services.voice_stream.health_url' => 'http://127.0.0.1:6002/health',
         ]);
-        Http::fake(['http://127.0.0.1:6002/health' => Http::response(['ok' => true, 'asr_ready' => true], 200)]);
+        Http::fake(['http://127.0.0.1:6002/health' => Http::response(['ok' => true, 'asr_ready' => true, 'laravel_ready' => true], 200)]);
 
         $router = \Mockery::mock(VoiceProviderRouter::class);
         $account = new VoiceProviderAccount();
