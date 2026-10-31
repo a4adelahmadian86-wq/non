@@ -277,11 +277,24 @@ async function startCloudStream(ctx, csrf, data) {
   ctx.onStatus('در حال اتصال به موتور زندهٔ سرور…');
   const wsUrl = String(data.websocket_url || '').replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
   const ws = new WebSocket(`${wsUrl}?v=1`); ws.binaryType = 'arraybuffer';
-  let media = null, ac = null, worklet = null, closed = false;
+  let media = null, ac = null, worklet = null, closed = false, stopTimer = null;
   let readyResolve = null, readyReject = null;
   const readyPromise = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
   readyPromise.catch(() => {});
-  const cleanup = () => { closed = true; try { ws.close(); } catch {} try { worklet?.disconnect(); } catch {} try { ac?.close(); } catch {} media?.getTracks().forEach(t => { try { t.stop(); } catch {} }); ctx.onStopped(); };
+  const cleanup = (flush = true) => {
+    if (closed) return;
+    closed = true;
+    if (flush && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: 'stop' })); } catch {}
+      stopTimer = setTimeout(() => { try { ws.close(1000, 'editor_stop_timeout'); } catch {} }, 8000);
+    } else {
+      try { ws.close(); } catch {}
+    }
+    try { worklet?.disconnect(); } catch {}
+    try { ac?.close(); } catch {}
+    media?.getTracks().forEach(t => { try { t.stop(); } catch {} });
+    ctx.onStopped();
+  };
   ws.onopen = async () => {
     try {
       ws.send(JSON.stringify({ type: 'start', token: data.token, locale: ctx.lang(), sequence: 0 }));
@@ -312,8 +325,8 @@ async function startCloudStream(ctx, csrf, data) {
       ctx.onError(m.message || 'خطای موتور'); cleanup();
     }
   };
-  ws.onerror = () => { if (readyReject) readyReject(new Error('ارتباط با موتور گفتار برقرار نشد.')); ctx.onError('ارتباط با موتور گفتار برقرار نشد.'); };
-  ws.onclose = () => { if (readyReject) readyReject(new Error('درگاه گفتار پیش از آماده‌شدن بسته شد.')); if (!closed) cleanup(); };
+  ws.onerror = () => { if (readyReject) readyReject(new Error('ارتباط با موتور گفتار برقرار نشد.')); ctx.onError('ارتباط با موتور گفتار برقرار نشد.'); cleanup(false); };
+  ws.onclose = () => { if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; } if (readyReject) readyReject(new Error('درگاه گفتار پیش از آماده‌شدن بسته شد.')); if (!closed) cleanup(false); };
   return { stop: cleanup, mode: 'cloud' };
 }
 
