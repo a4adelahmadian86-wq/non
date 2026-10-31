@@ -105,4 +105,25 @@ class GlobalAssistantGatewayTest extends TestCase
         Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://gateway.example/v1/chat/completions');
     }
 
+
+    public function test_streaming_assistant_forwards_gateway_deltas_as_sse(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example',
+            'services.ai_gateway.token' => 'gateway-test-token',
+        ]);
+        $user = User::factory()->create();
+        $sse = "data: {\\"choices\\":[{\\"delta\\":{\\"content\\":\\"سلام\\ "}}]}\\n\\ndata: [DONE]\\n\\n";
+
+        Http::fake([
+            'https://gateway.example/v1/chat/completions' => Http::response($sse, 200, ['Content-Type' => 'text/event-stream']),
+        ]);
+
+        $response = $this->actingAs($user)->postJson('/assistant/chat/stream', ['message' => 'سلام']);
+        $response->assertOk();
+        $this->assertStringContainsString('"delta":"سلام"', $response->getContent());
+        $this->assertStringContainsString('"done":true', $response->getContent());
+        Http::assertSentCount(1);
+    }
+
 }
