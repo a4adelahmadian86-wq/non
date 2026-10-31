@@ -28,12 +28,19 @@ class VoiceController extends Controller
 
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
         $gatewayReady = false;
-        try {
-            $secret = (string) config('services.voice_stream.gateway_secret', '');
-            $account = app(\App\Services\VoiceProviderRouter::class)->best('fa-IR');
-            $gatewayReady = $secret !== '' && $account !== null && $wsUrl !== '';
-        } catch (\Throwable) {
-            $gatewayReady = false;
+        $gatewayMode = (string) config('services.voice_stream.mode', 'router');
+        if ($gatewayMode === 'self_hosted') {
+            // The Python self-hosted service verifies Laravel's short-lived APP_KEY-signed
+            // stream token directly; it does not require a cloud VoiceProviderAccount.
+            $gatewayReady = $wsUrl !== '';
+        } else {
+            try {
+                $secret = (string) config('services.voice_stream.gateway_secret', '');
+                $account = app(\App\Services\VoiceProviderRouter::class)->best('fa-IR');
+                $gatewayReady = $secret !== '' && $account !== null && $wsUrl !== '';
+            } catch (\Throwable) {
+                $gatewayReady = false;
+            }
         }
         if ($gatewayReady) {
             return response()->json([
