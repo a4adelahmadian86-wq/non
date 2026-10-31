@@ -28,14 +28,15 @@ class VoiceController extends Controller
 
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
         $localVoiceOnly = (bool) config('services.voice.local_only', false);
-        $gatewayReady = false;
+        $secret = (string) config('services.voice_stream.gateway_secret', '');
+        $account = null;
+        $providerLookupFailed = false;
         try {
-            $secret = (string) config('services.voice_stream.gateway_secret', '');
             $account = app(\App\Services\VoiceProviderRouter::class)->best('fa-IR');
-            $gatewayReady = $secret !== '' && $account !== null && $wsUrl !== '';
         } catch (\Throwable) {
-            $gatewayReady = false;
+            $providerLookupFailed = true;
         }
+        $gatewayReady = $secret !== '' && $account !== null && $wsUrl !== '';
         if ($gatewayReady) {
             return response()->json([
                 'ok' => true,
@@ -50,10 +51,19 @@ class VoiceController extends Controller
         }
 
         if ($localVoiceOnly) {
+            $missing = [];
+            if ($wsUrl === '') $missing[] = 'VOICE_STREAM_URL';
+            if ($secret === '') $missing[] = 'VOICE_GATEWAY_SECRET';
+            if ($account === null) $missing[] = 'موتور Sherpa-ONNX فارسی فعال و سالم (اجرای seeder و بررسی ظرفیت)';
+            $reason = $providerLookupFailed ? 'voice_provider_lookup_failed' : 'local_voice_gateway_unavailable';
+            $message = 'درگاه زندهٔ گفتار خودمیزبان آماده نیست. موارد لازم: '.implode('، ', $missing).'.';
+
             return response()->json([
                 'ok' => true,
                 'mode' => 'none',
-                'reason' => 'local_voice_gateway_unavailable',
+                'reason' => $reason,
+                'message' => $message,
+                'missing' => $missing,
                 'gateway' => false,
                 'websocket_url' => '',
                 'self_hosted' => true,

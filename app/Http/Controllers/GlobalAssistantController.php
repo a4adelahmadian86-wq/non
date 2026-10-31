@@ -13,8 +13,25 @@ class GlobalAssistantController extends Controller
 {
     public function voiceStatus(Request $request)
     {
+        $localOnly = (bool) config('services.voice.local_only', false);
+        $gatewayUrl = trim((string) config('services.ai_gateway.url', ''));
+        $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+        $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
+        $chatGatewayReady = ! $localOnly || ($gatewayPrivate && $gatewayToken !== '');
+        $chatGatewayMessage = '';
+        if ($localOnly && ! $chatGatewayReady) {
+            $missing = [];
+            if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
+            elseif (! $gatewayPrivate) $missing[] = 'آدرس خصوصی برای FARAST_AI_GATEWAY_URL';
+            if ($gatewayToken === '') $missing[] = 'FARAST_AI_GATEWAY_TOKEN';
+            $chatGatewayMessage = 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: '.implode('، ', $missing).'. هیچ سرویس ابری فراخوانی نمی‌شود.';
+        }
+
         return response()->json([
             'ok' => true,
+            'local_only' => $localOnly,
+            'chat_gateway_ready' => $chatGatewayReady,
+            'chat_gateway_message' => $chatGatewayMessage,
             'server_stt' => filled(config('services.voice_asr.url')),
             'server_tts' => filled(config('services.voice_tts.url')),
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
@@ -271,7 +288,16 @@ class GlobalAssistantController extends Controller
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
         if ($localVoiceOnly && ($gatewayUrl === '' || $gatewayToken === '' || ! $this->isPrivateServiceUrl($gatewayUrl))) {
-            return response()->json(['ok' => false, 'message' => 'در حالت کاملاً خودمیزبان، درگاه مدل زبانی محلی تنظیم نشده است؛ هیچ سرویس ابری جایگزین نمی‌شود.'], 503, ['Cache-Control' => 'no-store']);
+            $missing = [];
+            if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
+            elseif (! $this->isPrivateServiceUrl($gatewayUrl)) $missing[] = 'یک نشانی خصوصی معتبر برای FARAST_AI_GATEWAY_URL';
+            if ($gatewayToken === '') $missing[] = 'FARAST_AI_GATEWAY_TOKEN';
+
+            return response()->json([
+                'ok' => false,
+                'code' => 'private_ai_gateway_not_configured',
+                'message' => 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: '.implode('، ', $missing).'. هیچ سرویس ابری فراخوانی نمی‌شود.',
+            ], 503, ['Cache-Control' => 'no-store']);
         }
         if (! $localVoiceOnly && $groqKey === '' && ($gatewayUrl === '' || $gatewayToken === '')) {
             return $this->chat($request, $ai);
@@ -300,7 +326,7 @@ class GlobalAssistantController extends Controller
 
         $targets = [];
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
-            $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
+            $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
         }
         if (! $localVoiceOnly && $groqKey !== '') {
             $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq'];
@@ -339,7 +365,11 @@ class GlobalAssistantController extends Controller
         }
         if (! $upstream) {
             if ($localVoiceOnly) {
-                return response()->json(['ok' => false, 'message' => 'درگاه مدل زبانی خودمیزبان پاسخ نداد؛ برای حفظ حریم خصوصی هیچ مسیر ابری فعال نشد.'], 503, ['Cache-Control' => 'no-store']);
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'private_ai_gateway_unavailable',
+                    'message' => 'درگاه خصوصی مدل زبانی پاسخ نداد. سلامت سرویس و مسیر /v1/chat/completions را بررسی کن؛ برای حفظ حریم خصوصی هیچ مسیر ابری فعال نشد.',
+                ], 503, ['Cache-Control' => 'no-store']);
             }
             return $this->chat($request, $ai);
         }
