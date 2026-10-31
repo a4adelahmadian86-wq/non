@@ -42,6 +42,7 @@ class GlobalAssistantVoiceTest extends TestCase
     {
         config([
             'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.mode' => 'router',
             'services.voice_stream.gateway_secret' => 'gateway-secret',
             'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
             'services.voice_asr.token' => 'asr-token',
