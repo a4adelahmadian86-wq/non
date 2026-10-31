@@ -4,7 +4,8 @@ const MAX_PENDING_CHUNKS = 80;
 const MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
 
 export function pcm16ToFloat32Buffer(buffer) {
-  const samples = Math.floor(buffer.length / 2);
+  if (!Buffer.isBuffer(buffer) || buffer.length % 2 !== 0) throw new Error('sherpa_onnx_invalid_pcm16_frame');
+  const samples = buffer.length / 2;
   const output = Buffer.allocUnsafe(samples * 4);
   for (let i = 0; i < samples; i += 1) {
     const sample = buffer.readInt16LE(i * 2);
@@ -37,7 +38,8 @@ function resolveLocalUrl() {
     (ipv4[0] === 192 && ipv4[1] === 168)
   );
   const privateIpv6 = host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:');
-  if (!(host === 'localhost' || privateIpv4 || privateIpv6)) {
+  const allowedHosts = String(process.env.SHERPA_ONNX_ALLOWED_HOSTS || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+  if (!(host === 'localhost' || privateIpv4 || privateIpv6 || allowedHosts.includes(host))) {
     throw new Error('sherpa_onnx_ws_url_must_be_private');
   }
 
@@ -53,11 +55,20 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
   let ready = false;
   let failed = false;
   const pending = [];
+  let resolveReady;
+  let rejectReady;
+  const readyPromise = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  readyPromise.catch(() => {});
 
   const fail = error => {
     if (closed || failed) return;
     failed = true;
-    handlers.error?.(error instanceof Error ? error : new Error(String(error || 'sherpa_onnx_error')));
+    const failure = error instanceof Error ? error : new Error(String(error || 'sherpa_onnx_error'));
+    if (!ready) {
+      rejectReady(failure);
+      return;
+    }
+    handlers.error?.(failure);
   };
 
   const flush = () => {
@@ -72,6 +83,7 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
 
   socket.on('open', () => {
     ready = true;
+    resolveReady();
     flush();
     handlers.ready?.();
   });
@@ -95,12 +107,13 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
 
   socket.on('error', fail);
   socket.on('close', (code, reason) => {
-    if (!closed && code !== 1000) {
+    if (!closed && (!ready || code !== 1000)) {
       fail(new Error(`sherpa_onnx_ws_closed_${code}_${String(reason || '')}`));
     }
   });
 
   return {
+    ready: readyPromise,
     write(buffer) {
       if (closed || failed || !buffer?.length) return;
       const chunk = pcm16ToFloat32Buffer(buffer);
