@@ -62,6 +62,10 @@ class VoiceController extends Controller
             return response()->json(['ok' => true, 'mode' => 'chunked', 'chunked' => true, 'gateway' => false, 'websocket_url' => '', 'engines' => ['self-hosted-asr'], 'self_hosted' => true], 200, ['Cache-Control' => 'no-store']);
         }
 
+        if ($gatewayMode === 'self_hosted') {
+            return response()->json(['ok' => true, 'mode' => 'none', 'reason' => 'self_hosted_service_not_configured', 'self_hosted' => true, 'chunked' => false, 'gateway' => false, 'websocket_url' => ''], 200, ['Cache-Control' => 'no-store']);
+        }
+
         $groq = false;
         try {
             $groq = trim((string) (\App\Models\SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', ''))) !== '';
