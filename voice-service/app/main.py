@@ -44,6 +44,7 @@ model_lock = Lock()
 asr_model = None
 tts_model = None
 tts_error: Optional[str] = None
+used_stream_nonces: dict[str, int] = {}
 
 
 def authorize(authorization: Optional[str] = Header(default=None)) -> None:
@@ -227,6 +228,23 @@ def verify_stream_token(token: str) -> Optional[dict]:
     return payload
 
 
+
+def consume_stream_nonce(payload: dict) -> bool:
+    """Allow each short-lived signed session token to open exactly one stream."""
+    nonce = str(payload.get("nonce", "")).strip()
+    try:
+        expires_at = int(payload.get("exp", 0))
+    except (TypeError, ValueError):
+        return False
+    now = int(time.time())
+    for used_nonce, expiry in list(used_stream_nonces.items()):
+        if expiry < now:
+            used_stream_nonces.pop(used_nonce, None)
+    if not nonce or expires_at < now or nonce in used_stream_nonces:
+        return False
+    used_stream_nonces[nonce] = expires_at
+    return True
+
 def _transcribe_pcm_chunk(raw: bytes, language: str) -> str:
     """Run one bounded 16 kHz mono PCM chunk through the already-loaded local model."""
     import numpy as np
@@ -270,6 +288,10 @@ async def live_stream(websocket: WebSocket) -> None:
         payload = verify_stream_token(token)
         if not payload or payload.get("locale") != locale:
             await websocket.send_json({"type": "error", "code": "unauthorized"})
+            await websocket.close(code=1008)
+            return
+        if not consume_stream_nonce(payload):
+            await websocket.send_json({"type": "error", "code": "stream_token_replayed"})
             await websocket.close(code=1008)
             return
         if not STREAM_APP_URL or not STREAM_GATEWAY_SECRET:
