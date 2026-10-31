@@ -7,11 +7,9 @@ use App\Models\TypingDocument;
 use App\Services\ToolExecutionService;
 use App\Services\AI\AiPrivacyPolicy;
 use App\Services\AI\AiQuotaService;
-use App\Services\GoogleSpeechToTextService;
 use App\Services\VoiceCorrectionService;
 use App\Services\VoiceProviderRouter;
 use App\Services\VoiceQuotaManager;
-use App\Services\VoiceTranscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -34,7 +32,7 @@ class VoiceController extends Controller
             try {
                 $account = app(VoiceProviderRouter::class)->best('fa-IR');
                 $gatewayReady = $gatewaySecret !== '' && $account !== null && $wsUrl !== '';
-            } catch (\\Throwable) {
+            } catch (\Throwable) {
                 $gatewayReady = false;
             }
         }
@@ -181,7 +179,7 @@ class VoiceController extends Controller
         VoiceCorrectionService $corrections,
         AiQuotaService $quota,
         AiPrivacyPolicy $privacy,
-        \\App\\Services\\CommerceAuthorizationService $commerce
+        \App\Services\CommerceAuthorizationService $commerce
     ) {
         $quota->assertAllowed($request->user(), 'can_voice');
         $data = $request->validate([
@@ -215,10 +213,10 @@ class VoiceController extends Controller
 
         $voiceReservation = null;
         try {
-            $response = \\Illuminate\\Support\\Facades\\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
+            $response = \Illuminate\Support\Facades\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
                 ->attach('audio', $bytes, 'farast-voice.'.$extension, ['Content-Type' => $mime])
                 ->post($asrUrl, ['locale' => $data['locale']]);
-            if (! $response->successful()) throw new \\RuntimeException('voice_self_hosted_http_'.$response->status());
+            if (! $response->successful()) throw new \RuntimeException('voice_self_hosted_http_'.$response->status());
 
             $rawText = trim((string) $response->json('text', ''));
             if ($rawText === '') {
@@ -226,7 +224,7 @@ class VoiceController extends Controller
             }
 
             $requestKey = trim((string) ($request->header('Idempotency-Key') ?: $request->header('X-Farast-Voice-Request', '')));
-            $idempotencyKey = 'voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \\Illuminate\\Support\\Str::uuid());
+            $idempotencyKey = 'voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \Illuminate\Support\Str::uuid());
             $voiceReservation = $commerce->reserve($request->user(), 'speech.transcription', 1, [], [
                 'policy_code' => 'speech.transcription',
                 'unit' => 'request',
@@ -234,9 +232,9 @@ class VoiceController extends Controller
                 'idempotency_key' => $idempotencyKey,
             ]);
             $finalText = $corrections->apply($rawText, $data['locale'], 'farast-self-hosted-asr', $request->user()->id);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             if ($voiceReservation) {
-                try { $commerce->release($voiceReservation); } catch (\\Throwable) {}
+                try { $commerce->release($voiceReservation); } catch (\Throwable) {}
             }
             $errorCode = (string) $e->getMessage();
             Log::warning('farast.voice.transcription_failed', [
