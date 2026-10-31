@@ -252,7 +252,7 @@ class GlobalAssistantController extends Controller
             ? \Illuminate\Support\Facades\DB::table('farast_assistant_memories')->where('user_id', $user->id)->orderBy('id')->limit(20)->pluck('content')->all()
             : [];
         $memoryContext = $memories
-            ? ("\\nنکته‌های شخصی ذخیره‌شده توسط خود کاربر (صرفاً زمینه):\\n- " . implode("\\n- ", array_map(fn ($item) => mb_substr((string) $item, 0, 500), $memories)))
+            ? ("\nنکته‌های شخصی ذخیره‌شده توسط خود کاربر (صرفاً زمینه):\n- " . implode("\n- ", array_map(fn ($item) => mb_substr((string) $item, 0, 500), $memories)))
             : '';
         $messages = [[
             'role' => 'system',
@@ -287,14 +287,14 @@ class GlobalAssistantController extends Controller
                     'message' => $upstream->status() === 429 ? 'سهمیهٔ فعلی هوش مصنوعی پر شده است؛ بعداً دوباره تلاش کنید.' : 'سرویس گفت‌وگو فعلاً در دسترس نیست.',
                 ], 503, ['Cache-Control' => 'no-store']);
             }
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             Log::warning('farast.global_assistant_stream_gateway_exception', ['user_id' => $user->id, 'error_class' => class_basename($e)]);
             return response()->json(['ok' => false, 'message' => 'ارتباط جریانی با سرویس گفت‌وگو برقرار نشد.'], 502, ['Cache-Control' => 'no-store']);
         }
 
         return response()->stream(function () use ($upstream, $user, $data) {
             $emit = static function (array $event): void {
-                echo 'data: ' . json_encode($event, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\\n\\n";
+                echo 'data: ' . json_encode($event, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
                 if (ob_get_level() > 0) @ob_flush();
                 flush();
             };
@@ -306,11 +306,11 @@ class GlobalAssistantController extends Controller
                     if (connection_aborted()) return;
                     $part = $body->read(2048);
                     if ($part === '') { usleep(10000); continue; }
-                    $buffer .= str_replace("\\r\\n", "\\n", $part);
-                    while (($boundary = strpos($buffer, "\\n\\n")) !== false) {
+                    $buffer .= str_replace("\r\n", "\n", $part);
+                    while (($boundary = strpos($buffer, "\n\n")) !== false) {
                         $block = substr($buffer, 0, $boundary);
                         $buffer = substr($buffer, $boundary + 2);
-                        foreach (preg_split('/\\\\r?\\\\n/', $block) as $line) {
+                        foreach (preg_split('/\\\r?\\\n/', $block) as $line) {
                             if (! str_starts_with($line, 'data:')) continue;
                             $raw = trim(substr($line, 5));
                             if ($raw === '[DONE]') continue;
@@ -329,7 +329,7 @@ class GlobalAssistantController extends Controller
                 }
                 $this->persistExchange((int) $user->id, $data['message'], trim($reply));
                 $emit(['done' => true]);
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 Log::warning('farast.global_assistant_stream_exception', ['user_id' => $user->id, 'error_class' => class_basename($e)]);
                 $emit(['error' => 'ارتباط جریانی با سرویس گفت‌وگو برقرار نشد؛ دوباره تلاش کن.']);
             }
