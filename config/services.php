@@ -25,6 +25,8 @@ return [
     ],
 
     'voice_stream' => [
+        // router keeps the legacy cloud-provider gateway; self_hosted uses the local Python voice service.
+        'mode' => env('VOICE_STREAM_MODE', 'router'),
         'url' => env('VOICE_STREAM_URL', ''),
         'gateway_secret' => env('VOICE_GATEWAY_SECRET'),
     ],
