@@ -223,3 +223,18 @@
   outline:3px solid #6578f6;
   outline-offset:3px;
 }
+
+
+/* Respect the operating system's reduced-motion preference throughout the assistant. */
+@media (prefers-reduced-motion: reduce){
+  .farast-assistant-voice-panel *,
+  .farast-assistant-voice-panel *::before,
+  .farast-assistant-voice-panel *::after,
+  .farast-assistant-launcher,
+  .farast-assistant-launcher::before,
+  .farast-assistant-launcher::after{
+    animation:none !important;
+    transition:none !important;
+    scroll-behavior:auto !important;
+  }
+}
