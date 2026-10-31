@@ -24,8 +24,7 @@ try {
 const frame = Buffer.alloc(3200);
 for (let i = 0; i < 12; i += 1) stream.write(frame);
 await delay(1500);
-stream.close();
-await delay(500);
+await stream.close();
 
 assert.deepEqual(errors, []);
 process.stdout.write('Sherpa sidecar WebSocket/model smoke test passed.\\n');
