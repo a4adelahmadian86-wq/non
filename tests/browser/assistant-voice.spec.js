@@ -458,5 +458,6 @@ test('assistant keeps the conversation composer visible and shows the private ga
   await page.locator('.farast-assistant-send').click();
   await expect(page.locator('.farast-assistant-msg.user')).toContainText('سلام');
   await expect(page.locator('[data-fa-messages]')).toContainText('FARAST_AI_GATEWAY_URL');
-  await expect(page.locator('[data-fa-voice-title]')).toContainText('درگاه پاسخ‌گویی تنظیم نشده');
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('پاسخ‌گویی ناموفق بود');
+  await expect(page.locator('[data-fa-status]')).toContainText('FARAST_AI_GATEWAY_URL');
 });
