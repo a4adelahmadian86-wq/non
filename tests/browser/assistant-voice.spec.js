@@ -115,6 +115,9 @@ test('unsupported voice browsers can continue through an accessible text fallbac
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__chatPayloads = [];
+  window.__deviceSpeechCalls = 0;
+  window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  window.speechSynthesis = { cancel() {}, getVoices() { return []; }, speak() { window.__deviceSpeechCalls++; } };
   window.WebSocket = undefined;
   window.AudioContext = undefined;
   Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: undefined });
@@ -138,6 +141,7 @@ test('unsupported voice browsers can continue through an accessible text fallbac
   await page.locator('.farast-assistant-send').click();
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
   await expect(page.locator('[data-fa-messages]')).toContainText('پاسخ متنی قابل مشاهده است.');
+  expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
 });
 
 
