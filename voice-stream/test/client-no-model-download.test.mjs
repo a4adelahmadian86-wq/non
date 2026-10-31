@@ -89,4 +89,5 @@ test('local deployment includes a private Qwen gateway and waits for healthy voi
   assert.match(waitReady, /7008\/ready/);
   assert.match(localGateway, /\/v1\/chat\/completions/);
   assert.match(localGateway, /authorization/i);
+  assert.match(localGateway, /reasoning_effort:'none'/);
 });
