@@ -289,26 +289,29 @@ async def live_stream(websocket: WebSocket) -> None:
             nonlocal usage_reported
             if not reservation_id or usage_reported:
                 return
-            try:
-                async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0)) as client:
-                    response = await client.post(
-                        STREAM_APP_URL + "/editor/voice/stream-usage",
-                        json={
-                            "token": token,
-                            "reservation_id": reservation_id,
-                            "audio_seconds": audio_seconds,
-                            "input_bytes": input_bytes,
-                            "success": bool(success),
-                            "latency_ms": int((time.monotonic() - started_at) * 1000),
-                        },
-                        headers={"X-Farast-Voice-Gateway": gateway_signature, "Accept": "application/json"},
-                    )
+            for attempt in range(2):
+                try:
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0)) as client:
+                        response = await client.post(
+                            STREAM_APP_URL + "/editor/voice/stream-usage",
+                            json={
+                                "token": token,
+                                "reservation_id": reservation_id,
+                                "audio_seconds": audio_seconds,
+                                "input_bytes": input_bytes,
+                                "success": bool(success),
+                                "latency_ms": int((time.monotonic() - started_at) * 1000),
+                            },
+                            headers={"X-Farast-Voice-Gateway": gateway_signature, "Accept": "application/json"},
+                        )
                     if response.is_success:
                         usage_reported = True
-                    else:
-                        print(f"LIVE_USAGE_REPORT_REJECTED: status={response.status_code}", flush=True)
-            except Exception as exc:
-                print(f"LIVE_USAGE_REPORT_FAILED: {type(exc).__name__}", flush=True)
+                        return
+                    print(f"LIVE_USAGE_REPORT_REJECTED: status={response.status_code} attempt={attempt + 1}", flush=True)
+                except Exception as exc:
+                    print(f"LIVE_USAGE_REPORT_FAILED: {type(exc).__name__} attempt={attempt + 1}", flush=True)
+                if attempt == 0:
+                    await asyncio.sleep(0.25)
 
         if not config_response.is_success or not config_data.get("gateway") or not reservation_id:
             await websocket.send_json({"type": "error", "code": "voice_quota_unavailable"})
