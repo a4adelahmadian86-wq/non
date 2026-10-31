@@ -43,8 +43,11 @@ class VoiceProviderRouter
 
     public function classRank(VoiceProviderAccount $account): int
     {
-        // Prefer the self-hosted provider and never silently send local audio to a cloud provider.
-        if (strtolower($account->provider) === 'sherpa-onnx') return 0;
+        // Only force local-only routing when explicitly enabled. Otherwise keep the
+        // local provider available, but do not let an unconfigured sidecar shadow healthy providers.
+        if (strtolower($account->provider) === 'sherpa-onnx') {
+            return filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 0 : 25;
+        }
 
         return match ($account->billing_mode) {
             'trial' => $this->trialRank($account),
