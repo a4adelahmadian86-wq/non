@@ -115,6 +115,7 @@ class VoiceController extends Controller
                     'policy_code' => 'speech.transcription',
                     'unit' => 'request',
                     'allow_payg' => true,
+                    'reservation_ttl_minutes' => 45,
                     'idempotency_key' => 'voice-live-'.$payload['uid'].'-'.$payload['nonce'],
                 ]);
                 $reservationId = $reservation->reservation_id;
@@ -150,11 +151,19 @@ class VoiceController extends Controller
         if ((string) config('services.voice_stream.mode', 'router') === 'self_hosted') {
             $data = $request->validate([
                 'reservation_id' => ['required', 'string', 'max:100'],
-                'audio_seconds' => ['required', 'numeric', 'min:0', 'max:86400'],
+                'audio_seconds' => ['required', 'numeric', 'min:0', 'max:1800'],
                 'input_bytes' => ['nullable', 'integer', 'min:0'],
                 'success' => ['required', 'boolean'],
                 'latency_ms' => ['nullable', 'integer', 'min:0', 'max:3600000'],
             ]);
+            // A signed token is user-scoped; bind the reservation to that same user
+            // and capability before allowing the gateway to commit or release it.
+            \App\Models\FarastUsageReservation::query()
+                ->where('reservation_id', $data['reservation_id'])
+                ->where('actor_id', (int) $payload['uid'])
+                ->where('capability', 'speech.transcription')
+                ->firstOrFail();
+
             if ($data['success'] && (float) $data['audio_seconds'] > 0) {
                 $commerce->commit($data['reservation_id'], [
                     'cost_metadata' => ['provider' => 'self-hosted-whisper', 'audio_seconds' => (float) $data['audio_seconds'], 'input_bytes' => (int) ($data['input_bytes'] ?? 0)],
