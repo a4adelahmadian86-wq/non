@@ -211,8 +211,17 @@ class VoiceController extends Controller
         $extension = strtolower($file->getClientOriginalExtension() ?: 'webm');
         if (! in_array($extension, ['webm', 'ogg', 'wav', 'mp3', 'm4a', 'mp4'], true)) $extension = 'webm';
 
+        $requestKey = trim((string) ($request->header('Idempotency-Key') ?: $request->header('X-Farast-Voice-Request', '')));
+        $idempotencyKey = 'voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \Illuminate\Support\Str::uuid());
         $voiceReservation = null;
         try {
+            // Reserve before invoking the model so an unmetered request cannot consume CPU.
+            $voiceReservation = $commerce->reserve($request->user(), 'speech.transcription', 1, [], [
+                'policy_code' => 'speech.transcription',
+                'unit' => 'request',
+                'allow_payg' => true,
+                'idempotency_key' => $idempotencyKey,
+            ]);
             $response = \Illuminate\Support\Facades\Http::withToken($asrToken)->acceptJson()->connectTimeout(5)->timeout(60)
                 ->attach('audio', $bytes, 'farast-voice.'.$extension, ['Content-Type' => $mime])
                 ->post($asrUrl, ['locale' => $data['locale']]);
@@ -220,17 +229,11 @@ class VoiceController extends Controller
 
             $rawText = trim((string) $response->json('text', ''));
             if ($rawText === '') {
+                $commerce->release($voiceReservation);
+                $voiceReservation = null;
                 return response()->json(['ok' => true, 'text' => '', 'engine' => 'farast-self-hosted-asr', 'empty' => true], 200, ['Cache-Control' => 'no-store']);
             }
 
-            $requestKey = trim((string) ($request->header('Idempotency-Key') ?: $request->header('X-Farast-Voice-Request', '')));
-            $idempotencyKey = 'voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \Illuminate\Support\Str::uuid());
-            $voiceReservation = $commerce->reserve($request->user(), 'speech.transcription', 1, [], [
-                'policy_code' => 'speech.transcription',
-                'unit' => 'request',
-                'allow_payg' => true,
-                'idempotency_key' => $idempotencyKey,
-            ]);
             $finalText = $corrections->apply($rawText, $data['locale'], 'farast-self-hosted-asr', $request->user()->id);
         } catch (\Throwable $e) {
             if ($voiceReservation) {
