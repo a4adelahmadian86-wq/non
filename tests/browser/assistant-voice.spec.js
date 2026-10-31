@@ -91,7 +91,7 @@ test('unsupported voice browsers can continue through an accessible text fallbac
   window.fetch = async (url, options = {}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ متنی قابل مشاهده است."}\n\ndata: {"done":true}\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
+    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ متنی قابل مشاهده است."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(JSON.stringify({ ok: false, message: 'TTS unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
@@ -145,7 +145,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
     if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/stream-token') return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ زنده"}\n\ndata: {"done":true}\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
+    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ زنده"}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
@@ -208,7 +208,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
     if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/stream-token') return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ زنده"}\n\ndata: {"done":true}\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
+    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ زنده"}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
@@ -270,7 +270,7 @@ test('user speech interrupts server TTS while keeping the same live microphone s
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
-    if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ در حال پخش است. "}\n\ndata: {"done":true}\n\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
+    if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ در حال پخش است. "}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
     if(url==='/assistant/speak')return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});
     return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
   };
@@ -415,9 +415,9 @@ test('assistant streams sentence-sized server audio chunks without browser speec
     if(url==='/assistant/chat/stream') {
       const encoder=new TextEncoder();
       return new Response(new ReadableStream({start(controller){
-        controller.enqueue(encoder.encode('data: {"delta":"جمله اول. "}\n\n'));
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\n\n')),500);
-        setTimeout(()=>{window.__streamSentAll=true;controller.enqueue(encoder.encode('data: {"delta":"جمله سوم."}\n\ndata: {"done":true}\n\n'));controller.close();},1000);
+        controller.enqueue(encoder.encode('data: {"delta":"جمله اول. "}\\n\\n'));
+        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),500);
+        setTimeout(()=>{window.__streamSentAll=true;controller.enqueue(encoder.encode('data: {"delta":"جمله سوم."}\\n\\ndata: {"done":true}\\n\\n'));controller.close();},1000);
       }}),{status:200,headers:{'Content-Type':'text/event-stream'}});
     }
     if(url==='/assistant/speak'){window.__spokenChunks.push(JSON.parse(options.body).text);return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});}
