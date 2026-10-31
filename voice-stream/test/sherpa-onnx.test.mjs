@@ -38,6 +38,7 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
         socket.send(JSON.stringify({ text: 'سلام فراست', segment: 0, is_final: true }));
       } else if (data.toString() === 'Done') {
         receivedDone = true;
+        socket.send('Done!');
         resolveDone();
       }
     });
@@ -62,7 +63,7 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
   assert.equal(receivedAudio.readFloatLE(4), -0.5);
   assert.deepEqual(events, [['interim', 'سلام'], ['final', 'سلام فراست']]);
 
-  stream.close();
+  await stream.close();
   await done;
   assert.equal(receivedDone, true);
 });
