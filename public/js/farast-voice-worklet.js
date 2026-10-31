@@ -10,7 +10,9 @@ class FarastPcmProcessor extends AudioWorkletProcessor {
     this.output = [];
   }
 
-  process(inputs) {
+  process(inputs, outputs) {
+    const output = outputs[0]?.[0];
+    if (output) output.fill(0);
     const input = inputs[0]?.[0];
     if (!input) return true;
 
