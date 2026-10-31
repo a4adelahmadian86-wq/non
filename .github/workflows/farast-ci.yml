@@ -1,7 +1,7 @@
 name: FARAST CI
 on:
   push:
-    branches: [main, farast-restoration-2026-09]
+    branches: [main, farast-restoration-2026-09, feat/self-hosted-sherpa-streaming]
   pull_request:
     branches: [main]
 jobs:
@@ -25,8 +25,8 @@ jobs:
       - run: node --check public/js/editor-agent.js
       - run: node --check public/js/editor-layout.js
       - run: node --check public/js/editor-voice-hub.js
-      - run: node --check public/js/farast-voice-worklet.js && node --check voice-stream/server-pro.mjs && node --check voice-stream/server.mjs
-      - run: node --check public/js/farast-voice.js
+      - run: node --check public/js/farast-voice-worklet.js && node --check voice-stream/server-pro.mjs && node --check voice-stream/server.mjs && node --check voice-stream/providers/sherpa-onnx.mjs
+      - run: npm ci --prefix voice-stream\n      - run: npm test --prefix voice-stream\n      - run: node --check public/js/farast-voice.js
       - run: php artisan key:generate
       - run: touch database/database.sqlite
       - run: php artisan migrate --force
