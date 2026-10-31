@@ -30,6 +30,12 @@ All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_
 7. Add environment variable `FARAST_VOICE_TOKEN` (a unique random secret), plus the settings in `.env.example`.
 8. Deploy, then check `https://YOUR-SERVICE.onrender.com/health`. It must show `asr_ready: true` and `tts_ready: true` before connecting Laravel. A 200 from `/health` alone does not mean the models are ready.
 
+## Local live WebSocket stream
+
+The same Python service exposes `ws://HOST:8000/v1/stream` for authenticated live PCM input. It accepts 16 kHz mono signed 16-bit PCM frames after a short-lived Laravel token, verifies the token with the exact Laravel `APP_KEY`, and transcribes bounded chunks using the already-loaded local faster-whisper model. No third-party speech inference API is called by this WebSocket route. The browser origin allowlist is mandatory: set `VOICE_STREAM_ORIGINS` to the exact local/deployed Laravel origin(s). Set Laravel `VOICE_STREAM_MODE=self_hosted` and `VOICE_STREAM_URL` to this service origin; in this mode Laravel does not require a cloud `VoiceProviderAccount` for the live stream. Set the same Laravel `APP_KEY` in this service's environment. Keep the key private.
+
+This is chunked local inference, not token-by-token neural streaming: it flushes on a short silence or a five-second maximum chunk. Real Persian accuracy, end-of-turn timing, CPU/RAM use, and barge-in still require browser/device E2E tests. TTS remains the separate fixed local model endpoint described below.
+
 ## Model installation (required)
 
 ### ASR
