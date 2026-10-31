@@ -17,7 +17,7 @@ This folder is a separate Python API for speech inference. It does not replace t
 - `POST /v1/transcribe`: authenticated multipart form with `audio` and `locale`; returns `{"text":"..." }`.
 - `POST /v1/synthesize`: authenticated JSON `{"text":"...","language":"fa-IR","voice_id":"farast-fa-male-v1"}`; returns WAV audio.
 
-All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_TOKEN>`. Health intentionally discloses only readiness booleans. Put the same token in Laravel's `FARAST_VOICE_ASR_TOKEN` and `FARAST_VOICE_TTS_TOKEN`, and point both URLs at this service's `/v1/transcribe` and `/v1/synthesize` endpoints. Generate a long random token; never commit it.
+All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_TOKEN>`. Health intentionally discloses only readiness booleans. Put the same token in Laravel's `FARAST_VOICE_ASR_TOKEN` and `FARAST_VOICE_TTS_TOKEN`, and point both URLs at this service's `/v1/transcribe` and `/v1/synthesize` endpoints. Reuse the existing FARAST_VOICE_TOKEN already configured for FARAST; do not rotate an existing token just for this service. Never commit it.
 
 ## Deploy on Render
 
@@ -27,8 +27,34 @@ All API endpoints except `/health` require `Authorization: Bearer <FARAST_VOICE_
 4. Choose **Docker** as runtime if the dashboard offers it for this repository.
 5. Do not select Free for production. Review the current price and select a paid always-on instance only if you accept the charge. For a real model service, evaluate 8 GB RAM rather than the Free tier; the combined memory demand and latency still must be measured.
 6. Add a persistent disk mounted at `/models`. Without persistent storage, model files may need to be downloaded again after redeploy/restart.
-7. Add environment variable `FARAST_VOICE_TOKEN` (a unique random secret), plus the settings in `.env.example`.
+7. Add the existing `FARAST_VOICE_TOKEN` to the service environment, plus the settings in `.env.example`; keep it identical to Laravel and do not rotate it.
 8. Deploy, then check `https://YOUR-SERVICE.onrender.com/health`. It must show `asr_ready: true` and `tts_ready: true` before connecting Laravel. A 200 from `/health` alone does not mean the models are ready.
+
+## Local live WebSocket stream
+
+The same Python service exposes `ws://HOST:8010/v1/stream` for authenticated live PCM input. A single live session is capped at 30 minutes and the reservation is held for 45 minutes; the user can start a new session for a fresh quota reservation. It accepts 16 kHz mono signed 16-bit PCM frames after a short-lived Laravel token, verifies the token with the exact Laravel `APP_KEY`, and transcribes bounded chunks using the already-loaded local faster-whisper model. The browser keeps one WebSocket/microphone session open between user turns; speech during assistant playback can interrupt the current TTS/answer and be sent through that same session. The browser does not fall back to its managed SpeechRecognition service or device TTS. No third-party speech inference API is called by this WebSocket route. The browser origin allowlist is mandatory: set `VOICE_STREAM_ORIGINS` to the exact local/deployed Laravel origin(s). Set Laravel `VOICE_STREAM_MODE=self_hosted` and `VOICE_STREAM_URL` to this service origin; for local HTTP development use `ws://127.0.0.1:8010`, and for an HTTPS site use a `wss://` endpoint. In this mode Laravel does not require a cloud `VoiceProviderAccount` for the live stream. Set the same Laravel `APP_KEY` in this service's environment. Also set `FARAST_APP_URL` to the Laravel base URL and `FARAST_VOICE_GATEWAY_SECRET` to the same value as Laravel `VOICE_GATEWAY_SECRET`. The gateway requests a server-side usage reservation before accepting audio and settles or releases it when the session ends; it does not bypass the existing speech-transcription entitlement. Keep both secrets private.
+
+Laravel environment values for the live path:
+
+```dotenv
+VOICE_STREAM_MODE=self_hosted
+VOICE_STREAM_URL=ws://127.0.0.1:8010
+VOICE_GATEWAY_SECRET=the-same-random-secret-as-FARAST_VOICE_GATEWAY_SECRET
+```
+
+Use the actual local service address and the exact page origin in `VOICE_STREAM_ORIGINS`; do not copy these example localhost values to a public deployment. The Laravel host should also point its batch fallback and fixed TTS proxy at this same service:
+
+```dotenv
+FARAST_VOICE_ASR_URL=http://127.0.0.1:8010/v1/transcribe
+FARAST_VOICE_ASR_TOKEN=the-same-FARAST_VOICE_TOKEN-as-the-service
+FARAST_VOICE_TTS_URL=http://127.0.0.1:8010/v1/synthesize
+FARAST_VOICE_TTS_TOKEN=the-same-FARAST_VOICE_TOKEN-as-the-service
+FARAST_VOICE_TTS_VOICE_ID=farast-fa-male-v1
+```
+
+These Laravel ASR/TTS URLs default to empty and are never silently redirected to a third-party speech provider. If the Python service runs in Docker while Laravel runs on the host, `FARAST_APP_URL` inside the container must use a host-reachable address (for example `http://host.docker.internal:8000` where supported), not the container's own `127.0.0.1`. Configure all secrets only in local environment files or the host dashboard, never in Git or chat.
+
+This is chunked local inference, not token-by-token neural streaming: it flushes on a short silence or a five-second maximum chunk. Real Persian accuracy, end-of-turn timing, CPU/RAM use, and barge-in still require browser/device E2E tests. TTS remains the separate fixed local model endpoint described below.
 
 ## Model installation (required)
 
@@ -55,10 +81,10 @@ With Docker and persistent model files available:
 ```sh
 cd voice-service
 cp .env.example .env
-# Edit .env and set FARAST_VOICE_TOKEN to a long random secret.
+# Edit .env and reuse the existing FARAST_VOICE_TOKEN already configured for FARAST.
 docker build -t farast-voice .
-docker run --rm --env-file .env -p 8000:8000 -v "$PWD/models:/models" farast-voice
-curl -fsS http://127.0.0.1:8000/health
+docker run --rm --env-file .env -p 8010:8000 -v "$PWD/models:/models" farast-voice
+curl -fsS http://127.0.0.1:8010/health
 ```
 
 The service attempts to download the pinned TTS model on first startup when `FARAST_TTS_AUTO_DOWNLOAD=true`. For local use, ensure the host can reach Hugging Face and mount `voice-service/models` at `/models`; alternatively, place the verified checkpoint and config under `voice-service/models/persian-tts-male-vits/`. Never commit model weights or secrets to Git.
@@ -69,9 +95,9 @@ Set these server-side environment values in the Laravel hosting panel:
 
 ```dotenv
 FARAST_VOICE_ASR_URL=https://YOUR-SERVICE.onrender.com/v1/transcribe
-FARAST_VOICE_ASR_TOKEN=the-same-long-random-secret
+FARAST_VOICE_ASR_TOKEN=the-same-existing-FARAST_VOICE_TOKEN
 FARAST_VOICE_TTS_URL=https://YOUR-SERVICE.onrender.com/v1/synthesize
-FARAST_VOICE_TTS_TOKEN=the-same-long-random-secret
+FARAST_VOICE_TTS_TOKEN=the-same-existing-FARAST_VOICE_TOKEN
 FARAST_VOICE_TTS_VOICE_ID=farast-fa-male-v1
 ```
 

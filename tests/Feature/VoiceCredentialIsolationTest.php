@@ -16,7 +16,7 @@ class VoiceCredentialIsolationTest extends TestCase
 
     public function test_public_stream_config_never_returns_provider_credentials(): void
     {
-        config(['services.voice_stream.gateway_secret' => 'test-gateway-secret']);
+        config(['services.voice_stream.mode' => 'router', 'services.voice_stream.gateway_secret' => 'test-gateway-secret']);
         $token = $this->token([
             'uid' => 1,
             'locale' => 'fa-IR',
@@ -29,7 +29,7 @@ class VoiceCredentialIsolationTest extends TestCase
             'token' => $token,
         ], [], [], [
             'HTTP_X_FARAST_VOICE_GATEWAY' => hash_hmac('sha256', $token, (string) config('services.voice_stream.gateway_secret','test-gateway-secret')),
-        ]));
+        ]), app(\App\Services\CommerceAuthorizationService::class));
 
         $data = $response->getData(true);
 

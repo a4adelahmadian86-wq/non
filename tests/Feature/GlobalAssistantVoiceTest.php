@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\VoiceProviderAccount;
 use App\Services\VoiceProviderRouter;
+use App\Services\AI\AiQuotaService;
+use App\Services\CommerceAuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\UploadedFile;
@@ -42,6 +44,7 @@ class GlobalAssistantVoiceTest extends TestCase
     {
         config([
             'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.mode' => 'router',
             'services.voice_stream.gateway_secret' => 'gateway-secret',
             'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
             'services.voice_asr.token' => 'asr-token',
@@ -64,7 +67,7 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('asr-token', $response->getContent());
     }
 
-    public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
+    public function test_assistant_transcription_uses_self_hosted_service_with_metered_request(): void
     {
         config([
             'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
@@ -73,6 +76,13 @@ class GlobalAssistantVoiceTest extends TestCase
         Http::fake([
             'https://voice.test/v1/transcribe' => Http::response(['text' => 'سلام فراست'], 200),
         ]);
+        $quota = \Mockery::mock(AiQuotaService::class);
+        $quota->shouldReceive('assertAllowed')->once();
+        $this->app->instance(AiQuotaService::class, $quota);
+        $commerce = \Mockery::mock(CommerceAuthorizationService::class);
+        $commerce->shouldReceive('reserve')->once()->andReturn('voice-reservation');
+        $commerce->shouldReceive('commit')->once()->with('voice-reservation', \Mockery::type('array'));
+        $this->app->instance(CommerceAuthorizationService::class, $commerce);
 
         $response = $this->actingAs(User::factory()->create())
             ->post('/assistant/transcribe', [
