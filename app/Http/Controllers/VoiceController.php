@@ -162,6 +162,7 @@ class VoiceController extends Controller
                 ->where('reservation_id', $data['reservation_id'])
                 ->where('actor_id', (int) $payload['uid'])
                 ->where('capability', 'speech.transcription')
+                ->where('idempotency_key', 'voice-live-'.$payload['uid'].'-'.$payload['nonce'])
                 ->firstOrFail();
 
             if ($data['success'] && (float) $data['audio_seconds'] > 0) {
