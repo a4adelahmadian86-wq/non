@@ -9,10 +9,15 @@ const stream = createSherpaOnnxStream({}, 'fa-IR', {
   error: error => errors.push(error.message),
 });
 
-await Promise.race([
-  stream.ready,
-  delay(180_000).then(() => { throw new Error('sherpa_sidecar_start_timeout'); }),
-]);
+const timeout = new AbortController();
+try {
+  await Promise.race([
+    stream.ready,
+    delay(180_000, undefined, { signal: timeout.signal }).then(() => { throw new Error('sherpa_sidecar_start_timeout'); }),
+  ]);
+} finally {
+  timeout.abort();
+}
 
 // Send 1.2 seconds of signed PCM silence. The adapter converts it to float32 and
 // the actual Sherpa model must accept/decode it without a browser or cloud fallback.
