@@ -134,8 +134,8 @@ function sweepInterim(root) {
  * تشخیص گفتار فقط از درگاه زندهٔ سرور انجام می‌شود؛ مرورگر هیچ موتور/مدل گفتاری نصب نمی‌کند. */
 function isAuthed() { return $('#farastWord')?.dataset.authenticated === '1'; }
 function hasMic() {
-  // در jsdom/تست و محیط‌های بدون mediaDevices، با MediaRecorder چک می‌شود؛ در غیر این صورت false
-  try { return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder); } catch { return false; }
+  // Live PCM streaming needs getUserMedia and Web Audio, not MediaRecorder.
+  try { return !!(navigator.mediaDevices?.getUserMedia && (window.AudioContext || window.webkitAudioContext)); } catch { return false; }
 }
 
 /* ===================== کتابخانه‌های CDN محلی‌پسند (load-once، graceful) ===================== */
@@ -238,7 +238,7 @@ window.FarastVoiceHub.cloudStatus = cloudStatus;
 /* ===================== موتور ابری فراست (فايرفاکس و بقیه) =====================
  * دو مسیر، هر دو روی سرور خود سایت (رایگان برای شما تا سهمیهٔ سرویس‌های ابری):
  *  الف) استریم زندهٔ WebSocket (اگر گیتوی VOICE_STREAM_URL بالا باشد) — interim زنده
- *  ب) Fallback خودکار: ضبط قطعه‌ها با MediaRecorder → /editor/voice/transcribe (همان موتور Google/Gemini سایت)
+ *  ب) Custom STT endpoint: only when explicitly selected; never a live-gateway fallback.
  * اگر Runtime اصلی در دسترس باشد، همان باز می‌شود (بدون تکرار پیاده‌سازی). */
 /* ---------- شناسایی خطای سطح‌بالای موتور ابری برای پیام دقیق به کاربر ---------- */
 function cloudErrorKind(status, body) {
