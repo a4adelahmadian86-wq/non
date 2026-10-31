@@ -32,7 +32,7 @@ class VoiceController extends Controller
         if ($gatewayMode === 'self_hosted') {
             // The Python self-hosted service verifies Laravel's short-lived APP_KEY-signed
             // stream token directly; it does not require a cloud VoiceProviderAccount.
-            $gatewayReady = $wsUrl !== '';
+            $gatewayReady = $wsUrl !== '' && trim((string) config('services.voice_stream.gateway_secret', '')) !== '';
         } else {
             try {
                 $secret = (string) config('services.voice_stream.gateway_secret', '');
@@ -100,14 +100,30 @@ class VoiceController extends Controller
         return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',''),'/')]);
     }
 
-    public function streamConfig(Request $request)
+    public function streamConfig(Request $request, \\App\\Services\\CommerceAuthorizationService $commerce)
     {
         $token=(string)$request->input('token','');
         $payload=$this->verifyStreamToken($token);
         abort_unless($payload,401);
         $gatewaySecret=(string)config('services.voice_stream.gateway_secret','');
         abort_unless($gatewaySecret!=='' && hash_equals($this->gatewaySignature($token),(string)$request->header('X-Farast-Voice-Gateway')),403);
-        return response()->json(['ok'=>true,'gateway'=>true,'uid'=>(int)$payload['uid'],'locale'=>$payload['locale']],200,['Cache-Control'=>'no-store']);
+        $reservationId = null;
+        if ((string) config('services.voice_stream.mode', 'router') === 'self_hosted') {
+            try {
+                $user = User::findOrFail((int) $payload['uid']);
+                $reservation = $commerce->reserve($user, 'speech.transcription', 1, [], [
+                    'policy_code' => 'speech.transcription',
+                    'unit' => 'request',
+                    'allow_payg' => true,
+                    'idempotency_key' => 'voice-live-'.$payload['uid'].'-'.$payload['nonce'],
+                ]);
+                $reservationId = $reservation->reservation_id;
+            } catch (\\Throwable $e) {
+                Log::warning('farast.voice.live_reservation_failed', ['user_id' => (int) $payload['uid'], 'error_code' => preg_match('/^[a-z0-9_.-]+$/i', $e->getMessage()) ? $e->getMessage() : 'reservation_failed']);
+                return response()->json(['ok' => false, 'message' => 'voice_quota_unavailable'], 402, ['Cache-Control' => 'no-store']);
+            }
+        }
+        return response()->json(['ok'=>true,'gateway'=>true,'uid'=>(int)$payload['uid'],'locale'=>$payload['locale'],'reservation_id'=>$reservationId],200,['Cache-Control'=>'no-store']);
     }
 
     public function streamProviderConfig(Request $request, VoiceProviderRouter $router)
@@ -125,12 +141,30 @@ class VoiceController extends Controller
         return response()->json(['ok'=>true,'provider'=>$account->provider,'model'=>$account->model,'region'=>$account->metadata['region']??env('GOOGLE_SPEECH_REGION','us'),'credentials'=>$account->credentials_array,'account_id'=>$account->id,'quality_score'=>(int)$account->quality_score,'capabilities'=>$account->capabilities],200,['Cache-Control'=>'no-store']);
     }
 
-    public function streamUsage(Request $request, VoiceQuotaManager $quota)
+    public function streamUsage(Request $request, VoiceQuotaManager $quota, \\App\\Services\\CommerceAuthorizationService $commerce)
     {
         $token=(string)$request->input('token','');
         $payload=$this->verifyStreamToken($token);
         abort_unless($payload,401);
         abort_unless(hash_equals($this->gatewaySignature($token),(string)$request->header('X-Farast-Voice-Gateway')),403);
+        if ((string) config('services.voice_stream.mode', 'router') === 'self_hosted') {
+            $data = $request->validate([
+                'reservation_id' => ['required', 'string', 'max:100'],
+                'audio_seconds' => ['required', 'numeric', 'min:0', 'max:86400'],
+                'input_bytes' => ['nullable', 'integer', 'min:0'],
+                'success' => ['required', 'boolean'],
+                'latency_ms' => ['nullable', 'integer', 'min:0', 'max:3600000'],
+            ]);
+            if ($data['success'] && (float) $data['audio_seconds'] > 0) {
+                $commerce->commit($data['reservation_id'], [
+                    'cost_metadata' => ['provider' => 'self-hosted-whisper', 'audio_seconds' => (float) $data['audio_seconds'], 'input_bytes' => (int) ($data['input_bytes'] ?? 0)],
+                    'metadata' => ['operation' => 'voice.live_stream', 'latency_ms' => (int) ($data['latency_ms'] ?? 0)],
+                ]);
+            } else {
+                $commerce->release($data['reservation_id']);
+            }
+            return response()->json(['ok' => true]);
+        }
         $data=$request->validate(['account_id'=>['required','integer','exists:voice_provider_accounts,id'],'audio_seconds'=>['required','numeric','min:0','max:86400'],'input_bytes'=>['nullable','integer','min:0'],'output_bytes'=>['nullable','integer','min:0'],'success'=>['nullable','boolean'],'latency_ms'=>['nullable','integer','min:0','max:3600000']]);
         $account=VoiceProviderAccount::findOrFail($data['account_id']);
         $quota->consume($account,(float)$data['audio_seconds'],(int)($data['input_bytes']??0),(int)($data['output_bytes']??0),(bool)($data['success']??true));
