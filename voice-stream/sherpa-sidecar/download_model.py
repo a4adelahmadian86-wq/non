@@ -54,7 +54,15 @@ def main() -> None:
             destination.write_bytes(downloaded.read_bytes())
         print(f"verified server-side ASR asset: {filename}", flush=True)
 
-    print(f"all Persian ASR model files are verified in {MODEL_DIR}", flush=True)
+    for notice in ("LICENSE", "NOTICE"):
+        hf_hub_download(
+            repo_id=REPO_ID,
+            filename=notice,
+            revision=REVISION,
+            local_dir=str(MODEL_DIR),
+        )
+
+    print(f"all Persian ASR model files and notices are ready in {MODEL_DIR}", flush=True)
 
 
 if __name__ == "__main__":
