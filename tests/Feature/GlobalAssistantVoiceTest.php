@@ -101,6 +101,52 @@ class GlobalAssistantVoiceTest extends TestCase
         }
     }
 
+    public function test_local_only_assistant_never_falls_back_to_groq_or_non_streaming_ai(): void
+    {
+        $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+        $groqOriginal = getenv('GROQ_API_KEY');
+        putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
+        $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        putenv('GROQ_API_KEY=must-not-be-used');
+        $_ENV['GROQ_API_KEY'] = 'must-not-be-used';
+        $_SERVER['GROQ_API_KEY'] = 'must-not-be-used';
+        config(['services.ai_gateway.url' => '', 'services.ai_gateway.token' => '']);
+        Http::fake();
+
+        try {
+            $user = User::factory()->create();
+            $stream = $this->actingAs($user)->postJson('/assistant/chat/stream', ['message' => 'سلام']);
+            $stream->assertStatus(503)->assertJsonPath('ok', false);
+
+            $legacy = $this->actingAs($user)->postJson('/assistant/chat', ['message' => 'سلام']);
+            $legacy->assertStatus(503)->assertJsonPath('ok', false);
+
+            config(['services.voice_tts.url' => '']);
+            $speech = $this->actingAs($user)->postJson('/assistant/speak', ['text' => 'سلام']);
+            $speech->assertStatus(503)->assertJsonPath('ok', false);
+
+            Http::assertNothingSent();
+        } finally {
+            if ($original === false) {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+                unset($_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'], $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED']);
+            } else {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED='.$original);
+                $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+                $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+            }
+            if ($groqOriginal === false) {
+                putenv('GROQ_API_KEY');
+                unset($_ENV['GROQ_API_KEY'], $_SERVER['GROQ_API_KEY']);
+            } else {
+                putenv('GROQ_API_KEY='.$groqOriginal);
+                $_ENV['GROQ_API_KEY'] = $groqOriginal;
+                $_SERVER['GROQ_API_KEY'] = $groqOriginal;
+            }
+        }
+    }
+
     public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
     {
         config([
