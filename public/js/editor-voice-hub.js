@@ -305,7 +305,7 @@ async function startCloudStream(ctx, csrf, data) {
       if (closed) return;
       media = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
       ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive', sampleRate: 48000 });
-      await ac.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261031serveronly4');
+      await ac.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261031vad1');
       const src = ac.createMediaStreamSource(media);
       worklet = new AudioWorkletNode(ac, 'farast-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
       worklet.port.onmessage = e => { if (ws.readyState === WebSocket.OPEN && !closed) { const b = new Uint8Array(e.data); if (b.byteLength > 24000) { for (let i = 0; i < b.byteLength; i += 24000) ws.send(b.slice(i, Math.min(i + 24000, b.byteLength))); } else ws.send(b); } };
