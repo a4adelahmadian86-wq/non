@@ -14,21 +14,21 @@ test('all browser voice clients use server recognition and never install speech 
     /SpeechRecognition/,
     /webkitSpeechRecognition/,
     /processLocally/,
-    /\\.install\\s*\\(/,
+    /\.install\s*\(/,
     /downloadable|downloading/i,
     /onnxruntime/i,
-    /transformers\\.js/i,
-    /Xenova\\/whisper/i,
+    /transformers\.js/i,
+    /Xenova\/whisper/i,
     /localWhisper/i,
     /model[_-]?url/i,
-    /\\.onnx\\b/i,
-    /\\.tflite\\b/i,
+    /\.onnx\b/i,
+    /\.tflite\b/i,
   ];
   for (const [index, client] of clients.entries()) {
     for (const pattern of forbidden) assert.doesNotMatch(client, pattern, `${paths[index]} contains forbidden client speech-model path: ${pattern}`);
   }
   assert.match(clients[0], /getUserMedia/);
-  assert.match(clients[0], /audioWorklet\\.addModule/);
+  assert.match(clients[0], /audioWorklet\.addModule/);
   assert.match(clients[0], /new WebSocket/);
   assert.match(clients[1], /getUserMedia/);
   assert.match(clients[1], /new WebSocket/);
@@ -36,5 +36,5 @@ test('all browser voice clients use server recognition and never install speech 
 
 test('local-only Laravel mode refuses batch transcription rather than falling back', async () => {
   const controller = await readFile(resolve(project, 'app/Http/Controllers/VoiceController.php'), 'utf8');
-  assert.match(controller, /if\\(\\$localVoiceOnly\\)return response\\(\\)->json\\(\\['ok'=>false/);
+  assert.match(controller, /if\(\$localVoiceOnly\)return response\(\)->json\(\['ok'=>false/);
 });
