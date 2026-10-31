@@ -232,6 +232,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'سلام فراست' }));
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length), { timeout: 5000 }).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+});
 
 test('user speech interrupts server TTS while keeping the same live microphone stream open', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
@@ -269,7 +270,7 @@ test('user speech interrupts server TTS while keeping the same live microphone s
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
-    if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ در حال پخش است. "}\\\\n\\\\ndata: {"done":true}\\\\n\\\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
+    if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ در حال پخش است. "}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
     if(url==='/assistant/speak')return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});
     return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
   };
