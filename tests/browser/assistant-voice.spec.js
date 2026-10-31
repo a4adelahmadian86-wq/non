@@ -288,10 +288,9 @@ test('opening the assistant keeps the microphone off until the user taps', async
   await page.locator('.farast-assistant-launcher').click();
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
   await page.locator('.farast-voice-mic').click();
-  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
-  await page.locator('.farast-voice-mic').click();
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await expect(page.locator('.farast-assistant-panel')).not.toHaveClass(/is-listening/);
-  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
 
@@ -365,7 +364,9 @@ test('assistant starts speaking while the response is still streaming and queues
 <script>
   window.__spokenChunks = [];
   window.__streamSentAll = false;
-  window.SpeechRecognition = class { constructor(){window.__liveRecognition=this;} start(){this.onstart?.();} stop(){this.onend?.();} };
+  window.WebSocket = undefined;
+  window.AudioContext = undefined;
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
   window.Audio = class {
     constructor(){this.duration=2;this.handlers={};this.ended=false;this.paused=false;}
     addEventListener(name,fn){this.handlers[name]=fn;}
@@ -391,8 +392,9 @@ test('assistant starts speaking while the response is still streaming and queues
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-  await expect.poll(() => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
-  await page.evaluate(() => window.__liveRecognition.onresult({resultIndex:0,results:[{0:{transcript:'سلام فراست'},isFinal:true}]}));
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
+  await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBeGreaterThanOrEqual(1);
   expect(await page.evaluate(() => window.__streamSentAll)).toBe(false);
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(3);
@@ -451,6 +453,7 @@ test('live voice session stays open and accepts the next turn after TTS finishes
       const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
       const outputBuffer={getChannelData:()=>new Float32Array(4096)};
       window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
+      window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
     });
     await page.evaluate((value)=>window.__wsInstances[0].emit({type:'final',text:value}),text);
   };
@@ -506,7 +509,7 @@ test('speaking during assistant audio interrupts TTS and routes the new speech t
     const outputBuffer={getChannelData:()=>new Float32Array(4096)};
     window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
   });
-  await frame();
+  await frame();await frame();
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'سلام'}));
   await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(1);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0]&&!window.__audioInstances[0].paused)).toBe(true);
