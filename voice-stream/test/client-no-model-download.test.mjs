@@ -79,6 +79,8 @@ test('local deployment includes a private Qwen gateway and waits for healthy voi
   assert.match(compose, /\.env\.ai-runtime/);
   assert.match(compose, /\/health/);
   assert.match(setup, /FARAST_AI_GATEWAY_TOKEN/);
+  assert.match(setup, /New-RandomToken/);
+  assert.match(setup, /Set-LaravelValue 'VOICE_GATEWAY_SECRET' \$gatewaySecret/);
   assert.match(setup, /VOICE_STREAM_HEALTH_URL/);
   assert.match(setup, /\.env\.ai-runtime/);
   assert.match(start, /--profile local-ai up -d --build/);

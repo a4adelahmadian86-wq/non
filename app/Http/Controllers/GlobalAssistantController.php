@@ -22,7 +22,7 @@ class GlobalAssistantController extends Controller
         $gatewayHealthUrl = trim((string) config('services.ai_gateway.health_url', ''));
         if ($localOnly && $gatewayPrivate && $gatewayToken !== '' && $gatewayHealthUrl !== '') {
             try {
-                $health = Http::acceptJson()->connectTimeout(1)->timeout(2)->get($gatewayHealthUrl);
+                $health = Http::acceptJson()->connectTimeout(2)->timeout(4)->get($gatewayHealthUrl);
                 $gatewayHealthy = $health->successful() && (bool) $health->json('ok');
             } catch (\Throwable) {
                 $gatewayHealthy = false;

@@ -17,7 +17,7 @@ foreach ($line in $sourceLines) {
     }
 }
 
-foreach ($required in @('APP_KEY', 'VOICE_GATEWAY_SECRET', 'APP_URL')) {
+foreach ($required in @('APP_KEY', 'APP_URL')) {
     if ([string]::IsNullOrWhiteSpace([string]$values[$required])) {
         throw "متغیر $required در فایل .env لاراول تنظیم نشده است؛ مقدار آن را بررسی کن."
     }
@@ -38,20 +38,24 @@ if ($appUri.Host -in @('localhost', '127.0.0.1', '::1')) {
 }
 $callbackUrl = $callbackBuilder.Uri.GetLeftPart([System.UriPartial]::Authority)
 
-# Keep only the secrets the voice containers actually need; never copy the whole Laravel .env.
-$aiToken = [string]$values['FARAST_AI_GATEWAY_TOKEN']
-if ([string]::IsNullOrWhiteSpace($aiToken)) {
+# Keep only the secrets each private container needs; never copy the whole Laravel .env.
+function New-RandomToken {
     $randomBytes = New-Object byte[] 32
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try { $rng.GetBytes($randomBytes) } finally { $rng.Dispose() }
-    $aiToken = [Convert]::ToBase64String($randomBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    return [Convert]::ToBase64String($randomBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 }
+
+$gatewaySecret = [string]$values['VOICE_GATEWAY_SECRET']
+if ([string]::IsNullOrWhiteSpace($gatewaySecret)) { $gatewaySecret = New-RandomToken }
+$aiToken = [string]$values['FARAST_AI_GATEWAY_TOKEN']
+if ([string]::IsNullOrWhiteSpace($aiToken)) { $aiToken = New-RandomToken }
 
 $ttsToken = [string]$values['FARAST_VOICE_TTS_TOKEN']
 if ([string]::IsNullOrWhiteSpace($ttsToken)) { $ttsToken = [string]$values['FARAST_VOICE_TOKEN'] }
 $runtimeLines = @(
     "APP_KEY=$($values['APP_KEY'])",
-    "VOICE_GATEWAY_SECRET=$($values['VOICE_GATEWAY_SECRET'])",
+    "VOICE_GATEWAY_SECRET=$gatewaySecret",
     "FARAST_VOICE_TTS_TOKEN=$ttsToken",
     "FARAST_AI_GATEWAY_TOKEN=$aiToken"
 )
@@ -88,6 +92,7 @@ function Set-LaravelValue([string]$Key, [string]$Value) {
     }
     if (-not $found) { $laravelLines.Add("$Key=$Value") }
 }
+Set-LaravelValue 'VOICE_GATEWAY_SECRET' $gatewaySecret
 if (-not [string]::IsNullOrWhiteSpace($ttsToken)) { Set-LaravelValue 'FARAST_VOICE_TTS_TOKEN' $ttsToken }
 Set-LaravelValue 'FARAST_VOICE_LOCAL_SPEECH_ENABLED' 'true'
 Set-LaravelValue 'VOICE_STREAM_HEALTH_URL' 'http://127.0.0.1:6002/health'
