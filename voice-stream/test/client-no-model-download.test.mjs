@@ -33,11 +33,17 @@ test('all browser voice clients use server recognition and never install speech 
   assert.match(clients[1], /getUserMedia/);
   assert.match(clients[1], /new WebSocket/);
   assert.doesNotMatch(clients[0], /MediaRecorder|startChunked|\/editor\/voice\/transcribe/);
-  assert.doesNotMatch(clients[1], /MediaRecorder|startServerRecording|\/assistant\/transcribe/);
+  assert.match(clients[1], /MediaRecorder/);
+  assert.match(clients[1], /\/assistant\/transcribe/);
+  assert.match(clients[1], /remote_batch_enabled/);
   assert.match(clients[3], /output\.fill\(0\)/);
 });
 
-test('local-only Laravel mode refuses batch transcription rather than falling back', async () => {
+test('local-only Laravel voice requires an explicit opt-in for remote assistant batch speech', async () => {
   const controller = await readFile(resolve(project, 'app/Http/Controllers/VoiceController.php'), 'utf8');
+  const assistant = await readFile(resolve(project, 'app/Http/Controllers/GlobalAssistantController.php'), 'utf8');
+  const services = await readFile(resolve(project, 'config/services.php'), 'utf8');
   assert.match(controller, /if\(\$localVoiceOnly\)return response\(\)->json\(\['ok'=>false/);
+  assert.match(assistant, /services\.voice\.remote_batch_enabled/);
+  assert.match(services, /FARAST_VOICE_REMOTE_BATCH_ENABLED/);
 });
