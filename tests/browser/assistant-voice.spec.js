@@ -45,31 +45,33 @@ test('closing the global voice assistant stops microphone capture and discards p
   await expect.poll(async () => page.evaluate(() => window.__transcribeCalled)).toBe(false);
 });
 
-test('live conversation streams interim transcript and sends the completed utterance automatically', async ({ page }) => {
+test('gateway-unavailable fallback uses the configured server recorder, never browser speech recognition', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
-  window.__chatPayloads = [];
+  window.__recognitionStarts = 0;
+  window.__micRequests = 0;
   window.WebSocket = undefined;
   window.AudioContext = undefined;
-  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
   window.SpeechRecognition = class {
-    constructor() { window.__liveRecognition = this; }
-    start() { this.onstart?.(); }
+    start() { window.__recognitionStarts++; this.onstart?.(); }
     stop() { this.onend?.(); }
   };
-  window.Audio = class {
-    constructor() { this.duration = 2; this.handlers = {}; this.paused = false; }
-    addEventListener(name, fn) { this.handlers[name] = fn; }
-    removeEventListener(name) { delete this.handlers[name]; }
-    load() { this.handlers.canplay?.(); }
-    play() { return Promise.resolve(); }
-    pause() { this.paused = true; }
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+    getUserMedia: async () => {
+      window.__micRequests++;
+      return { getTracks: () => [{ stop() {} }] };
+    }
+  }});
+  window.MediaRecorder = class {
+    static isTypeSupported() { return true; }
+    constructor(stream, options = {}) { this.mimeType = options.mimeType || 'audio/webm'; this.state = 'inactive'; window.__recorder = this; }
+    start() { this.state = 'recording'; }
+    stop() { this.state = 'inactive'; this.onstop?.(); }
   };
-  window.fetch = async (url, options = {}) => {
+  window.fetch = async (url) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"سلام، در خدمتم."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
-    if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
 </script></body></html>`);
@@ -77,20 +79,10 @@ test('live conversation streams interim transcript and sends the completed utter
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
 
-  await expect.poll(async () => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام' }, isFinal: false }]
-  }));
-  await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام');
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام فراست' }, isFinal: true }]
-  }));
-  await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
-  expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+  await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBe('recording');
+  expect(await page.evaluate(() => window.__recognitionStarts)).toBe(0);
+  expect(await page.evaluate(() => window.__micRequests)).toBe(1);
 });
-
 
 test('microphone permission failure switches to text without a second audio attempt', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
