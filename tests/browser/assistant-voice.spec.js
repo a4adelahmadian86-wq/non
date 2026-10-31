@@ -257,7 +257,7 @@ test('user speech interrupts server TTS while keeping the same live microphone s
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){window.__stoppedTracks++;}}]})}});
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__getUserMediaCalls++;return {getTracks:()=>[{stop(){window.__stoppedTracks++;}}]};}}});
   window.Audio=class {
     constructor(){this.duration=2;this.handlers={};this.paused=false;window.__audioInstances.push(this);}
     addEventListener(name,fn){this.handlers[name]=fn;}
@@ -521,6 +521,7 @@ test('stopping the conversation closes the live gateway and releases the microph
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__wsInstances = [];
+  window.__getUserMediaCalls = 0;
   window.__stoppedTracks = 0;
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
@@ -551,6 +552,7 @@ test('stopping the conversation closes the live gateway and releases the microph
   await expect.poll(() => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__stoppedTracks)).toBe(0);
   await expect.poll(() => page.evaluate(() => window.__wsInstances[0].readyState)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__getUserMediaCalls)).toBe(1);
   await page.locator('[data-fa-stop-speech]').click();
   await expect.poll(() => page.evaluate(() => window.__stoppedTracks)).toBe(1);
   expect(await page.evaluate(() => window.__wsInstances[0].readyState)).toBe(3);
