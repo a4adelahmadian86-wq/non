@@ -389,11 +389,11 @@
       gatewayAudioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});
       gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
       if(window.AudioWorkletNode&&gatewayAudioContext.audioWorklet&&typeof gatewayAudioContext.audioWorklet.addModule==='function'){
-        await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261023live15');
+        await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261031serveronly');
         if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
-        gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:0});
+        gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
         gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000){socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));noteGatewayAudioActivity(generation,bytes.slice(i,Math.min(i+24000,bytes.byteLength)).buffer);}}else if(bytes.byteLength){socket.send(bytes);noteGatewayAudioActivity(generation,event.data);}};
-        gatewaySourceNode.connect(gatewayWorkletNode);
+        gatewaySourceNode.connect(gatewayWorkletNode);gatewayWorkletNode.connect(gatewayAudioContext.destination);
       }else{
         gatewayScriptProcessorNode=gatewayAudioContext.createScriptProcessor(4096,1,1);
         gatewayScriptProcessorNode.onaudioprocess=function(event){
