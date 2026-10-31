@@ -29,6 +29,7 @@ test('closing the global voice assistant stops microphone capture and discards p
   window.fetch = async (url) => {
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/transcribe') { window.__transcribeCalled = true; return new Response(JSON.stringify({ ok: true, text: 'این متن نباید ارسال شود' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
     return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   };
@@ -45,19 +46,17 @@ test('closing the global voice assistant stops microphone capture and discards p
   await expect.poll(async () => page.evaluate(() => window.__transcribeCalled)).toBe(false);
 });
 
-test('live conversation streams interim transcript and sends the completed utterance automatically', async ({ page }) => {
+test('does not fall back to browser speech recognition when the live gateway is unavailable', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__chatPayloads = [];
   window.WebSocket = undefined;
   window.AudioContext = undefined;
-  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
-  window.SpeechRecognition = class {
-    constructor() { window.__liveRecognition = this; }
-    start() { this.onstart?.(); }
-    stop() { this.onend?.(); }
-  };
+  window.__recognitionStarted = false;
+  window.SpeechRecognition = class { constructor() { window.__recognitionStarted = true; } start() { window.__recognitionStarted = true; } };
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } });
+  window.MediaRecorder = class { static isTypeSupported() { return true; } constructor(stream, options = {}) { this.stream = stream; this.mimeType = options.mimeType || 'audio/webm'; this.state = 'inactive'; window.__recorder = this; } start() { this.state = 'recording'; } stop() { this.state = 'inactive'; this.onstop?.(); } };
   window.Audio = class {
     constructor() { this.duration = 2; this.handlers = {}; this.paused = false; }
     addEventListener(name, fn) { this.handlers[name] = fn; }
@@ -77,18 +76,8 @@ test('live conversation streams interim transcript and sends the completed utter
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
 
-  await expect.poll(async () => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام' }, isFinal: false }]
-  }));
-  await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام');
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام فراست' }, isFinal: true }]
-  }));
-  await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
-  expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+  await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBe('recording');
+  expect(await page.evaluate(() => window.__recognitionStarted)).toBe(false);
 });
 
 
