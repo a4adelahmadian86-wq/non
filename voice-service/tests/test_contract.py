@@ -12,6 +12,7 @@ os.environ.setdefault("APP_KEY", "test-app-key")
 
 from fastapi.testclient import TestClient
 from app import main
+from starlette.websockets import WebSocketDisconnect
 
 
 def test_health_does_not_expose_secret():
@@ -108,3 +109,81 @@ def test_live_pcm_transcription_uses_loaded_local_model(monkeypatch):
     import numpy as np
     raw = (np.ones(8000, dtype=np.int16) * 1000).tobytes()
     assert main._transcribe_pcm_chunk(raw, "fa") == "سلام فراست"
+
+def test_live_websocket_transcribes_local_pcm_and_retries_usage_settlement(monkeypatch):
+    class Segment:
+        text = "سلام فراست"
+
+    class FakeModel:
+        def transcribe(self, samples, **kwargs):
+            assert samples.dtype.name == "float32"
+            assert kwargs["language"] == "fa"
+            return iter([Segment()]), None
+
+    class FakeResponse:
+        def __init__(self, payload, status_code=200):
+            self._payload = payload
+            self.status_code = status_code
+            self.is_success = 200 <= status_code < 300
+
+        def json(self):
+            return self._payload
+
+    usage_calls = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            if url.endswith("/editor/voice/stream-config"):
+                return FakeResponse({"ok": True, "gateway": True, "reservation_id": "reservation-live-ws"})
+            if url.endswith("/editor/voice/stream-usage"):
+                usage_calls.append(json)
+                # Simulate a transient callback failure. The stream must retry rather
+                # than marking the reservation settled before Laravel confirms it.
+                return FakeResponse({"ok": len(usage_calls) > 1}, 200 if len(usage_calls) > 1 else 503)
+            raise AssertionError(f"Unexpected callback URL: {url}")
+
+    monkeypatch.setattr(main, "STREAM_APP_URL", "http://laravel.test")
+    monkeypatch.setattr(main, "STREAM_GATEWAY_SECRET", "test-live-gateway-secret")
+    monkeypatch.setattr(main, "STREAM_ORIGINS", {"http://localhost:8000"})
+    monkeypatch.setattr(main, "asr_model", FakeModel())
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    payload = {
+        "uid": 7,
+        "locale": "fa-IR",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 120,
+        "nonce": "test-live-ws-session",
+    }
+    token = _signed_stream_token(payload)
+    import numpy as np
+
+    client = TestClient(main.app)
+    with client.websocket_connect("/v1/stream", headers={"origin": "http://localhost:8000"}) as websocket:
+        websocket.send_json({"type": "start", "token": token, "locale": "fa-IR"})
+        assert websocket.receive_json()["type"] == "ready"
+        speech = (np.ones(16000, dtype=np.int16) * 1000).tobytes()
+        silence = np.zeros(12000, dtype=np.int16).tobytes()
+        websocket.send_bytes(speech)
+        websocket.send_bytes(silence)
+        transcript = websocket.receive_json()
+        assert transcript["type"] == "final"
+        assert transcript["text"] == "سلام فراست"
+        websocket.send_json({"type": "stop"})
+        try:
+            websocket.receive_json()
+        except WebSocketDisconnect:
+            pass
+
+    assert len(usage_calls) == 2
+    assert usage_calls[-1]["reservation_id"] == "reservation-live-ws"
+    assert usage_calls[-1]["success"] is True
