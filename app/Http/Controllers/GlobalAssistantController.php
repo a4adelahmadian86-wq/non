@@ -14,6 +14,7 @@ class GlobalAssistantController extends Controller
     public function voiceStatus(Request $request)
     {
         $localOnly = (bool) config('services.voice.local_only', false);
+        $remoteBatchEnabled = (bool) config('services.voice.remote_batch_enabled', false);
         $gatewayUrl = trim((string) config('services.ai_gateway.url', ''));
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
         $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
@@ -30,6 +31,7 @@ class GlobalAssistantController extends Controller
         return response()->json([
             'ok' => true,
             'local_only' => $localOnly,
+            'remote_batch_enabled' => $remoteBatchEnabled,
             'chat_gateway_ready' => $chatGatewayReady,
             'chat_gateway_message' => $chatGatewayMessage,
             'server_stt' => filled(config('services.voice_asr.url')),
@@ -47,8 +49,8 @@ class GlobalAssistantController extends Controller
      */
     public function transcribe(Request $request)
     {
-        if ((bool) config('services.voice.local_only', false)) {
-            return response()->json(['ok' => false, 'message' => 'در حالت گفتار محلی، رونویسی دسته‌ای غیرفعال است؛ فقط جریان زندهٔ موتور محلی سرور مجاز است.'], 503, ['Cache-Control' => 'no-store']);
+        if ((bool) config('services.voice.local_only', false) && ! (bool) config('services.voice.remote_batch_enabled', false)) {
+            return response()->json(['ok' => false, 'message' => 'در حالت گفتار محلی، رونویسی دسته‌ای غیرفعال است. برای اجازهٔ صریح ارسال فایل ضبط‌شده به سرویس صوتی بیرونی، FARAST_VOICE_REMOTE_BATCH_ENABLED=true را تنظیم کن.'], 503, ['Cache-Control' => 'no-store']);
         }
 
         $data = $request->validate([
@@ -111,7 +113,7 @@ class GlobalAssistantController extends Controller
     {
         $data = $request->validate(['text' => ['required', 'string', 'min:1', 'max:6000']]);
         $url = trim((string) config('services.voice_tts.url', ''));
-        if ((bool) config('services.voice.local_only', false) && ! $this->isPrivateServiceUrl($url)) {
+        if ((bool) config('services.voice.local_only', false) && ! (bool) config('services.voice.remote_batch_enabled', false) && ! $this->isPrivateServiceUrl($url)) {
             return response()->json(['ok' => false, 'message' => 'در حالت خودمیزبان، نشانی موتور صدا باید به سرویس خصوصی سرور اشاره کند؛ هیچ سرویس عمومی فراخوانی نشد.'], 503, ['Cache-Control' => 'no-store']);
         }
         if ($url === '') {
