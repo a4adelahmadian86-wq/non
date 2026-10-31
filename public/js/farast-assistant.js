@@ -162,7 +162,7 @@
         if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return {cancelled:true};
         if(!response.ok){var err=await response.json().catch(function(){return {};});throw new Error(err.message||'موتور صدای ثابت در دسترس نیست.');}
         var blob=await response.blob();
-        if(!blob.size||(!/^audio\\//i.test(blob.type)&&blob.type!=='application/octet-stream'))throw new Error('موتور صدا فایل صوتی معتبر برنگرداند.');
+        if(!blob.size||(!/^audio\//i.test(blob.type)&&blob.type!=='application/octet-stream'))throw new Error('موتور صدا فایل صوتی معتبر برنگرداند.');
         return {blob:blob};
       }catch(error){return {error:error};}
       finally{window.clearTimeout(timeout);if(speechRequestController===controller)speechRequestController=null;}
