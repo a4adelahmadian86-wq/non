@@ -412,9 +412,8 @@
       // the microphone. Keep the mic off and require an explicit retry from the user.
       panel.classList.remove('is-listening');
       root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
-      voiceTitle.textContent='میکروفون خاموش است';
-      voiceCaption.textContent='اتصال گفتار برقرار نشد؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';
-      status.textContent='میکروفون خاموش شد؛ مسیر جایگزین به‌صورت خودکار فعال نمی‌شود.';
+      conversationActive=false;
+      enableTextFallback('اتصال به درگاه گفتار زنده برقرار نشد؛ هیچ مسیر ضبط یا تشخیص دیگری خودکار فعال نمی‌شود.');
       return true;
     }
   }
@@ -438,19 +437,22 @@
   }
   function clearLiveSilence(){if(liveSilenceTimer){window.clearTimeout(liveSilenceTimer);liveSilenceTimer=null;}}
   function stopLiveRecognition(){clearLiveSilence();stopGatewayRecognition();liveTurnEnding=true;liveStarting=false;var current=liveRecognition;liveRecognition=null;if(current){try{current.onresult=null;current.onerror=null;current.onend=null;current.stop();}catch(e){}}}
-  function startLiveRecognition(useFallback){
+  function startLiveRecognition(){
     if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;
-    if(!useFallback&&!gatewayWs&&!gatewayStarting){
-      startGatewayLiveRecognition().then(function(started){
-        if(!started&&conversationActive&&!panel.hidden)startServerRecording();
-      }).catch(function(){
-        if(conversationActive&&!panel.hidden)startServerRecording();
-      });
-      return;
-    }
-    // Do not use browser-managed SpeechRecognition: its audio processing may be
-    // performed by an external provider outside FARAST's configured server path.
-    startServerRecording();
+    if(gatewayWs||gatewayStarting)return;
+    // The global assistant is a live conversation, not a stop-recording/upload flow.
+    // If the self-hosted gateway is absent, keep the microphone closed and offer text.
+    startGatewayLiveRecognition().then(function(started){
+      if(!started&&conversationActive&&!panel.hidden){
+        conversationActive=false;
+        enableTextFallback('درگاه گفتار زندهٔ خودمیزبان هنوز آماده نیست؛ برای جلوگیری از ارسال ناخواستهٔ صدا، ضبط دسته‌ای یا تشخیص گفتار مرورگر فعال نمی‌شود.');
+      }
+    }).catch(function(){
+      if(conversationActive&&!panel.hidden){
+        conversationActive=false;
+        enableTextFallback('اتصال به درگاه گفتار زنده برقرار نشد؛ می‌توانی با پیام متنی ادامه بدهی.');
+      }
+    });
   }
   function finishLiveTurn(){
     clearLiveSilence();if(!conversationActive||liveTurnEnding)return;
