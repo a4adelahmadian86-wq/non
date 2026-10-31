@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 test('live editor dictation refuses batch mode and never opens the microphone without a gateway', async ({ page }) => {
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
   const voiceJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-voice.js'), 'utf8');
   await page.setContent(`<!doctype html>
 <html lang="fa" dir="rtl">
@@ -37,7 +39,16 @@ test('live editor dictation refuses batch mode and never opens the microphone wi
 </body>
 </html>`);
   await page.addScriptTag({ content: voiceJs });
-  await expect.poll(async () => !!(await page.evaluate(() => window.FarastVoiceRuntime?.open))).toBeTruthy();
+  await page.waitForTimeout(50);
+  const boot = await page.evaluate(() => ({
+    loaded: !!window.__farastVoiceRuntimeLoaded,
+    booted: !!window.__farastVoiceBooted,
+    hasMic: !!document.getElementById('mic'),
+    hasEditor: !!document.getElementById('editor'),
+    hasPanel: !!document.getElementById('farastVoicePanel'),
+    hasRuntime: !!window.FarastVoiceRuntime,
+  }));
+  expect(boot.hasRuntime, 'Voice runtime boot diagnostics: ' + JSON.stringify({ boot, pageErrors })).toBeTruthy();
   await page.evaluate(() => window.FarastVoiceRuntime.open());
   await page.locator('#fvStart').click();
   await expect.poll(() => page.locator('#fvError').textContent()).not.toBe('');
