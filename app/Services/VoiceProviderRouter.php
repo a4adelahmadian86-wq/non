@@ -12,6 +12,7 @@ class VoiceProviderRouter
     {
         $accounts = VoiceProviderAccount::query()
             ->where('enabled', true)
+            ->when(filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN), fn ($q) => $q->where('provider', 'sherpa-onnx'))
             ->where('healthy', true)
             ->when($excludeAccountIds !== [], fn ($q) => $q->whereNotIn('id', $excludeAccountIds))
             ->get()
