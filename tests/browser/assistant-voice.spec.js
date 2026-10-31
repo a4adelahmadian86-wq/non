@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-test('closing the global voice assistant stops microphone capture and discards pending audio', async ({ page }) => {
+test('global assistant keeps microphone closed when the live gateway is unavailable', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html>
 <html lang="fa" dir="rtl">
@@ -38,26 +38,27 @@ test('closing the global voice assistant stops microphone capture and discards p
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
 
-  await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBe('recording');
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBeUndefined();
+  await expect.poll(async () => page.evaluate(() => window.__stoppedTracks)).toBe(0);
+  await expect.poll(async () => page.evaluate(() => window.__transcribeCalled)).toBe(false);
   await page.keyboard.press('Escape');
   await expect(page.locator('.farast-assistant-panel')).toBeHidden();
-  await expect.poll(async () => page.evaluate(() => window.__stoppedTracks)).toBeGreaterThan(0);
-  await expect.poll(async () => page.evaluate(() => window.__transcribeCalled)).toBe(false);
 });
 
-test('live conversation streams interim transcript and sends the completed utterance automatically', async ({ page }) => {
+test('assistant avoids browser speech and keeps text chat available when gateway is absent', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__chatPayloads = [];
+  window.__recognitionStarts = 0;
+  window.__speechSynthesisCalls = 0;
   window.WebSocket = undefined;
   window.AudioContext = undefined;
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
-  window.SpeechRecognition = class {
-    constructor() { window.__liveRecognition = this; }
-    start() { this.onstart?.(); }
-    stop() { this.onend?.(); }
-  };
+  window.SpeechRecognition = class { start() { window.__recognitionStarts++; } stop() {} };
+  window.SpeechSynthesisUtterance = class {};
+  window.speechSynthesis = { cancel() {}, getVoices() { return []; }, speak() { window.__speechSynthesisCalls++; } };
   window.Audio = class {
     constructor() { this.duration = 2; this.handlers = {}; this.paused = false; }
     addEventListener(name, fn) { this.handlers[name] = fn; }
@@ -76,23 +77,17 @@ test('live conversation streams interim transcript and sends the completed utter
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-
-  await expect.poll(async () => page.evaluate(() => !!window.__liveRecognition)).toBe(true);
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام' }, isFinal: false }]
-  }));
-  await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام');
-  await page.evaluate(() => window.__liveRecognition.onresult({
-    resultIndex: 0,
-    results: [{ 0: { transcript: 'سلام فراست' }, isFinal: true }]
-  }));
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  expect(await page.evaluate(() => window.__recognitionStarts)).toBe(0);
+  await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
+  await page.locator('.farast-assistant-send').click();
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+  await expect.poll(async () => page.evaluate(() => window.__speechSynthesisCalls)).toBe(0);
 });
 
 
-test('microphone permission failure switches to text without a second audio attempt', async ({ page }) => {
+test('gateway absence does not request microphone permission or start another recognizer', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -115,7 +110,7 @@ test('microphone permission failure switches to text without a second audio atte
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گفت‌وگوی متنی');
-  await expect.poll(() => page.evaluate(() => window.__micRequests)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__micRequests)).toBe(0);
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
@@ -296,10 +291,9 @@ test('opening the assistant keeps the microphone off until the user taps', async
   await page.locator('.farast-assistant-launcher').click();
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
   await page.locator('.farast-voice-mic').click();
-  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
-  await page.locator('.farast-voice-mic').click();
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await expect(page.locator('.farast-assistant-panel')).not.toHaveClass(/is-listening/);
-  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
 
@@ -328,7 +322,7 @@ test('gateway connection startup failure does not auto-start browser recognition
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-  await expect(page.locator('[data-fa-voice-title]')).toContainText('میکروفون خاموش');
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
