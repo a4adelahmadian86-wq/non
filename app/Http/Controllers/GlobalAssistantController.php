@@ -27,8 +27,8 @@ class GlobalAssistantController extends Controller
      */
     public function transcribe(
         Request $request,
-        \\App\\Services\\AI\\AiQuotaService $quota,
-        \\App\\Services\\CommerceAuthorizationService $commerce
+        \App\Services\AI\AiQuotaService $quota,
+        \App\Services\CommerceAuthorizationService $commerce
     ) {
         $quota->assertAllowed($request->user(), 'can_voice');
         $data = $request->validate([
@@ -50,7 +50,7 @@ class GlobalAssistantController extends Controller
         if (! in_array($extension, ['webm', 'ogg', 'wav', 'mp3', 'm4a', 'mp4'], true)) $extension = 'webm';
 
         $requestKey = trim((string) ($request->header('Idempotency-Key') ?: $request->header('X-Farast-Voice-Request', '')));
-        $idempotencyKey = 'assistant-voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \\Illuminate\\Support\\Str::uuid());
+        $idempotencyKey = 'assistant-voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \Illuminate\Support\Str::uuid());
         $reservation = null;
         try {
             $reservation = $commerce->reserve($request->user(), 'speech.transcription', 1, [], [
@@ -80,9 +80,9 @@ class GlobalAssistantController extends Controller
             ]);
             $reservation = null;
             return response()->json(['ok' => true, 'text' => $text, 'engine' => 'self-hosted-asr'], 200, ['Cache-Control' => 'no-store']);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             if ($reservation) {
-                try { $commerce->release($reservation); } catch (\\Throwable) {}
+                try { $commerce->release($reservation); } catch (\Throwable) {}
             }
             Log::warning('farast.global_assistant_asr_exception', [
                 'user_id' => $request->user()->id,
