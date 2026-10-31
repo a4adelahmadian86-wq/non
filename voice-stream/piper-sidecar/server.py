@@ -1,3 +1,4 @@
+import hmac
 import io
 import json
 import os
@@ -8,11 +9,15 @@ from pathlib import Path
 
 from piper import PiperVoice
 
-HOST = os.getenv("PIPER_HOST", "0.0.0.0")
+HOST = os.getenv("PIPER_HOST", "127.0.0.1")
 PORT = int(os.getenv("PIPER_PORT", "7007"))
+PIPER_TTS_TOKEN = os.getenv("PIPER_TTS_TOKEN", "").strip()
 MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")))
 MODEL_PATH = MODEL_DIR / "fa_IR-mana-medium.onnx"
 MAX_TEXT_LENGTH = 6000
+
+if not PIPER_TTS_TOKEN:
+    raise RuntimeError("piper_tts_token_missing")
 
 if not MODEL_PATH.is_file() or not MODEL_PATH.with_suffix(".onnx.json").is_file():
     raise RuntimeError(f"piper_model_missing:{MODEL_PATH}")
@@ -43,12 +48,25 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/v1/synthesize":
             self.send_json(404, {"ok": False})
             return
+        supplied = self.headers.get("Authorization", "")
+        expected = f"Bearer {PIPER_TTS_TOKEN}"
+        if not hmac.compare_digest(supplied, expected):
+            self.send_json(401, {"ok": False, "message": "unauthorized"})
+            return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > 32 * 1024:
                 self.send_json(413, {"ok": False, "message": "invalid_request_size"})
                 return
             payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict):
+                self.send_json(400, {"ok": False, "message": "invalid_json"})
+                return
+            language = str(payload.get("language", "fa-IR"))
+            voice_id = str(payload.get("voice_id", "farast-fa-male-v1"))
+            if language != "fa-IR" or voice_id != "farast-fa-male-v1":
+                self.send_json(400, {"ok": False, "message": "unsupported_voice"})
+                return
             text = str(payload.get("text", "")).strip()
             if not text or len(text) > MAX_TEXT_LENGTH:
                 self.send_json(422, {"ok": False, "message": "invalid_text"})

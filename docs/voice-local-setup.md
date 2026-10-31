@@ -25,7 +25,7 @@ FARAST_AI_GATEWAY_TOKEN=replace-with-a-private-local-token
 FARAST_AI_GATEWAY_MODEL=qwen3:4b
 ```
 
-اگر Ollama یا مدل دیگری روی میزبان جداگانه اجرا می‌شود، به‌جای loopback از نام DNS خصوصی یا IP خصوصی همان میزبان استفاده کن. آدرس عمومی اینترنتی پذیرفته نمی‌شود. درگاه باید Bearer token را بپذیرد و streaming را فعال کند.
+اگر Ollama یا مدل دیگری روی میزبان جداگانه اجرا می‌شود، به‌جای loopback از نام DNS خصوصی یا IP خصوصی همان میزبان استفاده کن. درگاه باید Bearer token را بپذیرد و streaming را فعال کند. آدرس خصوصی فقط وقتی از Laravel قابل استفاده است که میزبان Laravel واقعاً به آن شبکه دسترسی داشته باشد.
 
 ## ۲) تشخیص گفتار زندهٔ فارسی
 
@@ -45,6 +45,21 @@ FARAST_AI_GATEWAY_MODEL=qwen3:4b
 **محیط sidecar تشخیص گفتار**
 - مدل فارسی باید در `SHERPA_MODEL_DIR` وجود داشته باشد؛ دانلودکنندهٔ پروژه فایل‌ها را با SHA-256 بررسی می‌کند.
 - پورت پیش‌فرض sidecar برابر `6006` است.
+- این sidecar را فقط روی loopback یا شبکهٔ خصوصی اجرا کن؛ پورت `6006` نباید مستقیماً از اینترنت قابل دسترسی باشد.
+
+برای نصب و دریافت مدل روی **سرور** (نه مرورگر کاربر):
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r voice-stream/sherpa-sidecar/requirements.txt
+export SHERPA_MODEL_DIR=/opt/farast/models/sherpa
+python voice-stream/sherpa-sidecar/download_model.py
+SHERPA_HOST=127.0.0.1 SHERPA_PORT=6006 SHERPA_MODEL_DIR=/opt/farast/models/sherpa \
+  python voice-stream/sherpa-sidecar/server.py
+```
+
+مدل فعلی فارسی، نسخهٔ int8 جریانی است. دریافت فایل‌ها یک‌بار روی سرور انجام می‌شود؛ فایل‌ها را در فضای پایدار نگه دار تا پس از راه‌اندازی مجدد دانلود نشوند.
 
 رکورد موتور `sherpa-onnx` نیز باید در `voice_provider_accounts` فعال و سالم باشد. پس از فعال‌کردن `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true`، رکورد Sherpa را بساز یا به‌روزرسانی کن:
 
@@ -61,13 +76,32 @@ php artisan config:cache
 
 ## ۳) صدای خروجی فارسی
 
-برای صدای خروجی، سرویس خصوصی Piper باید در دسترس باشد:
+برای صدای خروجی، sidecar خصوصی Piper باید در دسترس باشد. مدل فارسی Mana حدود ۶۴ مگابایت است و روی **سرور** ذخیره و اجرا می‌شود.
 
-- `FARAST_VOICE_TTS_URL`: مسیر خصوصی `/v1/synthesize` سرویس Piper.
-- `FARAST_VOICE_TTS_TOKEN`: توکن سرویس، اگر endpoint با Bearer محافظت شده باشد.
-- `FARAST_VOICE_TTS_VOICE_ID`: به‌طور پیش‌فرض `farast-fa-male-v1`.
+در محیط sidecar:
+- `PIPER_MODEL_DIR`: مسیر پایدار مدل.
+- `PIPER_TTS_TOKEN`: یک راز تصادفی طولانی؛ endpoint تولید صدا بدون Bearer token درخواست را نمی‌پذیرد.
+- `PIPER_HOST` و `PIPER_PORT`: به‌طور پیش‌فرض `127.0.0.1:7007`.
 
-اگر سرویس TTS آماده نباشد، متن پاسخ باید همچنان قابل‌مشاهده بماند و خطای صدا جداگانه گزارش شود.
+نصب و اجرای نمونه روی همان میزبان:
+
+```bash
+pip install -r voice-stream/piper-sidecar/requirements.txt
+export PIPER_MODEL_DIR=/opt/farast/models/piper
+python voice-stream/piper-sidecar/download_model.py
+export PIPER_TTS_TOKEN='یک-راز-تصادفی-طولانی'
+PIPER_HOST=127.0.0.1 PIPER_PORT=7007 PIPER_MODEL_DIR=/opt/farast/models/piper \
+  python voice-stream/piper-sidecar/server.py
+```
+
+در محیط Laravel:
+- `FARAST_VOICE_TTS_URL`: آدرس قابل‌دسترسی از خود سرور Laravel به `/v1/synthesize`.
+- `FARAST_VOICE_TTS_TOKEN`: دقیقاً همان مقدار `PIPER_TTS_TOKEN`.
+- `FARAST_VOICE_TTS_VOICE_ID`: شناسهٔ ثابت `farast-fa-male-v1`.
+
+پورت Piper را مستقیم روی اینترنت باز نکن؛ آن را روی loopback یا شبکهٔ خصوصی نگه دار. اگر دو سرویس روی میزبان‌های جدا هستند، باید پیش از تنظیم Laravel مسیر شبکهٔ خصوصی بین آن‌ها برقرار باشد. در حالت خودمیزبان، Laravel آدرس عمومی را نمی‌پذیرد و در صورت نبود توکن، اصلاً درخواست تولید صدا ارسال نمی‌کند.
+
+اگر سرویس TTS آماده نباشد، متن پاسخ همچنان قابل‌مشاهده می‌ماند و خطای صدا جداگانه گزارش می‌شود.
 
 ## ۴) بررسی آمادگی قبل از تست
 

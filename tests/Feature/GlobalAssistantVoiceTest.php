@@ -252,6 +252,51 @@ class GlobalAssistantVoiceTest extends TestCase
         }
     }
 
+    public function test_local_only_synthesis_requires_a_server_side_piper_token(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+        Http::fake();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/speak', ['text' => 'سلام']);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonFragment(['message' => 'توکن موتور صدای خودمیزبان تنظیم نشده است؛ FARAST_VOICE_TTS_TOKEN باید با PIPER_TTS_TOKEN یکسان باشد. هیچ درخواست بدون احراز هویت ارسال نشد.']);
+        Http::assertNothingSent();
+    }
+
+    public function test_local_only_synthesis_authenticates_to_the_private_piper_service(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => 'piper-test-token',
+            'services.voice_tts.voice_id' => 'farast-fa-male-v1',
+        ]);
+        Http::fake([
+            'http://127.0.0.1:7007/v1/synthesize' => Http::response('fake-wav-bytes', 200, [
+                'Content-Type' => 'audio/wav',
+                'X-Farast-Voice-Id' => 'farast-fa-male-v1',
+                'X-Farast-TTS-Provider' => 'piper-mana-local',
+            ]),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/speak', ['text' => 'سلام']);
+
+        $response->assertOk()->assertHeader('Content-Type', 'audio/wav');
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'http://127.0.0.1:7007/v1/synthesize'
+            && $request->hasHeader('Authorization', 'Bearer piper-test-token')
+            && ($request->data()['voice_id'] ?? null) === 'farast-fa-male-v1'
+        );
+    }
+
     public function test_assistant_synthesis_returns_the_upstream_audio_binary_with_its_content_type(): void
     {
         config([
@@ -319,6 +364,41 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('server_tts_token_configured', true);
         $this->assertStringNotContainsString('asr-secret-never-return', $response->getContent());
         $this->assertStringNotContainsString('tts-secret-never-return', $response->getContent());
+    }
+
+    public function test_local_only_status_does_not_advertise_batch_asr_or_public_unauthenticated_tts(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_asr.url' => 'https://old-asr.example.test/v1/transcribe',
+            'services.voice_asr.token' => 'old-asr-token',
+            'services.voice_tts.url' => 'https://public-tts.example.com/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('server_stt', false)
+            ->assertJsonPath('server_tts', false)
+            ->assertJsonPath('server_tts_token_configured', false)
+            ->assertJsonFragment(['server_tts_message' => 'برای صدای خودمیزبان این تنظیمات لازم است: آدرس خصوصی برای FARAST_VOICE_TTS_URL، FARAST_VOICE_TTS_TOKEN. هیچ سرویس عمومی فراخوانی نمی‌شود.']);
+    }
+
+    public function test_local_only_status_marks_private_authenticated_piper_as_ready(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => 'piper-test-token',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('server_tts', true)
+            ->assertJsonPath('server_tts_token_configured', true)
+            ->assertJsonPath('server_tts_message', '');
     }
 
     public function test_local_only_chat_returns_actionable_missing_gateway_configuration(): void

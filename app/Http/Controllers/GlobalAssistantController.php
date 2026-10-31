@@ -18,6 +18,20 @@ class GlobalAssistantController extends Controller
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
         $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
         $chatGatewayReady = ! $localOnly || ($gatewayPrivate && $gatewayToken !== '');
+        $ttsUrl = trim((string) config('services.voice_tts.url', ''));
+        $ttsToken = trim((string) config('services.voice_tts.token', ''));
+        $ttsPrivate = $ttsUrl !== '' && $this->isPrivateServiceUrl($ttsUrl);
+        $serverTtsReady = $localOnly
+            ? ($ttsPrivate && $ttsToken !== '')
+            : ($ttsUrl !== '');
+        $serverTtsMessage = '';
+        if ($localOnly && ! $serverTtsReady) {
+            $missingTts = [];
+            if ($ttsUrl === '') $missingTts[] = 'FARAST_VOICE_TTS_URL';
+            elseif (! $ttsPrivate) $missingTts[] = 'آدرس خصوصی برای FARAST_VOICE_TTS_URL';
+            if ($ttsToken === '') $missingTts[] = 'FARAST_VOICE_TTS_TOKEN';
+            $serverTtsMessage = 'برای صدای خودمیزبان این تنظیمات لازم است: '.implode('، ', $missingTts).'. هیچ سرویس عمومی فراخوانی نمی‌شود.';
+        }
         $chatGatewayMessage = '';
         if ($localOnly && ! $chatGatewayReady) {
             $missing = [];
@@ -32,11 +46,12 @@ class GlobalAssistantController extends Controller
             'local_only' => $localOnly,
             'chat_gateway_ready' => $chatGatewayReady,
             'chat_gateway_message' => $chatGatewayMessage,
-            'server_stt' => filled(config('services.voice_asr.url')),
-            'server_tts' => filled(config('services.voice_tts.url')),
+            'server_stt' => ! $localOnly && filled(config('services.voice_asr.url')),
+            'server_tts' => $serverTtsReady,
+            'server_tts_message' => $serverTtsMessage,
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
             'server_stt_token_configured' => filled(config('services.voice_asr.token')),
-            'server_tts_token_configured' => filled(config('services.voice_tts.token')),
+            'server_tts_token_configured' => $ttsToken !== '',
             'browser_stt' => false,
         ], 200, ['Cache-Control' => 'no-store']);
     }
@@ -117,14 +132,19 @@ class GlobalAssistantController extends Controller
         if ($url === '') {
             return response()->json(['ok' => false, 'message' => 'موتور صدای ثابت خودمیزبان هنوز تنظیم نشده است.'], 503, ['Cache-Control' => 'no-store']);
         }
+        $token = trim((string) config('services.voice_tts.token', ''));
+        if ((bool) config('services.voice.local_only', false) && $token === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'توکن موتور صدای خودمیزبان تنظیم نشده است؛ FARAST_VOICE_TTS_TOKEN باید با PIPER_TTS_TOKEN یکسان باشد. هیچ درخواست بدون احراز هویت ارسال نشد.',
+            ], 503, ['Cache-Control' => 'no-store']);
+        }
+
         try {
-            // The free Render service can cold-start; keep a bounded connection timeout
-            // separate from the longer inference/read timeout so the browser does not
-            // fail before the upstream has a chance to wake up.
+            // Keep a bounded connection timeout separate from the longer inference/read timeout.
             $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')
                 ->connectTimeout(10)
                 ->timeout(120);
-            $token = trim((string) config('services.voice_tts.token', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->post($url, [
                 'text' => $data['text'],
@@ -134,7 +154,7 @@ class GlobalAssistantController extends Controller
             if (! $response->successful()) {
                 Log::warning('farast.global_assistant_tts_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
                 $message = match ($response->status()) {
-                    401, 403 => 'احراز هویت موتور صدای ثابت ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
+                    401, 403 => 'احراز هویت موتور صدای ثابت ناموفق است؛ FARAST_VOICE_TTS_TOKEN در Laravel باید با PIPER_TTS_TOKEN در سرویس Piper یکسان باشد.',
                     429 => 'سرویس تولید صدا فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
                     default => 'موتور صدای ثابت پاسخ معتبر نداد (HTTP '.$response->status().').',
                 };

@@ -36,6 +36,8 @@ jobs:
       - run: pip install --no-cache-dir -r voice-stream/piper-sidecar/requirements.txt
       - run: python voice-stream/piper-sidecar/download_model.py
       - run: python voice-stream/piper-sidecar/smoke_test.py
+        env:
+          PIPER_TTS_TOKEN: ci-only-piper-test-token
       - run: node --check public/js/farast-voice.js
       - run: php artisan key:generate
       - run: touch database/database.sqlite
