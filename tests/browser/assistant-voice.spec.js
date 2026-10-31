@@ -2,50 +2,44 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-test('closing the global voice assistant stops microphone capture and discards pending audio', async ({ page }) => {
+test('closing the global voice assistant closes its live WebSocket and microphone', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
-  await page.setContent(`<!doctype html>
-<html lang="fa" dir="rtl">
-<head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head>
-<body data-assistant-auth="1">
+  await page.setContent(\`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__stoppedTracks = 0;
-  window.__transcribeCalled = false;
-  Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: undefined });
-  Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: undefined });
-  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
-    getUserMedia: async () => ({ getTracks: () => [{ stop() { window.__stoppedTracks++; } }] })
-  }});
-  window.MediaRecorder = class {
-    static isTypeSupported() { return true; }
-    constructor(stream, options = {}) { this.stream = stream; this.mimeType = options.mimeType || 'audio/webm'; this.state = 'inactive'; window.__recorder = this; }
-    start() { this.state = 'recording'; }
-    stop() {
-      this.state = 'inactive';
-      this.ondataavailable?.({ data: new Blob(['pending-audio'], { type: this.mimeType }) });
-      this.onstop?.();
-    }
+  window.__wsInstances = [];
+  class FakeWebSocket extends EventTarget {
+    constructor(url) { super(); this.url=url; this.readyState=0; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
+    send(data) { if(typeof data==='string'&&JSON.parse(data).type==='start')queueMicrotask(()=>this.onmessage?.({data:JSON.stringify({type:'ready'})})); }
+    close() { this.readyState=3; }
+  }
+  FakeWebSocket.OPEN=1; window.WebSocket=FakeWebSocket;
+  window.AudioContext=class {
+    constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
+    createMediaStreamSource(){return {connect(){},disconnect(){}};}
+    createScriptProcessor(){return {onaudioprocess:null,connect(){},disconnect(){}};}
+    resume(){return Promise.resolve();}
+    close(){this.state='closed';return Promise.resolve();}
   };
-  window.fetch = async (url) => {
-    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url === '/assistant/transcribe') { window.__transcribeCalled = true; return new Response(JSON.stringify({ ok: true, text: 'این متن نباید ارسال شود' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
-    return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  window.AudioWorkletNode=undefined;
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){window.__stoppedTracks++;}}]})}});
+  window.fetch=async(url)=>{
+    if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'ws://127.0.0.1:8010'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
   };
-</script>
-</body></html>`);
-  await page.addScriptTag({ content: assistantJs });
+</script></body></html>\`);
+  await page.addScriptTag({content:assistantJs});
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-
-  await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBe('recording');
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>window.__stoppedTracks)).toBe(0);
   await page.keyboard.press('Escape');
   await expect(page.locator('.farast-assistant-panel')).toBeHidden();
-  await expect.poll(async () => page.evaluate(() => window.__stoppedTracks)).toBeGreaterThan(0);
-  await expect.poll(async () => page.evaluate(() => window.__transcribeCalled)).toBe(false);
-});
-
-test('gateway-unavailable fallback uses the configured server recorder, never browser speech recognition', async ({ page }) => {
+  await expect.poll(()=>page.evaluate(()=>window.__stoppedTracks)).toBe(1);
+  expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(3);
+});\n\ntest('gateway-unavailable live assistant keeps the microphone closed instead of batch recording', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -79,9 +73,10 @@ test('gateway-unavailable fallback uses the configured server recorder, never br
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
 
-  await expect.poll(async () => page.evaluate(() => window.__recorder?.state)).toBe('recording');
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
   expect(await page.evaluate(() => window.__recognitionStarts)).toBe(0);
-  expect(await page.evaluate(() => window.__micRequests)).toBe(1);
+  expect(await page.evaluate(() => window.__micRequests)).toBe(0);
+  expect(await page.evaluate(() => window.__recorder)).toBeUndefined();
 });
 
 test('microphone permission failure switches to text without a second audio attempt', async ({ page }) => {
@@ -90,14 +85,16 @@ test('microphone permission failure switches to text without a second audio atte
 <script>
   window.__micRequests = 0;
   window.__recognitionStarts = 0;
-  window.WebSocket = undefined;
-  window.AudioContext = undefined;
+  window.WebSocket = class {};
+  window.AudioContext = class { createMediaStreamSource(){return {connect(){},disconnect(){}};} createScriptProcessor(){return {connect(){},disconnect(){}};} close(){return Promise.resolve();} };
   Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: undefined });
   Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: undefined });
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
     getUserMedia: async () => { window.__micRequests++; const error = new Error('Not available'); error.name = 'NotAllowedError'; throw error; }
   }});
   window.fetch = async (url) => {
+    if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/stream-token') return new Response(JSON.stringify({ ok: true, token: 'mock-token', websocket_url: 'ws://127.0.0.1:8010' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, server_stt: true, server_tts: true, server_stt_token_configured: true, server_tts_token_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
