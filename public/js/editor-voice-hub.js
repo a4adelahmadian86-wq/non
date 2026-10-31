@@ -285,9 +285,10 @@ async function startCloudStream(ctx, csrf, data) {
       ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive', sampleRate: 48000 });
       await ac.audioWorklet.addModule('/js/farast-voice-worklet.js');
       const src = ac.createMediaStreamSource(media);
-      worklet = new AudioWorkletNode(ac, 'farast-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 0 });
+      worklet = new AudioWorkletNode(ac, 'farast-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
       worklet.port.onmessage = e => { if (ws.readyState === WebSocket.OPEN && !closed) { const b = new Uint8Array(e.data); if (b.byteLength > 24000) { for (let i = 0; i < b.byteLength; i += 24000) ws.send(b.slice(i, Math.min(i + 24000, b.byteLength))); } else ws.send(b); } };
       src.connect(worklet);
+      worklet.connect(ac.destination);
       if (ac.state === 'suspended') await ac.resume();
       ctx.onStatus('در حال گوش دادن (ابر)…'); ctx.onLive(true);
     } catch (e) { ctx.onError(e.message || 'میکروفن قابل شروع نیست.'); cleanup(); }
