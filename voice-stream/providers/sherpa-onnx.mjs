@@ -3,7 +3,7 @@ import WebSocket from 'ws';
 const MAX_PENDING_CHUNKS = 80;
 const MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
 
-function toFloat32Pcm16(buffer) {
+export function pcm16ToFloat32Buffer(buffer) {
   const samples = Math.floor(buffer.length / 2);
   const output = Buffer.allocUnsafe(samples * 4);
   for (let i = 0; i < samples; i += 1) {
@@ -52,7 +52,6 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
   let closed = false;
   let ready = false;
   let failed = false;
-  let lastSegment = null;
   const pending = [];
 
   const fail = error => {
@@ -83,14 +82,12 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
       const text = String(message?.text || '').trim();
       if (!text) return;
 
-      const segment = Number.isFinite(Number(message.segment)) ? Number(message.segment) : null;
       const final = message.is_final === true || message.is_eof === true;
       if (final) {
         handlers.final?.(text);
       } else {
         handlers.interim?.(text);
       }
-      if (segment !== null) lastSegment = segment;
     } catch (error) {
       fail(error);
     }
@@ -106,7 +103,7 @@ export function createSherpaOnnxStream(_config, locale, handlers = {}) {
   return {
     write(buffer) {
       if (closed || failed || !buffer?.length) return;
-      const chunk = toFloat32Pcm16(buffer);
+      const chunk = pcm16ToFloat32Buffer(buffer);
       if (!chunk.length) return;
 
       if (ready && socket.readyState === WebSocket.OPEN) {
