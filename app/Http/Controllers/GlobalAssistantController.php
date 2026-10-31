@@ -30,6 +30,10 @@ class GlobalAssistantController extends Controller
      */
     public function transcribe(Request $request)
     {
+        if (filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+            return response()->json(['ok' => false, 'message' => 'در حالت گفتار محلی، رونویسی دسته‌ای غیرفعال است؛ فقط جریان زندهٔ موتور محلی سرور مجاز است.'], 503, ['Cache-Control' => 'no-store']);
+        }
+
         $data = $request->validate([
             'audio' => ['required', 'file', 'max:15360', 'mimes:webm,ogg,wav,mp3,m4a,mp4'],
             'locale' => ['nullable', 'string', 'in:fa-IR,en-US,ar-SA'],
