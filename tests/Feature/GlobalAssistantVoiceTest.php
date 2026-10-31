@@ -64,6 +64,43 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('asr-token', $response->getContent());
     }
 
+    public function test_local_live_gateway_status_identifies_server_only_persian_mode(): void
+    {
+        $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+        putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
+        $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        config([
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.gateway_secret' => 'gateway-secret',
+        ]);
+
+        $router = \\Mockery::mock(VoiceProviderRouter::class);
+        $account = new VoiceProviderAccount();
+        $account->setAttribute('id', 321);
+        $account->setAttribute('provider', 'sherpa-onnx');
+        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn($account);
+        $this->app->instance(VoiceProviderRouter::class, $router);
+
+        try {
+            $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+
+            $response->assertOk()
+                ->assertJsonPath('mode', 'gateway')
+                ->assertJsonPath('self_hosted', true)
+                ->assertJsonPath('locale', 'fa-IR');
+        } finally {
+            if ($original === false) {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+                unset($_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'], $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED']);
+            } else {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED='.$original);
+                $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+                $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+            }
+        }
+    }
+
     public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
     {
         config([
