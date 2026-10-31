@@ -105,13 +105,3 @@ test('rejects non-private WebSocket endpoints', () => {
     else process.env.SHERPA_ONNX_WS_URL = original;
   }
 });
-test('rejects non-private WebSocket endpoints', () => {
-  const original = process.env.SHERPA_ONNX_WS_URL;
-  process.env.SHERPA_ONNX_WS_URL = 'ws://example.com:6006';
-  try {
-    assert.throws(() => createSherpaOnnxStream({}, 'fa-IR'), /must_be_private/);
-  } finally {
-    if (original === undefined) delete process.env.SHERPA_ONNX_WS_URL;
-    else process.env.SHERPA_ONNX_WS_URL = original;
-  }
-});
