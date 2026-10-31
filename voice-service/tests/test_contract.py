@@ -187,3 +187,14 @@ def test_live_websocket_transcribes_local_pcm_and_retries_usage_settlement(monke
     assert len(usage_calls) == 2
     assert usage_calls[-1]["reservation_id"] == "reservation-live-ws"
     assert usage_calls[-1]["success"] is True
+
+def test_live_stream_token_nonce_is_single_use():
+    payload = {
+        "uid": 7,
+        "locale": "fa-IR",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 120,
+        "nonce": "single-use-live-session",
+    }
+    assert main.consume_stream_nonce(payload) is True
+    assert main.consume_stream_nonce(payload) is False
