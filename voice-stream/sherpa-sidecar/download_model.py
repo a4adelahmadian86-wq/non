@@ -42,6 +42,7 @@ def main() -> None:
                 filename=filename,
                 revision=REVISION,
                 local_dir=str(MODEL_DIR),
+                force_download=True,
             )
         )
         actual = sha256(downloaded)
