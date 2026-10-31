@@ -5,6 +5,7 @@ return [
     'ai_gateway' => [
         'url' => env('FARAST_AI_GATEWAY_URL', ''),
         'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
+        'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
     ],
 
     'gemini' => [
