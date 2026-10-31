@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-test('voice assistant does not use batch recording when the live gateway is missing', async ({ page }) => {
+test('voice assistant does not start batch recording when server speech services are not configured', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -580,4 +580,44 @@ test('assistant animations are disabled when reduced motion is requested', async
   expect(motion.orbAnimation).toBe('none');
   expect(motion.micAnimation).toBe('none');
   expect(motion.micTransition).toBe('0s');
+});
+
+
+test('approved push-to-talk fallback records audio, transcribes it, and sends the recognized text', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.WebSocket = undefined;
+  window.AudioContext = undefined;
+  window.__micCalls = 0;
+  window.__stoppedTracks = 0;
+  window.__transcribeFile = null;
+  window.__chatMessage = null;
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => { window.__micCalls++; return { getTracks: () => [{ stop() { window.__stoppedTracks++; } }] }; } } });
+  class FakeMediaRecorder {
+    constructor(stream, options) { this.stream=stream; this.mimeType=options?.mimeType||'audio/webm'; this.state='inactive'; window.__recorder=this; }
+    start() { this.state='recording'; }
+    stop() { this.state='inactive'; this.ondataavailable?.({data:new Blob(['recorded-audio'],{type:this.mimeType})}); this.onstop?.(); }
+  }
+  FakeMediaRecorder.isTypeSupported = (type) => type.indexOf('audio/webm') === 0;
+  window.MediaRecorder = FakeMediaRecorder;
+  window.fetch = async (url, options={}) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ok:true,messages:[]}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/editor/voice/status') return new Response(JSON.stringify({ok:true,mode:'none'}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ok:true,local_only:false,server_stt:true,server_stt_token_configured:true,server_tts:true,server_tts_token_configured:true}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/assistant/transcribe') { window.__transcribeFile=options.body.get('audio'); return new Response(JSON.stringify({ok:true,text:'سلام فراست'}), {status:200,headers:{'Content-Type':'application/json'}}); }
+    if (url === '/assistant/chat/stream') { window.__chatMessage=JSON.parse(options.body).message; return new Response(JSON.stringify({reply:'سلام، صدایت رسید.'}), {status:200,headers:{'Content-Type':'application/json'}}); }
+    if (url === '/assistant/speak') return new Response(JSON.stringify({message:'mock TTS unavailable'}), {status:503,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({ok:false}), {status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect(page.locator('.farast-voice-mic')).toContainText('پایان ضبط');
+  expect(await page.evaluate(() => window.__micCalls)).toBe(1);
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(() => page.evaluate(() => window.__chatMessage)).toBe('سلام فراست');
+  expect(await page.evaluate(() => window.__transcribeFile?.size > 0)).toBe(true);
+  expect(await page.evaluate(() => window.__stoppedTracks)).toBe(1);
 });
