@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\VoiceProviderAccount;
+use App\Models\FarastUsageReservation;
+use App\Models\FarastUsageEvent;
+use App\Services\CommerceAuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
