@@ -6,12 +6,12 @@ import urllib.request
 
 os.environ.setdefault("PIPER_TTS_TOKEN", "ci-only-piper-test-token")
 
-from server import Handler, ThreadingHTTPServer
+from server import Handler, PIPER_TTS_TOKEN, ThreadingHTTPServer
 
-server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-thread = threading.Thread(target=server.serve_forever, daemon=True)
+http_server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+thread = threading.Thread(target=http_server.serve_forever, daemon=True)
 thread.start()
-base = f"http://127.0.0.1:{server.server_port}"
+base = f"http://127.0.0.1:{http_server.server_port}"
 
 try:
     with urllib.request.urlopen(f"{base}/health", timeout=10) as response:
@@ -41,7 +41,7 @@ try:
         }).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {server.PIPER_TTS_TOKEN}",
+            "Authorization": f"Bearer {PIPER_TTS_TOKEN}",
         },
         method="POST",
     )
@@ -56,5 +56,5 @@ try:
 
     print(f"Piper Persian TTS HTTP smoke passed: {len(audio)} WAV bytes")
 finally:
-    server.shutdown()
-    server.server_close()
+    http_server.shutdown()
+    http_server.server_close()
