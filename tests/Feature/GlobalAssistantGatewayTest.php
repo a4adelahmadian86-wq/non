@@ -113,7 +113,7 @@ class GlobalAssistantGatewayTest extends TestCase
             'services.ai_gateway.token' => 'gateway-test-token',
         ]);
         $user = User::factory()->create();
-        $sse = "data: {\\"choices\\":[{\\"delta\\":{\\"content\\":\\"سلام\\ "}}]}\\n\\ndata: [DONE]\\n\\n";
+        $sse = "data: {\"choices\":[{\"delta\":{\"content\":\"سلام\"}}]}\n\ndata: [DONE]\n\n";
 
         Http::fake([
             'https://gateway.example/v1/chat/completions' => Http::response($sse, 200, ['Content-Type' => 'text/event-stream']),
