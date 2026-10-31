@@ -52,6 +52,7 @@ class VoiceSecurityTest extends TestCase
     {
         Config::set('services.voice_asr.url', '');
         Config::set('services.voice_asr.token', '');
+        Config::set('services.voice_stream.mode', 'router');
         Config::set('services.voice_stream.url', 'wss://voice.example.test');
         Config::set('services.voice_stream.gateway_secret', 'test-gateway-secret');
         Config::set('services.google_speech.enabled', false);
