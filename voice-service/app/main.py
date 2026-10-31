@@ -172,10 +172,10 @@ async def transcribe(
 
 @app.post("/v1/synthesize", dependencies=[Depends(authorize)])
 def synthesize(request: SynthesizeRequest) -> Response:
-    if tts_model is None:
-        raise HTTPException(status_code=503, detail="Fixed Persian TTS model is not ready; inspect service logs")
     if request.language != "fa-IR" or request.voice_id != VOICE_ID:
         raise HTTPException(status_code=400, detail="Only the configured fixed Persian voice is supported")
+    if tts_model is None:
+        raise HTTPException(status_code=503, detail="Fixed Persian TTS model is not ready; inspect service logs")
     text = request.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Text is empty")
