@@ -318,7 +318,7 @@ test('gateway connection startup failure does not auto-start browser recognition
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-  await expect(page.locator('[data-fa-voice-title]')).toContainText('میکروفون خاموش');
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('گفت‌وگوی متنی');
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
