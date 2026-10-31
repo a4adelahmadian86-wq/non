@@ -10,7 +10,7 @@ from piper import PiperVoice
 
 HOST = os.getenv("PIPER_HOST", "0.0.0.0")
 PORT = int(os.getenv("PIPER_PORT", "7007"))
-MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/models"))
+MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")))
 MODEL_PATH = MODEL_DIR / "fa_IR-mana-medium.onnx"
 MAX_TEXT_LENGTH = 6000
 
