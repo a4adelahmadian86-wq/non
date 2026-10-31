@@ -326,7 +326,7 @@ class GlobalAssistantController extends Controller
 
         $targets = [];
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
-            $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
+            $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
         }
         if (! $localVoiceOnly && $groqKey !== '') {
             $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq'];
