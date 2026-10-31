@@ -42,6 +42,9 @@ class VoiceProviderRouter
 
     public function classRank(VoiceProviderAccount $account): int
     {
+        // Prefer the self-hosted provider and never silently send local audio to a cloud provider.
+        if (strtolower($account->provider) === 'sherpa-onnx') return 0;
+
         return match ($account->billing_mode) {
             'trial' => $this->trialRank($account),
             'monthly_free' => 20,
