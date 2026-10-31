@@ -19,7 +19,6 @@ test('voice assistant does not use batch recording when the live gateway is miss
     return new Response(JSON.stringify({ ok: false }), { status: 404 });
   };
 </script></body></html>`);
-  await page.addStyleTag({ content: assistantCss });
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
@@ -451,6 +450,7 @@ test('assistant keeps the conversation composer visible and shows the private ga
     return new Response(JSON.stringify({ok:false}), {status:404,headers:{'Content-Type':'application/json'}});
   };
 </script></body></html>`);
+  await page.addStyleTag({ content: assistantCss });
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await expect(page.locator('.farast-assistant-form')).toBeVisible();
