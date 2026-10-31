@@ -70,7 +70,7 @@ test('assistant avoids browser speech and keeps text chat available when gateway
   window.fetch = async (url, options = {}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"سلام، در خدمتم."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
-    if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
+    if (url === '/assistant/speak') return new Response(JSON.stringify({ ok: false, message: 'TTS unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
 </script></body></html>`);
@@ -83,6 +83,7 @@ test('assistant avoids browser speech and keeps text chat available when gateway
   await page.locator('.farast-assistant-send').click();
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length)).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+  await expect(page.locator('[data-fa-status]')).toContainText('TTS unavailable');
   await expect.poll(async () => page.evaluate(() => window.__speechSynthesisCalls)).toBe(0);
 });
 
