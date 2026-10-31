@@ -372,7 +372,7 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.voice.local_only' => true,
             'services.voice_asr.url' => 'https://old-asr.example.test/v1/transcribe',
             'services.voice_asr.token' => 'old-asr-token',
-            'services.voice_tts.url' => 'https://public-tts.example.test/v1/synthesize',
+            'services.voice_tts.url' => 'https://public-tts.example.com/v1/synthesize',
             'services.voice_tts.token' => '',
         ]);
 
