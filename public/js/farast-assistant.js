@@ -500,14 +500,14 @@
         enableTextFallback('دسترسی میکروفون مجاز نیست؛ می‌توانی همین‌جا با نوشتن پیام ادامه بدهی.');
         return true;
       }
-      // A failed live gateway must not silently start a second recognizer or re-open
-      // the microphone. Keep the mic off and require an explicit retry from the user.
+      // The user explicitly enabled the server-side push-to-talk fallback. Keep the
+      // microphone closed here; the caller checks server readiness before asking again.
       panel.classList.remove('is-listening');
       root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
       voiceTitle.textContent='میکروفون خاموش است';
       voiceCaption.textContent='اتصال گفتار برقرار نشد؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';
-      status.textContent='میکروفون خاموش شد؛ مسیر جایگزین به‌صورت خودکار فعال نمی‌شود.';
-      return true;
+      status.textContent='میکروفون خاموش شد؛ در حال بررسی مسیر ضبط امن سرور هستیم.';
+      return false;
     }
   }
   function finishGatewayTurn(generation){
