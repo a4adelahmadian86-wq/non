@@ -290,7 +290,7 @@ async def live_stream(websocket: WebSocket) -> None:
             usage_reported = True
             try:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0)) as client:
-                    await client.post(
+                    response = await client.post(
                         STREAM_APP_URL + "/editor/voice/stream-usage",
                         json={
                             "token": token,
@@ -302,6 +302,10 @@ async def live_stream(websocket: WebSocket) -> None:
                         },
                         headers={"X-Farast-Voice-Gateway": gateway_signature, "Accept": "application/json"},
                     )
+                    if response.is_success:
+                        usage_reported = True
+                    else:
+                        print(f"LIVE_USAGE_REPORT_REJECTED: status={response.status_code}", flush=True)
             except Exception as exc:
                 print(f"LIVE_USAGE_REPORT_FAILED: {type(exc).__name__}", flush=True)
 
