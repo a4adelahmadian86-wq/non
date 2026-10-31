@@ -126,7 +126,7 @@ class VoiceSecurityTest extends TestCase
         $user = User::factory()->create();
         FarastUsageReservation::create([
             'reservation_id' => 'reservation-live-test',
-            'idempotency_key' => 'voice-live-test',
+            'idempotency_key' => 'voice-live-'.$user->id.'-expired-live-session',
             'actor_id' => $user->id,
             'capability' => 'speech.transcription',
             'quantity' => 1,
