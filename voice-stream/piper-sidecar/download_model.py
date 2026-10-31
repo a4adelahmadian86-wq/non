@@ -4,7 +4,7 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
-MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/models"))
+MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")) )
 REVISION = "cafdcbdb455e4a9ab2ef18dccb3e21dce6a25ee9"
 REPOSITORY = "MahtaFetrat/Mana-Persian-Piper"
 FILES = {
