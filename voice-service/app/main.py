@@ -8,6 +8,7 @@ import os
 import secrets
 import struct
 import tempfile
+import time
 from pathlib import Path
 from threading import Lock
 from typing import Optional
@@ -211,7 +212,11 @@ def verify_stream_token(token: str) -> Optional[dict]:
         return None
     if payload.get("locale") not in {"fa-IR", "en-US", "ar-SA"}:
         return None
-    if int(payload.get("exp", 0)) < int(__import__("time").time()):
+    try:
+        expires_at = int(payload.get("exp", 0))
+    except (TypeError, ValueError):
+        return None
+    if expires_at < int(time.time()):
         return None
     return payload
 
@@ -234,11 +239,15 @@ def _transcribe_pcm_chunk(raw: bytes, language: str) -> str:
         return " ".join(segment.text.strip() for segment in segments).strip()
 
 
+def is_allowed_stream_origin(origin: str) -> bool:
+    return bool(origin and STREAM_ORIGINS and origin in STREAM_ORIGINS)
+
+
 @app.websocket("/v1/stream")
 async def live_stream(websocket: WebSocket) -> None:
     """Receive 16 kHz PCM frames and return local Whisper chunk transcripts."""
     origin = str(websocket.headers.get("origin", "")).strip()
-    if not origin or not STREAM_ORIGINS or origin not in STREAM_ORIGINS:
+    if not is_allowed_stream_origin(origin):
         await websocket.close(code=1008)
         return
     await websocket.accept()
