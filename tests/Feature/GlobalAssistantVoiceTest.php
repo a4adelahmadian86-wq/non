@@ -163,6 +163,7 @@ class GlobalAssistantVoiceTest extends TestCase
         config([
             'services.ai_gateway.url' => 'https://private-ai.test',
             'services.ai_gateway.token' => 'private-ai-token',
+            'services.ai_gateway.model' => 'qwen3:4b',
         ]);
         Http::fake([
             'https://private-ai.test/*' => Http::response(['error' => 'offline'], 503),
@@ -175,7 +176,10 @@ class GlobalAssistantVoiceTest extends TestCase
 
             $response->assertStatus(503)->assertJsonPath('ok', false);
             Http::assertSentCount(1);
-            Http::assertSent(fn (ClientRequest $request) => $request->url() === 'https://private-ai.test/v1/chat/completions');
+            Http::assertSent(fn (ClientRequest $request) =>
+                $request->url() === 'https://private-ai.test/v1/chat/completions'
+                && ($request->data()['model'] ?? null) === 'qwen3:4b'
+            );
         } finally {
             if ($original === false) {
                 putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
