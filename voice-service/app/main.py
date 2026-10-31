@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hmac
+import hashlib
 import io
 import json
 import os
@@ -14,6 +15,7 @@ from threading import Lock
 from typing import Optional
 
 import soundfile as sf
+import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -22,6 +24,8 @@ APP_NAME = "FARAST Self-hosted Voice"
 API_TOKEN = os.getenv("FARAST_VOICE_TOKEN", "").strip()
 STREAM_APP_KEY = os.getenv("APP_KEY", "").strip()
 STREAM_ORIGINS = {item.strip() for item in os.getenv("VOICE_STREAM_ORIGINS", "").split(",") if item.strip()}
+STREAM_APP_URL = os.getenv("FARAST_APP_URL", "").strip().rstrip("/")
+STREAM_GATEWAY_SECRET = os.getenv("FARAST_VOICE_GATEWAY_SECRET", "").strip()
 ASR_MODEL_NAME = os.getenv("FARAST_ASR_MODEL", "small")
 ASR_DEVICE = os.getenv("FARAST_ASR_DEVICE", "cpu")
 ASR_COMPUTE_TYPE = os.getenv("FARAST_ASR_COMPUTE_TYPE", "int8")
@@ -251,6 +255,12 @@ async def live_stream(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
     await websocket.accept()
+    reservation_id = None
+    usage_reported = False
+    audio_seconds = 0.0
+    input_bytes = 0
+    transcript_count = 0
+    started_at = time.monotonic()
     try:
         start = await asyncio.wait_for(websocket.receive_json(), timeout=10)
         token = str(start.get("token", "")) if isinstance(start, dict) else ""
@@ -258,6 +268,23 @@ async def live_stream(websocket: WebSocket) -> None:
         payload = verify_stream_token(token)
         if not payload or payload.get("locale") != locale:
             await websocket.send_json({"type": "error", "code": "unauthorized"})
+            await websocket.close(code=1008)
+            return
+        if not STREAM_APP_URL or not STREAM_GATEWAY_SECRET:
+            await websocket.send_json({"type": "error", "code": "stream_gateway_not_configured"})
+            await websocket.close(code=1013)
+            return
+        gateway_signature = hmac.new(STREAM_GATEWAY_SECRET.encode(), token.encode(), hashlib.sha256).hexdigest()
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0)) as client:
+            config_response = await client.post(
+                STREAM_APP_URL + "/editor/voice/stream-config",
+                json={"token": token},
+                headers={"X-Farast-Voice-Gateway": gateway_signature, "Accept": "application/json"},
+            )
+        config_data = config_response.json() if config_response.is_success else {}
+        reservation_id = str(config_data.get("reservation_id") or "")
+        if not config_response.is_success or not config_data.get("gateway") or not reservation_id:
+            await websocket.send_json({"type": "error", "code": "voice_quota_unavailable"})
             await websocket.close(code=1008)
             return
         if asr_model is None:
@@ -273,8 +300,30 @@ async def live_stream(websocket: WebSocket) -> None:
         max_chunk_bytes = 16000 * 2 * 5
         silence_limit_bytes = 24000  # 750 ms at 16 kHz, mono, signed 16-bit PCM.
 
+        async def report_usage(success: bool) -> None:
+            nonlocal usage_reported
+            if not reservation_id or usage_reported:
+                return
+            usage_reported = True
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0)) as client:
+                    await client.post(
+                        STREAM_APP_URL + "/editor/voice/stream-usage",
+                        json={
+                            "token": token,
+                            "reservation_id": reservation_id,
+                            "audio_seconds": audio_seconds,
+                            "input_bytes": input_bytes,
+                            "success": bool(success),
+                            "latency_ms": int((time.monotonic() - started_at) * 1000),
+                        },
+                        headers={"X-Farast-Voice-Gateway": gateway_signature, "Accept": "application/json"},
+                    )
+            except Exception as exc:
+                print(f"LIVE_USAGE_REPORT_FAILED: {type(exc).__name__}", flush=True)
+
         async def flush_chunk() -> None:
-            nonlocal buffer, silence_bytes, speech_seen
+            nonlocal buffer, silence_bytes, speech_seen, transcript_count
             raw = bytes(buffer)
             buffer.clear()
             silence_bytes = 0
@@ -288,6 +337,7 @@ async def live_stream(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "provider_error", "provider": "self-hosted-whisper", "code": "local_asr_failed"})
                 return
             if transcript:
+                transcript_count += 1
                 await websocket.send_json({"type": "final", "text": transcript, "provider": "self-hosted-whisper"})
 
         while True:
@@ -301,6 +351,7 @@ async def live_stream(websocket: WebSocket) -> None:
                     continue
                 if isinstance(command, dict) and command.get("type") == "stop":
                     await flush_chunk()
+                    await report_usage(transcript_count > 0)
                     break
                 continue
 
@@ -314,6 +365,8 @@ async def live_stream(websocket: WebSocket) -> None:
             frame = frame[: len(frame) - (len(frame) % 2)]
             if not frame:
                 continue
+            audio_seconds += len(frame) / 32000.0
+            input_bytes += len(frame)
             mean_abs = sum(abs(sample[0]) for sample in struct.iter_unpack("<h", frame)) / max(1, len(frame) // 2)
             if mean_abs >= 420:
                 speech_seen = True
@@ -326,6 +379,7 @@ async def live_stream(websocket: WebSocket) -> None:
             if speech_seen and (silence_bytes >= silence_limit_bytes or len(buffer) >= max_chunk_bytes):
                 await flush_chunk()
 
+        await report_usage(transcript_count > 0)
         await websocket.close(code=1000)
     except WebSocketDisconnect:
         return
