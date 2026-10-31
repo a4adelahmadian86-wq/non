@@ -348,11 +348,9 @@ class GlobalAssistantVoiceTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('mode', 'none')
-            ->assertJsonFragment(['missing' => [
-                'VOICE_STREAM_URL',
-                'VOICE_GATEWAY_SECRET',
-                'موتور Sherpa-ONNX فارسی فعال و سالم (اجرای seeder و بررسی ظرفیت)',
-            ]]);
+            ->assertJsonPath('missing.0', 'VOICE_STREAM_URL')
+            ->assertJsonPath('missing.1', 'VOICE_GATEWAY_SECRET')
+            ->assertJsonPath('missing.2', 'موتور Sherpa-ONNX فارسی فعال و سالم (اجرای seeder و بررسی ظرفیت)');
     }
 
     public function test_local_only_assistant_status_does_not_claim_chat_is_ready_without_a_private_llm_gateway(): void
