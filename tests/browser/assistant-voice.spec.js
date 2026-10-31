@@ -558,3 +558,23 @@ test('stopping the conversation closes the live gateway and releases the microph
   await expect(page.locator('[data-fa-voice-title]')).toContainText('مکالمه متوقف شد');
   await expect(page.locator('[data-fa-status]')).toContainText('گفت‌وگوی پیوسته متوقف شد');
 });
+
+
+test('assistant animations are disabled when reduced motion is requested', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  const assistantCss = fs.readFileSync(path.join(process.cwd(), 'public/css/farast-assistant.css'), 'utf8');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="0"></body></html>`);
+  await page.addStyleTag({ content: assistantCss });
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-assistant-panel').evaluate((panel) => panel.classList.add('is-listening'));
+  const motion = await page.evaluate(() => ({
+    orbAnimation: getComputedStyle(document.querySelector('.farast-voice-orb span')).animationName,
+    micAnimation: getComputedStyle(document.querySelector('.farast-voice-mic')).animationName,
+    micTransition: getComputedStyle(document.querySelector('.farast-voice-mic')).transitionDuration
+  }));
+  expect(motion.orbAnimation).toBe('none');
+  expect(motion.micAnimation).toBe('none');
+  expect(motion.micTransition).toBe('0s');
+});
