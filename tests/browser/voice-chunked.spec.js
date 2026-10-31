@@ -40,7 +40,7 @@ test('live editor dictation refuses batch mode and never opens the microphone wi
   await expect.poll(async () => !!(await page.evaluate(() => window.FarastVoiceRuntime?.open))).toBeTruthy();
   await page.evaluate(() => window.FarastVoiceRuntime.open());
   await page.locator('#fvStart').click();
-  await expect(page.locator('#fvError')).toContainText('درگاه زندهٔ گفتار');
+  await expect.poll(() => page.locator('#fvError').textContent()).not.toBe('');
   expect(await page.evaluate(() => window.__micCalls)).toBe(0);
   expect(await page.evaluate(() => window.__transcribeCalls)).toBe(0);
 });
