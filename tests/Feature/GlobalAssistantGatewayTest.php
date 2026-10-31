@@ -25,11 +25,11 @@ class GlobalAssistantGatewayTest extends TestCase
         Http::fake([
             'https://gateway.example/v1/chat/completions' => Http::response([
                 'id' => 'chatcmpl-assistant-test',
-                'model' => 'gemini-3.8-flash',
+                'model' => 'qwen3.5-32b',
                 'choices' => [[
                     'message' => ['role' => 'assistant', 'content' => 'سلام، من همراه فراست هستم.'],
                 ]],
-            ], 200, ['X-Farast-AI-Provider' => 'gemini']),
+            ], 200, ['X-Farast-AI-Provider' => 'runflare-qwen']),
         ]);
 
         $response = $this->actingAs($user)->postJson('/assistant/chat', ['message' => 'سلام']);
