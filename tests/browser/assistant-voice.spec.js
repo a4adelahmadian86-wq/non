@@ -4,7 +4,7 @@ const path = require('path');
 
 test('voice assistant does not use batch recording when the live gateway is missing', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
-  await page.setContent(\`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.WebSocket = undefined;
   window.AudioContext = undefined;
@@ -18,7 +18,7 @@ test('voice assistant does not use batch recording when the live gateway is miss
     if (url === '/assistant/transcribe') { window.__transcribeCalled = true; return new Response(JSON.stringify({ ok: true, text: 'unexpected' }), { status: 200 }); }
     return new Response(JSON.stringify({ ok: false }), { status: 404 });
   };
-</script></body></html>\`);
+</script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
@@ -30,7 +30,7 @@ test('voice assistant does not use batch recording when the live gateway is miss
 
 test('voice assistant never starts browser speech recognition when the live gateway is unavailable', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
-  await page.setContent(\`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.WebSocket = undefined;
   window.AudioContext = undefined;
@@ -42,7 +42,7 @@ test('voice assistant never starts browser speech recognition when the live gate
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404 });
   };
-</script></body></html>\`);
+</script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
@@ -53,7 +53,7 @@ test('voice assistant never starts browser speech recognition when the live gate
 
 test('unsupported microphone APIs switch to text without loading a browser recognizer', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
-  await page.setContent(\`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.WebSocket = undefined;
   window.AudioContext = undefined;
@@ -65,7 +65,7 @@ test('unsupported microphone APIs switch to text without loading a browser recog
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404 });
   };
-</script></body></html>\`);
+</script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
@@ -235,7 +235,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
 
 test('user speech interrupts server TTS while keeping the same live microphone stream open', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
-  await page.setContent(\`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__wsInstances = [];
   window.__chatPayloads = [];
@@ -273,7 +273,7 @@ test('user speech interrupts server TTS while keeping the same live microphone s
     if(url==='/assistant/speak')return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});
     return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
   };
-</script></body></html>\`);
+</script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
