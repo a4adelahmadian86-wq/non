@@ -64,4 +64,26 @@ Run the sidecar and the Node voice gateway on the same private network. Set `SHE
 
 After verifying that the gateway can reach the sidecar, set `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` on the Laravel server and run the `SherpaOnnxVoiceProviderSeeder`. In this mode, provider routing is restricted to Sherpa and batch transcription is disabled. A sidecar failure returns a visible error; it does not fall back to a cloud provider, browser recognition, or client-side model.
 
-The Persian streaming model supports `fa-IR` only. The browser performs microphone capture, echo cancellation/noise suppression when provided by the browser, PCM resampling/format conversion, and WebSocket transport. The assistant's LLM response and TTS remain server-side.
+The Persian streaming model supports `fa-IR` only. The browser performs microphone capture, echo cancellation/noise suppression when provided by the browser, PCM resampling/format conversion, and WebSocket transport. No speech model, model runtime, model WASM, or language pack is downloaded to the browser.
+
+## Self-hosted Persian TTS
+
+A local Piper sidecar is included at `voice-stream/piper-sidecar/`. It uses the MIT-licensed Mana Persian Piper voice (about 63.5 MB) and returns WAV audio from `POST /v1/synthesize`. Its Docker image downloads the pinned ONNX model during the server image build. It does not use Microsoft Edge TTS or another cloud synthesis provider.
+
+Run it on the same private server network as Laravel, then configure:
+
+```dotenv
+FARAST_VOICE_TTS_URL=http://farast-piper-tts:7007/v1/synthesize
+FARAST_VOICE_TTS_TOKEN=
+FARAST_VOICE_TTS_VOICE_ID=farast-fa-male-v1
+```
+
+The TTS sidecar currently has no public authentication layer; keep it private and allow inbound traffic only from the Laravel application. Do not expose port 7007 to the public internet.
+
+## Self-hosted LLM requirement
+
+When `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true`, the global assistant's streaming language model must be reached through `FARAST_AI_GATEWAY_URL` and `FARAST_AI_GATEWAY_TOKEN`, pointing to your own private inference gateway. The Groq route, legacy non-streaming AI route, and all automatic cloud fallbacks are disabled in this mode. If the private gateway is missing or fails, the assistant returns an explicit error instead of sending prompts to a cloud provider.
+
+The local-only mode also defaults `FARAST_VOICE_TTS_URL` to empty; configure it explicitly to the private Piper sidecar above. Without that setting, speech playback fails closed rather than using the former hosted TTS endpoint.
+
+The assistant is not ready for user testing until the Sherpa ASR, Piper TTS, and self-hosted LLM gateway are all running on the target server and their full Persian voice conversation has been validated there.
