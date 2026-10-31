@@ -32,7 +32,6 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
         receivedAudio = Buffer.from(data);
         socket.send(JSON.stringify({ text: 'سلام', segment: 0, is_final: false }));
         socket.send(JSON.stringify({ text: 'سلام فراست', segment: 0, is_final: true }));
-        if (events.length >= 2) resolveTranscript();
       } else if (data.toString() === 'Done') {
         receivedDone = true;
         resolveDone();
@@ -46,7 +45,7 @@ test('uses a private local WebSocket and forwards streaming transcripts', async 
   const stream = createSherpaOnnxStream({}, 'fa-IR', {
     ready: markReady,
     interim: text => events.push(['interim', text]),
-    final: text => events.push(['final', text]),
+    final: text => { events.push(['final', text]); resolveTranscript(); },
     error: error => events.push(['error', error.message]),
   });
 
