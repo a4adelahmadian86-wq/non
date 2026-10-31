@@ -121,8 +121,8 @@ class GlobalAssistantGatewayTest extends TestCase
 
         $response = $this->actingAs($user)->postJson('/assistant/chat/stream', ['message' => 'سلام']);
         $response->assertOk();
-        $this->assertStringContainsString('"delta":"سلام"', $response->getContent());
-        $this->assertStringContainsString('"done":true', $response->getContent());
+        $this->assertStringContainsString('"delta":"سلام"', $response->streamedContent());
+        $this->assertStringContainsString('"done":true', $response->streamedContent());
         Http::assertSentCount(1);
     }
 
