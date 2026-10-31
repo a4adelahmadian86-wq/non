@@ -446,21 +446,16 @@
   function startLiveRecognition(){
     if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;
     if(gatewayWs||gatewayStarting)return;
+    liveTurnEnding=false;
     startGatewayLiveRecognition().then(function(started){
       if(!started&&conversationActive&&!panel.hidden){
         conversationActive=false;
-        voiceTitle.textContent='درگاه زنده آماده نیست';
-        voiceCaption.textContent='برای حفظ حالت زنده، ضبط کامل و تشخیص گفتار مرورگر فعال نمی‌شود.';
-        status.textContent='موتور تشخیص گفتار زنده روی سرور در دسترس نیست؛ می‌توانی بعداً دوباره تلاش کنی.';
-        panel.classList.remove('is-listening');
-        root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+        enableTextFallback('درگاه زندهٔ گفتار روی سرور آماده نیست. برای حفظ حریم خصوصی، تشخیص گفتار مرورگر و ضبط دسته‌ای فعال نمی‌شوند؛ می‌توانی پیام را متنی ارسال کنی.');
       }
     }).catch(function(error){
       if(!conversationActive||panel.hidden)return;
       conversationActive=false;
-      voiceTitle.textContent='اتصال گفتار ناموفق بود';
-      voiceCaption.textContent=error&&error.message?error.message:'درگاه زندهٔ گفتار پاسخ نداد.';
-      status.textContent='هیچ مسیر جایگزین مرورگری یا ضبط دسته‌ای فعال نشد.';
+      enableTextFallback(error&&error.message?error.message:'درگاه زندهٔ گفتار پاسخ نداد؛ فعلاً می‌توانی پیام را متنی ارسال کنی.');
     });
   }
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
