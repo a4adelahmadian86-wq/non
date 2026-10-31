@@ -126,6 +126,52 @@
     }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
   }
   var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null, chatAbortController=null, activePendingMessage=null, speechGeneration=0, speechRequestController=null;
+  var batchRecorder=null,batchStream=null,batchChunks=[],batchRequest=null,batchRecording=false,batchVoiceMode=false,batchSubmit=false,batchTimer=null;
+  function releaseBatchStream(){if(batchStream){batchStream.getTracks().forEach(function(track){try{track.stop();}catch(e){}});batchStream=null;}}
+  function resetBatchMic(){var mic=root.querySelector('.farast-assistant-mic');mic.disabled=false;mic.classList.remove('is-recording');mic.setAttribute('aria-label','شروع صحبت');var label=mic.querySelector('span');if(label)label.textContent='صحبت کن';}
+  function cancelBatchCapture(){batchSubmit=false;if(batchTimer){window.clearTimeout(batchTimer);batchTimer=null;}if(batchRequest){batchRequest.abort();batchRequest=null;}if(batchRecorder&&batchRecorder.state!=='inactive'){try{batchRecorder.stop();}catch(e){releaseBatchStream();}}else{batchRecorder=null;batchChunks=[];batchRecording=false;releaseBatchStream();}resetBatchMic();}
+  async function sendBatchAudio(blob){
+    var controller=new AbortController();batchRequest=controller;
+    var form=new FormData(),type=String(blob.type||'audio/webm').toLowerCase();
+    var ext=type.indexOf('ogg')>=0?'ogg':(type.indexOf('mp4')>=0?'mp4':'webm');
+    form.append('audio',blob,'farast-assistant.'+ext);form.append('locale','fa-IR');
+    var mic=root.querySelector('.farast-assistant-mic');mic.disabled=true;
+    voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='صدای ضبط‌شده برای تبدیل به متن به سرور ارسال می‌شود.';status.textContent='در حال پردازش صدای فارسی…';
+    try{
+      var response=await fetch('/assistant/transcribe',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:form,signal:controller.signal});
+      var data=await response.json().catch(function(){return {};});
+      if(!response.ok||!data.ok||!String(data.text||'').trim())throw new Error(data.message||'گفتاری تشخیص داده نشد؛ دوباره تلاش کن.');
+      if(conversationActive&&!panel.hidden)await send(String(data.text).trim());
+    }catch(error){if(error&&error.name!=='AbortError'&&conversationActive&&!panel.hidden){voiceTitle.textContent='تشخیص گفتار ناموفق بود';voiceCaption.textContent=error.message||'اتصال موتور گفتار برقرار نشد.';status.textContent='میکروفون خاموش است؛ برای تلاش دوباره لمس کن.';}}
+    finally{if(batchRequest===controller)batchRequest=null;resetBatchMic();}
+  }
+  async function startBatchCapture(){
+    if(batchRecording||batchRequest)return;
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){conversationActive=false;enableTextFallback('این مرورگر امکان ضبط صوتی را فراهم نمی‌کند؛ می‌توانی پیام را متنی ارسال کنی.');return;}
+    try{
+      var stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      if(!conversationActive||panel.hidden){stream.getTracks().forEach(function(t){t.stop();});return;}
+      var choices=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'],mime='';
+      if(MediaRecorder.isTypeSupported)mime=choices.find(function(v){return MediaRecorder.isTypeSupported(v);})||'';
+      var recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+      batchRecorder=recorder;batchStream=stream;batchChunks=[];batchRecording=true;batchVoiceMode=true;batchSubmit=false;
+      recorder.ondataavailable=function(e){if(e.data&&e.data.size)batchChunks.push(e.data);};
+      recorder.onerror=function(){batchRecording=false;batchRecorder=null;batchChunks=[];releaseBatchStream();resetBatchMic();};
+      recorder.onstop=function(){var submit=batchSubmit;batchSubmit=false;batchRecording=false;batchRecorder=null;if(batchTimer){clearTimeout(batchTimer);batchTimer=null;}var blob=new Blob(batchChunks,{type:recorder.mimeType||'audio/webm'});batchChunks=[];releaseBatchStream();resetBatchMic();if(submit&&conversationActive&&!panel.hidden&&blob.size)sendBatchAudio(blob);};
+      recorder.start(1000);
+      var mic=root.querySelector('.farast-assistant-mic');mic.classList.add('is-recording');mic.setAttribute('aria-label','پایان ضبط و ارسال گفتار');var label=mic.querySelector('span');if(label)label.textContent='پایان ضبط';
+      voiceTitle.textContent='در حال شنیدن';voiceCaption.textContent='صحبت کن؛ برای پایان ضبط و ارسال گفتار دوباره میکروفون را لمس کن.';status.textContent='ضبط فقط با اجازهٔ میکروفون فعال است.';
+      batchTimer=window.setTimeout(function(){stopBatchCapture(true);},90000);
+    }catch(error){conversationActive=false;releaseBatchStream();enableTextFallback(error&&error.name==='NotAllowedError'?'اجازهٔ میکروفون داده نشد؛ می‌توانی پیام را متنی ارسال کنی.':'ضبط صدا شروع نشد؛ می‌توانی پیام را متنی ارسال کنی.');}
+  }
+  function stopBatchCapture(submit){if(!batchRecorder||!batchRecording)return;batchSubmit=!!submit;if(batchTimer){clearTimeout(batchTimer);batchTimer=null;}try{batchRecorder.stop();}catch(e){batchRecording=false;batchRecorder=null;batchChunks=[];releaseBatchStream();resetBatchMic();}}
+  async function startBatchFallback(reason){
+    try{var r=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});var d=await r.json().catch(function(){return {};});
+      if(r.ok&&!d.local_only&&d.server_stt&&d.server_stt_token_configured&&d.server_tts&&d.server_tts_token_configured){await startBatchCapture();return;}
+      var msg=d.local_only?'در حالت گفتار محلی، ارسال فایل صوتی به سرویس بیرونی مجاز نیست.':(!d.server_stt||!d.server_stt_token_configured?'موتور تشخیص گفتار یا توکن آن در تنظیمات Laravel آماده نیست.':'موتور صدای فارسی یا توکن آن در تنظیمات Laravel آماده نیست.');
+      conversationActive=false;enableTextFallback(msg||reason);
+    }catch(e){conversationActive=false;enableTextFallback(reason||'وضعیت سرویس گفتار بررسی نشد؛ می‌توانی پیام را متنی ارسال کنی.');}
+  }
   function stopConversation(){conversationActive=false;assistantTurn++;speechGeneration++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}if(speechRequestController){speechRequestController.abort();speechRequestController=null;}stopLiveRecognition();if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(assistantAudio){try{assistantAudio.pause();}catch(e){}assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
   function scheduleNextListening(){if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(gatewayWs&&gatewayWs.readyState===WebSocket.OPEN){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='میکروفون روشن است؛ هر وقت صحبت کنی، نوبت تو را تشخیص می‌دهم.';status.textContent='در حال گوش دادن؛ برای قطع کامل مکالمه، دکمهٔ توقف را لمس کن.';panel.classList.add('is-listening');return;}voiceTitle.textContent='نوبت توست';voiceCaption.textContent='درگاه زنده قطع شده است؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';status.textContent='میکروفون خاموش است؛ اتصال زنده را دوباره برقرار کن.';}
   function interruptAssistantForBargeIn(){
