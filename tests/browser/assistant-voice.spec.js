@@ -571,6 +571,7 @@ test('assistant animations are disabled when reduced motion is requested', async
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-assistant-panel').evaluate((panel) => panel.classList.add('is-listening'));
+  await page.locator('.farast-voice-mic').evaluate((mic) => mic.classList.add('is-recording'));
   const motion = await page.evaluate(() => ({
     orbAnimation: getComputedStyle(document.querySelector('.farast-voice-orb span')).animationName,
     micAnimation: getComputedStyle(document.querySelector('.farast-voice-mic')).animationName,
