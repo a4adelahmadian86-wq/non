@@ -259,6 +259,7 @@ async function startCloud(ctx) {
   if (!statusInfo || statusInfo.mode !== 'gateway' || statusInfo.gateway !== true) {
     throw new Error('درگاه زندهٔ گفتار روی سرور آماده نیست؛ برای حفظ حالت زنده، ضبط دسته‌ای یا تشخیص گفتار مرورگر فعال نمی‌شود.');
   }
+  if (statusInfo.self_hosted && ctx.lang() !== 'fa-IR') throw new Error('مدل گفتار محلی فعلاً فقط زبان فارسی ایران (fa-IR) را پشتیبانی می‌کند.');
 
   const response = await fetch('/editor/voice/stream-token', {
     method: 'POST',
