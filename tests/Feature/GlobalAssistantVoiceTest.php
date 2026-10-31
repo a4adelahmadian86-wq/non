@@ -252,6 +252,51 @@ class GlobalAssistantVoiceTest extends TestCase
         }
     }
 
+    public function test_local_only_synthesis_requires_a_server_side_piper_token(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+        Http::fake();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/speak', ['text' => 'سلام']);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonFragment(['message' => 'توکن موتور صدای خودمیزبان تنظیم نشده است؛ FARAST_VOICE_TTS_TOKEN باید با PIPER_TTS_TOKEN یکسان باشد. هیچ درخواست بدون احراز هویت ارسال نشد.']);
+        Http::assertNothingSent();
+    }
+
+    public function test_local_only_synthesis_authenticates_to_the_private_piper_service(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => 'piper-test-token',
+            'services.voice_tts.voice_id' => 'farast-fa-male-v1',
+        ]);
+        Http::fake([
+            'http://127.0.0.1:7007/v1/synthesize' => Http::response('fake-wav-bytes', 200, [
+                'Content-Type' => 'audio/wav',
+                'X-Farast-Voice-Id' => 'farast-fa-male-v1',
+                'X-Farast-TTS-Provider' => 'piper-mana-local',
+            ]),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/speak', ['text' => 'سلام']);
+
+        $response->assertOk()->assertHeader('Content-Type', 'audio/wav');
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'http://127.0.0.1:7007/v1/synthesize'
+            && $request->hasHeader('Authorization', 'Bearer piper-test-token')
+            && ($request->data()['voice_id'] ?? null) === 'farast-fa-male-v1'
+        );
+    }
+
     public function test_assistant_synthesis_returns_the_upstream_audio_binary_with_its_content_type(): void
     {
         config([
