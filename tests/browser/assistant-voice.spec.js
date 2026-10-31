@@ -398,3 +398,123 @@ test('assistant starts speaking while the response is still streaming and queues
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(3);
   expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول.','جمله دوم.','جمله سوم.']);
 });
+
+
+test('live voice session stays open and accepts the next turn after TTS finishes', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__chatPayloads = [];
+  window.__wsInstances = [];
+  window.__micTrackStopped = false;
+  window.__audioInstances = [];
+  class FakeWebSocket extends EventTarget {
+    constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
+    send(data) { this.sent.push(data); if(typeof data==='string'&&JSON.parse(data).type==='start')queueMicrotask(()=>this.emit({type:'ready'})); }
+    close() { this.readyState=3; }
+    emit(data) { this.onmessage?.({data:JSON.stringify(data)}); }
+  }
+  FakeWebSocket.OPEN=1; window.WebSocket=FakeWebSocket;
+  window.AudioContext=class {
+    constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
+    createMediaStreamSource(){return {connect(){},disconnect(){}};}
+    createScriptProcessor(){window.__scriptProcessor={onaudioprocess:null,connect(){},disconnect(){}};return window.__scriptProcessor;}
+    resume(){return Promise.resolve();}
+    close(){this.state='closed';return Promise.resolve();}
+  };
+  window.AudioWorkletNode=undefined;
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){window.__micTrackStopped=true;}}]})}});
+  window.Audio=class {
+    constructor(){this.duration=1;this.handlers={};this.paused=true;this.ended=false;window.__audioInstances.push(this);}
+    addEventListener(n,fn){this.handlers[n]=fn;}
+    removeEventListener(n){delete this.handlers[n];}
+    load(){this.handlers.canplay?.();}
+    play(){this.paused=false;this.onplay?.();setTimeout(()=>{this.ended=true;this.paused=true;this.handlers.ended?.();},80);return Promise.resolve();}
+    pause(){this.pauseCount=(this.pauseCount||0)+1;this.paused=true;this.handlers.pause?.();}
+  };
+  window.fetch=async(url,options={})=>{
+    if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ فراست."}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
+    if(url==='/assistant/speak')return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({content:assistantJs});
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
+  const speak = async (text) => {
+    await page.evaluate(() => {
+      const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
+      const outputBuffer={getChannelData:()=>new Float32Array(4096)};
+      window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
+    });
+    await page.evaluate((value)=>window.__wsInstances[0].emit({type:'final',text:value}),text);
+  };
+  await speak('سلام');
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0]?.ended)).toBe(true);
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
+  expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(1);
+  expect(await page.evaluate(()=>window.__micTrackStopped)).toBe(false);
+  await speak('سوال دوم');
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(2);
+  expect(await page.evaluate(()=>window.__chatPayloads[1].message)).toBe('سوال دوم');
+  expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
+});
+
+test('speaking during assistant audio interrupts TTS and routes the new speech through the same live session', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__chatPayloads=[];window.__wsInstances=[];window.__audioInstances=[];
+  class FakeWebSocket extends EventTarget {
+    constructor(url){super();this.url=url;this.readyState=0;this.sent=[];window.__wsInstances.push(this);setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0);}
+    send(data){this.sent.push(data);if(typeof data==='string'&&JSON.parse(data).type==='start')queueMicrotask(()=>this.emit({type:'ready'}));}
+    close(){this.readyState=3;}
+    emit(data){this.onmessage?.({data:JSON.stringify(data)});}
+  }
+  FakeWebSocket.OPEN=1;window.WebSocket=FakeWebSocket;
+  window.AudioContext=class{constructor(){this.state='running';this.sampleRate=48000;this.destination={};}createMediaStreamSource(){return{connect(){},disconnect(){}};}createScriptProcessor(){window.__scriptProcessor={onaudioprocess:null,connect(){},disconnect(){}};return window.__scriptProcessor;}resume(){return Promise.resolve();}close(){this.state='closed';return Promise.resolve();}};
+  window.AudioWorkletNode=undefined;
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}});
+  window.Audio=class{
+    constructor(){this.duration=1;this.handlers={};this.paused=true;this.ended=false;this.pauseCount=0;window.__audioInstances.push(this);}
+    addEventListener(n,fn){this.handlers[n]=fn;}removeEventListener(n){delete this.handlers[n];}load(){this.handlers.canplay?.();}
+    play(){this.paused=false;this.onplay?.();return Promise.resolve();}
+    pause(){this.pauseCount++;this.paused=true;this.handlers.pause?.();}
+  };
+  window.fetch=async(url,options={})=>{
+    if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ فراست."}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
+    if(url==='/assistant/speak')return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({content:assistantJs});
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
+  const frame = async () => page.evaluate(() => {
+    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
+    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
+    window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
+  });
+  await frame();
+  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'سلام'}));
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0]&&!window.__audioInstances[0].paused)).toBe(true);
+  await frame();await frame();await frame();
+  await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].pauseCount)).toBeGreaterThan(0);
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances[0].sent.filter(item=>typeof item!=='string').length)).toBeGreaterThan(1);
+  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'یک سوال فوری'}));
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(2);
+  expect(await page.evaluate(()=>window.__chatPayloads[1].message)).toBe('یک سوال فوری');
+  expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
+});
