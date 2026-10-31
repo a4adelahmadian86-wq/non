@@ -149,7 +149,7 @@
     if(batchRecording||batchRequest)return;
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){conversationActive=false;enableTextFallback('این مرورگر امکان ضبط صوتی را فراهم نمی‌کند؛ می‌توانی پیام را متنی ارسال کنی.');return;}
     try{
-      var stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      var stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});batchStream=stream;
       if(!conversationActive||panel.hidden){stream.getTracks().forEach(function(t){t.stop();});return;}
       var choices=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'],mime='';
       if(MediaRecorder.isTypeSupported)mime=choices.find(function(v){return MediaRecorder.isTypeSupported(v);})||'';
