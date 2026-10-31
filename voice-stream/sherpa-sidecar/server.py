@@ -72,11 +72,7 @@ async def handle_connection(socket, recognizer):
             result = recognizer.get_result(stream)
 
             if recognizer.is_endpoint(stream):
-                tail = np.zeros(int(SAMPLE_RATE * 0.3), dtype=np.float32)
-                stream.accept_waveform(SAMPLE_RATE, tail)
-                stream.input_finished()
-                await decode_ready(recognizer, stream)
-                await send_result(socket, recognizer.get_result(stream), segment, True)
+                await send_result(socket, result, segment, True)
                 recognizer.reset(stream)
                 segment += 1
             else:
