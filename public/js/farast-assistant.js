@@ -167,8 +167,8 @@
   function stopBatchCapture(submit){if(!batchRecorder||!batchRecording)return;batchSubmit=!!submit;if(batchTimer){clearTimeout(batchTimer);batchTimer=null;}try{batchRecorder.stop();}catch(e){batchRecording=false;batchRecorder=null;batchChunks=[];releaseBatchStream();resetBatchMic();}}
   async function startBatchFallback(reason){
     try{var r=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});var d=await r.json().catch(function(){return {};});
-      if(r.ok&&!d.local_only&&d.server_stt&&d.server_stt_token_configured&&d.server_tts&&d.server_tts_token_configured){await startBatchCapture();return;}
-      var msg=d.local_only?'در حالت گفتار محلی، ارسال فایل صوتی به سرویس بیرونی مجاز نیست.':(!d.server_stt||!d.server_stt_token_configured?'موتور تشخیص گفتار یا توکن آن در تنظیمات Laravel آماده نیست.':'موتور صدای فارسی یا توکن آن در تنظیمات Laravel آماده نیست.');
+      if(r.ok&&(!d.local_only||d.remote_batch_enabled)&&d.server_stt&&d.server_stt_token_configured&&d.server_tts&&d.server_tts_token_configured){await startBatchCapture();return;}
+      var msg=d.local_only&&!d.remote_batch_enabled?'برای ارسال صدای ضبط‌شده به سرویس Render، مقدار FARAST_VOICE_REMOTE_BATCH_ENABLED=true را در محیط Laravel فعال کن.':(!d.server_stt||!d.server_stt_token_configured?'موتور تشخیص گفتار یا توکن آن در تنظیمات Laravel آماده نیست.':'موتور صدای فارسی یا توکن آن در تنظیمات Laravel آماده نیست.');
       conversationActive=false;enableTextFallback(msg||reason);
     }catch(e){conversationActive=false;enableTextFallback(reason||'وضعیت سرویس گفتار بررسی نشد؛ می‌توانی پیام را متنی ارسال کنی.');}
   }
