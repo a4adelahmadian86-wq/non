@@ -85,6 +85,7 @@ async def handle_connection(socket, recognizer):
         stream.input_finished()
         await decode_ready(recognizer, stream)
         await send_result(socket, recognizer.get_result(stream), segment, True)
+        await socket.send("Done!")
     except websockets.ConnectionClosed:
         return
 
