@@ -215,20 +215,7 @@
       if(assistantAudio){try{assistantAudio.pause();}catch(ignore){}assistantAudio=null;}
       if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
       panel.classList.remove('is-speaking');
-      if(window.speechSynthesis&&window.SpeechSynthesisUtterance&&text){
-        try{
-          await new Promise(function(resolve){
-            window.speechSynthesis.cancel();
-            var utterance=new SpeechSynthesisUtterance(String(text));utterance.lang='fa-IR';utterance.rate=1.03;utterance.pitch=1;
-            var voices=window.speechSynthesis.getVoices?window.speechSynthesis.getVoices():[];
-            var persianVoice=voices.find(function(v){return /^fa([-_]|$)/i.test(v.lang||'');});
-            if(persianVoice)utterance.voice=persianVoice;
-            utterance.onend=resolve;utterance.onerror=resolve;window.speechSynthesis.speak(utterance);
-          });
-          if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
-          voiceTitle.textContent='پاسخ فراست';voiceCaption.textContent='برای جلوگیری از انتظار طولانی، صدا با موتور گفتار دستگاه پخش شد.';status.textContent='پخش با صدای دستگاه انجام شد.';scheduleNextListening();return;
-        }catch(ignore){}
-      }
+      // Keep the configured fixed server voice; never substitute a device/browser voice.
       enableTextFallback(e.message||'صدای ثابت فراست فعلاً در دسترس نیست؛ پاسخ را می‌توانی به‌صورت متنی بخوانی.');scheduleNextListening();
     }
   }
@@ -446,8 +433,9 @@
   function stopLiveRecognition(){clearLiveSilence();stopGatewayRecognition();liveTurnEnding=true;liveStarting=false;var current=liveRecognition;liveRecognition=null;if(current){try{current.onresult=null;current.onerror=null;current.onend=null;current.stop();}catch(e){}}}
   function startLiveRecognition(useFallback){
     if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;
-    if(!useFallback&&!gatewayWs&&!gatewayStarting){startGatewayLiveRecognition().then(function(started){if(!started&&conversationActive&&!panel.hidden)startLiveRecognition(true);}).catch(function(){if(conversationActive&&!panel.hidden)startLiveRecognition(true);});return;}
-    if(!LiveSpeechRecognition){startServerRecording();return;}
+    if(!useFallback&&!gatewayWs&&!gatewayStarting){startGatewayLiveRecognition().then(function(started){if(!started&&conversationActive&&!panel.hidden)startServerRecording();}).catch(function(){if(conversationActive&&!panel.hidden)startServerRecording();});return;}
+    // Never fall back to browser SpeechRecognition: implementations may send audio to an external provider.
+    if(useFallback||!LiveSpeechRecognition){startServerRecording();return;}
     if(liveRecognition||liveStarting)return;
     liveStarting=true;liveTurnEnding=false;liveFinalText='';
     try{
