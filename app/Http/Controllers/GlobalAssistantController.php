@@ -310,7 +310,7 @@ class GlobalAssistantController extends Controller
                     while (($boundary = strpos($buffer, "\n\n")) !== false) {
                         $block = substr($buffer, 0, $boundary);
                         $buffer = substr($buffer, $boundary + 2);
-                        foreach (preg_split('/\\\r?\\\n/', $block) as $line) {
+                        foreach (preg_split('/\\r?\\n/', $block) as $line) {
                             if (! str_starts_with($line, 'data:')) continue;
                             $raw = trim(substr($line, 5));
                             if ($raw === '[DONE]') continue;
