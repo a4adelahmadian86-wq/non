@@ -455,7 +455,7 @@ test('assistant keeps the conversation composer visible and shows the private ga
   await page.locator('.farast-assistant-launcher').click();
   await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await expect(page.locator('[data-fa-messages]')).toBeVisible();
-  await expect(page.locator('[data-fa-status]')).toContainText('هیچ سرویس ابری فراخوانی نمی‌شود');
+  await expect(page.locator('[data-fa-status]')).toContainText('هیچ درخواست ابری ارسال نمی‌شود');
   await page.locator('.farast-assistant-form input[name="message"]').fill('سلام');
   await page.locator('.farast-assistant-send').click();
   await expect(page.locator('.farast-assistant-msg.user')).toContainText('سلام');
