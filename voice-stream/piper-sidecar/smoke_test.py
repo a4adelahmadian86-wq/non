@@ -1,6 +1,10 @@
 import json
+import os
 import threading
+import urllib.error
 import urllib.request
+
+os.environ.setdefault("PIPER_TTS_TOKEN", "ci-only-piper-test-token")
 
 from server import Handler, ThreadingHTTPServer
 
@@ -15,10 +19,30 @@ try:
         if response.status != 200 or health.get("engine") != "piper-mana-local":
             raise SystemExit("piper_tts_health_failed")
 
+    unauthenticated = urllib.request.Request(
+        f"{base}/v1/synthesize",
+        data=json.dumps({"text": "سلام"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(unauthenticated, timeout=10)
+        raise SystemExit("piper_tts_unauthenticated_request_was_accepted")
+    except urllib.error.HTTPError as error:
+        if error.code != 401:
+            raise SystemExit("piper_tts_auth_contract_failed") from error
+
     request = urllib.request.Request(
         f"{base}/v1/synthesize",
-        data=json.dumps({"text": "سلام، به دستیار صوتی فراست خوش آمدید."}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        data=json.dumps({
+            "text": "سلام، به دستیار صوتی فراست خوش آمدید.",
+            "language": "fa-IR",
+            "voice_id": "farast-fa-male-v1",
+        }).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {server.PIPER_TTS_TOKEN}",
+        },
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=60) as response:
