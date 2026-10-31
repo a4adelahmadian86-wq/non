@@ -25,16 +25,22 @@ class GlobalAssistantController extends Controller
      * Send recorded audio only to a configured private/self-hosted ASR service.
      * Expected response: JSON {"text":"..."}; never falls back to a blocked cloud API.
      */
-    public function transcribe(Request $request)
-    {
+    public function transcribe(
+        Request $request,
+        \\App\\Services\\AI\\AiQuotaService $quota,
+        \\App\\Services\\CommerceAuthorizationService $commerce
+    ) {
+        $quota->assertAllowed($request->user(), 'can_voice');
         $data = $request->validate([
             'audio' => ['required', 'file', 'max:15360', 'mimes:webm,ogg,wav,mp3,m4a,mp4'],
             'locale' => ['nullable', 'string', 'in:fa-IR,en-US,ar-SA'],
         ]);
         $url = trim((string) config('services.voice_asr.url', ''));
-        if ($url === '') {
+        $token = trim((string) config('services.voice_asr.token', ''));
+        if ($url === '' || $token === '') {
             return response()->json(['ok' => false, 'message' => 'موتور گفتار خودمیزبان هنوز تنظیم نشده است.'], 503, ['Cache-Control' => 'no-store']);
         }
+
         $file = $data['audio'];
         $bytes = file_get_contents($file->getRealPath());
         if ($bytes === false || $bytes === '') {
@@ -42,40 +48,47 @@ class GlobalAssistantController extends Controller
         }
         $extension = strtolower($file->getClientOriginalExtension() ?: 'webm');
         if (! in_array($extension, ['webm', 'ogg', 'wav', 'mp3', 'm4a', 'mp4'], true)) $extension = 'webm';
+
+        $requestKey = trim((string) ($request->header('Idempotency-Key') ?: $request->header('X-Farast-Voice-Request', '')));
+        $idempotencyKey = 'assistant-voice-'.$request->user()->id.'-'.hash('sha256', $requestKey !== '' ? $requestKey : (string) \\Illuminate\\Support\\Str::uuid());
+        $reservation = null;
         try {
-            $http = Http::acceptJson()->timeout(60);
-            $token = trim((string) config('services.voice_asr.token', ''));
-            if ($token !== '') $http = $http->withToken($token);
-            $response = $http->attach('audio', $bytes, 'farast-assistant.'.$extension, ['Content-Type' => ($file->getMimeType() ?: 'audio/webm')])
+            $reservation = $commerce->reserve($request->user(), 'speech.transcription', 1, [], [
+                'policy_code' => 'speech.transcription',
+                'unit' => 'request',
+                'allow_payg' => true,
+                'idempotency_key' => $idempotencyKey,
+            ]);
+            $response = Http::withToken($token)->acceptJson()->connectTimeout(5)->timeout(60)
+                ->attach('audio', $bytes, 'farast-assistant.'.$extension, ['Content-Type' => ($file->getMimeType() ?: 'audio/webm')])
                 ->post($url, ['locale' => $data['locale'] ?? 'fa-IR']);
             if (! $response->successful()) {
+                $commerce->release($reservation);
+                $reservation = null;
                 Log::warning('farast.global_assistant_asr_failed', ['user_id' => $request->user()->id, 'status' => $response->status()]);
-                $message = match ($response->status()) {
-                    401, 403 => 'احراز هویت موتور گفتار ناموفق است؛ مقدار FARAST_VOICE_TOKEN در تنظیمات محلی را با توکن سرویس Render یکسان کن.',
-                    429 => 'سرویس تشخیص گفتار فعلاً به محدودیت درخواست رسیده است؛ چند لحظه دیگر تلاش کن.',
-                    default => 'موتور گفتار خودمیزبان پاسخ معتبر نداد (HTTP '.$response->status().').',
-                };
-                return response()->json(['ok' => false, 'message' => $message, 'upstream_status' => $response->status()], 503, ['Cache-Control' => 'no-store']);
+                return response()->json(['ok' => false, 'message' => 'موتور گفتار خودمیزبان پاسخ معتبر نداد (HTTP '.$response->status().').'], 503, ['Cache-Control' => 'no-store']);
             }
             $text = trim((string) $response->json('text', ''));
-            if ($text === '') return response()->json(['ok' => false, 'message' => 'گفتاری در فایل تشخیص داده نشد.'], 422, ['Cache-Control' => 'no-store']);
-            return response()->json(['ok' => true, 'text' => $text, 'engine' => 'self-hosted-asr'], 200, ['Cache-Control' => 'no-store']);
-        } catch (\Throwable $e) {
-            $errorClass = class_basename($e);
-            $diagnosticId = (string) \Illuminate\Support\Str::uuid();
-            Log::warning('farast.global_assistant_asr_exception', [
-                'diagnostic_id' => $diagnosticId,
-                'user_id' => $request->user()->id,
-                'error_class' => $errorClass,
-                'error' => mb_substr(preg_replace('/(?:Bearer\\s+)[A-Za-z0-9._~+\\/-]+=*/i', 'Bearer [redacted]', $e->getMessage()), 0, 300),
-                'url_host' => parse_url($url, PHP_URL_HOST),
+            if ($text === '') {
+                $commerce->release($reservation);
+                $reservation = null;
+                return response()->json(['ok' => false, 'message' => 'گفتاری در فایل تشخیص داده نشد.'], 422, ['Cache-Control' => 'no-store']);
+            }
+            $commerce->commit($reservation, [
+                'cost_metadata' => ['provider' => 'farast-self-hosted-asr', 'input_bytes' => strlen($bytes)],
+                'metadata' => ['locale' => $data['locale'] ?? 'fa-IR'],
             ]);
-            return response()->json([
-                'ok' => false,
-                'message' => 'ارتباط با موتور گفتار خودمیزبان برقرار نشد.',
-                'diagnostic_id' => $diagnosticId,
-                'error_class' => $errorClass,
-            ], 502, ['Cache-Control' => 'no-store']);
+            $reservation = null;
+            return response()->json(['ok' => true, 'text' => $text, 'engine' => 'self-hosted-asr'], 200, ['Cache-Control' => 'no-store']);
+        } catch (\\Throwable $e) {
+            if ($reservation) {
+                try { $commerce->release($reservation); } catch (\\Throwable) {}
+            }
+            Log::warning('farast.global_assistant_asr_exception', [
+                'user_id' => $request->user()->id,
+                'error_class' => class_basename($e),
+            ]);
+            return response()->json(['ok' => false, 'message' => 'ارتباط با موتور گفتار خودمیزبان برقرار نشد.'], 502, ['Cache-Control' => 'no-store']);
         }
     }
 
