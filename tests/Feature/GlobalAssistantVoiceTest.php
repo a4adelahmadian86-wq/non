@@ -366,6 +366,41 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('tts-secret-never-return', $response->getContent());
     }
 
+    public function test_local_only_status_does_not_advertise_batch_asr_or_public_unauthenticated_tts(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_asr.url' => 'https://old-asr.example.test/v1/transcribe',
+            'services.voice_asr.token' => 'old-asr-token',
+            'services.voice_tts.url' => 'https://public-tts.example.test/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('server_stt', false)
+            ->assertJsonPath('server_tts', false)
+            ->assertJsonPath('server_tts_token_configured', false)
+            ->assertJsonFragment(['server_tts_message' => 'برای صدای خودمیزبان این تنظیمات لازم است: آدرس خصوصی برای FARAST_VOICE_TTS_URL، FARAST_VOICE_TTS_TOKEN. هیچ سرویس عمومی فراخوانی نمی‌شود.']);
+    }
+
+    public function test_local_only_status_marks_private_authenticated_piper_as_ready(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => 'piper-test-token',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('server_tts', true)
+            ->assertJsonPath('server_tts_token_configured', true)
+            ->assertJsonPath('server_tts_message', '');
+    }
+
     public function test_local_only_chat_returns_actionable_missing_gateway_configuration(): void
     {
         config([
