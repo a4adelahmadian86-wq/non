@@ -54,3 +54,14 @@ These Laravel changes define the integration boundary, not a running inference h
 A deployable FastAPI service has been added under [`voice-service/`](../tree/main/voice-service). It is separate from Laravel and exposes authenticated `/v1/transcribe` and `/v1/synthesize` endpoints. Follow `voice-service/README.md` for deployment and model setup.
 
 **Always-on limitation:** Render Free sleeps after 15 minutes without inbound traffic and has no persistent disk. Do not use a free Render instance for production voice inference or try to defeat sleep with periodic pings. An always-on deployment needs a paid service instance and persistent storage; no live service is created automatically by these Git commits.
+
+
+## Persian live streaming ASR (server-side Sherpa-ONNX)
+
+The live microphone path uses the private Sherpa-ONNX sidecar under `voice-stream/sherpa-sidecar/`. The sidecar downloads the pinned Persian Nemotron ONNX files into its server-side persistent `/models` volume at container startup and verifies their SHA-256 hashes. The browser never downloads model weights, ONNX Runtime, model-related WASM, or a language pack.
+
+Run the sidecar and the Node voice gateway on the same private network. Set `SHERPA_ONNX_WS_URL` to the sidecar's private WebSocket address; for a private Docker service name, also set `SHERPA_ONNX_ALLOWED_HOSTS` to that exact hostname. Do not publish the sidecar port publicly.
+
+After verifying that the gateway can reach the sidecar, set `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` on the Laravel server and run the `SherpaOnnxVoiceProviderSeeder`. In this mode, provider routing is restricted to Sherpa and batch transcription is disabled. A sidecar failure returns a visible error; it does not fall back to a cloud provider, browser recognition, or client-side model.
+
+The Persian streaming model supports `fa-IR` only. The browser performs microphone capture, echo cancellation/noise suppression when provided by the browser, PCM resampling/format conversion, and WebSocket transport. The assistant's LLM response and TTS remain server-side.
