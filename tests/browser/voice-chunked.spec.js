@@ -2,7 +2,9 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-test('online voice uses configured chunked transcription when no websocket gateway is configured', async ({ page }) => {
+test('live editor dictation refuses batch mode and never opens the microphone without a gateway', async ({ page }) => {
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
   const voiceJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-voice.js'), 'utf8');
   await page.setContent(`<!doctype html>
 <html lang="fa" dir="rtl">
@@ -18,58 +20,38 @@ test('online voice uses configured chunked transcription when no websocket gatew
   <button id="mic" type="button">mic</button>
   <script>
     window.FARAST_AUTHENTICATED = true;
-    window.__transcribeCalled = false;
-    window.__insertCalled = false;
-    window.__insertedText = '';
+    window.__micCalls = 0;
+    window.__transcribeCalls = 0;
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
-      getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] })
+      getUserMedia: async () => { window.__micCalls++; return { getTracks: () => [{ stop() {} }] }; }
     }});
-    window.MediaRecorder = class {
-      static isTypeSupported() { return true; }
-      constructor(stream, options = {}) { this.stream = stream; this.mimeType = options.mimeType || 'audio/webm'; this.state = 'inactive'; }
-      start() { this.state = 'recording'; }
-      pause() { this.state = 'paused'; }
-      resume() { this.state = 'recording'; }
-      stop() {
-        this.state = 'inactive';
-        this.ondataavailable?.({ data: new Blob(['fake-audio'], { type: this.mimeType }) });
-        this.onstop?.();
-      }
-    };
-    window.fetch = async (url, options = {}) => {
-      if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'chunked' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      if (url === '/editor/voice/transcribe') {
-        window.__transcribeCalled = true;
-        if (!(options.body instanceof FormData) || !options.body.get('audio') || options.body.get('locale') !== 'fa-IR') return new Response(JSON.stringify({ ok: false, message: 'bad multipart request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        return new Response(JSON.stringify({ ok: true, text: 'سلام دنیای صوتی', engine: 'mock-asr' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      if (url === '/editor/voice/insert') {
-        const body = JSON.parse(options.body || '{}');
-        window.__insertCalled = true;
-        window.__insertedText = body.text;
-        return new Response(JSON.stringify({ ok: true, revision: 2, transaction_id: 'tx-voice-chunked', document_model: { plain_text: body.text } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({ ok: false, message: 'unexpected request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-    };
     window.FarastEditor = {
       state: { documentId: 7, revision: 1, model: { sections: [{ blocks: [{ id: 'b', runs: [{ text: '' }] }] }] } },
       getSelection() { return { start: { blockId: 'b', offset: 0 }, end: { blockId: 'b', offset: 0 } }; },
-      applyRemoteModel() {},
-      markSaved(revision) { this.state.revision = revision; },
-      restoreSelection() { return true; }
+      applyRemoteModel() {}, markSaved(revision) { this.state.revision = revision; }, restoreSelection() { return true; }
+    };
+    window.fetch = async (url) => {
+      if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'chunked', chunked: true, gateway: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url === '/editor/voice/transcribe') { window.__transcribeCalls++; return new Response(JSON.stringify({ ok: true, text: 'unexpected' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+      return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     };
   </script>
 </body>
 </html>`);
   await page.addScriptTag({ content: voiceJs });
-  await expect.poll(async () => page.evaluate(() => !!window.FarastVoiceRuntime?.open)).toBeTruthy();
+  await page.waitForTimeout(50);
+  const boot = await page.evaluate(() => ({
+    loaded: !!window.__farastVoiceRuntimeLoaded,
+    booted: !!window.__farastVoiceBooted,
+    hasMic: !!document.getElementById('mic'),
+    hasEditor: !!document.getElementById('editor'),
+    hasPanel: !!document.getElementById('farastVoicePanel'),
+    hasRuntime: !!window.FarastVoiceRuntime,
+  }));
+  expect(boot.hasRuntime, 'Voice runtime boot diagnostics: ' + JSON.stringify({ boot, pageErrors })).toBeTruthy();
   await page.evaluate(() => window.FarastVoiceRuntime.open());
   await page.locator('#fvStart').click();
-  await expect(page.locator('#fvStatus')).toContainText('در حال ضبط');
-  await page.locator('#fvStop').click();
-  await expect.poll(async () => page.evaluate(() => window.__insertCalled)).toBeTruthy();
-  const result = await page.evaluate(() => ({ transcribe: window.__transcribeCalled, inserted: window.__insertedText, engine: document.getElementById('fvEngine').textContent }));
-  expect(result.transcribe).toBeTruthy();
-  expect(result.inserted).toContain('سلام دنیای صوتی');
-  expect(result.engine).toBe('mock-asr');
+  await expect.poll(() => page.locator('#fvError').textContent()).not.toBe('');
+  expect(await page.evaluate(() => window.__micCalls)).toBe(0);
+  expect(await page.evaluate(() => window.__transcribeCalls)).toBe(0);
 });

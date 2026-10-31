@@ -105,15 +105,17 @@ class VoiceSafeImportTest extends TestCase
         }
     }
 
-    public function test_http_voice_chunks_share_a_session_key_and_silence_does_not_consume_quota(): void
+    public function test_live_voice_hub_never_falls_back_to_batch_transcription(): void
     {
         $hub = file_get_contents(base_path('public/js/editor-voice-hub.js'));
         $controller = file_get_contents(base_path('app/Http/Controllers/VoiceController.php'));
 
         $this->assertIsString($hub);
-        $this->assertStringContainsString('const sessionRequestId = globalThis.crypto', $hub);
-        $this->assertStringContainsString("'X-Farast-Voice-Request': sessionRequestId", $hub);
-        $this->assertStringContainsString("'Idempotency-Key': sessionRequestId", $hub);
+        $this->assertStringContainsString("statusInfo.mode !== 'gateway'", $hub);
+        $this->assertStringContainsString('ضبط دسته‌ای یا تشخیص گفتار مرورگر فعال نمی‌شود', $hub);
+        $this->assertStringNotContainsString('startCloudChunks', $hub);
+        $this->assertStringNotContainsString('localWhisper', $hub);
+        $this->assertStringNotContainsString('SpeechRecognition', $hub);
 
         $this->assertIsString($controller);
         $this->assertStringContainsString("if(\$rawText==='')return response()->json(['ok'=>true,'text'=>'','engine'", $controller);

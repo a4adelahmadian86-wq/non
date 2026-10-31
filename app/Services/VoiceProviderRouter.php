@@ -12,6 +12,7 @@ class VoiceProviderRouter
     {
         $accounts = VoiceProviderAccount::query()
             ->where('enabled', true)
+            ->when((bool) config('services.voice.local_only', false), fn ($q) => $q->where('provider', 'sherpa-onnx'), fn ($q) => $q->where('provider', '!=', 'sherpa-onnx'))
             ->where('healthy', true)
             ->when($excludeAccountIds !== [], fn ($q) => $q->whereNotIn('id', $excludeAccountIds))
             ->get()
@@ -42,6 +43,11 @@ class VoiceProviderRouter
 
     public function classRank(VoiceProviderAccount $account): int
     {
+        // The candidate query excludes Sherpa unless local-only mode is enabled.
+        if (strtolower($account->provider) === 'sherpa-onnx') {
+            return (bool) config('services.voice.local_only', false) ? 0 : 25;
+        }
+
         return match ($account->billing_mode) {
             'trial' => $this->trialRank($account),
             'monthly_free' => 20,

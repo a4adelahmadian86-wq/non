@@ -54,3 +54,36 @@ These Laravel changes define the integration boundary, not a running inference h
 A deployable FastAPI service has been added under [`voice-service/`](../tree/main/voice-service). It is separate from Laravel and exposes authenticated `/v1/transcribe` and `/v1/synthesize` endpoints. Follow `voice-service/README.md` for deployment and model setup.
 
 **Always-on limitation:** Render Free sleeps after 15 minutes without inbound traffic and has no persistent disk. Do not use a free Render instance for production voice inference or try to defeat sleep with periodic pings. An always-on deployment needs a paid service instance and persistent storage; no live service is created automatically by these Git commits.
+
+
+## Persian live streaming ASR (server-side Sherpa-ONNX)
+
+The live microphone path uses the private Sherpa-ONNX sidecar under `voice-stream/sherpa-sidecar/`. The sidecar downloads the pinned Persian Nemotron ONNX files into its server-side persistent `/models` volume at container startup and verifies their SHA-256 hashes. The browser never downloads model weights, ONNX Runtime, model-related WASM, or a language pack.
+
+Run the sidecar and the Node voice gateway on the same private network. Set `SHERPA_ONNX_WS_URL` to the sidecar's private WebSocket address; for a private Docker service name, also set `SHERPA_ONNX_ALLOWED_HOSTS` to that exact hostname. Do not publish the sidecar port publicly.
+
+After verifying that the gateway can reach the sidecar, set `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true` on the Laravel server and run the `SherpaOnnxVoiceProviderSeeder`. In this mode, provider routing is restricted to Sherpa and batch transcription is disabled. A sidecar failure returns a visible error; it does not fall back to a cloud provider, browser recognition, or client-side model.
+
+The Persian streaming model supports `fa-IR` only. The browser performs microphone capture, echo cancellation/noise suppression when provided by the browser, PCM resampling/format conversion, and WebSocket transport. No speech model, model runtime, model WASM, or language pack is downloaded to the browser.
+
+## Self-hosted Persian TTS
+
+A local Piper sidecar is included at `voice-stream/piper-sidecar/`. It uses the MIT-licensed Mana Persian Piper voice (about 63.5 MB) and returns WAV audio from `POST /v1/synthesize`. Its Docker image downloads the pinned ONNX model during the server image build. It does not use Microsoft Edge TTS or another cloud synthesis provider.
+
+Run it on the same private server network as Laravel, then configure:
+
+```dotenv
+FARAST_VOICE_TTS_URL=http://farast-piper-tts:7007/v1/synthesize
+FARAST_VOICE_TTS_TOKEN=
+FARAST_VOICE_TTS_VOICE_ID=farast-fa-male-v1
+```
+
+The TTS sidecar currently has no public authentication layer; keep it private and allow inbound traffic only from the Laravel application. Do not expose port 7007 to the public internet.
+
+## Self-hosted LLM requirement
+
+When `FARAST_VOICE_LOCAL_SPEECH_ENABLED=true`, the global assistant's streaming language model must be reached through `FARAST_AI_GATEWAY_URL` and `FARAST_AI_GATEWAY_TOKEN`, pointing to your own private inference gateway. The Groq route, legacy non-streaming AI route, and all automatic cloud fallbacks are disabled in this mode. If the private gateway is missing or fails, the assistant returns an explicit error instead of sending prompts to a cloud provider.
+
+The local-only mode also defaults `FARAST_VOICE_TTS_URL` to empty; configure it explicitly to the private Piper sidecar above. Without that setting, speech playback fails closed rather than using the former hosted TTS endpoint.
+
+The assistant is not ready for user testing until the Sherpa ASR, Piper TTS, and self-hosted LLM gateway are all running on the target server and their full Persian voice conversation has been validated there.

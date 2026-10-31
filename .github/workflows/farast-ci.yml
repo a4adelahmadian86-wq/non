@@ -1,7 +1,11 @@
 name: FARAST CI
+
+concurrency:
+  group: farast-ci-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
-    branches: [main, farast-restoration-2026-09]
+    branches: [main, farast-restoration-2026-09, feat/self-hosted-sherpa-streaming]
   pull_request:
     branches: [main]
 jobs:
@@ -20,12 +24,18 @@ jobs:
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: composer install --no-interaction --prefer-dist --no-progress
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
-      - run: php -l app/Services/ProviderRegistry.php && php -l app/Http/Controllers/AdminPlatformController.php && php -l app/Services/EditorDocumentService.php && php -l app/Services/EditorKernelToolHandler.php && php -l app/Http/Controllers/VoiceController.php && php -l app/Services/Agent/FarastEditorAgent.php && php -l app/Http/Controllers/EditorAgentController.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/EditorDocumentStateController.php && php -l app/Http/Controllers/EditorSaveController.php && php -l app/Http/Controllers/ExportController.php && php -l app/Models/FarastDocument.php && php -l app/Models/FarastDocumentVersion.php
+      - run: php -l database/seeders/SherpaOnnxVoiceProviderSeeder.php && php -l database/seeders/DatabaseSeeder.php && php -l app/Services/VoiceProviderRouter.php && php -l app/Services/ProviderRegistry.php && php -l app/Http/Controllers/AdminPlatformController.php && php -l app/Services/EditorDocumentService.php && php -l app/Services/EditorKernelToolHandler.php && php -l app/Http/Controllers/VoiceController.php && php -l app/Services/Agent/FarastEditorAgent.php && php -l app/Http/Controllers/EditorAgentController.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/EditorDocumentStateController.php && php -l app/Http/Controllers/EditorSaveController.php && php -l app/Http/Controllers/ExportController.php && php -l app/Models/FarastDocument.php && php -l app/Models/FarastDocumentVersion.php
       - run: node --check public/js/editor-core.js
       - run: node --check public/js/editor-agent.js
       - run: node --check public/js/editor-layout.js
-      - run: node --check public/js/editor-voice-hub.js
-      - run: node --check public/js/farast-voice-worklet.js && node --check voice-stream/server-pro.mjs && node --check voice-stream/server.mjs
+      - run: node --check public/js/editor-voice-hub.js && node --check public/js/farast-assistant.js && node --check public/js/farast-voice.js
+      - run: node --check public/js/farast-voice-worklet.js && node --check voice-stream/server-pro.mjs && node --check voice-stream/server.mjs && node --check voice-stream/providers/sherpa-onnx.mjs && node --check voice-stream/scripts/sherpa-sidecar-smoke.mjs
+      - run: npm install --prefix voice-stream --no-audit --no-fund
+      - run: npm test --prefix voice-stream
+      - run: python -m py_compile voice-stream/sherpa-sidecar/server.py voice-stream/sherpa-sidecar/download_model.py voice-stream/sherpa-sidecar/smoke_test.py voice-stream/piper-sidecar/server.py voice-stream/piper-sidecar/download_model.py voice-stream/piper-sidecar/smoke_test.py
+      - run: pip install --no-cache-dir -r voice-stream/piper-sidecar/requirements.txt
+      - run: python voice-stream/piper-sidecar/download_model.py
+      - run: python voice-stream/piper-sidecar/smoke_test.py
       - run: node --check public/js/farast-voice.js
       - run: php artisan key:generate
       - run: touch database/database.sqlite
@@ -48,4 +58,42 @@ jobs:
         env:
           FARAST_E2E_URL: http://127.0.0.1:8000
       - if: always()
-        run: cat /tmp/farast-server.log
+        run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
+
+  voice-model-smoke:
+    if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm install --prefix voice-stream --no-audit --no-fund
+      - run: pip install --no-cache-dir -r voice-stream/sherpa-sidecar/requirements.txt
+      - run: python voice-stream/sherpa-sidecar/download_model.py
+        env:
+          SHERPA_MODEL_DIR: ${{ runner.temp }}/farast-sherpa-models
+      - run: python voice-stream/sherpa-sidecar/smoke_test.py
+        env:
+          SHERPA_MODEL_DIR: ${{ runner.temp }}/farast-sherpa-models
+          SHERPA_NUM_THREADS: '2'
+      - name: Start the real Sherpa sidecar and test the gateway protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHERPA_HOST=127.0.0.1 SHERPA_PORT=6006 SHERPA_MODEL_DIR="${RUNNER_TEMP}/farast-sherpa-models" SHERPA_NUM_THREADS=2 python voice-stream/sherpa-sidecar/server.py > /tmp/farast-sherpa.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 180); do
+            if grep -q 'listening on ws://127.0.0.1:6006' /tmp/farast-sherpa.log; then ready=1; break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then cat /tmp/farast-sherpa.log; exit 1; fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then cat /tmp/farast-sherpa.log; exit 1; fi
+          SHERPA_ONNX_WS_URL=ws://127.0.0.1:6006 node voice-stream/scripts/sherpa-sidecar-smoke.mjs
+          cat /tmp/farast-sherpa.log

@@ -30,6 +30,10 @@ class GlobalAssistantController extends Controller
      */
     public function transcribe(Request $request)
     {
+        if ((bool) config('services.voice.local_only', false)) {
+            return response()->json(['ok' => false, 'message' => 'در حالت گفتار محلی، رونویسی دسته‌ای غیرفعال است؛ فقط جریان زندهٔ موتور محلی سرور مجاز است.'], 503, ['Cache-Control' => 'no-store']);
+        }
+
         $data = $request->validate([
             'audio' => ['required', 'file', 'max:15360', 'mimes:webm,ogg,wav,mp3,m4a,mp4'],
             'locale' => ['nullable', 'string', 'in:fa-IR,en-US,ar-SA'],
@@ -90,6 +94,9 @@ class GlobalAssistantController extends Controller
     {
         $data = $request->validate(['text' => ['required', 'string', 'min:1', 'max:6000']]);
         $url = trim((string) config('services.voice_tts.url', ''));
+        if ((bool) config('services.voice.local_only', false) && ! $this->isPrivateServiceUrl($url)) {
+            return response()->json(['ok' => false, 'message' => 'در حالت خودمیزبان، نشانی موتور صدا باید به سرویس خصوصی سرور اشاره کند؛ هیچ سرویس عمومی فراخوانی نشد.'], 503, ['Cache-Control' => 'no-store']);
+        }
         if ($url === '') {
             return response()->json(['ok' => false, 'message' => 'موتور صدای ثابت خودمیزبان هنوز تنظیم نشده است.'], 503, ['Cache-Control' => 'no-store']);
         }
@@ -207,6 +214,28 @@ class GlobalAssistantController extends Controller
         return response()->json(['ok' => true, 'message' => 'سابقه گفت‌وگوی شما پاک شد.'], 200, ['Cache-Control' => 'no-store']);
     }
 
+    /**
+     * Local-only inference must use loopback, private IPs, or private service DNS.
+     * This prevents a mistaken public URL from receiving prompts or synthesized text.
+     */
+    private function isPrivateServiceUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts)) return false;
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') return false;
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        }
+
+        if ($host === 'localhost' || ! str_contains($host, '.')) return true;
+
+        return preg_match('/\\.(?:internal|local|localhost|test|svc|cluster\\.local)$/D', $host) === 1;
+    }
+
     private function persistExchange(int $userId, string $message, string $reply): void
     {
         if (! \Illuminate\Support\Facades\Schema::hasTable('farast_assistant_messages')) return;
@@ -237,10 +266,14 @@ class GlobalAssistantController extends Controller
         $user = $request->user();
         abort_unless($user, 401, 'برای استفاده از همراه فراست وارد حساب شوید.');
 
+        $localVoiceOnly = (bool) config('services.voice.local_only', false);
         $groqKey = trim((string) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')));
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-        if ($groqKey === '' && ($gatewayUrl === '' || $gatewayToken === '')) {
+        if ($localVoiceOnly && ($gatewayUrl === '' || $gatewayToken === '' || ! $this->isPrivateServiceUrl($gatewayUrl))) {
+            return response()->json(['ok' => false, 'message' => 'در حالت کاملاً خودمیزبان، درگاه مدل زبانی محلی تنظیم نشده است؛ هیچ سرویس ابری جایگزین نمی‌شود.'], 503, ['Cache-Control' => 'no-store']);
+        }
+        if (! $localVoiceOnly && $groqKey === '' && ($gatewayUrl === '' || $gatewayToken === '')) {
             return $this->chat($request, $ai);
         }
 
@@ -269,7 +302,7 @@ class GlobalAssistantController extends Controller
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
             $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
         }
-        if ($groqKey !== '') {
+        if (! $localVoiceOnly && $groqKey !== '') {
             $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq'];
         }
         $upstream = null;
@@ -304,7 +337,10 @@ class GlobalAssistantController extends Controller
                 ]);
             }
         }
-        if (!$upstream) {
+        if (! $upstream) {
+            if ($localVoiceOnly) {
+                return response()->json(['ok' => false, 'message' => 'درگاه مدل زبانی خودمیزبان پاسخ نداد؛ برای حفظ حریم خصوصی هیچ مسیر ابری فعال نشد.'], 503, ['Cache-Control' => 'no-store']);
+            }
             return $this->chat($request, $ai);
         }
 
@@ -359,6 +395,9 @@ class GlobalAssistantController extends Controller
 
     public function chat(Request $request, EditorAiAssistService $ai)
     {
+        if ((bool) config('services.voice.local_only', false)) {
+            return response()->json(['ok' => false, 'message' => 'در حالت کاملاً خودمیزبان، فقط مسیر جریانی متصل به درگاه مدل زبانی محلی مجاز است؛ مسیر جایگزین ابری غیرفعال است.'], 503, ['Cache-Control' => 'no-store']);
+        }
         $data = $request->validate([
             'message' => ['required','string','max:1200'],
             'context' => ['nullable','array','max:10'],

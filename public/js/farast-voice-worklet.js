@@ -8,9 +8,14 @@ class FarastPcmProcessor extends AudioWorkletProcessor {
     this.position = 0;
     this.targetSamples = 1600;
     this.output = [];
+    this.vadThreshold = 0.006;
+    this.vadHangoverFrames = 15;
+    this.vadHangover = 0;
   }
 
-  process(inputs) {
+  process(inputs, outputs) {
+    const output = outputs[0]?.[0];
+    if (output) output.fill(0);
     const input = inputs[0]?.[0];
     if (!input) return true;
 
@@ -24,11 +29,21 @@ class FarastPcmProcessor extends AudioWorkletProcessor {
 
       if (this.output.length >= this.targetSamples) {
         const pcm = new Int16Array(this.output.length);
+        let level = 0;
         for (let i = 0; i < this.output.length; i++) {
           const sample = Math.max(-1, Math.min(1, this.output[i]));
+          level += Math.abs(sample);
           pcm[i] = sample < 0 ? sample * 32768 : sample * 32767;
         }
-        this.port.postMessage(pcm.buffer, [pcm.buffer]);
+        level /= Math.max(1, this.output.length);
+
+        // Client-side, model-free VAD: send speech plus a 1.5s tail so the
+        // server recognizer can detect endpoints; suppress long silent periods.
+        const sendFrame = level >= this.vadThreshold || this.vadHangover > 0;
+        if (level >= this.vadThreshold) this.vadHangover = this.vadHangoverFrames;
+        else if (this.vadHangover > 0) this.vadHangover -= 1;
+
+        if (sendFrame) this.port.postMessage(pcm.buffer, [pcm.buffer]);
         this.output = [];
       }
     }

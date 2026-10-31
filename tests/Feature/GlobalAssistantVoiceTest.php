@@ -64,6 +64,138 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('asr-token', $response->getContent());
     }
 
+    public function test_local_live_gateway_status_identifies_server_only_persian_mode(): void
+    {
+        $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+        putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
+        $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        config(['services.voice.local_only' => true]);
+        config([
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.gateway_secret' => 'gateway-secret',
+        ]);
+
+        $router = \Mockery::mock(VoiceProviderRouter::class);
+        $account = new VoiceProviderAccount();
+        $account->setAttribute('id', 321);
+        $account->setAttribute('provider', 'sherpa-onnx');
+        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn($account);
+        $this->app->instance(VoiceProviderRouter::class, $router);
+
+        try {
+            $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+
+            $response->assertOk()
+                ->assertJsonPath('mode', 'gateway')
+                ->assertJsonPath('self_hosted', true)
+                ->assertJsonPath('locale', 'fa-IR');
+        } finally {
+            if ($original === false) {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+                unset($_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'], $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED']);
+            } else {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED='.$original);
+                $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+                $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+            }
+        }
+    }
+
+    public function test_local_only_assistant_never_falls_back_to_groq_or_non_streaming_ai(): void
+    {
+        $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+        $groqOriginal = getenv('GROQ_API_KEY');
+        putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
+        $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        config(['services.voice.local_only' => true]);
+        putenv('GROQ_API_KEY=must-not-be-used');
+        $_ENV['GROQ_API_KEY'] = 'must-not-be-used';
+        $_SERVER['GROQ_API_KEY'] = 'must-not-be-used';
+        config(['services.ai_gateway.url' => 'https://api.groq.com', 'services.ai_gateway.token' => 'must-not-be-used']);
+        Http::fake();
+
+        try {
+            $user = User::factory()->create();
+            $stream = $this->actingAs($user)->postJson('/assistant/chat/stream', ['message' => 'سلام']);
+            $stream->assertStatus(503)->assertJsonPath('ok', false);
+
+            $legacy = $this->actingAs($user)->postJson('/assistant/chat', ['message' => 'سلام']);
+            $legacy->assertStatus(503)->assertJsonPath('ok', false);
+
+            config(['services.voice_tts.url' => 'https://voice-typing-r5r7.onrender.com/v1/synthesize']);
+            $speech = $this->actingAs($user)->postJson('/assistant/speak', ['text' => 'سلام']);
+            $speech->assertStatus(503)->assertJsonPath('ok', false);
+
+            Http::assertNothingSent();
+        } finally {
+            if ($original === false) {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+                unset($_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'], $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED']);
+            } else {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED='.$original);
+                $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+                $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+            }
+            if ($groqOriginal === false) {
+                putenv('GROQ_API_KEY');
+                unset($_ENV['GROQ_API_KEY'], $_SERVER['GROQ_API_KEY']);
+            } else {
+                putenv('GROQ_API_KEY='.$groqOriginal);
+                $_ENV['GROQ_API_KEY'] = $groqOriginal;
+                $_SERVER['GROQ_API_KEY'] = $groqOriginal;
+            }
+        }
+    }
+
+    public function test_local_only_assistant_does_not_fall_back_when_private_llm_gateway_fails(): void
+    {
+        $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+        $groqOriginal = getenv('GROQ_API_KEY');
+        putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
+        $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        config(['services.voice.local_only' => true]);
+        putenv('GROQ_API_KEY=must-not-be-used');
+        $_ENV['GROQ_API_KEY'] = 'must-not-be-used';
+        $_SERVER['GROQ_API_KEY'] = 'must-not-be-used';
+        config([
+            'services.ai_gateway.url' => 'https://private-ai.test',
+            'services.ai_gateway.token' => 'private-ai-token',
+        ]);
+        Http::fake([
+            'https://private-ai.test/*' => Http::response(['error' => 'offline'], 503),
+            '*' => Http::response(['choices' => [['message' => ['content' => 'cloud fallback']]]], 200),
+        ]);
+
+        try {
+            $response = $this->actingAs(User::factory()->create())
+                ->postJson('/assistant/chat/stream', ['message' => 'سلام']);
+
+            $response->assertStatus(503)->assertJsonPath('ok', false);
+            Http::assertSentCount(1);
+            Http::assertSent(fn (ClientRequest $request) => $request->url() === 'https://private-ai.test/v1/chat/completions');
+        } finally {
+            if ($original === false) {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+                unset($_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'], $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED']);
+            } else {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED='.$original);
+                $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+                $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+            }
+            if ($groqOriginal === false) {
+                putenv('GROQ_API_KEY');
+                unset($_ENV['GROQ_API_KEY'], $_SERVER['GROQ_API_KEY']);
+            } else {
+                putenv('GROQ_API_KEY='.$groqOriginal);
+                $_ENV['GROQ_API_KEY'] = $groqOriginal;
+                $_SERVER['GROQ_API_KEY'] = $groqOriginal;
+            }
+        }
+    }
+
     public function test_assistant_transcription_proxies_bearer_auth_to_the_configured_free_voice_service(): void
     {
         config([
@@ -86,6 +218,34 @@ class GlobalAssistantVoiceTest extends TestCase
             $request->url() === 'https://voice.test/v1/transcribe'
             && $request->hasHeader('Authorization', 'Bearer asr-test-token')
         );
+    }
+
+    public function test_local_only_voice_mode_disables_batch_assistant_transcription(): void
+    {
+        $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+        putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
+        $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        config(['services.voice.local_only' => true]);
+        Http::fake();
+
+        try {
+            $response = $this->actingAs(User::factory()->create())
+                ->postJson('/assistant/transcribe', []);
+
+            $response->assertStatus(503)
+                ->assertJsonPath('ok', false);
+            Http::assertNothingSent();
+        } finally {
+            if ($original === false) {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+                unset($_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'], $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED']);
+            } else {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED='.$original);
+                $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+                $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+            }
+        }
     }
 
     public function test_assistant_synthesis_returns_the_upstream_audio_binary_with_its_content_type(): void

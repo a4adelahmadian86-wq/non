@@ -19,14 +19,15 @@ class VoiceController extends Controller
 {
     public function voiceStatus(Request $request)
     {
-        // Prefer the live WebSocket gateway when fully configured. Batch ASR
-        // providers remain available as a fallback, but must not mask live mode.
+        // Prefer the live WebSocket gateway when fully configured. The live browser client
+        // never switches to batch ASR if this gateway is unavailable.
         $authed = (bool) ($request->user()?->id);
         if (! $authed) {
             return response()->json(['ok' => true, 'mode' => 'none', 'reason' => 'auth'], 200, ['Cache-Control' => 'no-store']);
         }
 
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
+        $localVoiceOnly = (bool) config('services.voice.local_only', false);
         $gatewayReady = false;
         try {
             $secret = (string) config('services.voice_stream.gateway_secret', '');
@@ -43,6 +44,19 @@ class VoiceController extends Controller
                 'gateway' => true,
                 'websocket_url' => preg_replace('#^http#', 'ws', $wsUrl),
                 'reason' => null,
+                'self_hosted' => $localVoiceOnly,
+                'locale' => $localVoiceOnly ? 'fa-IR' : null,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        if ($localVoiceOnly) {
+            return response()->json([
+                'ok' => true,
+                'mode' => 'none',
+                'reason' => 'local_voice_gateway_unavailable',
+                'gateway' => false,
+                'websocket_url' => '',
+                'self_hosted' => true,
             ], 200, ['Cache-Control' => 'no-store']);
         }
 
@@ -139,6 +153,8 @@ class VoiceController extends Controller
         $asrToken=trim((string)(config('services.voice_asr.token','')));
         if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
         $selfHosted=$asrUrl!==''&&$asrToken!=='';
+        $localVoiceOnly=(bool) config('services.voice.local_only', false);
+        if($localVoiceOnly)return response()->json(['ok'=>false,'message'=>'در حالت پردازش محلی فراست، رونویسی دسته‌ای غیرفعال است. برای جلوگیری از ارسال ناخواستهٔ صدا به مسیر جایگزین، فقط جریان زندهٔ موتور محلی سرور مجاز است.'],503,['Cache-Control'=>'no-store']);
         $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
         // One idempotency key represents one voice session across its short HTTP audio chunks.
         // Do not reserve quota until a chunk actually contains speech.
