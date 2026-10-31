@@ -37,6 +37,7 @@ TTS_MODEL_REPO = os.getenv("FARAST_TTS_MODEL_REPO", "Kamtera/persian-tts-male-vi
 VOICE_ID = os.getenv("FARAST_VOICE_ID", "farast-fa-male-v1")
 MAX_AUDIO_BYTES = int(os.getenv("FARAST_MAX_AUDIO_BYTES", str(15 * 1024 * 1024)))
 MAX_TEXT_CHARS = int(os.getenv("FARAST_MAX_TEXT_CHARS", "1200"))
+MAX_STREAM_SECONDS = max(60, min(1800, int(os.getenv("FARAST_MAX_STREAM_SECONDS", "1800"))))
 
 app = FastAPI(title=APP_NAME, version="0.1.0")
 model_lock = Lock()
@@ -346,7 +347,19 @@ async def live_stream(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "final", "text": transcript, "provider": "self-hosted-whisper"})
 
         while True:
-            message = await websocket.receive()
+            remaining_seconds = MAX_STREAM_SECONDS - (time.monotonic() - started_at)
+            if remaining_seconds <= 0:
+                await flush_chunk()
+                await report_usage(transcript_count > 0)
+                await websocket.send_json({"type": "error", "code": "session_limit_reached"})
+                break
+            try:
+                message = await asyncio.wait_for(websocket.receive(), timeout=remaining_seconds)
+            except asyncio.TimeoutError:
+                await flush_chunk()
+                await report_usage(transcript_count > 0)
+                await websocket.send_json({"type": "error", "code": "session_limit_reached"})
+                break
             if message.get("type") == "websocket.disconnect":
                 break
             if message.get("text") is not None:
@@ -370,14 +383,16 @@ async def live_stream(websocket: WebSocket) -> None:
             frame = frame[: len(frame) - (len(frame) % 2)]
             if not frame:
                 continue
-            audio_seconds += len(frame) / 32000.0
-            input_bytes += len(frame)
             mean_abs = sum(abs(sample[0]) for sample in struct.iter_unpack("<h", frame)) / max(1, len(frame) // 2)
             if mean_abs >= 420:
                 speech_seen = True
                 silence_bytes = 0
+                audio_seconds += len(frame) / 32000.0
+                input_bytes += len(frame)
                 buffer.extend(frame)
             elif speech_seen:
+                audio_seconds += len(frame) / 32000.0
+                input_bytes += len(frame)
                 buffer.extend(frame)
                 silence_bytes += len(frame)
 
