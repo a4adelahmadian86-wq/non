@@ -5,7 +5,7 @@ This sidecar synthesizes Persian speech locally on the server using Piper and th
 ## Runtime
 
 - Python 3.11, Piper TTS, CPU inference
-- Model: `MahtaFetrat/Mana-Persian-Piper`, pinned revision `d7ec7b55362a11c2b79907188bd6e71acc19d9b0`
+- Model: `MahtaFetrat/Mana-Persian-Piper`, pinned revision `cafdcbdb455e4a9ab2ef18dccb3e21dce6a25ee9`
 - ONNX weights are downloaded by the server image build / CI only; never place them in the Laravel public directory or browser bundle.
 - HTTP API: `POST /v1/synthesize` with JSON `{"text":"سلام"}`; returns WAV audio.
 - Health: `GET /health`
