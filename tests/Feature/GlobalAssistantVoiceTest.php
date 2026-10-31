@@ -75,7 +75,7 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.voice_stream.gateway_secret' => 'gateway-secret',
         ]);
 
-        $router = \\Mockery::mock(VoiceProviderRouter::class);
+        $router = \Mockery::mock(VoiceProviderRouter::class);
         $account = new VoiceProviderAccount();
         $account->setAttribute('id', 321);
         $account->setAttribute('provider', 'sherpa-onnx');
