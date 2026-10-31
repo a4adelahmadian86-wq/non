@@ -88,6 +88,33 @@ class GlobalAssistantVoiceTest extends TestCase
         );
     }
 
+    public function test_local_only_voice_mode_disables_batch_assistant_transcription(): void
+    {
+        $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+        putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
+        $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
+        Http::fake();
+
+        try {
+            $response = $this->actingAs(User::factory()->create())
+                ->postJson('/assistant/transcribe', []);
+
+            $response->assertStatus(503)
+                ->assertJsonPath('ok', false);
+            Http::assertNothingSent();
+        } finally {
+            if ($original === false) {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
+                unset($_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'], $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED']);
+            } else {
+                putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED='.$original);
+                $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+                $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = $original;
+            }
+        }
+    }
+
     public function test_assistant_synthesis_returns_the_upstream_audio_binary_with_its_content_type(): void
     {
         config([
