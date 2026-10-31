@@ -27,6 +27,7 @@ class VoiceController extends Controller
         }
 
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
+        $localVoiceOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
         $gatewayReady = false;
         try {
             $secret = (string) config('services.voice_stream.gateway_secret', '');
@@ -46,7 +47,6 @@ class VoiceController extends Controller
             ], 200, ['Cache-Control' => 'no-store']);
         }
 
-        $localVoiceOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
         if ($localVoiceOnly) {
             return response()->json([
                 'ok' => true,
