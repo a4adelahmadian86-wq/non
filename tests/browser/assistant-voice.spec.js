@@ -481,6 +481,8 @@ test('assistant panel keeps every control inside desktop and mobile viewports', 
     await expect(page.locator('.farast-assistant-launcher')).toHaveAttribute('aria-controls', 'farast-assistant-panel');
     await expect(page.locator('.farast-voice-mic')).toBeVisible();
     await expect(page.locator('[data-fa-stop-speech]')).toBeVisible();
+    await expect(page.locator('[data-fa-stop-speech]')).toHaveText('توقف مکالمه');
+    await expect(page.locator('[data-fa-stop-speech]')).toHaveAttribute('aria-label', 'توقف کامل مکالمه');
     await expect(page.locator('.farast-assistant-form input[name="message"]')).toBeVisible();
 
     const geometry = await page.evaluate(() => {
