@@ -12,7 +12,7 @@ class VoiceProviderRouter
     {
         $accounts = VoiceProviderAccount::query()
             ->where('enabled', true)
-            ->when(filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN), fn ($q) => $q->where('provider', 'sherpa-onnx'), fn ($q) => $q->where('provider', '!=', 'sherpa-onnx'))
+            ->when((bool) config('services.voice.local_only', false), fn ($q) => $q->where('provider', 'sherpa-onnx'), fn ($q) => $q->where('provider', '!=', 'sherpa-onnx'))
             ->where('healthy', true)
             ->when($excludeAccountIds !== [], fn ($q) => $q->whereNotIn('id', $excludeAccountIds))
             ->get()
@@ -45,7 +45,7 @@ class VoiceProviderRouter
     {
         // The candidate query excludes Sherpa unless local-only mode is enabled.
         if (strtolower($account->provider) === 'sherpa-onnx') {
-            return filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 0 : 25;
+            return (bool) config('services.voice.local_only', false) ? 0 : 25;
         }
 
         return match ($account->billing_mode) {

@@ -12,7 +12,7 @@ class DatabaseSeeder extends Seeder
     {
         $mobile=env('ADMIN_MOBILE','091512345678'); $password=env('ADMIN_INITIAL_PASSWORD') ?: env('FARAST_ADMIN_PASSWORD');
         if($password)User::updateOrCreate(['mobile'=>$mobile],['name'=>'مدیر اصلی','password'=>$password,'role'=>'admin','is_verified'=>true]);
-        if (filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        if ((bool) config('services.voice.local_only', false)) {
             $this->call(SherpaOnnxVoiceProviderSeeder::class);
         }
         foreach([

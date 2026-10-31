@@ -13,6 +13,10 @@ return [
     ],
 
     // Optional private/self-hosted speech services. No third-party cloud API is assumed.
+    'voice' => [
+        'local_only' => filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     'voice_asr' => [
         'url' => env('FARAST_VOICE_ASR_URL', 'https://voice-typing-r5r7.onrender.com/v1/transcribe'),
         'token' => env('FARAST_VOICE_ASR_TOKEN', env('FARAST_VOICE_TOKEN')),

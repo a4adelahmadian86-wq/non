@@ -27,7 +27,7 @@ class VoiceController extends Controller
         }
 
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
-        $localVoiceOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+        $localVoiceOnly = (bool) config('services.voice.local_only', false);
         $gatewayReady = false;
         try {
             $secret = (string) config('services.voice_stream.gateway_secret', '');
@@ -153,7 +153,7 @@ class VoiceController extends Controller
         $asrToken=trim((string)(config('services.voice_asr.token','')));
         if($asrUrl!==''&&$asrToken==='')return response()->json(['ok'=>false,'message'=>'توکن موتور گفتار خودمیزبان تنظیم نشده است؛ FARAST_VOICE_ASR_TOKEN را در محیط سرور تنظیم کنید.'],503,['Cache-Control'=>'no-store']);
         $selfHosted=$asrUrl!==''&&$asrToken!=='';
-        $localVoiceOnly=filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+        $localVoiceOnly=(bool) config('services.voice.local_only', false);
         if($localVoiceOnly)return response()->json(['ok'=>false,'message'=>'در حالت پردازش محلی فراست، رونویسی دسته‌ای غیرفعال است. برای جلوگیری از ارسال ناخواستهٔ صدا به مسیر جایگزین، فقط جریان زندهٔ موتور محلی سرور مجاز است.'],503,['Cache-Control'=>'no-store']);
         $processingMode=$privacy->resolve($data['processing_mode']??null,$selfHosted?['server']:['external']);
         // One idempotency key represents one voice session across its short HTTP audio chunks.

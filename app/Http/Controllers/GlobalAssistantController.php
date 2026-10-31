@@ -30,7 +30,7 @@ class GlobalAssistantController extends Controller
      */
     public function transcribe(Request $request)
     {
-        if (filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        if ((bool) config('services.voice.local_only', false)) {
             return response()->json(['ok' => false, 'message' => 'در حالت گفتار محلی، رونویسی دسته‌ای غیرفعال است؛ فقط جریان زندهٔ موتور محلی سرور مجاز است.'], 503, ['Cache-Control' => 'no-store']);
         }
 
@@ -241,7 +241,7 @@ class GlobalAssistantController extends Controller
         $user = $request->user();
         abort_unless($user, 401, 'برای استفاده از همراه فراست وارد حساب شوید.');
 
-        $localVoiceOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+        $localVoiceOnly = (bool) config('services.voice.local_only', false);
         $groqKey = trim((string) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')));
         $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
@@ -370,7 +370,7 @@ class GlobalAssistantController extends Controller
 
     public function chat(Request $request, EditorAiAssistService $ai)
     {
-        if (filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        if ((bool) config('services.voice.local_only', false)) {
             return response()->json(['ok' => false, 'message' => 'در حالت کاملاً خودمیزبان، فقط مسیر جریانی متصل به درگاه مدل زبانی محلی مجاز است؛ مسیر جایگزین ابری غیرفعال است.'], 503, ['Cache-Control' => 'no-store']);
         }
         $data = $request->validate([
