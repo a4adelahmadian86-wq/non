@@ -26,11 +26,15 @@ foreach ($endpoint in @('/health', '/ready')) {
     if ($response.StatusCode -ne 200) { throw "Render $endpoint returned HTTP $($response.StatusCode)." }
     Write-Host "$endpoint : HTTP $($response.StatusCode)"
 }
+$ready = Invoke-RestMethod -Method Get -Uri ($baseUrl + '/ready') -TimeoutSec 30
+if (-not $ready.asr_ready -or -not $ready.tts_ready -or -not $ready.chat_ready) {
+    throw 'Render ASR, TTS, or chat is not ready. No local .env changes were made.'
+}
 $status = Invoke-RestMethod -Method Get -Uri ($baseUrl + '/v1/status') -Headers @{ Authorization = "Bearer $voiceToken"; Accept = 'application/json' } -TimeoutSec 30
 if (-not $status.asr_ready -or -not $status.tts_ready) {
-    throw 'Render ASR/TTS is not ready. No local .env changes were made.'
+    throw 'Authenticated Render voice status is not ready. No local .env changes were made.'
 }
-Write-Host 'Authenticated Render voice status: OK'
+Write-Host 'Authenticated Render ASR, TTS, and chat status: OK'
 
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backup = "$envPath.backup-$timestamp"
