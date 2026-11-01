@@ -493,4 +493,86 @@ class GlobalAssistantVoiceTest extends TestCase
         );
     }
 
+    public function test_online_non_streaming_chat_uses_render_gateway_without_a_direct_groq_key(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.ai_gateway.url' => 'https://voice-typing-r5r7.onrender.com',
+            'services.ai_gateway.token' => 'render-gateway-token',
+        ]);
+        $original = getenv('GROQ_API_KEY');
+        putenv('GROQ_API_KEY=');
+        $_ENV['GROQ_API_KEY'] = '';
+        $_SERVER['GROQ_API_KEY'] = '';
+        Http::fake([
+            'https://voice-typing-r5r7.onrender.com/v1/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => 'پاسخ از درگاه Render']]],
+            ], 200),
+        ]);
+
+        try {
+            $response = $this->actingAs(User::factory()->create())
+                ->postJson('/assistant/chat', ['message' => 'سلام']);
+
+            $response->assertOk()
+                ->assertJsonPath('provider', 'farast-ai-gateway')
+                ->assertJsonPath('reply', 'پاسخ از درگاه Render');
+            Http::assertSentCount(1);
+            Http::assertSent(fn (ClientRequest $request) =>
+                $request->url() === 'https://voice-typing-r5r7.onrender.com/v1/chat/completions'
+                && $request->hasHeader('Authorization', 'Bearer render-gateway-token')
+            );
+        } finally {
+            if ($original === false) {
+                putenv('GROQ_API_KEY');
+                unset($_ENV['GROQ_API_KEY'], $_SERVER['GROQ_API_KEY']);
+            } else {
+                putenv('GROQ_API_KEY='.$original);
+                $_ENV['GROQ_API_KEY'] = $original;
+                $_SERVER['GROQ_API_KEY'] = $original;
+            }
+        }
+    }
+
+    public function test_online_streaming_chat_does_not_bypass_render_when_direct_groq_is_also_configured(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.ai_gateway.url' => 'https://voice-typing-r5r7.onrender.com',
+            'services.ai_gateway.token' => 'render-gateway-token',
+        ]);
+        $original = getenv('GROQ_API_KEY');
+        putenv('GROQ_API_KEY=direct-groq-must-not-be-used');
+        $_ENV['GROQ_API_KEY'] = 'direct-groq-must-not-be-used';
+        $_SERVER['GROQ_API_KEY'] = 'direct-groq-must-not-be-used';
+        $streamBody = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'پاسخ جریانی Render']]]], JSON_UNESCAPED_UNICODE)."\\n\\ndata: [DONE]\\n\\n";
+        Http::fake([
+            'https://voice-typing-r5r7.onrender.com/v1/chat/completions' => Http::response($streamBody, 200, ['Content-Type' => 'text/event-stream']),
+            'https://api.groq.com/*' => Http::response(['choices' => [['delta' => ['content' => 'نباید استفاده شود']]]], 200),
+        ]);
+
+        try {
+            $response = $this->actingAs(User::factory()->create())
+                ->post('/assistant/chat/stream', ['message' => 'سلام']);
+
+            $response->assertOk();
+            $this->assertStringContainsString('پاسخ جریانی Render', $response->streamedContent());
+            $this->assertStringNotContainsString('نباید استفاده شود', $response->streamedContent());
+            Http::assertSentCount(1);
+            Http::assertSent(fn (ClientRequest $request) =>
+                $request->url() === 'https://voice-typing-r5r7.onrender.com/v1/chat/completions'
+                && $request->hasHeader('Authorization', 'Bearer render-gateway-token')
+            );
+        } finally {
+            if ($original === false) {
+                putenv('GROQ_API_KEY');
+                unset($_ENV['GROQ_API_KEY'], $_SERVER['GROQ_API_KEY']);
+            } else {
+                putenv('GROQ_API_KEY='.$original);
+                $_ENV['GROQ_API_KEY'] = $original;
+                $_SERVER['GROQ_API_KEY'] = $original;
+            }
+        }
+    }
+
 }
