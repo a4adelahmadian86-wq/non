@@ -386,10 +386,9 @@
   function noteGatewayAudioActivity(generation,pcm){if(generation!==gatewayGeneration||!pcm)return;var samples=pcm instanceof Int16Array?pcm:new Int16Array(pcm);if(!samples.length)return;var total=0;for(var i=0;i<samples.length;i++)total+=Math.abs(samples[i]);var level=total/samples.length;if(level<420){gatewayVoiceFrames=0;return;}gatewayLastVoiceAt=Date.now();if(level>=650)gatewayVoiceFrames=Math.min(6,gatewayVoiceFrames+1);else gatewayVoiceFrames=0;if(busy&&gatewayVoiceFrames>=3)interruptAssistantForBargeIn();scheduleGatewayTurnEnd(generation);}
   async function startBatchRecording(){
     if(batchRecording)return true;
-    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){
-      gatewayStatusMessage='این مرورگر ضبط صوت را پشتیبانی نمی‌کند یا صفحه در بستر امن HTTPS اجرا نشده است.';
-      return false;
-    }
+    if(!window.isSecureContext){gatewayStatusMessage='مرورگر فقط در HTTPS یا نشانی localhost اجازه دسترسی به میکروفون می‌دهد؛ سایت را با HTTPS یا http://localhost باز کن.';return false;}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){gatewayStatusMessage='دسترسی میکروفون در این مرورگر موجود نیست؛ HTTPS و مجوز میکروفون را بررسی کن.';return false;}
+    if(!window.MediaRecorder){gatewayStatusMessage='این مرورگر ضبط صوت را پشتیبانی نمی‌کند؛ از نسخه به‌روز Chrome یا Edge استفاده کن.';return false;}
     try{
       var readinessResponse=await fetch('/assistant/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
       var readiness=await readinessResponse.json().catch(function(){return {};});
