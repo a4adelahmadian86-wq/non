@@ -61,7 +61,6 @@ Set-EnvValue 'FARAST_VOICE_TTS_URL' "$baseUrl/v1/synthesize"
 Set-EnvValue 'FARAST_VOICE_TTS_TOKEN' $voiceToken
 Set-EnvValue 'FARAST_VOICE_TTS_VOICE_ID' 'farast-fa-male-v1'
 Set-EnvValue 'FARAST_AI_GATEWAY_URL' $baseUrl
-Set-EnvValue 'FARAST_AI_GATEWAY_TOKEN' $voiceToken
 Set-EnvValue 'FARAST_AI_GATEWAY_MODEL' 'farast-general'
 Set-EnvValue 'VOICE_STREAM_URL' 'wss://voice-typing-r5r7.onrender.com'
 
