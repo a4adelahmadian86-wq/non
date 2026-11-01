@@ -101,7 +101,18 @@ Set-LaravelValue 'FARAST_AI_GATEWAY_HEALTH_URL' 'http://127.0.0.1:7008/ready'
 Set-LaravelValue 'FARAST_AI_GATEWAY_TOKEN' $aiToken
 Set-LaravelValue 'FARAST_AI_GATEWAY_MODEL' 'qwen3:1.7b'
 Set-LaravelValue 'VOICE_STREAM_URL' 'ws://127.0.0.1:6002'
-Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:7007/v1/synthesize'
+$remoteBatchEnabled = ([string]$values['FARAST_VOICE_REMOTE_BATCH_ENABLED']) -match '^(?i:true|1|yes|on)$'
+if ($remoteBatchEnabled) {
+    # Keep the already verified Render ASR/TTS URLs; local Sherpa remains the live stream.
+    if ([string]::IsNullOrWhiteSpace([string]$values['FARAST_VOICE_ASR_URL'])) {
+        Set-LaravelValue 'FARAST_VOICE_ASR_URL' 'https://voice-typing-r5r7.onrender.com/v1/transcribe'
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$values['FARAST_VOICE_TTS_URL'])) {
+        Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'https://voice-typing-r5r7.onrender.com/v1/synthesize'
+    }
+} else {
+    Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:7007/v1/synthesize'
+}
 [System.IO.File]::WriteAllLines($laravelEnv, $laravelLines, [System.Text.UTF8Encoding]::new($false))
 
 $phpCommand = Get-Command php -ErrorAction SilentlyContinue
