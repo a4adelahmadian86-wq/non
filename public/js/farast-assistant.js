@@ -455,7 +455,7 @@
   async function startGatewayLiveRecognition(){
     if(gatewayStarting||gatewayWs)return true;
     var AudioContextClass=window.AudioContext||window.webkitAudioContext;
-    if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor))||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return false;
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder)return false;if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor)))return await startBatchRecording();
     gatewayStarting=true;var generation=++gatewayGeneration;
     try{
       // Check server readiness before requesting microphone permission. This avoids
@@ -528,9 +528,14 @@
         enableTextFallback('دسترسی میکروفون مجاز نیست؛ می‌توانی همین‌جا با نوشتن پیام ادامه بدهی.');
         return true;
       }
-      // A failed live connection must never downgrade to a two-step recording flow.
+      // If the live WebSocket/provider path fails before microphone capture,
+      // use the explicitly enabled authenticated Render batch-ASR path instead.
       panel.classList.remove('is-listening');
       root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+      if(conversationActive&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder){
+        gatewayStatusMessage=e&&e.message?e.message:'درگاه زنده در دسترس نیست؛ مسیر تشخیص گفتار دسته‌ای بررسی می‌شود.';
+        return await startBatchRecording();
+      }
       voiceTitle.textContent='میکروفون خاموش است';
       voiceCaption.textContent='اتصال گفتار برقرار نشد؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';
       status.textContent='میکروفون خاموش شد؛ اتصال زنده را بررسی کن و دوباره تلاش کن.';
