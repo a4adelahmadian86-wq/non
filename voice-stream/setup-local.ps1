@@ -101,7 +101,52 @@ Set-LaravelValue 'FARAST_AI_GATEWAY_HEALTH_URL' 'http://127.0.0.1:7008/ready'
 Set-LaravelValue 'FARAST_AI_GATEWAY_TOKEN' $aiToken
 Set-LaravelValue 'FARAST_AI_GATEWAY_MODEL' 'qwen3:1.7b'
 Set-LaravelValue 'VOICE_STREAM_URL' 'ws://127.0.0.1:6002'
-Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:7007/v1/synthesize'
+$remoteBatchEnabled = ([string]$values['FARAST_VOICE_REMOTE_BATCH_ENABLED']) -match '^(?i:true|1|yes|on)
+[System.IO.File]::WriteAllLines($laravelEnv, $laravelLines, [System.Text.UTF8Encoding]::new($false))
+
+$phpCommand = Get-Command php -ErrorAction SilentlyContinue
+$phpExe = if ($phpCommand) { $phpCommand.Source } else { $null }
+if ([string]::IsNullOrWhiteSpace($phpExe)) {
+    $phpCandidates = @('C:\xampp\php\php.exe', 'C:\wamp64\bin\php\php.exe', (Join-Path $projectRoot 'php\php.exe'))
+    foreach ($candidate in $phpCandidates) {
+        if (Test-Path -LiteralPath $candidate) { $phpExe = $candidate; break }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($phpExe)) {
+    foreach ($phpRoot in @('C:\laragon\bin\php', 'C:\wamp64\bin\php')) {
+        if (Test-Path -LiteralPath $phpRoot) {
+            $found = Get-ChildItem -LiteralPath $phpRoot -Filter php.exe -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $phpExe = $found.FullName; break }
+        }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($phpExe)) {
+    throw 'PHP CLI پیدا نشد. PHP پروژه باید نصب باشد و php.exe در PATH، XAMPP، WAMP یا Laragon در دسترس باشد تا حساب موتور گفتار ثبت شود.'
+}
+
+Push-Location $projectRoot
+try {
+    & $phpExe artisan db:seed --class='Database\Seeders\SherpaOnnxVoiceProviderSeeder' --force | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'ثبت موتور محلی Sherpa در پایگاه داده انجام نشد.' }
+    & $phpExe artisan config:clear | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'پاک‌سازی تنظیمات Laravel انجام نشد.' }
+} finally {
+    Pop-Location
+}
+
+Write-Host 'تنظیمات محلی گفتار و مدل زبانی آماده شد. کلیدها و توکن‌ها نمایش داده یا تغییر داده نشدند.'
+
+if ($remoteBatchEnabled) {
+    # Keep the already verified Render ASR/TTS URLs; local Sherpa remains the live stream.
+    if ([string]::IsNullOrWhiteSpace([string]$values['FARAST_VOICE_ASR_URL'])) {
+        Set-LaravelValue 'FARAST_VOICE_ASR_URL' 'https://voice-typing-r5r7.onrender.com/v1/transcribe'
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$values['FARAST_VOICE_TTS_URL'])) {
+        Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'https://voice-typing-r5r7.onrender.com/v1/synthesize'
+    }
+} else {
+    Set-LaravelValue 'FARAST_VOICE_TTS_URL' 'http://127.0.0.1:7007/v1/synthesize'
+}
 [System.IO.File]::WriteAllLines($laravelEnv, $laravelLines, [System.Text.UTF8Encoding]::new($false))
 
 $phpCommand = Get-Command php -ErrorAction SilentlyContinue
