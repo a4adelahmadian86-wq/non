@@ -545,7 +545,7 @@ class GlobalAssistantVoiceTest extends TestCase
         putenv('GROQ_API_KEY=direct-groq-must-not-be-used');
         $_ENV['GROQ_API_KEY'] = 'direct-groq-must-not-be-used';
         $_SERVER['GROQ_API_KEY'] = 'direct-groq-must-not-be-used';
-        $streamBody = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'پاسخ جریانی Render']]]], JSON_UNESCAPED_UNICODE)."\\n\\ndata: [DONE]\\n\\n";
+        $streamBody = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'پاسخ جریانی Render']]]], JSON_UNESCAPED_UNICODE)."\n\ndata: [DONE]\n\n";
         Http::fake([
             'https://voice-typing-r5r7.onrender.com/v1/chat/completions' => Http::response($streamBody, 200, ['Content-Type' => 'text/event-stream']),
             'https://api.groq.com/*' => Http::response(['choices' => [['delta' => ['content' => 'نباید استفاده شود']]]], 200),
