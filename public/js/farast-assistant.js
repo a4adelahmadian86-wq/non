@@ -410,7 +410,7 @@
         var chunks=batchChunks.slice(),blobType=recorder.mimeType||'audio/webm';
         batchChunks=[];batchRecorder=null;batchRecording=false;
         if(batchMediaStream){batchMediaStream.getTracks().forEach(function(track){track.stop();});batchMediaStream=null;}
-        panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');
+        panel.classList.remove('is-listening');var stoppedMic=root.querySelector('.farast-assistant-mic');stoppedMic.classList.remove('is-recording');var stoppedMicLabel=stoppedMic.querySelector('span');if(stoppedMicLabel)stoppedMicLabel.textContent='صحبت کن';stoppedMic.setAttribute('aria-label','شروع صحبت');
         if(!chunks.length){status.textContent='صدایی ضبط نشد؛ دوباره تلاش کن.';voiceTitle.textContent='ضبط خالی بود';return;}
         var blob=new Blob(chunks,{type:blobType});
         if(!blob.size){status.textContent='فایل ضبط‌شده خالی است؛ دوباره تلاش کن.';return;}
@@ -432,6 +432,7 @@
         }
       };
       recorder.start(1000);
+      var batchMicButton=root.querySelector('.farast-assistant-mic');var batchMicLabel=batchMicButton.querySelector('span');if(batchMicLabel)batchMicLabel.textContent='پایان ضبط';batchMicButton.setAttribute('aria-label','پایان ضبط');
       panel.classList.add('is-listening');
       root.querySelector('.farast-assistant-mic').classList.add('is-recording');
       voiceTitle.textContent='در حال ضبط';voiceCaption.textContent='صحبت کن؛ برای پایان ضبط، دکمه میکروفون را دوباره لمس کن.';
@@ -440,7 +441,7 @@
       return true;
     }catch(error){
       if(batchMediaStream){batchMediaStream.getTracks().forEach(function(track){track.stop();});batchMediaStream=null;}
-      batchRecorder=null;batchChunks=[];batchRecording=false;
+      batchRecorder=null;batchChunks=[];batchRecording=false;var failedMic=root.querySelector('.farast-assistant-mic');var failedMicLabel=failedMic.querySelector('span');if(failedMicLabel)failedMicLabel.textContent='صحبت کن';failedMic.setAttribute('aria-label','شروع صحبت');
       if(error&&(error.name==='NotAllowedError'||error.name==='SecurityError'))gatewayStatusMessage='دسترسی میکروفون مجاز نیست؛ مجوز میکروفون مرورگر و HTTPS را بررسی کن.';
       else gatewayStatusMessage=error&&error.message?error.message:'شروع ضبط صدا ناموفق بود.';
       return false;
@@ -449,13 +450,13 @@
   function stopBatchRecording(){
     if(!batchRecorder||batchRecorder.state==='inactive')return;
     if(batchStopTimer){window.clearTimeout(batchStopTimer);batchStopTimer=null;}
-    voiceTitle.textContent='در حال پایان ضبط';voiceCaption.textContent='چند لحظه صبر کن تا صدا ارسال و تبدیل شود.';status.textContent='در حال نهایی‌کردن فایل صوتی…';
+    voiceTitle.textContent='در حال پایان ضبط';voiceCaption.textContent='چند لحظه صبر کن تا صدا ارسال و تبدیل شود.';status.textContent='در حال نهایی‌کردن فایل صوتی…';var stoppingMic=root.querySelector('.farast-assistant-mic');var stoppingLabel=stoppingMic.querySelector('span');if(stoppingLabel)stoppingLabel.textContent='در حال ارسال…';stoppingMic.setAttribute('aria-label','در حال ارسال');
     try{batchRecorder.stop();}catch(error){gatewayStatusMessage='توقف ضبط ناموفق بود.';}
   }
   async function startGatewayLiveRecognition(){
     if(gatewayStarting||gatewayWs)return true;
     var AudioContextClass=window.AudioContext||window.webkitAudioContext;
-    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder)return false;if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor)))return await startBatchRecording();
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return false;if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor)))return await startBatchRecording();
     gatewayStarting=true;var generation=++gatewayGeneration;
     try{
       // Check server readiness before requesting microphone permission. This avoids
