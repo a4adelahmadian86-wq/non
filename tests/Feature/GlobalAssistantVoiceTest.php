@@ -575,4 +575,20 @@ class GlobalAssistantVoiceTest extends TestCase
         }
     }
 
+    public function test_cloud_voice_status_does_not_claim_render_chat_ready_without_a_gateway_token(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.ai_gateway.url' => 'https://voice-typing-r5r7.onrender.com',
+            'services.ai_gateway.token' => '',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('local_only', false)
+            ->assertJsonPath('chat_gateway_ready', false);
+        $this->assertStringContainsString('FARAST_VOICE_TOKEN', (string) $response->json('chat_gateway_message'));
+    }
+
 }
