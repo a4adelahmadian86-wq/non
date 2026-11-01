@@ -326,7 +326,7 @@ test('opening the assistant keeps the microphone off until the user taps', async
 });
 
 
-test('gateway connection startup failure does not auto-start browser recognition', async ({ page }) => {
+test('gateway connection startup failure falls back to text when batch ASR is unavailable', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -350,7 +350,7 @@ test('gateway connection startup failure does not auto-start browser recognition
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-  await expect(page.locator('[data-fa-voice-title]')).toContainText('میکروفون خاموش');
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('ورودی متنی در دسترس است');
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
@@ -604,7 +604,7 @@ test('approved push-to-talk fallback records audio, transcribes it, and sends th
   window.fetch = async (url, options={}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ok:true,messages:[]}), {status:200,headers:{'Content-Type':'application/json'}});
     if (url === '/editor/voice/status') return new Response(JSON.stringify({ok:true,mode:'none'}), {status:200,headers:{'Content-Type':'application/json'}});
-    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ok:true,local_only:false,server_stt:true,server_stt_token_configured:true,server_tts:true,server_tts_token_configured:true}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ok:true,local_only:false,remote_batch_enabled:true,server_stt:true,server_stt_token_configured:true,server_tts:true,server_tts_token_configured:true}), {status:200,headers:{'Content-Type':'application/json'}});
     if (url === '/assistant/transcribe') { window.__transcribeFile=options.body.get('audio'); return new Response(JSON.stringify({ok:true,text:'سلام فراست'}), {status:200,headers:{'Content-Type':'application/json'}}); }
     if (url === '/assistant/chat/stream') { window.__chatMessage=JSON.parse(options.body).message; return new Response(JSON.stringify({reply:'سلام، صدایت رسید.'}), {status:200,headers:{'Content-Type':'application/json'}}); }
     if (url === '/assistant/speak') return new Response(JSON.stringify({message:'mock TTS unavailable'}), {status:503,headers:{'Content-Type':'application/json'}});
