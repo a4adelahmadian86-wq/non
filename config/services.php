@@ -39,9 +39,13 @@ return [
     ],
 
     'voice_stream' => [
-        'url' => env('VOICE_STREAM_URL', ''),
+        // The online conversation WebSocket is hosted on Render; local Laravel only
+        // issues short-lived session tokens and never needs to be reachable by Render.
+        'url' => env('VOICE_STREAM_URL', $voiceLocalOnly ? 'ws://127.0.0.1:6002' : 'wss://voice-typing-r5r7.onrender.com'),
+        'token_secret' => env('FARAST_VOICE_TOKEN', env('FARAST_VOICE_ASR_TOKEN', '')),
+        // Legacy local gateway authentication, retained only for optional local development.
         'gateway_secret' => env('VOICE_GATEWAY_SECRET'),
-        'health_url' => env('VOICE_STREAM_HEALTH_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 'http://127.0.0.1:6002/health' : ''),
+        'health_url' => env('VOICE_STREAM_HEALTH_URL', $voiceLocalOnly ? 'http://127.0.0.1:6002/health' : ''),
     ],
 
     'google_speech' => [
