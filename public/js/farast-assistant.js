@@ -538,6 +538,7 @@
       voiceCaption.textContent=gatewayStatusMessage+' برای جلوگیری از تبدیل مکالمه به ضبط و ارسال دستی، مسیر دسته‌ای فعال نمی‌شود.';
       status.textContent='اتصال مکالمه برقرار نشد؛ ورودی متنی همچنان در دسترس است.';
       return false;
+    }
   }
   function finishGatewayTurn(generation){
     if(generation!==gatewayGeneration||!conversationActive||liveTurnEnding)return;
