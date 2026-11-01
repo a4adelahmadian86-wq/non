@@ -447,7 +447,7 @@ class GlobalAssistantVoiceTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('local_only', true)
             ->assertJsonPath('chat_gateway_ready', false)
-            ->assertJsonFragment(['chat_gateway_message' => 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: FARAST_AI_GATEWAY_URL، FARAST_AI_GATEWAY_TOKEN. هیچ سرویس ابری فراخوانی نمی‌شود.']);
+            ->assertJsonFragment(['chat_gateway_message' => 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: FARAST_AI_GATEWAY_URL، FARAST_AI_GATEWAY_TOKEN یا FARAST_VOICE_TOKEN. هیچ سرویس ابری فراخوانی نمی‌شود.']);
     }
 
 
