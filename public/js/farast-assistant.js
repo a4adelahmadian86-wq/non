@@ -455,7 +455,7 @@
   async function startGatewayLiveRecognition(){
     if(gatewayStarting||gatewayWs)return true;
     var AudioContextClass=window.AudioContext||window.webkitAudioContext;
-    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){gatewayStatusMessage=!window.isSecureContext?'برای فعال‌شدن میکروفون، سایت باید با HTTPS یا localhost باز شود.':'مرورگر اجازه دسترسی به میکروفون را فراهم نمی‌کند؛ تنظیمات سایت و مجوز میکروفون را بررسی کن.';return false;}if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor)))return await startBatchRecording();
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){gatewayStatusMessage=!window.isSecureContext?'برای فعال‌شدن میکروفون، سایت باید با HTTPS یا localhost باز شود.':'مرورگر اجازه دسترسی به میکروفون را فراهم نمی‌کند؛ تنظیمات سایت و مجوز میکروفون را بررسی کن.';return false;}if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor))){gatewayStarting=false;return await startBatchRecording();}
     gatewayStarting=true;var generation=++gatewayGeneration;
     try{
       // Check server readiness before requesting microphone permission. This avoids
