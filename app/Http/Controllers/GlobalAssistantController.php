@@ -28,15 +28,19 @@ class GlobalAssistantController extends Controller
                 $gatewayHealthy = false;
             }
         }
-        $chatGatewayReady = ! $localOnly || ($gatewayPrivate && $gatewayToken !== '' && $gatewayHealthy);
+        $chatGatewayReady = $localOnly
+            ? ($gatewayPrivate && $gatewayToken !== '' && $gatewayHealthy)
+            : ($gatewayUrl !== '' && $gatewayToken !== '');
         $chatGatewayMessage = '';
-        if ($localOnly && ! $chatGatewayReady) {
+        if (! $chatGatewayReady) {
             $missing = [];
             if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
-            elseif (! $gatewayPrivate) $missing[] = 'آدرس خصوصی برای FARAST_AI_GATEWAY_URL';
-            if ($gatewayToken === '') $missing[] = 'FARAST_AI_GATEWAY_TOKEN';
-            if ($gatewayPrivate && $gatewayToken !== '' && ! $gatewayHealthy) $missing[] = 'مدل زبانی محلی آماده نیست؛ start.cmd را اجرا کن و سلامت /ready را بررسی کن';
-            $chatGatewayMessage = 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: '.implode('، ', $missing).'. هیچ سرویس ابری فراخوانی نمی‌شود.';
+            elseif ($localOnly && ! $gatewayPrivate) $missing[] = 'آدرس خصوصی برای FARAST_AI_GATEWAY_URL';
+            if ($gatewayToken === '') $missing[] = 'FARAST_AI_GATEWAY_TOKEN یا FARAST_VOICE_TOKEN';
+            if ($localOnly && $gatewayPrivate && $gatewayToken !== '' && ! $gatewayHealthy) $missing[] = 'مدل زبانی محلی آماده نیست؛ start.cmd را اجرا کن و سلامت /ready را بررسی کن';
+            $chatGatewayMessage = $localOnly
+                ? 'برای پاسخ‌گویی در حالت خودمیزبان، این تنظیمات لازم است: '.implode('، ', $missing).'. هیچ سرویس ابری فراخوانی نمی‌شود.'
+                : 'درگاه آنلاین Render برای چت آماده نیست؛ این تنظیمات لازم است: '.implode('، ', $missing).'.';
         }
 
         return response()->json([
