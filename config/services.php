@@ -9,7 +9,7 @@ return [
         // Production AI requests are routed through the existing Render gateway by default.
         // Local-only mode still rejects public gateway URLs in the controller.
         'url' => env('FARAST_AI_GATEWAY_URL', 'https://voice-typing-r5r7.onrender.com'),
-        'token' => env('FARAST_AI_GATEWAY_TOKEN', env('FARAST_VOICE_TOKEN', '')),
+        'token' => env('FARAST_VOICE_TOKEN', ''),
         'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', $voiceLocalOnly ? 'http://127.0.0.1:7008/ready' : ''),
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
     ],
