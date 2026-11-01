@@ -164,7 +164,7 @@ class GlobalAssistantVoiceTest extends TestCase
         putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
         $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
         $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
-        config(['services.voice.local_only' => true]);
+        config(['services.voice.local_only' => true, 'services.voice.remote_batch_enabled' => false]);
         putenv('GROQ_API_KEY=must-not-be-used');
         $_ENV['GROQ_API_KEY'] = 'must-not-be-used';
         $_SERVER['GROQ_API_KEY'] = 'must-not-be-used';
@@ -285,7 +285,7 @@ class GlobalAssistantVoiceTest extends TestCase
         putenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED=true');
         $_ENV['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
         $_SERVER['FARAST_VOICE_LOCAL_SPEECH_ENABLED'] = 'true';
-        config(['services.voice.local_only' => true]);
+        config(['services.voice.local_only' => true, 'services.voice.remote_batch_enabled' => false]);
         Http::fake();
 
         try {
