@@ -538,7 +538,8 @@ test('stopping the conversation closes the live gateway and releases the microph
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){window.__stoppedTracks++;}}]})}});
+  Object.defineProperty(window,'isSecureContext',{configurable:true,value:true});
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__getUserMediaCalls++;return {getTracks:()=>[{stop(){window.__stoppedTracks++;}}]};}}});
   window.fetch=async(url)=>{
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
@@ -593,6 +594,7 @@ test('approved push-to-talk fallback records audio, transcribes it, and sends th
   window.__stoppedTracks = 0;
   window.__transcribeFile = null;
   window.__chatMessage = null;
+  Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => { window.__micCalls++; return { getTracks: () => [{ stop() { window.__stoppedTracks++; } }] }; } } });
   class FakeMediaRecorder {
     constructor(stream, options) { this.stream=stream; this.mimeType=options?.mimeType||'audio/webm'; this.state='inactive'; window.__recorder=this; }
