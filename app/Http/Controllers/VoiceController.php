@@ -29,6 +29,53 @@ class VoiceController extends Controller
 
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
         $localVoiceOnly = (bool) config('services.voice.local_only', false);
+
+        // Online voice sessions connect directly to Render. The browser receives a
+        // short-lived signed token from Laravel; Render verifies it locally using the
+        // already-shared FARAST_VOICE_TOKEN and never calls back into this Laravel host.
+        if (! $localVoiceOnly) {
+            $sessionSecret = trim((string) config('services.voice_stream.token_secret', ''));
+            $asrUrl = trim((string) config('services.voice_asr.url', ''));
+            $asrToken = trim((string) config('services.voice_asr.token', ''));
+            $ttsUrl = trim((string) config('services.voice_tts.url', ''));
+            $ttsToken = trim((string) config('services.voice_tts.token', ''));
+            $chatUrl = trim((string) config('services.ai_gateway.url', ''));
+            $chatToken = trim((string) config('services.ai_gateway.token', ''));
+
+            $missing = [];
+            if ($wsUrl === '') $missing[] = 'VOICE_STREAM_URL';
+            if ($sessionSecret === '') $missing[] = 'FARAST_VOICE_TOKEN';
+            if ($asrUrl === '' || $asrToken === '') $missing[] = 'Render ASR URL/token';
+            if ($ttsUrl === '' || $ttsToken === '') $missing[] = 'Render TTS URL/token';
+            if ($chatUrl === '' || $chatToken === '') $missing[] = 'Render AI gateway URL/token';
+
+            if (! $missing) {
+                return response()->json([
+                    'ok' => true,
+                    'mode' => 'gateway',
+                    'chunked' => false,
+                    'gateway' => true,
+                    'websocket_url' => preg_replace('#^http#', 'ws', $wsUrl),
+                    'reason' => null,
+                    'self_hosted' => false,
+                    'provider' => 'render',
+                    'endpointing' => 'server-vad',
+                ], 200, ['Cache-Control' => 'no-store']);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'mode' => 'none',
+                'chunked' => false,
+                'gateway' => false,
+                'websocket_url' => '',
+                'reason' => 'render_voice_gateway_not_configured',
+                'message' => 'گفت‌وگوی زنده Render کامل پیکربندی نشده است: '.implode('، ', $missing).'.',
+                'missing' => $missing,
+                'self_hosted' => false,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
         $secret = (string) config('services.voice_stream.gateway_secret', '');
         $account = null;
         $providerLookupFailed = false;
@@ -131,8 +178,27 @@ class VoiceController extends Controller
     public function streamToken(Request $request)
     {
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
-        $payload=['uid'=>(int)$request->user()->id,'locale'=>$request->string('locale')->toString(),'iat'=>time(),'exp'=>time()+120,'nonce'=>bin2hex(random_bytes(12))];
-        return response()->json(['ok'=>true,'session_id'=>$payload['nonce'],'token'=>$this->signStreamPayload($payload),'expires_at'=>date(DATE_ATOM,$payload['exp']),'websocket_url'=>rtrim((string)config('services.voice_stream.url',''),'/')]);
+        $secret = trim((string) config('services.voice_stream.token_secret', ''));
+        $websocketUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
+        abort_if($secret === '' || $websocketUrl === '', 503, 'درگاه گفت‌وگوی زنده Render پیکربندی نشده است.');
+
+        $payload = [
+            'uid' => (int) $request->user()->id,
+            'locale' => $request->string('locale')->toString(),
+            'iat' => time(),
+            'exp' => time() + 120,
+            'nonce' => bin2hex(random_bytes(16)),
+        ];
+        $encoded = rtrim(strtr(base64_encode(json_encode($payload, JSON_UNESCAPED_SLASHES)), '+/', '-_'), '=');
+        $token = $encoded.'.'.hash_hmac('sha256', $encoded, $secret);
+
+        return response()->json([
+            'ok' => true,
+            'session_id' => $payload['nonce'],
+            'token' => $token,
+            'expires_at' => date(DATE_ATOM, $payload['exp']),
+            'websocket_url' => $websocketUrl,
+        ], 200, ['Cache-Control' => 'no-store']);
     }
 
     public function streamConfig(Request $request)
