@@ -30,11 +30,11 @@ class VoiceController extends Controller
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
         $localVoiceOnly = (bool) config('services.voice.local_only', false);
 
-        // Online voice sessions connect directly to Render. The browser receives a
-        // short-lived signed token from Laravel; Render verifies it locally using the
-        // already-shared FARAST_VOICE_TOKEN and never calls back into this Laravel host.
-        if (! $localVoiceOnly) {
-            $sessionSecret = trim((string) config('services.voice_stream.token_secret', ''));
+        // Online voice sessions connect directly to Render only when the shared
+        // Render session-signing secret is configured. Legacy/local gateways keep
+        // their existing APP_KEY/provider-router contract.
+        $sessionSecret = trim((string) config('services.voice_stream.token_secret', ''));
+        if (! $localVoiceOnly && $sessionSecret !== '') {
             $asrUrl = trim((string) config('services.voice_asr.url', ''));
             $asrToken = trim((string) config('services.voice_asr.token', ''));
             $ttsUrl = trim((string) config('services.voice_tts.url', ''));
@@ -180,7 +180,6 @@ class VoiceController extends Controller
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
         $secret = trim((string) config('services.voice_stream.token_secret', ''));
         $websocketUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
-        abort_if($secret === '' || $websocketUrl === '', 503, 'درگاه گفت‌وگوی زنده Render پیکربندی نشده است.');
 
         $payload = [
             'uid' => (int) $request->user()->id,
@@ -189,8 +188,13 @@ class VoiceController extends Controller
             'exp' => time() + 120,
             'nonce' => bin2hex(random_bytes(16)),
         ];
-        $encoded = rtrim(strtr(base64_encode(json_encode($payload, JSON_UNESCAPED_SLASHES)), '+/', '-_'), '=');
-        $token = $encoded.'.'.hash_hmac('sha256', $encoded, $secret);
+        if (! (bool) config('services.voice.local_only', false) && $secret !== '') {
+            $encoded = rtrim(strtr(base64_encode(json_encode($payload, JSON_UNESCAPED_SLASHES)), '+/', '-_'), '=');
+            $token = $encoded.'.'.hash_hmac('sha256', $encoded, $secret);
+        } else {
+            // Backward-compatible short-lived token for optional local gateways.
+            $token = $this->signStreamPayload($payload);
+        }
 
         return response()->json([
             'ok' => true,
