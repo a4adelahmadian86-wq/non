@@ -21,9 +21,12 @@ class GlobalAssistantVoiceTest extends TestCase
             .pack('V', 8000).pack('V', 16000).pack('v', 2).pack('v', 16).'data'.pack('V', 2).pack('v', 0);
     }
 
-    public function test_global_assistant_can_issue_a_scoped_live_voice_token_outside_the_editor(): void
+    public function test_global_assistant_issues_a_short_lived_render_verifiable_voice_session_token(): void
     {
-        config(['services.voice_stream.url' => 'wss://voice.example.test']);
+        config([
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.token_secret' => 'render-shared-voice-token',
+        ]);
 
         $response = $this->actingAs(User::factory()->create())
             ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
@@ -31,27 +34,30 @@ class GlobalAssistantVoiceTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('websocket_url', 'wss://voice.example.test');
-        $this->assertNotEmpty($response->json('token'));
-        $appKey = (string) config('app.key');
-        if ($appKey !== '') {
-            $this->assertStringNotContainsString($appKey, $response->getContent());
-        }
+        $token = (string) $response->json('token');
+        $this->assertNotEmpty($token);
+        [$encoded, $signature] = explode('.', $token, 2);
+        $this->assertSame(hash_hmac('sha256', $encoded, 'render-shared-voice-token'), $signature);
+        $payload = json_decode(base64_decode(strtr($encoded, '-_', '+/').str_repeat('=', (4 - strlen($encoded) % 4) % 4)), true);
+        $this->assertSame('fa-IR', $payload['locale']);
+        $this->assertSame(120, $payload['exp'] - $payload['iat']);
+        $this->assertNotEmpty($payload['nonce']);
+        $this->assertStringNotContainsString((string) config('app.key'), $response->getContent());
     }
 
-    public function test_live_gateway_takes_priority_over_configured_batch_asr(): void
+    public function test_render_live_voice_status_does_not_depend_on_a_laravel_callback_or_provider_database(): void
     {
         config([
+            'services.voice.local_only' => false,
             'services.voice_stream.url' => 'wss://voice.example.test',
-            'services.voice_stream.gateway_secret' => 'gateway-secret',
-            'services.voice_asr.url' => 'https://voice.test/v1/transcribe',
-            'services.voice_asr.token' => 'asr-token',
+            'services.voice_stream.token_secret' => 'render-shared-voice-token',
+            'services.voice_asr.url' => 'https://voice.example.test/v1/transcribe',
+            'services.voice_asr.token' => 'render-shared-voice-token',
+            'services.voice_tts.url' => 'https://voice.example.test/v1/synthesize',
+            'services.voice_tts.token' => 'render-shared-voice-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'render-shared-voice-token',
         ]);
-
-        $router = \Mockery::mock(VoiceProviderRouter::class);
-        $account = new VoiceProviderAccount();
-        $account->setAttribute('id', 123);
-        $router->shouldReceive('best')->once()->with('fa-IR')->andReturn($account);
-        $this->app->instance(VoiceProviderRouter::class, $router);
 
         $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
 
@@ -59,9 +65,10 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('mode', 'gateway')
             ->assertJsonPath('gateway', true)
             ->assertJsonPath('chunked', false)
-            ->assertJsonPath('websocket_url', 'wss://voice.example.test');
-        $this->assertStringNotContainsString('gateway-secret', $response->getContent());
-        $this->assertStringNotContainsString('asr-token', $response->getContent());
+            ->assertJsonPath('websocket_url', 'wss://voice.example.test')
+            ->assertJsonPath('provider', 'render')
+            ->assertJsonPath('endpointing', 'server-vad');
+        $this->assertStringNotContainsString('render-shared-voice-token', $response->getContent());
     }
 
     public function test_local_live_gateway_status_identifies_server_only_persian_mode(): void
