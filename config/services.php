@@ -1,11 +1,16 @@
 <?php
 
+$voiceLocalOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+$remoteBatchDefault = ! $voiceLocalOnly;
+
 return [
     // Optional central multi-provider gateway. Empty by default preserves direct provider behavior.
     'ai_gateway' => [
-        'url' => env('FARAST_AI_GATEWAY_URL', ''),
-        'token' => env('FARAST_AI_GATEWAY_TOKEN', ''),
-        'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 'http://127.0.0.1:7008/ready' : ''),
+        // Production AI requests are routed through the existing Render gateway by default.
+        // Local-only mode still rejects public gateway URLs in the controller.
+        'url' => env('FARAST_AI_GATEWAY_URL', 'https://voice-typing-r5r7.onrender.com'),
+        'token' => env('FARAST_AI_GATEWAY_TOKEN', env('FARAST_VOICE_TOKEN', '')),
+        'health_url' => env('FARAST_AI_GATEWAY_HEALTH_URL', $voiceLocalOnly ? 'http://127.0.0.1:7008/ready' : ''),
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
     ],
 
@@ -16,8 +21,10 @@ return [
 
     // Optional private/self-hosted speech services. No third-party cloud API is assumed.
     'voice' => [
-        'local_only' => filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-        'remote_batch_enabled' => filter_var(env('FARAST_VOICE_REMOTE_BATCH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'local_only' => $voiceLocalOnly,
+        // Online deployments use Render batch ASR/TTS by default. Local development
+        // remains opt-in when FARAST_VOICE_LOCAL_SPEECH_ENABLED=true.
+        'remote_batch_enabled' => filter_var(env('FARAST_VOICE_REMOTE_BATCH_ENABLED', $remoteBatchDefault), FILTER_VALIDATE_BOOLEAN),
     ],
 
     'voice_asr' => [
