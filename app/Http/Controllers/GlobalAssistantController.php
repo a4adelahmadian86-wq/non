@@ -341,7 +341,8 @@ class GlobalAssistantController extends Controller
         if ($gatewayUrl !== '' && $gatewayToken !== '') {
             $targets[] = ['url' => $gatewayUrl.'/v1/chat/completions', 'token' => $gatewayToken, 'model' => trim((string) config('services.ai_gateway.model', 'farast-general')) ?: 'farast-general', 'limit_key' => 'max_tokens', 'name' => 'gateway'];
         }
-        if (! $localVoiceOnly && $groqKey !== '') {
+        if (! $localVoiceOnly && $groqKey !== '' && ! ($gatewayUrl !== '' && $gatewayToken !== '')) {
+            // Direct Groq is a compatibility path only when no Render gateway is configured.
             $targets[] = ['url' => 'https://api.groq.com/openai/v1/chat/completions', 'token' => $groqKey, 'model' => $model, 'limit_key' => 'max_completion_tokens', 'name' => 'groq'];
         }
         $upstream = null;
@@ -466,7 +467,10 @@ class GlobalAssistantController extends Controller
             . $history . "\nکاربر: " . $data['message'];
         try {
             $groqKey = trim((string) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')));
-            if ($groqKey !== '') {
+            $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
+            $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
+            $gatewayConfigured = $gatewayUrl !== '' && $gatewayToken !== '';
+            if ($groqKey !== '' || $gatewayConfigured) {
                 // Reuse the admin-managed Groq secret for chat and Whisper; never expose it to the browser.
                 $model = trim((string) SiteSetting::read('assistant_groq_model', 'openai/gpt-oss-120b'));
                 $messages = [[
@@ -486,11 +490,9 @@ class GlobalAssistantController extends Controller
                 }
                 $messages[] = ['role' => 'user', 'content' => $data['message']];
 
-                // Prefer the central Runflare gateway when configured; direct Groq below remains
-                // the immediate fallback if the gateway or its upstream providers are unavailable.
-                $gatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
-                $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
-                if ($gatewayUrl !== '' && $gatewayToken !== '') {
+                // Prefer the Render gateway. When it is configured, do not silently bypass it
+                // with a direct provider request if the gateway is unavailable.
+                if ($gatewayConfigured) {
                     try {
                         $gatewayRequestId = (string) ($request->header('Idempotency-Key') ?: \Illuminate\Support\Str::uuid());
                         $gatewayResponse = Http::withToken($gatewayToken)->acceptJson()->timeout(35)->retry(1, 300, throw: false)
@@ -510,15 +512,16 @@ class GlobalAssistantController extends Controller
                         Log::warning('farast.global_assistant_gateway_failed', [
                             'user_id' => $user->id,
                             'status' => $gatewayResponse->status(),
-                            'fallback' => 'groq',
+                            'fallback' => 'disabled',
                         ]);
                     } catch (\Throwable $gatewayException) {
                         Log::warning('farast.global_assistant_gateway_exception', [
                             'user_id' => $user->id,
                             'error_class' => class_basename($gatewayException),
-                            'fallback' => 'groq',
+                            'fallback' => 'disabled',
                         ]);
                     }
+                    throw new RuntimeException('ai_gateway_failure');
                 }
 
                 $response = Http::withToken($groqKey)->acceptJson()->timeout(30)->retry(1, 300, throw: false)
