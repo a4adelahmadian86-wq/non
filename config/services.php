@@ -4,7 +4,7 @@ $voiceLocalOnly = filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FI
 $remoteBatchDefault = ! $voiceLocalOnly;
 
 return [
-    // Optional central multi-provider gateway. Empty by default preserves direct provider behavior.
+    // Central online assistant gateway. Set FARAST_AI_GATEWAY_URL empty only to use the compatibility provider path.
     'ai_gateway' => [
         // Production AI requests are routed through the existing Render gateway by default.
         // Local-only mode still rejects public gateway URLs in the controller.
@@ -19,7 +19,7 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
-    // Optional private/self-hosted speech services. No third-party cloud API is assumed.
+    // Speech gateway URLs. Production defaults point to the existing Render service.
     'voice' => [
         'local_only' => $voiceLocalOnly,
         // Online deployments use Render batch ASR/TTS by default. Local development
