@@ -33,7 +33,12 @@ test('all browser voice clients use server recognition and never install speech 
   assert.match(clients[1], /getUserMedia/);
   assert.match(clients[1], /new WebSocket/);
   assert.doesNotMatch(clients[0], /MediaRecorder|startChunked|\/editor\/voice\/transcribe/);
-  assert.doesNotMatch(clients[1], /MediaRecorder|\/assistant\/transcribe|startBatchFallback|startBatchCapture/);
+  // The global assistant may use an explicit, user-started Render batch recording only
+  // when the server advertises both remote_batch_enabled and a configured ASR endpoint.
+  assert.match(clients[1], /MediaRecorder/);
+  assert.match(clients[1], /readiness\.remote_batch_enabled/);
+  assert.match(clients[1], /readiness\.server_stt/);
+  assert.match(clients[1], /\/assistant\/transcribe/);
   assert.match(clients[1], /startGatewayLiveRecognition/);
   assert.match(clients[3], /output\.fill\(0\)/);
 });
