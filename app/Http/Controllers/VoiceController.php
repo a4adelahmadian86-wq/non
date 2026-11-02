@@ -29,6 +29,8 @@ class VoiceController extends Controller
 
         $wsUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
         $localVoiceOnly = (bool) config('services.voice.local_only', false);
+        $aiGatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
+        $renderVoiceConfigured = ! $localVoiceOnly && $aiGatewayUrl !== '';
 
         // Online voice sessions connect directly to Render only when the shared
         // Render session-signing secret is configured. Legacy/local gateways keep
@@ -42,7 +44,21 @@ class VoiceController extends Controller
             && hash_equals($asrSessionToken, $chatSessionToken)) {
             $sessionSecret = $asrSessionToken;
         }
-        if (! $localVoiceOnly && $sessionSecret !== '') {
+        if ($renderVoiceConfigured && $sessionSecret === '') {
+            return response()->json([
+                'ok' => true,
+                'mode' => 'none',
+                'chunked' => false,
+                'gateway' => false,
+                'websocket_url' => '',
+                'reason' => 'render_voice_token_missing',
+                'message' => 'توکن مشترک گفت‌وگوی زنده Render تنظیم نشده یا با توکن‌های درگاه یکسان نیست؛ مقدار FARAST_VOICE_TOKEN باید با توکن مشترک Render هماهنگ باشد.',
+                'missing' => ['FARAST_VOICE_TOKEN (shared Render token)'],
+                'self_hosted' => false,
+            ], 200, ['Cache-Control' => 'no-store']);
+        }
+
+        if ($renderVoiceConfigured) {
             $asrUrl = trim((string) config('services.voice_asr.url', ''));
             $asrToken = trim((string) config('services.voice_asr.token', ''));
             $ttsUrl = trim((string) config('services.voice_tts.url', ''));
@@ -187,7 +203,10 @@ class VoiceController extends Controller
     {
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
         $secret = trim((string) config('services.voice_stream.token_secret', ''));
-        if ($secret === '' && ! (bool) config('services.voice.local_only', false)) {
+        $localVoiceOnly = (bool) config('services.voice.local_only', false);
+        $websocketUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
+        $aiGatewayUrl = rtrim(trim((string) config('services.ai_gateway.url', '')), '/');
+        if ($secret === '' && ! $localVoiceOnly) {
             $asrSessionToken = trim((string) config('services.voice_asr.token', ''));
             $chatSessionToken = trim((string) config('services.ai_gateway.token', ''));
             if ($asrSessionToken !== '' && $chatSessionToken !== ''
@@ -195,7 +214,16 @@ class VoiceController extends Controller
                 $secret = $asrSessionToken;
             }
         }
-        $websocketUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
+        if (! $localVoiceOnly && $aiGatewayUrl !== '' && ($secret === '' || $websocketUrl === '')) {
+            $missing = [];
+            if ($secret === '') $missing[] = 'FARAST_VOICE_TOKEN (shared Render token)';
+            if ($websocketUrl === '') $missing[] = 'VOICE_STREAM_URL';
+            return response()->json([
+                'ok' => false,
+                'code' => $secret === '' ? 'render_voice_token_missing' : 'render_voice_gateway_not_configured',
+                'message' => 'اتصال زندهٔ Render کامل پیکربندی نشده است: '.implode('، ', $missing).'.',
+            ], 503, ['Cache-Control' => 'no-store']);
+        }
 
         $payload = [
             'uid' => (int) $request->user()->id,
