@@ -8,7 +8,7 @@ import { test } from 'node:test';
 const here = dirname(fileURLToPath(import.meta.url));
 const project = resolve(here, '../..');
 
-test('PCM worklet suppresses long silence and sends speech with a 1.5s endpoint tail', async () => {
+test('PCM worklet continuously sends silence and speech for server-side VAD pre-roll', async () => {
   const source = await readFile(resolve(project, 'public/js/farast-voice-worklet.js'), 'utf8');
   const sent = [];
   let Processor;
@@ -34,16 +34,16 @@ test('PCM worklet suppresses long silence and sends speech with a 1.5s endpoint 
 
   runFrame(0);
   runFrame(0);
-  assert.equal(sent.length, 0, 'idle silence should not be sent to the ASR server');
+  assert.equal(sent.length, 2, 'silence must be sent so the server can maintain a pre-roll buffer');
+  assert.equal(sent[0].length, 1600);
+  assert.ok(sent[0].every(sample => sample === 0));
 
   runFrame(0.1);
-  assert.equal(sent.length, 1, 'speech frame should be sent');
-  assert.equal(sent[0].length, 1600);
-  assert.ok(sent[0][100] > 3000);
+  assert.equal(sent.length, 3, 'speech must be sent without client-side threshold clipping');
+  assert.equal(sent[2].length, 1600);
+  assert.ok(sent[2][100] > 3000);
 
-  for (let i = 0; i < 15; i += 1) runFrame(0);
-  assert.equal(sent.length, 16, 'send the configured 1.5 second silence hangover');
   runFrame(0);
-  assert.equal(sent.length, 16, 'suppress silence after the endpoint tail');
+  assert.equal(sent.length, 4, 'silence after speech must reach server-side endpoint detection');
   assert.ok(output.every(sample => sample === 0), 'worklet output must remain silent to avoid feedback');
 });
