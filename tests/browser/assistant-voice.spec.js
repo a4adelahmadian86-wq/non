@@ -167,7 +167,9 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
   await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام فراست');
-  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'سلام فراست' }));
+  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'سلام' }));
+  await page.waitForTimeout(120);
+  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'فراست' }));
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length), { timeout: 5000 }).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
 });
@@ -292,6 +294,9 @@ test('user speech interrupts server TTS while keeping the same live microphone s
   await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(1);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances.length),{timeout:5000}).toBeGreaterThan(0);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].playing)).toBe(true);
+
+  await page.evaluate(()=>window.__wsInstances[0].emit({type:'interim',text:'موسیقی'}));
+  expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
 
   await page.evaluate(()=>{
     const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
