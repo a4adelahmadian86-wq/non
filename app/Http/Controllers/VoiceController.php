@@ -34,10 +34,13 @@ class VoiceController extends Controller
         // Render session-signing secret is configured. Legacy/local gateways keep
         // their existing APP_KEY/provider-router contract.
         $sessionSecret = trim((string) config('services.voice_stream.token_secret', ''));
-        // The ASR token is configured to be the same shared Render token by the setup script.
-        // Use it as a fallback when FARAST_VOICE_TOKEN is absent/blank in a local .env.
-        if ($sessionSecret === '') {
-            $sessionSecret = trim((string) config('services.voice_asr.token', ''));
+        // Recover the shared Render token from the ASR setting only when both
+        // remote clients are configured with the exact same credential.
+        $asrSessionToken = trim((string) config('services.voice_asr.token', ''));
+        $chatSessionToken = trim((string) config('services.ai_gateway.token', ''));
+        if ($sessionSecret === '' && $asrSessionToken !== '' && $chatSessionToken !== ''
+            && hash_equals($asrSessionToken, $chatSessionToken)) {
+            $sessionSecret = $asrSessionToken;
         }
         if (! $localVoiceOnly && $sessionSecret !== '') {
             $asrUrl = trim((string) config('services.voice_asr.url', ''));
@@ -185,8 +188,12 @@ class VoiceController extends Controller
         $request->validate(['locale'=>['required','string','in:fa-IR,en-US,ar-SA']]);
         $secret = trim((string) config('services.voice_stream.token_secret', ''));
         if ($secret === '' && ! (bool) config('services.voice.local_only', false)) {
-            // Keep token issuance aligned with voiceStatus() and the shared ASR token.
-            $secret = trim((string) config('services.voice_asr.token', ''));
+            $asrSessionToken = trim((string) config('services.voice_asr.token', ''));
+            $chatSessionToken = trim((string) config('services.ai_gateway.token', ''));
+            if ($asrSessionToken !== '' && $chatSessionToken !== ''
+                && hash_equals($asrSessionToken, $chatSessionToken)) {
+                $secret = $asrSessionToken;
+            }
         }
         $websocketUrl = rtrim((string) config('services.voice_stream.url', ''), '/');
 
