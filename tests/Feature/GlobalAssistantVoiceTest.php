@@ -99,6 +99,35 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('render-shared-voice-token', $response->getContent());
     }
 
+    public function test_render_chat_stream_does_not_require_site_settings_or_optional_history_tables(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'shared-render-token',
+            'services.ai_gateway.model' => 'farast-general',
+        ]);
+
+        $user = User::factory()->create();
+        \\Illuminate\\Support\\Facades\\Schema::dropIfExists('site_settings');
+        \\Illuminate\\Support\\Facades\\Schema::dropIfExists('farast_assistant_messages');
+        \\Illuminate\\Support\\Facades\\Schema::dropIfExists('farast_assistant_memories');
+        $streamBody = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'سلام از درگاه Render']]]], JSON_UNESCAPED_UNICODE)."\n\ndata: [DONE]\n\n";
+        Http::fake([
+            'https://voice.example.test/v1/chat/completions' => Http::response($streamBody, 200, ['Content-Type' => 'text/event-stream']),
+        ]);
+
+        $response = $this->actingAs($user)->post('/assistant/chat/stream', ['message' => 'سلام']);
+        $response->assertOk();
+        $this->assertStringContainsString('سلام از درگاه Render', $response->streamedContent());
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer shared-render-token')
+            && ($request->data()['stream'] ?? false) === true
+        );
+    }
+
     public function test_local_live_gateway_status_identifies_server_only_persian_mode(): void
     {
         $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
