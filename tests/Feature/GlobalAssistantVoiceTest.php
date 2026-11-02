@@ -45,6 +45,34 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString((string) config('app.key'), $response->getContent());
     }
 
+    public function test_render_asr_token_is_used_for_live_stream_signing_when_primary_secret_is_blank(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.token_secret' => '',
+            'services.voice_asr.url' => 'https://voice.example.test/v1/transcribe',
+            'services.voice_asr.token' => 'shared-render-token',
+            'services.voice_tts.url' => 'https://voice.example.test/v1/synthesize',
+            'services.voice_tts.token' => 'shared-render-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'shared-render-token',
+        ]);
+
+        $user = User::factory()->create();
+        $status = $this->actingAs($user)->getJson('/editor/voice/status');
+        $status->assertOk()
+            ->assertJsonPath('mode', 'gateway')
+            ->assertJsonPath('provider', 'render')
+            ->assertJsonPath('websocket_url', 'wss://voice.example.test');
+
+        $tokenResponse = $this->actingAs($user)->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
+        $tokenResponse->assertOk()->assertJsonPath('ok', true);
+        [$encoded, $signature] = explode('.', (string) $tokenResponse->json('token'), 2);
+        $this->assertSame(hash_hmac('sha256', $encoded, 'shared-render-token'), $signature);
+        $this->assertStringNotContainsString('shared-render-token', $tokenResponse->getContent());
+    }
+
     public function test_render_live_voice_status_does_not_depend_on_a_laravel_callback_or_provider_database(): void
     {
         config([
