@@ -128,6 +128,37 @@ class GlobalAssistantVoiceTest extends TestCase
         );
     }
 
+    public function test_render_live_voice_fails_closed_when_shared_token_is_missing_or_mismatched(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.token_secret' => '',
+            'services.voice_asr.url' => 'https://voice.example.test/v1/transcribe',
+            'services.voice_asr.token' => 'asr-only-token',
+            'services.voice_tts.url' => 'https://voice.example.test/v1/synthesize',
+            'services.voice_tts.token' => 'tts-only-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'chat-only-token',
+        ]);
+
+        $user = User::factory()->create();
+        $status = $this->actingAs($user)->getJson('/editor/voice/status');
+        $status->assertOk()
+            ->assertJsonPath('mode', 'none')
+            ->assertJsonPath('gateway', false)
+            ->assertJsonPath('chunked', false)
+            ->assertJsonPath('reason', 'render_voice_token_missing')
+            ->assertJsonPath('missing.0', 'FARAST_VOICE_TOKEN (shared Render token)');
+
+        $tokenResponse = $this->actingAs($user)->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
+        $tokenResponse->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'render_voice_token_missing');
+        $this->assertStringNotContainsString('asr-only-token', $tokenResponse->getContent());
+        $this->assertStringNotContainsString('chat-only-token', $tokenResponse->getContent());
+    }
+
     public function test_local_live_gateway_status_identifies_server_only_persian_mode(): void
     {
         $original = getenv('FARAST_VOICE_LOCAL_SPEECH_ENABLED');
