@@ -6,11 +6,8 @@ class FarastPcmProcessor extends AudioWorkletProcessor {
     this.ratio = this.inputRate / this.outputRate;
     this.buffer = [];
     this.position = 0;
-    this.targetSamples = 1600;
+    this.targetSamples = 1600; // 100 ms of mono PCM16 at 16 kHz.
     this.output = [];
-    this.vadThreshold = 0.006;
-    this.vadHangoverFrames = 15;
-    this.vadHangover = 0;
   }
 
   process(inputs, outputs) {
@@ -28,22 +25,15 @@ class FarastPcmProcessor extends AudioWorkletProcessor {
       this.position += this.ratio;
 
       if (this.output.length >= this.targetSamples) {
-        const pcm = new Int16Array(this.output.length);
-        let level = 0;
-        for (let i = 0; i < this.output.length; i++) {
+        const pcm = new Int16Array(this.targetSamples);
+        for (let i = 0; i < this.targetSamples; i++) {
           const sample = Math.max(-1, Math.min(1, this.output[i]));
-          level += Math.abs(sample);
           pcm[i] = sample < 0 ? sample * 32768 : sample * 32767;
         }
-        level /= Math.max(1, this.output.length);
 
-        // Client-side, model-free VAD: send speech plus a 1.5s tail so the
-        // server recognizer can detect endpoints; suppress long silent periods.
-        const sendFrame = level >= this.vadThreshold || this.vadHangover > 0;
-        if (level >= this.vadThreshold) this.vadHangover = this.vadHangoverFrames;
-        else if (this.vadHangover > 0) this.vadHangover -= 1;
-
-        if (sendFrame) this.port.postMessage(pcm.buffer, [pcm.buffer]);
+        // Always send PCM, including silence. Server-side VAD needs the complete
+        // signal to retain pre-roll and distinguish quiet speech from background.
+        this.port.postMessage(pcm.buffer, [pcm.buffer]);
         this.output = [];
       }
     }
