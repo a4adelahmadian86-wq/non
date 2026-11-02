@@ -12,6 +12,13 @@ class VoiceSecurityTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests cover the legacy/local gateway contract, not the Render AI gateway.
+        Config::set('services.ai_gateway.url', '');
+    }
+
     public function test_stream_token_never_contains_provider_credentials(): void
     {
         $user=User::factory()->create();
