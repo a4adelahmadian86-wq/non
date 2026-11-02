@@ -354,7 +354,7 @@ test('gateway connection startup failure falls back to text when batch ASR is un
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
-test('gateway failure keeps the microphone off until the user taps again', async ({ page }) => {
+test('a failed utterance keeps the live microphone stream open for the next turn', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -383,8 +383,9 @@ test('gateway failure keeps the microphone off until the user taps again', async
   await expect.poll(() => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__wsInstances[0].readyState)).toBe(1);
   await page.evaluate(() => window.__wsInstances[0].emit({type:'provider_error',status:503}));
-  await expect(page.locator('[data-fa-voice-title]')).toContainText('میکروفون خاموش');
-  await expect(page.locator('[data-fa-voice-caption]')).toContainText('پردازش این بخش از صدا ناموفق بود');
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
+  await expect(page.locator('[data-fa-voice-caption]')).toContainText('تشخیص این نوبت گفتار ناموفق بود');
+  await expect.poll(() => page.evaluate(() => window.__wsInstances[0].readyState)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__recognitionStarts)).toBe(0);
 });
 
@@ -584,42 +585,32 @@ test('assistant animations are disabled when reduced motion is requested', async
 });
 
 
-test('approved push-to-talk fallback records audio, transcribes it, and sends the recognized text', async ({ page }) => {
+test('live gateway unavailability never starts batch recording and leaves text input available', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.WebSocket = undefined;
   window.AudioContext = undefined;
   window.__micCalls = 0;
-  window.__stoppedTracks = 0;
-  window.__transcribeFile = null;
-  window.__chatMessage = null;
+  window.__recorderInstances = 0;
+  window.__transcribeCalls = 0;
   Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
-  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => { window.__micCalls++; return { getTracks: () => [{ stop() { window.__stoppedTracks++; } }] }; } } });
-  class FakeMediaRecorder {
-    constructor(stream, options) { this.stream=stream; this.mimeType=options?.mimeType||'audio/webm'; this.state='inactive'; window.__recorder=this; }
-    start() { this.state='recording'; }
-    stop() { this.state='inactive'; this.ondataavailable?.({data:new Blob(['recorded-audio'],{type:this.mimeType})}); this.onstop?.(); }
-  }
-  FakeMediaRecorder.isTypeSupported = (type) => type.indexOf('audio/webm') === 0;
-  window.MediaRecorder = FakeMediaRecorder;
-  window.fetch = async (url, options={}) => {
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => { window.__micCalls++; return { getTracks: () => [{ stop() {} }] }; } } });
+  window.MediaRecorder = class { constructor() { window.__recorderInstances++; } start() {} stop() {} };
+  window.fetch = async (url) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ok:true,messages:[]}), {status:200,headers:{'Content-Type':'application/json'}});
-    if (url === '/editor/voice/status') return new Response(JSON.stringify({ok:true,mode:'none'}), {status:200,headers:{'Content-Type':'application/json'}});
-    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ok:true,local_only:false,remote_batch_enabled:true,server_stt:true,server_stt_token_configured:true,server_tts:true,server_tts_token_configured:true}), {status:200,headers:{'Content-Type':'application/json'}});
-    if (url === '/assistant/transcribe') { window.__transcribeFile=options.body.get('audio'); return new Response(JSON.stringify({ok:true,text:'سلام فراست'}), {status:200,headers:{'Content-Type':'application/json'}}); }
-    if (url === '/assistant/chat/stream') { window.__chatMessage=JSON.parse(options.body).message; return new Response(JSON.stringify({reply:'سلام، صدایت رسید.'}), {status:200,headers:{'Content-Type':'application/json'}}); }
-    if (url === '/assistant/speak') return new Response(JSON.stringify({message:'mock TTS unavailable'}), {status:503,headers:{'Content-Type':'application/json'}});
+    if (url === '/editor/voice/status') return new Response(JSON.stringify({ok:true,mode:'none',message:'درگاه زنده در دسترس نیست.'}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ok:true,local_only:false,remote_batch_enabled:true,server_stt:true,server_stt_token_configured:true}), {status:200,headers:{'Content-Type':'application/json'}});
+    if (url === '/assistant/transcribe') { window.__transcribeCalls++; return new Response(JSON.stringify({ok:true,text:'نباید اجرا شود'}), {status:200,headers:{'Content-Type':'application/json'}}); }
     return new Response(JSON.stringify({ok:false}), {status:404,headers:{'Content-Type':'application/json'}});
   };
 </script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
-  await expect(page.locator('.farast-voice-mic')).toContainText('پایان ضبط');
-  expect(await page.evaluate(() => window.__micCalls)).toBe(1);
-  await page.locator('.farast-voice-mic').click();
-  await expect.poll(() => page.evaluate(() => window.__chatMessage)).toBe('سلام فراست');
-  expect(await page.evaluate(() => window.__transcribeFile?.size > 0)).toBe(true);
-  expect(await page.evaluate(() => window.__stoppedTracks)).toBe(1);
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('ورودی متنی در دسترس است');
+  await expect(page.locator('.farast-assistant-form')).toBeVisible();
+  expect(await page.evaluate(() => window.__micCalls)).toBe(0);
+  expect(await page.evaluate(() => window.__recorderInstances)).toBe(0);
+  expect(await page.evaluate(() => window.__transcribeCalls)).toBe(0);
 });
