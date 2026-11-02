@@ -109,9 +109,9 @@ class GlobalAssistantVoiceTest extends TestCase
         ]);
 
         $user = User::factory()->create();
-        \\Illuminate\\Support\\Facades\\Schema::dropIfExists('site_settings');
-        \\Illuminate\\Support\\Facades\\Schema::dropIfExists('farast_assistant_messages');
-        \\Illuminate\\Support\\Facades\\Schema::dropIfExists('farast_assistant_memories');
+        \Illuminate\Support\Facades\Schema::dropIfExists('site_settings');
+        \Illuminate\Support\Facades\Schema::dropIfExists('farast_assistant_messages');
+        \Illuminate\Support\Facades\Schema::dropIfExists('farast_assistant_memories');
         $streamBody = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'سلام از درگاه Render']]]], JSON_UNESCAPED_UNICODE)."\n\ndata: [DONE]\n\n";
         Http::fake([
             'https://voice.example.test/v1/chat/completions' => Http::response($streamBody, 200, ['Content-Type' => 'text/event-stream']),
