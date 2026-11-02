@@ -472,12 +472,16 @@
       // Accept a full endpoint too, so deployments that already include the path are not doubled.
       if(!/\/v1\/stream(?:\?|$)/.test(wsUrl))wsUrl+='/v1/stream';
       var socket=new WebSocket(wsUrl);gatewayWs=socket;socket.binaryType='arraybuffer';
+      voiceTitle.textContent='در حال اتصال به موتور صوتی';
+      voiceCaption.textContent='در حال برقراری اتصال امن؛ شروع ضبط پس از آماده‌شدن موتور انجام می‌شود.';
+      status.textContent='درخواست اتصال به موتور گفتار ارسال شد؛ هنوز ضبط شروع نشده است.';
       await new Promise(function(resolve,reject){
-        var settled=false;var timer=window.setTimeout(function(){finish(new Error('مهلت اتصال درگاه صوتی تمام شد.'));},12000);
-        function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);if(error)reject(error);else resolve();}
+        var settled=false;var timer=window.setTimeout(function(){finish(new Error('پس از ۷۵ ثانیه اتصال به درگاه صوتی برقرار نشد.'));},75000);
+        function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);socket.removeEventListener('close',closed);if(error)reject(error);else resolve();}
         function opened(){finish();}
-        function failed(){finish(new Error('اتصال درگاه گفتار برقرار نشد.'));}
-        socket.addEventListener('open',opened,{once:true});socket.addEventListener('error',failed,{once:true});
+        function failed(){finish(new Error('اتصال درگاه گفتار برقرار نشد؛ شبکه یا سرویس صوتی را بررسی کن.'));}
+        function closed(event){finish(new Error('درگاه صوتی پیش از تکمیل اتصال بسته شد (کد '+event.code+').'));}
+        socket.addEventListener('open',opened,{once:true});socket.addEventListener('error',failed,{once:true});socket.addEventListener('close',closed,{once:true});
       });
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
       var providerReadyResolve=null,providerReadyReject=null;
@@ -504,7 +508,7 @@
       gatewayAudioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});
       gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
       if(window.AudioWorkletNode&&gatewayAudioContext.audioWorklet&&typeof gatewayAudioContext.audioWorklet.addModule==='function'){
-        await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261102asr1');
+        await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261102asr2');
         if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
         gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
         gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000){socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));noteGatewayAudioActivity(generation,bytes.slice(i,Math.min(i+24000,bytes.byteLength)).buffer);}}else if(bytes.byteLength){socket.send(bytes);noteGatewayAudioActivity(generation,event.data);}};
