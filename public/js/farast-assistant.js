@@ -125,8 +125,31 @@
       status.textContent='سابقه ذخیره‌شده پاک شد.';
     }catch(e){status.textContent='پاک کردن سابقه انجام نشد؛ دوباره تلاش کن.';}
   }
-  var assistantAudio=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null, chatAbortController=null, activePendingMessage=null, speechGeneration=0, speechRequestController=null;
+  var assistantAudio=null, assistantAudioElement=null, assistantSilentAudioUrl=null, assistantAudioUrl=null, conversationActive=false, resumeListeningTimer=null, chatAbortController=null, activePendingMessage=null, speechGeneration=0, speechRequestController=null;
   var batchRecorder=null,batchMediaStream=null,batchChunks=[],batchRecording=false,batchStopTimer=null;
+  // Prime the same HTMLAudioElement during the user's click gesture. The tiny silent WAV
+  // is generated in memory (never downloaded or saved) so later network-delayed TTS playback
+  // is allowed by browsers that otherwise block audio.play() outside a user gesture.
+  function primeAssistantAudioPlayback(){
+    if(busy)return;
+    try{
+      if(!assistantAudioElement)assistantAudioElement=new Audio();
+      if(!assistantSilentAudioUrl){
+        var sampleRate=8000,sampleCount=800,buffer=new ArrayBuffer(44+sampleCount),view=new DataView(buffer);
+        function writeAscii(offset,value){for(var i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));}
+        writeAscii(0,'RIFF');view.setUint32(4,36+sampleCount,true);writeAscii(8,'WAVE');writeAscii(12,'fmt ');
+        view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+        view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate,true);view.setUint16(32,1,true);view.setUint16(34,8,true);
+        writeAscii(36,'data');view.setUint32(40,sampleCount,true);
+        for(var sample=0;sample<sampleCount;sample++)view.setUint8(44+sample,128);
+        assistantSilentAudioUrl=URL.createObjectURL(new Blob([buffer],{type:'audio/wav'}));
+      }
+      assistantAudioElement.preload='auto';
+      assistantAudioElement.src=assistantSilentAudioUrl;
+      var priming=assistantAudioElement.play();
+      if(priming&&typeof priming.catch==='function')priming.catch(function(){});
+    }catch(ignore){}
+  }
   function stopConversation(){if(batchStopTimer){window.clearTimeout(batchStopTimer);batchStopTimer=null;}if(batchRecorder&&batchRecorder.state!=='inactive'){try{batchRecorder.onstop=null;batchRecorder.stop();}catch(e){}}if(batchMediaStream){batchMediaStream.getTracks().forEach(function(track){track.stop();});batchMediaStream=null;}batchRecorder=null;batchChunks=[];batchRecording=false;var stoppedBatchMic=root.querySelector('.farast-assistant-mic');var stoppedBatchLabel=stoppedBatchMic.querySelector('span');if(stoppedBatchLabel)stoppedBatchLabel.textContent='صحبت کن';stoppedBatchMic.setAttribute('aria-label','شروع صحبت');conversationActive=false;assistantTurn++;speechGeneration++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}if(speechRequestController){speechRequestController.abort();speechRequestController=null;}stopLiveRecognition();if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(assistantAudio){try{assistantAudio.pause();}catch(e){}assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
   function scheduleNextListening(){if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(gatewayWs&&gatewayWs.readyState===WebSocket.OPEN){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='میکروفون روشن است؛ هر وقت صحبت کنی، نوبت تو را تشخیص می‌دهم.';status.textContent='در حال گوش دادن؛ برای قطع کامل مکالمه، دکمهٔ توقف را لمس کن.';panel.classList.add('is-listening');return;}voiceTitle.textContent='نوبت توست';voiceCaption.textContent='درگاه زنده قطع شده است؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';status.textContent='میکروفون خاموش است؛ اتصال زنده را دوباره برقرار کن.';}
   function setGatewayMicrophoneMuted(muted){
@@ -199,7 +222,7 @@
         if(result.error)throw result.error;
         var blob=result.blob;
         assistantAudioUrl=URL.createObjectURL(blob);
-        var audio=new Audio();assistantAudio=audio;audio.preload='auto';audio.src=assistantAudioUrl;
+        var audio=assistantAudioElement||new Audio();assistantAudioElement=audio;assistantAudio=audio;audio.preload='auto';if(assistantSilentAudioUrl){URL.revokeObjectURL(assistantSilentAudioUrl);assistantSilentAudioUrl=null;}audio.src=assistantAudioUrl;
         audio.onplay=function(){setGatewayMicrophoneMuted(true);panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='برای جلوگیری از شنیدن صدای بلندگو، میکروفون هنگام پخش پاسخ موقتاً بی‌صداست؛ برای قطع پاسخ، دکمه میکروفون را لمس کن.';status.textContent='پاسخ صوتی در حال پخش است؛ برای قطع آن دکمه میکروفون را لمس کن.';};
         audio.onended=function(){setGatewayMicrophoneMuted(false);};
         audio.onpause=function(){setGatewayMicrophoneMuted(false);};
@@ -355,8 +378,8 @@
   root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
   root.querySelector('[data-fa-memory]').addEventListener('click',saveMemory);
   root.querySelector('[data-fa-memory-manage]').addEventListener('click',manageMemories);
-  form.addEventListener('submit',function(e){e.preventDefault();send(input.value);});
-  root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
+  form.addEventListener('submit',function(e){e.preventDefault();primeAssistantAudioPlayback();send(input.value);});
+  root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){primeAssistantAudioPlayback();send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var liveTurnEnding=false,gatewayStatusMessage='';
   var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false;
@@ -497,8 +520,8 @@
       if(!/\/v1\/stream(?:\?|$)/.test(wsUrl))wsUrl+='/v1/stream';
       var socket=new WebSocket(wsUrl);gatewayWs=socket;socket.binaryType='arraybuffer';
       voiceTitle.textContent='در حال اتصال به موتور صوتی';
-      voiceCaption.textContent='در حال برقراری اتصال امن؛ شروع ضبط پس از آماده‌شدن موتور انجام می‌شود.';
-      status.textContent='درخواست اتصال به موتور گفتار ارسال شد؛ هنوز ضبط شروع نشده است.';
+      voiceCaption.textContent='در حال اتصال امن به سرویس گفتار؛ هیچ فایل یا مدلی روی دستگاه دانلود نمی‌شود. ضبط پس از آماده‌شدن سرویس آغاز می‌شود.';
+      status.textContent='درخواست اتصال امن ارسال شد؛ هنوز ضبط شروع نشده و دانلودی روی دستگاه انجام نمی‌شود.';
       await new Promise(function(resolve,reject){
         var settled=false;var timer=window.setTimeout(function(){finish(new Error('پس از ۷۵ ثانیه اتصال به درگاه صوتی برقرار نشد.'));},75000);
         function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);socket.removeEventListener('close',closed);if(error)reject(error);else resolve();}
@@ -599,6 +622,7 @@
   }
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(batchRecording){stopBatchRecording();return;}
+    if(!busy)primeAssistantAudioPlayback();
     if(gatewayWs||gatewayStarting){
       if(busy){
         interruptAssistantForBargeIn();
