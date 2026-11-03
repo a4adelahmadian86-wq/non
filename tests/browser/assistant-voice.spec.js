@@ -234,6 +234,40 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
 });
 
+test('failed live gateway handshake releases microphone and allows a one-tap retry', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__wsInstances=[];window.__stoppedTracks=0;window.__micRequests=0;
+  class FakeWebSocket extends EventTarget {
+    constructor(url){super();this.url=url;this.readyState=0;this.sent=[];window.__wsInstances.push(this);const attempt=window.__wsInstances.length;setTimeout(()=>{if(attempt===1){this.readyState=3;this.dispatchEvent(new Event('error'));}else{this.readyState=1;this.dispatchEvent(new Event('open'));}},0);}
+    send(data){this.sent.push(data);if(typeof data==='string'&&JSON.parse(data).type==='start')queueMicrotask(()=>this.onmessage?.({data:JSON.stringify({type:'ready',provider:'mock'})}));}
+    close(){this.readyState=3;}
+  }
+  FakeWebSocket.OPEN=1;window.WebSocket=FakeWebSocket;
+  window.AudioContext=class{constructor(){this.state='running';this.sampleRate=48000;this.destination={};}createMediaStreamSource(){return{connect(){},disconnect(){}};}createScriptProcessor(){return{connect(){},disconnect(){},onaudioprocess:null};}resume(){return Promise.resolve();}close(){this.state='closed';return Promise.resolve();}};
+  window.AudioWorkletNode=undefined;
+  window.Audio=class{play(){return Promise.resolve();}pause(){}};
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__micRequests++;return{getTracks:()=>[{stop(){window.__stoppedTracks++;}}]};}}});
+  window.fetch=async(url)=>{
+    if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length),{timeout:5000}).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>window.__stoppedTracks),{timeout:5000}).toBe(1);
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('ورودی متنی در دسترس است');
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length),{timeout:5000}).toBe(2);
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
+  expect(await page.evaluate(()=>window.__micRequests)).toBe(2);
+});
+
 test('text chat primes browser audio in the submit gesture and reuses it for Persian TTS', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
