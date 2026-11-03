@@ -512,7 +512,7 @@
       socket.onmessage=function(event){
         if(generation!==gatewayGeneration||typeof event.data!=='string')return;var data;try{data=JSON.parse(event.data);}catch(e){return;}
         if(data.type==='ready'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='مکالمه زنده روی Render فعال است؛ پایان هر نوبت را از روی مکث گفتار تشخیص می‌دهم.';status.textContent='گوش می‌دهم؛ هر وقت جمله‌ات تمام شود، پاسخ را خودکار آماده می‌کنم.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');if(providerReadyResolve){providerReadyResolve();providerReadyResolve=null;providerReadyReject=null;}}
-        else if(data.type==='speech_started'){if(busy&&!assistantAudio){interruptAssistantForBargeIn();}if(!busy){voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}}
+        else if(data.type==='speech_started'){if(busy&&(!assistantAudio||assistantAudio.paused||assistantAudio.ended)){interruptAssistantForBargeIn();}if(!busy){voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}}
         else if(data.type==='processing'){if(!busy){voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='مکث گفتار تشخیص داده شد؛ متن درخواست در حال نهایی‌شدن است.';status.textContent='در حال تبدیل نوبت گفتار به متن…';}}
         else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(!busy&&interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
         else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart&&!busy){gatewayFinalText=finalPart;finishGatewayTurn(generation);}}
