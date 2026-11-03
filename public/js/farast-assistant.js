@@ -247,6 +247,7 @@
       status.textContent=conversationActive?'میکروفون خاموش است و تا لمس دکمه دوباره فعال نمی‌شود.':'آماده‌ام؛ دوباره صحبت کن.';
       scheduleNextListening();
     }catch(e){
+      setGatewayMicrophoneMuted(false);
       if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
       if(assistantAudio){try{assistantAudio.pause();}catch(ignore){}assistantAudio=null;}
       if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
