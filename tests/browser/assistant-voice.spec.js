@@ -295,7 +295,14 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].playing)).toBe(true);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
 
-  // The mic is muted during TTS so speaker echo cannot interrupt the answer.
+  // Even loud samples must not auto-interrupt while the assistant is speaking.
+  await page.evaluate(()=>{
+    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.8)};
+    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
+    for(let i=0;i<8;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
+  });
+  expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
+
   // A deliberate mic tap still interrupts and re-enables the same capture stream.
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].paused)).toBe(true);
