@@ -234,6 +234,37 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
 });
 
+test('text chat primes browser audio in the submit gesture and reuses it for Persian TTS', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__audioInstances=[];window.__audioOrder=[];
+  window.Audio=class {
+    constructor(){this.duration=2;this.handlers={};this.paused=true;this.ended=false;this.src='';window.__audioInstances.push(this);}
+    addEventListener(name,fn){this.handlers[name]=fn;}
+    removeEventListener(name){delete this.handlers[name];}
+    load(){this.handlers.canplay?.();}
+    play(){window.__audioOrder.push('play');this.playing=true;this.paused=false;this.ended=true;this.onplay?.();this.onended?.();this.handlers.ended?.();return Promise.resolve();}
+    pause(){this.paused=true;this.onpause?.();this.handlers.pause?.();}
+  };
+  window.fetch=async(url,options={})=>{
+    if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/status')return new Response(JSON.stringify({ok:true,local_only:false,chat_gateway_ready:true}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/chat/stream'){window.__audioOrder.push('chat');return new Response('data: {"delta":"پاسخ صوتی فعال است."}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
+    if(url==='/assistant/speak')return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-assistant-form input').fill('سلام فراست');
+  await page.locator('.farast-assistant-send').click();
+  await expect.poll(()=>page.evaluate(()=>window.__audioOrder.filter(x=>x==='play').length),{timeout:5000}).toBeGreaterThanOrEqual(2);
+  expect(await page.evaluate(()=>window.__audioInstances.length)).toBe(1);
+  expect(await page.evaluate(()=>window.__audioOrder.indexOf('play') < window.__audioOrder.indexOf('chat'))).toBe(true);
+  expect(await page.evaluate(()=>window.__audioOrder.filter(x=>x==='play').length)).toBe(2);
+});
+
 test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts safely', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
