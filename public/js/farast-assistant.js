@@ -471,8 +471,14 @@
       voiceTitle.textContent='در انتظار اجازه میکروفون';
       voiceCaption.textContent='لطفاً درخواست دسترسی میکروفون مرورگر را تأیید کن.';
       status.textContent='ابتدا اجازه میکروفون را می‌گیریم؛ سپس به موتور گفتار وصل می‌شویم.';
+      // Resume Web Audio while the click gesture is still active; several network
+      // awaits before this point can leave the context suspended on mobile browsers.
+      gatewayAudioContext=new AudioContextClass({latencyHint:'interactive',sampleRate:48000});
+      var audioContextReady=gatewayAudioContext.resume().catch(function(){});
       gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      await audioContextReady;
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
+      if(gatewayAudioContext.state!=='running')throw new Error('فعال‌سازی ورودی صوتی مرورگر کامل نشد؛ دوباره دکمه میکروفون را لمس کن.');
       var statusResponse=await fetch('/editor/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
       var service=await statusResponse.json().catch(function(){return {};});
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
@@ -517,7 +523,6 @@
       socket.send(JSON.stringify({type:'start',token:tokenData.token,locale:'fa-IR',sequence:0}));
       try{await providerReadyPromise;}finally{window.clearTimeout(providerReadyTimer);providerReadyResolve=null;providerReadyReject=null;}
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
-      gatewayAudioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});
       gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
       if(window.AudioWorkletNode&&gatewayAudioContext.audioWorklet&&typeof gatewayAudioContext.audioWorklet.addModule==='function'){
         await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261102asr2');
@@ -536,7 +541,6 @@
         };
         gatewaySourceNode.connect(gatewayScriptProcessorNode);gatewayScriptProcessorNode.connect(gatewayAudioContext.destination);
       }
-      if(gatewayAudioContext.state==='suspended')await gatewayAudioContext.resume();
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
       gatewayStarting=false;return true;
     }catch(e){
