@@ -234,7 +234,7 @@ test('live assistant uses a ScriptProcessor fallback when AudioWorklet is unavai
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
 });
 
-test('user speech interrupts server TTS while keeping the same live microphone stream open', async ({ page }) => {
+test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts safely', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -242,6 +242,7 @@ test('user speech interrupts server TTS while keeping the same live microphone s
   window.__chatPayloads = [];
   window.__audioInstances = [];
   window.__stoppedTracks = 0;
+  window.__track = { enabled: true, stop() { window.__stoppedTracks++; } };
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
     send(data) { this.sent.push(data); if(typeof data==='string' && JSON.parse(data).type==='start') queueMicrotask(()=>this.emit({type:'ready',provider:'mock-local'})); }
@@ -257,14 +258,14 @@ test('user speech interrupts server TTS while keeping the same live microphone s
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__getUserMediaCalls++;return {getTracks:()=>[{stop(){window.__stoppedTracks++;}}]};}}});
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__getUserMediaCalls++;return {getTracks:()=>[window.__track]};}}});
   window.Audio=class {
     constructor(){this.duration=2;this.handlers={};this.paused=false;window.__audioInstances.push(this);}
     addEventListener(name,fn){this.handlers[name]=fn;}
     removeEventListener(name){delete this.handlers[name];}
     load(){this.handlers.canplay?.();}
-    play(){this.playing=true;return Promise.resolve();}
-    pause(){this.paused=true;this.handlers.pause?.();}
+    play(){this.playing=true;this.onplay?.();return Promise.resolve();}
+    pause(){this.paused=true;this.onpause?.();this.handlers.pause?.();}
   };
   window.fetch=async(url,options={})=>{
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
@@ -292,13 +293,13 @@ test('user speech interrupts server TTS while keeping the same live microphone s
   await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(1);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances.length),{timeout:5000}).toBeGreaterThan(0);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].playing)).toBe(true);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
 
-  await page.evaluate(()=>{
-    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
-    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
-    for(let i=0;i<4;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
-  });
+  // The mic is muted during TTS so speaker echo cannot interrupt the answer.
+  // A deliberate mic tap still interrupts and re-enables the same capture stream.
+  await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].paused)).toBe(true);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(1);
   expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(0);
