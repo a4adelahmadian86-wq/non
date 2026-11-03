@@ -383,7 +383,7 @@
     gatewayFinalText='';gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
   }
   function scheduleGatewayTurnEnd(generation){if(generation!==gatewayGeneration||!gatewayFinalText.trim()||!gatewayLastVoiceAt)return;if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);var remaining=Math.max(0,1400-(Date.now()-gatewayLastVoiceAt));gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},remaining);}
-  function noteGatewayAudioActivity(generation,pcm){if(generation!==gatewayGeneration||!pcm)return;var samples=pcm instanceof Int16Array?pcm:new Int16Array(pcm);if(!samples.length)return;var total=0;for(var i=0;i<samples.length;i++)total+=Math.abs(samples[i]);var level=total/samples.length;if(level<420){gatewayVoiceFrames=0;return;}gatewayLastVoiceAt=Date.now();if(level>=650)gatewayVoiceFrames=Math.min(6,gatewayVoiceFrames+1);else gatewayVoiceFrames=0;if(busy&&gatewayVoiceFrames>=3)interruptAssistantForBargeIn();scheduleGatewayTurnEnd(generation);}
+  function noteGatewayAudioActivity(generation,pcm){if(generation!==gatewayGeneration||!pcm)return;var samples=pcm instanceof Int16Array?pcm:new Int16Array(pcm);if(!samples.length)return;var total=0;for(var i=0;i<samples.length;i++)total+=Math.abs(samples[i]);var level=total/samples.length;if(level<420){gatewayVoiceFrames=0;return;}gatewayLastVoiceAt=Date.now();if(level>=900)gatewayVoiceFrames=Math.min(8,gatewayVoiceFrames+1);else gatewayVoiceFrames=0;if(busy&&gatewayVoiceFrames>=4)interruptAssistantForBargeIn();scheduleGatewayTurnEnd(generation);}
   async function startBatchRecording(){
     if(batchRecording)return true;
     if(!window.isSecureContext){gatewayStatusMessage='مرورگر فقط در HTTPS یا نشانی localhost اجازه دسترسی به میکروفون می‌دهد؛ سایت را با HTTPS یا http://localhost باز کن.';return false;}
@@ -458,15 +458,21 @@
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){gatewayStatusMessage=!window.isSecureContext?'برای فعال‌شدن میکروفون، سایت باید با HTTPS یا localhost باز شود.':'مرورگر اجازه دسترسی به میکروفون را فراهم نمی‌کند؛ تنظیمات سایت و مجوز میکروفون را بررسی کن.';return false;}if(!window.WebSocket||!AudioContextClass||(!window.AudioWorkletNode&&!(AudioContextClass.prototype&&AudioContextClass.prototype.createScriptProcessor))){gatewayStatusMessage='این مرورگر قابلیت لازم برای مکالمه زنده را ندارد؛ از Chrome یا Edge به‌روز استفاده کن.';gatewayStarting=false;return false;}
     gatewayStarting=true;var generation=++gatewayGeneration;
     try{
-      // Check server readiness before requesting microphone permission. This avoids
-      // opening the microphone when this deployment has no live gateway configured.
+      // Ask for microphone access immediately inside the user's click gesture.
+      // A slow gateway must never prevent the browser permission prompt from appearing.
+      voiceTitle.textContent='در انتظار اجازه میکروفون';
+      voiceCaption.textContent='لطفاً درخواست دسترسی میکروفون مرورگر را تأیید کن.';
+      status.textContent='ابتدا اجازه میکروفون را می‌گیریم؛ سپس به موتور گفتار وصل می‌شویم.';
+      gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
       var statusResponse=await fetch('/editor/voice/status',{credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
       var service=await statusResponse.json().catch(function(){return {};});
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
       if(!statusResponse.ok||service.mode!=='gateway'){gatewayStatusMessage=String(service.message||'درگاه مکالمه زنده Render آماده نیست.');stopGatewayRecognition();return false;}gatewayStatusMessage='';
       var tokenResponse=await fetch('/assistant/voice/stream-token',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({locale:'fa-IR'})});
       var tokenData=await tokenResponse.json().catch(function(){return {};});
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
       if(!tokenResponse.ok||!tokenData.token||!tokenData.websocket_url)throw new Error(tokenData.message||'درگاه تشخیص زنده آماده نیست.');
-      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){gatewayStarting=false;return true;}
       var wsUrl=tokenData.websocket_url.replace(/^http:/,'ws:').replace(/^https:/,'wss:').replace(/\/$/,'');
       // Laravel intentionally stores the gateway origin; the ASGI stream lives at /v1/stream.
       // Accept a full endpoint too, so deployments that already include the path are not doubled.
@@ -490,10 +496,10 @@
       socket.onmessage=function(event){
         if(generation!==gatewayGeneration||typeof event.data!=='string')return;var data;try{data=JSON.parse(event.data);}catch(e){return;}
         if(data.type==='ready'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='مکالمه زنده روی Render فعال است؛ پایان هر نوبت را از روی مکث گفتار تشخیص می‌دهم.';status.textContent='گوش می‌دهم؛ هر وقت جمله‌ات تمام شود، پاسخ را خودکار آماده می‌کنم.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');if(providerReadyResolve){providerReadyResolve();providerReadyResolve=null;providerReadyReject=null;}}
-        else if(data.type==='speech_started'){if(busy)interruptAssistantForBargeIn();voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}
-        else if(data.type==='processing'){voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='مکث گفتار تشخیص داده شد؛ متن درخواست در حال نهایی‌شدن است.';status.textContent='در حال تبدیل نوبت گفتار به متن…';}
-        else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(busy&&interimText.length>=2)interruptAssistantForBargeIn();if(interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
-        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart){if(busy)interruptAssistantForBargeIn();gatewayFinalText=finalPart;finishGatewayTurn(generation);}}
+        else if(data.type==='speech_started'){if(!busy){voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}}
+        else if(data.type==='processing'){if(!busy){voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='مکث گفتار تشخیص داده شد؛ متن درخواست در حال نهایی‌شدن است.';status.textContent='در حال تبدیل نوبت گفتار به متن…';}}
+        else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(!busy&&interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
+        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart&&!busy){gatewayFinalText=finalPart;finishGatewayTurn(generation);}}
         else if(data.type==='empty'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتاری تشخیص داده نشد؛ هر وقت آماده‌ای ادامه بده.';status.textContent='هنوز جمله‌ای برای پاسخ‌دادن دریافت نشده است.';}
         else if(data.type==='provider_error'){var providerMessage=data.code==='asr_rate_limited'?'محدودیت موقت سرویس تشخیص گفتار؛ چند لحظه دیگر دوباره صحبت کن.':'تشخیص این نوبت گفتار ناموفق بود؛ اتصال برقرار است و می‌توانی دوباره صحبت کنی.';voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent=providerMessage;status.textContent=providerMessage;}
         else if(data.type==='error'){if(providerReadyReject)providerReadyReject(new Error('اتصال درگاه گفتار برقرار نشد.'));stopGatewayRecognition();panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');voiceTitle.textContent='اتصال مکالمه قطع شد';voiceCaption.textContent='اتصال گفتار قطع شد؛ دوباره مکالمه را شروع کن.';status.textContent='میکروفون برای حفظ حریم خصوصی خاموش شد.';}
@@ -502,8 +508,6 @@
       socket.onclose=function(){if(providerReadyReject)providerReadyReject(new Error('درگاه گفتار پیش از آماده‌شدن بسته شد.'));if(generation!==gatewayGeneration)return;if(gatewayStopping){if(gatewayStopTimer){window.clearTimeout(gatewayStopTimer);gatewayStopTimer=null;}if(gatewayFinalText.trim())finishGatewayTurn(generation);else{voiceTitle.textContent='میکروفون خاموش است';voiceCaption.textContent='برای شروع دوباره، دکمهٔ «صحبت کن» را لمس کن.';status.textContent='میکروفون خاموش شد.';}gatewayStopping=false;gatewayStarting=false;gatewayGeneration++;return;}if(conversationActive&&!liveTurnEnding){stopGatewayRecognition();panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');voiceTitle.textContent='میکروفون خاموش است';voiceCaption.textContent='اتصال گفتار قطع شد؛ برای شروع دوباره دکمهٔ «صحبت کن» را لمس کن.';status.textContent='میکروفون خاموش شد؛ برای ادامه دوباره لمس کن.';}};
       socket.send(JSON.stringify({type:'start',token:tokenData.token,locale:'fa-IR',sequence:0}));
       try{await providerReadyPromise;}finally{window.clearTimeout(providerReadyTimer);providerReadyResolve=null;providerReadyReject=null;}
-      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
-      gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
       gatewayAudioContext=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive',sampleRate:48000});
       gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
@@ -579,7 +583,14 @@
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(batchRecording){stopBatchRecording();return;}
     if(gatewayWs||gatewayStarting){
-      status.textContent='گفت‌وگوی زنده فعال است؛ برای پایان کامل مکالمه از دکمه «توقف مکالمه» استفاده کن.';
+      if(busy){
+        interruptAssistantForBargeIn();
+        return;
+      }
+      stopConversation();
+      voiceTitle.textContent='مکالمه متوقف شد';
+      voiceCaption.textContent='برای شروع دوباره، دکمهٔ میکروفون را لمس کن.';
+      status.textContent='اتصال و میکروفون متوقف شدند.';
       return;
     }
     if(busy){interruptAssistantForBargeIn();}
