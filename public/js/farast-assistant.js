@@ -474,6 +474,9 @@
       batchStopTimer=window.setTimeout(function(){if(batchRecorder&&batchRecorder.state!=='inactive')stopBatchRecording();},60000);
       return true;
     }catch(error){
+      // A failed WebSocket handshake must release the microphone and clear stale
+      // gateway references; otherwise the next tap only stops the failed session.
+      if(generation===gatewayGeneration)stopGatewayRecognition();
       if(batchMediaStream){batchMediaStream.getTracks().forEach(function(track){track.stop();});batchMediaStream=null;}
       batchRecorder=null;batchChunks=[];batchRecording=false;var failedMic=root.querySelector('.farast-assistant-mic');var failedMicLabel=failedMic.querySelector('span');if(failedMicLabel)failedMicLabel.textContent='صحبت کن';failedMic.setAttribute('aria-label','شروع صحبت');
       if(error&&(error.name==='NotAllowedError'||error.name==='SecurityError'))gatewayStatusMessage='دسترسی میکروفون مجاز نیست؛ مجوز میکروفون مرورگر و HTTPS را بررسی کن.';
