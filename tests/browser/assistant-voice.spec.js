@@ -242,6 +242,8 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   window.__chatPayloads = [];
   window.__audioInstances = [];
   window.__stoppedTracks = 0;
+  window.__getUserMediaCalls = 0;
+  window.__order = [];
   window.__track = { enabled: true, stop() { window.__stoppedTracks++; } };
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
@@ -251,14 +253,14 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   }
   FakeWebSocket.OPEN=1; window.WebSocket=FakeWebSocket;
   window.AudioContext=class {
-    constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
+    constructor(){window.__order.push('audio-context');this.state='running';this.sampleRate=48000;this.destination={};}
     createMediaStreamSource(){return {connect(){},disconnect(){}};}
     createScriptProcessor(){window.__scriptProcessor={onaudioprocess:null,connect(){},disconnect(){}};return window.__scriptProcessor;}
-    resume(){return Promise.resolve();}
+    resume(){window.__order.push('audio-resume');return Promise.resolve();}
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__getUserMediaCalls++;return {getTracks:()=>[window.__track]};}}});
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__order.push('get-user-media');window.__getUserMediaCalls++;return {getTracks:()=>[window.__track]};}}});
   window.Audio=class {
     constructor(){this.duration=2;this.handlers={};this.paused=false;window.__audioInstances.push(this);}
     addEventListener(name,fn){this.handlers[name]=fn;}
@@ -268,7 +270,7 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
     pause(){this.paused=true;this.onpause?.();this.handlers.pause?.();}
   };
   window.fetch=async(url,options={})=>{
-    if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/editor/voice/status'){window.__order.push('status-request');return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});}
     if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ در حال پخش است. "}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
@@ -281,6 +283,7 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
+  expect(await page.evaluate(()=>window.__order.indexOf('audio-context') < window.__order.indexOf('audio-resume') && window.__order.indexOf('audio-resume') < window.__order.indexOf('get-user-media') && window.__order.indexOf('get-user-media') < window.__order.indexOf('status-request'))).toBe(true);
 
   await page.evaluate(()=>{
     const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
