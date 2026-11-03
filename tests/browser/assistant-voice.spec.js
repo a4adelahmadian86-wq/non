@@ -239,6 +239,7 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__wsInstances = [];
+  window.__sentAudioFrames = 0;
   window.__chatPayloads = [];
   window.__audioInstances = [];
   window.__stoppedTracks = 0;
@@ -247,7 +248,7 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   window.__track = { enabled: true, stop() { window.__stoppedTracks++; } };
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
-    send(data) { this.sent.push(data); if(typeof data==='string' && JSON.parse(data).type==='start') queueMicrotask(()=>this.emit({type:'ready',provider:'mock-local'})); }
+    send(data) { this.sent.push(data); if(data instanceof ArrayBuffer)window.__sentAudioFrames++; if(typeof data==='string' && JSON.parse(data).type==='start') queueMicrotask(()=>this.emit({type:'ready',provider:'mock-local'})); }
     close() { this.readyState=3; }
     emit(data) { this.onmessage?.({data:JSON.stringify(data)}); }
   }
@@ -297,14 +298,16 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances.length),{timeout:5000}).toBeGreaterThan(0);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].playing)).toBe(true);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
+  const framesBeforeTtsNoise=await page.evaluate(()=>window.__sentAudioFrames);
 
-  // Even loud samples must not auto-interrupt while the assistant is speaking.
+  // Even loud samples must neither auto-interrupt nor reach server VAD during TTS.
   await page.evaluate(()=>{
     const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.8)};
     const outputBuffer={getChannelData:()=>new Float32Array(4096)};
     for(let i=0;i<8;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
   });
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
+  expect(await page.evaluate(()=>window.__sentAudioFrames)).toBe(framesBeforeTtsNoise);
 
   // A deliberate mic tap still interrupts and re-enables the same capture stream.
   await page.locator('.farast-voice-mic').click();
