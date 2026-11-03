@@ -130,9 +130,10 @@
   function stopConversation(){if(batchStopTimer){window.clearTimeout(batchStopTimer);batchStopTimer=null;}if(batchRecorder&&batchRecorder.state!=='inactive'){try{batchRecorder.onstop=null;batchRecorder.stop();}catch(e){}}if(batchMediaStream){batchMediaStream.getTracks().forEach(function(track){track.stop();});batchMediaStream=null;}batchRecorder=null;batchChunks=[];batchRecording=false;var stoppedBatchMic=root.querySelector('.farast-assistant-mic');var stoppedBatchLabel=stoppedBatchMic.querySelector('span');if(stoppedBatchLabel)stoppedBatchLabel.textContent='صحبت کن';stoppedBatchMic.setAttribute('aria-label','شروع صحبت');conversationActive=false;assistantTurn++;speechGeneration++;busy=false;if(chatAbortController){chatAbortController.abort();chatAbortController=null;}if(speechRequestController){speechRequestController.abort();speechRequestController=null;}stopLiveRecognition();if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(assistantAudio){try{assistantAudio.pause();}catch(e){}assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}panel.classList.remove('is-listening','is-speaking');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');}
   function scheduleNextListening(){if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(gatewayWs&&gatewayWs.readyState===WebSocket.OPEN){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='میکروفون روشن است؛ هر وقت صحبت کنی، نوبت تو را تشخیص می‌دهم.';status.textContent='در حال گوش دادن؛ برای قطع کامل مکالمه، دکمهٔ توقف را لمس کن.';panel.classList.add('is-listening');return;}voiceTitle.textContent='نوبت توست';voiceCaption.textContent='درگاه زنده قطع شده است؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';status.textContent='میکروفون خاموش است؛ اتصال زنده را دوباره برقرار کن.';}
   function setGatewayMicrophoneMuted(muted){
+    gatewayMicrophoneMuted=!!muted;
     if(!gatewayMediaStream)return;
     var tracks=typeof gatewayMediaStream.getAudioTracks==='function'?gatewayMediaStream.getAudioTracks():gatewayMediaStream.getTracks();
-    tracks.forEach(function(track){track.enabled=!muted;});
+    tracks.forEach(function(track){track.enabled=!gatewayMicrophoneMuted;});
   }
   function interruptAssistantForBargeIn(){
     if(!busy&&!assistantAudio&&!speechRequestController&&!chatAbortController)return;
@@ -358,7 +359,7 @@
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var liveTurnEnding=false,gatewayStatusMessage='';
-  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false;
+  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false;
   function releaseGatewayCapture(){
     if(gatewayWorkletNode){try{gatewayWorkletNode.disconnect();}catch(e){}gatewayWorkletNode=null;}
     if(gatewayScriptProcessorNode){try{gatewayScriptProcessorNode.disconnect();gatewayScriptProcessorNode.onaudioprocess=null;}catch(e){}gatewayScriptProcessorNode=null;}
@@ -530,12 +531,13 @@
         await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261102asr2');
         if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
         gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
-        gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000){socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));noteGatewayAudioActivity(generation,bytes.slice(i,Math.min(i+24000,bytes.byteLength)).buffer);}}else if(bytes.byteLength){socket.send(bytes);noteGatewayAudioActivity(generation,event.data);}};
+        gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive||gatewayMicrophoneMuted)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000){socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));noteGatewayAudioActivity(generation,bytes.slice(i,Math.min(i+24000,bytes.byteLength)).buffer);}}else if(bytes.byteLength){socket.send(bytes);noteGatewayAudioActivity(generation,event.data);}};
         gatewaySourceNode.connect(gatewayWorkletNode);gatewayWorkletNode.connect(gatewayAudioContext.destination);
       }else{
         gatewayScriptProcessorNode=gatewayAudioContext.createScriptProcessor(4096,1,1);
         gatewayScriptProcessorNode.onaudioprocess=function(event){
           if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;
+          if(gatewayMicrophoneMuted){event.outputBuffer.getChannelData(0).fill(0);return;}
           var input=event.inputBuffer.getChannelData(0),ratio=gatewayAudioContext.sampleRate/16000;
           for(var i=0;i<input.length;i+=ratio){var sample=Math.max(-1,Math.min(1,input[Math.floor(i)]));gatewayPcmBuffer.push(sample<0?sample*32768:sample*32767);}
           while(gatewayPcmBuffer.length>=1600){var frame=new Int16Array(gatewayPcmBuffer.splice(0,1600));socket.send(frame.buffer);noteGatewayAudioActivity(generation,frame);}
@@ -567,8 +569,8 @@
     if(gatewaySilenceTimer){window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=null;}
     var text=gatewayFinalText.trim();if(!text)return;
     liveTurnEnding=true;gatewayFinalText='';gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
-    // Keep the same authenticated stream and microphone open during generation and playback.
-    // This allows server-side interim ASR to detect a new user utterance and barge in.
+    // Keep the authenticated stream open and microphone live while the model is thinking.
+    // TTS playback mutes capture to prevent speaker echo; a mic tap can interrupt playback.
     liveTurnEnding=false;send(text);
   }
   function enableTextFallback(reason){
