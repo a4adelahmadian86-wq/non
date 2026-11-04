@@ -154,7 +154,7 @@
   function scheduleNextListening(){if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(busy||!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;if(gatewayWs&&gatewayWs.readyState===WebSocket.OPEN){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='میکروفون روشن است؛ هر وقت صحبت کنی، نوبت تو را تشخیص می‌دهم.';status.textContent='در حال گوش دادن؛ برای قطع کامل مکالمه، دکمهٔ توقف را لمس کن.';panel.classList.add('is-listening');return;}voiceTitle.textContent='نوبت توست';voiceCaption.textContent='درگاه زنده قطع شده است؛ برای تلاش دوباره دکمهٔ «صحبت کن» را لمس کن.';status.textContent='میکروفون خاموش است؛ اتصال زنده را دوباره برقرار کن.';}
   function setGatewayMicrophoneMuted(muted){
     gatewayMicrophoneMuted=!!muted;
-    if(!gatewayMicrophoneMuted){gatewayBargeInPending=false;gatewayBargeInFrames=0;gatewayBargeInBuffer=[];}
+    if(!gatewayMicrophoneMuted){gatewayBargeInFrames=0;gatewayBargeInBuffer=[];}
     if(!gatewayMediaStream)return;
     // Keep the input track live while TTS plays. Browser echo cancellation is
     // enabled at capture time; the gateway's VAD/transcript lets the user barge
@@ -398,7 +398,7 @@
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){primeAssistantAudioPlayback();send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var liveTurnEnding=false,gatewayStatusMessage='';
-  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInPending=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[];
+  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[];
   function releaseGatewayCapture(){
     gatewayMicrophoneMuted=false;
     if(gatewayWorkletNode){try{gatewayWorkletNode.disconnect();}catch(e){}gatewayWorkletNode=null;}
@@ -571,12 +571,9 @@
       socket.onmessage=function(event){
         if(generation!==gatewayGeneration||typeof event.data!=='string')return;var data;try{data=JSON.parse(event.data);}catch(e){return;}
         if(data.type==='ready'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='مکالمه زنده روی Render فعال است؛ پایان هر نوبت را از روی مکث گفتار تشخیص می‌دهم.';status.textContent='گوش می‌دهم؛ هر وقت جمله‌ات تمام شود، پاسخ را خودکار آماده می‌کنم.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');if(providerReadyResolve){providerReadyResolve();providerReadyResolve=null;providerReadyReject=null;}}
-        else if(data.type==='speech_started'){
-          if(busy){gatewayBargeInPending=true;}
-          else{voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}
-        }
+        else if(data.type==='speech_started'){if(!busy){voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}}
         else if(data.type==='processing'){if(!busy){voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='مکث گفتار تشخیص داده شد؛ متن درخواست در حال نهایی‌شدن است.';status.textContent='در حال تبدیل نوبت گفتار به متن…';}}
-        else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(busy&&gatewayBargeInPending&&interimText.length>=2){gatewayBargeInPending=false;interruptAssistantForBargeIn();}if(!busy&&interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
+        else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(!busy&&interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
         else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart&&!busy){gatewayFinalText=finalPart;finishGatewayTurn(generation);}}
         else if(data.type==='empty'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتاری تشخیص داده نشد؛ هر وقت آماده‌ای ادامه بده.';status.textContent='هنوز جمله‌ای برای پاسخ‌دادن دریافت نشده است.';}
         else if(data.type==='provider_error'){var providerMessage=data.code==='asr_rate_limited'?'محدودیت موقت سرویس تشخیص گفتار؛ چند لحظه دیگر دوباره صحبت کن.':'تشخیص این نوبت گفتار ناموفق بود؛ اتصال برقرار است و می‌توانی دوباره صحبت کنی.';voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent=providerMessage;status.textContent=providerMessage;}
