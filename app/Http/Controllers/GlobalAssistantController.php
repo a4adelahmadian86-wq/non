@@ -32,6 +32,13 @@ class GlobalAssistantController extends Controller
             ? ($gatewayPrivate && $gatewayToken !== '' && $gatewayHealthy)
             : ($gatewayUrl !== '' && $gatewayToken !== '');
         $chatGatewayMessage = '';
+        $chatGatewayHealthUrl = '';
+        if (! $localOnly && $gatewayUrl !== '') {
+            $gatewayHost = strtolower((string) parse_url($gatewayUrl, PHP_URL_HOST));
+            if ($gatewayHost !== '' && str_ends_with($gatewayHost, '.onrender.com')) {
+                $chatGatewayHealthUrl = rtrim($gatewayUrl, '/').'/health';
+            }
+        }
         if (! $chatGatewayReady) {
             $missing = [];
             if ($gatewayUrl === '') $missing[] = 'FARAST_AI_GATEWAY_URL';
@@ -49,6 +56,7 @@ class GlobalAssistantController extends Controller
             'remote_batch_enabled' => $remoteBatchEnabled,
             'chat_gateway_ready' => $chatGatewayReady,
             'chat_gateway_message' => $chatGatewayMessage,
+            'chat_gateway_health_url' => $chatGatewayHealthUrl,
             'server_stt' => filled(config('services.voice_asr.url')),
             'server_tts' => filled(config('services.voice_tts.url')),
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
