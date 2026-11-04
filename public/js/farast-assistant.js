@@ -226,7 +226,7 @@
         var blob=result.blob;
         assistantAudioUrl=URL.createObjectURL(blob);
         var audio=assistantAudioElement||new Audio();assistantAudioElement=audio;assistantAudio=audio;audio.preload='auto';if(assistantSilentAudioUrl){URL.revokeObjectURL(assistantSilentAudioUrl);assistantSilentAudioUrl=null;}audio.src=assistantAudioUrl;
-        audio.onplay=function(){setGatewayMicrophoneMuted(true);panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='برای جلوگیری از شنیدن صدای بلندگو، میکروفون هنگام پخش پاسخ موقتاً بی‌صداست؛ برای قطع پاسخ، دکمه میکروفون را لمس کن.';status.textContent='پاسخ صوتی در حال پخش است؛ برای قطع آن دکمه میکروفون را لمس کن.';};
+        audio.onplay=function(){setGatewayMicrophoneMuted(true);panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='میکروفون در حالت پایش است؛ صدای بلندگو فیلتر می‌شود. اگر وسط پاسخ صحبت کنی، فراست پاسخ را متوقف می‌کند و به تو گوش می‌دهد.';status.textContent='پاسخ صوتی در حال پخش است؛ برای صحبت‌کردن لازم نیست دکمه را لمس کنی.';};
         // Keep capture muted across every chunk boundary. The microphone is
         // re-enabled only after the complete assistant turn has finished.
         var readyPromise=new Promise(function(resolve,reject){
@@ -282,7 +282,7 @@
       }
       panel.classList.remove('is-speaking');
       voiceTitle.textContent=conversationActive?'نوبت توست':'آمادهٔ گفت‌وگو هستم';
-      voiceCaption.textContent=conversationActive?'میکروفون خاموش است؛ برای پیام بعدی دکمهٔ «صحبت کن» را لمس کن.':'هر وقت آماده بودی، دوباره صحبت کن.';
+      voiceCaption.textContent=conversationActive?'میکروفون همچنان آمادهٔ شنیدن است؛ بدون لمس دوباره صحبت کن.':'هر وقت آماده بودی، دوباره صحبت کن.';
       status.textContent='پاسخ صوتی کامل شد؛ آمادهٔ نوبت بعدی هستم.';
     }catch(e){
       if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return;
