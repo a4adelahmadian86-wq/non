@@ -362,7 +362,7 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:5000}).toBe(1);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances.length),{timeout:5000}).toBeGreaterThan(0);
   await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].playing)).toBe(true);
-  expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   const framesBeforeTtsNoise=await page.evaluate(()=>window.__sentAudioFrames);
 
   // Even loud samples must neither auto-interrupt nor reach server VAD during TTS.
@@ -695,7 +695,7 @@ test('live gateway unavailability never starts batch recording and leaves text i
 });
 
 
-test('assistant keeps microphone muted across generation and every TTS chunk; ASR cannot auto-interrupt its own reply', async ({ page }) => {
+test('assistant streams complete TTS chunks, ignores VAD-only echo, and supports transcript-confirmed barge-in', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -764,4 +764,9 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__audio.finish());
   await expect.poll(()=>page.evaluate(()=>window.__track.enabled)).toBe(true);
+  await page.locator('.farast-assistant-form input[name="message"]').fill('یک پاسخ دیگر بده');
+  await page.locator('.farast-assistant-send').click();
+  await expect.poll(()=>page.evaluate(()=>typeof window.__resolveChat==='function')).toBe(true);
+  await page.evaluate(()=>{window.__wsInstances[0].emit({type:'speech_started'});window.__wsInstances[0].emit({type:'interim',text:'لطفاً صبر کن'});});
+  await expect.poll(()=>page.evaluate(()=>window.__chatSignal.aborted)).toBe(true);
 });
