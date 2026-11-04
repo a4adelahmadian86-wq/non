@@ -155,8 +155,10 @@
   function setGatewayMicrophoneMuted(muted){
     gatewayMicrophoneMuted=!!muted;
     if(!gatewayMediaStream)return;
-    var tracks=typeof gatewayMediaStream.getAudioTracks==='function'?gatewayMediaStream.getAudioTracks():gatewayMediaStream.getTracks();
-    tracks.forEach(function(track){track.enabled=!gatewayMicrophoneMuted;});
+    // Keep the input track live while TTS plays. Browser echo cancellation is
+    // enabled at capture time; the gateway's VAD/transcript lets the user barge
+    // in naturally without touching the mic button. We still mark playback as
+    // muted so UI/state logic knows not to treat it as a normal listening turn.
   }
   function interruptAssistantForBargeIn(){
     if(!busy&&!assistantAudio&&!speechRequestController&&!chatAbortController)return;
@@ -554,13 +556,11 @@
         if(generation!==gatewayGeneration||typeof event.data!=='string')return;var data;try{data=JSON.parse(event.data);}catch(e){return;}
         if(data.type==='ready'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='مکالمه زنده روی Render فعال است؛ پایان هر نوبت را از روی مکث گفتار تشخیص می‌دهم.';status.textContent='گوش می‌دهم؛ هر وقت جمله‌ات تمام شود، پاسخ را خودکار آماده می‌کنم.';panel.classList.add('is-listening');root.querySelector('.farast-assistant-mic').classList.add('is-recording');if(providerReadyResolve){providerReadyResolve();providerReadyResolve=null;providerReadyReject=null;}}
         else if(data.type==='speech_started'){
-          // Never infer barge-in from the ASR stream while the assistant is
-          // generating or speaking: speaker echo/noise can otherwise cancel
-          // the answer. An explicit microphone tap remains the interrupt action.
-          if(!busy){voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}
+          if(busy){gatewayBargeInPending=true;}
+          else{voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}
         }
         else if(data.type==='processing'){if(!busy){voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='مکث گفتار تشخیص داده شد؛ متن درخواست در حال نهایی‌شدن است.';status.textContent='در حال تبدیل نوبت گفتار به متن…';}}
-        else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(!busy&&interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
+        else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(busy&&gatewayBargeInPending&&interimText.length>=2){gatewayBargeInPending=false;interruptAssistantForBargeIn();}if(!busy&&interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
         else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart&&!busy){gatewayFinalText=finalPart;finishGatewayTurn(generation);}}
         else if(data.type==='empty'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتاری تشخیص داده نشد؛ هر وقت آماده‌ای ادامه بده.';status.textContent='هنوز جمله‌ای برای پاسخ‌دادن دریافت نشده است.';}
         else if(data.type==='provider_error'){var providerMessage=data.code==='asr_rate_limited'?'محدودیت موقت سرویس تشخیص گفتار؛ چند لحظه دیگر دوباره صحبت کن.':'تشخیص این نوبت گفتار ناموفق بود؛ اتصال برقرار است و می‌توانی دوباره صحبت کنی.';voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent=providerMessage;status.textContent=providerMessage;}
@@ -576,13 +576,12 @@
         await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261102asr2');
         if(generation!==gatewayGeneration||!conversationActive||panel.hidden){stopGatewayRecognition();return true;}
         gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
-        gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive||gatewayMicrophoneMuted)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000){socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));noteGatewayAudioActivity(generation,bytes.slice(i,Math.min(i+24000,bytes.byteLength)).buffer);}}else if(bytes.byteLength){socket.send(bytes);noteGatewayAudioActivity(generation,event.data);}};
+        gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;var bytes=new Uint8Array(event.data);if(bytes.byteLength>24000){for(var i=0;i<bytes.byteLength;i+=24000){socket.send(bytes.slice(i,Math.min(i+24000,bytes.byteLength)));noteGatewayAudioActivity(generation,bytes.slice(i,Math.min(i+24000,bytes.byteLength)).buffer);}}else if(bytes.byteLength){socket.send(bytes);noteGatewayAudioActivity(generation,event.data);}};
         gatewaySourceNode.connect(gatewayWorkletNode);gatewayWorkletNode.connect(gatewayAudioContext.destination);
       }else{
         gatewayScriptProcessorNode=gatewayAudioContext.createScriptProcessor(4096,1,1);
         gatewayScriptProcessorNode.onaudioprocess=function(event){
           if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;
-          if(gatewayMicrophoneMuted){event.outputBuffer.getChannelData(0).fill(0);return;}
           var input=event.inputBuffer.getChannelData(0),ratio=gatewayAudioContext.sampleRate/16000;
           for(var i=0;i<input.length;i+=ratio){var sample=Math.max(-1,Math.min(1,input[Math.floor(i)]));gatewayPcmBuffer.push(sample<0?sample*32768:sample*32767);}
           while(gatewayPcmBuffer.length>=1600){var frame=new Int16Array(gatewayPcmBuffer.splice(0,1600));socket.send(frame.buffer);noteGatewayAudioActivity(generation,frame);}
