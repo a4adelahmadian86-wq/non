@@ -753,13 +753,13 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__resolveChat());
-  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(3);
+  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   await page.evaluate(()=>{const audio=window.__audio; if(audio)audio.finish();});
-  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(3);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__audio.finish());
