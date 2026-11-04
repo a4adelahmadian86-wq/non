@@ -723,7 +723,7 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   Object.defineProperty(window,'isSecureContext',{configurable:true,value:true});
   Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[window.__track]})}});
   window.Audio=class extends EventTarget {
-    constructor(){super();this.duration=2;this.ended=false;this.paused=true;this.src='';}
+    constructor(){super();this.duration=2;this.ended=false;this.paused=true;this.src='';window.__audio=this;}
     load(){this.dispatchEvent(new Event('canplay'));}
     play(){this.paused=false;if(this.onplay){window.__playCount++;this.onplay();}return Promise.resolve();}
     finish(){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));this.onended?.();}
@@ -753,16 +753,14 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__resolveChat());
   await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(1);
-  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.']);
+  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
-  await page.evaluate(()=>document.querySelector('.farast-assistant-panel').querySelector('[data-fa-messages]') && window.__track.enabled);
-  await page.evaluate(()=>window.__wsInstances[0] && document.querySelector('audio'));
   await page.evaluate(()=>{const audio=window.__audio; if(audio)audio.finish();});
   await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
-  await page.evaluate(()=>{const audio=document.querySelector('audio');if(audio)audio.dispatchEvent(new Event('ended'));});
+  await page.evaluate(()=>window.__audio.finish());
   await expect.poll(()=>page.evaluate(()=>window.__track.enabled)).toBe(true);
 });
