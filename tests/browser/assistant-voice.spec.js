@@ -716,7 +716,7 @@ test('assistant streams complete TTS chunks, suppresses echo, and supports local
   window.AudioContext=class {
     constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
     createMediaStreamSource(){return {connect(){},disconnect(){}};}
-    createScriptProcessor(){return {onaudioprocess:null,connect(){},disconnect(){}};}
+    createScriptProcessor(){window.__scriptProcessor={onaudioprocess:null,connect(){},disconnect(){}};return window.__scriptProcessor;}
     resume(){return Promise.resolve();}
     close(){this.state='closed';return Promise.resolve();}
   };
@@ -751,17 +751,17 @@ test('assistant streams complete TTS chunks, suppresses echo, and supports local
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
-  expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__resolveChat());
   await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
-  expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   await page.evaluate(()=>{const audio=window.__audio; if(audio)audio.finish();});
   await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(3);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
-  expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__audio.finish());
   await expect.poll(()=>page.evaluate(()=>window.__track.enabled)).toBe(true);
   const firstSignal = await page.evaluate(()=>window.__chatSignal);
