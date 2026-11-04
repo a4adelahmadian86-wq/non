@@ -110,6 +110,37 @@ test('unsupported voice browsers can continue through an accessible text fallbac
 });
 
 
+test('text chat wakes the sleeping Render gateway before sending the chat request', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.WebSocket = undefined;
+  window.AudioContext = undefined;
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+  window.__order = [];
+  window.fetch = async (url, options = {}) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, local_only: false, chat_gateway_ready: true, chat_gateway_health_url: 'https://voice.example.test/health' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (String(url).startsWith('https://voice.example.test/health')) {
+      window.__order.push('health');
+      if (window.__order.filter(item => item === 'health').length === 1) return new Response(JSON.stringify({ status: 'starting', chat_configured: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ status: 'ok', chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url === '/assistant/chat/stream') { window.__order.push('chat'); return new Response('data: {"delta":"پاسخ آماده است."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
+    if (url === '/assistant/speak') return new Response(JSON.stringify({ ok: false, message: 'TTS unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
+  await page.locator('.farast-assistant-send').click();
+  await expect.poll(() => page.evaluate(() => window.__order.includes('chat'))).toBe(true);
+  expect(await page.evaluate(() => window.__order)).toEqual(['health', 'health', 'chat']);
+  await expect(page.locator('[data-fa-messages]')).toContainText('پاسخ آماده است.');
+});
+
+
 test('live assistant prefers server WebSocket speech streaming when a gateway is configured', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
