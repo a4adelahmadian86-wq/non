@@ -836,7 +836,10 @@ test('live assistant aggregates segmented final ASR events before starting a cha
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
   await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام فراست');
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'سلام' }));
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'فراست' }));
+  await page.waitForTimeout(900);
+  expect(await page.evaluate(() => window.__chatPayloads.length)).toBe(0);
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'فراست' }));
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length), { timeout: 5000 }).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
