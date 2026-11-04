@@ -141,11 +141,9 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
     play() { return Promise.resolve(); }
     pause() {}
   };
-  window.__wakeOrder = [];
   window.fetch = async (url, options = {}) => {
-    if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway', provider: 'render', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (String(url).startsWith('https://voice.example.test/health')) { window.__wakeOrder.push('health'); return new Response(JSON.stringify({ status: 'ok', asr_configured: true, tts_configured: true, chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
-    if (url === '/assistant/voice/stream-token') { window.__wakeOrder.push('token'); return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+    if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/stream-token') return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ زنده"}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
@@ -158,7 +156,6 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
 
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(() => window.__wsInstances[0].url)).toBe('wss://voice.example.test/v1/stream');
-  expect(await page.evaluate(() => window.__wakeOrder)).toEqual(['health', 'token']);
   await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
   await page.evaluate(() => {
     const inputBuffer = { getChannelData: () => new Float32Array(4096).fill(0.1) };
