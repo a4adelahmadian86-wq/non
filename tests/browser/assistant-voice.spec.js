@@ -902,3 +902,54 @@ test('live assistant keeps one microphone session open across consecutive voice 
   expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(()=>window.__getUserMediaCalls)).toBe(1);
 });
+
+
+test('live assistant preserves a finalized ASR transcript when the provider errors immediately afterward', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__wsInstances = [];
+  window.__chatPayloads = [];
+  class FakeWebSocket extends EventTarget {
+    constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
+    send(data) { this.sent.push(data); if(typeof data==='string' && JSON.parse(data).type==='start') queueMicrotask(()=>this.emit({type:'ready'})); }
+    close() { this.readyState=3; }
+    emit(data) { this.onmessage?.({data:JSON.stringify(data)}); }
+  }
+  FakeWebSocket.OPEN=1; window.WebSocket=FakeWebSocket;
+  window.AudioContext=class {
+    constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
+    createMediaStreamSource(){return {connect(){},disconnect(){}};}
+    createScriptProcessor(){window.__scriptProcessor={onaudioprocess:null,connect(){},disconnect(){}};return window.__scriptProcessor;}
+    resume(){return Promise.resolve();}
+    close(){this.state='closed';return Promise.resolve();}
+  };
+  window.AudioWorkletNode=undefined;
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}});
+  window.Audio=class extends EventTarget {
+    constructor(){super();this.duration=1;this.paused=true;}
+    load(){this.dispatchEvent(new Event('canplay'));}
+    play(){this.paused=false;this.onplay?.();return Promise.resolve();}
+    pause(){this.paused=true;}
+  };
+  window.fetch=async(url,options={})=>{
+    if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/status')return new Response(JSON.stringify({ok:true,local_only:false,chat_gateway_ready:true}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/chat/stream'){window.__chatPayloads.push(JSON.parse(options.body));return new Response('data: {"delta":"پاسخ فراست."}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}});}
+    if(url==='/assistant/speak')return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
+  await page.evaluate(()=>{
+    window.__wsInstances[0].emit({type:'final',text:'درخواست نهایی‌شده'});
+    window.__wsInstances[0].emit({type:'provider_error',code:'temporary_provider_failure'});
+  });
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:8000}).toBe(1);
+  expect(await page.evaluate(()=>window.__chatPayloads[0].message)).toBe('درخواست نهایی‌شده');
+});
