@@ -545,6 +545,40 @@
       var service=await statusResponse.json().catch(function(){return {};});
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
       if(!statusResponse.ok||service.mode!=='gateway'){gatewayStatusMessage=String(service.message||'درگاه مکالمه زنده Render آماده نیست.');stopGatewayRecognition();return false;}gatewayStatusMessage='';
+      // Render Free sleeps after inactivity. Wake it over ordinary HTTP and wait
+      // for its real health response before opening the WebSocket upgrade.
+      if(service.provider==='render'){
+        var healthUrl='';
+        try{
+          var healthTarget=new URL(String(service.websocket_url||''));
+          healthTarget.protocol=healthTarget.protocol==='wss:'?'https:':'http:';
+          healthTarget.pathname='/health';healthTarget.search='';healthTarget.hash='';
+          healthUrl=healthTarget.toString();
+        }catch(e){throw new Error('نشانی سلامت درگاه رایگان Render معتبر نیست.');}
+        if(!healthUrl)throw new Error('نشانی سلامت درگاه رایگان Render تنظیم نشده است.');
+        var wakeDeadline=Date.now()+75000,wakeReady=false,wakeFailure='سرویس هنوز پاسخ آماده نداده است.';
+        voiceTitle.textContent='در حال بیدارکردن سرویس رایگان';
+        voiceCaption.textContent='سرویس صوتی رایگان پس از بی‌کاری به خواب می‌رود؛ در حال بیدارکردن و بررسی سلامت آن هستم. میکروفون تا آماده‌شدن سرویس ضبطی ارسال نمی‌کند.';
+        status.textContent='در حال آماده‌سازی درگاه صوتی رایگان؛ لطفاً این صفحه را باز نگه دار.';
+        while(!wakeReady&&Date.now()<wakeDeadline){
+          if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
+          var wakeController=new AbortController();
+          var wakeTimer=window.setTimeout(function(){wakeController.abort();},10000);
+          try{
+            var wakeResponse=await fetch(healthUrl,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Accept':'application/json'},signal:wakeController.signal});
+            var wakeData=await wakeResponse.json().catch(function(){return {};});
+            wakeReady=wakeResponse.ok&&wakeData.status==='ok'&&wakeData.asr_configured===true&&wakeData.tts_configured===true&&wakeData.chat_configured===true;
+            if(!wakeReady)wakeFailure='پاسخ سلامت سرویس کامل نیست (HTTP '+wakeResponse.status+').';
+          }catch(wakeError){wakeFailure=wakeError&&wakeError.name==='AbortError'?'مهلت بررسی سلامت سرویس تمام شد.':'اتصال HTTP به سرویس هنوز برقرار نشده است.';}
+          finally{window.clearTimeout(wakeTimer);}
+          if(!wakeReady){
+            voiceCaption.textContent='سرویس رایگان هنوز در حال راه‌اندازی است؛ بررسی سلامت را خودکار تکرار می‌کنم.';
+            await new Promise(function(resolve){window.setTimeout(resolve,1500);});
+          }
+        }
+        if(!wakeReady)throw new Error('سرویس صوتی رایگان Render پس از تلاش برای بیدارشدن آماده نشد؛ اتصال اینترنت را بررسی کن و دوباره تلاش کن. '+wakeFailure);
+      }
+      if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
       var tokenResponse=await fetch('/assistant/voice/stream-token',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({locale:'fa-IR'})});
       var tokenData=await tokenResponse.json().catch(function(){return {};});
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
@@ -558,10 +592,10 @@
       voiceCaption.textContent='در حال اتصال امن به سرویس گفتار؛ هیچ فایل یا مدلی روی دستگاه دانلود نمی‌شود. ضبط پس از آماده‌شدن سرویس آغاز می‌شود.';
       status.textContent='درخواست اتصال امن ارسال شد؛ هنوز ضبط شروع نشده و دانلودی روی دستگاه انجام نمی‌شود.';
       await new Promise(function(resolve,reject){
-        var settled=false;var timer=window.setTimeout(function(){finish(new Error('پس از ۷۵ ثانیه اتصال به درگاه صوتی برقرار نشد.'));},75000);
+        var settled=false;var timer=window.setTimeout(function(){finish(new Error('سرویس آماده است اما اتصال WebSocket در ۲۰ ثانیه برقرار نشد؛ شبکه یا پشتیبانی WebSocket را بررسی کن.'));},20000);
         function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);socket.removeEventListener('close',closed);if(error)reject(error);else resolve();}
         function opened(){finish();}
-        function failed(){finish(new Error('اتصال درگاه گفتار برقرار نشد؛ شبکه یا سرویس صوتی را بررسی کن.'));}
+        function failed(){finish(new Error('ارتباط WebSocket با سرویس آماده‌شده برقرار نشد؛ ممکن است شبکه اتصال WebSocket را مسدود کرده باشد.'));}
         function closed(event){finish(new Error('درگاه صوتی پیش از تکمیل اتصال بسته شد (کد '+event.code+').'));}
         socket.addEventListener('open',opened,{once:true});socket.addEventListener('error',failed,{once:true});socket.addEventListener('close',closed,{once:true});
       });
