@@ -293,6 +293,28 @@
 
     }
   }
+  async function waitForGatewayChatHealth(url,signal,turn){
+    var deadline=Date.now()+75000,lastFailure='سرویس هنوز پاسخ آماده نداده است.';
+    while(Date.now()<deadline){
+      if(signal.aborted||turn!==assistantTurn){var cancelled=new Error('درخواست لغو شد.');cancelled.name='AbortError';throw cancelled;}
+      var probe=new AbortController(),abortParent=function(){probe.abort();};
+      signal.addEventListener('abort',abortParent,{once:true});
+      var timer=window.setTimeout(function(){probe.abort();},10000);
+      try{
+        var response=await fetch(url,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Accept':'application/json'},signal:probe.signal});
+        var health=await response.json().catch(function(){return {};});
+        if(response.ok&&health.status==='ok'&&health.chat_configured===true)return;
+        lastFailure='پاسخ سلامت سرویس کامل نیست (HTTP '+response.status+').';
+      }catch(error){
+        if(signal.aborted||turn!==assistantTurn)throw error;
+        lastFailure=error&&error.name==='AbortError'?'راه‌اندازی سرویس بیشتر از مهلت هر بررسی طول کشید.':'اتصال HTTP به درگاه گفت‌وگو هنوز برقرار نشده است.';
+      }finally{
+        window.clearTimeout(timer);signal.removeEventListener('abort',abortParent);
+      }
+      await new Promise(function(resolve){window.setTimeout(resolve,1500);});
+    }
+    throw new Error('درگاه گفت‌وگوی رایگان Render هنوز آماده نشده است؛ '+lastFailure+' لطفاً چند لحظه بعد دوباره تلاش کن.');
+  }
   async function send(text){
     text=String(text||'').trim();if(!text||busy)return;
     if(document.body.dataset.assistantAuth !== '1'){
@@ -336,6 +358,9 @@
       var assistantStatus=await assistantStatusResponse.json().catch(function(){return {};});
       if(assistantStatusResponse.ok&&assistantStatus.local_only&&assistantStatus.chat_gateway_ready===false){
         throw new Error(assistantStatus.chat_gateway_message||'درگاه خصوصی Qwen آماده نیست؛ voice-stream/start.cmd را اجرا کن و سلامت سرویس را بررسی کن.');
+      }
+      if(assistantStatusResponse.ok&&assistantStatus.chat_gateway_ready===true&&assistantStatus.chat_gateway_health_url){
+        await waitForGatewayChatHealth(assistantStatus.chat_gateway_health_url,requestController.signal,turn);
       }
       var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربری /dashboard. مکالمه اخیر:\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\n')+'\nکاربر: '+text;
       var response=await fetch('/assistant/chat/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'text/event-stream, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt}),signal:requestController.signal});
