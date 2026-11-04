@@ -695,7 +695,7 @@ test('live gateway unavailability never starts batch recording and leaves text i
 });
 
 
-test('assistant streams complete TTS chunks, ignores VAD-only echo, and supports transcript-confirmed barge-in', async ({ page }) => {
+test('assistant streams complete TTS chunks, suppresses echo, and supports local-VAD barge-in', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -748,7 +748,7 @@ test('assistant streams complete TTS chunks, ignores VAD-only echo, and supports
   await page.locator('.farast-assistant-form input[name="message"]').fill('لطفاً پاسخ بده');
   await page.locator('.farast-assistant-send').click();
   await expect.poll(()=>page.evaluate(()=>typeof window.__resolveChat==='function')).toBe(true);
-  expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
