@@ -777,3 +777,67 @@ test('assistant streams complete TTS chunks, suppresses echo, and supports local
   await expect.poll(()=>page.evaluate(()=>window.__chatSignal.aborted)).toBe(true);
   expect(await page.evaluate(()=>window.__wsInstances[0].sent.filter(x=>x instanceof ArrayBuffer).length)).toBeGreaterThan(0);
 });
+
+test('live assistant aggregates segmented final ASR events before starting a chat turn', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__chatPayloads = [];
+  window.__wsInstances = [];
+  class FakeWebSocket extends EventTarget {
+    constructor(url) { super(); this.url = url; this.readyState = 0; this.sent = []; window.__wsInstances.push(this); setTimeout(() => { this.readyState = 1; this.dispatchEvent(new Event('open')); }, 0); }
+    send(data) { this.sent.push(data); if (typeof data === 'string' && JSON.parse(data).type === 'start') queueMicrotask(() => this.emit({ type: 'ready', provider: 'mock-provider' })); }
+    close() { this.readyState = 3; }
+    emit(data) { this.onmessage?.({ data: JSON.stringify(data) }); }
+  }
+  FakeWebSocket.OPEN = 1;
+  window.WebSocket = FakeWebSocket;
+  window.AudioContext = class {
+    constructor() { this.state = 'running'; this.sampleRate = 48000; this.destination = {}; }
+    createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
+    createScriptProcessor() { window.__scriptProcessor = { onaudioprocess: null, connect() {}, disconnect() {} }; return window.__scriptProcessor; }
+    resume() { return Promise.resolve(); }
+    close() { this.state = 'closed'; return Promise.resolve(); }
+  };
+  window.AudioWorkletNode = undefined;
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } });
+  window.Audio = class {
+    constructor() { this.duration = 2; this.handlers = {}; }
+    addEventListener(n, fn) { this.handlers[n] = fn; }
+    removeEventListener(n) { delete this.handlers[n]; }
+    load() { this.handlers.canplay?.(); }
+    play() { return Promise.resolve(); }
+    pause() {}
+  };
+  window.fetch = async (url, options = {}) => {
+    if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/stream-token') return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ زنده"}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
+    if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
+    return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+
+  await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
+  expect(await page.evaluate(() => window.__wsInstances[0].url)).toBe('wss://voice.example.test/v1/stream');
+  await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
+  await page.evaluate(() => {
+    const inputBuffer = { getChannelData: () => new Float32Array(4096).fill(0.1) };
+    const outputBuffer = { getChannelData: () => new Float32Array(4096) };
+    window.__scriptProcessor.onaudioprocess({ inputBuffer, outputBuffer });
+    window.__scriptProcessor.onaudioprocess({ inputBuffer, outputBuffer });
+  });
+  expect(await page.evaluate(() => window.__wsInstances[0].sent.some((item) => typeof item !== 'string'))).toBe(true);
+  await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
+  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'interim', text: 'سلام فراست' }));
+  await expect(page.locator('[data-fa-voice-caption]')).toContainText('سلام فراست');
+  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'سلام' }));
+  await page.waitForTimeout(120);
+  await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'فراست' }));
+  await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length), { timeout: 5000 }).toBe(1);
+  expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+});
