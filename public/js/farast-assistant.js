@@ -398,7 +398,7 @@
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){primeAssistantAudioPlayback();send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var liveTurnEnding=false,gatewayStatusMessage='';
-  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[];
+  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayFinalTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[];
   function releaseGatewayCapture(){
     gatewayMicrophoneMuted=false;
     if(gatewayWorkletNode){try{gatewayWorkletNode.disconnect();}catch(e){}gatewayWorkletNode=null;}
@@ -409,6 +409,7 @@
     if(gatewayMediaStream){gatewayMediaStream.getTracks().forEach(function(track){track.stop();});gatewayMediaStream=null;}
   }
   function stopGatewayRecognition(flushFinal){
+    if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}
     var socket=gatewayWs;
     if(flushFinal&&socket&&socket.readyState===WebSocket.OPEN){
       gatewayWs=null;gatewayStopping=true;gatewayStarting=true;
@@ -574,7 +575,7 @@
         else if(data.type==='speech_started'){if(!busy){voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}}
         else if(data.type==='processing'){if(!busy){voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='مکث گفتار تشخیص داده شد؛ متن درخواست در حال نهایی‌شدن است.';status.textContent='در حال تبدیل نوبت گفتار به متن…';}}
         else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(!busy&&interimText){voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
-        else if(data.type==='final'){var finalPart=String(data.text||'').trim();if(finalPart&&!busy){gatewayFinalText=finalPart;finishGatewayTurn(generation);}}
+        else if(data.type==='final'){var finalPart=String(data.text||'').replace(/\\s+/g,' ').trim();if(finalPart&&!busy){gatewayFinalText=mergeFinalTranscript(gatewayFinalText,finalPart);if(gatewayFinalTimer)window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=window.setTimeout(function(){gatewayFinalTimer=null;finishGatewayTurn(generation);},850);}}
         else if(data.type==='empty'){voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتاری تشخیص داده نشد؛ هر وقت آماده‌ای ادامه بده.';status.textContent='هنوز جمله‌ای برای پاسخ‌دادن دریافت نشده است.';}
         else if(data.type==='provider_error'){var providerMessage=data.code==='asr_rate_limited'?'محدودیت موقت سرویس تشخیص گفتار؛ چند لحظه دیگر دوباره صحبت کن.':'تشخیص این نوبت گفتار ناموفق بود؛ اتصال برقرار است و می‌توانی دوباره صحبت کنی.';voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent=providerMessage;status.textContent=providerMessage;}
         else if(data.type==='error'){if(providerReadyReject)providerReadyReject(new Error('اتصال درگاه گفتار برقرار نشد.'));stopGatewayRecognition();panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');voiceTitle.textContent='اتصال مکالمه قطع شد';voiceCaption.textContent='اتصال گفتار قطع شد؛ دوباره مکالمه را شروع کن.';status.textContent='میکروفون برای حفظ حریم خصوصی خاموش شد.';}
@@ -621,9 +622,17 @@
       return false;
     }
   }
+  function mergeFinalTranscript(current,incoming){
+    current=String(current||'').replace(/\\s+/g,' ').trim();incoming=String(incoming||'').replace(/\\s+/g,' ').trim();
+    if(!current)return incoming;if(!incoming||current===incoming||current.endsWith(incoming))return current;if(incoming.startsWith(current))return incoming;
+    var left=current.split(' '),right=incoming.split(' '),overlap=0,max=Math.min(left.length,right.length);
+    for(var n=max;n>0;n--){var same=true;for(var i=0;i<n;i++){if(left[left.length-n+i]!==right[i]){same=false;break;}}if(same){overlap=n;break;}}
+    return current+' '+right.slice(overlap).join(' ');
+  }
   function finishGatewayTurn(generation){
     if(generation!==gatewayGeneration||!conversationActive||liveTurnEnding)return;
     if(gatewaySilenceTimer){window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=null;}
+    if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}
     var text=gatewayFinalText.trim();if(!text)return;
     liveTurnEnding=true;gatewayFinalText='';gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
     // Keep the authenticated stream open and microphone live while the model is thinking.
