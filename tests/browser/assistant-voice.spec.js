@@ -704,6 +704,7 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   window.__chatSignal = null;
   window.__resolveChat = null;
   window.__playCount = 0;
+  window.__pauseOnce = true;
   window.__track = { enabled: true, stop() {} };
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
@@ -725,7 +726,7 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=2;this.ended=false;this.paused=true;this.src='';window.__audio=this;}
     load(){this.ended=false;this.paused=true;this.dispatchEvent(new Event('canplay'));}
-    play(){this.ended=false;this.paused=false;if(this.onplay){window.__playCount++;this.onplay();}return Promise.resolve();}
+    play(){this.ended=false;this.paused=false;if(this.onplay){window.__playCount++;this.onplay();if(window.__pauseOnce){window.__pauseOnce=false;this.paused=true;this.dispatchEvent(new Event('pause'));}}return Promise.resolve();}
     finish(){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));this.onended?.();}
     pause(){this.paused=true;this.dispatchEvent(new Event('pause'));this.onpause?.();}
   };
@@ -752,7 +753,7 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__resolveChat());
-  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(3);
   expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
