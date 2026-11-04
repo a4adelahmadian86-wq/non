@@ -724,8 +724,8 @@ test('assistant keeps microphone muted across generation and every TTS chunk; AS
   Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[window.__track]})}});
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=2;this.ended=false;this.paused=true;this.src='';window.__audio=this;}
-    load(){this.dispatchEvent(new Event('canplay'));}
-    play(){this.paused=false;if(this.onplay){window.__playCount++;this.onplay();}return Promise.resolve();}
+    load(){this.ended=false;this.paused=true;this.dispatchEvent(new Event('canplay'));}
+    play(){this.ended=false;this.paused=false;if(this.onplay){window.__playCount++;this.onplay();}return Promise.resolve();}
     finish(){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));this.onended?.();}
     pause(){this.paused=true;this.dispatchEvent(new Event('pause'));this.onpause?.();}
   };
