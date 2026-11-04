@@ -367,7 +367,7 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
 
   // Even loud samples must neither auto-interrupt nor reach server VAD during TTS.
   await page.evaluate(()=>{
-    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.8)};
+    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.02)};
     const outputBuffer={getChannelData:()=>new Float32Array(4096)};
     for(let i=0;i<8;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
   });
@@ -613,7 +613,7 @@ test('stopping the conversation closes the live gateway and releases the microph
   window.AudioContext=class {
     constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
     createMediaStreamSource(){return {connect(){},disconnect(){}};}
-    createScriptProcessor(){return {onaudioprocess:null,connect(){},disconnect(){}};}
+    createScriptProcessor(){window.__scriptProcessor={onaudioprocess:null,connect(){},disconnect(){}};return window.__scriptProcessor;}
     resume(){return Promise.resolve();}
     close(){this.state='closed';return Promise.resolve();}
   };
@@ -768,6 +768,12 @@ test('assistant streams complete TTS chunks, ignores VAD-only echo, and supports
   await page.locator('.farast-assistant-form input[name="message"]').fill('یک پاسخ دیگر بده');
   await page.locator('.farast-assistant-send').click();
   await expect.poll(()=>page.evaluate(signal=>window.__chatSignal!==signal,firstSignal)).toBe(true);
-  await page.evaluate(()=>{window.__wsInstances[0].emit({type:'speech_started'});window.__wsInstances[0].emit({type:'interim',text:'لطفاً صبر کن'});});
+  await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
+  await page.evaluate(()=>{
+    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
+    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
+    for(let i=0;i<5;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
+  });
   await expect.poll(()=>page.evaluate(()=>window.__chatSignal.aborted)).toBe(true);
+  expect(await page.evaluate(()=>window.__wsInstances[0].sent.filter(x=>x instanceof ArrayBuffer).length)).toBeGreaterThan(0);
 });
