@@ -764,9 +764,10 @@ test('assistant streams complete TTS chunks, ignores VAD-only echo, and supports
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   await page.evaluate(()=>window.__audio.finish());
   await expect.poll(()=>page.evaluate(()=>window.__track.enabled)).toBe(true);
+  const firstSignal = await page.evaluate(()=>window.__chatSignal);
   await page.locator('.farast-assistant-form input[name="message"]').fill('یک پاسخ دیگر بده');
   await page.locator('.farast-assistant-send').click();
-  await expect.poll(()=>page.evaluate(()=>typeof window.__resolveChat==='function')).toBe(true);
+  await expect.poll(()=>page.evaluate(signal=>window.__chatSignal!==signal,firstSignal)).toBe(true);
   await page.evaluate(()=>{window.__wsInstances[0].emit({type:'speech_started'});window.__wsInstances[0].emit({type:'interim',text:'لطفاً صبر کن'});});
   await expect.poll(()=>page.evaluate(()=>window.__chatSignal.aborted)).toBe(true);
 });
