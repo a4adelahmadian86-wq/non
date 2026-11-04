@@ -735,7 +735,7 @@ test('assistant streams complete TTS chunks, suppresses echo, and supports local
     if(url==='/assistant/voice/status')return new Response(JSON.stringify({ok:true,local_only:false,chat_gateway_ready:true}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
     if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
-    if(url==='/assistant/chat/stream'){window.__chatSignal=options.signal;return await new Promise(resolve=>{window.__resolveChat=()=>resolve(new Response('data: {"delta":"بخش اول. بخش دوم."}\\\\n\\\\ndata: {"done":true}\\\\n\\\\n',{status:200,headers:{'Content-Type':'text/event-stream'}}));});}
+    if(url==='/assistant/chat/stream'){window.__chatSignal=options.signal;return await new Promise(resolve=>{window.__resolveChat=()=>resolve(new Response('data: {"delta":"بخش اول. بخش دوم."}\\n\\ndata: {"done":true}\\n\\n',{status:200,headers:{'Content-Type':'text/event-stream'}}));});}
     if(url==='/assistant/speak'){window.__spokenChunks.push(JSON.parse(options.body).text);return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});}
     return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
   };
