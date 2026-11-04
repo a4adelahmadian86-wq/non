@@ -872,7 +872,7 @@ test('live assistant keeps one microphone session open across consecutive voice 
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=1;this.ended=false;this.paused=true;}
     load(){this.ended=false;this.dispatchEvent(new Event('canplay'));}
-    play(){this.paused=false;this.onplay?.();setTimeout(()=>{if(this.paused)return;this.ended=true;this.paused=true;window.__audioEnds++;this.dispatchEvent(new Event('ended'));},5);return Promise.resolve();}
+    play(){this.paused=false;if(this.onplay){this.onplay();setTimeout(()=>{if(this.paused)return;this.ended=true;this.paused=true;window.__audioEnds++;this.dispatchEvent(new Event('ended'));},5);}return Promise.resolve();}
     pause(){this.paused=true;this.dispatchEvent(new Event('pause'));}
   };
   window.fetch=async(url,options={})=>{
