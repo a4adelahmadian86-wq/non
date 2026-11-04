@@ -252,14 +252,24 @@
             return null;
           })();
         }
-        await audio.play();
         await new Promise(function(resolve,reject){
-          var finished=false;
+          var finished=false,pauseRetries=0;
           function cleanup(){audio.removeEventListener('ended',ended);audio.removeEventListener('pause',paused);audio.removeEventListener('error',failed);}
-          function ended(){if(finished)return;finished=true;cleanup();resolve();}
-          function paused(){if(finished||audio.ended)return;finished=true;cleanup();reject(new Error('پخش یکی از بخش‌های پاسخ پیش از پایان متوقف شد.'));}
-          function failed(){if(finished)return;finished=true;cleanup();reject(new Error('پخش یکی از بخش‌های پاسخ با خطا متوقف شد.'));}
+          function done(error){if(finished)return;finished=true;cleanup();if(error)reject(error);else resolve();}
+          function ended(){done();}
+          function failed(){done(new Error('پخش یکی از بخش‌های پاسخ با خطا متوقف شد.'));}
+          function paused(){
+            if(finished)return;
+            if(audio.ended){ended();return;}
+            if(speechTurn!==speechGeneration||requestTurn!==assistantTurn){done(new Error('پخش پاسخ لغو شد.'));return;}
+            // Some browsers briefly pause a media element between buffered
+            // ranges. Resume the same segment instead of silently skipping it.
+            if(pauseRetries>=2){done(new Error('پخش یکی از بخش‌های پاسخ چند بار متوقف شد.'));return;}
+            pauseRetries++;
+            try{var resumed=audio.play();if(resumed&&typeof resumed.catch==='function')resumed.catch(failed);}catch(error){done(error);}
+          }
           audio.addEventListener('ended',ended,{once:true});audio.addEventListener('pause',paused);audio.addEventListener('error',failed,{once:true});
+          try{var started=audio.play();if(started&&typeof started.catch==='function')started.catch(failed);}catch(error){done(error);}
           if(audio.ended)ended();
         });
         if(streamPrefetch){var prepared=await streamPrefetch;if(prepared)streamState.prefetched=prepared;}
