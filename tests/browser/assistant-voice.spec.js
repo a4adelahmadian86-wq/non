@@ -1056,7 +1056,7 @@ test('live assistant queues speech received while answering and processes it aft
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=1;this.ended=false;this.paused=true;}
     load(){this.ended=false;this.dispatchEvent(new Event('canplay'));}
-    play(){this.paused=false;this.onplay?.();window.__audioPlayCount++;setTimeout(()=>{if(!this.paused){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));}},500);return Promise.resolve();}
+    play(){this.paused=false;this.onplay?.();window.__audioPlayCount++;setTimeout(()=>{if(!this.paused){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));}},900);return Promise.resolve();}
     pause(){this.paused=true;this.dispatchEvent(new Event('pause'));}
   };
   window.fetch=async(url,options={})=>{
