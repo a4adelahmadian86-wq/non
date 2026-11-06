@@ -10,6 +10,7 @@ use App\Services\EmailService;
 use App\Services\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -187,18 +188,29 @@ class AuthController extends Controller
     {
         $email = $request->session()->get('email_login.email');
         abort_unless($email, 422, 'درخواست ایمیل پیدا نشد.');
-        $otp = EmailOtpChallenge::where('email', $email)->whereNull('consumed_at')->where('expires_at', '>', now())->latest()->first();
-        abort_unless($otp, 422, 'کد منقضی شده است.');
 
-        if ($otp->attempts >= 5) {
-            abort(429, 'تعداد تلاش‌ها بیش از حد مجاز است.');
-        }
+        $userId = DB::transaction(function () use ($email, $request) {
+            $otp = EmailOtpChallenge::where('email', $email)
+                ->whereNull('consumed_at')
+                ->where('expires_at', '>', now())
+                ->latest()
+                ->lockForUpdate()
+                ->first();
+            abort_unless($otp, 422, 'کد منقضی شده است.');
 
-        $otp->increment('attempts');
-        abort_unless(Hash::check(trim((string) $request->input('code')), $otp->code_hash), 422, 'کد نادرست است.');
-        $otp->update(['consumed_at' => now()]);
-        $user = User::whereRaw('LOWER(email) = ?', [$email])->firstOrFail();
-        $request->session()->put('email_login.user_id', $user->id);
+            if ($otp->attempts >= 5) {
+                abort(429, 'تعداد تلاش‌ها بیش از حد مجاز است.');
+            }
+
+            $otp->increment('attempts');
+            abort_unless(Hash::check(trim((string) $request->input('code')), $otp->code_hash), 422, 'کد نادرست است.');
+            $otp->update(['consumed_at' => now()]);
+
+            return User::whereRaw('LOWER(email) = ?', [$email])->value('id')
+                ?: abort(404, 'حساب کاربری پیدا نشد.');
+        });
+
+        $request->session()->put('email_login.user_id', $userId);
 
         return redirect()->route('login.email.mobile');
     }
@@ -340,15 +352,22 @@ class AuthController extends Controller
 
     private function consumeSmsOtp(string $phone, string $code): void
     {
-        $otp = OtpChallenge::where('mobile', $phone)->whereNull('consumed_at')->where('expires_at', '>', now())->latest()->first();
-        abort_unless($otp, 422, 'کد منقضی شده است.');
+        DB::transaction(function () use ($phone, $code) {
+            $otp = OtpChallenge::where('mobile', $phone)
+                ->whereNull('consumed_at')
+                ->where('expires_at', '>', now())
+                ->latest()
+                ->lockForUpdate()
+                ->first();
+            abort_unless($otp, 422, 'کد منقضی شده است.');
 
-        if ($otp->attempts >= 5) {
-            abort(429, 'تعداد تلاش‌ها بیش از حد مجاز است.');
-        }
+            if ($otp->attempts >= 5) {
+                abort(429, 'تعداد تلاش‌ها بیش از حد مجاز است.');
+            }
 
-        $otp->increment('attempts');
-        abort_unless(Hash::check($code, $otp->code_hash), 422, 'کد نادرست است.');
-        $otp->update(['consumed_at' => now()]);
+            $otp->increment('attempts');
+            abort_unless(Hash::check($code, $otp->code_hash), 422, 'کد نادرست است.');
+            $otp->update(['consumed_at' => now()]);
+        });
     }
 }
