@@ -165,7 +165,7 @@ class CrmController extends Controller
                 'tickets_count' => $user->tickets_count,
                 'typing_documents_count' => $user->documents_count,
                 'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
-                'wallet_transactions_count' => $wallet ? $walletTransactions->count() : 0,
+                'wallet_transactions_count' => $wallet ? WalletTransaction::query()->where('wallet_id', $wallet->id)->count() : 0,
                 'paid_revenue_rials' => (int) ($user->paid_revenue_rials ?? 0),
             ],
             'timeline' => $timeline,
