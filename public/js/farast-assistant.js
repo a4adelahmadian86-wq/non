@@ -603,7 +603,7 @@
           healthUrl=healthTarget.toString();
         }catch(e){throw new Error('نشانی سلامت درگاه رایگان Render معتبر نیست.');}
         if(!healthUrl)throw new Error('نشانی سلامت درگاه رایگان Render تنظیم نشده است.');
-        var recentlyHealthy=renderGatewayReadyUrl===healthUrl&&(Date.now()-renderGatewayReadyAt)<240000;
+        var recentlyHealthy=renderGatewayReadyUrl===healthUrl&&(Date.now()-renderGatewayReadyAt)<720000;
         if(recentlyHealthy){
           voiceTitle.textContent='در حال اتصال به سرویس صوتی';
           voiceCaption.textContent='سلامت سرویس چند دقیقه پیش تأیید شده است؛ بدون بیدارسازی دوباره وصل می‌شوم.';
