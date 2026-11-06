@@ -363,7 +363,7 @@
         await waitForGatewayChatHealth(assistantStatus.chat_gateway_health_url,requestController.signal,turn);
       }
       var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربری /dashboard. مکالمه اخیر:\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\n')+'\nکاربر: '+text;
-      var response=await fetch('/assistant/chat/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'text/event-stream, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt}),signal:requestController.signal});
+      var response=await fetch('/assistant/chat/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json, text/event-stream','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt}),signal:requestController.signal});
       if(turn!==assistantTurn)return;
       if(response.status===401||response.status===419)throw new Error('نشست شما منقضی شده است. لطفاً دوباره وارد حساب کاربری شوید.');
       if(!response.ok){var failure=await response.json().catch(function(){return {};});var serverMessage=typeof failure.message==='string'?failure.message.trim():'';throw new Error(serverMessage||'سرویس گفت‌وگو فعلاً آماده نیست (HTTP '+response.status+').');}
