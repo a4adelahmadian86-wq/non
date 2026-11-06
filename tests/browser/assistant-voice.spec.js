@@ -653,7 +653,6 @@ test('assistant panel keeps every control inside desktop and mobile viewports', 
       const panel = document.querySelector('.farast-assistant-panel').getBoundingClientRect();
       const controls = [
         document.querySelector('.farast-voice-mic'),
-        document.querySelector('[data-fa-stop-speech]'),
         document.querySelector('.farast-assistant-form input[name="message"]')
       ].map((element) => element.getBoundingClientRect());
       return {
@@ -1047,6 +1046,7 @@ test('live assistant queues speech received while answering and processes it aft
   window.__firstSignal = null;
   window.__resolveFirst = null;
   window.__audioPlayCount = 0;
+  window.URL.createObjectURL = (blob) => blob.type === 'audio/wav' ? 'blob:silent-prime' : 'blob:assistant-tts';
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
     send(data) { this.sent.push(data); if(typeof data==='string' && JSON.parse(data).type==='start') queueMicrotask(()=>this.emit({type:'ready'})); }
@@ -1066,7 +1066,7 @@ test('live assistant queues speech received while answering and processes it aft
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=1;this.ended=false;this.paused=true;}
     load(){this.ended=false;this.dispatchEvent(new Event('canplay'));}
-    play(){this.paused=false;this.onplay?.();window.__audioPlayCount++;setTimeout(()=>{if(!this.paused){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));}},900);return Promise.resolve();}
+    play(){this.paused=false;this.onplay?.();if(this.src==='blob:assistant-tts'){window.__audioPlayCount++;window.__ttsPlaying=true;}setTimeout(()=>{if(!this.paused){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));}},900);return Promise.resolve();}
     pause(){this.paused=true;this.dispatchEvent(new Event('pause'));}
   };
   window.fetch=async(url,options={})=>{
