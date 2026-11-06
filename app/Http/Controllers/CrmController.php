@@ -265,6 +265,14 @@ class CrmController extends Controller
     public function followUps(Request $request, AdminConsoleService $console)
     {
         $console->authorizeAction($request->user(), 'users');
+        $request->validate([
+            'status' => 'nullable|in:open,completed,cancelled',
+            'priority' => 'nullable|in:low,normal,high',
+            'assigned_to' => 'nullable|integer|min:1',
+            'customer_id' => 'nullable|integer|min:1',
+            'overdue' => 'nullable|boolean',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
         $visibleIds = $console->visibleUserIds($request->user());
 
         $query = DB::table('crm_follow_up_tasks')
