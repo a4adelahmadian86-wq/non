@@ -35,7 +35,7 @@ return [
         'integrations'  => ['permission' => 'integrations.manage','min_scope' => 'global'],
         'access'        => ['permission' => 'access.manage',      'min_scope' => 'global'],
         'organizations' => ['permission' => 'organization.manage','min_scope' => 'organization'],
-        'analytics'     => ['permission' => 'reports.view',       'min_scope' => 'team'],
+        'analytics'     => ['permission' => 'reports.team',       'min_scope' => 'team'],
         'audit'         => ['permission' => 'audit.view',         'min_scope' => 'global'],
         'emails'        => ['permission' => 'settings.manage',    'min_scope' => 'global'],
         'social'        => ['permission' => 'settings.manage',    'min_scope' => 'global'],
