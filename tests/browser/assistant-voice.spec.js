@@ -653,7 +653,8 @@ test('assistant batches adjacent streamed sentences into continuous server audio
       return new Response(new ReadableStream({start(controller){
         controller.enqueue(encoder.encode('data: {"delta":"جمله اول. "}\\n\\n'));
         setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),500);
-        setTimeout(()=>{window.__streamSentAll=true;controller.enqueue(encoder.encode('data: {"delta":"جمله سوم."}\\n\\ndata: {"done":true}\\n\\n'));controller.close();},1000);
+        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله سوم. "}\\n\\n')),1000);
+        setTimeout(()=>{window.__streamSentAll=true;controller.enqueue(encoder.encode('data: {"delta":"جمله چهارم."}\\n\\ndata: {"done":true}\\n\\n'));controller.close();},1500);
       }}),{status:200,headers:{'Content-Type':'text/event-stream'}});
     }
     if(url==='/assistant/speak'){window.__spokenChunks.push(JSON.parse(options.body).text);return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});}
@@ -669,7 +670,7 @@ test('assistant batches adjacent streamed sentences into continuous server audio
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBeGreaterThanOrEqual(1);
   expect(await page.evaluate(() => window.__streamSentAll)).toBe(false);
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(2);
-  expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول. جمله دوم.','جمله سوم.']);
+  expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول. جمله دوم. جمله سوم.','جمله چهارم.']);
   expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
 });
 
