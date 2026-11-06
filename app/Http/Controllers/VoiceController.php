@@ -73,6 +73,25 @@ class VoiceController extends Controller
             if ($ttsUrl === '' || $ttsToken === '') $missing[] = 'Render TTS URL/token';
             if ($chatUrl === '' || $chatToken === '') $missing[] = 'Render AI gateway URL/token';
 
+            $credentialMismatch = $sessionSecret !== ''
+                && (($asrToken !== '' && ! hash_equals($sessionSecret, $asrToken))
+                    || ($ttsToken !== '' && ! hash_equals($sessionSecret, $ttsToken))
+                    || ($chatToken !== '' && ! hash_equals($sessionSecret, $chatToken)));
+
+            if ($credentialMismatch) {
+                return response()->json([
+                    'ok' => true,
+                    'mode' => 'none',
+                    'chunked' => false,
+                    'gateway' => false,
+                    'websocket_url' => '',
+                    'reason' => 'render_voice_credential_mismatch',
+                    'message' => 'توکن‌های گفتار، صداسازی و چت در Laravel یکسان نیستند؛ مقدار FARAST_VOICE_TOKEN باید مبنای هر سه تنظیم باشد.',
+                    'missing' => ['هماهنگ‌سازی FARAST_VOICE_TOKEN، FARAST_VOICE_ASR_TOKEN، FARAST_VOICE_TTS_TOKEN و توکن درگاه چت'],
+                    'self_hosted' => false,
+                ], 200, ['Cache-Control' => 'no-store']);
+            }
+
             if (! $missing) {
                 return response()->json([
                     'ok' => true,
