@@ -51,6 +51,51 @@ class CrmProjectController extends Controller
         ]);
     }
 
+    public function assignHumanTask(Request $request, int $project, int $task, AdminConsoleService $console)
+    {
+        $record = FarastProject::query()->findOrFail($project);
+        $console->authorizeAction($request->user(), 'users', (int) $record->user_id);
+
+        $data = $request->validate([
+            'specialist_id' => 'required|nullable|integer|exists:users,id',
+        ]);
+
+        if ($data['specialist_id'] !== null) {
+            $specialist = \App\Models\User::query()
+                ->whereKey($data['specialist_id'])
+                ->whereIn('role', [
+                    \App\Models\User::ROLE_ADMIN,
+                    \App\Models\User::ROLE_ORGANIZATION_MANAGER,
+                    \App\Models\User::ROLE_TEAM_SUPERVISOR,
+                    \App\Models\User::ROLE_EMPLOYEE,
+                ])
+                ->where('is_blocked', false)
+                ->firstOrFail();
+
+            $console->authorizeAction($request->user(), 'users', (int) $specialist->id);
+        }
+
+        $humanTask = DB::table('farast_human_tasks')
+            ->where('id', $task)
+            ->where('project_id', $record->id)
+            ->first();
+
+        abort_unless($humanTask, 404);
+
+        DB::table('farast_human_tasks')->where('id', $task)->update([
+            'specialist_id' => $data['specialist_id'],
+            'updated_at' => now(),
+        ]);
+
+        app(\App\Services\AuditLogService::class)->record($request->user()->id, 'crm.project.human_task.assigned', $request->ip(), [
+            'project_id' => $record->id,
+            'task_id' => $task,
+            'specialist_id' => $data['specialist_id'],
+        ]);
+
+        return response()->json(['ok' => true, 'task_id' => $task, 'specialist_id' => $data['specialist_id']]);
+    }
+
     public function show(Request $request, int $project, AdminConsoleService $console)
     {
         $record = FarastProject::query()
