@@ -225,6 +225,48 @@ class VoiceController extends Controller
             ], 503, ['Cache-Control' => 'no-store']);
         }
 
+        // The browser has already awakened Render and confirmed /health before
+        // requesting this token. Verify the shared credential against Render now,
+        // so a non-empty but mismatched Laravel secret cannot create a doomed WS session.
+        if (! $localVoiceOnly && $aiGatewayUrl !== '' && $secret !== '') {
+            try {
+                $gatewayStatus = Http::acceptJson()
+                    ->withToken($secret)
+                    ->connectTimeout(4)
+                    ->timeout(8)
+                    ->get($aiGatewayUrl.'/v1/status');
+
+                if ($gatewayStatus->status() === 401 || $gatewayStatus->status() === 403) {
+                    return response()->json([
+                        'ok' => false,
+                        'code' => 'render_voice_token_mismatch',
+                        'message' => 'توکن Laravel با توکن درگاه Render یکسان نیست؛ مقدار FARAST_VOICE_TOKEN باید در هر دو محیط یکسان باشد.',
+                    ], 503, ['Cache-Control' => 'no-store']);
+                }
+
+                if (! $gatewayStatus->successful()
+                    || $gatewayStatus->json('asr_ready') !== true
+                    || $gatewayStatus->json('tts_ready') !== true
+                    || $gatewayStatus->json('chat_ready') !== true) {
+                    return response()->json([
+                        'ok' => false,
+                        'code' => 'render_voice_gateway_not_ready',
+                        'message' => 'Render توکن را دریافت کرد، اما آمادگی کامل تشخیص گفتار، صداسازی و پاسخ‌گویی را تأیید نکرد.',
+                    ], 503, ['Cache-Control' => 'no-store']);
+                }
+            } catch (\\Throwable $exception) {
+                Log::warning('Render live voice preflight failed', [
+                    'exception' => get_class($exception),
+                ]);
+
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'render_voice_gateway_unreachable',
+                    'message' => 'بررسی امن درگاه Render ناموفق بود؛ اتصال شبکه یا آماده‌بودن سرویس را بررسی کن و دوباره تلاش کن.',
+                ], 503, ['Cache-Control' => 'no-store']);
+            }
+        }
+
         $payload = [
             'uid' => (int) $request->user()->id,
             'locale' => $request->string('locale')->toString(),
