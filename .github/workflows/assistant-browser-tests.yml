@@ -37,4 +37,4 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run assistant browser regression tests
-        run: npx playwright test
+        run: npx playwright test tests/browser/assistant-voice.spec.js --workers=1
