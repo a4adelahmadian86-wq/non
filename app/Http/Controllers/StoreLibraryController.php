@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\StoreDownload;
 use App\Models\StoreLibraryItem;
+use App\Models\StoreProductFile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
@@ -27,7 +29,13 @@ class StoreLibraryController extends Controller
     {
         abort_unless($libraryItem->user_id === $request->user()->id && $libraryItem->revoked_at === null, 404);
         $libraryItem->load(['file', 'product']);
-        abort_unless($libraryItem->file && $libraryItem->file->is_active, 404, 'فایل فعال نیست.');
+        abort_unless(
+            $libraryItem->file
+                && $libraryItem->file->is_active
+                && $libraryItem->file->product_id === $libraryItem->product_id,
+            404,
+            'فایل فعال نیست.'
+        );
 
         $disk = Storage::disk($libraryItem->file->disk ?: 'private');
         abort_unless($disk->exists($libraryItem->file->path), 404, 'فایل پیدا نشد.');
@@ -58,21 +66,49 @@ class StoreLibraryController extends Controller
     public function stream(Request $request, StoreDownload $download)
     {
         abort_unless($request->hasValidSignature(), 403);
-        abort_unless($download->expires_at && $download->expires_at->isFuture(), 410);
-        abort_unless($download->user_id === $request->user()->id, 403);
-        abort_unless(hash_equals($download->token_hash, hash('sha256', (string) $request->query('token'))), 403);
-        abort_unless($download->download_count < 10, 429, 'سقف دریافت این لینک به پایان رسیده است.');
 
-        $download->load(['file', 'libraryItem']);
-        abort_unless($download->libraryItem && $download->libraryItem->user_id === $request->user()->id, 403);
-        abort_unless($download->file && $download->file->is_active, 404);
+        $file = DB::transaction(function () use ($request, $download) {
+            $lockedDownload = StoreDownload::query()->whereKey($download->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedDownload->expires_at && $lockedDownload->expires_at->isFuture(), 410);
+            abort_unless($lockedDownload->user_id === $request->user()->id, 403);
+            abort_unless(
+                hash_equals($lockedDownload->token_hash, hash('sha256', (string) $request->query('token'))),
+                403
+            );
+            abort_if($lockedDownload->download_count >= 10, 429, 'سقف دریافت این لینک به پایان رسیده است.');
 
-        $disk = Storage::disk($download->file->disk ?: 'private');
-        abort_unless($disk->exists($download->file->path), 404);
+            // Lock the entitlement too: a previously issued URL must stop working after revocation.
+            $libraryItem = StoreLibraryItem::query()
+                ->whereKey($lockedDownload->library_item_id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless(
+                $libraryItem
+                    && $libraryItem->user_id === $request->user()->id
+                    && $libraryItem->revoked_at === null
+                    && $libraryItem->product_file_id === $lockedDownload->product_file_id,
+                403
+            );
 
-        $download->increment('download_count');
+            $file = StoreProductFile::query()
+                ->whereKey($lockedDownload->product_file_id)
+                ->where('product_id', $libraryItem->product_id)
+                ->where('is_active', true)
+                ->first();
+            abort_unless($file, 404, 'فایل فعال نیست.');
 
-        return $disk->response($download->file->path, $download->file->original_name ?: basename($download->file->path), [
+            $disk = Storage::disk($file->disk ?: 'private');
+            abort_unless($disk->exists($file->path), 404, 'فایل پیدا نشد.');
+
+            // The row lock makes the 10-download limit exact under concurrent requests.
+            $lockedDownload->increment('download_count');
+
+            return $file;
+        });
+
+        $disk = Storage::disk($file->disk ?: 'private');
+
+        return $disk->response($file->path, $file->original_name ?: basename($file->path), [
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
