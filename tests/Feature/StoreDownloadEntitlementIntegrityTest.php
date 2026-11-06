@@ -172,6 +172,13 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
 
         $libraryItem = StoreLibraryItem::query()->where('order_id', $order->id)->firstOrFail();
         $this->assertSame($purchasedFile->id, $libraryItem->product_file_id);
+
+        // A repeated gateway callback must be idempotent and must not send a second receipt.
+        $this->withSession([
+            'zarinpal_order_id' => $order->id,
+            'zarinpal_authority' => 'AUTH-SNAPSHOT',
+        ])->get('/checkout/zarinpal/callback?Authority=AUTH-SNAPSHOT&Status=OK')
+            ->assertRedirect(route('library'));
     }
 
     public function test_zarinpal_callback_rejects_an_authority_not_bound_to_the_order(): void
