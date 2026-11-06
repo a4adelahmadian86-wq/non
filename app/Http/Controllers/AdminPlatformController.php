@@ -25,7 +25,8 @@ class AdminPlatformController extends Controller {
   if($visibleIds!==null)$query->whereIn('id',$visibleIds);
   return view('admin.organizations',['organizations'=>$query->paginate(20)]);
  }
- public function storeOrganization(Request $r){
+ public function storeOrganization(Request $r, AdminConsoleService $console){
+  abort_unless($console->sectionAllowed($r->user(),'access'),403,'ایجاد سازمان جدید فقط در دامنهٔ سراسری مجاز است.');
   abort_unless($r->user()?->isAdmin(),403,'ایجاد سازمان جدید فقط برای مدیر اصلی مجاز است.');
   $d=$r->validate(['name'=>'required|string|max:120','slug'=>'required|string|max:120|alpha_dash|unique:organizations,slug']);
   $o=Organization::create($d);
