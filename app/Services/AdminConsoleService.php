@@ -43,13 +43,10 @@ class AdminConsoleService
             return false;
         }
 
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
         $def = config("farast_admin.sections.$section");
         if (! is_array($def)) {
-            return $user->isAdmin();
-        }
-
-        if ($user->isAdmin()) {
-            return true;
+            return $user->isAdmin() && $scope === self::SCOPE_GLOBAL;
         }
 
         if (! $this->authorization->allows($user, $def['permission'])) {
@@ -57,10 +54,10 @@ class AdminConsoleService
         }
 
         $rank = config('farast_admin.scope_rank', ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3]);
-        $userRank = $rank[self::scopeOf($user)] ?? 3;
+        $userRank = $rank[$scope] ?? 3;
         $requiredRank = $rank[$def['min_scope']] ?? 3;
 
-        // دامنهٔ کاربر باید دست‌کم به اندازهٔ لازم باز باشد (عدد رتبه کوچک‌تر = بازتر).
+        // نقش مدیر نیز از scope محدودترِ تنظیم‌شده در middleware تبعیت می‌کند.
         return $userRank <= $requiredRank;
     }
 
@@ -87,7 +84,9 @@ class AdminConsoleService
      */
     public function visibleUserIds(?User $user): ?array
     {
-        return ResolveAdminScope::visibleUserIds($user);
+        $scope = request()->attributes->get('farast.scope');
+
+        return ResolveAdminScope::visibleUserIds($user, is_string($scope) ? $scope : null);
     }
 
     /**
@@ -122,7 +121,7 @@ class AdminConsoleService
      */
     public function scopeSummary(?User $user): array
     {
-        $scope = self::scopeOf($user);
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
 
         return [
             'scope' => $scope,
