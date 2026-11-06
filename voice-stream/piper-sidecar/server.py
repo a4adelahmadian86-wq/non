@@ -9,12 +9,16 @@ from pathlib import Path
 
 from piper import PiperVoice
 
-HOST = os.getenv("PIPER_HOST", "0.0.0.0")
+HOST = os.getenv("PIPER_HOST", "127.0.0.1")
 PORT = int(os.getenv("PIPER_PORT", "7007"))
 MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")) )
 MODEL_PATH = MODEL_DIR / "fa_IR-mana-medium.onnx"
 MAX_TEXT_LENGTH = 6000
 VOICE_ID = "farast-fa-male-v1"
+PIPER_TOKEN = (os.getenv("FARAST_VOICE_TTS_TOKEN") or os.getenv("FARAST_VOICE_TOKEN") or "").strip()
+
+if not PIPER_TOKEN:
+    raise RuntimeError("piper_tts_token_missing")
 
 if not MODEL_PATH.is_file() or not MODEL_PATH.with_suffix(".onnx.json").is_file():
     raise RuntimeError(f"piper_model_missing:{MODEL_PATH}")
@@ -36,15 +40,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def authorized(self) -> bool:
-        token = os.getenv("FARAST_VOICE_TTS_TOKEN") or os.getenv("FARAST_VOICE_TOKEN") or ""
-        if not token:
-            return True
         supplied = self.headers.get("Authorization", "")
-        if supplied.startswith("Bearer "):
-            supplied = supplied[7:].strip()
-        else:
-            supplied = ""
-        return hmac.compare_digest(supplied, token)
+        if not supplied.startswith("Bearer "):
+            return False
+        return hmac.compare_digest(supplied[7:].strip(), PIPER_TOKEN)
 
     def do_GET(self) -> None:
         if self.path != "/health":
@@ -65,11 +64,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(413, {"ok": False, "message": "invalid_request_size"})
                 return
             payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict):
+                self.send_json(400, {"ok": False, "message": "invalid_json"})
+                return
             text = str(payload.get("text", "")).strip()
             language = str(payload.get("language", "fa-IR"))
             voice_id = str(payload.get("voice_id", VOICE_ID))
             if language != "fa-IR" or voice_id != VOICE_ID:
-                self.send_json(422, {"ok": False, "message": "unsupported_voice"})
+                self.send_json(400, {"ok": False, "message": "unsupported_voice"})
                 return
             if not text or len(text) > MAX_TEXT_LENGTH:
                 self.send_json(422, {"ok": False, "message": "invalid_text"})
