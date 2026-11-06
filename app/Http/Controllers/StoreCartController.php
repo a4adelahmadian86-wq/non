@@ -148,6 +148,9 @@ class StoreCartController extends Controller
                         'title' => $product->title,
                         'sku' => $product->sku,
                         'version' => $product->version,
+                        // Pin digital delivery to the exact asset chosen when the order was placed.
+                        'file_id' => $file->id,
+                        'file_sha256' => $file->sha256,
                     ],
                 ]);
                 $orderItems[] = [$orderItem, $product, $file];
