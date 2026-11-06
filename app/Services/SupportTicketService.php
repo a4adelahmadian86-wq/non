@@ -106,7 +106,7 @@ class SupportTicketService
             try {
                 app(WorkflowEngine::class)->dispatch(
                     'ticket.created',
-                    ['user_id' => (int) $ticket->user_id, 'ticket_id' => (int) $ticket->id, 'ticket_code' => $ticket->ticket_code],
+                    ['user_id' => (int) $ticket->user_id, 'customer_id' => (int) $ticket->user_id, 'ticket_id' => (int) $ticket->id, 'ticket_code' => $ticket->ticket_code],
                     'ticket:'.$ticket->id.':created',
                 );
             } catch (\Throwable $exception) {
