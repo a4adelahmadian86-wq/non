@@ -371,7 +371,7 @@ test('text chat primes browser audio in the submit gesture and reuses it for Per
   expect(await page.evaluate(()=>window.__audioOrder.filter(x=>x==='play').length)).toBe(2);
 });
 
-test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts safely', async ({ page }) => {
+test('assistant keeps listening during TTS without interrupting the active answer', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -437,18 +437,18 @@ test('assistant TTS mutes microphone to prevent echo and explicit tap interrupts
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   const framesBeforeTtsNoise=await page.evaluate(()=>window.__sentAudioFrames);
 
-  // Even loud samples must neither auto-interrupt nor reach server VAD during TTS.
+  // Microphone frames continue to reach server VAD while TTS is playing.
   await page.evaluate(()=>{
     const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.02)};
     const outputBuffer={getChannelData:()=>new Float32Array(4096)};
     for(let i=0;i<8;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
   });
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
-  expect(await page.evaluate(()=>window.__sentAudioFrames)).toBe(framesBeforeTtsNoise);
+  expect(await page.evaluate(()=>window.__sentAudioFrames)).toBeGreaterThan(framesBeforeTtsNoise);
 
-  // A deliberate mic tap still interrupts and re-enables the same capture stream.
+  // The microphone button does not cancel an answer; the dedicated stop control does.
   await page.locator('.farast-voice-mic').click();
-  await expect.poll(()=>page.evaluate(()=>window.__audioInstances[0].paused)).toBe(true);
+  expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(1);
@@ -841,13 +841,14 @@ test('assistant streams complete TTS chunks, suppresses echo, and supports local
   await page.locator('.farast-assistant-send').click();
   await expect.poll(()=>page.evaluate(signal=>window.__chatSignal!==signal,firstSignal)).toBe(true);
   await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
+  const framesBeforeSpeaking = await page.evaluate(()=>window.__wsInstances[0].sent.filter(x=>x instanceof ArrayBuffer).length);
   await page.evaluate(()=>{
     const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
     const outputBuffer={getChannelData:()=>new Float32Array(4096)};
     for(let i=0;i<5;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
   });
-  await expect.poll(()=>page.evaluate(()=>window.__chatSignal.aborted)).toBe(true);
-  expect(await page.evaluate(()=>window.__wsInstances[0].sent.filter(x=>x instanceof ArrayBuffer).length)).toBeGreaterThan(0);
+  expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
+  expect(await page.evaluate(()=>window.__wsInstances[0].sent.filter(x=>x instanceof ArrayBuffer).length)).toBeGreaterThan(framesBeforeSpeaking);
 });
 
 test('live assistant aggregates segmented final ASR events before starting a chat turn', async ({ page }) => {
