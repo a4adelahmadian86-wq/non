@@ -110,7 +110,9 @@ class AdminController extends Controller
                     return array_fill(0, count($chartDays), 0);
                 }
             }
-            $rows = $q->select(DB::raw("DATE($dateCol) as d"), DB::raw('COUNT(*) as c'))->get();
+            $rows = $q->select(DB::raw("DATE($dateCol) as d"), DB::raw('COUNT(*) as c'))
+                ->groupByRaw("DATE($dateCol)")
+                ->get();
             $map = [];
             foreach ($rows as $row) {
                 $d = \Illuminate\Support\Carbon::parse($row->d)->toDateString();
