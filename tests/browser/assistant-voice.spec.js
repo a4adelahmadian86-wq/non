@@ -2,6 +2,61 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
+test('live gateway wakes before requesting microphone and fully releases tracks when switched off', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.__wsInstances = [];
+  window.__micRequests = 0;
+  window.__micRequestedAfterReady = false;
+  window.__trackStopped = false;
+  window.__track = { kind: 'audio', enabled: true, readyState: 'live', stop() { this.readyState = 'ended'; window.__trackStopped = true; } };
+  class FakeWebSocket extends EventTarget {
+    constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
+    send(data) { this.sent.push(data); if(typeof data==='string'&&JSON.parse(data).type==='start')setTimeout(()=>this.emit({type:'ready'}),180); }
+    close() { this.readyState=3; }
+    emit(data) { this.onmessage?.({data:JSON.stringify(data)}); }
+  }
+  FakeWebSocket.OPEN=1; window.WebSocket=FakeWebSocket;
+  window.AudioContext=class {
+    constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
+    createMediaStreamSource(){return {connect(){},disconnect(){}};}
+    createScriptProcessor(){return {onaudioprocess:null,connect(){},disconnect(){}};}
+    resume(){return Promise.resolve();}
+    close(){this.state='closed';return Promise.resolve();}
+  };
+  window.AudioWorkletNode=undefined;
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{
+    window.__micRequests++;
+    window.__micRequestedAfterReady=window.__wsInstances.length===1&&window.__wsInstances[0].sent.some(x=>typeof x==='string'&&JSON.parse(x).type==='start')&&window.__wsInstances[0].readyState===1&&window.__providerReady;
+    return {getTracks:()=>[window.__track],getAudioTracks:()=>[window.__track]};
+  }}});
+  const NativeWebSocket=FakeWebSocket;
+  window.fetch=async(url,options={})=>{
+    if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway',provider:'render',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(String(url).startsWith('https://voice.example.test/health'))return new Response(JSON.stringify({status:'ok',asr_configured:true,tts_configured:true,chat_configured:true}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/voice/stream-token')return new Response(JSON.stringify({ok:true,token:'mock-token',websocket_url:'wss://voice.example.test'}),{status:200,headers:{'Content-Type':'application/json'}});
+    if(url==='/assistant/history')return new Response(JSON.stringify({ok:true,messages:[]}),{status:200,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({ok:false}),{status:404,headers:{'Content-Type':'application/json'}});
+  };
+  const originalEmit=FakeWebSocket.prototype.emit;
+  FakeWebSocket.prototype.emit=function(data){if(data.type==='ready')window.__providerReady=true;return originalEmit.call(this,data);};
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-voice-mic').click();
+  await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-connecting/);
+  expect(await page.evaluate(() => window.__micRequests)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__micRequests), { timeout: 8000 }).toBe(1);
+  expect(await page.evaluate(() => window.__micRequestedAfterReady)).toBe(true);
+  await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-ready/);
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(() => page.evaluate(() => window.__trackStopped)).toBe(true);
+  await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-off/);
+  expect(await page.evaluate(() => window.__track.enabled)).toBe(false);
+});
+
+
 test('voice assistant does not start batch recording when server speech services are not configured', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
