@@ -31,7 +31,7 @@ jobs:
                 echo "Render health responded, but one or more speech/chat services are not configured."
                 exit 1
               fi
-              if ! grep -Eiq '^access-control-allow-origin:[[:space:]]*\\*[[:space:]]*
+              if ! grep -Eiq '^access-control-allow-origin:[[:space:]]*\*[[:space:]]*
             fi
             echo "Health request attempt $attempt failed; retrying shortly."
             sleep 5
