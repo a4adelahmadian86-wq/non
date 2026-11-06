@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Organization;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Permission;
+use App\Models\RolePermission;
 use App\Models\SiteSetting;
 use App\Models\Team;
 use App\Models\User;
@@ -173,6 +175,26 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->post('/admin/organizations', ['name' => 'Unauthorized Org', 'slug' => 'unauthorized-org'])
             ->assertForbidden();
         $this->assertDatabaseMissing('organizations', ['slug' => 'unauthorized-org']);
+
+        $financePermission = Permission::query()->where('key', 'finance.view')->firstOrFail();
+        RolePermission::firstOrCreate([
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+            'permission_id' => $financePermission->id,
+        ]);
+        $finance = $this->get('/admin/finance')->assertOk();
+        $finance->assertViewHas('financeStats', fn (array $stats): bool => $stats['total'] === 1000);
+        $finance->assertViewHas('walletTotal', 300);
+        $finance->assertViewHas('users', fn ($users) => $users->count() === 2);
+
+        $this->post('/admin/finance', [
+            'tax_rate_percent' => 99,
+            'payment_gateway' => 'none',
+        ])->assertForbidden();
+        $this->post('/admin/finance/users/'.$member->id.'/wallet', [
+            'amount' => 100,
+            'reason' => 'unauthorized test',
+        ])->assertForbidden();
+
         $this->get('/admin/access')->assertForbidden();
     }
 
