@@ -387,7 +387,7 @@ class PaymentController extends Controller
                 ],
                 'order:'.$order->id.':'.$eventType,
             );
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
         }
     }
