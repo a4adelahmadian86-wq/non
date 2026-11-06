@@ -98,8 +98,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/users', [AdminController::class, 'users'])->middleware('admin.section:users')->name('users');
     Route::post('/users/{user}/role', [AdminController::class, 'updateUserRole'])->middleware('admin.section:users')->name('users.role');
     Route::get('/finance', [AdminController::class, 'finance'])->middleware('admin.section:finance')->name('finance');
-    Route::post('/finance', [AdminController::class, 'updateFinance'])->middleware('admin.section:finance')->name('finance.update');
-    Route::post('/finance/users/{user}/wallet', [AdminController::class, 'adjustWallet'])->middleware('admin.section:finance')->name('finance.wallet');
+    Route::post('/finance', [AdminController::class, 'updateFinance'])->middleware('admin.section:finance_settings')->name('finance.update');
+    Route::post('/finance/users/{user}/wallet', [AdminController::class, 'adjustWallet'])->middleware('admin.section:finance_manage')->name('finance.wallet');
     Route::get('/social', [SocialController::class, 'admin'])->middleware('admin.section:social')->name('social');
     Route::post('/social', [SocialController::class, 'update'])->middleware('admin.section:social')->name('social.update');
     Route::post('/settings', [AdminController::class, 'updateSettings'])->middleware('admin.section:settings')->name('settings.update');
