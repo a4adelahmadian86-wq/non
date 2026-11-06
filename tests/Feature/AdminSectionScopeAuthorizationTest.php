@@ -61,6 +61,12 @@ class AdminSectionScopeAuthorizationTest extends TestCase
 
         $this->actingAs($employee)->get('/admin')->assertOk();
         $this->get('/admin/access')->assertForbidden();
+
+        $this->post('/admin/users/'.$outsideUser->id.'/block')->assertForbidden();
+        $this->assertDatabaseHas('users', ['id' => $outsideUser->id, 'is_blocked' => false]);
+
+        $this->post('/admin/users/'.$insideUser->id.'/block')->assertRedirect();
+        $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'is_blocked' => true]);
         $this->post('/admin/settings', ['weekly_free_pages' => 99])->assertForbidden();
 
         $this->assertDatabaseMissing('site_settings', ['key' => 'weekly_free_pages']);
@@ -203,8 +209,8 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $organization = Organization::create(['name' => 'Restricted Org', 'slug' => 'restricted-org', 'status' => 'active']);
         $otherOrganization = Organization::create(['name' => 'Other Org', 'slug' => 'other-org', 'status' => 'active']);
         $admin = $this->makeUser('09123456785', User::ROLE_ADMIN, $organization->id);
-        $this->makeUser('09123456786', User::ROLE_EMPLOYEE, $organization->id);
-        $this->makeUser('09123456787', User::ROLE_EMPLOYEE, $otherOrganization->id);
+        $insideUser = $this->makeUser('09123456786', User::ROLE_EMPLOYEE, $organization->id);
+        $outsideUser = $this->makeUser('09123456787', User::ROLE_EMPLOYEE, $otherOrganization->id);
 
         config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
         SiteSetting::write('dashboard_scope_override', 'organization');
