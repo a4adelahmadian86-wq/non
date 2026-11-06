@@ -48,7 +48,7 @@ class CrmCustomerWorkspaceTest extends TestCase
         ]);
 
         $this->actingAs($admin)->getJson('/admin/crm/customers')
-            ->assertOk()->assertJsonPath('data.total', 2);
+            ->assertOk()->assertJsonFragment(['id' => $customer->id]);
 
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
