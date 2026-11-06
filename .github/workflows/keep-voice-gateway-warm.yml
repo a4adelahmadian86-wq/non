@@ -40,3 +40,50 @@ jobs:
             sleep 5
           done
           exit 1
+
+      - name: Set up Node.js for WebSocket smoke test
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify live WebSocket handshake and expected unauthenticated rejection
+        run: |
+          node <<'NODE'
+          const ws = new WebSocket("wss://voice-typing-r5r7.onrender.com/v1/stream");
+          const timeout = setTimeout(() => {
+            console.error("WebSocket smoke test timed out.");
+            ws.close();
+            process.exit(1);
+          }, 20000);
+
+          ws.addEventListener("open", () => {
+            console.log("Render WebSocket upgrade succeeded.");
+            ws.send(JSON.stringify({ type: "start", token: "invalid-smoke-test-token", locale: "fa-IR" }));
+          });
+
+          ws.addEventListener("message", (event) => {
+            let payload = {};
+            try { payload = JSON.parse(String(event.data)); } catch {}
+            if (payload.type === "error" && payload.code === "unauthorized_or_not_configured") {
+              console.log("WebSocket application reached; invalid token was correctly rejected.");
+            } else {
+              console.error("Unexpected WebSocket response:", String(event.data));
+              clearTimeout(timeout);
+              process.exit(1);
+            }
+          });
+
+          ws.addEventListener("close", (event) => {
+            clearTimeout(timeout);
+            if (event.code === 1008) {
+              console.log("WebSocket closed with the expected policy code 1008.");
+              process.exit(0);
+            }
+            console.error("Unexpected WebSocket close code:", event.code);
+            process.exit(1);
+          });
+
+          ws.addEventListener("error", () => {
+            console.error("WebSocket connection failed.");
+          });
+          NODE
