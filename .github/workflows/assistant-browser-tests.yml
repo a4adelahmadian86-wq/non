@@ -1,0 +1,40 @@
+name: Assistant browser regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/farast-assistant.js'
+      - 'public/css/farast-assistant.css'
+      - 'tests/browser/assistant-voice.spec.js'
+      - 'playwright.config.js'
+      - '.github/workflows/assistant-browser-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'public/js/farast-assistant.js'
+      - 'public/css/farast-assistant.css'
+      - 'tests/browser/assistant-voice.spec.js'
+      - 'playwright.config.js'
+      - '.github/workflows/assistant-browser-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  assistant-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright test runner
+        run: |
+          npm init -y
+          npm install --no-save --no-audit --no-fund @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run assistant browser regression tests
+        run: npx playwright test
