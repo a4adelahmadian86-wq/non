@@ -171,7 +171,7 @@ class AdminConsoleService
     {
         abort_unless($this->sectionAllowed($user, $section), 403, 'اجرای این عملیات در کنسول برای حساب شما مجاز نیست.');
 
-        if ($targetUserId !== null && $user && ! $user->isAdmin()) {
+        if ($targetUserId !== null && $user) {
             $ids = $this->visibleUserIds($user);
             abort_if($ids !== null && ! in_array($targetUserId, $ids, true), 403, 'این کاربر خارج از دامنهٔ دسترسی شماست.');
         }
