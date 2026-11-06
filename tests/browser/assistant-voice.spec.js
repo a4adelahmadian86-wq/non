@@ -767,7 +767,7 @@ test('live gateway unavailability never starts batch recording and leaves text i
 });
 
 
-test('assistant streams complete TTS chunks, suppresses echo, and supports local-VAD barge-in', async ({ page }) => {
+test('assistant streams complete TTS chunks while keeping full-duplex capture active', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
