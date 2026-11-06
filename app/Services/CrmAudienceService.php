@@ -34,11 +34,7 @@ class CrmAudienceService
         }
 
         if (array_key_exists('min_orders', $filters) && $filters['min_orders'] !== null) {
-            $query->whereHas('orders', function ($orders) use ($filters) {
-                $orders->select(DB::raw('1'))
-                    ->groupBy('user_id')
-                    ->havingRaw('COUNT(*) >= ?', [(int) $filters['min_orders']]);
-            });
+            $query->whereHas('orders', null, '>=', (int) $filters['min_orders']);
         }
 
         if (($filters['paid_customer'] ?? false) === true) {
