@@ -7,6 +7,7 @@ use App\Http\Controllers\CanvaController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CrmAnalyticsController;
 use App\Http\Controllers\CrmMarketingController;
+use App\Http\Controllers\CrmProjectController;
 use App\Http\Controllers\EditorAiAssistController;
 use App\Http\Controllers\EditorController;
 use App\Http\Controllers\EditorDocumentStateController;
@@ -106,6 +107,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/crm/marketing/campaigns/{campaign}/send', [CrmMarketingController::class, 'sendCampaign'])->middleware(['admin.section:marketing', 'throttle:5,10'])->name('crm.marketing.campaigns.send');
 
     Route::get('/crm/analytics', CrmAnalyticsController::class)->middleware('admin.section:marketing')->name('crm.analytics');
+    // CRM project workspace: typing projects, documents, payments and human-service tasks.
+    Route::get('/crm/projects', [CrmProjectController::class, 'index'])->middleware('admin.section:users')->name('crm.projects.index');
+    Route::get('/crm/projects/{project}', [CrmProjectController::class, 'show'])->middleware('admin.section:users')->name('crm.projects.show');
+
     // CRM backend: customer 360, internal notes and follow-up tasks (reuses scoped users permission).
     Route::get('/crm/follow-ups', [CrmController::class, 'followUps'])->middleware('admin.section:users')->name('crm.followups.index');
     Route::get('/crm/customers', [CrmController::class, 'customers'])->middleware('admin.section:users')->name('crm.customers.index');
