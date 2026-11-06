@@ -64,8 +64,10 @@ php artisan config:cache
 برای صدای خروجی، سرویس خصوصی Piper باید در دسترس باشد:
 
 - `FARAST_VOICE_TTS_URL`: مسیر خصوصی `/v1/synthesize` سرویس Piper.
-- `FARAST_VOICE_TTS_TOKEN`: توکن سرویس، اگر endpoint با Bearer محافظت شده باشد.
+- `FARAST_VOICE_TTS_TOKEN` یا `FARAST_VOICE_TOKEN`: توکن Bearer اجباری برای احراز هویت بین Laravel و Piper؛ سرویس بدون توکن راه‌اندازی نمی‌شود.
 - `FARAST_VOICE_TTS_VOICE_ID`: به‌طور پیش‌فرض `farast-fa-male-v1`.
+
+Piper به‌صورت پیش‌فرض فقط روی `127.0.0.1` گوش می‌دهد. اگر Laravel و Piper در یک شبکهٔ خصوصی کانتینری/سروری جدا اجرا می‌شوند، فقط در همان شبکه `PIPER_HOST` را صریحاً روی رابط خصوصی مناسب تنظیم کن؛ پورت Piper را مستقیماً در اینترنت منتشر نکن. حتی در شبکهٔ خصوصی نیز Bearer token الزامی است.
 
 اگر سرویس TTS آماده نباشد، متن پاسخ باید همچنان قابل‌مشاهده بماند و خطای صدا جداگانه گزارش شود.
 

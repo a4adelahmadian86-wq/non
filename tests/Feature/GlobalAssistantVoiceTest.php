@@ -519,6 +519,89 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('ok', false);
     }
 
+    public function test_local_only_tts_status_requires_a_private_url_and_bearer_token(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice.remote_batch_enabled' => false,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('server_tts', false)
+            ->assertJsonPath('server_tts_token_configured', false);
+        $this->assertStringContainsString('FARAST_VOICE_TTS_TOKEN', (string) $response->json('server_tts_message'));
+    }
+
+    public function test_local_only_tts_fails_closed_when_the_piper_token_is_missing(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice.remote_batch_enabled' => false,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+        Http::fake();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/speak', ['text' => 'سلام']);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'tts_token_missing');
+        Http::assertNothingSent();
+    }
+
+    public function test_remote_tts_readiness_and_synthesis_fail_closed_without_a_bearer_token(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice.remote_batch_enabled' => true,
+            'services.voice_tts.url' => 'https://voice.test/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+        Http::fake();
+
+        $status = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+        $status->assertOk()
+            ->assertJsonPath('server_tts', false)
+            ->assertJsonPath('server_tts_token_configured', false);
+        $this->assertStringContainsString('FARAST_VOICE_TTS_TOKEN', (string) $status->json('server_tts_message'));
+
+        $response = $this->postJson('/assistant/speak', ['text' => 'سلام']);
+        $response->assertStatus(503)->assertJsonPath('code', 'tts_token_missing');
+        Http::assertNothingSent();
+    }
+
+    public function test_local_only_tts_sends_the_configured_bearer_token_to_private_piper(): void
+    {
+        config([
+            'services.voice.local_only' => true,
+            'services.voice.remote_batch_enabled' => false,
+            'services.voice_tts.url' => 'http://127.0.0.1:7007/v1/synthesize',
+            'services.voice_tts.token' => 'private-piper-token',
+            'services.voice_tts.voice_id' => 'farast-fa-male-v1',
+        ]);
+        Http::fake([
+            'http://127.0.0.1:7007/v1/synthesize' => Http::response('fake-wav-bytes', 200, [
+                'Content-Type' => 'audio/wav',
+                'X-Farast-Voice-Id' => 'farast-fa-male-v1',
+            ]),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/speak', ['text' => 'سلام']);
+
+        $response->assertOk()->assertHeader('Content-Type', 'audio/wav');
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'http://127.0.0.1:7007/v1/synthesize'
+            && $request->hasHeader('Authorization', 'Bearer private-piper-token')
+        );
+    }
+
     public function test_voice_status_exposes_readiness_booleans_but_never_provider_tokens(): void
     {
         config([
