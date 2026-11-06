@@ -117,6 +117,9 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   window.WebSocket = undefined;
   window.AudioContext = undefined;
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+  window.__healthTimeouts = [];
+  const originalSetTimeout = window.setTimeout.bind(window);
+  window.setTimeout = (callback, delay, ...args) => { if (delay >= 50000) window.__healthTimeouts.push(delay); return originalSetTimeout(callback, delay, ...args); };
   window.__order = [];
   window.__chatAttempts = 0;
   window.__csrfRefreshes = 0;
@@ -140,6 +143,7 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__order.includes('chat'))).toBe(true);
   expect(await page.evaluate(() => window.__order)).toEqual(['health', 'health', 'chat', 'chat']);
+  expect(await page.evaluate(() => window.__healthTimeouts)).toContain(60000);
   expect(await page.evaluate(() => window.__chatAttempts)).toBe(2);
   expect(await page.evaluate(() => window.__csrfRefreshes)).toBe(1);
   expect(await page.evaluate(() => window.__chatAccept)).toBe('application/json, text/event-stream');
@@ -197,6 +201,9 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
     play() { return Promise.resolve(); }
     pause() {}
   };
+  window.__healthTimeouts = [];
+  const originalSetTimeout = window.setTimeout.bind(window);
+  window.setTimeout = (callback, delay, ...args) => { if (delay >= 50000) window.__healthTimeouts.push(delay); return originalSetTimeout(callback, delay, ...args); };
   window.__wakeOrder = [];
   window.__tokenAttempts = 0;
   window.__csrfRefreshes = 0;
@@ -218,6 +225,7 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(() => window.__wsInstances[0].url)).toBe('wss://voice.example.test/v1/stream');
   expect(await page.evaluate(() => window.__wakeOrder)).toEqual(['health', 'token', 'token']);
+  expect(await page.evaluate(() => window.__healthTimeouts)).toContain(60000);
   expect(await page.evaluate(() => window.__tokenAttempts)).toBe(2);
   expect(await page.evaluate(() => window.__csrfRefreshes)).toBe(1);
   await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
