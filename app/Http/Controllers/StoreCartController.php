@@ -148,6 +148,9 @@ class StoreCartController extends Controller
                         'title' => $product->title,
                         'sku' => $product->sku,
                         'version' => $product->version,
+                        // Preserve the exact digital asset selected at checkout for later gateway callbacks.
+                        'file_id' => $file->id,
+                        'file_sha256' => $file->sha256,
                     ],
                 ]);
                 $orderItems[] = [$orderItem, $product, $file];
