@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Http\Middleware\ResolveAdminScope;
+use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -87,6 +89,65 @@ class AdminConsoleService
         $scope = request()->attributes->get('farast.scope');
 
         return ResolveAdminScope::visibleUserIds($user, is_string($scope) ? $scope : null);
+    }
+
+    /**
+     * شناسه تیم‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
+     */
+    public function visibleTeamIds(?User $user): ?array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        if ($scope === self::SCOPE_GLOBAL) {
+            return null;
+        }
+        if ($scope === self::SCOPE_ORGANIZATION) {
+            return $user->organization_id
+                ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->all()
+                : [];
+        }
+        if ($scope !== self::SCOPE_TEAM) {
+            return [];
+        }
+
+        return Team::query()
+            ->where('supervisor_id', $user->id)
+            ->orWhereIn('id', function ($query) use ($user) {
+                $query->select('team_id')
+                    ->from('team_user')
+                    ->where('user_id', $user->id)
+                    ->where('team_role', 'manager');
+            })
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * شناسه سازمان‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
+     */
+    public function visibleOrganizationIds(?User $user): ?array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        if ($scope === self::SCOPE_GLOBAL) {
+            return null;
+        }
+        if ($scope === self::SCOPE_ORGANIZATION) {
+            return $user->organization_id ? [(int) $user->organization_id] : [];
+        }
+        if ($scope === self::SCOPE_TEAM) {
+            $teamIds = $this->visibleTeamIds($user) ?? [];
+
+            return Team::query()->whereIn('id', $teamIds)->distinct()->pluck('organization_id')->all();
+        }
+
+        return [];
     }
 
     /**
