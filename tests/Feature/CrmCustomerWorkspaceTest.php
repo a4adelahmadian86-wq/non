@@ -4,6 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\StoreCategory;
+use App\Models\StoreDownload;
+use App\Models\StoreLibraryItem;
+use App\Models\StoreProduct;
+use App\Models\StoreProductFile;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\User;
@@ -71,6 +76,30 @@ class CrmCustomerWorkspaceTest extends TestCase
             'idempotency_key' => 'crm-test-wallet-1',
         ]);
 
+        $category = StoreCategory::create(['name' => 'فایل‌ها', 'slug' => 'crm-files']);
+        $product = StoreProduct::create([
+            'category_id' => $category->id, 'seller_id' => $admin->id,
+            'title' => 'قالب آزمایشی', 'slug' => 'crm-template', 'sku' => 'CRM-TPL-1',
+            'type' => 'digital_file', 'price_rials' => 100000, 'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id, 'version' => '1.0', 'disk' => 'private',
+            'path' => 'crm/template.zip', 'original_name' => 'template.zip',
+            'mime' => 'application/zip', 'size_bytes' => 1200,
+            'sha256' => str_repeat('a', 64), 'is_primary' => true, 'is_active' => true,
+        ]);
+        $libraryItem = StoreLibraryItem::create([
+            'user_id' => $customer->id, 'product_id' => $product->id,
+            'order_id' => $order->id, 'product_file_id' => $file->id,
+            'granted_at' => now(),
+        ]);
+        StoreDownload::create([
+            'library_item_id' => $libraryItem->id, 'user_id' => $customer->id,
+            'product_file_id' => $file->id, 'token_hash' => hash('sha256', 'crm-download-token'),
+            'expires_at' => now()->addDay(), 'download_count' => 2,
+        ]);
+
         $this->actingAs($admin)->getJson('/admin/crm/customers')
             ->assertOk()->assertJsonFragment(['id' => $customer->id]);
 
@@ -84,6 +113,12 @@ class CrmCustomerWorkspaceTest extends TestCase
             ->assertJsonFragment(['type' => 'wallet_transaction', 'balance_after_rials' => 750000])
             ->assertJsonPath('metrics.payments_count', 1)
             ->assertJsonPath('metrics.wallet_transactions_count', 1);
+        $this->getJson('/admin/crm/customers/'.$customer->id)
+            ->assertOk()
+            ->assertJsonPath('metrics.store_library_items_count', 1)
+            ->assertJsonPath('metrics.store_downloads_count', 1)
+            ->assertJsonFragment(['type' => 'store_download', 'download_count' => 2])
+            ->assertJsonFragment(['type' => 'store_entitlement', 'status' => 'active']);
 
         $this->postJson('/admin/crm/customers/'.$customer->id.'/notes', [
             'note' => 'مشتری برای سفارش بعدی تماس می‌خواهد.',
