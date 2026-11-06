@@ -50,6 +50,7 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   await expect.poll(() => page.evaluate(() => window.__micRequests), { timeout: 8000 }).toBe(1);
   expect(await page.evaluate(() => window.__micRequestedAfterReady)).toBe(true);
   await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-ready/);
+  await expect.poll(() => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
   await page.locator('.farast-voice-mic').click();
   await expect.poll(() => page.evaluate(() => window.__trackStopped)).toBe(true);
   await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-off/);
