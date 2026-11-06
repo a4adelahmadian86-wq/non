@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\StoreCategory;
 use App\Models\StoreDownload;
 use App\Models\StoreLibraryItem;
@@ -143,6 +144,15 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             'is_active' => true,
         ]);
 
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'authority' => 'AUTH-SNAPSHOT',
+            'transaction_id' => 'AUTH-SNAPSHOT',
+            'amount_rials' => $order->total_rials,
+            'status' => 'pending',
+        ]);
+
         $gateway = Mockery::mock(ZarinpalService::class);
         $gateway->shouldReceive('verify')
             ->once()
@@ -162,6 +172,32 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
 
         $libraryItem = StoreLibraryItem::query()->where('order_id', $order->id)->firstOrFail();
         $this->assertSame($purchasedFile->id, $libraryItem->product_file_id);
+    }
+
+    public function test_zarinpal_callback_rejects_an_authority_not_bound_to_the_order(): void
+    {
+        $user = $this->makeUser();
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 50000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 50000,
+            'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store'],
+        ]);
+
+        $gateway = Mockery::mock(ZarinpalService::class);
+        $gateway->shouldNotReceive('verify');
+        app()->instance(ZarinpalService::class, $gateway);
+
+        $this->actingAs($user)->withSession([
+            'zarinpal_order_id' => $order->id,
+            'zarinpal_authority' => 'AUTH-FROM-ANOTHER-ORDER',
+        ])->get('/checkout/zarinpal/callback?Authority=AUTH-FROM-ANOTHER-ORDER&Status=OK')
+            ->assertRedirect(route('checkout', $order))
+            ->assertSessionHasErrors('payment');
     }
 
     public function test_revoking_a_library_item_invalidates_previously_issued_download_links(): void
