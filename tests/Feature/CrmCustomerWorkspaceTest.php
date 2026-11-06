@@ -108,7 +108,7 @@ class CrmCustomerWorkspaceTest extends TestCase
             ->assertJsonPath('customer.id', $customer->id)
             ->assertJsonPath('metrics.orders_count', 1)
             ->assertJsonPath('metrics.paid_revenue_rials', 250000)
-            ->assertJsonPath('timeline.0.type', 'order')
+            ->assertJsonFragment(['type' => 'order', 'id' => $order->id])
             ->assertJsonFragment(['type' => 'payment', 'gateway' => 'wallet', 'amount_rials' => 250000])
             ->assertJsonFragment(['type' => 'wallet_transaction', 'balance_after_rials' => 750000])
             ->assertJsonPath('metrics.payments_count', 1)
