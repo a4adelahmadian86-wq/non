@@ -105,6 +105,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/crm/marketing/campaigns/{campaign}/send', [CrmMarketingController::class, 'sendCampaign'])->middleware(['admin.section:marketing', 'throttle:5,10'])->name('crm.marketing.campaigns.send');
 
     // CRM backend: customer 360, internal notes and follow-up tasks (reuses scoped users permission).
+    Route::get('/crm/follow-ups', [CrmController::class, 'followUps'])->middleware('admin.section:users')->name('crm.followups.index');
     Route::get('/crm/customers', [CrmController::class, 'customers'])->middleware('admin.section:users')->name('crm.customers.index');
     Route::get('/crm/customers/{customer}', [CrmController::class, 'show'])->middleware('admin.section:users')->name('crm.customers.show');
     Route::post('/crm/customers/{customer}/notes', [CrmController::class, 'storeNote'])->middleware(['admin.section:users', 'throttle:30,10'])->name('crm.customers.notes.store');
