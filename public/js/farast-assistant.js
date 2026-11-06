@@ -765,6 +765,17 @@
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(batchRecording){stopBatchRecording();return;}
     // This control toggles only microphone capture. It never interrupts chat or TTS.
+    if(gatewayStarting){
+      status.textContent='اتصال میکروفون هنوز در حال آماده‌سازی است؛ پاسخ دستیار بدون وقفه ادامه دارد.';
+      return;
+    }
+    if(gatewayWs&&(!gatewayMediaStream||gatewayWs.readyState!==WebSocket.OPEN)){
+      // Recover a stale or half-closed capture session without touching the assistant turn.
+      stopGatewayRecognition();
+      startLiveRecognition();
+      status.textContent='اتصال گفتار دوباره برقرار می‌شود؛ پاسخ فعلی متوقف نخواهد شد.';
+      return;
+    }
     if(gatewayMediaStream){
       var audioTracks=typeof gatewayMediaStream.getAudioTracks==='function'?gatewayMediaStream.getAudioTracks():gatewayMediaStream.getTracks();
       var captureIsMuted=audioTracks.length>0&&audioTracks.every(function(track){return track.kind&&track.kind!=='audio'?true:track.enabled===false;});
@@ -783,10 +794,6 @@
       status.textContent=busy
         ?(muteNow?'ارسال صدای شما متوقف شد؛ پاسخ فراست بدون وقفه ادامه دارد.':'میکروفون روشن شد؛ پاسخ فعلی ادامه دارد و گفتار جدید در صف می‌ماند.')
         :(muteNow?'میکروفون خاموش شد؛ اتصال زنده و گفت‌وگو باز می‌ماند.':'میکروفون روشن شد؛ هر وقت صحبت کنی گوش می‌دهم.');
-      return;
-    }
-    if(gatewayStarting){
-      status.textContent='اتصال میکروفون هنوز در حال آماده‌سازی است؛ پاسخ دستیار بدون وقفه ادامه دارد.';
       return;
     }
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
