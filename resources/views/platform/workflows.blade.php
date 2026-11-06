@@ -18,6 +18,7 @@
                         <option value="document.saved">پس از ذخیره سند</option>
                         <option value="ticket.created">پس از ثبت تیکت</option>
                         <option value="order.paid">پس از پرداخت موفق سفارش</option>
+                        <option value="order.deposit_paid">پس از پرداخت پیش‌پرداخت تایپ</option>
                     </select>
                 </div>
                 <div class="mb-3">
