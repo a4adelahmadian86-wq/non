@@ -100,6 +100,8 @@ class CrmCustomerWorkspaceTest extends TestCase
         $organizationA = \App\Models\Organization::create(['name' => 'CRM A', 'slug' => 'crm-a', 'status' => 'active']);
         $organizationB = \App\Models\Organization::create(['name' => 'CRM B', 'slug' => 'crm-b', 'status' => 'active']);
         $admin = $this->makeUser('09120000005', User::ROLE_ADMIN);
+        $admin->organization_id = $organizationA->id;
+        $admin->save();
         $inside = $this->makeUser('09120000006');
         $outside = $this->makeUser('09120000007');
 
