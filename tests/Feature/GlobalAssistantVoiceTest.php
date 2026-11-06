@@ -26,6 +26,14 @@ class GlobalAssistantVoiceTest extends TestCase
         config([
             'services.voice_stream.url' => 'wss://voice.example.test',
             'services.voice_stream.token_secret' => 'render-shared-voice-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+        ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true,
+                'tts_ready' => true,
+                'chat_ready' => true,
+            ], 200),
         ]);
 
         $response = $this->actingAs(User::factory()->create())
@@ -57,6 +65,13 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.voice_tts.token' => 'shared-render-token',
             'services.ai_gateway.url' => 'https://voice.example.test',
             'services.ai_gateway.token' => 'shared-render-token',
+        ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true,
+                'tts_ready' => true,
+                'chat_ready' => true,
+            ], 200),
         ]);
 
         $user = User::factory()->create();
@@ -157,6 +172,56 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('code', 'render_voice_token_missing');
         $this->assertStringNotContainsString('asr-only-token', $tokenResponse->getContent());
         $this->assertStringNotContainsString('chat-only-token', $tokenResponse->getContent());
+    }
+
+    public function test_render_stream_token_is_rejected_when_the_laravel_secret_does_not_match_render(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.token_secret' => 'wrong-laravel-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'wrong-laravel-token',
+        ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response(['detail' => 'Unauthorized'], 401),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'render_voice_token_mismatch');
+        $this->assertStringNotContainsString('wrong-laravel-token', $response->getContent());
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer wrong-laravel-token')
+        );
+    }
+
+    public function test_render_stream_token_is_rejected_when_render_reports_incomplete_services(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.token_secret' => 'render-shared-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+        ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true,
+                'tts_ready' => true,
+                'chat_ready' => false,
+            ], 200),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'render_voice_gateway_not_ready');
     }
 
     public function test_local_live_gateway_status_identifies_server_only_persian_mode(): void
