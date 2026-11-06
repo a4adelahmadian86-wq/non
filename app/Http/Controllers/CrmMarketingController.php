@@ -184,7 +184,7 @@ class CrmMarketingController extends Controller
                         ]);
                     $sent++;
                 }
-            }, 'users.id');
+            }, 'users.id', 'id');
 
             DB::table('crm_marketing_campaigns')->where('id', $campaign)->update([
                 'status' => 'sent', 'recipient_count' => $sent, 'sent_at' => now(), 'updated_at' => now(),
