@@ -67,6 +67,9 @@ class AdminSectionScopeAuthorizationTest extends TestCase
 
         $this->post('/admin/users/'.$insideUser->id.'/block')->assertRedirect();
         $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'is_blocked' => true]);
+
+        $this->post('/admin/users/'.$insideUser->id.'/role', ['role' => User::ROLE_ADMIN])->assertForbidden();
+        $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'role' => User::ROLE_EMPLOYEE]);
         $this->post('/admin/settings', ['weekly_free_pages' => 99])->assertForbidden();
 
         $this->assertDatabaseMissing('site_settings', ['key' => 'weekly_free_pages']);
