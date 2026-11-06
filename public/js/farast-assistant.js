@@ -176,20 +176,6 @@
     gatewayBargeInFrames=0;
     gatewayBargeInBuffer=[];
   }
-  function interruptAssistantForBargeIn(){
-    if(!busy&&!assistantAudio&&!speechRequestController&&!chatAbortController)return;
-    setGatewayMicrophoneMuted(false);
-    assistantTurn++;speechGeneration++;busy=false;
-    if(chatAbortController){chatAbortController.abort();chatAbortController=null;}
-    if(speechRequestController){speechRequestController.abort();speechRequestController=null;}
-    if(assistantAudio){try{assistantAudio.pause();assistantAudio.currentTime=0;}catch(e){}assistantAudio=null;}
-    if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
-    if(activePendingMessage){activePendingMessage.textContent+='\n\n[پاسخ با درخواست شما متوقف شد]';activePendingMessage=null;}
-    panel.classList.remove('is-speaking');
-    voiceTitle.textContent='گوش می‌دهم';
-    voiceCaption.textContent='پاسخ قطع شد؛ ادامه بده، دارم گوش می‌دهم.';
-    status.textContent='با تشخیص صدای شما، پخش و تولید پاسخ قبلی قطع شد.';
-  }
   function splitSpeechChunks(value){
     var text=String(value||'').replace(/\s+/g,' ').trim();
     if(!text)return [];
