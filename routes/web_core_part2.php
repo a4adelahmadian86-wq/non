@@ -110,6 +110,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // CRM project workspace: typing projects, documents, payments and human-service tasks.
     Route::get('/crm/projects', [CrmProjectController::class, 'index'])->middleware('admin.section:users')->name('crm.projects.index');
     Route::get('/crm/projects/{project}', [CrmProjectController::class, 'show'])->middleware('admin.section:users')->name('crm.projects.show');
+    Route::post('/crm/projects/{project}/tasks/{task}/assign', [CrmProjectController::class, 'assignHumanTask'])->middleware(['admin.section:users', 'throttle:30,10'])->name('crm.projects.tasks.assign');
 
     // CRM backend: customer 360, internal notes and follow-up tasks (reuses scoped users permission).
     Route::get('/crm/follow-ups', [CrmController::class, 'followUps'])->middleware('admin.section:users')->name('crm.followups.index');
