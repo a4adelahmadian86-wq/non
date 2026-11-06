@@ -392,12 +392,14 @@ test('failed live gateway handshake releases microphone and allows a one-tap ret
   await page.locator('.farast-assistant-launcher').click();
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length),{timeout:5000}).toBe(1);
-  await expect.poll(()=>page.evaluate(()=>window.__stoppedTracks),{timeout:5000}).toBe(1);
   await expect(page.locator('[data-fa-voice-title]')).toContainText('ورودی متنی در دسترس است');
+  expect(await page.evaluate(()=>window.__micRequests)).toBe(0);
+  expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(0);
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length),{timeout:5000}).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>window.__micRequests),{timeout:5000}).toBe(1);
   await expect(page.locator('[data-fa-voice-title]')).toContainText('گوش می‌دهم');
-  expect(await page.evaluate(()=>window.__micRequests)).toBe(2);
+  expect(await page.evaluate(()=>window.__micRequests)).toBe(1);
 });
 
 test('text chat primes browser audio in the submit gesture and reuses it for Persian TTS', async ({ page }) => {
@@ -481,7 +483,7 @@ test('assistant keeps listening during TTS without interrupting the active answe
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
-  expect(await page.evaluate(()=>window.__order.indexOf('audio-context') < window.__order.indexOf('audio-resume') && window.__order.indexOf('audio-resume') < window.__order.indexOf('get-user-media') && window.__order.indexOf('get-user-media') < window.__order.indexOf('status-request'))).toBe(true);
+  expect(await page.evaluate(()=>window.__order.indexOf('audio-context') < window.__order.indexOf('audio-resume') && window.__order.indexOf('audio-resume') < window.__order.indexOf('status-request') && window.__order.indexOf('status-request') < window.__order.indexOf('get-user-media'))).toBe(true);
 
   await page.evaluate(()=>{
     const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
