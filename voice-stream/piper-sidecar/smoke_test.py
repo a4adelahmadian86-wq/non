@@ -1,8 +1,12 @@
 import json
+import os
 import threading
+import urllib.error
 import urllib.request
 
-from server import Handler, ThreadingHTTPServer
+os.environ.setdefault("FARAST_VOICE_TTS_TOKEN", "ci-only-piper-test-token")
+
+from server import Handler, PIPER_TOKEN, ThreadingHTTPServer
 
 server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
 thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -15,10 +19,30 @@ try:
         if response.status != 200 or health.get("engine") != "piper-mana-local":
             raise SystemExit("piper_tts_health_failed")
 
+    unauthenticated = urllib.request.Request(
+        f"{base}/v1/synthesize",
+        data=json.dumps({"text": "سلام"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(unauthenticated, timeout=10)
+        raise SystemExit("piper_tts_unauthenticated_request_was_accepted")
+    except urllib.error.HTTPError as error:
+        if error.code != 401:
+            raise SystemExit("piper_tts_auth_contract_failed") from error
+
     request = urllib.request.Request(
         f"{base}/v1/synthesize",
-        data=json.dumps({"text": "سلام، به دستیار صوتی فراست خوش آمدید."}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        data=json.dumps({
+            "text": "سلام، به دستیار صوتی فراست خوش آمدید.",
+            "language": "fa-IR",
+            "voice_id": "farast-fa-male-v1",
+        }).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {PIPER_TOKEN}",
+        },
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=60) as response:
@@ -30,7 +54,7 @@ try:
         if len(audio) < 1024 or audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
             raise SystemExit("piper_tts_invalid_wav")
 
-    print(f"Piper Persian TTS HTTP smoke passed: {len(audio)} WAV bytes")
+    print(f"Piper Persian TTS authenticated HTTP smoke passed: {len(audio)} WAV bytes")
 finally:
     server.shutdown()
     server.server_close()
