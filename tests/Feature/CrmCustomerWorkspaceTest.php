@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,6 +50,27 @@ class CrmCustomerWorkspaceTest extends TestCase
             'paid_at' => now(),
         ]);
 
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'wallet',
+            'amount_rials' => 250000,
+            'status' => 'paid',
+            'transaction_id' => 'CRM-PAYMENT-1',
+            'paid_at' => now(),
+        ]);
+        $wallet = Wallet::create(['user_id' => $customer->id, 'balance_rials' => 750000]);
+        WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'type' => 'debit',
+            'amount_rials' => 250000,
+            'balance_before' => 1000000,
+            'balance_after' => 750000,
+            'reference_type' => 'order',
+            'reference_id' => $order->id,
+            'description' => 'پرداخت سفارش',
+            'idempotency_key' => 'crm-test-wallet-1',
+        ]);
+
         $this->actingAs($admin)->getJson('/admin/crm/customers')
             ->assertOk()->assertJsonFragment(['id' => $customer->id]);
 
@@ -55,7 +79,11 @@ class CrmCustomerWorkspaceTest extends TestCase
             ->assertJsonPath('customer.id', $customer->id)
             ->assertJsonPath('metrics.orders_count', 1)
             ->assertJsonPath('metrics.paid_revenue_rials', 250000)
-            ->assertJsonPath('timeline.0.type', 'order');
+            ->assertJsonPath('timeline.0.type', 'order')
+            ->assertJsonFragment(['type' => 'payment', 'gateway' => 'wallet', 'amount_rials' => 250000])
+            ->assertJsonFragment(['type' => 'wallet_transaction', 'balance_after_rials' => 750000])
+            ->assertJsonPath('metrics.payments_count', 1)
+            ->assertJsonPath('metrics.wallet_transactions_count', 1);
 
         $this->postJson('/admin/crm/customers/'.$customer->id.'/notes', [
             'note' => 'مشتری برای سفارش بعدی تماس می‌خواهد.',
