@@ -171,13 +171,13 @@
   function scheduleNextListening(){if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}if(busy||!conversationActive||panel.hidden||document.body.dataset.assistantAuth!=='1')return;var tracks=gatewayMediaStream?(typeof gatewayMediaStream.getAudioTracks==='function'?gatewayMediaStream.getAudioTracks():gatewayMediaStream.getTracks()):[];var captureReady=!!gatewayWs&&gatewayWs.readyState===WebSocket.OPEN&&tracks.some(function(track){return (track.kind==='audio'||!track.kind)&&track.readyState!=='ended'&&track.enabled!==false;});if(captureReady&&!gatewayMicrophoneMuted){setMicButtonState('ready');voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='میکروفون روشن است؛ هر وقت صحبت کنی، نوبت تو را تشخیص می‌دهم.';status.textContent='در حال گوش دادن؛ دستیار تا زمان فشردن × باز می‌ماند.';panel.classList.add('is-listening');return;}setMicButtonState('off');panel.classList.remove('is-listening');voiceTitle.textContent='میکروفون خاموش است';voiceCaption.textContent='برای شروع یا ادامهٔ صحبت، دکمهٔ قرمز را لمس کن.';status.textContent='میکروفون غیرفعال است؛ هیچ صدایی ضبط یا ارسال نمی‌شود.';}
   function setMicButtonState(state){
     var mic=root.querySelector('.farast-assistant-mic');if(!mic)return;
-    mic.classList.remove('is-connecting','is-ready','is-off','is-recording','is-muted');
-    mic.classList.add(state==='connecting'?'is-connecting':state==='ready'?'is-ready':'is-off');
+    mic.classList.remove('is-idle','is-connecting','is-ready','is-off','is-recording','is-muted');
+    mic.classList.add(state==='connecting'?'is-connecting':state==='ready'?'is-ready':state==='idle'?'is-idle':'is-off');
     mic.setAttribute('aria-pressed',state==='ready'?'true':'false');
-    mic.setAttribute('aria-label',state==='connecting'?'در حال اتصال میکروفون':state==='ready'?'خاموش‌کردن میکروفون':'روشن‌کردن میکروفون');
-    var label=mic.querySelector('span');if(label)label.textContent=state==='connecting'?'در حال اتصال':state==='ready'?'میکروفون روشن':'میکروفون خاموش';
+    mic.setAttribute('aria-label',state==='connecting'?'در حال اتصال میکروفون':state==='ready'?'خاموش‌کردن میکروفون':state==='idle'?'شروع گفت‌وگو':'روشن‌کردن میکروفون');
+    var label=mic.querySelector('span');if(label)label.textContent=state==='connecting'?'در حال اتصال':state==='ready'?'میکروفون روشن':state==='idle'?'صحبت کن':'میکروفون خاموش';
   }
-  setMicButtonState('off');
+  setMicButtonState('idle');
   function setGatewayMicrophoneMuted(muted){
     gatewayMicrophoneMuted=!!muted;
     gatewayBargeInFrames=0;
@@ -444,7 +444,7 @@
       if(turn===assistantTurn){busy=false;if(chatAbortController===requestController)chatAbortController=null;if(activePendingMessage===pending)activePendingMessage=null;if(pendingVoiceTurns.length&&conversationActive)processPendingVoiceTurns();else if(turnSucceeded)scheduleNextListening();}
     }
   }
-  launcher.addEventListener('click',function(){if(!panel.hidden)return;setOpen(true);loadHistory();loadAssistantStatus();if(document.body.dataset.assistantAuth==='1'){conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';voiceCaption.textContent='میکروفون خاموش است. برای شروع، دکمهٔ «صحبت کن» را لمس کن.';status.textContent='تا وقتی دکمه را لمس نکنی، میکروفون فعال نمی‌شود.';}});
+  launcher.addEventListener('click',function(){if(!panel.hidden)return;setOpen(true);loadHistory();loadAssistantStatus();if(document.body.dataset.assistantAuth==='1'){conversationActive=true;liveTurnEnding=false;setMicButtonState('idle');voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';voiceCaption.textContent='میکروفون هنوز فعال نیست؛ برای شروع، دکمهٔ بنفش را لمس کن.';status.textContent='تا وقتی دکمه را لمس نکنی، هیچ دسترسی یا ضبط میکروفونی فعال نمی‌شود.';}});
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);});
   root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
   root.querySelector('[data-fa-memory]').addEventListener('click',saveMemory);
