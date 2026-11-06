@@ -306,6 +306,7 @@ class AdminController extends Controller
     public function updateUserRole(Request $request, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         abort_unless($request->user()?->isAdmin(), 403, 'تغییر نقش فقط توسط مدیر اصلی ممکن است.');
+        $console->authorizeAction($request->user(), 'users', $user->id);
         abort_if($user->isAdmin() && $user->id !== $request->user()->id, 403, 'نقش مدیر اصلی قابل تغییر نیست.');
 
         $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
