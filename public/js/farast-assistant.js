@@ -198,15 +198,15 @@
     var chunks=[],pending='';
     sentences.forEach(function(sentence){
       sentence=sentence.trim();if(!sentence)return;
-      if(sentence.length>260){
+      if(sentence.length>520){
         if(pending){chunks.push(pending);pending='';}
         var words=sentence.split(/\s+/),part='';
         words.forEach(function(word){
-          if(part&&((part+' '+word).length>260)){chunks.push(part);part=word;}
+          if(part&&((part+' '+word).length>520)){chunks.push(part);part=word;}
           else part=part?(part+' '+word):word;
         });
         if(part)chunks.push(part);
-      }else if(pending&&(pending+' '+sentence).length>260){chunks.push(pending);pending=sentence;}
+      }else if(pending&&(pending+' '+sentence).length>520){chunks.push(pending);pending=sentence;}
       else pending=pending?(pending+' '+sentence):sentence;
     });
     if(pending)chunks.push(pending);
@@ -365,7 +365,7 @@
       var combined=speechBatch.join(' ');
       if(force&&pendingSpeech.trim())combined=combined?(combined+' '+pendingSpeech.trim()):pendingSpeech.trim();
       if(force){speechBatch=[];pendingSpeech='';if(combined)enqueueSpeech(combined);return;}
-      if(speechBatch.length>=2||combined.length>=220){speechBatch=[];if(combined)enqueueSpeech(combined);}
+      if(speechBatch.length>=3||combined.length>=360){speechBatch=[];if(combined)enqueueSpeech(combined);}
     }
     function acceptDelta(delta){
       if(typeof delta!=='string'||!delta)return;
@@ -376,8 +376,8 @@
         if(match&&match[1].trim()){
           speechBatch.push(match[1].trim());pendingSpeech=pendingSpeech.slice(match[0].length).trimStart();flushSpeechBatch(false);continue;
         }
-        if(pendingSpeech.length>300){
-          var splitAt=pendingSpeech.lastIndexOf(' ',260);
+        if(pendingSpeech.length>560){
+          var splitAt=pendingSpeech.lastIndexOf(' ',480);
           if(splitAt>40){speechBatch.push(pendingSpeech.slice(0,splitAt));pendingSpeech=pendingSpeech.slice(splitAt+1);flushSpeechBatch(false);continue;}
         }
         break;
