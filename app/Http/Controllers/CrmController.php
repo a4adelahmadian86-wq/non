@@ -261,6 +261,55 @@ class CrmController extends Controller
         return response()->json(['ok' => true, 'id' => $id], 201);
     }
 
+
+    public function followUps(Request $request, AdminConsoleService $console)
+    {
+        $console->authorizeAction($request->user(), 'users');
+        $visibleIds = $console->visibleUserIds($request->user());
+
+        $query = DB::table('crm_follow_up_tasks')
+            ->join('users as customers', 'customers.id', '=', 'crm_follow_up_tasks.customer_id')
+            ->leftJoin('users as assignees', 'assignees.id', '=', 'crm_follow_up_tasks.assigned_to');
+
+        if ($visibleIds !== null) {
+            $query->whereIn('crm_follow_up_tasks.customer_id', $visibleIds);
+        }
+        if ($request->filled('status')) {
+            $query->where('crm_follow_up_tasks.status', $request->query('status'));
+        }
+        if ($request->filled('priority')) {
+            $query->where('crm_follow_up_tasks.priority', $request->query('priority'));
+        }
+        if ($request->filled('assigned_to')) {
+            $assignedTo = $request->integer('assigned_to');
+            $console->authorizeAction($request->user(), 'users', $assignedTo);
+            $query->where('crm_follow_up_tasks.assigned_to', $assignedTo);
+        }
+        if ($request->boolean('overdue')) {
+            $query->where('crm_follow_up_tasks.status', 'open')
+                ->whereNotNull('crm_follow_up_tasks.due_at')
+                ->where('crm_follow_up_tasks.due_at', '<', now());
+        }
+        if ($request->filled('customer_id')) {
+            $customerId = $request->integer('customer_id');
+            $console->authorizeAction($request->user(), 'users', $customerId);
+            $query->where('crm_follow_up_tasks.customer_id', $customerId);
+        }
+
+        $query->orderByRaw("CASE WHEN crm_follow_up_tasks.status = 'open' THEN 0 ELSE 1 END")
+            ->orderBy('crm_follow_up_tasks.due_at');
+
+        return response()->json([
+            'data' => $query->paginate(min(max($request->integer('per_page', 25), 1), 100), [
+                'crm_follow_up_tasks.id', 'crm_follow_up_tasks.customer_id', 'customers.name as customer_name',
+                'crm_follow_up_tasks.assigned_to', 'assignees.name as assignee_name',
+                'crm_follow_up_tasks.title', 'crm_follow_up_tasks.description', 'crm_follow_up_tasks.status',
+                'crm_follow_up_tasks.priority', 'crm_follow_up_tasks.due_at', 'crm_follow_up_tasks.completed_at',
+                'crm_follow_up_tasks.created_at',
+            ])->withQueryString(),
+        ]);
+    }
+
     public function updateFollowUp(Request $request, int $customer, int $task, AdminConsoleService $console)
     {
         $user = $this->authorizeCustomer($console, $request, $customer);
