@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\StoreDownload;
+use App\Models\StoreLibraryItem;
 use App\Models\WalletTransaction;
 use App\Models\Ticket;
 use App\Models\TypingDocument;
@@ -117,6 +119,28 @@ class CrmController extends Controller
                 'created_at' => $payment->created_at,
             ]);
 
+        $libraryItems = StoreLibraryItem::query()->with('product')->where('user_id', $user->id)
+            ->latest()->limit(30)->get()->map(fn (StoreLibraryItem $item) => [
+                'type' => 'store_entitlement',
+                'id' => $item->id,
+                'title' => $item->product?->title ?? 'دسترسی به فایل',
+                'status' => $item->revoked_at ? 'revoked' : 'active',
+                'order_id' => $item->order_id,
+                'granted_at' => $item->granted_at,
+                'created_at' => $item->created_at,
+            ]);
+
+        $downloads = StoreDownload::query()->with(['file', 'libraryItem.product'])
+            ->where('user_id', $user->id)->latest()->limit(30)->get()
+            ->map(fn (StoreDownload $download) => [
+                'type' => 'store_download',
+                'id' => $download->id,
+                'title' => $download->libraryItem?->product?->title ?? $download->file?->original_name ?? 'دریافت فایل',
+                'download_count' => $download->download_count,
+                'expires_at' => $download->expires_at,
+                'created_at' => $download->created_at,
+            ]);
+
         $wallet = $user->wallet()->first();
         $walletTransactions = $wallet
             ? WalletTransaction::query()->where('wallet_id', $wallet->id)->latest()->limit(30)->get()
@@ -133,7 +157,7 @@ class CrmController extends Controller
                 ])
             : collect();
 
-        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)->concat($libraryItems)->concat($downloads)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -164,6 +188,8 @@ class CrmController extends Controller
                 'orders_count' => $user->orders_count,
                 'tickets_count' => $user->tickets_count,
                 'typing_documents_count' => $user->documents_count,
+                'store_library_items_count' => StoreLibraryItem::query()->where('user_id', $user->id)->count(),
+                'store_downloads_count' => StoreDownload::query()->where('user_id', $user->id)->count(),
                 'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
                 'wallet_transactions_count' => $wallet ? WalletTransaction::query()->where('wallet_id', $wallet->id)->count() : 0,
                 'paid_revenue_rials' => (int) ($user->paid_revenue_rials ?? 0),
