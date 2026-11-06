@@ -72,6 +72,9 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $organizationB = Organization::create(['name' => 'Org B', 'slug' => 'org-b', 'status' => 'active']);
 
         $manager = $this->makeUser('09123456782', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        SiteSetting::write('gemini_model', 'private-scope-model');
+        SiteSetting::write('gemini_api_key', 'private-scope-secret', true);
+        \App\Models\PricingRule::create(['key' => 'scope-private-price', 'value' => 987654, 'label' => 'Private global price', 'active' => true]);
         $member = $this->makeUser('09123456783', User::ROLE_EMPLOYEE, $organizationA->id);
         $outsider = $this->makeUser('09123456784', User::ROLE_EMPLOYEE, $organizationB->id);
 
@@ -145,6 +148,10 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         ]);
 
         $dashboard = $this->actingAs($manager)->get('/admin')->assertOk();
+        $dashboard->assertViewHas('rules', fn ($rules) => $rules->isEmpty());
+        $dashboard->assertViewHas('settings', fn (array $settings): bool => ($settings['gemini_model'] ?? null) === '');
+        $dashboard->assertViewHas('secretStatus', fn (array $status): bool => $status === ['gemini' => false, 'files' => false, 'groq' => false]);
+        $dashboard->assertViewHas('systemHealth', fn (array $health): bool => $health === []);
         $dashboard->assertViewHas('stats', function (array $stats): bool {
             return $stats['users'] === 2
                 && $stats['organizations'] === 1
