@@ -58,7 +58,7 @@ class AdminPlatformController extends Controller {
    'users'=>$users->count(),
    'active_users'=>$activeUsers->count(),
    'documents'=>Schema::hasTable('typing_documents')?$documents->count():0,
-   'ai_total'=>Schema::hasTable('ai_interactions')?$ai->count():0,
+   'ai_total'=>Schema::hasTable('ai_interactions')?(clone $ai)->count():0,
    'ai_today'=>Schema::hasTable('ai_interactions')?(clone $ai)->whereDate('created_at',today())->count():0,
    'voice_seconds'=>$global&&Schema::hasTable('voice_provider_usage')?(int)DB::table('voice_provider_usage')->sum('audio_seconds'):0,
    'voice_requests'=>$global&&Schema::hasTable('voice_provider_usage')?(int)DB::table('voice_provider_usage')->sum('requests'):0,
