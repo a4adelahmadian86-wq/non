@@ -123,10 +123,6 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   window.__order = [];
   window.__chatAttempts = 0;
   window.__csrfRefreshes = 0;
-  await page.evaluate(() => { window.__wsInstances[0].onclose?.({code:1006}); });
-  await page.locator('.farast-voice-mic').click();
-  await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(2);
-  expect(await page.evaluate(() => window.__wakeOrder.filter(item => item === 'health').length)).toBe(1);
   window.fetch = async (url, options = {}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, local_only: false, chat_gateway_ready: true, chat_gateway_health_url: 'https://voice.example.test/health' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -246,6 +242,10 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
   await page.evaluate(() => window.__wsInstances[0].emit({ type: 'final', text: 'سلام فراست' }));
   await expect.poll(async () => page.evaluate(() => window.__chatPayloads.length), { timeout: 5000 }).toBe(1);
   expect(await page.evaluate(() => window.__chatPayloads[0].message)).toBe('سلام فراست');
+  await page.evaluate(() => { window.__wsInstances[0].onclose?.({code:1006}); });
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(2);
+  expect(await page.evaluate(() => window.__wakeOrder.filter(item => item === 'health').length)).toBe(1);
 });
 
 
@@ -450,9 +450,18 @@ test('assistant keeps listening during TTS without interrupting the active answe
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__sentAudioFrames)).toBeGreaterThan(framesBeforeTtsNoise);
 
-  // Repeated microphone clicks, launcher clicks, and Escape must not stop an answer.
+  // The microphone button mutes capture only; the active answer and TTS keep running.
   await page.locator('.farast-voice-mic').click();
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
+  expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
+  const framesWhileMuted=await page.evaluate(()=>window.__sentAudioFrames);
+  await page.evaluate(()=>{
+    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
+    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
+    for(let i=0;i<4;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
+  });
+  expect(await page.evaluate(()=>window.__sentAudioFrames)).toBe(framesWhileMuted);
+  await page.locator('.farast-voice-mic').click();
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(1);
