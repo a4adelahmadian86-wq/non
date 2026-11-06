@@ -102,6 +102,90 @@ class CrmProjectWorkspaceTest extends TestCase
             ->assertJsonPath('human_tasks.0.capability', 'typing');
     }
 
+    public function test_admin_can_assign_project_human_task_to_an_in_scope_specialist(): void
+    {
+        $admin = $this->makeUser('09123330005', User::ROLE_ADMIN);
+        $customer = $this->makeUser('09123330006');
+        $specialist = $this->makeUser('09123330007');
+
+        $project = FarastProject::create([
+            'user_id' => $customer->id,
+            'name' => 'پروژه دارای کار تخصصی',
+            'project_type' => 'typing',
+            'status' => 'active',
+            'estimated_pages' => 1,
+        ]);
+
+        $taskId = DB::table('farast_human_tasks')->insertGetId([
+            'task_id' => (string) \Illuminate\Support\Str::uuid(),
+            'capability' => 'typing',
+            'project_id' => $project->id,
+            'requester_id' => $customer->id,
+            'status' => 'queued',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/admin/crm/projects/'.$project->id.'/tasks/'.$taskId.'/assign', [
+                'specialist_id' => $specialist->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('specialist_id', $specialist->id);
+
+        $this->assertDatabaseHas('farast_human_tasks', [
+            'id' => $taskId,
+            'project_id' => $project->id,
+            'specialist_id' => $specialist->id,
+        ]);
+    }
+
+    public function test_project_task_cannot_be_assigned_to_a_specialist_outside_admin_scope(): void
+    {
+        $organizationA = \App\Models\Organization::create(['name' => 'Project Scope A', 'slug' => 'project-scope-a', 'status' => 'active']);
+        $organizationB = \App\Models\Organization::create(['name' => 'Project Scope B', 'slug' => 'project-scope-b', 'status' => 'active']);
+        $admin = $this->makeUser('09123330008', User::ROLE_ADMIN);
+        $admin->organization_id = $organizationA->id;
+        $admin->save();
+        $customer = $this->makeUser('09123330009');
+        $customer->organization_id = $organizationA->id;
+        $customer->save();
+        $specialist = $this->makeUser('09123330010');
+        $specialist->organization_id = $organizationB->id;
+        $specialist->save();
+
+        $project = FarastProject::create([
+            'user_id' => $customer->id,
+            'name' => 'پروژه سازمانی',
+            'project_type' => 'typing',
+            'status' => 'active',
+            'estimated_pages' => 1,
+        ]);
+        $taskId = DB::table('farast_human_tasks')->insertGetId([
+            'task_id' => (string) \Illuminate\Support\Str::uuid(),
+            'capability' => 'typing',
+            'project_id' => $project->id,
+            'requester_id' => $customer->id,
+            'status' => 'queued',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        \App\Models\SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $this->actingAs($admin)
+            ->postJson('/admin/crm/projects/'.$project->id.'/tasks/'.$taskId.'/assign', [
+                'specialist_id' => $specialist->id,
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('farast_human_tasks', [
+            'id' => $taskId,
+            'specialist_id' => null,
+        ]);
+    }
+
     public function test_employee_without_users_permission_cannot_access_project_workspace(): void
     {
         $employee = $this->makeUser('09123330003');
