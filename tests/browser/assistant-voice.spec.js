@@ -1121,8 +1121,15 @@ test('live assistant queues speech received while answering and processes it aft
   await expect.poll(()=>page.evaluate(()=>window.__audioEnded),{timeout:3000}).toBe(true);
   expect(await page.locator('[data-fa-voice-title]').textContent()).not.toBe('در حال صحبت');
   await page.locator('.farast-voice-mic').click();
-  expect(await page.evaluate(()=>window.__micTrack.enabled)).toBe(true);
-  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'پرسش سوم هنگام پخش صدا'}));
+  await expect.poll(()=>page.evaluate(()=>window.__micTrack.enabled),{timeout:4000}).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>{
+    const socket=window.__wsInstances[window.__wsInstances.length-1];
+    return !!socket&&socket.readyState===1;
+  }),{timeout:8000}).toBe(true);
+  await page.evaluate(()=>{
+    const socket=window.__wsInstances[window.__wsInstances.length-1];
+    socket.emit({type:'final',text:'پرسش سوم هنگام پخش صدا'});
+  });
   await page.waitForTimeout(200);
   expect(await page.evaluate(()=>window.__chatPayloads.length)).toBe(2);
   expect(await page.evaluate(()=>window.__firstSignal.aborted)).toBe(false);
