@@ -555,6 +555,27 @@ class GlobalAssistantVoiceTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_remote_tts_readiness_and_synthesis_fail_closed_without_a_bearer_token(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice.remote_batch_enabled' => true,
+            'services.voice_tts.url' => 'https://voice.test/v1/synthesize',
+            'services.voice_tts.token' => '',
+        ]);
+        Http::fake();
+
+        $status = $this->actingAs(User::factory()->create())->getJson('/assistant/voice/status');
+        $status->assertOk()
+            ->assertJsonPath('server_tts', false)
+            ->assertJsonPath('server_tts_token_configured', false);
+        $this->assertStringContainsString('FARAST_VOICE_TTS_TOKEN', (string) $status->json('server_tts_message'));
+
+        $response = $this->postJson('/assistant/speak', ['text' => 'سلام']);
+        $response->assertStatus(503)->assertJsonPath('code', 'tts_token_missing');
+        Http::assertNothingSent();
+    }
+
     public function test_local_only_tts_sends_the_configured_bearer_token_to_private_piper(): void
     {
         config([
