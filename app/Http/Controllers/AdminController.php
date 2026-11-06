@@ -199,6 +199,13 @@ class AdminController extends Controller
                 'gemini_model' => '',
                 'gemini_fallback_model' => '',
                 'assistant_groq_model' => '',
+                'can_type' => false,
+                'can_ai' => false,
+                'can_voice' => false,
+                'can_export_docx' => false,
+                'can_export_pdf' => false,
+                'can_feedback' => false,
+                'can_support' => false,
             ],
             'secretStatus' => $globalScope ? [
                 'gemini' => (bool) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key')),
