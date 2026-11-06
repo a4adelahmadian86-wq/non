@@ -32,6 +32,7 @@ class AdminController extends Controller
 
         // دامنهٔ کاربر از middleware یا محاسبهٔ مستقیم نقش.
         $scope = $request->attributes->get('farast.scope') ?? AdminConsoleService::scopeOf($actor);
+        $globalScope = $scope === AdminConsoleService::SCOPE_GLOBAL;
         $visibleIds = $console->visibleUserIds($actor);
 
         // دسترسی‌های کنسول بر پایهٔ RBAC + Scope — همین‌جا منبع واحد ناوبری است.
@@ -166,7 +167,7 @@ class AdminController extends Controller
         }
 
         return view('admin.index', [
-            'rules' => PricingRule::orderBy('id')->get(),
+            'rules' => $globalScope ? PricingRule::orderBy('id')->get() : collect(),
             'users' => $users,
             'userTotalForFilter' => $usersQuery->count(),
             'announcements' => Announcement::latest()->limit(20)->get(),
@@ -230,13 +231,20 @@ class AdminController extends Controller
                     ->latest('audit_logs.id')->limit(7)
                     ->get(['audit_logs.action', 'audit_logs.created_at', 'users.name as actor_name'])
                 : collect(),
-            'settings' => $settings,
-            'secretStatus' => [
+            'settings' => $globalScope ? $settings : [
+                'weekly_free_pages' => '',
+                'max_file_mb' => '',
+                'daily_ai_requests' => '',
+                'gemini_model' => '',
+                'gemini_fallback_model' => '',
+                'assistant_groq_model' => '',
+            ],
+            'secretStatus' => $globalScope ? [
                 'gemini' => (bool) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key')),
                 'files' => (bool) (SiteSetting::read('files_api_key') ?: env('FILES_API_KEY')),
                 'groq' => (bool) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')),
-            ],
-            'systemHealth' => [
+            ] : ['gemini' => false, 'files' => false, 'groq' => false],
+            'systemHealth' => $globalScope ? [
                 'php' => PHP_VERSION,
                 'laravel' => app()->version(),
                 'driver' => config('database.default'),
@@ -246,7 +254,7 @@ class AdminController extends Controller
                 'env' => app()->environment(),
                 'debug' => (bool) config('app.debug'),
                 'storage_writable' => is_writable(storage_path()),
-            ],
+            ] : [],
             'capabilities' => $capabilities,
             'voiceAccounts' => ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
                 ? VoiceProviderAccount::query()->get()->keyBy('provider')
