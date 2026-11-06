@@ -131,15 +131,19 @@ class ResolveAdminScope
      * شناسه‌های کاربرانی که کاربر فعلی مجاز به دیدن آن‌هاست.
      * null یعنی «بدون محدودیت» (دامنه سراسری).
      */
-    public static function visibleUserIds(?User $user): ?array
+    public static function visibleUserIds(?User $user, ?string $scope = null): ?array
     {
-        if (! $user || $user->isAdmin()) {
-            return null;
+        if (! $user) {
+            return [];
         }
 
-        return match ($user->role) {
-            User::ROLE_ORGANIZATION_MANAGER => self::organizationUserIds($user),
-            User::ROLE_TEAM_SUPERVISOR => self::teamUserIds($user),
+        $scope ??= self::scopeFor($user);
+
+        return match ($scope) {
+            self::SCOPE_GLOBAL => null,
+            self::SCOPE_ORGANIZATION => self::organizationUserIds($user),
+            self::SCOPE_TEAM => self::teamUserIds($user),
+            self::SCOPE_OWN => [$user->id],
             default => [$user->id],
         };
     }

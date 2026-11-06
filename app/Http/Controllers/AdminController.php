@@ -110,7 +110,9 @@ class AdminController extends Controller
                     return array_fill(0, count($chartDays), 0);
                 }
             }
-            $rows = $q->select(DB::raw("DATE($dateCol) as d"), DB::raw('COUNT(*) as c'))->get();
+            $rows = $q->select(DB::raw("DATE($dateCol) as d"), DB::raw('COUNT(*) as c'))
+                ->groupByRaw("DATE($dateCol)")
+                ->get();
             $map = [];
             foreach ($rows as $row) {
                 $d = \Illuminate\Support\Carbon::parse($row->d)->toDateString();
@@ -127,6 +129,26 @@ class AdminController extends Controller
             }
             $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         }
+
+        $visibleTeamIds = $console->visibleTeamIds($actor);
+        $visibleOrganizationIds = $console->visibleOrganizationIds($actor);
+        $paidPaymentsQuery = function () use ($visibleIds) {
+            $query = DB::table('payments')->where('payments.status', 'paid');
+            if ($visibleIds !== null) {
+                $query->join('orders', 'orders.id', '=', 'payments.order_id')
+                    ->whereIn('orders.user_id', $visibleIds);
+            }
+
+            return $query;
+        };
+        $walletBalanceQuery = function () use ($visibleIds) {
+            $query = DB::table('wallets');
+            if ($visibleIds !== null) {
+                $query->whereIn('user_id', $visibleIds);
+            }
+
+            return $query;
+        };
 
         $topConsumers = collect();
         if (Schema::hasTable('typing_documents')) {
@@ -168,15 +190,32 @@ class AdminController extends Controller
                 'ai_today' => Schema::hasTable('ai_interactions')
                     ? (($visibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $visibleIds))->whereDate('created_at', today())->count())
                     : 0,
-                'voice_seconds' => Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('audio_seconds') : 0,
-                'voice_requests' => Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('requests') : 0,
-                'organizations' => Schema::hasTable('organizations') ? \App\Models\Organization::count() : 0,
-                'teams' => Schema::hasTable('teams') ? \App\Models\Team::count() : 0,
-                'audit_events' => Schema::hasTable('audit_logs') ? DB::table('audit_logs')->count() : 0,
-                'revenue_month' => Schema::hasTable('payments') ? (int) DB::table('payments')->where('status', 'paid')->where('created_at', '>=', $monthAgo)->sum('amount_rials') : 0,
-                'revenue_total' => Schema::hasTable('payments') ? (int) DB::table('payments')->where('status', 'paid')->sum('amount_rials') : 0,
+                // Voice usage has no user attribution in its schema; expose it only in the global scope.
+                'voice_seconds' => $visibleIds === null && Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('audio_seconds') : 0,
+                'voice_requests' => $visibleIds === null && Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('requests') : 0,
+                'organizations' => Schema::hasTable('organizations')
+                    ? ($visibleOrganizationIds === null
+                        ? \App\Models\Organization::count()
+                        : DB::table('organizations')->whereIn('id', $visibleOrganizationIds)->count())
+                    : 0,
+                'teams' => Schema::hasTable('teams')
+                    ? ($visibleTeamIds === null
+                        ? \App\Models\Team::count()
+                        : DB::table('teams')->whereIn('id', $visibleTeamIds)->count())
+                    : 0,
+                'audit_events' => Schema::hasTable('audit_logs')
+                    ? ($visibleIds === null
+                        ? DB::table('audit_logs')->count()
+                        : DB::table('audit_logs')->whereIn('user_id', $visibleIds)->count())
+                    : 0,
+                'revenue_month' => Schema::hasTable('payments')
+                    ? (int) $paidPaymentsQuery()->where('payments.created_at', '>=', $monthAgo)->sum('payments.amount_rials')
+                    : 0,
+                'revenue_total' => Schema::hasTable('payments')
+                    ? (int) $paidPaymentsQuery()->sum('payments.amount_rials')
+                    : 0,
                 'tickets_open' => (int) ($ticketStats['open'] ?? 0) + (int) ($ticketStats['user_replied'] ?? 0),
-                'wallet_balance' => Schema::hasTable('wallets') ? (int) DB::table('wallets')->sum('balance_rials') : 0,
+                'wallet_balance' => Schema::hasTable('wallets') ? (int) $walletBalanceQuery()->sum('balance_rials') : 0,
             ],
             'charts' => [
                 'labels' => $chartDays,
@@ -267,6 +306,8 @@ class AdminController extends Controller
     public function updateUserRole(Request $request, User $user, AdminConsoleService $console, AuditLogService $audit)
     {
         abort_unless($request->user()?->isAdmin(), 403, 'تغییر نقش فقط توسط مدیر اصلی ممکن است.');
+        abort_unless($console->sectionAllowed($request->user(), 'access'), 403, 'تغییر نقش فقط در دامنهٔ سراسری مجاز است.');
+        $console->authorizeAction($request->user(), 'users', $user->id);
         abort_if($user->isAdmin() && $user->id !== $request->user()->id, 403, 'نقش مدیر اصلی قابل تغییر نیست.');
 
         $d = $request->validate(['role' => ['required', 'in:' . implode(',', User::DASHBOARD_ROLES)]]);
@@ -356,43 +397,60 @@ class AdminController extends Controller
 
     public function finance(Request $request, AdminConsoleService $console)
     {
-        // ورود به بخش مالی: مجوز RBAC + دامنه (config/farast_admin.php → sections.finance)
+        // مجوز و دامنهٔ مالی؛ همهٔ داده‌های وابسته به کاربر باید در همین دامنه بمانند.
         $console->authorizeAction($request->user(), 'finance');
+        $visibleIds = $console->visibleUserIds($request->user());
+        $globalScope = $visibleIds === null;
 
         $monthAgo = now()->subMonth();
-
         $chartDays = [];
         for ($i = 29; $i >= 0; $i--) {
             $chartDays[] = now()->subDays($i)->toDateString();
         }
+
+        $paymentsQuery = function (string $status) use ($visibleIds) {
+            $query = DB::table('payments')->where('payments.status', $status);
+            if ($visibleIds !== null) {
+                $query->join('orders', 'orders.id', '=', 'payments.order_id')
+                    ->whereIn('orders.user_id', $visibleIds);
+            }
+
+            return $query;
+        };
+
         $dailyRevenue = array_fill(0, 30, 0);
         $revenueSeries = [];
         if (Schema::hasTable('payments')) {
-            $rows = DB::table('payments')
-                ->where('status', 'paid')
-                ->where('created_at', '>=', $chartDays[0])
-                ->select('created_at', 'amount_rials')
+            $rows = $paymentsQuery('paid')
+                ->where('payments.created_at', '>=', $chartDays[0])
+                ->select('payments.created_at', 'payments.amount_rials')
                 ->get();
+
             foreach ($rows as $row) {
-                $d = \Illuminate\Support\Carbon::parse($row->created_at)->toDateString();
-                $idx = array_search($d, $chartDays, true);
-                if ($idx !== false) {
-                    $dailyRevenue[$idx] += (int) $row->amount_rials;
+                $day = \Illuminate\Support\Carbon::parse($row->created_at)->toDateString();
+                $index = array_search($day, $chartDays, true);
+                if ($index !== false) {
+                    $dailyRevenue[$index] += (int) $row->amount_rials;
                 }
             }
+
             $revenueSeries = [
-                'total' => (int) DB::table('payments')->where('status', 'paid')->sum('amount_rials'),
-                'month' => (int) DB::table('payments')->where('status', 'paid')->where('created_at', '>=', $monthAgo)->sum('amount_rials'),
-                'count' => (int) DB::table('payments')->where('status', 'paid')->count(),
-                'pending' => (int) DB::table('payments')->where('status', 'pending')->count(),
+                'total' => (int) $paymentsQuery('paid')->sum('payments.amount_rials'),
+                'month' => (int) $paymentsQuery('paid')->where('payments.created_at', '>=', $monthAgo)->sum('payments.amount_rials'),
+                'count' => (int) $paymentsQuery('paid')->count(),
+                'pending' => (int) $paymentsQuery('pending')->count(),
             ];
         }
 
         $recentTransactions = collect();
-        if (Schema::hasTable('wallet_transactions')) {
-            $recentTransactions = DB::table('wallet_transactions')
+        if (Schema::hasTable('wallet_transactions') && Schema::hasTable('wallets')) {
+            $transactions = DB::table('wallet_transactions')
                 ->join('wallets', 'wallets.id', '=', 'wallet_transactions.wallet_id')
-                ->join('users', 'users.id', '=', 'wallets.user_id')
+                ->join('users', 'users.id', '=', 'wallets.user_id');
+            if ($visibleIds !== null) {
+                $transactions->whereIn('wallets.user_id', $visibleIds);
+            }
+            $recentTransactions = $transactions
                 ->latest('wallet_transactions.id')
                 ->limit(40)
                 ->get(['wallet_transactions.*', 'users.name as user_name', 'users.mobile as user_mobile']);
@@ -400,21 +458,46 @@ class AdminController extends Controller
 
         $invoices = collect();
         if (Schema::hasTable('farast_invoices')) {
-            $invoices = DB::table('farast_invoices')->latest('id')->limit(20)->get();
+            $invoiceQuery = DB::table('farast_invoices');
+            if ($visibleIds !== null) {
+                if (Schema::hasColumn('farast_invoices', 'user_id')) {
+                    $invoiceQuery->whereIn('user_id', $visibleIds);
+                } elseif (Schema::hasColumn('farast_invoices', 'order_id') && Schema::hasTable('orders')) {
+                    $invoiceQuery->join('orders', 'orders.id', '=', 'farast_invoices.order_id')
+                        ->whereIn('orders.user_id', $visibleIds)
+                        ->select('farast_invoices.*');
+                } else {
+                    $invoiceQuery = null;
+                }
+            }
+            if ($invoiceQuery) {
+                $invoices = $invoiceQuery->latest('farast_invoices.id')->limit(20)->get();
+            }
+        }
+
+        $usersQuery = User::with('wallet')->orderBy('name');
+        if ($visibleIds !== null) {
+            $usersQuery->whereIn('id', $visibleIds);
+        }
+
+        $walletQuery = Schema::hasTable('wallets') ? DB::table('wallets') : null;
+        if ($walletQuery && $visibleIds !== null) {
+            $walletQuery->whereIn('user_id', $visibleIds);
         }
 
         return view('admin.finance', [
-            'taxEnabled' => filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN),
-            'taxRate' => (float) SiteSetting::read('tax_rate_percent', 10),
-            'gateway' => (string) SiteSetting::read('payment_gateway', 'none'),
-            'merchantConfigured' => (bool) SiteSetting::read('gateway_merchant_id'),
-            'users' => User::with('wallet')->orderBy('name')->limit(100)->get(),
+            // Gateway and tax configuration are global settings, not organization-level report data.
+            'taxEnabled' => $globalScope ? filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN) : false,
+            'taxRate' => $globalScope ? (float) SiteSetting::read('tax_rate_percent', 10) : 0,
+            'gateway' => $globalScope ? (string) SiteSetting::read('payment_gateway', 'none') : 'none',
+            'merchantConfigured' => $globalScope ? (bool) SiteSetting::read('gateway_merchant_id') : false,
+            'users' => $usersQuery->limit(100)->get(),
             'financeStats' => $revenueSeries,
             'chartDays' => $chartDays,
             'dailyRevenue' => $dailyRevenue,
             'recentTransactions' => $recentTransactions,
             'invoices' => $invoices,
-            'walletTotal' => Schema::hasTable('wallets') ? (int) DB::table('wallets')->sum('balance_rials') : 0,
+            'walletTotal' => $walletQuery ? (int) $walletQuery->sum('balance_rials') : 0,
         ]);
     }
 

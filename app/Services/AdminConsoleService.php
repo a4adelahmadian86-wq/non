@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Http\Middleware\ResolveAdminScope;
+use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -43,13 +45,10 @@ class AdminConsoleService
             return false;
         }
 
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
         $def = config("farast_admin.sections.$section");
         if (! is_array($def)) {
-            return $user->isAdmin();
-        }
-
-        if ($user->isAdmin()) {
-            return true;
+            return $user->isAdmin() && $scope === self::SCOPE_GLOBAL;
         }
 
         if (! $this->authorization->allows($user, $def['permission'])) {
@@ -57,10 +56,10 @@ class AdminConsoleService
         }
 
         $rank = config('farast_admin.scope_rank', ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3]);
-        $userRank = $rank[self::scopeOf($user)] ?? 3;
+        $userRank = $rank[$scope] ?? 3;
         $requiredRank = $rank[$def['min_scope']] ?? 3;
 
-        // دامنهٔ کاربر باید دست‌کم به اندازهٔ لازم باز باشد (عدد رتبه کوچک‌تر = بازتر).
+        // نقش مدیر نیز از scope محدودترِ تنظیم‌شده در middleware تبعیت می‌کند.
         return $userRank <= $requiredRank;
     }
 
@@ -87,7 +86,68 @@ class AdminConsoleService
      */
     public function visibleUserIds(?User $user): ?array
     {
-        return ResolveAdminScope::visibleUserIds($user);
+        $scope = request()->attributes->get('farast.scope');
+
+        return ResolveAdminScope::visibleUserIds($user, is_string($scope) ? $scope : null);
+    }
+
+    /**
+     * شناسه تیم‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
+     */
+    public function visibleTeamIds(?User $user): ?array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        if ($scope === self::SCOPE_GLOBAL) {
+            return null;
+        }
+        if ($scope === self::SCOPE_ORGANIZATION) {
+            return $user->organization_id
+                ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->all()
+                : [];
+        }
+        if ($scope !== self::SCOPE_TEAM) {
+            return [];
+        }
+
+        return Team::query()
+            ->where('supervisor_id', $user->id)
+            ->orWhereIn('id', function ($query) use ($user) {
+                $query->select('team_id')
+                    ->from('team_user')
+                    ->where('user_id', $user->id)
+                    ->where('team_role', 'manager');
+            })
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * شناسه سازمان‌های قابل مشاهده در دامنه جاری؛ null فقط برای دامنه سراسری است.
+     */
+    public function visibleOrganizationIds(?User $user): ?array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        if ($scope === self::SCOPE_GLOBAL) {
+            return null;
+        }
+        if ($scope === self::SCOPE_ORGANIZATION) {
+            return $user->organization_id ? [(int) $user->organization_id] : [];
+        }
+        if ($scope === self::SCOPE_TEAM) {
+            $teamIds = $this->visibleTeamIds($user) ?? [];
+
+            return Team::query()->whereIn('id', $teamIds)->distinct()->pluck('organization_id')->all();
+        }
+
+        return [];
     }
 
     /**
@@ -111,7 +171,7 @@ class AdminConsoleService
     {
         abort_unless($this->sectionAllowed($user, $section), 403, 'اجرای این عملیات در کنسول برای حساب شما مجاز نیست.');
 
-        if ($targetUserId !== null && $user && ! $user->isAdmin()) {
+        if ($targetUserId !== null && $user) {
             $ids = $this->visibleUserIds($user);
             abort_if($ids !== null && ! in_array($targetUserId, $ids, true), 403, 'این کاربر خارج از دامنهٔ دسترسی شماست.');
         }
@@ -122,7 +182,7 @@ class AdminConsoleService
      */
     public function scopeSummary(?User $user): array
     {
-        $scope = self::scopeOf($user);
+        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
 
         return [
             'scope' => $scope,
