@@ -45,7 +45,7 @@ class CrmMarketingController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:140',
             'description' => 'nullable|string|max:1000',
-            'filters' => 'required|array',
+            'filters' => 'present|array',
         ]);
         $filters = validator($data['filters'], [
             'role' => 'nullable|in:admin,organization_manager,team_supervisor,employee,observer,guest',
