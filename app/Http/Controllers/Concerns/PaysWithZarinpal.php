@@ -105,8 +105,10 @@ trait PaysWithZarinpal
             return redirect()->route('checkout', $order)->withErrors(['payment' => 'تأیید پرداخت ناموفق بود (کد '.$verify['code'].').']);
         }
 
+        $paymentProcessed = false;
+
         try {
-            DB::transaction(function () use ($order, $payment, $authority, $verify) {
+            DB::transaction(function () use ($order, $payment, $authority, $verify, &$paymentProcessed) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
                 $lockedPayment = Payment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
 
@@ -174,6 +176,7 @@ trait PaysWithZarinpal
                 ]);
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                $paymentProcessed = true;
             });
         } catch (\RuntimeException $e) {
             return redirect()->route('checkout', $order)->withErrors(['payment' => $e->getMessage()]);
@@ -181,9 +184,11 @@ trait PaysWithZarinpal
 
         $request->session()->forget(['zarinpal_order_id', 'zarinpal_authority']);
 
-        try {
-            $emailService->sendOrderPaid(auth()->user(), $order->fresh());
-        } catch (\Throwable) {
+        if ($paymentProcessed) {
+            try {
+                $emailService->sendOrderPaid(auth()->user(), $order->fresh());
+            } catch (\Throwable) {
+            }
         }
 
         return redirect()->route('library')->with('status', 'پرداخت زرین‌پال موفق بود؛ فایل‌ها در کتابخانه شماست.');
