@@ -631,6 +631,7 @@ test('assistant batches adjacent streamed sentences into continuous server audio
 <script>
   window.__spokenChunks = [];
   window.__streamSentAll = false;
+  window.__releaseFinalDelta = null;
   window.__deviceSpeechCalls = 0;
   window.SpeechRecognition = class { start() { throw new Error('browser recognition must not run'); } };
   window.SpeechSynthesisUtterance = class {};
@@ -652,9 +653,14 @@ test('assistant batches adjacent streamed sentences into continuous server audio
       const encoder=new TextEncoder();
       return new Response(new ReadableStream({start(controller){
         controller.enqueue(encoder.encode('data: {"delta":"جمله اول. "}\\n\\n'));
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),500);
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله سوم. "}\\n\\n')),1000);
-        setTimeout(()=>{window.__streamSentAll=true;controller.enqueue(encoder.encode('data: {"delta":"جمله چهارم."}\\n\\ndata: {"done":true}\\n\\n'));controller.close();},1500);
+        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),100);
+        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله سوم. "}\\n\\n')),200);
+        window.__releaseFinalDelta=()=>{
+          if(window.__streamSentAll)return;
+          window.__streamSentAll=true;
+          controller.enqueue(encoder.encode('data: {"delta":"جمله چهارم."}\\n\\ndata: {"done":true}\\n\\n'));
+          controller.close();
+        };
       }}),{status:200,headers:{'Content-Type':'text/event-stream'}});
     }
     if(url==='/assistant/speak'){window.__spokenChunks.push(JSON.parse(options.body).text);return new Response(new Blob(['audio'],{type:'audio/mpeg'}),{status:200,headers:{'Content-Type':'audio/mpeg'}});}
@@ -667,8 +673,9 @@ test('assistant batches adjacent streamed sentences into continuous server audio
   await expect(page.locator('.farast-assistant-form')).toBeVisible();
   await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
   await page.locator('.farast-assistant-send').click();
-  await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBeGreaterThanOrEqual(1);
+  await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(1);
   expect(await page.evaluate(() => window.__streamSentAll)).toBe(false);
+  await page.evaluate(() => window.__releaseFinalDelta());
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(2);
   expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول. جمله دوم. جمله سوم.','جمله چهارم.']);
   expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
