@@ -21,7 +21,7 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   window.AudioContext=class {
     constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
     createMediaStreamSource(){return {connect(){},disconnect(){}};}
-    createScriptProcessor(){return {onaudioprocess:null,connect(){},disconnect(){}};}
+    createScriptProcessor(){window.__scriptProcessor={onaudioprocess:null,connect(){},disconnect(){}};return window.__scriptProcessor;}
     resume(){return Promise.resolve();}
     close(){this.state='closed';return Promise.resolve();}
   };
@@ -508,22 +508,24 @@ test('assistant keeps listening during TTS without interrupting the active answe
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__sentAudioFrames)).toBeGreaterThan(framesBeforeTtsNoise);
 
-  // The microphone button mutes capture only; the active answer and TTS keep running.
+  // Turning the button red must stop the real MediaStream tracks without interrupting TTS.
   await page.locator('.farast-voice-mic').click();
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
-  const framesWhileMuted=await page.evaluate(()=>window.__sentAudioFrames);
-  await page.evaluate(()=>{
-    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.1)};
-    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
-    for(let i=0;i<4;i++)window.__scriptProcessor.onaudioprocess({inputBuffer,outputBuffer});
-  });
-  expect(await page.evaluate(()=>window.__sentAudioFrames)).toBe(framesWhileMuted);
+  expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
+  expect(await page.evaluate(()=>window.__scriptProcessor.onaudioprocess)).toBe(null);
+  const framesWhileOff=await page.evaluate(()=>window.__sentAudioFrames);
+  await page.waitForTimeout(80);
+  expect(await page.evaluate(()=>window.__sentAudioFrames)).toBe(framesWhileOff);
+
+  // Re-enabling capture opens a fresh gateway and a fresh microphone stream.
   await page.locator('.farast-voice-mic').click();
+  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length),{timeout:5000}).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>window.__getUserMediaCalls),{timeout:5000}).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>typeof window.__scriptProcessor?.onaudioprocess==='function')).toBe(true);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
-  expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
-  expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(1);
-  expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(0);
+  expect(await page.evaluate(()=>window.__wsInstances[1].readyState)).toBe(1);
+  expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
   await page.keyboard.press('Escape');
   await expect(page.locator('.farast-assistant-panel')).toBeVisible();
   await page.locator('.farast-assistant-launcher').click();
@@ -532,7 +534,7 @@ test('assistant keeps listening during TTS without interrupting the active answe
   await page.locator('.farast-assistant-close').click();
   await expect(page.locator('.farast-assistant-panel')).toBeHidden();
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(true);
-  expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
+  expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(2);
 });
 
 test('opening the assistant keeps the microphone off until the user taps', async ({ page }) => {
