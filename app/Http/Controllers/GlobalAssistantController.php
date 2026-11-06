@@ -15,6 +15,19 @@ class GlobalAssistantController extends Controller
     {
         $localOnly = (bool) config('services.voice.local_only', false);
         $remoteBatchEnabled = (bool) config('services.voice.remote_batch_enabled', false);
+        $ttsUrl = trim((string) config('services.voice_tts.url', ''));
+        $ttsToken = trim((string) config('services.voice_tts.token', ''));
+        $ttsPrivate = $ttsUrl !== '' && $this->isPrivateServiceUrl($ttsUrl);
+        $serverTtsReady = $ttsUrl !== ''
+            && (! $localOnly || $remoteBatchEnabled || ($ttsPrivate && $ttsToken !== ''));
+        $serverTtsMessage = '';
+        if (! $serverTtsReady) {
+            $missingTts = [];
+            if ($ttsUrl === '') $missingTts[] = 'FARAST_VOICE_TTS_URL';
+            elseif ($localOnly && ! $remoteBatchEnabled && ! $ttsPrivate) $missingTts[] = 'آدرس خصوصی برای FARAST_VOICE_TTS_URL';
+            if ($localOnly && ! $remoteBatchEnabled && $ttsToken === '') $missingTts[] = 'FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN';
+            $serverTtsMessage = 'برای صدای خودمیزبان این تنظیمات لازم است: '.implode('، ', $missingTts).'.';
+        }
         $gatewayUrl = trim((string) config('services.ai_gateway.url', ''));
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
         $gatewayPrivate = $gatewayUrl !== '' && $this->isPrivateServiceUrl($gatewayUrl);
@@ -57,11 +70,13 @@ class GlobalAssistantController extends Controller
             'chat_gateway_ready' => $chatGatewayReady,
             'chat_gateway_message' => $chatGatewayMessage,
             'chat_gateway_health_url' => $chatGatewayHealthUrl,
-            'server_stt' => filled(config('services.voice_asr.url')),
-            'server_tts' => filled(config('services.voice_tts.url')),
+            // Batch ASR is deliberately unavailable in local-only mode unless explicitly opted in.
+            'server_stt' => (! $localOnly || $remoteBatchEnabled) && filled(config('services.voice_asr.url')),
+            'server_tts' => $serverTtsReady,
+            'server_tts_message' => $serverTtsMessage,
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
             'server_stt_token_configured' => filled(config('services.voice_asr.token')),
-            'server_tts_token_configured' => filled(config('services.voice_tts.token')),
+            'server_tts_token_configured' => $ttsToken !== '',
             'browser_stt' => false,
         ], 200, ['Cache-Control' => 'no-store']);
     }
@@ -136,11 +151,17 @@ class GlobalAssistantController extends Controller
     {
         $data = $request->validate(['text' => ['required', 'string', 'min:1', 'max:6000']]);
         $url = trim((string) config('services.voice_tts.url', ''));
-        if ((bool) config('services.voice.local_only', false) && ! (bool) config('services.voice.remote_batch_enabled', false) && ! $this->isPrivateServiceUrl($url)) {
-            return response()->json(['ok' => false, 'message' => 'در حالت خودمیزبان، نشانی موتور صدا باید به سرویس خصوصی سرور اشاره کند؛ هیچ سرویس عمومی فراخوانی نشد.'], 503, ['Cache-Control' => 'no-store']);
-        }
+        $localOnly = (bool) config('services.voice.local_only', false);
+        $remoteBatchEnabled = (bool) config('services.voice.remote_batch_enabled', false);
+        $token = trim((string) config('services.voice_tts.token', ''));
         if ($url === '') {
             return response()->json(['ok' => false, 'message' => 'موتور صدای ثابت خودمیزبان هنوز تنظیم نشده است.'], 503, ['Cache-Control' => 'no-store']);
+        }
+        if ($localOnly && ! $remoteBatchEnabled && ! $this->isPrivateServiceUrl($url)) {
+            return response()->json(['ok' => false, 'code' => 'private_tts_gateway_required', 'message' => 'در حالت خودمیزبان، نشانی موتور صدا باید به سرویس خصوصی سرور اشاره کند؛ هیچ سرویس عمومی فراخوانی نشد.'], 503, ['Cache-Control' => 'no-store']);
+        }
+        if ($localOnly && ! $remoteBatchEnabled && $token === '') {
+            return response()->json(['ok' => false, 'code' => 'local_tts_token_missing', 'message' => 'برای سرویس Piper محلی، FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN باید تنظیم شود.'], 503, ['Cache-Control' => 'no-store']);
         }
         try {
             // The free Render service can cold-start; keep a bounded connection timeout
@@ -149,7 +170,6 @@ class GlobalAssistantController extends Controller
             $http = Http::accept('audio/wav, audio/mpeg, audio/ogg, application/octet-stream')
                 ->connectTimeout(10)
                 ->timeout(120);
-            $token = trim((string) config('services.voice_tts.token', ''));
             if ($token !== '') $http = $http->withToken($token);
             $response = $http->post($url, [
                 'text' => $data['text'],
