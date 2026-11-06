@@ -446,13 +446,22 @@ test('assistant keeps listening during TTS without interrupting the active answe
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__sentAudioFrames)).toBeGreaterThan(framesBeforeTtsNoise);
 
-  // The microphone button does not cancel an answer; the dedicated stop control does.
+  // Repeated microphone clicks, launcher clicks, and Escape must not stop an answer.
   await page.locator('.farast-voice-mic').click();
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(1);
   expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.farast-assistant-panel')).toBeVisible();
+  await page.locator('.farast-assistant-launcher').click();
+  await expect(page.locator('.farast-assistant-panel')).toBeVisible();
+  expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
+  await page.locator('.farast-assistant-close').click();
+  await expect(page.locator('.farast-assistant-panel')).toBeHidden();
+  expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(true);
+  expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
 });
 
 test('opening the assistant keeps the microphone off until the user taps', async ({ page }) => {
@@ -633,9 +642,11 @@ test('assistant panel keeps every control inside desktop and mobile viewports', 
     await expect(panel).toHaveAttribute('role', 'dialog');
     await expect(page.locator('.farast-assistant-launcher')).toHaveAttribute('aria-controls', 'farast-assistant-panel');
     await expect(page.locator('.farast-voice-mic')).toBeVisible();
-    await expect(page.locator('[data-fa-stop-speech]')).toBeVisible();
-    await expect(page.locator('[data-fa-stop-speech]')).toHaveText('توقف مکالمه');
-    await expect(page.locator('[data-fa-stop-speech]')).toHaveAttribute('aria-label', 'توقف کامل مکالمه');
+    await expect(page.locator('[data-fa-stop-speech]')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeVisible();
+    await page.locator('.farast-assistant-launcher').click();
+    await expect(panel).toBeVisible();
     await expect(page.locator('.farast-assistant-form input[name="message"]')).toBeVisible();
 
     const geometry = await page.evaluate(() => {
@@ -668,7 +679,7 @@ test('assistant panel keeps every control inside desktop and mobile viewports', 
 });
 
 
-test('stopping the conversation closes the live gateway and releases the microphone', async ({ page }) => {
+test('only the assistant close button stops the live gateway and releases the microphone', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -706,12 +717,11 @@ test('stopping the conversation closes the live gateway and releases the microph
   await expect.poll(() => page.evaluate(() => window.__stoppedTracks)).toBe(0);
   await expect.poll(() => page.evaluate(() => window.__wsInstances[0].readyState)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__getUserMediaCalls)).toBe(1);
-  await page.locator('[data-fa-stop-speech]').click();
+  await page.locator('.farast-assistant-close').click();
+  await expect(page.locator('.farast-assistant-panel')).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.__stoppedTracks)).toBe(1);
   expect(await page.evaluate(() => window.__wsInstances[0].readyState)).toBe(3);
   expect(await page.evaluate(() => window.__wsInstances[0].sent.some((item) => typeof item === 'string' && JSON.parse(item).type === 'stop'))).toBe(true);
-  await expect(page.locator('[data-fa-voice-title]')).toContainText('مکالمه متوقف شد');
-  await expect(page.locator('[data-fa-status]')).toContainText('گفت‌وگوی پیوسته متوقف شد');
 });
 
 
