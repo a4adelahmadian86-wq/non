@@ -19,6 +19,23 @@
       list=root.querySelector('[data-fa-messages]'), form=root.querySelector('form'), input=form.querySelector('input'),
       status=root.querySelector('[data-fa-status]'), busy=false, history=[], historyLoaded=false, assistantTurn=0;
   var csrf=document.querySelector('meta[name="csrf-token"]');
+  async function refreshCsrfToken(){
+    var response=await fetch('/assistant/csrf-token',{method:'GET',credentials:'same-origin',headers:{'Accept':'application/json'},cache:'no-store'});
+    var data=await response.json().catch(function(){return {};});
+    if(!response.ok||!data.token)throw new Error(data.message||'نشست امنیتی معتبر نیست؛ صفحه را تازه‌سازی کن و دوباره وارد حساب شو.');
+    if(csrf)csrf.content=data.token;
+    return data.token;
+  }
+  async function fetchWithCsrf(url,options){
+    options=options||{};
+    options.headers=Object.assign({},options.headers||{});
+    if(csrf&&csrf.content)options.headers['X-CSRF-TOKEN']=csrf.content;
+    var response=await fetch(url,options);
+    if(response.status!==419)return response;
+    var freshToken=await refreshCsrfToken();
+    options.headers['X-CSRF-TOKEN']=freshToken;
+    return fetch(url,options);
+  }
   function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   var voiceTitle=root.querySelector('[data-fa-voice-title]'), voiceCaption=root.querySelector('[data-fa-voice-caption]');
   function message(role,text){var el=document.createElement('div');el.className='farast-assistant-msg '+role;el.textContent=String(text||'');list.appendChild(el);list.scrollTop=list.scrollHeight;if(role==='bot')voiceCaption.textContent='پاسخ صوتی در حال آماده‌شدن است.';return el;}
@@ -69,7 +86,7 @@
     if(historyLoaded||document.body.dataset.assistantAuth!=='1')return;
     historyLoaded=true;
     try{
-      var response=await fetch('/assistant/history',{credentials:'same-origin',headers:{'Accept':'application/json'}});
+      var response=await fetchWithCsrf('/assistant/history',{credentials:'same-origin',headers:{'Accept':'application/json'}});
       if(!response.ok)return;
       var data=await response.json();
       if(!Array.isArray(data.messages)||!data.messages.length)return;
@@ -82,7 +99,7 @@
   async function loadMemories(){
     if(document.body.dataset.assistantAuth!=='1')return [];
     try{
-      var response=await fetch('/assistant/memories',{credentials:'same-origin',headers:{'Accept':'application/json'}});
+      var response=await fetchWithCsrf('/assistant/memories',{credentials:'same-origin',headers:{'Accept':'application/json'}});
       if(!response.ok)return [];
       var data=await response.json();
       return Array.isArray(data.memories)?data.memories:[];
@@ -95,7 +112,7 @@
     content=content.trim();
     if(content.length<2){status.textContent='متن حافظه خیلی کوتاه است.';return;}
     try{
-      var response=await fetch('/assistant/memories',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({content:content})});
+      var response=await fetchWithCsrf('/assistant/memories',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({content:content})});
       var data=await response.json().catch(function(){return {};});
       if(!response.ok)throw new Error(data.message||'ذخیره حافظه ناموفق بود.');
       status.textContent=data.message||'نکته برای گفتگوهای بعدی ذخیره شد.';
@@ -108,7 +125,7 @@
     var summary=memories.map(function(m,i){return (i+1)+'. '+m.content;}).join('\n');
     if(!window.confirm('حافظه شخصی ذخیره‌شده:\n\n'+summary+'\n\nبرای پاک‌کردن همه موارد، تأیید کن. برای نگه‌داشتن آن‌ها «لغو» را بزن.'))return;
     try{
-      var response=await fetch('/assistant/memories',{method:'DELETE',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''}});
+      var response=await fetchWithCsrf('/assistant/memories',{method:'DELETE',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''}});
       var data=await response.json().catch(function(){return {};});
       if(!response.ok)throw new Error(data.message||'پاک‌کردن حافظه ناموفق بود.');
       status.textContent=data.message||'حافظه شخصی پاک شد.';
@@ -118,7 +135,7 @@
     if(document.body.dataset.assistantAuth!=='1')return;
     if(!window.confirm('سابقه گفت‌وگوی ذخیره‌شده در حساب کاربری پاک شود؟'))return;
     try{
-      var response=await fetch('/assistant/history',{method:'DELETE',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''}});
+      var response=await fetchWithCsrf('/assistant/history',{method:'DELETE',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''}});
       if(!response.ok)throw new Error();
       list.innerHTML='';history=[];historyLoaded=true;
       message('bot','سابقه پاک شد. از اینجا می‌توانیم گفت‌وگوی تازه‌ای شروع کنیم.');
@@ -205,7 +222,7 @@
       var controller=new AbortController();speechRequestController=controller;
       var timeout=window.setTimeout(function(){controller.abort();},30000);
       try{
-        var response=await fetch('/assistant/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'audio/*, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({text:chunk}),signal:controller.signal});
+        var response=await fetchWithCsrf('/assistant/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'audio/*, application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({text:chunk}),signal:controller.signal});
         if(speechTurn!==speechGeneration||requestTurn!==assistantTurn)return {cancelled:true};
         if(!response.ok){var err=await response.json().catch(function(){return {};});throw new Error(err.message||'موتور صدای ثابت در دسترس نیست.');}
         var blob=await response.blob();
@@ -336,19 +353,25 @@
       }
     }
     var playback=drainSpeechQueue();
-    var answer='',pendingSpeech='',turnSucceeded=false;
+    var answer='',pendingSpeech='',speechBatch=[],turnSucceeded=false;
+    function flushSpeechBatch(force){
+      var combined=speechBatch.join(' ');
+      if(force&&pendingSpeech.trim())combined=combined?(combined+' '+pendingSpeech.trim()):pendingSpeech.trim();
+      if(force){speechBatch=[];pendingSpeech='';if(combined)enqueueSpeech(combined);return;}
+      if(speechBatch.length>=2||combined.length>=220){speechBatch=[];if(combined)enqueueSpeech(combined);}
+    }
     function acceptDelta(delta){
       if(typeof delta!=='string'||!delta)return;
       answer+=delta;pending.textContent=answer;voiceCaption.textContent='پاسخ در حال تولید است؛ صدا به‌تدریج پخش می‌شود.';
       pendingSpeech+=delta;
       while(true){
-        var match=pendingSpeech.match(/^([\s\S]*?[.!?؟۔])(?:\s+|$)/u);
+        var match=pendingSpeech.match(/^([\\s\\S]*?[.!?؟۔])(?:\\s+|$)/u);
         if(match&&match[1].trim()){
-          enqueueSpeech(match[1].trim());pendingSpeech=pendingSpeech.slice(match[0].length).trimStart();continue;
+          speechBatch.push(match[1].trim());pendingSpeech=pendingSpeech.slice(match[0].length).trimStart();flushSpeechBatch(false);continue;
         }
         if(pendingSpeech.length>300){
-          var splitAt=pendingSpeech.lastIndexOf(' ',280);
-          if(splitAt>40){enqueueSpeech(pendingSpeech.slice(0,splitAt));pendingSpeech=pendingSpeech.slice(splitAt+1);continue;}
+          var splitAt=pendingSpeech.lastIndexOf(' ',260);
+          if(splitAt>40){speechBatch.push(pendingSpeech.slice(0,splitAt));pendingSpeech=pendingSpeech.slice(splitAt+1);flushSpeechBatch(false);continue;}
         }
         break;
       }
@@ -363,9 +386,10 @@
         await waitForGatewayChatHealth(assistantStatus.chat_gateway_health_url,requestController.signal,turn);
       }
       var prompt='تو همراه هوشمند وب‌سایت فارسی فراست هستی. به فارسی روان، صمیمی، دقیق و مختصر پاسخ بده. درباره خدمات سایت راهنمایی عملی بده؛ اگر مطمئن نیستی ادعا نکن. مسیرهای شناخته‌شده: فروشگاه /store، سبد /cart، خدمات تایپ /editor، قیمت‌ها /pricing، پشتیبانی /support، فضای کاربری /dashboard. مکالمه اخیر:\n'+history.slice(-8).map(function(m){return (m.role==='user'?'کاربر':'همراه')+': '+m.text;}).join('\n')+'\nکاربر: '+text;
-      var response=await fetch('/assistant/chat/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json, text/event-stream','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt}),signal:requestController.signal});
+      var response=await fetchWithCsrf('/assistant/chat/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json, text/event-stream','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({message:text,context:history.slice(-8),prompt:prompt}),signal:requestController.signal});
       if(turn!==assistantTurn)return;
-      if(response.status===401||response.status===419)throw new Error('نشست شما منقضی شده است. لطفاً دوباره وارد حساب کاربری شوید.');
+      if(response.status===401)throw new Error('نشست ورود شما پایان یافته است. لطفاً دوباره وارد حساب کاربری شوید.');
+      if(response.status===419){var csrfFailure=await response.json().catch(function(){return {};});throw new Error(csrfFailure.message||'اعتبار امنیتی درخواست پس از نوسازی نشست تأیید نشد؛ صفحه را تازه‌سازی کن و دوباره تلاش کن.');}
       if(!response.ok){var failure=await response.json().catch(function(){return {};});var serverMessage=typeof failure.message==='string'?failure.message.trim():'';throw new Error(serverMessage||'سرویس گفت‌وگو فعلاً آماده نیست (HTTP '+response.status+').');}
       var contentType=(response.headers.get('Content-Type')||'').toLowerCase();
       if(contentType.indexOf('application/json')!==-1){
@@ -384,15 +408,15 @@
               var event;try{event=JSON.parse(line.slice(5).trim());}catch(ignore){return;}
               if(event.error)throw new Error(event.error);
               if(event.delta)acceptDelta(event.delta);
-              if(event.done){if(pendingSpeech.trim())enqueueSpeech(pendingSpeech);pendingSpeech='';queueState.done=true;wakeQueue();}
+              if(event.done){flushSpeechBatch(true);queueState.done=true;wakeQueue();}
             });
           }
           if(turn!==assistantTurn)return;
         }
         if(buffer.trim()){
-          buffer.split(/\r?\n/).forEach(function(line){if(line.indexOf('data:')!==0)return;try{var event=JSON.parse(line.slice(5).trim());if(event.delta)acceptDelta(event.delta);if(event.error)throw new Error(event.error);if(event.done){if(pendingSpeech.trim())enqueueSpeech(pendingSpeech);pendingSpeech='';queueState.done=true;wakeQueue();}}catch(error){if(error&&error.message)throw error;}});
+          buffer.split(/\r?\n/).forEach(function(line){if(line.indexOf('data:')!==0)return;try{var event=JSON.parse(line.slice(5).trim());if(event.delta)acceptDelta(event.delta);if(event.error)throw new Error(event.error);if(event.done){flushSpeechBatch(true);queueState.done=true;wakeQueue();}}catch(error){if(error&&error.message)throw error;}});
         }
-        if(pendingSpeech.trim())enqueueSpeech(pendingSpeech);
+        flushSpeechBatch(true);
         queueState.done=true;wakeQueue();
       }
       await playback;
@@ -511,7 +535,7 @@
           var extension=blobType.indexOf('mp4')!==-1?'mp4':'webm';
           formData.append('audio',blob,'farast-assistant.'+extension);
           formData.append('locale','fa-IR');
-          var response=await fetch('/assistant/transcribe',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:formData});
+          var response=await fetchWithCsrf('/assistant/transcribe',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:formData});
           var data=await response.json().catch(function(){return {};});
           if(!response.ok||!data.ok||!String(data.text||'').trim())throw new Error(data.message||'تشخیص گفتار از طریق Render ناموفق بود (HTTP '+response.status+').');
           status.textContent='متن تشخیص داده شد؛ در حال ارسال به دستیار…';
@@ -604,7 +628,7 @@
         if(!wakeReady)throw new Error('سرویس صوتی رایگان Render پس از تلاش برای بیدارشدن آماده نشد؛ اتصال اینترنت را بررسی کن و دوباره تلاش کن. '+wakeFailure);
       }
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
-      var tokenResponse=await fetch('/assistant/voice/stream-token',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({locale:'fa-IR'})});
+      var tokenResponse=await fetchWithCsrf('/assistant/voice/stream-token',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf?csrf.content:''},body:JSON.stringify({locale:'fa-IR'})});
       var tokenData=await tokenResponse.json().catch(function(){return {};});
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
       if(!tokenResponse.ok||!tokenData.token||!tokenData.websocket_url)throw new Error(tokenData.message||'درگاه تشخیص زنده آماده نیست.');
