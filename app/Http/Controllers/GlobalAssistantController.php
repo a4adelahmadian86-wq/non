@@ -70,7 +70,8 @@ class GlobalAssistantController extends Controller
             'chat_gateway_ready' => $chatGatewayReady,
             'chat_gateway_message' => $chatGatewayMessage,
             'chat_gateway_health_url' => $chatGatewayHealthUrl,
-            'server_stt' => filled(config('services.voice_asr.url')),
+            // Batch ASR is deliberately unavailable in local-only mode unless explicitly opted in.
+            'server_stt' => (! $localOnly || $remoteBatchEnabled) && filled(config('services.voice_asr.url')),
             'server_tts' => $serverTtsReady,
             'server_tts_message' => $serverTtsMessage,
             'fixed_voice' => (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1'),
