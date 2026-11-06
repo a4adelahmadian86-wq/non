@@ -428,7 +428,7 @@ class GlobalAssistantController extends Controller
             try {
                 $candidate = Http::withToken($target['token'])->accept('text/event-stream')
                     ->withOptions(['stream' => true])
-                    ->connectTimeout(8)->timeout(45)
+                    ->connectTimeout(15)->timeout(100)
                     ->post($target['url'], $payload);
                 if ($candidate->successful() && str_contains(strtolower((string) $candidate->header('Content-Type', '')), 'text/event-stream')) {
                     $upstream = $candidate;
