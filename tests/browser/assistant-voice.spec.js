@@ -1046,6 +1046,8 @@ test('live assistant queues speech received while answering and processes it aft
   window.__firstSignal = null;
   window.__resolveFirst = null;
   window.__audioPlayCount = 0;
+  window.__ttsPlaying = false;
+  window.__audioEnded = false;
   window.URL.createObjectURL = (blob) => blob.type === 'audio/wav' ? 'blob:silent-prime' : 'blob:assistant-tts';
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
@@ -1066,8 +1068,8 @@ test('live assistant queues speech received while answering and processes it aft
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=1;this.ended=false;this.paused=true;}
     load(){this.ended=false;this.dispatchEvent(new Event('canplay'));}
-    play(){this.paused=false;this.onplay?.();if(this.src==='blob:assistant-tts'){window.__audioPlayCount++;window.__ttsPlaying=true;}setTimeout(()=>{if(!this.paused){this.ended=true;this.paused=true;this.dispatchEvent(new Event('ended'));}},900);return Promise.resolve();}
-    pause(){this.paused=true;this.dispatchEvent(new Event('pause'));}
+    play(){this.paused=false;this.onplay?.();if(this.src==='blob:assistant-tts'){window.__audioPlayCount++;window.__ttsPlaying=true;window.__audioEnded=false;}setTimeout(()=>{if(!this.paused){this.ended=true;this.paused=true;window.__ttsPlaying=false;window.__audioEnded=true;this.dispatchEvent(new Event('ended'));}},900);return Promise.resolve();}
+    pause(){this.paused=true;window.__ttsPlaying=false;this.dispatchEvent(new Event('pause'));}
   };
   window.fetch=async(url,options={})=>{
     if(url==='/editor/voice/status')return new Response(JSON.stringify({ok:true,mode:'gateway'}),{status:200,headers:{'Content-Type':'application/json'}});
@@ -1098,6 +1100,11 @@ test('live assistant queues speech received while answering and processes it aft
 
   await page.evaluate(()=>window.__resolveFirst());
   await expect.poll(()=>page.evaluate(()=>window.__audioPlayCount),{timeout:8000}).toBe(1);
+  await page.locator('.farast-voice-mic').click();
+  expect(await page.evaluate(()=>window.__firstSignal.aborted)).toBe(false);
+  expect(await page.evaluate(()=>window.__ttsPlaying)).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>window.__audioEnded),{timeout:3000}).toBe(true);
+  expect(await page.locator('[data-fa-voice-title]').textContent()).not.toBe('در حال صحبت');
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'پرسش سوم هنگام پخش صدا'}));
   await page.waitForTimeout(200);
   expect(await page.evaluate(()=>window.__chatPayloads.length)).toBe(1);
