@@ -244,6 +244,25 @@ class VoiceController extends Controller
             ], 503, ['Cache-Control' => 'no-store']);
         }
 
+        // All Laravel clients must use the same Render bearer credential that signs
+        // the short-lived WebSocket token. Reject divergent overrides before network I/O.
+        if (! $localVoiceOnly && $aiGatewayUrl !== '' && $secret !== '') {
+            $clientTokens = [
+                trim((string) config('services.voice_asr.token', '')),
+                trim((string) config('services.voice_tts.token', '')),
+                trim((string) config('services.ai_gateway.token', '')),
+            ];
+            foreach ($clientTokens as $clientToken) {
+                if ($clientToken === '' || ! hash_equals($secret, $clientToken)) {
+                    return response()->json([
+                        'ok' => false,
+                        'code' => 'render_voice_credential_mismatch',
+                        'message' => 'توکن‌های ASR، صداسازی، چت و مکالمهٔ زنده باید با FARAST_VOICE_TOKEN یکسان باشند.',
+                    ], 503, ['Cache-Control' => 'no-store']);
+                }
+            }
+        }
+
         // The browser has already awakened Render and confirmed /health before
         // requesting this token. Verify the shared credential against Render now,
         // so a non-empty but mismatched Laravel secret cannot create a doomed WS session.
