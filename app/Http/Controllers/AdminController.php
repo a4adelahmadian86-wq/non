@@ -130,6 +130,26 @@ class AdminController extends Controller
             $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         }
 
+        $visibleTeamIds = $console->visibleTeamIds($actor);
+        $visibleOrganizationIds = $console->visibleOrganizationIds($actor);
+        $paidPaymentsQuery = function () use ($visibleIds) {
+            $query = DB::table('payments')->where('payments.status', 'paid');
+            if ($visibleIds !== null) {
+                $query->join('orders', 'orders.id', '=', 'payments.order_id')
+                    ->whereIn('orders.user_id', $visibleIds);
+            }
+
+            return $query;
+        };
+        $walletBalanceQuery = function () use ($visibleIds) {
+            $query = DB::table('wallets');
+            if ($visibleIds !== null) {
+                $query->whereIn('user_id', $visibleIds);
+            }
+
+            return $query;
+        };
+
         $topConsumers = collect();
         if (Schema::hasTable('typing_documents')) {
             $tcq = DB::table('typing_documents')
@@ -170,15 +190,32 @@ class AdminController extends Controller
                 'ai_today' => Schema::hasTable('ai_interactions')
                     ? (($visibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $visibleIds))->whereDate('created_at', today())->count())
                     : 0,
-                'voice_seconds' => Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('audio_seconds') : 0,
-                'voice_requests' => Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('requests') : 0,
-                'organizations' => Schema::hasTable('organizations') ? \App\Models\Organization::count() : 0,
-                'teams' => Schema::hasTable('teams') ? \App\Models\Team::count() : 0,
-                'audit_events' => Schema::hasTable('audit_logs') ? DB::table('audit_logs')->count() : 0,
-                'revenue_month' => Schema::hasTable('payments') ? (int) DB::table('payments')->where('status', 'paid')->where('created_at', '>=', $monthAgo)->sum('amount_rials') : 0,
-                'revenue_total' => Schema::hasTable('payments') ? (int) DB::table('payments')->where('status', 'paid')->sum('amount_rials') : 0,
+                // Voice usage has no user attribution in its schema; expose it only in the global scope.
+                'voice_seconds' => $visibleIds === null && Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('audio_seconds') : 0,
+                'voice_requests' => $visibleIds === null && Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('requests') : 0,
+                'organizations' => Schema::hasTable('organizations')
+                    ? ($visibleOrganizationIds === null
+                        ? \App\Models\Organization::count()
+                        : DB::table('organizations')->whereIn('id', $visibleOrganizationIds)->count())
+                    : 0,
+                'teams' => Schema::hasTable('teams')
+                    ? ($visibleTeamIds === null
+                        ? \App\Models\Team::count()
+                        : DB::table('teams')->whereIn('id', $visibleTeamIds)->count())
+                    : 0,
+                'audit_events' => Schema::hasTable('audit_logs')
+                    ? ($visibleIds === null
+                        ? DB::table('audit_logs')->count()
+                        : DB::table('audit_logs')->whereIn('user_id', $visibleIds)->count())
+                    : 0,
+                'revenue_month' => Schema::hasTable('payments')
+                    ? (int) $paidPaymentsQuery()->where('payments.created_at', '>=', $monthAgo)->sum('payments.amount_rials')
+                    : 0,
+                'revenue_total' => Schema::hasTable('payments')
+                    ? (int) $paidPaymentsQuery()->sum('payments.amount_rials')
+                    : 0,
                 'tickets_open' => (int) ($ticketStats['open'] ?? 0) + (int) ($ticketStats['user_replied'] ?? 0),
-                'wallet_balance' => Schema::hasTable('wallets') ? (int) DB::table('wallets')->sum('balance_rials') : 0,
+                'wallet_balance' => Schema::hasTable('wallets') ? (int) $walletBalanceQuery()->sum('balance_rials') : 0,
             ],
             'charts' => [
                 'labels' => $chartDays,
