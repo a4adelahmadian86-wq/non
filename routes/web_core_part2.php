@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminPlatformController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CanvaController;
 use App\Http\Controllers\CrmController;
+use App\Http\Controllers\CrmMarketingController;
 use App\Http\Controllers\EditorAiAssistController;
 use App\Http\Controllers\EditorController;
 use App\Http\Controllers\EditorDocumentStateController;
@@ -95,6 +96,14 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    // CRM marketing: saved segments and explicitly dispatched in-app campaigns.
+    Route::get('/crm/marketing/segments', [CrmMarketingController::class, 'segments'])->middleware('admin.section:marketing')->name('crm.marketing.segments.index');
+    Route::post('/crm/marketing/segments', [CrmMarketingController::class, 'storeSegment'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('crm.marketing.segments.store');
+    Route::post('/crm/marketing/audience/preview', [CrmMarketingController::class, 'previewAudience'])->middleware('admin.section:marketing')->name('crm.marketing.audience.preview');
+    Route::get('/crm/marketing/campaigns', [CrmMarketingController::class, 'campaigns'])->middleware('admin.section:marketing')->name('crm.marketing.campaigns.index');
+    Route::post('/crm/marketing/campaigns', [CrmMarketingController::class, 'storeCampaign'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('crm.marketing.campaigns.store');
+    Route::post('/crm/marketing/campaigns/{campaign}/send', [CrmMarketingController::class, 'sendCampaign'])->middleware(['admin.section:marketing', 'throttle:5,10'])->name('crm.marketing.campaigns.send');
+
     // CRM backend: customer 360, internal notes and follow-up tasks (reuses scoped users permission).
     Route::get('/crm/customers', [CrmController::class, 'customers'])->middleware('admin.section:users')->name('crm.customers.index');
     Route::get('/crm/customers/{customer}', [CrmController::class, 'show'])->middleware('admin.section:users')->name('crm.customers.show');
