@@ -1120,6 +1120,7 @@ test('live assistant queues speech received while answering and processes it aft
   expect(await page.evaluate(()=>window.__micTrack.enabled)).toBe(false);
   await expect.poll(()=>page.evaluate(()=>window.__audioEnded),{timeout:3000}).toBe(true);
   expect(await page.locator('[data-fa-voice-title]').textContent()).not.toBe('در حال صحبت');
+  expect(await page.evaluate(()=>window.__micTrack.enabled)).toBe(false);
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__micTrack.enabled),{timeout:4000}).toBe(true);
   await expect.poll(()=>page.evaluate(()=>{
