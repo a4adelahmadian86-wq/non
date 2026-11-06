@@ -237,7 +237,7 @@
         var blob=result.blob;
         assistantAudioUrl=URL.createObjectURL(blob);
         var audio=assistantAudioElement||new Audio();assistantAudioElement=audio;assistantAudio=audio;audio.preload='auto';if(assistantSilentAudioUrl){URL.revokeObjectURL(assistantSilentAudioUrl);assistantSilentAudioUrl=null;}audio.src=assistantAudioUrl;
-        audio.onplay=function(){setGatewayMicrophoneMuted(false);panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='هم‌زمان با پاسخ، صدایت دریافت می‌شود؛ درخواست تازه در صف می‌ماند تا پاسخ فعلی تمام شود.';status.textContent='پاسخ صوتی در حال پخش است و میکروفون هم‌زمان آمادهٔ شنیدن است.';};
+        audio.onplay=function(){panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent='هم‌زمان با پاسخ، صدایت دریافت می‌شود؛ درخواست تازه در صف می‌ماند تا پاسخ فعلی تمام شود.';status.textContent='پاسخ صوتی در حال پخش است و میکروفون هم‌زمان آمادهٔ شنیدن است.';};
         // Keep capture muted across every chunk boundary. The microphone is
         // re-enabled only after the complete assistant turn has finished.
         var readyPromise=new Promise(function(resolve,reject){
@@ -435,7 +435,7 @@
       if(answer.trim()){pending.textContent=answer;voiceCaption.textContent='پاسخ متوقف شد؛ بخشی از متن دریافت شد.';}else{pending.textContent='دریافت پاسخ ناموفق بود. '+detail;voiceCaption.textContent=detail;}
       voiceTitle.textContent='پاسخ‌گویی ناموفق بود';status.textContent=detail+' می‌توانی پس از بررسی اتصال دوباره تلاش کنی.';panel.classList.remove('is-speaking');
     }finally{
-      if(turn===assistantTurn){busy=false;setGatewayMicrophoneMuted(false);if(chatAbortController===requestController)chatAbortController=null;if(activePendingMessage===pending)activePendingMessage=null;if(pendingVoiceTurns.length&&conversationActive)processPendingVoiceTurns();else if(turnSucceeded)scheduleNextListening();}
+      if(turn===assistantTurn){busy=false;if(chatAbortController===requestController)chatAbortController=null;if(activePendingMessage===pending)activePendingMessage=null;if(pendingVoiceTurns.length&&conversationActive)processPendingVoiceTurns();else if(turnSucceeded)scheduleNextListening();}
     }
   }
   launcher.addEventListener('click',function(){if(!panel.hidden)return;setOpen(true);loadHistory();loadAssistantStatus();if(document.body.dataset.assistantAuth==='1'){conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';voiceCaption.textContent='میکروفون خاموش است. برای شروع، دکمهٔ «صحبت کن» را لمس کن.';status.textContent='تا وقتی دکمه را لمس نکنی، میکروفون فعال نمی‌شود.';}});
