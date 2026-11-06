@@ -42,6 +42,34 @@ class WorkflowEventDispatchTest extends TestCase
     }
 
 
+
+    public function test_verified_order_paid_event_runs_customer_workflow_once(): void
+    {
+        $user = $this->user('09152223348');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id, 'name' => 'Paid order receipt', 'enabled' => true,
+            'trigger_type' => 'order.paid',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'پرداخت موفق', 'message' => 'سفارش شما پرداخت شد.']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $first = app(WorkflowEngine::class)->dispatch(
+            'order.paid',
+            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000],
+            'order:125:paid',
+        );
+        $second = app(WorkflowEngine::class)->dispatch(
+            'order.paid',
+            ['user_id' => $user->id, 'order_id' => 125, 'amount_rials' => 450000],
+            'order:125:paid',
+        );
+
+        $this->assertSame(1, $first);
+        $this->assertSame(0, $second);
+        $this->assertDatabaseHas('farast_workflow_runs', ['workflow_id' => $workflow, 'status' => 'completed']);
+        $this->assertDatabaseHas('farast_notifications', ['user_id' => $user->id, 'title' => 'پرداخت موفق']);
+    }
+
     public function test_workflow_can_create_a_crm_follow_up_for_its_owner(): void
     {
         $user = $this->user('09152223347');
