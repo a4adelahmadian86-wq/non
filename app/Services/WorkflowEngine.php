@@ -55,7 +55,7 @@ class WorkflowEngine
     /** Dispatch a domain event once; a user's workflows can only run for that user. */
     public function dispatch(string $eventType, array $context, string $idempotencyKey): int
     {
-        if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid'], true)) {
+        if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
             throw new \InvalidArgumentException('Unsupported workflow event.');
         }
         if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {

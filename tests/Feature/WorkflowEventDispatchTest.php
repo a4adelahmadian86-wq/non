@@ -70,6 +70,28 @@ class WorkflowEventDispatchTest extends TestCase
         $this->assertDatabaseHas('farast_notifications', ['user_id' => $user->id, 'title' => 'پرداخت موفق']);
     }
 
+
+    public function test_typing_deposit_paid_event_runs_matching_workflow_once(): void
+    {
+        $user = $this->user('09152223349');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id, 'name' => 'Deposit receipt', 'enabled' => true,
+            'trigger_type' => 'order.deposit_paid',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'پیش‌پرداخت ثبت شد']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $engine = app(WorkflowEngine::class);
+        $context = ['user_id' => $user->id, 'order_id' => 502, 'order_kind' => 'typing_deposit'];
+        $first = $engine->dispatch('order.deposit_paid', $context, 'order:502:order.deposit_paid');
+        $second = $engine->dispatch('order.deposit_paid', $context, 'order:502:order.deposit_paid');
+
+        $this->assertSame(1, $first);
+        $this->assertSame(0, $second);
+        $this->assertDatabaseHas('farast_workflow_runs', ['workflow_id' => $workflow, 'status' => 'completed']);
+        $this->assertDatabaseHas('farast_notifications', ['user_id' => $user->id, 'title' => 'پیش‌پرداخت ثبت شد']);
+    }
+
     public function test_workflow_can_create_a_crm_follow_up_for_its_owner(): void
     {
         $user = $this->user('09152223347');
