@@ -44,6 +44,8 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
 </script></body></html>`);
   await page.addScriptTag({ content: assistantJs });
   await page.locator('.farast-assistant-launcher').click();
+  await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-idle/);
+  expect(await page.evaluate(() => window.__micRequests)).toBe(0);
   await page.locator('.farast-voice-mic').click();
   await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-connecting/);
   expect(await page.evaluate(() => window.__micRequests)).toBe(0);
