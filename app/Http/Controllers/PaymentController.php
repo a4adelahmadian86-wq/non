@@ -375,8 +375,9 @@ class PaymentController extends Controller
     private function dispatchPaidOrderWorkflow(Order $order): void
     {
         try {
+            $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
             app(WorkflowEngine::class)->dispatch(
-                'order.paid',
+                $eventType,
                 [
                     'user_id' => (int) $order->user_id,
                     'customer_id' => (int) $order->user_id,
@@ -384,7 +385,7 @@ class PaymentController extends Controller
                     'amount_rials' => (int) $order->total_rials,
                     'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
                 ],
-                'order:'.$order->id.':paid',
+                'order:'.$order->id.':'.$eventType,
             );
         } catch (\\Throwable $exception) {
             report($exception);
