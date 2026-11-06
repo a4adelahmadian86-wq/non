@@ -10,7 +10,7 @@ return Application::configure(basePath:dirname(__DIR__))
     ->withRouting(web:__DIR__.'/../routes/web.php',commands:__DIR__.'/../routes/console.php',health:'/up')
     ->withMiddleware(function(Middleware $middleware):void{
         TrimStrings::skipWhen(fn(Request $request):bool=>$request->is('editor/save')&&$request->has('document_model'));
-        $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'admin.scope'=>App\Http\Middleware\ResolveAdminScope::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class]);
+        $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'admin.scope'=>App\Http\Middleware\ResolveAdminScope::class,'admin.section'=>App\Http\Middleware\EnsureAdminSection::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class]);
         // These server-to-server voice gateway endpoints authenticate every request with
         // a short-lived signed token plus HMAC gateway headers, not browser cookies.
         // Exempt only these signed endpoints from browser CSRF validation.
