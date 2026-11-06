@@ -366,31 +366,9 @@ class PaymentController extends Controller
 
             $this->dispatchPaidOrderWorkflow($order->fresh());
 
-            $this->dispatchPaidOrderWorkflow($order->fresh());
-
             return redirect()->route('editor')->with('status', 'پیش‌پرداخت ثبت شد؛ فایل آماده ورود به ویرایشگر است.');
         } catch (\RuntimeException $e) {
             return back()->withErrors(['payment' => $e->getMessage()]);
-        }
-    }
-
-    private function dispatchPaidOrderWorkflow(Order $order): void
-    {
-        try {
-            $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
-            app(WorkflowEngine::class)->dispatch(
-                $eventType,
-                [
-                    'user_id' => (int) $order->user_id,
-                    'customer_id' => (int) $order->user_id,
-                    'order_id' => (int) $order->id,
-                    'amount_rials' => (int) $order->total_rials,
-                    'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
-                ],
-                'order:'.$order->id.':'.$eventType,
-            );
-        } catch (\Throwable $exception) {
-            report($exception);
         }
     }
 
@@ -436,10 +414,17 @@ class PaymentController extends Controller
     private function dispatchPaidOrderWorkflow(Order $order): void
     {
         try {
+            $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
             app(\App\Services\WorkflowEngine::class)->dispatch(
-                'order.paid',
-                ['user_id' => (int) $order->user_id, 'order_id' => (int) $order->id, 'amount_rials' => (int) $order->total_rials],
-                'order:'.$order->id.':paid',
+                $eventType,
+                [
+                    'user_id' => (int) $order->user_id,
+                    'customer_id' => (int) $order->user_id,
+                    'order_id' => (int) $order->id,
+                    'amount_rials' => (int) $order->total_rials,
+                    'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+                ],
+                'order:'.$order->id.':'.$eventType,
             );
         } catch (\Throwable $exception) {
             report($exception);
