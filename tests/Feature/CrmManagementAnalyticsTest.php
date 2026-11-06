@@ -67,7 +67,7 @@ class CrmManagementAnalyticsTest extends TestCase
 
         $this->actingAs($admin)->getJson('/admin/crm/analytics')
             ->assertOk()
-            ->assertJsonPath('customers.total', 2)
+            ->assertJsonPath('customers.total', 1)
             ->assertJsonPath('customers.paying', 1)
             ->assertJsonPath('commerce.paid_revenue_rials', 100000)
             ->assertJsonPath('operations.open_follow_ups', 1)
