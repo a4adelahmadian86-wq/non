@@ -19,14 +19,15 @@ class GlobalAssistantController extends Controller
         $ttsToken = trim((string) config('services.voice_tts.token', ''));
         $ttsPrivate = $ttsUrl !== '' && $this->isPrivateServiceUrl($ttsUrl);
         $serverTtsReady = $ttsUrl !== ''
-            && (! $localOnly || $remoteBatchEnabled || ($ttsPrivate && $ttsToken !== ''));
+            && $ttsToken !== ''
+            && (! $localOnly || $remoteBatchEnabled || $ttsPrivate);
         $serverTtsMessage = '';
         if (! $serverTtsReady) {
             $missingTts = [];
             if ($ttsUrl === '') $missingTts[] = 'FARAST_VOICE_TTS_URL';
             elseif ($localOnly && ! $remoteBatchEnabled && ! $ttsPrivate) $missingTts[] = 'آدرس خصوصی برای FARAST_VOICE_TTS_URL';
-            if ($localOnly && ! $remoteBatchEnabled && $ttsToken === '') $missingTts[] = 'FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN';
-            $serverTtsMessage = 'برای صدای خودمیزبان این تنظیمات لازم است: '.implode('، ', $missingTts).'.';
+            if ($ttsToken === '') $missingTts[] = 'FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN';
+            $serverTtsMessage = 'برای اتصال امن موتور صدا این تنظیمات لازم است: '.implode('، ', $missingTts).'.';
         }
         $gatewayUrl = trim((string) config('services.ai_gateway.url', ''));
         $gatewayToken = trim((string) config('services.ai_gateway.token', ''));
@@ -160,8 +161,8 @@ class GlobalAssistantController extends Controller
         if ($localOnly && ! $remoteBatchEnabled && ! $this->isPrivateServiceUrl($url)) {
             return response()->json(['ok' => false, 'code' => 'private_tts_gateway_required', 'message' => 'در حالت خودمیزبان، نشانی موتور صدا باید به سرویس خصوصی سرور اشاره کند؛ هیچ سرویس عمومی فراخوانی نشد.'], 503, ['Cache-Control' => 'no-store']);
         }
-        if ($localOnly && ! $remoteBatchEnabled && $token === '') {
-            return response()->json(['ok' => false, 'code' => 'local_tts_token_missing', 'message' => 'برای سرویس Piper محلی، FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN باید تنظیم شود.'], 503, ['Cache-Control' => 'no-store']);
+        if ($token === '') {
+            return response()->json(['ok' => false, 'code' => 'tts_token_missing', 'message' => 'برای اتصال امن به موتور صدا، FARAST_VOICE_TTS_TOKEN یا FARAST_VOICE_TOKEN باید تنظیم شود.'], 503, ['Cache-Control' => 'no-store']);
         }
         try {
             // The free Render service can cold-start; keep a bounded connection timeout
