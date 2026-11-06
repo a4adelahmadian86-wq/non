@@ -365,7 +365,7 @@
       answer+=delta;pending.textContent=answer;voiceCaption.textContent='پاسخ در حال تولید است؛ صدا به‌تدریج پخش می‌شود.';
       pendingSpeech+=delta;
       while(true){
-        var match=pendingSpeech.match(/^([\\s\\S]*?[.!?؟۔])(?:\\s+|$)/u);
+        var match=pendingSpeech.match(/^([\s\S]*?[.!?؟۔])(?:\s+|$)/u);
         if(match&&match[1].trim()){
           speechBatch.push(match[1].trim());pendingSpeech=pendingSpeech.slice(match[0].length).trimStart();flushSpeechBatch(false);continue;
         }
