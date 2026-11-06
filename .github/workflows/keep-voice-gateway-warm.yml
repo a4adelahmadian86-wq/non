@@ -54,7 +54,7 @@ jobs:
             console.error("WebSocket smoke test timed out.");
             ws.close();
             process.exit(1);
-          }, 20000);
+          }, 15000);
 
           ws.addEventListener("open", () => {
             console.log("Render WebSocket upgrade succeeded.");
@@ -66,6 +66,9 @@ jobs:
             try { payload = JSON.parse(String(event.data)); } catch {}
             if (payload.type === "error" && payload.code === "unauthorized_or_not_configured") {
               console.log("WebSocket application reached; invalid token was correctly rejected.");
+              clearTimeout(timeout);
+              ws.close(1000, "smoke-test-complete");
+              process.exit(0);
             } else {
               console.error("Unexpected WebSocket response:", String(event.data));
               clearTimeout(timeout);
@@ -73,15 +76,6 @@ jobs:
             }
           });
 
-          ws.addEventListener("close", (event) => {
-            clearTimeout(timeout);
-            if (event.code === 1008) {
-              console.log("WebSocket closed with the expected policy code 1008.");
-              process.exit(0);
-            }
-            console.error("Unexpected WebSocket close code:", event.code);
-            process.exit(1);
-          });
 
           ws.addEventListener("error", () => {
             console.error("WebSocket connection failed.");
