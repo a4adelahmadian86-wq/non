@@ -533,7 +533,7 @@ test('a failed utterance keeps the live microphone stream open for the next turn
 });
 
 
-test('assistant streams sentence-sized server audio chunks without browser speech APIs', async ({ page }) => {
+test('assistant batches adjacent streamed sentences into continuous server audio chunks without browser speech APIs', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
@@ -576,8 +576,8 @@ test('assistant streams sentence-sized server audio chunks without browser speec
   await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBeGreaterThanOrEqual(1);
   expect(await page.evaluate(() => window.__streamSentAll)).toBe(false);
-  await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(3);
-  expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول.','جمله دوم.','جمله سوم.']);
+  await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(2);
+  expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول. جمله دوم.','جمله سوم.']);
   expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
 });
 
