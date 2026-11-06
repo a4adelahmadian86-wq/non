@@ -32,6 +32,26 @@ try:
         if error.code != 401:
             raise SystemExit("piper_tts_auth_contract_failed") from error
 
+    for unsupported_payload in (
+        {"text": "سلام", "language": "en-US", "voice_id": "farast-fa-male-v1"},
+        {"text": "سلام", "language": "fa-IR", "voice_id": "unsupported-voice"},
+    ):
+        unsupported = urllib.request.Request(
+            f"{base}/v1/synthesize",
+            data=json.dumps(unsupported_payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {PIPER_TOKEN}",
+            },
+            method="POST",
+        )
+        try:
+            urllib.request.urlopen(unsupported, timeout=10)
+            raise SystemExit("piper_tts_unsupported_voice_was_accepted")
+        except urllib.error.HTTPError as error:
+            if error.code != 400:
+                raise SystemExit("piper_tts_voice_validation_failed") from error
+
     request = urllib.request.Request(
         f"{base}/v1/synthesize",
         data=json.dumps({
