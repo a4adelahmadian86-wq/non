@@ -27,7 +27,7 @@ jobs:
               -H "Origin: http://127.0.0.1:8001" \
               -D "$headers" -o "$body" "$url"; then
               cat "$body"
-              if ! grep -Eiq '^access-control-allow-origin:[[:space:]]*\\*[[:space:]]*$' "$headers"; then
+              if ! grep -Eiq '^access-control-allow-origin:[[:space:]]*\*[[:space:]]*$' "$headers"; then
                 echo "Health endpoint responded, but browser CORS header is missing."
                 cat "$headers"
                 exit 1
