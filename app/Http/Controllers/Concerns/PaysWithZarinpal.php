@@ -191,6 +191,18 @@ trait PaysWithZarinpal
             }
         }
 
+        if ($paymentProcessed) {
+            try {
+                app(\App\Services\WorkflowEngine::class)->dispatch(
+                    'order.paid',
+                    ['user_id' => (int) $order->user_id, 'order_id' => (int) $order->id, 'amount_rials' => (int) $order->total_rials],
+                    'order:'.$order->id.':paid',
+                );
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
         return redirect()->route('library')->with('status', 'پرداخت زرین‌پال موفق بود؛ فایل‌ها در کتابخانه شماست.');
     }
 }
