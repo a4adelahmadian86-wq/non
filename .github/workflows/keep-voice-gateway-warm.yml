@@ -17,79 +17,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - name: Wake and verify the operational voice gateway and browser CORS
+      - name: Wake and verify Render health, CORS, and protected status
+        shell: bash
         run: |
-          url="https://voice-typing-r5r7.onrender.com/health"
+          set -euo pipefail
+          base="https://voice-typing-r5r7.onrender.com"
           headers="$(mktemp)"
           body="$(mktemp)"
           for attempt in 1 2 3; do
             if curl --fail --silent --show-error --max-time 70 \
               -H "Origin: http://127.0.0.1:8001" \
-              -D "$headers" -o "$body" "$url"; then
+              -D "$headers" -o "$body" "$base/health"; then
               cat "$body"
-              if ! jq -e '.asr_configured == true and .tts_configured == true and .chat_configured == true' "$body" >/dev/null; then
-                echo "Render health responded, but one or more speech/chat services are not configured."
-                exit 1
-              fi
-              if ! grep -Eiq '^access-control-allow-origin:[[:space:]]*\*[[:space:]]*
-            fi
-            echo "Health request attempt $attempt failed; retrying shortly."
-            sleep 5
-          done
-          exit 1
-
-      - name: Set up Node.js for WebSocket smoke test
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Verify live WebSocket handshake and expected unauthenticated rejection
-        run: |
-          node <<'NODE'
-          const ws = new WebSocket("wss://voice-typing-r5r7.onrender.com/v1/stream");
-          const timeout = setTimeout(() => {
-            console.error("WebSocket smoke test timed out.");
-            ws.close();
-            process.exit(1);
-          }, 15000);
-
-          ws.addEventListener("open", () => {
-            console.log("Render WebSocket upgrade succeeded.");
-            ws.send(JSON.stringify({ type: "start", token: "invalid-smoke-test-token", locale: "fa-IR" }));
-          });
-
-          ws.addEventListener("message", (event) => {
-            let payload = {};
-            try { payload = JSON.parse(String(event.data)); } catch {}
-            if (payload.type === "error" && payload.code === "unauthorized_or_not_configured") {
-              console.log("WebSocket application reached; invalid token was correctly rejected.");
-              clearTimeout(timeout);
-              ws.close(1000, "smoke-test-complete");
-              process.exit(0);
-            } else {
-              console.error("Unexpected WebSocket response:", String(event.data));
-              clearTimeout(timeout);
-              process.exit(1);
-            }
-          });
-
-
-          ws.addEventListener("error", () => {
-            console.error("WebSocket connection failed.");
-          });
-          NODE
- "$headers"; then
-                echo "Health endpoint responded, but browser CORS header is missing."
-                cat "$headers"
-                exit 1
-              fi
-              status_code="$(curl --silent --show-error --max-time 10 -o /tmp/render-status.json -w '%{http_code}' 'https://voice-typing-r5r7.onrender.com/v1/status')"
+              jq -e '.asr_configured == true and .tts_configured == true and .chat_configured == true' "$body" >/dev/null
+              grep -Fiq 'access-control-allow-origin: *' "$headers"
+              status_code="$(curl --silent --show-error --max-time 10 -o /tmp/render-status.json -w '%{http_code}' "$base/v1/status")"
               if [ "$status_code" != "401" ]; then
-                echo "Authenticated status endpoint should reject an unauthenticated request with HTTP 401; got $status_code."
+                echo "Protected status endpoint should reject unauthenticated requests with HTTP 401; got $status_code."
                 cat /tmp/render-status.json
                 exit 1
               fi
-              echo "Render health, ASR/TTS/chat readiness, browser CORS, and protected status endpoint verified."
+              echo "Render health, ASR/TTS/chat readiness, browser CORS, and protected status verified."
               exit 0
             fi
             echo "Health request attempt $attempt failed; retrying shortly."
@@ -125,13 +73,11 @@ jobs:
               clearTimeout(timeout);
               ws.close(1000, "smoke-test-complete");
               process.exit(0);
-            } else {
-              console.error("Unexpected WebSocket response:", String(event.data));
-              clearTimeout(timeout);
-              process.exit(1);
             }
+            console.error("Unexpected WebSocket response:", String(event.data));
+            clearTimeout(timeout);
+            process.exit(1);
           });
-
 
           ws.addEventListener("error", () => {
             console.error("WebSocket connection failed.");
