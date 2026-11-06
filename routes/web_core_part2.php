@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminPlatformController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CanvaController;
 use App\Http\Controllers\CrmController;
+use App\Http\Controllers\CrmAnalyticsController;
 use App\Http\Controllers\CrmMarketingController;
 use App\Http\Controllers\EditorAiAssistController;
 use App\Http\Controllers\EditorController;
@@ -104,6 +105,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/crm/marketing/campaigns', [CrmMarketingController::class, 'storeCampaign'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('crm.marketing.campaigns.store');
     Route::post('/crm/marketing/campaigns/{campaign}/send', [CrmMarketingController::class, 'sendCampaign'])->middleware(['admin.section:marketing', 'throttle:5,10'])->name('crm.marketing.campaigns.send');
 
+    Route::get('/crm/analytics', CrmAnalyticsController::class)->middleware('admin.section:marketing')->name('crm.analytics');
     // CRM backend: customer 360, internal notes and follow-up tasks (reuses scoped users permission).
     Route::get('/crm/customers', [CrmController::class, 'customers'])->middleware('admin.section:users')->name('crm.customers.index');
     Route::get('/crm/customers/{customer}', [CrmController::class, 'show'])->middleware('admin.section:users')->name('crm.customers.show');
