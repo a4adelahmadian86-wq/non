@@ -243,8 +243,8 @@
         assistantAudioUrl=URL.createObjectURL(blob);
         var audio=assistantAudioElement||new Audio();assistantAudioElement=audio;assistantAudio=audio;audio.preload='auto';if(assistantSilentAudioUrl){URL.revokeObjectURL(assistantSilentAudioUrl);assistantSilentAudioUrl=null;}audio.src=assistantAudioUrl;
         audio.onplay=function(){var micReady=!!gatewayMediaStream&&!!gatewayWs&&gatewayWs.readyState===WebSocket.OPEN&&!gatewayMicrophoneMuted;panel.classList.add('is-speaking');voiceTitle.textContent='در حال صحبت';voiceCaption.textContent=micReady?'هم‌زمان با پاسخ، میکروفون روشن است؛ درخواست تازه در صف می‌ماند تا پاسخ فعلی تمام شود.':'پاسخ صوتی در حال پخش است؛ میکروفون خاموش است و صدایی دریافت نمی‌شود.';status.textContent=micReady?'پاسخ صوتی در حال پخش است؛ گفتار جدید در صف می‌ماند.':'پاسخ صوتی در حال پخش است؛ برای صحبت دوباره میکروفون را روشن کن.';};
-        // Keep capture muted across every chunk boundary. The microphone is
-        // re-enabled only after the complete assistant turn has finished.
+        // Preserve the user's microphone state across TTS chunk boundaries;
+        // audio playback must never silently enable or disable capture.
         var readyPromise=new Promise(function(resolve,reject){
           var settled=false,timeout;
           function done(error){if(settled)return;settled=true;if(timeout)window.clearTimeout(timeout);audio.removeEventListener('canplay',ready);audio.removeEventListener('error',failed);if(error)reject(error);else resolve();}
