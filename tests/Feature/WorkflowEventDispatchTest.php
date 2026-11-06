@@ -41,6 +41,30 @@ class WorkflowEventDispatchTest extends TestCase
         $this->assertSame(1, DB::table('farast_workflow_events')->count());
     }
 
+
+    public function test_workflow_can_create_a_crm_follow_up_for_its_owner(): void
+    {
+        $user = $this->user('09152223347');
+        DB::table('farast_workflows')->insert([
+            'user_id' => $user->id, 'name' => 'Ticket follow-up', 'enabled' => true,
+            'trigger_type' => 'ticket.created',
+            'steps' => json_encode([['action' => 'create_follow_up', 'title' => 'بررسی تیکت جدید', 'priority' => 'high']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $count = app(WorkflowEngine::class)->dispatch(
+            'ticket.created',
+            ['user_id' => $user->id, 'customer_id' => $user->id, 'ticket_id' => 91],
+            'ticket:91:created',
+        );
+
+        $this->assertSame(1, $count);
+        $this->assertDatabaseHas('crm_follow_up_tasks', [
+            'customer_id' => $user->id, 'created_by' => $user->id,
+            'title' => 'بررسی تیکت جدید', 'priority' => 'high',
+        ]);
+    }
+
     public function test_event_dispatch_never_runs_another_users_workflow(): void
     {
         $owner = $this->user('09152223345');
