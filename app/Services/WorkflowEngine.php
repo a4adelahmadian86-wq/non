@@ -31,12 +31,14 @@ class WorkflowEngine
         ]);
 
         try {
-            foreach ($steps as $step) {
-                if (! is_array($step)) {
-                    throw new \InvalidArgumentException('Workflow step must be an object.');
+            DB::transaction(function () use ($steps, $context, $workflow): void {
+                foreach ($steps as $step) {
+                    if (! is_array($step)) {
+                        throw new \InvalidArgumentException('Workflow step must be an object.');
+                    }
+                    $this->step($step, $context, (int) $workflow->user_id);
                 }
-                $this->step($step, $context, (int) $workflow->user_id);
-            }
+            });
 
             DB::table('farast_workflow_runs')->where('id', $runId)->update([
                 'status' => 'completed', 'finished_at' => now(), 'updated_at' => now(),
