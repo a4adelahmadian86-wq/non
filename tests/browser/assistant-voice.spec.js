@@ -123,6 +123,10 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   window.__order = [];
   window.__chatAttempts = 0;
   window.__csrfRefreshes = 0;
+  await page.evaluate(() => { window.__wsInstances[0].onclose?.({code:1006}); });
+  await page.locator('.farast-voice-mic').click();
+  await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(2);
+  expect(await page.evaluate(() => window.__wakeOrder.filter(item => item === 'health').length)).toBe(1);
   window.fetch = async (url, options = {}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, local_only: false, chat_gateway_ready: true, chat_gateway_health_url: 'https://voice.example.test/health' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -1064,7 +1068,8 @@ test('live assistant queues speech received while answering and processes it aft
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}});
+  window.__micTrack={enabled:true,kind:'audio',stop(){}};
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[window.__micTrack],getAudioTracks:()=>[window.__micTrack]})}});
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=1;this.ended=false;this.paused=true;}
     load(){this.ended=false;this.dispatchEvent(new Event('canplay'));}
@@ -1103,11 +1108,14 @@ test('live assistant queues speech received while answering and processes it aft
   await page.locator('.farast-voice-mic').click();
   expect(await page.evaluate(()=>window.__firstSignal.aborted)).toBe(false);
   expect(await page.evaluate(()=>window.__ttsPlaying)).toBe(true);
+  expect(await page.evaluate(()=>window.__micTrack.enabled)).toBe(false);
   await expect.poll(()=>page.evaluate(()=>window.__audioEnded),{timeout:3000}).toBe(true);
   expect(await page.locator('[data-fa-voice-title]').textContent()).not.toBe('در حال صحبت');
+  await page.locator('.farast-voice-mic').click();
+  expect(await page.evaluate(()=>window.__micTrack.enabled)).toBe(true);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'پرسش سوم هنگام پخش صدا'}));
   await page.waitForTimeout(200);
-  expect(await page.evaluate(()=>window.__chatPayloads.length)).toBe(1);
+  expect(await page.evaluate(()=>window.__chatPayloads.length)).toBe(2);
   expect(await page.evaluate(()=>window.__firstSignal.aborted)).toBe(false);
 
   await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:8000}).toBe(2);
