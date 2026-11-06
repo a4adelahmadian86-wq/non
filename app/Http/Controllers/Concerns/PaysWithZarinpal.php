@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Concerns;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StoreLibraryItem;
+use App\Models\StoreProductFile;
 use App\Services\EmailService;
 use App\Services\ZarinpalService;
 use Illuminate\Http\Request;
@@ -44,6 +45,7 @@ trait PaysWithZarinpal
             ['order_id' => $order->id, 'gateway' => 'zarinpal', 'status' => 'pending'],
             [
                 'amount_rials' => $amount,
+                'authority' => $result['authority'],
                 'transaction_id' => $result['authority'],
                 'paid_at' => null,
             ]
@@ -66,12 +68,35 @@ trait PaysWithZarinpal
             return redirect()->route('store')->withErrors(['payment' => 'بازگشت از درگاه نامعتبر بود.']);
         }
 
+        // Bind the callback authority to the pending payment created for this exact order.
+        $payment = Payment::query()
+            ->where('order_id', $order->id)
+            ->where('gateway', 'zarinpal')
+            ->where(function ($query) use ($authority) {
+                $query->where('authority', $authority)->orWhere('transaction_id', $authority);
+            })
+            ->latest('id')
+            ->first();
+
+        if (! $payment || (int) $payment->amount_rials !== (int) $order->total_rials) {
+            return redirect()->route('checkout', $order)->withErrors(['payment' => 'تراکنش درگاه به این سفارش متصل نیست.']);
+        }
+
+        if ($order->isPaid() && $payment->status === 'paid') {
+            $request->session()->forget(['zarinpal_order_id', 'zarinpal_authority']);
+            return redirect()->route('library')->with('status', 'این سفارش قبلاً پرداخت شده است.');
+        }
+
+        if ($payment->status !== 'pending') {
+            return redirect()->route('checkout', $order)->withErrors(['payment' => 'وضعیت تراکنش برای تأیید معتبر نیست.']);
+        }
+
         if (strtoupper($status) !== 'OK') {
             return redirect()->route('checkout', $order)->withErrors(['payment' => 'پرداخت توسط کاربر لغو شد.']);
         }
 
         try {
-            $verify = $zarinpal->verify($authority, (int) $order->total_rials);
+            $verify = $zarinpal->verify($authority, (int) $payment->amount_rials);
         } catch (\Throwable $e) {
             return redirect()->route('checkout', $order)->withErrors(['payment' => $e->getMessage()]);
         }
@@ -81,23 +106,51 @@ trait PaysWithZarinpal
         }
 
         try {
-            DB::transaction(function () use ($order, $authority, $verify) {
+            DB::transaction(function () use ($order, $payment, $authority, $verify) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
-                if ($locked->isPaid()) {
+                $lockedPayment = Payment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
+
+                abort_unless(
+                    (int) $lockedPayment->order_id === (int) $locked->id
+                        && $lockedPayment->gateway === 'zarinpal'
+                        && ($lockedPayment->authority === $authority || $lockedPayment->transaction_id === $authority),
+                    409,
+                    'تراکنش درگاه با سفارش مطابقت ندارد.'
+                );
+
+                if ($locked->isPaid() && $lockedPayment->status === 'paid') {
                     return;
                 }
 
-                $items = $locked->storeItems()->with(['product.files'])->get();
+                abort_unless($locked->status === 'pending' && $lockedPayment->status === 'pending', 409, 'سفارش یا تراکنش قبلاً تعیین تکلیف شده است.');
+                abort_unless((int) $lockedPayment->amount_rials === (int) $locked->total_rials, 409, 'مبلغ تراکنش با سفارش مطابقت ندارد.');
+
+                $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
                     $product = $item->product;
-                    $file = $product?->files->firstWhere('is_primary', true)
-                        ?: $product?->files->firstWhere('is_active', true);
-                    if (! $product || ! $file) {
+                    if (! $product || $product->status !== 'published') {
+                        throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
+                    }
+
+                    $snapshot = $item->product_snapshot ?? [];
+                    $fileId = (int) ($snapshot['file_id'] ?? 0);
+                    // Preserve the file selected at checkout; support older pending orders without snapshots.
+                    $file = $fileId > 0
+                        ? StoreProductFile::query()->whereKey($fileId)->where('product_id', $product->id)->first()
+                        : ($product->files()->where('is_primary', true)->first()
+                            ?: $product->files()->where('is_active', true)->first());
+
+                    if (! $file || ! $file->is_active) {
                         throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
+                    }
+
+                    $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
+                    if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
+                        throw new \RuntimeException('نسخه فایل محصول پس از ثبت سفارش تغییر کرده است.');
                     }
                     StoreLibraryItem::firstOrCreate(
                         [
-                            'user_id' => auth()->id(),
+                            'user_id' => $locked->user_id,
                             'product_id' => $product->id,
                             'order_id' => $locked->id,
                         ],
@@ -110,15 +163,15 @@ trait PaysWithZarinpal
                     );
                 }
 
-                Payment::updateOrCreate(
-                    ['order_id' => $locked->id, 'gateway' => 'zarinpal', 'transaction_id' => $authority],
-                    [
-                        'amount_rials' => (int) $locked->total_rials,
-                        'status' => 'paid',
-                        'paid_at' => now(),
-                        'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
-                    ]
-                );
+                $lockedPayment->update([
+                    'status' => 'paid',
+                    'gateway_response' => [
+                        'verification_code' => (int) $verify['code'],
+                        'ref_id' => $verify['ref_id'] ?? null,
+                    ],
+                    'paid_at' => now(),
+                    'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
+                ]);
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
             });
