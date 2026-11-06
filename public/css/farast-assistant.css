@@ -238,3 +238,32 @@
     scroll-behavior:auto !important;
   }
 }
+
+
+/* Microphone control states: purple while connecting, green when capture is live,
+   red when fully stopped. The off state means the MediaStream tracks are stopped. */
+.farast-assistant-voice-panel .farast-voice-mic.is-connecting{
+  background:linear-gradient(145deg,#7658e8,#a04de2);
+  color:#fff;
+  box-shadow:0 0 0 6px #8958e51f,0 10px 25px #7954d94a;
+  animation:farastMicConnecting 1.25s ease-in-out infinite;
+}
+.farast-assistant-voice-panel .farast-voice-mic.is-ready{
+  background:linear-gradient(145deg,#20b978,#159b68);
+  color:#fff;
+  box-shadow:0 0 0 6px #20b97820,0 10px 25px #159b6840;
+}
+.farast-assistant-voice-panel .farast-voice-mic.is-off{
+  background:linear-gradient(145deg,#e85a66,#c9364b);
+  color:#fff;
+  box-shadow:0 0 0 5px #dc46531a,0 10px 25px #c9364b35;
+}
+.farast-assistant-voice-panel.is-listening .farast-voice-mic{
+  background:linear-gradient(145deg,#20b978,#159b68);
+  box-shadow:0 0 0 6px #20b97820,0 10px 25px #159b6840;
+}
+@keyframes farastMicConnecting{
+  0%,100%{box-shadow:0 0 0 4px #8958e51a,0 10px 25px #7954d933}
+  50%{box-shadow:0 0 0 9px #8958e52a,0 10px 28px #7954d955}
+}
+@media(prefers-reduced-motion:reduce){.farast-assistant-voice-panel .farast-voice-mic.is-connecting{animation:none}}
