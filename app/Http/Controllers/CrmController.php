@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\Payment;
+use App\Models\WalletTransaction;
 use App\Models\Ticket;
 use App\Models\TypingDocument;
 use App\Models\User;
@@ -103,7 +105,35 @@ class CrmController extends Controller
                 'created_at' => $document->created_at,
             ]);
 
-        $timeline = $orders->concat($tickets)->concat($documents)
+        $payments = Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))
+            ->latest()->limit(30)->get()->map(fn (Payment $payment) => [
+                'type' => 'payment',
+                'id' => $payment->id,
+                'order_id' => $payment->order_id,
+                'title' => 'پرداخت سفارش',
+                'status' => $payment->status,
+                'gateway' => $payment->gateway,
+                'amount_rials' => $payment->amount_rials,
+                'created_at' => $payment->created_at,
+            ]);
+
+        $wallet = $user->wallet()->first();
+        $walletTransactions = $wallet
+            ? WalletTransaction::query()->where('wallet_id', $wallet->id)->latest()->limit(30)->get()
+                ->map(fn (WalletTransaction $transaction) => [
+                    'type' => 'wallet_transaction',
+                    'id' => $transaction->id,
+                    'title' => $transaction->description ?: 'تراکنش کیف پول',
+                    'status' => $transaction->type,
+                    'amount_rials' => $transaction->amount_rials,
+                    'balance_after_rials' => $transaction->balance_after,
+                    'reference_type' => $transaction->reference_type,
+                    'reference_id' => $transaction->reference_id,
+                    'created_at' => $transaction->created_at,
+                ])
+            : collect();
+
+        $timeline = $orders->concat($tickets)->concat($documents)->concat($payments)->concat($walletTransactions)
             ->sortByDesc(fn (array $event) => $event['created_at']?->getTimestamp() ?? 0)
             ->take(60)->values();
 
@@ -134,6 +164,8 @@ class CrmController extends Controller
                 'orders_count' => $user->orders_count,
                 'tickets_count' => $user->tickets_count,
                 'typing_documents_count' => $user->documents_count,
+                'payments_count' => Payment::query()->whereHas('order', fn ($query) => $query->where('user_id', $user->id))->count(),
+                'wallet_transactions_count' => $wallet ? $walletTransactions->count() : 0,
                 'paid_revenue_rials' => (int) ($user->paid_revenue_rials ?? 0),
             ],
             'timeline' => $timeline,
