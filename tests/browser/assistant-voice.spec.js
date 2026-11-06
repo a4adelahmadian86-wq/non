@@ -118,6 +118,8 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   window.AudioContext = undefined;
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
   window.__order = [];
+  window.__chatAttempts = 0;
+  window.__csrfRefreshes = 0;
   window.fetch = async (url, options = {}) => {
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, local_only: false, chat_gateway_ready: true, chat_gateway_health_url: 'https://voice.example.test/health' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -126,7 +128,8 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
       if (window.__order.filter(item => item === 'health').length === 1) return new Response(JSON.stringify({ status: 'starting', chat_configured: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
       return new Response(JSON.stringify({ status: 'ok', chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
-    if (url === '/assistant/chat/stream') { window.__order.push('chat'); window.__chatAccept = options.headers?.Accept; return new Response('data: {"delta":"پاسخ آماده است."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
+    if (url === '/assistant/csrf-token') { window.__csrfRefreshes++; return new Response(JSON.stringify({ token: 'fresh-csrf' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+    if (url === '/assistant/chat/stream') { window.__order.push('chat'); window.__chatAttempts++; window.__chatAccept = options.headers?.Accept; if (window.__chatAttempts === 1) return new Response(JSON.stringify({ message: 'CSRF token mismatch.' }), { status: 419, headers: { 'Content-Type': 'application/json' } }); return new Response('data: {"delta":"پاسخ آماده است."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(JSON.stringify({ ok: false, message: 'TTS unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
@@ -136,7 +139,9 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
   await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__order.includes('chat'))).toBe(true);
-  expect(await page.evaluate(() => window.__order)).toEqual(['health', 'health', 'chat']);
+  expect(await page.evaluate(() => window.__order)).toEqual(['health', 'health', 'chat', 'chat']);
+  expect(await page.evaluate(() => window.__chatAttempts)).toBe(2);
+  expect(await page.evaluate(() => window.__csrfRefreshes)).toBe(1);
   expect(await page.evaluate(() => window.__chatAccept)).toBe('application/json, text/event-stream');
   await expect(page.locator('[data-fa-messages]')).toContainText('پاسخ آماده است.');
 });
@@ -193,10 +198,13 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
     pause() {}
   };
   window.__wakeOrder = [];
+  window.__tokenAttempts = 0;
+  window.__csrfRefreshes = 0;
   window.fetch = async (url, options = {}) => {
     if (url === '/editor/voice/status') return new Response(JSON.stringify({ ok: true, mode: 'gateway', provider: 'render', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (String(url).startsWith('https://voice.example.test/health')) { window.__wakeOrder.push('health'); return new Response(JSON.stringify({ status: 'ok', asr_configured: true, tts_configured: true, chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
-    if (url === '/assistant/voice/stream-token') { window.__wakeOrder.push('token'); return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+    if (url === '/assistant/csrf-token') { window.__csrfRefreshes++; return new Response(JSON.stringify({ token: 'fresh-csrf' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+    if (url === '/assistant/voice/stream-token') { window.__wakeOrder.push('token'); window.__tokenAttempts++; if (options.headers?.['X-CSRF-TOKEN'] !== 'fresh-csrf') return new Response(JSON.stringify({ message: 'CSRF token mismatch.' }), { status: 419, headers: { 'Content-Type': 'application/json' } }); return new Response(JSON.stringify({ ok: true, token: 'mock-signed-token', websocket_url: 'wss://voice.example.test' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
     if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url === '/assistant/chat/stream') { window.__chatPayloads.push(JSON.parse(options.body)); return new Response('data: {"delta":"پاسخ زنده"}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200, headers: { 'Content-Type': 'audio/mpeg' } });
@@ -209,7 +217,9 @@ test('live assistant prefers server WebSocket speech streaming when a gateway is
 
   await expect.poll(async () => page.evaluate(() => window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(() => window.__wsInstances[0].url)).toBe('wss://voice.example.test/v1/stream');
-  expect(await page.evaluate(() => window.__wakeOrder)).toEqual(['health', 'token']);
+  expect(await page.evaluate(() => window.__wakeOrder)).toEqual(['health', 'token', 'token']);
+  expect(await page.evaluate(() => window.__tokenAttempts)).toBe(2);
+  expect(await page.evaluate(() => window.__csrfRefreshes)).toBe(1);
   await expect.poll(async () => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
   await page.evaluate(() => {
     const inputBuffer = { getChannelData: () => new Float32Array(4096).fill(0.1) };
@@ -808,13 +818,13 @@ test('assistant streams complete TTS chunks, suppresses echo, and supports local
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__resolveChat());
   await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
-  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
+  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول. بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__wsInstances[0].emit({type:'speech_started'}));
   expect(await page.evaluate(()=>window.__chatSignal.aborted)).toBe(false);
   await page.evaluate(()=>{const audio=window.__audio; if(audio)audio.finish();});
-  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(3);
-  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول.','بخش دوم.']);
+  await expect.poll(()=>page.evaluate(()=>window.__playCount)).toBe(2);
+  expect(await page.evaluate(()=>window.__spokenChunks)).toEqual(['بخش اول. بخش دوم.']);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
   await page.evaluate(()=>window.__audio.finish());
   await expect.poll(()=>page.evaluate(()=>window.__track.enabled)).toBe(true);
