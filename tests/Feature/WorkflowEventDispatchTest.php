@@ -115,6 +115,36 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
     }
 
+    public function test_workflow_steps_roll_back_together_when_a_later_step_fails(): void
+    {
+        $user = $this->user('09152223350');
+        $workflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Atomic workflow',
+            'enabled' => true,
+            'trigger_type' => 'document.saved',
+            'steps' => json_encode([
+                ['action' => 'notify', 'title' => 'این اعلان نباید باقی بماند'],
+                ['action' => 'unsupported_action'],
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            app(WorkflowEngine::class)->run($workflow, ['user_id' => $user->id]);
+            $this->fail('The unsupported second step should fail the workflow.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('Unsupported workflow action', $exception->getMessage());
+        }
+
+        $this->assertSame(0, DB::table('farast_notifications')->where('user_id', $user->id)->count());
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflow,
+            'status' => 'failed',
+        ]);
+    }
+
     public function test_event_dispatch_never_runs_another_users_workflow(): void
     {
         $owner = $this->user('09152223345');
