@@ -8,13 +8,13 @@
     '<button class="farast-assistant-launcher" id="farast-assistant-launcher" type="button" aria-controls="farast-assistant-panel" aria-label="شروع گفت‌وگوی صوتی با فراست" aria-expanded="false" title="گفت‌وگوی صوتی فراست"><span class="fa-solid fa-microphone-lines" aria-hidden="true"></span><span class="farast-assistant-pulse" aria-hidden="true"></span></button>' +
     '<section class="farast-assistant-panel farast-assistant-voice-panel" id="farast-assistant-panel" role="dialog" aria-labelledby="farast-assistant-title" aria-modal="false" aria-label="گفت‌وگوی صوتی فراست" hidden>' +
     '<header class="farast-assistant-head"><div class="farast-assistant-avatar"><i class="fa-solid fa-wave-square" aria-hidden="true"></i></div><div class="farast-assistant-brand"><strong id="farast-assistant-title">همراه صوتی فراست</strong><small><span class="farast-assistant-online"></span> گفت‌وگوی زنده + متن</small></div><button class="farast-assistant-close" type="button" aria-label="بستن">×</button></header>' +
-    '<div class="farast-voice-stage"><div class="farast-voice-orb" aria-hidden="true"><span></span><span></span><span></span></div><strong class="farast-voice-title" data-fa-voice-title>آمادهٔ گفت‌وگو هستم</strong><p class="farast-voice-caption" data-fa-voice-caption>برای شروع، میکروفون را لمس کن و صحبت کن.</p><div class="farast-assistant-status" data-fa-status role="status" aria-live="polite">برای گفت‌وگو وارد حساب کاربری‌ات شو.</div><button class="farast-assistant-mic farast-voice-mic" type="button" aria-label="شروع صحبت" title="برای شروع مکالمه لمس کن"><i class="fa-solid fa-microphone" aria-hidden="true"></i><span>صحبت کن</span></button><button class="farast-voice-stop" type="button" data-fa-stop-speech aria-label="توقف کامل مکالمه">توقف مکالمه</button></div>' +
+    '<div class="farast-voice-stage"><div class="farast-voice-orb" aria-hidden="true"><span></span><span></span><span></span></div><strong class="farast-voice-title" data-fa-voice-title>آمادهٔ گفت‌وگو هستم</strong><p class="farast-voice-caption" data-fa-voice-caption>برای شروع، میکروفون را لمس کن و صحبت کن.</p><div class="farast-assistant-status" data-fa-status role="status" aria-live="polite">برای گفت‌وگو وارد حساب کاربری‌ات شو.</div><button class="farast-assistant-mic farast-voice-mic" type="button" aria-label="شروع صحبت" title="برای شروع مکالمه لمس کن"><i class="fa-solid fa-microphone" aria-hidden="true"></i><span>صحبت کن</span></button></div>' +
     '<div class="farast-assistant-messages" data-fa-messages aria-live="polite" aria-relevant="additions"></div>' +
     '<div class="farast-assistant-intro" hidden><b>همراه صوتی فراست</b><p>گفت‌وگوی صوتی</p></div>' +
     '<div class="farast-assistant-suggestions"><button type="button" data-fa-tour>راهنمای سایت</button><button type="button" data-fa-text="برای خرید فایل راهنمایی‌ام کن">خرید فایل</button></div>' +
     '<form class="farast-assistant-form" autocomplete="off"><input name="message" maxlength="1200" aria-label="پیام شما" placeholder="پیامت را اینجا بنویس…"><button class="farast-assistant-send" type="submit" aria-label="ارسال پیام"><i class="fa-solid fa-arrow-up"></i></button></form>' +
     '<div hidden><button class="farast-assistant-memory" type="button" data-fa-memory>حافظه +</button><button class="farast-assistant-memory-manage" type="button" data-fa-memory-manage>مدیریت حافظه</button><button class="farast-assistant-clear" type="button" aria-label="پاک کردن سابقه">پاک کردن سابقه</button></div>' +
-    '<footer class="farast-assistant-foot">گفت‌وگوی زنده؛ پایان هر نوبت با تشخیص مکث گفتار انجام می‌شود. برای پایان کل مکالمه «توقف مکالمه» را بزن.</footer></section>';  document.body.appendChild(root);
+    '<footer class="farast-assistant-foot">گفت‌وگوی زنده؛ پایان هر نوبت با تشخیص مکث گفتار انجام می‌شود. برای بستن دستیار، دکمهٔ × بالای پنجره را بزن.</footer></section>';  document.body.appendChild(root);
   var panel=root.querySelector('.farast-assistant-panel'), launcher=root.querySelector('.farast-assistant-launcher'),
       list=root.querySelector('[data-fa-messages]'), form=root.querySelector('form'), input=form.querySelector('input'),
       status=root.querySelector('[data-fa-status]'), busy=false, history=[], historyLoaded=false, assistantTurn=0;
@@ -317,7 +317,8 @@
     throw new Error('درگاه گفت‌وگوی رایگان Render هنوز آماده نشده است؛ '+lastFailure+' لطفاً چند لحظه بعد دوباره تلاش کن.');
   }
   async function send(text){
-    text=String(text||'').trim();if(!text||busy)return;
+    text=String(text||'').trim();if(!text)return;
+    if(busy){pendingVoiceTurns.push(text);input.value='';voiceTitle.textContent='در حال پاسخ‌گویی';voiceCaption.textContent='پیام جدید دریافت شد و پس از پایان پاسخ فعلی پردازش می‌شود.';status.textContent='درخواست شما در صف مکالمه قرار گرفت؛ پاسخ فعلی قطع نمی‌شود.';return;}
     if(document.body.dataset.assistantAuth !== '1'){
       voiceTitle.textContent='ابتدا وارد حساب شو';voiceCaption.textContent='برای استفاده از همراه صوتی، ورود به حساب کاربری لازم است.';status.textContent='ورود برای استفاده از همراه هوشمند الزامی است.';
       var link=root.querySelector('.farast-voice-login');if(!link){link=document.createElement('a');link.href='/login?redirect='+encodeURIComponent(location.pathname+location.search);link.className='farast-voice-login';link.textContent='ورود به حساب کاربری';root.querySelector('.farast-voice-stage').appendChild(link);}return;
@@ -421,9 +422,8 @@
       if(turn===assistantTurn){busy=false;setGatewayMicrophoneMuted(false);if(chatAbortController===requestController)chatAbortController=null;if(activePendingMessage===pending)activePendingMessage=null;if(pendingVoiceTurns.length&&conversationActive)processPendingVoiceTurns();else if(turnSucceeded)scheduleNextListening();}
     }
   }
-  launcher.addEventListener('click',function(){var opening=panel.hidden;if(!opening){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);return;}setOpen(true);loadHistory();loadAssistantStatus();if(document.body.dataset.assistantAuth==='1'){conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';voiceCaption.textContent='میکروفون خاموش است. برای شروع، دکمهٔ «صحبت کن» را لمس کن.';status.textContent='تا وقتی دکمه را لمس نکنی، میکروفون فعال نمی‌شود.';}});
+  launcher.addEventListener('click',function(){if(!panel.hidden)return;setOpen(true);loadHistory();loadAssistantStatus();if(document.body.dataset.assistantAuth==='1'){conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='آمادهٔ گفت‌وگو هستم';voiceCaption.textContent='میکروفون خاموش است. برای شروع، دکمهٔ «صحبت کن» را لمس کن.';status.textContent='تا وقتی دکمه را لمس نکنی، میکروفون فعال نمی‌شود.';}});
   root.querySelector('.farast-assistant-close').addEventListener('click',function(){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);});
-  root.querySelector('[data-fa-stop-speech]').addEventListener('click',function(){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}panel.classList.remove('is-speaking');voiceTitle.textContent='مکالمه متوقف شد';status.textContent='گفت‌وگوی پیوسته متوقف شد.';voiceCaption.textContent='برای شروع دوباره، میکروفون را لمس کن.';});
   root.querySelector('.farast-assistant-clear').addEventListener('click',clearHistory);
   root.querySelector('[data-fa-memory]').addEventListener('click',saveMemory);
   root.querySelector('[data-fa-memory-manage]').addEventListener('click',manageMemories);
@@ -737,17 +737,12 @@
     if(batchRecording){stopBatchRecording();return;}
     if(!busy)primeAssistantAudioPlayback();
     if(gatewayWs||gatewayStarting){
-      if(busy){
-        status.textContent='پاسخ فعلی ادامه دارد؛ درخواست صوتی جدید پس از پایان آن پردازش می‌شود.';
-        return;
-      }
-      stopConversation();
-      voiceTitle.textContent='مکالمه متوقف شد';
-      voiceCaption.textContent='برای شروع دوباره، دکمهٔ میکروفون را لمس کن.';
-      status.textContent='اتصال و میکروفون متوقف شدند.';
+      status.textContent=busy
+        ?'پاسخ فعلی ادامه دارد؛ درخواست جدید پس از پایان آن پردازش می‌شود.'
+        :'میکروفون از قبل فعال است و به‌طور پیوسته گوش می‌دهد.';
       return;
     }
-    if(busy){status.textContent='پاسخ فعلی ادامه دارد؛ برای پایان مکالمه از دکمهٔ توقف استفاده کن.';return;}
+    if(busy){status.textContent='پاسخ فعلی ادامه دارد؛ درخواست جدید پس از پایان آن پردازش می‌شود.';return;}
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
     if(speechRequestController){speechRequestController.abort();speechRequestController=null;}
     speechGeneration++;
@@ -756,6 +751,5 @@
     panel.classList.remove('is-speaking');
     conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='شروع گفت‌وگوی زنده';voiceCaption.textContent='گفتار به‌صورت زنده تشخیص داده می‌شود و بعد از مکث کوتاه پاسخ می‌دهم. برای پایان، «توقف مکالمه» را لمس کن.';startLiveRecognition();
   });
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!panel.hidden){stopConversation();if(assistantAudio){assistantAudio.pause();assistantAudio=null;}if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}setOpen(false);}});
   voiceCaption.textContent='برای شروع، میکروفون را لمس کن و به فارسی صحبت کن.';
 })();
