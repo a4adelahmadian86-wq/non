@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProductFile;
 use App\Services\EmailService;
+use App\Services\WorkflowEngine;
 use App\Services\ZarinpalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -188,6 +189,25 @@ trait PaysWithZarinpal
             try {
                 $emailService->sendOrderPaid(auth()->user(), $order->fresh());
             } catch (\Throwable) {
+            }
+        }
+
+        if ($paymentProcessed) {
+            try {
+                $paidOrder = $order->fresh();
+                app(WorkflowEngine::class)->dispatch(
+                    'order.paid',
+                    [
+                        'user_id' => (int) $paidOrder->user_id,
+                        'customer_id' => (int) $paidOrder->user_id,
+                        'order_id' => (int) $paidOrder->id,
+                        'amount_rials' => (int) $paidOrder->total_rials,
+                        'order_kind' => (string) ($paidOrder->pricing_snapshot['kind'] ?? 'unknown'),
+                    ],
+                    'order:'.$paidOrder->id.':paid',
+                );
+            } catch (\\Throwable $exception) {
+                report($exception);
             }
         }
 
