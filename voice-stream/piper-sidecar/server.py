@@ -67,6 +67,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 self.send_json(400, {"ok": False, "message": "invalid_json"})
                 return
+            language = str(payload.get("language", "fa-IR"))
+            voice_id = str(payload.get("voice_id", VOICE_ID))
+            if language != "fa-IR" or voice_id != VOICE_ID:
+                self.send_json(400, {"ok": False, "message": "unsupported_voice"})
+                return
             text = str(payload.get("text", "")).strip()
             language = str(payload.get("language", "fa-IR"))
             voice_id = str(payload.get("voice_id", VOICE_ID))
