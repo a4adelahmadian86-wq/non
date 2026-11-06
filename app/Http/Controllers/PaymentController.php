@@ -15,7 +15,6 @@ use App\Services\EmailService;
 use App\Services\FreeQuotaService;
 use App\Services\PricingService;
 use App\Services\ProjectBillingService;
-use App\Services\WorkflowEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -173,8 +172,8 @@ class PaymentController extends Controller
 
             if ($paidOrder) {
                 try { $emailService->sendOrderPaid(auth()->user(), $paidOrder); } catch (\Throwable) {}
-                $this->dispatchPaidOrderWorkflow($paidOrder);
             }
+            if ($paidOrder) $this->dispatchPaidOrderWorkflow($paidOrder);
 
             return redirect()->route('editor')->with('status', 'پرداخت با موفقیت ثبت شد؛ اکنون خروجی قابل دریافت است.');
         } catch (\RuntimeException $e) {
@@ -298,6 +297,7 @@ class PaymentController extends Controller
             if ($paidOrder) {
                 try { $emailService->sendOrderPaid(auth()->user(), $paidOrder); } catch (\Throwable) {}
             }
+            if ($paidOrder) $this->dispatchPaidOrderWorkflow($paidOrder);
 
             return redirect()->route('store')->with('status', 'خرید با موفقیت ثبت شد؛ فایل‌ها در کتابخانه شما قرار گرفتند.');
         } catch (\RuntimeException $e) {
@@ -366,6 +366,8 @@ class PaymentController extends Controller
 
             $this->dispatchPaidOrderWorkflow($order->fresh());
 
+            $this->dispatchPaidOrderWorkflow($order->fresh());
+
             return redirect()->route('editor')->with('status', 'پیش‌پرداخت ثبت شد؛ فایل آماده ورود به ویرایشگر است.');
         } catch (\RuntimeException $e) {
             return back()->withErrors(['payment' => $e->getMessage()]);
@@ -430,4 +432,19 @@ class PaymentController extends Controller
             ? (int) round(max(0, $taxable) * $this->taxRate() / 100)
             : 0;
     }
+
+    private function dispatchPaidOrderWorkflow(Order $order): void
+    {
+        try {
+            app(\App\Services\WorkflowEngine::class)->dispatch(
+                'order.paid',
+                ['user_id' => (int) $order->user_id, 'order_id' => (int) $order->id, 'amount_rials' => (int) $order->total_rials],
+                'order:'.$order->id.':paid',
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
+
 }
