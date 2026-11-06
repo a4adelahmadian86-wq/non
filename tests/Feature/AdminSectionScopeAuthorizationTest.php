@@ -207,6 +207,59 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->get('/admin/access')->assertForbidden();
     }
 
+    public function test_team_supervisor_analytics_is_limited_to_managed_team_members(): void
+    {
+        $organizationA = Organization::create(['name' => 'Team Org A', 'slug' => 'team-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Team Org B', 'slug' => 'team-org-b', 'status' => 'active']);
+
+        $supervisor = $this->makeUser('09123456788', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $member = $this->makeUser('09123456789', User::ROLE_EMPLOYEE, $organizationA->id);
+        $otherSupervisor = $this->makeUser('09123456790', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $otherMember = $this->makeUser('09123456791', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $teamA = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Managed Team',
+            'slug' => 'managed-team',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $teamA->members()->attach($member->id, ['team_role' => 'employee']);
+
+        $teamB = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Other Team',
+            'slug' => 'other-team',
+            'supervisor_id' => $otherSupervisor->id,
+        ]);
+        $teamB->members()->attach($otherMember->id, ['team_role' => 'employee']);
+
+        $insideOrder = $this->makePaidOrder($member, 1200);
+        Payment::create([
+            'order_id' => $insideOrder->id,
+            'gateway' => 'test',
+            'transaction_id' => 'TEAM-SCOPE-IN',
+            'amount_rials' => 1200,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        $outsideOrder = $this->makePaidOrder($otherMember, 8400);
+        Payment::create([
+            'order_id' => $outsideOrder->id,
+            'gateway' => 'test',
+            'transaction_id' => 'TEAM-SCOPE-OUT',
+            'amount_rials' => 8400,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $analytics = $this->actingAs($supervisor)->get('/admin/analytics')->assertOk();
+        $analytics->assertViewHas('stats', function (array $stats): bool {
+            return $stats['users'] === 2 && $stats['revenue'] === 1200;
+        });
+
+        $this->get('/admin/organizations')->assertForbidden();
+    }
+
     public function test_global_admin_scope_override_restricts_both_queries_and_global_sections(): void
     {
         $organization = Organization::create(['name' => 'Restricted Org', 'slug' => 'restricted-org', 'status' => 'active']);
