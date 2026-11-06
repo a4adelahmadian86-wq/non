@@ -206,7 +206,7 @@ trait PaysWithZarinpal
                     ],
                     'order:'.$paidOrder->id.':paid',
                 );
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 report($exception);
             }
         }
