@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminPlatformController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CanvaController;
+use App\Http\Controllers\CrmController;
 use App\Http\Controllers\EditorAiAssistController;
 use App\Http\Controllers\EditorController;
 use App\Http\Controllers\EditorDocumentStateController;
@@ -94,6 +95,12 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    // CRM backend: customer 360, internal notes and follow-up tasks (reuses scoped users permission).
+    Route::get('/crm/customers', [CrmController::class, 'customers'])->middleware('admin.section:users')->name('crm.customers.index');
+    Route::get('/crm/customers/{customer}', [CrmController::class, 'show'])->middleware('admin.section:users')->name('crm.customers.show');
+    Route::post('/crm/customers/{customer}/notes', [CrmController::class, 'storeNote'])->middleware(['admin.section:users', 'throttle:30,10'])->name('crm.customers.notes.store');
+    Route::post('/crm/customers/{customer}/follow-ups', [CrmController::class, 'storeFollowUp'])->middleware(['admin.section:users', 'throttle:30,10'])->name('crm.customers.followups.store');
+    Route::patch('/crm/customers/{customer}/follow-ups/{task}', [CrmController::class, 'updateFollowUp'])->middleware(['admin.section:users', 'throttle:30,10'])->name('crm.customers.followups.update');
     Route::get('/', [AdminController::class, 'index'])->middleware('admin.section:overview')->name('index');
     Route::get('/users', [AdminController::class, 'users'])->middleware('admin.section:users')->name('users');
     Route::post('/users/{user}/role', [AdminController::class, 'updateUserRole'])->middleware('admin.section:users')->name('users.role');
