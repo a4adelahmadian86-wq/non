@@ -126,7 +126,7 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
       if (window.__order.filter(item => item === 'health').length === 1) return new Response(JSON.stringify({ status: 'starting', chat_configured: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
       return new Response(JSON.stringify({ status: 'ok', chat_configured: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
-    if (url === '/assistant/chat/stream') { window.__order.push('chat'); return new Response('data: {"delta":"پاسخ آماده است."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
+    if (url === '/assistant/chat/stream') { window.__order.push('chat'); window.__chatAccept = options.headers?.Accept; return new Response('data: {"delta":"پاسخ آماده است."}\\n\\ndata: {"done":true}\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }
     if (url === '/assistant/speak') return new Response(JSON.stringify({ ok: false, message: 'TTS unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   };
@@ -137,7 +137,27 @@ test('text chat wakes the sleeping Render gateway before sending the chat reques
   await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__order.includes('chat'))).toBe(true);
   expect(await page.evaluate(() => window.__order)).toEqual(['health', 'health', 'chat']);
+  expect(await page.evaluate(() => window.__chatAccept)).toBe('application/json, text/event-stream');
   await expect(page.locator('[data-fa-messages]')).toContainText('پاسخ آماده است.');
+});
+
+
+test('text chat displays JSON errors returned by Laravel instead of hiding them behind a generic HTTP error', async ({ page }) => {
+  const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
+  await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
+<script>
+  window.fetch = async (url) => {
+    if (url === '/assistant/history') return new Response(JSON.stringify({ ok: true, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/voice/status') return new Response(JSON.stringify({ ok: true, local_only: false, chat_gateway_ready: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url === '/assistant/chat/stream') return new Response(JSON.stringify({ message: 'خطای تشخیصی Laravel' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  };
+</script></body></html>`);
+  await page.addScriptTag({ content: assistantJs });
+  await page.locator('.farast-assistant-launcher').click();
+  await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
+  await page.locator('.farast-assistant-send').click();
+  await expect(page.locator('[data-fa-messages]')).toContainText('خطای تشخیصی Laravel');
 });
 
 
