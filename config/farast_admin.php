@@ -24,6 +24,7 @@ return [
     'sections' => [
         'overview'      => ['permission' => 'dashboard.view',     'min_scope' => 'own'],
         'users'         => ['permission' => 'users.view',         'min_scope' => 'team'],
+        'marketing'     => ['permission' => 'users.view',         'min_scope' => 'team'],
         'documents'     => ['permission' => 'documents.view',     'min_scope' => 'own'],
         'ai'            => ['permission' => 'ai.view',            'min_scope' => 'organization'],
         'voice'         => ['permission' => 'voice.manage',       'min_scope' => 'global'],
