@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminPlatformController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CanvaController;
+use App\Http\Controllers\CrmController;
 use App\Http\Controllers\EditorAiAssistController;
 use App\Http\Controllers\EditorController;
 use App\Http\Controllers\EditorDocumentStateController;
