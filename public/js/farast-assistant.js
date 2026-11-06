@@ -260,7 +260,13 @@
           var finished=false,pauseRetries=0;
           function cleanup(){audio.removeEventListener('ended',ended);audio.removeEventListener('pause',paused);audio.removeEventListener('error',failed);}
           function done(error){if(finished)return;finished=true;cleanup();if(error)reject(error);else resolve();}
-          function ended(){done();}
+          function ended(){
+            panel.classList.remove('is-speaking');
+            voiceTitle.textContent=busy?'در حال آماده‌سازی ادامه پاسخ':'نوبت توست';
+            voiceCaption.textContent=busy?'پخش این بخش تمام شد؛ اگر پاسخ ادامه داشته باشد، بخش بعدی پخش می‌شود.':'پخش پاسخ تمام شد؛ آماده شنیدن نوبت بعدی هستم.';
+            status.textContent=busy?'صدای این بخش تمام شد؛ منتظر ادامه پاسخ هستم.':'پاسخ صوتی تمام شد.';
+            done();
+          }
           function failed(){done(new Error('پخش یکی از بخش‌های پاسخ با خطا متوقف شد.'));}
           function paused(){
             if(finished)return;
@@ -735,20 +741,17 @@
   }
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(batchRecording){stopBatchRecording();return;}
-    if(!busy)primeAssistantAudioPlayback();
-    if(gatewayWs||gatewayStarting){
-      status.textContent=busy
-        ?'پاسخ فعلی ادامه دارد؛ درخواست جدید پس از پایان آن پردازش می‌شود.'
-        :'میکروفون از قبل فعال است و به‌طور پیوسته گوش می‌دهد.';
+    // The microphone button controls capture only. It must never cancel a
+    // generated answer, abort TTS, or reset the speech generation counter.
+    if(busy||panel.classList.contains('is-speaking')||(assistantAudio&&!assistantAudio.paused&&!assistantAudio.ended)){
+      status.textContent='پاسخ فراست بدون وقفه ادامه دارد؛ میکروفون نیازی به لمس دوباره ندارد.';
       return;
     }
-    if(busy){status.textContent='پاسخ فعلی ادامه دارد؛ درخواست جدید پس از پایان آن پردازش می‌شود.';return;}
+    if(gatewayWs||gatewayStarting){
+      status.textContent='میکروفون از قبل فعال است و به‌طور پیوسته گوش می‌دهد.';
+      return;
+    }
     if(resumeListeningTimer){window.clearTimeout(resumeListeningTimer);resumeListeningTimer=null;}
-    if(speechRequestController){speechRequestController.abort();speechRequestController=null;}
-    speechGeneration++;
-    if(assistantAudio){assistantAudio.pause();assistantAudio.currentTime=0;assistantAudio=null;}
-    if(assistantAudioUrl){URL.revokeObjectURL(assistantAudioUrl);assistantAudioUrl=null;}
-    panel.classList.remove('is-speaking');
     conversationActive=true;liveTurnEnding=false;voiceTitle.textContent='شروع گفت‌وگوی زنده';voiceCaption.textContent='گفتار به‌صورت زنده تشخیص داده می‌شود و بعد از مکث کوتاه پاسخ می‌دهم. برای بستن دستیار، × را بزن.';startLiveRecognition();
   });
   voiceCaption.textContent='برای شروع، میکروفون را لمس کن و به فارسی صحبت کن.';
