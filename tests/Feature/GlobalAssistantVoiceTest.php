@@ -26,7 +26,10 @@ class GlobalAssistantVoiceTest extends TestCase
         config([
             'services.voice_stream.url' => 'wss://voice.example.test',
             'services.voice_stream.token_secret' => 'render-shared-voice-token',
+            'services.voice_asr.token' => 'render-shared-voice-token',
+            'services.voice_tts.token' => 'render-shared-voice-token',
             'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'render-shared-voice-token',
         ]);
         Http::fake([
             'https://voice.example.test/v1/status' => Http::response([
@@ -86,6 +89,29 @@ class GlobalAssistantVoiceTest extends TestCase
         [$encoded, $signature] = explode('.', (string) $tokenResponse->json('token'), 2);
         $this->assertSame(hash_hmac('sha256', $encoded, 'shared-render-token'), $signature);
         $this->assertStringNotContainsString('shared-render-token', $tokenResponse->getContent());
+    }
+
+    public function test_render_live_voice_status_rejects_divergent_laravel_client_credentials(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.token_secret' => 'shared-render-token',
+            'services.voice_asr.url' => 'https://voice.example.test/v1/transcribe',
+            'services.voice_asr.token' => 'asr-override-token',
+            'services.voice_tts.url' => 'https://voice.example.test/v1/synthesize',
+            'services.voice_tts.token' => 'shared-render-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'shared-render-token',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('mode', 'none')
+            ->assertJsonPath('gateway', false)
+            ->assertJsonPath('reason', 'render_voice_credential_mismatch');
+        $this->assertStringNotContainsString('asr-override-token', $response->getContent());
     }
 
     public function test_render_live_voice_status_does_not_depend_on_a_laravel_callback_or_provider_database(): void
@@ -180,6 +206,8 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.voice.local_only' => false,
             'services.voice_stream.url' => 'wss://voice.example.test',
             'services.voice_stream.token_secret' => 'wrong-laravel-token',
+            'services.voice_asr.token' => 'wrong-laravel-token',
+            'services.voice_tts.token' => 'wrong-laravel-token',
             'services.ai_gateway.url' => 'https://voice.example.test',
             'services.ai_gateway.token' => 'wrong-laravel-token',
         ]);
@@ -206,7 +234,10 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.voice.local_only' => false,
             'services.voice_stream.url' => 'wss://voice.example.test',
             'services.voice_stream.token_secret' => 'render-shared-token',
+            'services.voice_asr.token' => 'render-shared-token',
+            'services.voice_tts.token' => 'render-shared-token',
             'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'render-shared-token',
         ]);
         Http::fake([
             'https://voice.example.test/v1/status' => Http::response([
