@@ -311,12 +311,12 @@
     }
   }
   async function waitForGatewayChatHealth(url,signal,turn){
-    var deadline=Date.now()+75000,lastFailure='سرویس هنوز پاسخ آماده نداده است.';
+    var deadline=Date.now()+90000,lastFailure='سرویس هنوز پاسخ آماده نداده است.';
     while(Date.now()<deadline){
       if(signal.aborted||turn!==assistantTurn){var cancelled=new Error('درخواست لغو شد.');cancelled.name='AbortError';throw cancelled;}
       var probe=new AbortController(),abortParent=function(){probe.abort();};
       signal.addEventListener('abort',abortParent,{once:true});
-      var timer=window.setTimeout(function(){probe.abort();},10000);
+      var timer=window.setTimeout(function(){probe.abort();},Math.min(60000,Math.max(1000,deadline-Date.now())));
       try{
         var response=await fetch(url,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Accept':'application/json'},signal:probe.signal});
         var health=await response.json().catch(function(){return {};});
@@ -605,14 +605,14 @@
           healthUrl=healthTarget.toString();
         }catch(e){throw new Error('نشانی سلامت درگاه رایگان Render معتبر نیست.');}
         if(!healthUrl)throw new Error('نشانی سلامت درگاه رایگان Render تنظیم نشده است.');
-        var wakeDeadline=Date.now()+75000,wakeReady=false,wakeFailure='سرویس هنوز پاسخ آماده نداده است.';
+        var wakeDeadline=Date.now()+90000,wakeReady=false,wakeFailure='سرویس هنوز پاسخ آماده نداده است.';
         voiceTitle.textContent='در حال بیدارکردن سرویس رایگان';
         voiceCaption.textContent='سرویس صوتی رایگان پس از بی‌کاری به خواب می‌رود؛ در حال بیدارکردن و بررسی سلامت آن هستم. میکروفون تا آماده‌شدن سرویس ضبطی ارسال نمی‌کند.';
         status.textContent='در حال آماده‌سازی درگاه صوتی رایگان؛ لطفاً این صفحه را باز نگه دار.';
         while(!wakeReady&&Date.now()<wakeDeadline){
           if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
           var wakeController=new AbortController();
-          var wakeTimer=window.setTimeout(function(){wakeController.abort();},10000);
+          var wakeTimer=window.setTimeout(function(){wakeController.abort();},Math.min(60000,Math.max(1000,wakeDeadline-Date.now())));
           try{
             var wakeResponse=await fetch(healthUrl,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Accept':'application/json'},signal:wakeController.signal});
             var wakeData=await wakeResponse.json().catch(function(){return {};});
