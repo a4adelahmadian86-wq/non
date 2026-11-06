@@ -379,9 +379,26 @@ class AuthController extends Controller
             if (! $otp) {
                 return 'expired';
             }
+            if ($otp->attempts >= 5) {
+                return 'limit';
+            }
 
-        $otp->increment('attempts');
-        abort_unless(Hash::check($code, $otp->code_hash), 422, 'کد نادرست است.');
-        $otp->update(['consumed_at' => now()]);
+            $otp->increment('attempts');
+            if (! Hash::check($code, $otp->code_hash)) {
+                return 'invalid';
+            }
+
+            $otp->update(['consumed_at' => now()]);
+
+            return 'ok';
+        });
+
+        if ($result === 'limit') {
+            abort(429, 'تعداد تلاش‌ها بیش از حد مجاز است.');
+        }
+        if ($result === 'invalid') {
+            abort(422, 'کد نادرست است.');
+        }
+        abort_unless($result === 'ok', 422, 'کد منقضی شده است.');
     }
 }
