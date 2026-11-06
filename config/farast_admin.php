@@ -28,6 +28,8 @@ return [
         'ai'            => ['permission' => 'ai.view',            'min_scope' => 'organization'],
         'voice'         => ['permission' => 'voice.manage',       'min_scope' => 'global'],
         'finance'       => ['permission' => 'finance.view',       'min_scope' => 'organization'],
+        'finance_manage' => ['permission' => 'finance.manage',     'min_scope' => 'organization'],
+        'finance_settings' => ['permission' => 'billing.manage',   'min_scope' => 'global'],
         'support'       => ['permission' => 'support.manage',     'min_scope' => 'team'],
         'announcements' => ['permission' => 'settings.manage',    'min_scope' => 'global'],
         'integrations'  => ['permission' => 'integrations.manage','min_scope' => 'global'],
