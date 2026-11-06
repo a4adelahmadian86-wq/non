@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Concerns;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StoreLibraryItem;
+use App\Models\StoreProductFile;
 use App\Services\EmailService;
 use App\Services\ZarinpalService;
 use Illuminate\Http\Request;
@@ -87,17 +88,34 @@ trait PaysWithZarinpal
                     return;
                 }
 
-                $items = $locked->storeItems()->with(['product.files'])->get();
+                $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
                     $product = $item->product;
-                    $file = $product?->files->firstWhere('is_primary', true)
-                        ?: $product?->files->firstWhere('is_active', true);
-                    if (! $product || ! $file) {
+                    if (! $product || $product->status !== 'published') {
+                        throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
+                    }
+
+                    $snapshot = $item->product_snapshot ?? [];
+                    $fileId = (int) ($snapshot['file_id'] ?? 0);
+                    // Older pending orders may predate file snapshots; keep them fulfillable,
+                    // while all new orders are pinned to the exact asset selected at checkout.
+                    $file = $fileId > 0
+                        ? StoreProductFile::query()->whereKey($fileId)->where('product_id', $product->id)->first()
+                        : ($product->files()->where('is_primary', true)->first()
+                            ?: $product->files()->where('is_active', true)->first());
+
+                    if (! $file || ! $file->is_active) {
                         throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
                     }
+
+                    $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
+                    if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
+                        throw new \RuntimeException('نسخه فایل محصول پس از ثبت سفارش تغییر کرده است.');
+                    }
+
                     StoreLibraryItem::firstOrCreate(
                         [
-                            'user_id' => auth()->id(),
+                            'user_id' => $locked->user_id,
                             'product_id' => $product->id,
                             'order_id' => $locked->id,
                         ],
