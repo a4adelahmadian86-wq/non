@@ -292,7 +292,7 @@ class VoiceController extends Controller
                         'message' => 'Render توکن را دریافت کرد، اما آمادگی کامل تشخیص گفتار، صداسازی و پاسخ‌گویی را تأیید نکرد.',
                     ], 503, ['Cache-Control' => 'no-store']);
                 }
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 Log::warning('Render live voice preflight failed', [
                     'exception' => get_class($exception),
                 ]);
