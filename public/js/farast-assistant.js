@@ -583,6 +583,8 @@
       gatewayAudioContext=new AudioContextClass({latencyHint:'interactive',sampleRate:48000});
       var audioContextReady=gatewayAudioContext.resume().catch(function(){});
       gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      // Every newly acquired stream starts with capture enabled, even after a prior muted session.
+      setGatewayMicrophoneMuted(false);
       await audioContextReady;
       if(generation!==gatewayGeneration||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return true;}
       if(gatewayAudioContext.state!=='running')throw new Error('فعال‌سازی ورودی صوتی مرورگر کامل نشد؛ دوباره دکمه میکروفون را لمس کن.');
@@ -763,8 +765,18 @@
   root.querySelector('.farast-assistant-mic').addEventListener('click',function(){
     if(batchRecording){stopBatchRecording();return;}
     // This control toggles only microphone capture. It never interrupts chat or TTS.
-    if(gatewayWs&&gatewayWs.readyState===WebSocket.OPEN&&gatewayMediaStream){
-      var muteNow=!gatewayMicrophoneMuted;
+    if(gatewayMediaStream){
+      var audioTracks=typeof gatewayMediaStream.getAudioTracks==='function'?gatewayMediaStream.getAudioTracks():gatewayMediaStream.getTracks();
+      var captureIsMuted=audioTracks.length>0&&audioTracks.every(function(track){return track.kind&&track.kind!=='audio'?true:track.enabled===false;});
+      var muteNow=!captureIsMuted;
+      if(!gatewayWs||gatewayWs.readyState!==WebSocket.OPEN){
+        // A dead socket must not leave a disabled track masquerading as a live microphone.
+        stopGatewayRecognition();
+        setGatewayMicrophoneMuted(false);
+        startLiveRecognition();
+        status.textContent='اتصال گفتار دوباره برقرار می‌شود؛ پاسخ فعلی متوقف نخواهد شد.';
+        return;
+      }
       setGatewayMicrophoneMuted(muteNow);
       if(!busy)voiceTitle.textContent=muteNow?'میکروفون خاموش است':'گوش می‌دهم';
       voiceCaption.textContent=muteNow?'صدای میکروفون ارسال نمی‌شود؛ برای ادامهٔ صحبت دوباره همین دکمه را بزن.':'میکروفون دوباره روشن است؛ گفتار تازه در نوبت خودش پردازش می‌شود.';
