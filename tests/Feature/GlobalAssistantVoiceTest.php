@@ -551,7 +551,7 @@ class GlobalAssistantVoiceTest extends TestCase
 
         $response->assertStatus(503)
             ->assertJsonPath('ok', false)
-            ->assertJsonPath('code', 'local_tts_token_missing');
+            ->assertJsonPath('code', 'tts_token_missing');
         Http::assertNothingSent();
     }
 
