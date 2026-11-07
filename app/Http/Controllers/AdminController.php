@@ -375,8 +375,8 @@ class AdminController extends Controller
             ],
             'secretStatus' => $globalScope ? [
                 'gemini' => (bool) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key')),
-                'files' => (bool) (SiteSetting::read('files_api_key') ?: env('FILES_API_KEY')),
-                'groq' => (bool) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')),
+                'files' => (bool) (SiteSetting::read('files_api_key') ?: config('services.files.key')),
+                'groq' => (bool) (SiteSetting::read('voice_groq_key') ?: config('services.groq.key')),
             ] : ['gemini' => false, 'files' => false, 'groq' => false],
             'systemHealth' => $globalScope ? [
                 'php' => PHP_VERSION,
