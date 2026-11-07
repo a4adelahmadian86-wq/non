@@ -138,4 +138,31 @@ class VoiceProviderDashboardIntegrationTest extends TestCase
         $this->assertTrue($account->fresh()->quota_period_ends_at->isFuture());
     }
 
+    public function test_rotating_provider_credentials_invalidates_previous_connection_verification(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $account = new VoiceProviderAccount();
+        $account->provider = 'gladia';
+        $account->name = 'Gladia';
+        $account->credentials_array = ['api_key' => 'old-secret'];
+        $account->enabled = true;
+        $account->healthy = true;
+        $account->last_success_at = now();
+        $account->save();
+
+        $this->actingAs($admin)
+            ->from(route('admin.index'))
+            ->post(route('admin.voice.providers.update'), [
+                'gladia_api_key' => 'new-secret',
+                'gladia_enabled' => '1',
+            ])
+            ->assertRedirect(route('admin.index'));
+
+        $account->refresh();
+
+        $this->assertSame('new-secret', $account->credentials_array['api_key']);
+        $this->assertNull($account->last_success_at);
+        $this->assertSame('unverified', collect(app(ProviderRegistry::class)->catalog())->firstWhere('provider', 'gladia')['status']);
+    }
+
 }
