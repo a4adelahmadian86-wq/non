@@ -39,14 +39,14 @@ class AdminConsoleScopeIntegrityTest extends TestCase
 
         $response->assertOk()
             ->assertDontSee('private-dashboard-user@example.test')
-            ->assertDontSee('id="users"')
-            ->assertDontSee('name="gemini_api_key"')
-            ->assertDontSee('name="voice_groq_key"')
-            ->assertDontSee('id="voice-settings"')
-            ->assertDontSee('id="content"')
-            ->assertDontSee('id="ai"')
-            ->assertDontSee('id="platform-control"')
-            ->assertDontSee('id="system-health"');
+            ->assertDontSee('id="users"', false)
+            ->assertDontSee('name="gemini_api_key"', false)
+            ->assertDontSee('name="voice_groq_key"', false)
+            ->assertDontSee('id="voice-settings"', false)
+            ->assertDontSee('id="content"', false)
+            ->assertDontSee('id="ai"', false)
+            ->assertDontSee('id="platform-control"', false)
+            ->assertDontSee('id="system-health"', false);
 
         $this->actingAs($viewer)->get(route('admin.users'))->assertForbidden();
     }
@@ -164,7 +164,7 @@ class AdminConsoleScopeIntegrityTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.index'))
             ->assertOk()
-            ->assertSee('id="system-health"')
+            ->assertSee('id="system-health"', false)
             ->assertSee('پایگاه داده')
             ->assertSee('صف پردازش')
             ->assertSee('فضای خصوصی فایل‌ها');
