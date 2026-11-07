@@ -53,9 +53,9 @@
     </section>
 
     <div class="user-dashboard__columns">
-        <section class="user-dashboard__panel user-dashboard__panel--wide">
+        <section id="editor-documents" class="user-dashboard__panel user-dashboard__panel--wide">
             <div class="user-dashboard__panel-head">
-                <div><span class="user-dashboard__kicker">ویرایشگر</span><h2>اسناد اخیر</h2><p>با انتخاب هر سند، همان سند در ویرایشگر باز می‌شود.</p></div>
+                <div><span class="user-dashboard__kicker">ویرایشگر</span><h2>{{ $documentStatusFilter ? 'پیش‌نویس‌های من' : 'اسناد اخیر' }}</h2><p>{{ $documentStatusFilter ? 'فقط پیش‌نویس‌های ذخیره‌شده نمایش داده می‌شوند.' : 'با انتخاب هر سند، همان سند در ویرایشگر باز می‌شود.' }}</p></div>
                 <span class="user-dashboard__count">{{ number_format($documents->total()) }}</span>
             </div>
             @forelse($documents as $document)
@@ -94,7 +94,7 @@
                 <div><span>درخواست AI روزانه</span><strong>{{ $capabilities['unlimited'] ? 'نامحدود' : number_format($capabilities['daily_ai_requests']) }}</strong></div>
                 <div><span>حداکثر حجم فایل</span><strong>{{ number_format($capabilities['max_file_mb']) }} MB</strong></div>
             </div>
-            <div class="user-dashboard__quick-links">
+            <div id="workspace-shortcuts" class="user-dashboard__quick-links">
                 <a href="{{ route('wallet') }}"><i class="fa-solid fa-wallet"></i> کیف پول</a>
                 <a href="{{ route('platform.notifications') }}"><i class="fa-solid fa-bell"></i> اعلان‌ها</a>
                 @if($capabilities['can_support'])<a href="{{ route('support') }}"><i class="fa-solid fa-headset"></i> پشتیبانی</a>@endif
