@@ -21,8 +21,19 @@ jobs:
           php-version: '8.3'
           extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
           coverage: none
+      - name: Install ClamAV for browser upload tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clamav clamav-freshclam
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam
+          clamscan --version
+          printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > /tmp/farast-clamav-smoke.png
+          clamscan --no-summary /tmp/farast-clamav-smoke.png
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Verify PHP process can invoke ClamAV
+        run: php -r 'require "vendor/autoload.php"; $p = new Symfony\Component\Process\Process(["/usr/bin/clamscan", "--no-summary", "/tmp/farast-clamav-smoke.png"]); $p->setTimeout(30); $p->mustRun();'
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
       - run: php -l database/seeders/SherpaOnnxVoiceProviderSeeder.php && php -l database/seeders/DatabaseSeeder.php && php -l app/Services/VoiceProviderRouter.php && php -l app/Services/ProviderRegistry.php && php -l app/Http/Controllers/AdminPlatformController.php && php -l app/Services/EditorDocumentService.php && php -l app/Services/EditorKernelToolHandler.php && php -l app/Http/Controllers/VoiceController.php && php -l app/Http/Controllers/GlobalAssistantController.php && php -l app/Services/Agent/FarastEditorAgent.php && php -l app/Http/Controllers/EditorAgentController.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/EditorDocumentStateController.php && php -l app/Http/Controllers/EditorSaveController.php && php -l app/Http/Controllers/ExportController.php && php -l app/Models/FarastDocument.php && php -l app/Models/FarastDocumentVersion.php
       - run: node --check public/js/editor-core.js
@@ -50,6 +61,8 @@ jobs:
           DB_DATABASE: database/database.sqlite
       - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-farast-e2e php artisan db:seed --force
       - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-server.log 2>&1 &
+        env:
+          FARAST_CLAMSCAN_BINARY: /usr/bin/clamscan
       - run: for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/up >/dev/null && exit 0; sleep 1; done; cat /tmp/farast-server.log; exit 1
       - run: npm init -y
       - run: npm install --no-save @playwright/test@1.55.0
@@ -58,7 +71,10 @@ jobs:
         env:
           FARAST_E2E_URL: http://127.0.0.1:8000
       - if: always()
-        run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
+        name: Collect application diagnostics
+        run: |
+          test -f storage/logs/laravel.log && tail -n 250 storage/logs/laravel.log || true
+          test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
   voice-model-smoke:
     if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'

@@ -65,6 +65,7 @@ test('explicit page break survives reload', async ({ page }) => {
 });
 
 test('table and image remain represented across pagination', async ({ page }) => {
+  page.on('response', async response => { if (response.url().includes('/editor/assets')) console.log('[editor-assets]', response.status(), await response.text()); });
   await openEditor(page);
   await page.locator('.farast-editor').first().click();
   await page.keyboard.insertText('متن '.repeat(180));
@@ -76,7 +77,7 @@ test('table and image remain represented across pagination', async ({ page }) =>
   await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.some(b => b.type === 'table'))).toBeTruthy();
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
   await page.locator('#source').setInputFiles({ name: 'phase2.png', mimeType: 'image/png', buffer: png });
-  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.resources.length)).toBeGreaterThan(0);
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor.state.model.resources.length)).toBeGreaterThan(0).catch(async error => { console.log('[editor-image-toast]', await page.locator('#farastEditorMessage').textContent().catch(() => null)); console.log('[editor-image-state]', JSON.stringify(await page.evaluate(() => ({ resources: window.FarastEditor?.state?.model?.resources, blocks: window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(block => block.type), selection: window.FarastEditor?.state?.selection })))); throw error; });
   expect(await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.find(b => b.type === 'table').rows.length)).toBe(12);
   expect(await page.evaluate(() => window.FarastEditor.state.model.sections[0].blocks.some(b => b.type === 'image'))).toBeTruthy();
 });

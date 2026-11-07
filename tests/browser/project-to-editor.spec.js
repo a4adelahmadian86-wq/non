@@ -13,6 +13,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   const consoleErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  page.on('response', async response => { if (response.url().includes('/editor/assets')) console.log('[editor-assets]', response.status(), await response.text()); });
   const password = `${process.env.GITHUB_RUN_ID || 'local'}-farast-e2e`;
 
   await page.goto('/login?continue=/projects/new');
@@ -311,7 +312,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
 
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
   await page.locator('#source').setInputFiles({ name: 'kernel-test.png', mimeType: 'image/png', buffer: png });
-  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.resources?.length || 0)).toBeGreaterThan(0);
+  await expect.poll(async () => page.evaluate(() => window.FarastEditor?.state?.model?.resources?.length || 0)).toBeGreaterThan(0).catch(async error => { console.log('[editor-image-toast]', await page.locator('#farastEditorMessage').textContent().catch(() => null)); console.log('[editor-image-state]', JSON.stringify(await page.evaluate(() => ({ resources: window.FarastEditor?.state?.model?.resources, blocks: window.FarastEditor?.state?.model?.sections?.[0]?.blocks?.map(block => block.type), selection: window.FarastEditor?.state?.selection })))); throw error; });
   const resource = await page.evaluate(() => window.FarastEditor?.state?.model?.resources?.[0] || null);
   expect(resource?.id).toMatch(/^asset-/);
   expect(resource?.storage_path).toBeTruthy();
