@@ -17,7 +17,7 @@ class UserFileController extends Controller
         return response()->json(['ok' => true, 'files' => $files]);
     }
 
-    public function upload(Request $request, PricingService $pricing, CapabilityService $capabilities)
+    public function upload(Request $request, PricingService $pricing, CapabilityService $capabilities, UploadSecurityService $security)
     {
         $caps = $capabilities->forUser(auth()->user());
         $limit = max(1, min((int) ($caps['max_file_mb'] ?? 50), 2048));
@@ -25,27 +25,65 @@ class UserFileController extends Controller
         $file = $request->file('file');
         $bytes = $file->getSize() ?: 0;
         $path = $file->store('user-files/'.auth()->id(), 'private');
-        $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $path);
-        $quote = $pricing->estimateByPages($pages);
-        $now = now();
-        $record = UserFile::create([
-            'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
-            'disk' => 'private', 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
-            'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'], 'status' => 'local',
-            'uploaded_at' => $now, 'local_expires_at' => $now->copy()->addDays((int) env('FILES_TTL_DAYS', 14)),
-            'remote_expires_at' => $now->copy()->addDays(90),
-        ]);
+
+        try {
+            $inspection = $security->inspect($path, $file->getMimeType(), $limit * 1024 * 1024);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن امنیتی فایل در دسترس نیست؛ بارگذاری تا فعال‌شدن ضدبدافزار متوقف است.');
+            $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $path);
+            $quote = $pricing->estimateByPages($pages);
+            $now = now();
+
+            $record = DB::transaction(function () use ($file, $bytes, $path, $pages, $quote, $now, $inspection) {
+                $record = UserFile::create([
+                    'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
+                    'disk' => 'private', 'mime' => $inspection['mime'], 'size_bytes' => $bytes,
+                    'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'], 'status' => 'local',
+                    'uploaded_at' => $now, 'local_expires_at' => $now->copy()->addDays((int) env('FILES_TTL_DAYS', 14)),
+                    'remote_expires_at' => $now->copy()->addDays(90),
+                ]);
+
+                FarastStorageObject::create([
+                    'user_id' => auth()->id(), 'disk' => 'private', 'path' => $path,
+                    'mime' => $inspection['mime'], 'size' => $inspection['size'], 'checksum' => $inspection['checksum'],
+                    'status' => 'approved', 'classification' => 'user_file',
+                    'provenance' => ['pipeline' => 'upload_security', 'scan' => $inspection['scan']],
+                ]);
+
+                return $record;
+            });
+        } catch (\\Throwable $e) {
+            Storage::disk('private')->delete($path);
+            throw $e;
+        }
+
         return response()->json(['ok' => true, 'file' => $this->present($record), 'estimate' => $quote]);
     }
 
     public function select(UserFile $file, Request $request)
     {
         abort_unless($file->user_id === $request->user()->id, 403);
-        abort_unless(Storage::disk($file->disk ?: 'private')->exists($file->path), 404, 'فایل در فضای نگهداری موجود نیست.');
+        abort_unless($file->status === 'local' && ($file->disk ?: 'private') === 'private', 409, 'فایل آرشیوشده باید ابتدا بازیابی شود.');
+        abort_unless(Storage::disk('private')->exists($file->path), 404, 'فایل در فضای نگهداری موجود نیست.');
 
-        $bytes = Storage::disk($file->disk ?: 'private')->get($file->path);
+        $storedObject = FarastStorageObject::query()
+            ->where('user_id', $request->user()->id)
+            ->where('disk', 'private')
+            ->where('path', $file->path)
+            ->where('classification', 'user_file')
+            ->where('status', 'approved')
+            ->firstOrFail();
+
+        $bytes = Storage::disk('private')->get($file->path);
+        abort_unless(hash_equals((string) $storedObject->checksum, hash('sha256', $bytes)), 409, 'محتوای فایل پس از بررسی امنیتی تغییر کرده است.');
+
         $sourcePath = 'typing/'.$request->user()->id.'/'.Str::uuid().'-'.basename($file->path);
         Storage::disk('private')->put($sourcePath, $bytes);
+        FarastStorageObject::create([
+            'user_id' => $request->user()->id, 'disk' => 'private', 'path' => $sourcePath,
+            'mime' => $storedObject->mime, 'size' => strlen($bytes), 'checksum' => $storedObject->checksum,
+            'status' => 'approved', 'classification' => 'upload',
+            'provenance' => ['pipeline' => 'user_file_select', 'source_object_id' => $storedObject->object_id],
+        ]);
 
         $pending = [
             'path' => $sourcePath,
@@ -71,6 +109,7 @@ class UserFileController extends Controller
         abort_unless($file->user_id === auth()->id(), 403);
         Storage::disk($file->disk ?: 'private')->delete($file->path);
         if ($file->remote_path) Storage::disk('farast_remote')->delete($file->remote_path);
+        FarastStorageObject::query()->where('user_id', auth()->id())->where('disk', 'private')->where('path', $file->path)->delete();
         $file->delete();
         return response()->json(['ok' => true]);
     }
