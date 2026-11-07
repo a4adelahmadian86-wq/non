@@ -26,7 +26,8 @@
         @csrf
         <div class="auth-field">
           <label for="emailMobileOtpCode">کد تأیید پیامک</label>
-          <input id="emailMobileOtpCode" name="code" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="کد ۶ رقمی" required>
+          <input id="emailMobileOtpCode" name="code" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="کد ۶ رقمی" aria-describedby="emailMobileOtpHint" required>
+          <small class="auth-field-hint" id="emailMobileOtpHint">کد ۶ رقمی ارسال‌شده به شماره ثبت‌شده را وارد کنید.</small>
         </div>
         <button class="auth-btn primary" type="submit"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> ورود به حساب</button>
       </form>
