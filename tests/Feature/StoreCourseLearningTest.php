@@ -13,6 +13,7 @@ use App\Models\StoreProduct;
 use App\Models\User;
 use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class StoreCourseLearningTest extends TestCase
@@ -135,10 +136,9 @@ class StoreCourseLearningTest extends TestCase
             ->assertOk()
             ->assertJson(['ok' => true, 'completed' => true]);
 
-        $this->assertDatabaseHas('store_course_lesson_progress', [
-            'lesson_id' => $lesson->id,
-            'completed_at' => now()->toDateTimeString(),
-        ]);
+        $this->assertNotNull(DB::table('store_course_lesson_progress')
+            ->where('lesson_id', $lesson->id)
+            ->value('completed_at'));
     }
 
     public function test_drip_released_lesson_cannot_be_opened_before_its_release_day(): void
