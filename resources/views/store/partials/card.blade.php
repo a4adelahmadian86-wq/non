@@ -5,11 +5,11 @@
     @if($product->cover_path)
       <img src="{{ asset($product->cover_path) }}" alt="{{ $product->title }}" loading="lazy">
     @else
-      <span class="store-cover-placeholder"><i class="fa-solid fa-file-lines"></i><b>FARAST</b></span>
+      <span class="store-cover-placeholder"><i class="fa-solid fa-{{ $product->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i><b>FARAST</b></span>
     @endif
   </a>
   <div class="store-product-copy">
-    <small>{{ $product->category?->name ?? 'فایل دیجیتال' }}</small>
+    <small>{{ $product->type === 'course' ? 'دوره آموزشی' : ($product->category?->name ?? 'فایل دیجیتال') }}</small>
     <h2><a href="{{ route('store.product',$product->slug) }}">{{ $product->title }}</a></h2>
     <p>{{ \Illuminate\Support\Str::limit($product->short_description ?: $product->description, 100) }}</p>
     <div class="store-price-row">
