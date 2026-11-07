@@ -22,6 +22,7 @@ class AuthOtpSessionBindingTest extends TestCase
         $session->put('register.mobile', '09120002222');
         $session->put('register.verified', true);
         $session->put('register.verified_mobile', '09120001111');
+        $session->put('register.verified_at', now()->timestamp);
 
         $request = Request::create('/register', 'POST', []);
         $request->setLaravelSession($session);
@@ -54,6 +55,7 @@ class AuthOtpSessionBindingTest extends TestCase
         $this->assertSame('09120002222', $session->get('register.mobile'));
         $this->assertFalse((bool) $session->get('register.verified', false));
         $this->assertNull($session->get('register.verified_mobile'));
+        $this->assertNull($session->get('register.verified_at'));
     }
 
     public function test_password_reset_rejects_verification_bound_to_another_phone(): void
@@ -64,6 +66,7 @@ class AuthOtpSessionBindingTest extends TestCase
         $session->put('password_reset.mobile', $user->mobile);
         $session->put('password_reset.verified', true);
         $session->put('password_reset.verified_mobile', '09120001111');
+        $session->put('password_reset.verified_at', now()->timestamp);
 
         $request = Request::create('/password/reset', 'POST', [
             'password' => 'NewSecurePassword123',
@@ -103,4 +106,49 @@ class AuthOtpSessionBindingTest extends TestCase
         $this->assertNull($session->get('email_login.user_id'));
         $this->assertNull($session->get('email_login.mobile'));
     }
+
+    public function test_registration_verification_expires_after_ten_minutes(): void
+    {
+        $session = app('session')->driver();
+        $session->flush();
+        $session->put('register.mobile', '09120002222');
+        $session->put('register.verified_mobile', '09120002222');
+        $session->put('register.verified_at', now()->subMinutes(11)->timestamp);
+
+        $request = Request::create('/register', 'POST', []);
+        $request->setLaravelSession($session);
+
+        try {
+            (new AuthController())->registerStore($request, \Mockery::mock(EmailService::class));
+            $this->fail('Expired phone verification must not authorize registration.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
+    public function test_password_reset_verification_expires_after_ten_minutes(): void
+    {
+        $user = User::factory()->create(['mobile' => '09120003333']);
+        $session = app('session')->driver();
+        $session->flush();
+        $session->put('password_reset.mobile', $user->mobile);
+        $session->put('password_reset.verified_mobile', $user->mobile);
+        $session->put('password_reset.verified_at', now()->subMinutes(11)->timestamp);
+
+        $request = Request::create('/password/reset', 'POST', [
+            'password' => 'NewSecurePassword123',
+            'password_confirmation' => 'NewSecurePassword123',
+        ]);
+        $request->setLaravelSession($session);
+
+        try {
+            (new AuthController())->resetPassword($request, \Mockery::mock(EmailService::class));
+            $this->fail('Expired phone verification must not authorize password reset.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+
+        $this->assertFalse(password_verify('NewSecurePassword123', $user->fresh()->password));
+    }
+
 }
