@@ -159,6 +159,10 @@ class StoreController extends Controller
             ->view('store.reader', compact('product', 'previews', 'readerIdentity'))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
+            ->header('X-Content-Type-Options', 'nosniff')
+            ->header('X-Frame-Options', 'SAMEORIGIN')
+            ->header('Referrer-Policy', 'no-referrer')
+            ->header('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
     /**
