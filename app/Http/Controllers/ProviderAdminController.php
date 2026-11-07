@@ -11,10 +11,10 @@ use Throwable;
 class ProviderAdminController extends Controller {
  public function updateAi(Request $r){$d=$r->validate(['gemini_api_key'=>'nullable|string|max:500','gemini_model'=>'required|string|max:120','gemini_fallback_model'=>'nullable|string|max:120']);if(filled($d['gemini_api_key']??null))SiteSetting::write('gemini_api_key',trim($d['gemini_api_key']),true);SiteSetting::write('gemini_model',trim($d['gemini_model']));SiteSetting::write('gemini_fallback_model',trim((string)($d['gemini_fallback_model']??'')));app(AuditLogService::class)->record(auth()->id(),'provider.gemini.updated',request()->ip(),['model'=>$d['gemini_model'],'key_replaced'=>filled($d['gemini_api_key']??null)]);return back()->with('status','تنظیمات Gemini ذخیره شد.');}
  public function testAi(){
-  $key=trim((string)SiteSetting::read('gemini_api_key',''));
+  $key=trim((string)(SiteSetting::read('gemini_api_key') ?: config('services.gemini.key','')));
   if($key==='')return response()->json(['ok'=>false,'configured'=>false,'message'=>'کلید Gemini تنظیم نشده است.'],422);
 
-  $selectedModel=trim((string)SiteSetting::read('gemini_model','gemini-3.8-flash'));
+  $selectedModel=trim((string)(SiteSetting::read('gemini_model') ?: config('services.gemini.model','gemini-3.8-flash')));
 
   try{
    $response=Http::withHeaders([
