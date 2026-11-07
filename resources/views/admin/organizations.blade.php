@@ -1,5 +1,5 @@
-@extends('layouts.app')
-@section('content')
+@extends('layouts.admin')
+@section('admin-content')
 <div class="farast-control-page" dir="rtl"><header><div><span class="eyebrow">ORGANIZATIONS / TEAMS</span><h1>سازمان‌ها و تیم‌ها</h1><p>ساختار سازمانی additive است و داده کاربران فعلی را حذف نمی‌کند.</p></div><a href="{{ route('admin.index') }}">مرکز عملیات</a></header>
 @if(auth()->user()?->isAdmin())
 <section class="control-card"><form class="inline-form" method="post" action="{{ route('admin.organizations.store') }}">@csrf<input name="name" placeholder="نام سازمان" required><input name="slug" placeholder="slug" required><button>ایجاد سازمان</button></form></section>
