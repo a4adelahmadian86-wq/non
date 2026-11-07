@@ -17,15 +17,7 @@ final class ProviderRegistry
         foreach (VoiceProviderAccount::query()->orderBy('priority')->orderBy('provider')->get() as $a) {
             $verified = (bool) $a->last_success_at
                 && (! $a->last_failure_at || $a->last_success_at->gt($a->last_failure_at));
-            $requiredCredentials = match ($a->provider) {
-                'gladia' => ['api_key'],
-                'azure' => ['subscription_key', 'region'],
-                'google' => ['project_id', 'client_email', 'private_key', 'region'],
-                default => [],
-            };
-            $credentials = $a->credentials_array;
-            $configured = $requiredCredentials !== []
-                && collect($requiredCredentials)->every(fn ($key) => filled($credentials[$key] ?? null));
+            $configured = $a->credentialsConfigured();
             $status = ! $a->enabled
                 ? 'disabled'
                 : (! $configured
