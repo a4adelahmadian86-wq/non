@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
+use App\Models\StoreProductImage;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -209,6 +210,45 @@ class AdminStoreController extends Controller
         return back()->with('status', 'پیش‌نمایش پس از اسکن امنیتی اضافه شد.');
     }
 
+    public function uploadCover(Request $request, StoreProduct $product, UploadSecurityService $security)
+    {
+        $request->validate(['cover' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192']);
+        $upload = $request->file('cover');
+        $temporaryPath = $upload->store('store/quarantine/covers/'.$product->id, 'private');
+
+        try {
+            $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
+                'image/jpeg', 'image/png', 'image/webp',
+            ]);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ کاور ذخیره نشد.');
+            abort_unless(hash_equals($inspection['checksum'], (string) hash_file('sha256', $upload->getRealPath())), 409, 'محتوای کاور هنگام انتقال تغییر کرده است.');
+
+            $extension = strtolower($upload->guessExtension() ?: 'jpg');
+            $filename = Str::random(32).'.'.$extension;
+            $publicPath = 'store/covers/'.$product->id.'/'.$filename;
+            $stored = Storage::disk('public')->putFileAs('store/covers/'.$product->id, $upload, $filename);
+            if (! $stored) {
+                throw new \\RuntimeException('cover_public_storage_failed');
+            }
+
+            $oldPath = (string) $product->cover_path;
+            $product->update(['cover_path' => $publicPath]);
+            if ($oldPath !== '' && Str::startsWith($oldPath, 'store/covers/'.$product->id.'/')) {
+                Storage::disk('public')->delete($oldPath);
+            }
+        } catch (Throwable $exception) {
+            Storage::disk('private')->delete($temporaryPath);
+            if ($exception instanceof ValidationException) {
+                throw $exception;
+            }
+            abort(503, 'بارگذاری کاور به دلیل ناموفق بودن بررسی امنیتی یا ذخیره‌سازی متوقف شد.');
+        }
+
+        Storage::disk('private')->delete($temporaryPath);
+
+        return back()->with('status', 'کاور محصول پس از اسکن امنیتی ذخیره شد.');
+    }
+
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
     {
         abort_unless($preview->product_id === $product->id, 404);
@@ -252,6 +292,8 @@ class AdminStoreController extends Controller
             'license_type' => 'nullable|string|max:60',
             'version' => 'nullable|string|max:60',
             'cover_path' => 'nullable|string|max:500',
+            'seo_title' => 'nullable|string|max:220',
+            'seo_description' => 'nullable|string|max:320',
         ]);
         $data['featured'] = $request->boolean('featured');
         $data['sort_order'] = $data['sort_order'] ?? 0;
