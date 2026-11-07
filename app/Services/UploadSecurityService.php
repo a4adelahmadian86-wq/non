@@ -51,7 +51,7 @@ class UploadSecurityService
         }
 
         $checksum = hash('sha256', $disk->get($path));
-        $scanner = trim((string) env('FARAST_CLAMSCAN_BINARY', ''));
+        $scanner = trim((string) config('farast.security.clamscan_binary', ''));
 
         if ($scanner === '') {
             return [
