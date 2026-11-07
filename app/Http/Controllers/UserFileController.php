@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\UserFile;
+use App\Models\FarastStorageObject;
 use App\Services\CapabilityService;
 use App\Services\PricingService;
+use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class UserFileController extends Controller
@@ -51,7 +54,7 @@ class UserFileController extends Controller
 
                 return $record;
             });
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             Storage::disk('private')->delete($path);
             throw $e;
         }
