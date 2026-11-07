@@ -4,7 +4,6 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsurePrivateStorageDisk
@@ -14,23 +13,23 @@ class EnsurePrivateStorageDisk
         $root = storage_path('app/private');
         $private = (array) config('filesystems.disks.private', []);
 
-        $needsRepair = ($private['driver'] ?? null) !== 'local' || ($private['root'] ?? null) !== $root;
+        $needsRepair = ($private['driver'] ?? null) !== 'local'
+            || ($private['root'] ?? null) !== $root
+            || ($private['throw'] ?? false) !== true;
+
         if ($needsRepair) {
             config([
                 'filesystems.disks.private' => [
                     'driver' => 'local',
                     'root' => $root,
-                    'throw' => false,
+                    // Private file writes must fail loudly; a false return can otherwise
+                    // leave database records pointing at files that were never persisted.
+                    'throw' => true,
                 ],
             ]);
 
-            // Laravel caches resolved disks in FilesystemManager. Forget the stale
-            // instance so a previously cached configuration cannot survive this request.
-            try {
-                app('filesystem')->forgetDisk('private');
-            } catch (\Throwable) {
-                // The config above is still authoritative when the manager has no forgetDisk method.
-            }
+            // Drop any resolved disk so this request uses the repaired configuration.
+            app('filesystem')->forgetDisk('private');
         }
 
         if (! is_dir($root)) {
