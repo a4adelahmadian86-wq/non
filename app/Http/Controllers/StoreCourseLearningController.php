@@ -54,9 +54,13 @@ class StoreCourseLearningController extends Controller
             return $section;
         })->filter(fn ($section) => $section->lessons->isNotEmpty())->values();
 
-        $total = $sections->sum(fn ($section) => $section->lessons->count());
-        $completed = $enrollment->progress->whereNotNull('completed_at')->count();
-        $progressPercent = $total > 0 ? (int) floor($completed * 100 / $total) : 0;
+        $availableLessonIds = $sections->flatMap(fn ($section) => $section->lessons->pluck('id'));
+        $total = $availableLessonIds->count();
+        $completed = $enrollment->progress
+            ->whereIn('lesson_id', $availableLessonIds)
+            ->whereNotNull('completed_at')
+            ->count();
+        $progressPercent = $total > 0 ? min(100, (int) floor($completed * 100 / $total)) : 0;
 
         return view('store.course-learning', compact('product', 'enrollment', 'sections', 'total', 'completed', 'progressPercent'));
     }
@@ -80,26 +84,51 @@ class StoreCourseLearningController extends Controller
         $enrollment = $this->enrollment($request, $product);
         abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
         abort_unless($this->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
+
         $data = $request->validate([
-            'last_position_seconds' => 'nullable|integer|min:0|max:86400',
-            'completed' => 'nullable|boolean',
+            'last_position_seconds' => 'sometimes|integer|min:0|max:86400',
+            'completed' => 'sometimes|boolean',
         ]);
 
-        $progress = StoreCourseLessonProgress::updateOrCreate(
-            ['enrollment_id' => $enrollment->id, 'lesson_id' => $lesson->id],
-            [
-                'last_position_seconds' => $data['last_position_seconds'] ?? 0,
-                'completed_at' => $request->boolean('completed') ? now() : null,
-            ]
-        );
+        $current = StoreCourseLessonProgress::query()
+            ->where('enrollment_id', $enrollment->id)
+            ->where('lesson_id', $lesson->id)
+            ->first();
+
+        $attributes = [];
+        if (array_key_exists('last_position_seconds', $data)) {
+            $attributes['last_position_seconds'] = $data['last_position_seconds'];
+        }
+        if (array_key_exists('completed', $data)) {
+            $attributes['completed_at'] = $request->boolean('completed') ? now() : null;
+        }
+
+        $progress = $attributes
+            ? StoreCourseLessonProgress::updateOrCreate(
+                ['enrollment_id' => $enrollment->id, 'lesson_id' => $lesson->id],
+                $attributes
+            )
+            : ($current ?? StoreCourseLessonProgress::firstOrCreate([
+                'enrollment_id' => $enrollment->id,
+                'lesson_id' => $lesson->id,
+            ]));
+
         $enrollment->update(['last_lesson_id' => $lesson->id]);
 
-        if ($request->boolean('completed')) {
-            $total = $enrollment->course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->withCount(['lessons as published_lessons_count' => fn ($query) => $query->where('is_published', true)])->get()->sum('published_lessons_count');
-            $done = $enrollment->progress()->whereNotNull('completed_at')->count();
-            if ($total > 0 && $done >= $total) {
-                $enrollment->update(['completed_at' => now()]);
-            }
+        if (array_key_exists('completed', $data)) {
+            $publishedLessonIds = StoreCourseLesson::query()
+                ->where('is_published', true)
+                ->whereHas('section', fn ($query) => $query->where('course_id', $enrollment->course_id))
+                ->pluck('id');
+            $total = $publishedLessonIds->count();
+            $done = $enrollment->progress()
+                ->whereIn('lesson_id', $publishedLessonIds)
+                ->whereNotNull('completed_at')
+                ->count();
+
+            $enrollment->update([
+                'completed_at' => $total > 0 && $done >= $total ? now() : null,
+            ]);
         }
 
         return response()->json(['ok' => true, 'completed' => (bool) $progress->completed_at]);
