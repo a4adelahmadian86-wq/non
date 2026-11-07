@@ -306,7 +306,7 @@ class AdminStoreController extends Controller
             'short_description' => 'nullable|string|max:2000',
             'description' => 'nullable|string|max:20000',
             'price_rials' => 'required|integer|min:0|max:999999999999',
-            'compare_at_price_rials' => 'nullable|integer|min:0',
+            'compare_at_price_rials' => 'nullable|integer|min:0|gte:price_rials',
             'status' => 'required|in:draft,published,archived',
             'featured' => 'nullable|boolean',
             'sort_order' => 'nullable|integer|min:0|max:999999',
