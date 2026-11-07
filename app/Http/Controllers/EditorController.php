@@ -76,7 +76,7 @@ class EditorController extends Controller
                 ->limit(4)
                 ->get(['id', 'name', 'status', 'updated_at', 'estimated_pages', 'used_pages']),
             'projectTotal' => $user->projects()->count(),
-            'canCreateDocuments' => app(\\App\\Services\\AuthorizationService::class)->allows($user, 'documents.create'),
+            'canCreateDocuments' => app(\App\Services\AuthorizationService::class)->allows($user, 'documents.create'),
             'openTicketCount' => $user->tickets()
                 ->whereIn('status', ['open', 'pending', 'user_replied'])
                 ->count(),
