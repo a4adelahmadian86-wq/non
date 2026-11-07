@@ -30,6 +30,7 @@ final class ProviderConnectionHealth
         SiteSetting::write($prefix.'.fingerprint', $this->fingerprint($provider, $key, $model), true);
         SiteSetting::write($prefix.'.last_failure_at', now()->toIso8601String());
         SiteSetting::write($prefix.'.api_reachable', $apiReachable ? '1' : '0');
+        SiteSetting::write($prefix.'.capabilities', '{}');
         SiteSetting::write($prefix.'.last_failure_code', preg_replace('/[^a-z0-9_:-]/i', '', $reason) ?: 'unknown');
     }
 
