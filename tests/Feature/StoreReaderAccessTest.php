@@ -184,7 +184,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertOk()
             ->assertSee('farast-xlsx-frame')
             ->assertSee('sandbox=""', false)
-            ->assertSee('EXCEL');
+            ->assertSee('Excel');
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
         $response->assertOk()
