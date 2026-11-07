@@ -218,4 +218,32 @@ class ProviderConnectionConfigTest extends TestCase
                     && $groq['ready'] === false;
             });
     }
+
+    public function test_old_successful_probe_expires_and_cannot_claim_provider_readiness(): void
+    {
+        config([
+            'services.groq.key' => 'config-only-groq-secret',
+            'services.provider_health_freshness_seconds' => 3600,
+        ]);
+
+        \Illuminate\Support\Carbon::setTestNow(now()->subHours(2));
+        app(\App\Services\ProviderConnectionHealth::class)->recordSuccess(
+            'groq',
+            'config-only-groq-secret',
+            'openai/gpt-oss-120b',
+            ['chat' => true, 'speech' => true]
+        );
+        \Illuminate\Support\Carbon::setTestNow();
+
+        $catalog = collect(app(\App\Services\ProviderRegistry::class)->catalog())->keyBy('id');
+        $groq = $catalog->get('ai:groq');
+
+        $this->assertSame('stale', $groq['status']);
+        $this->assertFalse($groq['connection_verified']);
+        $this->assertFalse($groq['api_reachable']);
+        $this->assertFalse($groq['ready']);
+        $this->assertSame(['chat' => false, 'speech' => false], $groq['capability_readiness']);
+        $this->assertNotNull($groq['last_success_at']);
+    }
+
 }
