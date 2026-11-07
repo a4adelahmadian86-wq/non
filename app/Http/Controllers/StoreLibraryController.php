@@ -102,6 +102,10 @@ class StoreLibraryController extends Controller
 
             $disk = Storage::disk($file->disk ?: 'private');
             abort_unless($disk->exists($file->path), 404, 'فایل پیدا نشد.');
+            if ($file->sha256) {
+                $actualHash = hash_file('sha256', $disk->path($file->path));
+                abort_unless(is_string($actualHash) && hash_equals((string) $file->sha256, $actualHash), 409, 'محتوای فایل پس از اسکن یا ثبت سفارش تغییر کرده است.');
+            }
 
             // Serialize increments to enforce the per-link download ceiling.
             $lockedDownload->increment('download_count');
