@@ -11,9 +11,6 @@
 @push('scripts')
 <script src="{{ asset('js/blog.js') }}?v=20261107b" defer></script>
 @endpush
-@push('scripts')
-<script src="{{ asset('js/blog.js') }}?v=20261107b" defer></script>
-@endpush
 
 @section('content')
 <section class="farast-blog" dir="rtl">
