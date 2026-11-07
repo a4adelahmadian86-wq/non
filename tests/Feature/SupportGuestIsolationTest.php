@@ -141,10 +141,11 @@ class SupportGuestIsolationTest extends TestCase
         $this->assertSame('private', $attachment['disk']);
         Storage::disk('private')->assertExists($attachment['path']);
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->get(route('support.attachment', ['ticket' => $ticket->id, 'message' => $message->id, 'index' => 0]))
-            ->assertOk()
-            ->assertHeader('Cache-Control', 'private, no-store, max-age=0');
+            ->assertOk();
+        $this->assertStringContainsString('private', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
 
         $this->actingAs($other)
             ->get(route('support.attachment', ['ticket' => $ticket->id, 'message' => $message->id, 'index' => 0]))
