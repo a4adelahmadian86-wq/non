@@ -281,4 +281,29 @@ class WorkspaceModuleAccessAndBillingIntegrityTest extends TestCase
         $this->post(route('platform.workflows.run', $workflowId))->assertForbidden();
     }
 
+    public function test_single_editor_lock_does_not_block_dashboard_or_other_workspace_modules(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+
+        DB::table('editor_sessions')->insert([
+            'user_id' => $user->id,
+            'token' => str_repeat('x', 64),
+            'last_seen_at' => now(),
+            'expires_at' => now()->addMinutes(20),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertOk();
+
+        $this->get(route('platform.documents'))->assertOk();
+        $this->get(route('platform.billing'))->assertOk();
+        $this->get(route('wallet'))->assertOk();
+
+        // The editor itself remains protected by the existing one-session rule.
+        $this->get(route('editor'))->assertStatus(409);
+    }
+
 }
