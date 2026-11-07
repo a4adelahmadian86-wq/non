@@ -18,18 +18,27 @@ class CanvaService {
   return ['url'=>'https://www.canva.com/api/oauth/authorize?'.$query,'state'=>$state];
  }
  public function callback(User $user,string $code,string $state):CanvaConnection {
-  $oauth=session()->pull('canva_oauth');if(!$oauth||!hash_equals($oauth['state']??'', $state))throw new RuntimeException('canva_oauth_state_invalid');
-  $response=Http::asForm()->withBasicAuth((string)SiteSetting::read('canva_client_id'),(string)SiteSetting::read('canva_client_secret'))->post('https://api.canva.com/rest/v1/oauth/token',['grant_type'=>'authorization_code','code'=>$code,'redirect_uri'=>SiteSetting::read('canva_redirect_uri'),'code_verifier'=>$oauth['verifier']]);
+  $oauth=session()->pull('canva_oauth');
+  if(!$oauth||!is_string($oauth['state']??null)||!is_string($oauth['verifier']??null)||!hash_equals($oauth['state'], $state))throw new RuntimeException('canva_oauth_state_invalid');
+  $response=Http::asForm()->connectTimeout(5)->timeout(20)->withBasicAuth((string)SiteSetting::read('canva_client_id'),(string)SiteSetting::read('canva_client_secret'))->post('https://api.canva.com/rest/v1/oauth/token',['grant_type'=>'authorization_code','code'=>$code,'redirect_uri'=>SiteSetting::read('canva_redirect_uri'),'code_verifier'=>$oauth['verifier']]);
   if(!$response->successful())throw new RuntimeException('canva_token_exchange_failed');
-  $j=$response->json();$conn=CanvaConnection::updateOrCreate(['user_id'=>$user->id],['access_token'=>$j['access_token']??null,'refresh_token'=>$j['refresh_token']??null,'expires_at'=>now()->addSeconds((int)($j['expires_in']??14400)),'scopes'=>preg_split('/\s+/',trim((string)($j['scope']??'')), -1,PREG_SPLIT_NO_EMPTY),'status'=>'connected','last_checked_at'=>now()]);
+  $j=$response->json();
+  $accessToken=is_array($j)?trim((string)($j['access_token']??'')):'';
+  $expiresIn=is_array($j)?(int)($j['expires_in']??0):0;
+  if($accessToken===''||$expiresIn<=0)throw new RuntimeException('canva_token_response_invalid');
+  $conn=CanvaConnection::updateOrCreate(['user_id'=>$user->id],['access_token'=>$accessToken,'refresh_token'=>$j['refresh_token']??null,'expires_at'=>now()->addSeconds($expiresIn),'scopes'=>preg_split('/\\s+/',trim((string)($j['scope']??'')), -1,PREG_SPLIT_NO_EMPTY),'status'=>'connected','last_checked_at'=>now()]);
   return $conn;
  }
  public function token(CanvaConnection $connection):string {
   if($connection->expires_at && $connection->expires_at->gt(now()->addMinute()) && $connection->access_token)return $connection->access_token;
   if(!$connection->refresh_token)throw new RuntimeException('canva_reauthorization_required');
-  $response=Http::asForm()->withBasicAuth((string)SiteSetting::read('canva_client_id'),(string)SiteSetting::read('canva_client_secret'))->post('https://api.canva.com/rest/v1/oauth/token',['grant_type'=>'refresh_token','refresh_token'=>$connection->refresh_token]);
+  $response=Http::asForm()->connectTimeout(5)->timeout(20)->withBasicAuth((string)SiteSetting::read('canva_client_id'),(string)SiteSetting::read('canva_client_secret'))->post('https://api.canva.com/rest/v1/oauth/token',['grant_type'=>'refresh_token','refresh_token'=>$connection->refresh_token]);
   if(!$response->successful())throw new RuntimeException('canva_token_refresh_failed');
-  $j=$response->json();$connection->access_token=$j['access_token']??null;if(!empty($j['refresh_token']))$connection->refresh_token=$j['refresh_token'];$connection->expires_at=now()->addSeconds((int)($j['expires_in']??14400));$connection->last_checked_at=now();$connection->status='connected';$connection->save();return (string)$connection->access_token;
+  $j=$response->json();
+  $accessToken=is_array($j)?trim((string)($j['access_token']??'')):'';
+  $expiresIn=is_array($j)?(int)($j['expires_in']??0):0;
+  if($accessToken===''||$expiresIn<=0)throw new RuntimeException('canva_token_response_invalid');
+  $connection->access_token=$accessToken;if(!empty($j['refresh_token']))$connection->refresh_token=$j['refresh_token'];$connection->expires_at=now()->addSeconds($expiresIn);$connection->last_checked_at=now();$connection->status='connected';$connection->save();return (string)$connection->access_token;
  }
  public function request(CanvaConnection $c,string $method,string $path,array $options=[]):array {
   $token=$this->token($c);$req=Http::withToken($token)->acceptJson()->timeout(30);
