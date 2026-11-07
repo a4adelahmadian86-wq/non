@@ -29,17 +29,6 @@ class UserDashboardDataIntegrationTest extends TestCase
             'is_favorite' => false,
         ]);
 
-        $editorDocument = TypingDocument::create([
-            'user_id' => $user->id,
-            'farast_document_id' => $linkedWorkspaceDocument->id,
-            'title' => 'My editor document',
-            'content' => '',
-            'page_count' => 3,
-            'word_count' => 20,
-            'status' => 'draft',
-            'price_rials' => 0,
-        ]);
-
         for ($i = 1; $i <= 10; $i++) {
             TypingDocument::create([
                 'user_id' => $user->id,
@@ -51,6 +40,17 @@ class UserDashboardDataIntegrationTest extends TestCase
                 'price_rials' => 0,
             ]);
         }
+
+        $editorDocument = TypingDocument::create([
+            'user_id' => $user->id,
+            'farast_document_id' => $linkedWorkspaceDocument->id,
+            'title' => 'My editor document',
+            'content' => '',
+            'page_count' => 3,
+            'word_count' => 20,
+            'status' => 'draft',
+            'price_rials' => 0,
+        ]);
 
         $workspaceOnlyDocument = FarastDocument::create([
             'user_id' => $user->id,
