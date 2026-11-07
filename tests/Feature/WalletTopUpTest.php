@@ -80,7 +80,7 @@ class WalletTopUpTest extends TestCase
         $this->assertDatabaseCount('wallet_transactions', 1);
     }
 
-    public function test_cancelled_top_up_never_credits_wallet(): void
+    public function test_untrusted_cancel_callback_never_credits_or_mutates_pending_payment(): void
     {
         $this->enableGateway();
         $user = User::factory()->create();
@@ -107,8 +107,8 @@ class WalletTopUpTest extends TestCase
             ->assertRedirect(route('wallet'))
             ->assertSessionHasErrors('topup');
 
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'failed']);
-        $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'failed']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'pending']);
         $this->assertDatabaseMissing('wallet_transactions', ['reference_id' => $order->id]);
         $this->assertSame(0, (int) Wallet::query()->where('user_id', $user->id)->value('balance_rials'));
     }
