@@ -4,7 +4,7 @@ return [
     'default' => env('FILESYSTEM_DISK', 'local'),
     'disks' => [
         'local' => ['driver' => 'local', 'root' => storage_path('app/private'), 'throw' => false],
-        'private' => ['driver' => 'local', 'root' => storage_path('app/private'), 'throw' => false],
+        'private' => ['driver' => 'local', 'root' => storage_path('app/private'), 'throw' => true],
         'public' => ['driver' => 'local', 'root' => storage_path('app/public'), 'url' => env('APP_URL').'/storage', 'visibility' => 'public', 'throw' => false],
         'farast_remote' => [
             'driver' => 'local',
