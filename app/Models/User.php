@@ -19,17 +19,6 @@ class User extends Authenticatable
     public const ROLE_OBSERVER = 'observer';
     public const ROLE_GUEST = 'guest';
 
-    protected static function booted(): void
-    {
-        static::creating(function (self $user): void {
-            // The legacy database default was "user"; new accounts use the
-            // explicit employee role while old records are normalized by migration.
-            if (blank($user->role) || $user->role === 'user') {
-                $user->role = self::ROLE_EMPLOYEE;
-            }
-        });
-    }
-
     public const DASHBOARD_ROLES = [
         self::ROLE_ADMIN,
         self::ROLE_ORGANIZATION_MANAGER,
