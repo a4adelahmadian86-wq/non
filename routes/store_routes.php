@@ -4,10 +4,18 @@ use App\Http\Controllers\AdminCourseController;
 use App\Http\Controllers\AdminStoreController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StoreController;
+use App\Http\Controllers\StoreCourseLearningController;
 use App\Http\Controllers\StoreWishlistController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');\n\nRoute::middleware(['auth'])->group(function () {\n    Route::get('/my-courses/{product}', [StoreCourseLearningController::class, 'show'])->name('store.course.learn');\n    Route::get('/my-courses/{product}/lessons/{lesson}', [StoreCourseLearningController::class, 'lesson'])->name('store.course.lesson');\n    Route::post('/my-courses/{product}/lessons/{lesson}/progress', [StoreCourseLearningController::class, 'progress'])->middleware('throttle:60,10')->name('store.course.progress');\n    Route::get('/my-courses/{product}/lessons/{lesson}/resources/{file}', [StoreCourseLearningController::class, 'resource'])->middleware('throttle:60,10')->name('store.course.resource');\n});
+Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/my-courses/{product}', [StoreCourseLearningController::class, 'show'])->name('store.course.learn');
+    Route::get('/my-courses/{product}/lessons/{lesson}', [StoreCourseLearningController::class, 'lesson'])->name('store.course.lesson');
+    Route::post('/my-courses/{product}/lessons/{lesson}/progress', [StoreCourseLearningController::class, 'progress'])->middleware('throttle:60,10')->name('store.course.progress');
+    Route::get('/my-courses/{product}/lessons/{lesson}/resources/{file}', [StoreCourseLearningController::class, 'resource'])->middleware('throttle:60,10')->name('store.course.resource');
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('/wishlist',[StoreWishlistController::class,'index'])->name('wishlist');
