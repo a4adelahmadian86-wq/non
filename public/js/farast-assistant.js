@@ -459,9 +459,9 @@
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){primeAssistantAudioPlayback();send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var liveTurnEnding=false,gatewayStatusMessage='',renderGatewayReadyUrl='',renderGatewayReadyAt=0;
-  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayFinalTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[],pendingVoiceTurns=[];
+  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayFinalTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayCaptureGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[],pendingVoiceTurns=[];
   function releaseGatewayCapture(){
-    gatewayMicrophoneMuted=false;
+    gatewayCaptureGeneration++;gatewayMicrophoneMuted=false;
     if(gatewayWorkletNode){try{gatewayWorkletNode.disconnect();}catch(e){}gatewayWorkletNode=null;}
     if(gatewayScriptProcessorNode){try{gatewayScriptProcessorNode.disconnect();gatewayScriptProcessorNode.onaudioprocess=null;}catch(e){}gatewayScriptProcessorNode=null;}
     gatewayPcmBuffer=[];
@@ -579,6 +579,7 @@
     try{batchRecorder.stop();}catch(error){gatewayStatusMessage='توقف ضبط ناموفق بود.';}
   }
   async function attachGatewayCapture(generation,socket){
+    var captureGeneration=++gatewayCaptureGeneration;
     var AudioContextClass=window.AudioContext||window.webkitAudioContext;
     if(!gatewayAudioContext)gatewayAudioContext=new AudioContextClass({latencyHint:'interactive',sampleRate:48000});
     setMicButtonState('connecting');
@@ -588,19 +589,19 @@
     if(gatewayAudioContext.state!=='running')await gatewayAudioContext.resume().catch(function(){});
     if(gatewayAudioContext.state!=='running')throw new Error('فعال‌سازی ورودی صوتی مرورگر کامل نشد؛ دوباره دکمه میکروفون را لمس کن.');
     gatewayMediaStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
-    if(generation!==gatewayGeneration||socket!==gatewayWs||socket.readyState!==WebSocket.OPEN||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return false;}
+    if(generation!==gatewayGeneration||captureGeneration!==gatewayCaptureGeneration||socket!==gatewayWs||socket.readyState!==WebSocket.OPEN||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return false;}
     gatewayMicrophoneMuted=false;gatewayBargeInFrames=0;gatewayBargeInBuffer=[];gatewayPcmBuffer=[];
     gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
     if(window.AudioWorkletNode&&gatewayAudioContext.audioWorklet&&typeof gatewayAudioContext.audioWorklet.addModule==='function'){
       await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261102asr2');
       if(generation!==gatewayGeneration||socket!==gatewayWs||socket.readyState!==WebSocket.OPEN||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return false;}
       gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
-      gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;handleGatewayPcmFrame(generation,socket,new Int16Array(event.data));};
+      gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||captureGeneration!==gatewayCaptureGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;handleGatewayPcmFrame(generation,socket,new Int16Array(event.data));};
       gatewaySourceNode.connect(gatewayWorkletNode);gatewayWorkletNode.connect(gatewayAudioContext.destination);
     }else{
       gatewayScriptProcessorNode=gatewayAudioContext.createScriptProcessor(4096,1,1);
       gatewayScriptProcessorNode.onaudioprocess=function(event){
-        if(generation!==gatewayGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;
+        if(generation!==gatewayGeneration||captureGeneration!==gatewayCaptureGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;
         var input=event.inputBuffer.getChannelData(0),ratio=gatewayAudioContext.sampleRate/16000;
         for(var i=0;i<input.length;i+=ratio){var sample=Math.max(-1,Math.min(1,input[Math.floor(i)]));gatewayPcmBuffer.push(sample<0?sample*32768:sample*32767);}
         while(gatewayPcmBuffer.length>=1600){var frame=new Int16Array(gatewayPcmBuffer.splice(0,1600));handleGatewayPcmFrame(generation,socket,frame);}
