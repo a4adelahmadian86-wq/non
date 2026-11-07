@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
 use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\CapabilityService;
 use App\Services\SupportTicketService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -103,7 +105,7 @@ class SupportController extends Controller
             }))
             ->orderBy('created_at')
             ->get()
-            ->map(function ($m) {
+            ->map(function ($m) use ($ticket) {
                 $isStaff = $m->isFromStaff();
 
                 return [
@@ -113,7 +115,10 @@ class SupportController extends Controller
                     'is_internal' => (bool) $m->is_internal,
                     'is_mine' => $m->user_id === auth()->id() && ! $isStaff,
                     'time' => $m->created_at->timezone(config('app.timezone'))->format('Y/m/d H:i'),
-                    'attachments' => $m->attachments ?? [],
+                    'attachments' => collect($m->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                        'name' => $attachment['name'] ?? 'پیوست',
+                        'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $m->id, 'index' => $index]),
+                    ])->all(),
                 ];
             });
 
@@ -203,6 +208,10 @@ class SupportController extends Controller
                     'is_staff' => false,
                     'created_at' => $msg->created_at->timezone(config('app.timezone'))->format('Y-m-d H:i'),
                     'time' => $msg->created_at->format('H:i'),
+                    'attachments' => collect($msg->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                        'name' => $attachment['name'] ?? 'پیوست',
+                        'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $msg->id, 'index' => $index]),
+                    ])->all(),
                 ],
             ]);
         }
@@ -494,14 +503,28 @@ class SupportController extends Controller
             ]);
         }
 
-        $email = $data['email'] ?? session('support_guest_email');
+        $email = mb_strtolower(trim((string) ($data['email'] ?? session('support_guest_email', ''))));
         $name = $data['name'] ?? session('support_guest_name');
         if (! $email) {
             return response()->json(['ok' => false, 'need_contact' => true, 'message' => 'برای ادامه لطفاً نام و ایمیل خود را وارد کنید.'], 422);
         }
+
         session(['support_guest_email' => $email, 'support_guest_name' => $name]);
 
-        $ticket = $this->tickets->findOpenGuestTicket($email, $data['ticket_id'] ?? null);
+        // A matching email and a guessable ticket ID are not authentication.
+        // Only continue guest tickets previously issued to this server-side session.
+        $sessionTicketIds = collect(session('support_guest_ticket_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+        $requestedTicketId = (int) ($data['ticket_id'] ?? 0);
+        $ticket = null;
+
+        if ($requestedTicketId > 0 && $sessionTicketIds->contains($requestedTicketId)) {
+            $ticket = $this->tickets->findOpenGuestTicket($email, $requestedTicketId);
+        }
+
         if (! $ticket) {
             $ticket = $this->tickets->createTicket(null, [
                 'subject' => Str::limit($data['body'], 80),
@@ -512,6 +535,9 @@ class SupportController extends Controller
                 'department' => 'support',
                 'priority' => 'normal',
             ]);
+
+            $sessionTicketIds->push((int) $ticket->id);
+            session(['support_guest_ticket_ids' => $sessionTicketIds->unique()->take(-10)->values()->all()]);
         } else {
             $this->tickets->addMessage($ticket, null, $data['body'], ['is_staff' => false]);
         }
@@ -520,6 +546,35 @@ class SupportController extends Controller
             'ok' => true,
             'ticket_id' => $ticket->id,
             'reply' => 'پیام شما ثبت شد. پس از ورود، ادامه گفتگو در داشبورد → پشتیبانی در دسترس است.',
+        ]);
+    }
+
+    public function attachment(Request $request, Ticket $ticket, TicketMessage $message, int $index)
+    {
+        $this->authorize('view', $ticket);
+        abort_unless((int) $message->ticket_id === (int) $ticket->id, 404);
+        abort_if($message->is_internal && ! $request->user()->isAdmin(), 404);
+
+        $attachments = array_values((array) ($message->attachments ?? []));
+        abort_unless(isset($attachments[$index]) && is_array($attachments[$index]), 404);
+
+        $attachment = $attachments[$index];
+        $path = (string) ($attachment['path'] ?? '');
+        abort_unless($path !== '', 404);
+        $diskName = (string) ($attachment['disk'] ?? 'public');
+        abort_unless(in_array($diskName, ['private', 'public'], true), 404);
+
+        $disk = Storage::disk($diskName);
+        abort_unless($disk->exists($path), 404);
+
+        $filename = basename((string) ($attachment['name'] ?? 'attachment'));
+        $filename = preg_replace('/[\r\n"]+/', '_', $filename) ?: 'attachment';
+
+        return $disk->download($path, $filename, [
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Type' => 'application/octet-stream',
         ]);
     }
 

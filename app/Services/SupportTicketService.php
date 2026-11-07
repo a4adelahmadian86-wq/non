@@ -171,9 +171,10 @@ class SupportTicketService
         if (! empty($options['attachment']) && $options['attachment'] instanceof UploadedFile
             && Schema::hasColumn('ticket_messages', 'attachments')) {
             $file = $options['attachment'];
-            $path = $file->store('ticket-attachments/'.$ticket->id, 'public');
+            $path = $file->store('ticket-attachments/'.$ticket->id, 'private');
             $payload['attachments'] = [[
                 'path' => $path,
+                'disk' => 'private',
                 'name' => $file->getClientOriginalName(),
                 'size' => $file->getSize(),
                 'mime' => $file->getMimeType(),
@@ -380,27 +381,29 @@ class SupportTicketService
             return 0;
         }
 
-        $claimed = 0;
-        $q = Ticket::query()->whereNull('user_id');
+        // Guest tickets are claimed only when this browser session created them.
+        // Email equality alone is not proof of ownership and allowed impersonation.
+        $ticketIds = collect(session('support_guest_ticket_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
 
-        if (filled($user->email)) {
-            $email = mb_strtolower(trim((string) $user->email));
-            $claimed += (clone $q)->whereRaw('LOWER(guest_email) = ?', [$email])
-                ->update(['user_id' => $user->id]);
+        $sessionEmail = mb_strtolower(trim((string) session('support_guest_email', '')));
+        $accountEmail = mb_strtolower(trim((string) ($user->email ?? '')));
+        if ($ticketIds === [] || $sessionEmail === '' || $accountEmail === '' || ! hash_equals($accountEmail, $sessionEmail)) {
+            return 0;
         }
 
-        // تطبیق با ایمیل session ویجت پس از لاگین
-        $sessionEmail = session('support_guest_email');
-        if ($sessionEmail && mb_strtolower(trim((string) $sessionEmail)) !== mb_strtolower(trim((string) ($user->email ?? '')))) {
-            $se = mb_strtolower(trim((string) $sessionEmail));
-            $claimed += Ticket::query()
-                ->whereNull('user_id')
-                ->whereRaw('LOWER(guest_email) = ?', [$se])
-                ->update(['user_id' => $user->id]);
-        }
+        $claimed = Ticket::query()
+            ->whereNull('user_id')
+            ->whereIn('id', $ticketIds)
+            ->whereRaw('LOWER(guest_email) = ?', [$sessionEmail])
+            ->update(['user_id' => $user->id]);
 
         if ($claimed > 0) {
-            session()->forget(['support_guest_email', 'support_guest_name']);
+            session()->forget(['support_guest_ticket_ids', 'support_guest_email', 'support_guest_name']);
         }
 
         return $claimed;
