@@ -65,6 +65,11 @@ final class ProviderConnectionHealth
             }
         }
 
+        // A key or model rotation invalidates capability claims from the old probe.
+        if (! $fingerprintMatches) {
+            $capabilities = [];
+        }
+
         $ready = $verified;
         foreach ($requiredCapabilities as $capability) {
             $ready = $ready && ($capabilities[$capability] ?? false);
