@@ -139,6 +139,11 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page canvas')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page')).toHaveAttribute('data-rendered', '1');
+    // Continuous rendering must not lock the rest of the reading toolbar.
+    await expect(root.locator('#reader-zoom-in')).toBeEnabled();
+    await root.locator('#reader-zoom-in').click();
+    await expect(root.locator('#reader-zoom-label')).toContainText('۱۲۰');
+    await expect(root.locator('#reader-prev')).toBeEnabled();
     await root.locator('#reader-scroll-mode').click();
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
   });
