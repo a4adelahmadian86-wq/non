@@ -10,6 +10,7 @@ use App\Models\StoreLibraryItem;
 use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
 use App\Services\StoreCartService;
+use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -127,10 +128,17 @@ class StoreCartController extends Controller
                 if (! $product || $product->status !== 'published') {
                     throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
                 }
-                $file = $product->files->firstWhere('is_primary', true)
-                    ?: $product->files->firstWhere('is_active', true);
-                if (! $file || ! $file->is_active) {
-                    throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
+                $file = null;
+                if ($product->type === 'course') {
+                    if (! $product->course || ! $product->course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
+                        throw new \RuntimeException('برنامه آموزشی این دوره هنوز برای تحویل آماده نیست.');
+                    }
+                } else {
+                    $file = $product->files->where('purpose', 'product_download')->firstWhere('is_primary', true)
+                        ?: $product->files->where('purpose', 'product_download')->firstWhere('is_active', true);
+                    if (! $file || ! $file->is_active || $file->scan_status !== 'clean') {
+                        throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
+                    }
                 }
                 $unit = (int) $product->price_rials;
                 $line = $unit * (int) $item->quantity;
@@ -149,8 +157,8 @@ class StoreCartController extends Controller
                         'sku' => $product->sku,
                         'version' => $product->version,
                         // Pin digital delivery to the exact asset chosen when the order was placed.
-                        'file_id' => $file->id,
-                        'file_sha256' => $file->sha256,
+                        'file_id' => $file?->id,
+                        'file_sha256' => $file?->sha256,
                     ],
                 ]);
                 $orderItems[] = [$orderItem, $product, $file];
@@ -173,19 +181,16 @@ class StoreCartController extends Controller
                     'paid_at' => now(),
                 ]);
                 foreach ($orderItems as [$orderItem, $product, $file]) {
-                    StoreLibraryItem::firstOrCreate(
-                        [
-                            'user_id' => $request->user()->id,
-                            'product_id' => $product->id,
-                            'order_id' => $order->id,
-                        ],
+                    $libraryItem = StoreLibraryItem::firstOrCreate(
+                        ['user_id' => $request->user()->id, 'product_id' => $product->id, 'order_id' => $order->id],
                         [
                             'order_item_id' => $orderItem->id,
-                            'product_file_id' => $file->id,
+                            'product_file_id' => $file?->id,
                             'granted_at' => now(),
                             'revoked_at' => null,
                         ]
                     );
+                    app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
                 $order->update(['status' => 'paid', 'paid_at' => now()]);
             }
@@ -194,7 +199,7 @@ class StoreCartController extends Controller
         });
 
         if ((int) $order->total_rials === 0 && $order->status === 'paid') {
-            return redirect()->route('library')->with('status', 'سفارش رایگان ثبت شد؛ فایل‌ها در کتابخانه شماست.');
+            return redirect()->route('library')->with('status', 'سفارش رایگان ثبت شد؛ فایل یا دسترسی دوره در کتابخانه شما فعال است.');
         }
 
         return redirect()->route('checkout', $order);
