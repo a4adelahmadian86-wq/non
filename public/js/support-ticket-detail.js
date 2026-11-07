@@ -207,7 +207,7 @@
               is_mine: true,
               is_staff: false,
               time: data.message.created_at || data.message.time || '',
-              attachments: [],
+              attachments: data.message.attachments || [],
             });
           }
         } catch (_) {}
