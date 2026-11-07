@@ -58,3 +58,5 @@
 @media(max-width:900px){.workspace-documents__layout{grid-template-columns:220px minmax(0,1fr)}.workspace-documents__share{flex-wrap:wrap}}
 @media(max-width:700px){.workspace-documents{padding-block:20px 42px}.workspace-documents__header{align-items:stretch;flex-direction:column}.workspace-documents__new{max-width:none}.workspace-documents__layout{grid-template-columns:minmax(0,1fr)}.workspace-documents__folders{position:static}.workspace-documents__editor{grid-template-columns:minmax(0,1fr)}.workspace-documents__body-label,.workspace-documents__save{grid-column:auto}.workspace-documents__share{align-items:flex-start}.workspace-documents__share-state{margin-inline-start:auto}}
 @media(max-width:420px){.workspace-documents__new{flex-direction:column}.workspace-documents__tabs a{flex:1;justify-content:center}.workspace-documents__document-actions button{font-size:11px}.workspace-documents__share-result{align-items:stretch;flex-direction:column}}
+
+.workspace-documents__read-only{padding:13px 15px;border:1px solid #edf0f5;border-radius:11px;background:#f8fafc;color:#5f6d85;font-size:12px;line-height:2;white-space:pre-wrap;overflow-wrap:anywhere}
