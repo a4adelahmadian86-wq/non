@@ -84,18 +84,164 @@ class PlatformCompletionController extends Controller {
  /** اعلان‌ها — واگذاری به کنترلر یکپارچه */
  public function notifications(Request $r){return app(NotificationController::class)->index($r);}
  public function readNotification(Request $r,$id){return app(NotificationController::class)->read($r,(int)$id);}
- public function workflow(Request $r){$items=DB::table('farast_workflows')->where('user_id',auth()->id())->get();return view('platform.workflows',compact('items'));}
- public function saveWorkflow(Request $r){$x=$r->validate(['name'=>'required|string|max:160','trigger_type'=>'required|in:document.saved,ticket.created,order.paid,order.deposit_paid','steps'=>'required|array|min:1|max:20','steps.*.action'=>'required|in:notify,create_follow_up','steps.*.title'=>'nullable|string|max:180','steps.*.message'=>'nullable|string|max:5000','steps.*.description'=>'nullable|string|max:4000','steps.*.priority'=>'nullable|in:low,normal,high','steps.*.due_at'=>'nullable|date']);DB::table('farast_workflows')->updateOrInsert(['id'=>$r->integer('id'),'user_id'=>auth()->id()],['name'=>$x['name'],'trigger_type'=>$x['trigger_type'],'steps'=>json_encode($x['steps'],JSON_UNESCAPED_UNICODE),'enabled'=>$r->boolean('enabled',true),'updated_at'=>now(),'created_at'=>now()]);return back()->with('status','گردش‌کار ذخیره شد.');}
- public function runWorkflow(Request $r,$id, \App\Services\WorkflowEngine $engine){$w=DB::table('farast_workflows')->where('id',$id)->where('user_id',auth()->id())->first();abort_unless($w,404);$context=$r->validate(['context'=>'nullable|array'])['context']??[];$context['user_id']=auth()->id();$run=$engine->run((int)$id,$context);return response()->json(['run_id'=>$run,'status'=>'completed']);}
- public function security(){return view('platform.security',['events'=>DB::table('farast_security_events')->where('user_id',auth()->id())->latest()->limit(50)->get()]);}
- public function ocr(Request $r){$x=$r->validate(['source_path'=>'required|string|max:1000','provider'=>'nullable|string|max:50']);$id=DB::table('farast_ocr_jobs')->insertGetId(['user_id'=>auth()->id(),'source_path'=>$x['source_path'],'provider'=>$x['provider']??'auto','status'=>'queued','created_at'=>now(),'updated_at'=>now()]);return response()->json(['job_id'=>$id,'status'=>'queued']);}
- public function ocrStatus(Request $r,$id){$j=DB::table('farast_ocr_jobs')->where('id',$id)->where('user_id',auth()->id())->first();abort_unless($j,404);return response()->json($j);}
+ public function workflow(Request $r){
+  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.view'),403);
+  $items=DB::table('farast_workflows')->where('user_id',$r->user()->id)->orderByDesc('updated_at')->get();
+  $canManageWorkflows=app(AuthorizationService::class)->allows($r->user(),'workflows.manage');
+  return view('platform.workflows',compact('items','canManageWorkflows'));
+ }
+ public function saveWorkflow(Request $r){
+  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
+  $x=$r->validate([
+   'id'=>'nullable|integer|min:1',
+   'name'=>'required|string|max:160',
+   'trigger_type'=>'required|in:document.saved,ticket.created,order.paid,order.deposit_paid',
+   'steps'=>'required|array|min:1|max:20',
+   'steps.*.action'=>'required|in:notify,create_follow_up',
+   'steps.*.title'=>'nullable|string|max:180',
+   'steps.*.message'=>'nullable|string|max:5000',
+   'steps.*.description'=>'nullable|string|max:4000',
+   'steps.*.priority'=>'nullable|in:low,normal,high',
+   'steps.*.due_at'=>'nullable|date',
+  ]);
+  $payload=[
+   'name'=>$x['name'],
+   'trigger_type'=>$x['trigger_type'],
+   'steps'=>json_encode($x['steps'],JSON_UNESCAPED_UNICODE),
+   'enabled'=>$r->boolean('enabled',true),
+   'updated_at'=>now(),
+  ];
+  DB::transaction(function()use($r,$x,$payload){
+   if(!empty($x['id'])){
+    $owned=DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->exists();
+    abort_unless($owned,404);
+    DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->update($payload);
+    return;
+   }
+   $payload['user_id']=$r->user()->id;
+   $payload['created_at']=now();
+   DB::table('farast_workflows')->insert($payload);
+  });
+  return back()->with('status','گردش‌کار ذخیره شد.');
+ }
+ public function runWorkflow(Request $r,$id, \App\Services\WorkflowEngine $engine){
+  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
+  $w=DB::table('farast_workflows')->where('id',$id)->where('user_id',$r->user()->id)->first();
+  abort_unless($w,404);
+  abort_unless((bool)$w->enabled,409,'گردش‌کار غیرفعال است.');
+  $context=$r->validate(['context'=>'nullable|array'])['context']??[];
+  $context['user_id']=$r->user()->id;
+  $run=$engine->run((int)$id,$context);
+  return response()->json(['run_id'=>$run,'status'=>'completed']);
+ }
+ public function security(Request $r){
+  abort_unless(app(AuthorizationService::class)->allows($r->user(),'audit.view'),403);
+  return view('platform.security',['events'=>DB::table('farast_security_events')->where('user_id',$r->user()->id)->latest()->limit(50)->get()]);
+ }
+ public function ocr(Request $r){
+  abort_unless(app(AuthorizationService::class)->allows($r->user(),'ocr.use'),403);
+  $r->validate(['source_path'=>'required|string|max:1000','provider'=>'nullable|string|max:50']);
+  // There is currently no registered OCR provider or queue consumer in this
+  // deployment. Do not create jobs that would remain queued forever.
+  return response()->json([
+   'ok'=>false,
+   'status'=>'unavailable',
+   'code'=>'ocr_worker_unavailable',
+   'message'=>'پردازشگر OCR هنوز به صف کار متصل نشده است؛ هیچ کاری ثبت نشد.',
+  ],503);
+ }
+ public function ocrStatus(Request $r,$id){abort_unless(app(AuthorizationService::class)->allows($r->user(),'ocr.use'),403);$j=DB::table('farast_ocr_jobs')->where('id',$id)->where('user_id',$r->user()->id)->first();abort_unless($j,404);return response()->json($j);}
  public function cms(Request $r){abort_unless(auth()->user()->isAdmin(),403);return view('admin.cms',['pages'=>DB::table('farast_cms_pages')->orderByDesc('updated_at')->get()]);}
  public function saveCms(Request $r){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['slug'=>'required|string|max:160','title'=>'required|string|max:255','body'=>'nullable|string','status'=>'required|in:draft,published']);DB::table('farast_cms_pages')->updateOrInsert(['slug'=>$x['slug']],['title'=>$x['title'],'body'=>$x['body']??'','status'=>$x['status'],'published_at'=>$x['status']==='published'?now():null,'updated_by'=>auth()->id(),'updated_at'=>now(),'created_at'=>now()]);return back()->with('status','صفحه CMS ذخیره شد.');}
- public function billing(){ $plans=DB::table('farast_plans')->where('active',1)->orderBy('price')->get();$sub=DB::table('farast_subscriptions')->join('farast_plans','farast_plans.id','=','farast_subscriptions.plan_id')->where('farast_subscriptions.user_id',auth()->id())->where('farast_subscriptions.status','active')->first();return view('platform.billing',compact('plans','sub')); }
- public function subscribe(Request $r,$plan){$p=DB::table('farast_plans')->where('id',$plan)->where('active',1)->first();abort_unless($p,404);DB::transaction(function()use($p){DB::table('farast_subscriptions')->where('user_id',auth()->id())->where('status','active')->update(['status'=>'replaced','ends_at'=>now(),'updated_at'=>now()]);DB::table('farast_entitlements')->where('user_id',auth()->id())->where('source_type','subscription')->where('status','active')->update(['status'=>'replaced','ends_at'=>now(),'updated_at'=>now()]);DB::table('farast_subscriptions')->insert(['user_id'=>auth()->id(),'plan_id'=>$p->id,'status'=>'active','starts_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);app(\App\Services\SubscriptionEntitlementService::class)->sync(auth()->user(),(int)$p->id);});return back()->with('status','پلن فعال شد. سهمیه‌های آن نیز به‌عنوان entitlement سروری فعال شدند.');}
- public function adminPlans(){abort_unless(auth()->user()->isAdmin(),403);return view('admin.plans',['plans'=>DB::table('farast_plans')->orderBy('price')->get()]);}
- public function savePlan(Request $r){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['code'=>'required|string|max:80','name'=>'required|string|max:120','price'=>'required|integer|min:0','currency'=>'required|string|max:8','quotas'=>'nullable|array']);DB::table('farast_plans')->updateOrInsert(['code'=>$x['code']],['name'=>$x['name'],'price'=>$x['price'],'currency'=>$x['currency'],'quotas'=>json_encode($x['quotas']??[],JSON_UNESCAPED_UNICODE),'active'=>$r->boolean('active',true),'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','پلن ذخیره شد.');}
+ public function billing(Request $r){
+  abort_unless(app(AuthorizationService::class)->allows($r->user(),'billing.view'),403);
+  $plans=DB::table('farast_commercial_plans')->where('active',1)->orderBy('price')->orderBy('name')->get();
+  $sub=DB::table('farast_subscriptions')
+   ->join('farast_commercial_plans','farast_commercial_plans.id','=','farast_subscriptions.plan_id')
+   ->where('farast_subscriptions.user_id',$r->user()->id)
+   ->where('farast_subscriptions.status','active')
+   ->where('farast_subscriptions.starts_at','<=',now())
+   ->where(function($q){$q->whereNull('farast_subscriptions.ends_at')->orWhere('farast_subscriptions.ends_at','>',now());})
+   ->select('farast_subscriptions.*','farast_commercial_plans.name','farast_commercial_plans.code','farast_commercial_plans.price','farast_commercial_plans.currency','farast_commercial_plans.quotas')
+   ->orderByDesc('farast_subscriptions.starts_at')->first();
+  return view('platform.billing',compact('plans','sub'));
+ }
+ public function subscribe(Request $r,$plan){
+  abort_unless(app(AuthorizationService::class)->allows($r->user(),'billing.view'),403);
+  $user=$r->user();
+  $planId=(int)$plan;
+  $activated=DB::transaction(function()use($user,$planId){
+   $p=DB::table('farast_commercial_plans')->where('id',$planId)->where('active',1)->lockForUpdate()->first();
+   abort_unless($p,404);
+   // Paid plans must go through a verified payment flow. This endpoint only
+   // activates free plans and cannot be raced against an admin price update.
+   if((int)$p->price>0)return false;
+   // Serialize concurrent plan switches for the same account, even when no active subscription exists yet.
+   DB::table('users')->where('id',$user->id)->lockForUpdate()->first();
+   $starts=now();
+   $ends=match($p->billing_interval){
+    'monthly'=>$starts->copy()->addMonth(),
+    'yearly'=>$starts->copy()->addYear(),
+    default=>null,
+   };
+   DB::table('farast_subscriptions')->where('user_id',$user->id)->where('status','active')->lockForUpdate()->get();
+   DB::table('farast_subscriptions')->where('user_id',$user->id)->where('status','active')->update(['status'=>'replaced','ends_at'=>$starts,'updated_at'=>$starts]);
+   DB::table('farast_entitlements')->where('user_id',$user->id)->where('source_type','subscription')->where('status','active')->update(['status'=>'replaced','ends_at'=>$starts,'updated_at'=>$starts]);
+   DB::table('farast_subscriptions')->insert([
+    'subscription_id'=>(string)Str::uuid(),
+    'user_id'=>$user->id,
+    'organization_id'=>$user->organization_id,
+    'plan_id'=>$p->id,
+    'status'=>'active',
+    'starts_at'=>$starts,
+    'ends_at'=>$ends,
+    'created_at'=>$starts,
+    'updated_at'=>$starts,
+   ]);
+   app(\App\Services\SubscriptionEntitlementService::class)->sync($user,(int)$p->id);
+   return true;
+  });
+  if(!$activated){
+   return back()->withErrors(['plan'=>'این پلن پولی است؛ تا زمانی که پرداخت و تأیید مالی آن به اشتراک متصل نشده، فعال‌سازی مستقیم مجاز نیست.']);
+  }
+  return back()->with('status','پلن رایگان فعال شد و سهمیه‌های آن در سامانه ثبت شدند.');
+ }
+ public function adminPlans(){
+  abort_unless(auth()->user()->isAdmin(),403);
+  return view('admin.plans',['plans'=>DB::table('farast_commercial_plans')->orderBy('price')->orderBy('name')->get()]);
+ }
+ public function savePlan(Request $r){
+  abort_unless($r->user()->isAdmin(),403);
+  $x=$r->validate([
+   'code'=>'required|string|max:120',
+   'name'=>'required|string|max:180',
+   'price'=>'required|integer|min:0',
+   'currency'=>'required|string|max:8',
+   'billing_interval'=>'nullable|in:monthly,yearly,one_time',
+   'quotas'=>'nullable|array',
+   'quotas.*'=>'nullable|integer|min:0',
+   'allow_payg'=>'nullable|boolean',
+   'allow_overage'=>'nullable|boolean',
+   'postpaid'=>'nullable|boolean',
+   'active'=>'nullable|boolean',
+  ]);
+  $existing=DB::table('farast_commercial_plans')->where('code',$x['code'])->exists();
+  $values=[
+   'name'=>$x['name'],
+   'price'=>$x['price'],
+   'currency'=>strtoupper($x['currency']),
+   'billing_interval'=>$x['billing_interval']??null,
+   'quotas'=>json_encode($x['quotas']??[],JSON_UNESCAPED_UNICODE),
+   'allow_payg'=>$r->boolean('allow_payg',true),
+   'allow_overage'=>$r->boolean('allow_overage',false),
+   'postpaid'=>$r->boolean('postpaid',false),
+   'active'=>$r->boolean('active',true),
+   'updated_at'=>now(),
+  ];
+  if(!$existing)$values['created_at']=now();
+  DB::table('farast_commercial_plans')->updateOrInsert(['code'=>$x['code']],$values);
+  return back()->with('status','پلن تجاری در کاتالوگ اصلی ذخیره شد.');
+ }
  public function adminSupport(Request $request){
   abort_unless(auth()->user()->isAdmin(),403);
   $query=Ticket::with(['messages'=>fn($q)=>$q->orderBy('created_at'),'user','relatedProduct']);
@@ -108,7 +254,7 @@ class PlatformCompletionController extends Controller {
   $stats=['open'=>Ticket::whereIn('status',['open','user_replied'])->count(),'answered'=>Ticket::where('status','answered')->count(),'pending'=>Ticket::where('status','pending')->count(),'closed'=>Ticket::where('status','closed')->count()];
   return view('admin.support',compact('tickets','active','stats'));
  }
- public function usage(){return response()->json(DB::table('farast_usage_counters')->where('user_id',auth()->id())->orderByDesc('period_start')->get());}
+ public function usage(Request $r){abort_unless(app(AuthorizationService::class)->allows($r->user(),'reports.view'),403);return response()->json(DB::table('farast_usage_counters')->where('user_id',$r->user()->id)->orderByDesc('period_start')->get());}
  public function createFolder(Request $r){$this->authorizeDocumentAction($r,'documents.create');$x=$r->validate(['name'=>'required|string|max:120','parent_id'=>'nullable|integer']);$this->assertFolderOwnership(isset($x['parent_id'])?(int)$x['parent_id']:null);DB::table('document_folders')->insert(['user_id'=>auth()->id(),'name'=>$x['name'],'parent_id'=>$x['parent_id']??null,'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','پوشه ایجاد شد.');}
  public function teamMembers(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$t=DB::table('teams')->find($team);abort_unless($t,404);return response()->json(DB::table('team_user')->join('users','users.id','=','team_user.user_id')->where('team_id',$team)->select('users.id','users.name','users.email','team_user.team_role')->get());}
  public function addTeamMember(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['user_id'=>'required|integer','team_role'=>'required|in:owner,supervisor,employee']);DB::table('team_user')->updateOrInsert(['team_id'=>$team,'user_id'=>$x['user_id']],['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','عضو تیم به‌روزرسانی شد.');}

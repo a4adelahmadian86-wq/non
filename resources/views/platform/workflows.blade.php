@@ -3,6 +3,7 @@
 <div class="container" dir="rtl">
     <h1>گردش‌کار و اتوماسیون</h1>
     @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
+    @if($canManageWorkflows)
     <div class="card mb-4">
         <div class="card-body">
             <h2>ساخت گردش‌کار</h2>
@@ -40,12 +41,13 @@
             </form>
         </div>
     </div>
+    @endif
     <h2>گردش‌کارهای من</h2>
     <ul class="list-group">
         @forelse($items as $w)
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <span>{{ $w->name }} — {{ $w->enabled ? 'فعال' : 'خاموش' }} ({{ $w->trigger_type }})</span>
-                <form method="post" action="{{ route('platform.workflows.run', $w->id) }}">@csrf<button class="btn btn-outline-primary btn-sm" type="submit">اجرای دستی</button></form>
+                @if($canManageWorkflows)<form method="post" action="{{ route('platform.workflows.run', $w->id) }}">@csrf<button class="btn btn-outline-primary btn-sm" type="submit">اجرای دستی</button></form>@else<span>فقط مشاهده</span>@endif
             </li>
         @empty
             <li class="list-group-item">هنوز گردش‌کاری ثبت نشده است.</li>

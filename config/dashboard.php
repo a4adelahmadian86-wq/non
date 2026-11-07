@@ -10,6 +10,7 @@ return [
                 ['key' => 'workspace.tasks', 'label' => 'وظایف من', 'icon' => 'fa-list-check', 'planned' => true],
                 ['key' => 'workspace.action', 'label' => 'موارد نیازمند اقدام', 'icon' => 'fa-bell-exclamation', 'planned' => true],
                 ['key' => 'workspace.shortcuts', 'label' => 'میانبرهای سریع', 'icon' => 'fa-bolt', 'route' => 'dashboard', 'fragment' => '#workspace-shortcuts'],
+                ['key' => 'workspace.billing', 'label' => 'پلن و سهمیه', 'icon' => 'fa-crown', 'route' => 'platform.billing', 'permission' => 'billing.view', 'scope' => 'own'],
                 ['key' => 'workspace.status', 'label' => 'وضعیت سیستم', 'icon' => 'fa-heart-pulse', 'route' => 'admin.index', 'fragment' => '#operations', 'admin_only' => true],
             ],
         ],
