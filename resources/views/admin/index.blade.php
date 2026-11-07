@@ -25,7 +25,15 @@
             @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><span>ایمیل</span></a>@endif
             @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><span>شبکه‌های اجتماعی</span></a>@endif
         </div>
-        <div class="farast-admin-live"><span></span><div><b>سامانه عملیاتی</b><small>کنترل‌های زنده فعال هستند</small></div></div>
+        @if($scope === 'global')
+            @php($runtimeReady = (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false))
+            <div class="farast-admin-live {{ $runtimeReady ? 'is-healthy' : 'is-degraded' }}">
+                <span></span>
+                <div><b>سلامت زیرساخت</b><small>{{ $runtimeReady ? 'بررسی داخلی موفق' : 'نیازمند بررسی عملیاتی' }}</small></div>
+            </div>
+        @else
+            <div class="farast-admin-live is-scoped"><span></span><div><b>فضای مدیریتی محدود</b><small>نمایش داده‌های مجاز این دامنه</small></div></div>
+        @endif
     </aside>
 
     <main class="farast-admin-main">
