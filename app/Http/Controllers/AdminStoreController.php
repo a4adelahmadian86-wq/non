@@ -165,7 +165,7 @@ class AdminStoreController extends Controller
                     $product->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
                 }
 
-                return StoreProductFile::create([
+                $record = StoreProductFile::create([
                     'product_id' => $product->id,
                     'purpose' => 'product_download',
                     'version' => $product->version,
@@ -181,8 +181,10 @@ class AdminStoreController extends Controller
                     'scan_engine' => $inspection['scan'],
                     'scanned_at' => now(),
                 ]);
+                $this->audit('store.product.file_uploaded', $product, ['file_id' => $record->id, 'mime' => $record->mime, 'size_bytes' => $record->size_bytes, 'sha256' => $record->sha256]);
+
+                return $record;
             });
-            $this->audit('store.product.file_uploaded', $product, ['file_id' => $fileRecord->id, 'mime' => $fileRecord->mime, 'size_bytes' => $fileRecord->size_bytes, 'sha256' => $fileRecord->sha256]);
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof ValidationException) {
@@ -220,18 +222,20 @@ class AdminStoreController extends Controller
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ پیش‌نمایش ذخیره نشد.');
 
             $sort = (int) ($product->previews()->max('sort_order') ?? 0) + 1;
-            StoreProductPreview::create([
-                'product_id' => $product->id,
-                'disk' => 'private',
-                'path' => $path,
-                'mime' => $inspection['mime'],
-                'page_number' => $request->input('page_number') ?: $sort,
-                'kind' => $inspection['mime'] === 'application/pdf' ? 'pdf' : 'image',
-                'watermarked' => true,
-                'is_active' => true,
-                'sort_order' => $sort,
-            ]);
-            $this->audit('store.product.preview_uploaded', $product, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
+            DB::transaction(function () use ($product, $path, $inspection, $request, $sort) {
+                StoreProductPreview::create([
+                    'product_id' => $product->id,
+                    'disk' => 'private',
+                    'path' => $path,
+                    'mime' => $inspection['mime'],
+                    'page_number' => $request->input('page_number') ?: $sort,
+                    'kind' => $inspection['mime'] === 'application/pdf' ? 'pdf' : 'image',
+                    'watermarked' => true,
+                    'is_active' => true,
+                    'sort_order' => $sort,
+                ]);
+                $this->audit('store.product.preview_uploaded', $product, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
+            });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof ValidationException) {
