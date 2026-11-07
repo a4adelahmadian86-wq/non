@@ -38,6 +38,7 @@ class EditorController extends Controller
         // open in the workspace library. Linked records are not counted twice.
         $documents = $user->documents()
             ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->paginate(8)
             ->withQueryString();
 
