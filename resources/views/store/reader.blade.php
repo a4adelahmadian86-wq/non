@@ -23,7 +23,14 @@
       <button type="button" id="reader-zoom-out" class="reader-tool" title="کوچک‌نمایی" aria-label="کوچک‌نمایی"><i class="fa-solid fa-minus"></i></button>
       <output id="reader-zoom-label" class="reader-zoom-label">۱۰۰٪</output>
       <button type="button" id="reader-zoom-in" class="reader-tool" title="بزرگ‌نمایی" aria-label="بزرگ‌نمایی"><i class="fa-solid fa-plus"></i></button>
-      <button type="button" id="reader-fit" class="reader-tool reader-tool-wide"><i class="fa-solid fa-arrows-left-right-to-line"></i><span>تناسب صفحه</span></button>
+      <button type="button" id="reader-fit" class="reader-tool reader-tool-wide"><i class="fa-solid fa-arrows-left-right-to-line"></i><span>تناسب عرض</span></button>
+      <button type="button" id="reader-rotate" class="reader-tool" title="چرخش صفحه" aria-label="چرخش صفحه"><i class="fa-solid fa-rotate"></i></button>
+    </div>
+    <div class="farast-reader-toolgroup reader-search-group">
+      <label class="sr-only" for="reader-search-input">جست‌وجو در سند</label>
+      <input id="reader-search-input" type="search" placeholder="جست‌وجو در سند…" autocomplete="off">
+      <button type="button" id="reader-search" class="reader-tool" aria-label="جست‌وجو"><i class="fa-solid fa-magnifying-glass"></i></button>
+      <output id="reader-search-count" class="reader-search-count" aria-live="polite"></output>
     </div>
     <div class="farast-reader-toolgroup">
       <button type="button" id="reader-thumbs-toggle" class="reader-tool reader-tool-wide" aria-expanded="true"><i class="fa-solid fa-table-cells"></i><span>تصاویر صفحات</span></button>
@@ -36,13 +43,15 @@
 
   <div class="farast-reader-workspace" id="reader-workspace">
     <aside class="farast-reader-sidebar" id="reader-sidebar" aria-label="فهرست صفحات">
-      <div class="farast-reader-sidebar-head"><strong>صفحات نمونه</strong><span>{{ $previews->count() }} صفحه</span></div>
+      <div class="farast-reader-sidebar-head"><strong>فهرست اسناد</strong><span>{{ $previews->count() }} مورد</span></div>
       <div class="farast-reader-thumbs">
         @foreach($previews as $i => $preview)
           <button type="button" class="farast-reader-thumb {{ $i===0 ? 'is-active' : '' }}" data-goto="{{ $i }}" aria-label="رفتن به صفحه {{ $i+1 }}" aria-current="{{ $i===0 ? 'page' : 'false' }}">
             <span class="farast-reader-thumb-preview">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <i class="fa-solid fa-file-pdf"></i><small>PDF</small>
+              @elseif(($preview->kind ?? '') === 'docx')
+                <i class="fa-solid fa-file-word"></i><small>Word</small>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
               @endif
@@ -59,7 +68,13 @@
           <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}">
             <div class="farast-reader-page-content">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
-                <iframe src="{{ route('store.preview',$preview) }}#toolbar=0&navpanes=0" title="صفحه نمونه {{ $i+1 }}" loading="{{ $i===0 ? 'eager' : 'lazy' }}" referrerpolicy="same-origin"></iframe>
+                <div class="farast-pdf-document" data-pdf-url="{{ route('store.preview',$preview) }}" aria-label="نمایش سند PDF">
+                  <canvas class="farast-pdf-canvas"></canvas>
+                  <div class="farast-pdf-text-layer"></div>
+                  <div class="farast-pdf-loading" role="status">در حال آماده‌سازی سند PDF…</div>
+                </div>
+              @elseif(($preview->kind ?? '') === 'docx')
+                <iframe class="farast-docx-frame" src="{{ route('store.preview',$preview) }}" title="سند Word نمونه {{ $i+1 }}" loading="{{ $i===0 ? 'eager' : 'lazy' }}" referrerpolicy="same-origin"></iframe>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="صفحه نمونه {{ $i+1 }}" draggable="false" loading="{{ $i===0 ? 'eager' : 'lazy' }}">
               @endif
@@ -93,64 +108,15 @@
 .farast-reader-progress{height:3px;background:rgba(110,140,180,.15)}.farast-reader-progress span{display:block;height:100%;width:0;background:#4c8dff;transition:width .2s}
 .farast-reader-workspace{display:grid;grid-template-columns:190px minmax(0,1fr);flex:1;min-height:65vh}.farast-reader-sidebar{background:var(--reader-panel);border-left:1px solid var(--reader-line);padding:12px;overflow:auto;max-height:calc(100vh - 190px)}.farast-reader-sidebar-head{display:flex;justify-content:space-between;gap:8px;font-size:.75rem;margin:2px 0 12px}.farast-reader-sidebar-head span{color:var(--reader-muted)}.farast-reader-thumbs{display:grid;grid-template-columns:1fr;gap:9px}.farast-reader-thumb{border:1px solid var(--reader-line);border-radius:10px;background:transparent;color:var(--reader-muted);padding:7px;display:flex;align-items:center;gap:9px;text-align:right;cursor:pointer;font:inherit;font-size:.7rem}.farast-reader-thumb.is-active{border-color:#4c8dff;background:rgba(76,141,255,.12);color:var(--reader-text)}.farast-reader-thumb-preview{width:44px;height:56px;border-radius:5px;background:rgba(100,130,170,.15);display:grid;place-items:center;overflow:hidden;flex:0 0 auto}.farast-reader-thumb-preview img{width:100%;height:100%;object-fit:cover}.farast-reader-thumb-preview i{font-size:1.2rem;color:#e45d66}.farast-reader-thumb-preview small{font-size:.55rem}
 .farast-reader-canvas{position:relative;min-width:0;min-height:65vh;padding:24px 16px 48px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;background:radial-gradient(ellipse at top,rgba(80,110,160,.12),transparent 60%),var(--reader-bg)}.farast-reader-pages{width:100%;display:flex;justify-content:center}.farast-reader-page-item{display:none;position:relative;width:min(900px,100%);min-height:60vh;isolation:isolate}.farast-reader-page-item.is-active{display:flex;justify-content:center;align-items:flex-start}.farast-reader-page-content{width:100%;display:flex;justify-content:center;overflow:visible}.farast-reader-page-content img,.farast-reader-page-content iframe{display:block;width:min(100%,900px);height:min(78vh,1000px);min-height:480px;object-fit:contain;border:0;border-radius:5px;background:#fff;box-shadow:0 18px 60px rgba(0,0,0,.32);transform:scale(var(--reader-zoom,1));transform-origin:top center}.farast-reader-page-content img{height:auto;max-height:calc(100vh - 230px);user-select:none;-webkit-user-drag:none}.farast-reader-watermark{position:absolute;inset:0;z-index:3;pointer-events:none;display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr);align-items:center;justify-items:center;overflow:hidden;opacity:.24;mix-blend-mode:multiply}.farast-reader-watermark span{color:#26364b;background:rgba(255,255,255,.18);border:1px solid rgba(30,50,80,.12);padding:5px 9px;border-radius:4px;font-size:clamp(9px,1.1vw,13px);font-weight:800;white-space:nowrap;transform:rotate(-24deg);text-shadow:0 1px 1px rgba(255,255,255,.6)}.farast-reader-page-caption{position:absolute;bottom:8px;left:12px;z-index:4;color:#334155;background:rgba(255,255,255,.7);padding:3px 7px;border-radius:4px;font-size:9px;pointer-events:none}
-.farast-reader-shortcuts{position:absolute;bottom:9px;left:50%;transform:translateX(-50%);white-space:nowrap;color:var(--reader-muted);font-size:.65rem;background:var(--reader-panel);border:1px solid var(--reader-line);border-radius:20px;padding:5px 12px}.farast-reader-shortcuts kbd{font:inherit;border:1px solid var(--reader-line);border-radius:4px;padding:1px 4px}.farast-reader-security-note{display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 12px;color:var(--reader-muted);font-size:.68rem;border-top:1px solid var(--reader-line);background:var(--reader-panel)}.farast-reader-security-note i{color:#5c9bff}
+.reader-search-group input{width:clamp(120px,18vw,220px);height:36px;padding:7px 10px;border:1px solid var(--reader-line);border-radius:9px;background:transparent;color:var(--reader-text);font:inherit;font-size:.72rem}.reader-search-group input::placeholder{color:var(--reader-muted)}.reader-search-count{font-size:.68rem;color:var(--reader-muted);min-width:42px}.farast-pdf-document{position:relative;width:min(100%,1000px);min-height:60vh;display:flex;justify-content:center;align-items:flex-start;background:#fff;box-shadow:0 18px 60px rgba(0,0,0,.32);overflow:hidden}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-text-layer{position:absolute;inset:0;overflow:hidden;line-height:1;opacity:0;user-select:none;-webkit-user-select:none;pointer-events:none}.farast-pdf-text-layer span{position:absolute;white-space:pre;color:transparent;transform-origin:0 0}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff;color:#475569;font-size:.8rem}.farast-docx-frame{display:block;width:min(100%,1000px);height:78vh;min-height:560px;border:0;background:#fff;box-shadow:0 18px 60px rgba(0,0,0,.32)}.farast-reader-shortcuts{position:absolute;bottom:9px;left:50%;transform:translateX(-50%);white-space:nowrap;color:var(--reader-muted);font-size:.65rem;background:var(--reader-panel);border:1px solid var(--reader-line);border-radius:20px;padding:5px 12px}.farast-reader-shortcuts kbd{font:inherit;border:1px solid var(--reader-line);border-radius:4px;padding:1px 4px}.farast-reader-security-note{display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 12px;color:var(--reader-muted);font-size:.68rem;border-top:1px solid var(--reader-line);background:var(--reader-panel)}.farast-reader-security-note i{color:#5c9bff}
 .farast-reader.is-sidebar-hidden .farast-reader-workspace{grid-template-columns:minmax(0,1fr)}.farast-reader.is-sidebar-hidden .farast-reader-sidebar{display:none}.farast-reader:fullscreen{min-height:100vh}.farast-reader:fullscreen .farast-reader-canvas{min-height:calc(100vh - 150px)}.farast-reader:fullscreen .farast-reader-sidebar{max-height:calc(100vh - 150px)}
-@media(max-width:760px){.farast-reader-header{grid-template-columns:auto 1fr;gap:8px}.farast-reader-heading{text-align:right}.farast-reader-account{grid-column:1/-1;justify-content:flex-start;font-size:.68rem}.farast-reader-toolbar{justify-content:center}.reader-tool-wide span{display:none}.farast-reader-workspace{grid-template-columns:1fr}.farast-reader-sidebar{max-height:150px;border-left:0;border-bottom:1px solid var(--reader-line)}.farast-reader-thumbs{display:flex;overflow:auto}.farast-reader-thumb{flex:0 0 112px}.farast-reader-canvas{min-height:60vh;padding:12px 8px 42px}.farast-reader-page-content img,.farast-reader-page-content iframe{min-height:360px;height:70vh}.farast-reader-shortcuts{display:none}.farast-reader-security-note{font-size:.62rem;text-align:center}}
+@media(max-width:760px){.reader-search-group{order:3;width:100%;justify-content:center}.reader-search-group input{flex:1;max-width:280px}.farast-docx-frame{height:70vh;min-height:420px}.farast-reader-header{grid-template-columns:auto 1fr;gap:8px}.farast-reader-heading{text-align:right}.farast-reader-account{grid-column:1/-1;justify-content:flex-start;font-size:.68rem}.farast-reader-toolbar{justify-content:center}.reader-tool-wide span{display:none}.farast-reader-workspace{grid-template-columns:1fr}.farast-reader-sidebar{max-height:150px;border-left:0;border-bottom:1px solid var(--reader-line)}.farast-reader-thumbs{display:flex;overflow:auto}.farast-reader-thumb{flex:0 0 112px}.farast-reader-canvas{min-height:60vh;padding:12px 8px 42px}.farast-reader-page-content img,.farast-reader-page-content iframe{min-height:360px;height:70vh}.farast-reader-shortcuts{display:none}.farast-reader-security-note{font-size:.62rem;text-align:center}}
 @media(prefers-reduced-motion:reduce){.farast-reader-progress span{transition:none}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 </style>
 @endpush
 
 @push('scripts')
-<script>
-(()=> {
-  const root=document.querySelector('[data-reader-root]');
-  if(!root)return;
-  const pages=[...root.querySelectorAll('.farast-reader-page-item')];
-  const thumbs=[...root.querySelectorAll('.farast-reader-thumb')];
-  const pageInput=root.querySelector('#reader-page-number');
-  const zoomLabel=root.querySelector('#reader-zoom-label');
-  const progress=root.querySelector('#reader-progress');
-  const progressBar=root.querySelector('.farast-reader-progress');
-  const stage=root.querySelector('#reader-stage');
-  let index=0,zoom=1;
-  const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
-  const show=(n)=>{
-    index=clamp(Number(n)||0,0,pages.length-1);
-    pages.forEach((p,i)=>p.classList.toggle('is-active',i===index));
-    thumbs.forEach((t,i)=>{const active=i===index;t.classList.toggle('is-active',active);t.setAttribute('aria-current',active?'page':'false');});
-    if(pageInput)pageInput.value=String(index+1);
-    const percent=Math.round(((index+1)/pages.length)*100);
-    if(progress)progress.style.width=percent+'%';
-    if(progressBar){progressBar.setAttribute('aria-valuenow',String(percent));}
-    thumbs[index]?.scrollIntoView({block:'nearest',inline:'nearest'});
-    stage?.scrollTo({top:0,behavior:'smooth'});
-  };
-  const setZoom=(value)=>{zoom=clamp(value,.6,1.8);root.style.setProperty('--reader-zoom',zoom);pages.forEach(p=>p.style.setProperty('--reader-zoom',zoom));if(zoomLabel)zoomLabel.textContent=Math.round(zoom*100).toLocaleString('fa-IR')+'٪';};
-  root.querySelector('#reader-prev')?.addEventListener('click',()=>show(index-1));
-  root.querySelector('#reader-next')?.addEventListener('click',()=>show(index+1));
-  thumbs.forEach(t=>t.addEventListener('click',()=>show(Number(t.dataset.goto))));
-  pageInput?.addEventListener('change',()=>show((Number(pageInput.value)||1)-1));
-  root.querySelector('#reader-zoom-in')?.addEventListener('click',()=>setZoom(zoom+.1));
-  root.querySelector('#reader-zoom-out')?.addEventListener('click',()=>setZoom(zoom-.1));
-  root.querySelector('#reader-fit')?.addEventListener('click',()=>setZoom(1));
-  root.querySelector('#reader-thumbs-toggle')?.addEventListener('click',e=>{const hidden=root.classList.toggle('is-sidebar-hidden');e.currentTarget.setAttribute('aria-expanded',String(!hidden));});
-  root.querySelector('#reader-theme')?.addEventListener('click',()=>{const light=root.dataset.theme!=='light';root.dataset.theme=light?'light':'dark';});
-  root.querySelector('#reader-fs')?.addEventListener('click',async()=>{try{if(!document.fullscreenElement)await root.requestFullscreen?.();else await document.exitFullscreen?.();}catch(_){root.classList.toggle('is-fullscreen-fallback');}});
-  document.addEventListener('keydown',e=>{
-    if(e.target&&['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
-    if(e.key==='ArrowLeft'||e.key==='ArrowDown'){e.preventDefault();show(index+1);}
-    if(e.key==='ArrowRight'||e.key==='ArrowUp'){e.preventDefault();show(index-1);}
-    if(e.key==='+'||e.key==='='){e.preventDefault();setZoom(zoom+.1);}
-    if(e.key==='-'){e.preventDefault();setZoom(zoom-.1);}
-    if(e.key.toLowerCase()==='f'){e.preventDefault();root.querySelector('#reader-fs')?.click();}
-    if((e.ctrlKey||e.metaKey)&&['p','s','c','x'].includes(e.key.toLowerCase()))e.preventDefault();
-  });
-  root.addEventListener('contextmenu',e=>e.preventDefault());
-  root.addEventListener('copy',e=>e.preventDefault());
-  root.addEventListener('cut',e=>e.preventDefault());
-  root.addEventListener('dragstart',e=>e.preventDefault());
-  setZoom(1);show(0);
-})();
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" referrerpolicy="no-referrer"></script>
+<script src="/js/farast-reader.js?v=20261107phase2"></script>
 @endpush
