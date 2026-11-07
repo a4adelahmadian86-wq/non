@@ -86,6 +86,7 @@ class StoreCourseLearningController extends Controller
     {
         $enrollment = $this->enrollment($request, $product);
         abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
+        abort_unless($this->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
         $data = $request->validate([
             'last_position_seconds' => 'nullable|integer|min:0|max:86400',
             'completed' => 'nullable|boolean',
@@ -115,6 +116,7 @@ class StoreCourseLearningController extends Controller
     {
         $enrollment = $this->enrollment($request, $product);
         abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
+        abort_unless($this->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
         abort_unless(
             $file->product_id === $product->id
                 && $file->course_lesson_id === $lesson->id
