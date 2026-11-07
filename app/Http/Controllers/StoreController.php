@@ -422,7 +422,10 @@ class StoreController extends Controller
             return '';
         }
 
-        $walk = function (\DOMNode $node) use (&$walk, $allowed): void {
+        // Keep embedded image work bounded independently of the DOCX ZIP size.
+        $embeddedImageBytes = 0;
+        $embeddedImageCount = 0;
+        $walk = function (\DOMNode $node) use (&$walk, $allowed, &$embeddedImageBytes, &$embeddedImageCount): void {
             for ($child = $node->firstChild; $child; ) {
                 $next = $child->nextSibling;
                 if ($child instanceof \DOMElement) {
@@ -448,9 +451,18 @@ class StoreController extends Controller
                         foreach (iterator_to_array($child->attributes) as $attribute) {
                             $name = strtolower($attribute->name);
                             $value = $attribute->value;
-                            $safeImage = $name === 'src'
-                                && strlen($value) <= 8 * 1024 * 1024
-                                && preg_match('#^data:image/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$#i', $value) === 1;
+                            $safeImage = false;
+                            if ($name === 'src' && strlen($value) <= 6 * 1024 * 1024
+                                && preg_match('#^data:image/(?:png|jpe?g|gif|webp);base64,([A-Za-z0-9+/=]+)$#i', $value, $imageMatch) === 1) {
+                                $imageBytes = (int) floor(strlen($imageMatch[1]) * 3 / 4);
+                                $safeImage = $imageBytes <= 4 * 1024 * 1024
+                                    && $embeddedImageCount < 32
+                                    && ($embeddedImageBytes + $imageBytes) <= 16 * 1024 * 1024;
+                                if ($safeImage) {
+                                    $embeddedImageCount++;
+                                    $embeddedImageBytes += $imageBytes;
+                                }
+                            }
                             if (!in_array($name, $keep, true) || ($name === 'src' && !$safeImage)) {
                                 $child->removeAttribute($attribute->name);
                             } elseif ($name === 'style') {
