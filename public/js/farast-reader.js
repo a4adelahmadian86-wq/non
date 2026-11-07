@@ -96,7 +96,8 @@
     if(!pdfDoc||!continuousHost)return;
     const wrapper=continuousHost.querySelector('[data-pdf-cont-page="'+number+'"]');
     const canvas=wrapper?.querySelector('canvas');
-    if(!wrapper||!canvas||wrapper.dataset.rendered==='1')return;
+    if(!wrapper||!canvas||wrapper.dataset.rendered==='1'||wrapper.dataset.rendering==='1')return;
+    wrapper.dataset.rendering='1';
     const page=await pdfDoc.getPage(number);
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
@@ -127,6 +128,7 @@
       });
     }
     wrapper.dataset.rendered='1';
+    delete wrapper.dataset.rendering;
   };
 
   const buildContinuousPages=async()=>{
@@ -157,16 +159,15 @@
     if(pdfSurface){pdfSurface.classList.add('is-continuous');pdfSurface.style.width='100%';pdfSurface.style.minHeight='0';}
     if(window.IntersectionObserver){
       continuousObserver=new IntersectionObserver(entries=>{
+        let best=null;
         entries.forEach(entry=>{
           if(!entry.isIntersecting)return;
           const number=Number(entry.target.dataset.pdfContPage);
-          if(entry.intersectionRatio>=.35){
-            pdfPage=number;
-            setPageControls(number,pdfDoc.numPages);
-          }
+          if(!best||entry.intersectionRatio>best.ratio)best={number,ratio:entry.intersectionRatio};
           renderContinuousPage(number).catch(showPdfError);
         });
-      },{root:stage,threshold:[.15,.35,.6]});
+        if(best){pdfPage=best.number;setPageControls(best.number,pdfDoc.numPages);}
+      },{root:stage,threshold:[.05,.15,.35,.6]});
       continuousHost.querySelectorAll('[data-pdf-cont-page]').forEach(node=>continuousObserver.observe(node));
       await renderContinuousPage(pdfPage);
     }else{
@@ -177,16 +178,20 @@
   const refreshContinuousVisiblePages=async()=>{
     if(!continuousMode||!stage||!continuousHost)return;
     const stageRect=stage.getBoundingClientRect();
-    const visible=[...continuousHost.querySelectorAll('[data-pdf-cont-page]')].filter(node=>{
+    const nodes=[...continuousHost.querySelectorAll('[data-pdf-cont-page]')];
+    const visible=nodes.filter(node=>{
       const rect=node.getBoundingClientRect();
       return rect.bottom>=stageRect.top-180&&rect.top<=stageRect.bottom+180;
     });
-    for(const node of visible){
+    nodes.forEach(node=>{
       node.dataset.rendered='0';
+      delete node.dataset.rendering;
       const canvas=node.querySelector('canvas');
       if(canvas){canvas.width=0;canvas.height=0;}
-      await renderContinuousPage(Number(node.dataset.pdfContPage));
-    }
+      const text=node.querySelector('.farast-pdf-cont-text');
+      if(text)text.innerHTML='';
+    });
+    for(const node of visible)await renderContinuousPage(Number(node.dataset.pdfContPage));
   };
 
   const navigatePdfPage=async(number)=>{
