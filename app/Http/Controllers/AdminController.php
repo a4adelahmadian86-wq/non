@@ -138,6 +138,86 @@ class AdminController extends Controller
             return array_map(fn ($d) => $map[$d] ?? 0, $chartDays);
         };
 
+        // Canonical workspace documents are authoritative. Legacy editor rows are
+        // counted only when they have no canonical document link, preventing double counts.
+        $documentCount = function ($since = null) use ($visibleIds): int {
+            $count = 0;
+
+            if (Schema::hasTable('farast_documents')) {
+                $query = DB::table('farast_documents')->where('status', 'active');
+                if (Schema::hasColumn('farast_documents', 'trashed_at')) {
+                    $query->whereNull('trashed_at');
+                }
+                if ($since !== null) {
+                    $query->where('created_at', '>=', $since);
+                }
+                if ($visibleIds !== null) {
+                    $query->whereIn('user_id', $visibleIds);
+                }
+                $count += (int) $query->count();
+            }
+
+            if (Schema::hasTable('typing_documents')) {
+                $query = DB::table('typing_documents');
+                if (Schema::hasColumn('typing_documents', 'farast_document_id')) {
+                    $query->whereNull('farast_document_id');
+                }
+                if ($since !== null) {
+                    $query->where('created_at', '>=', $since);
+                }
+                if ($visibleIds !== null) {
+                    $query->whereIn('user_id', $visibleIds);
+                }
+                $count += (int) $query->count();
+            }
+
+            return $count;
+        };
+
+        $documentSeries = function () use ($chartDays, $visibleIds): array {
+            $map = [];
+            $sources = [];
+
+            if (Schema::hasTable('farast_documents')) {
+                $query = DB::table('farast_documents')
+                    ->select('created_at')
+                    ->where('status', 'active');
+                if (Schema::hasColumn('farast_documents', 'trashed_at')) {
+                    $query->whereNull('trashed_at');
+                }
+                if ($visibleIds !== null) {
+                    $query->whereIn('user_id', $visibleIds);
+                }
+                $sources[] = $query;
+            }
+
+            if (Schema::hasTable('typing_documents')) {
+                $query = DB::table('typing_documents')->select('created_at');
+                if (Schema::hasColumn('typing_documents', 'farast_document_id')) {
+                    $query->whereNull('farast_document_id');
+                }
+                if ($visibleIds !== null) {
+                    $query->whereIn('user_id', $visibleIds);
+                }
+                $sources[] = $query;
+            }
+
+            foreach ($sources as $source) {
+                $rows = $source
+                    ->where('created_at', '>=', $chartDays[0])
+                    ->select(DB::raw('DATE(created_at) as d'), DB::raw('COUNT(*) as c'))
+                    ->groupByRaw('DATE(created_at)')
+                    ->get();
+
+                foreach ($rows as $row) {
+                    $day = \Illuminate\Support\Carbon::parse($row->d)->toDateString();
+                    $map[$day] = ($map[$day] ?? 0) + (int) $row->c;
+                }
+            }
+
+            return array_map(fn ($day) => $map[$day] ?? 0, $chartDays);
+        };
+
         $ticketStats = collect();
         if (Schema::hasTable('tickets')) {
             $tq = Ticket::query();
@@ -168,18 +248,48 @@ class AdminController extends Controller
         };
 
         $topConsumers = collect();
-        if ($canViewAnalytics && Schema::hasTable('typing_documents')) {
-            $tcq = DB::table('typing_documents')
-                ->join('users', 'users.id', '=', 'typing_documents.user_id')
-                ->where('typing_documents.created_at', '>=', $monthAgo)
-                ->groupBy('users.id', 'users.name', 'users.mobile')
-                ->select('users.id', 'users.name', 'users.mobile', DB::raw('COUNT(typing_documents.id) as documents'))
-                ->orderByDesc('documents')
-                ->limit(5);
-            if ($visibleIds !== null) {
-                $tcq->whereIn('typing_documents.user_id', $visibleIds);
+        if ($canViewAnalytics) {
+            $documentSources = [];
+
+            if (Schema::hasTable('farast_documents')) {
+                $query = DB::table('farast_documents')
+                    ->select('user_id', 'created_at')
+                    ->where('status', 'active');
+                if (Schema::hasColumn('farast_documents', 'trashed_at')) {
+                    $query->whereNull('trashed_at');
+                }
+                $documentSources[] = $query;
             }
-            $topConsumers = $tcq->get();
+
+            if (Schema::hasTable('typing_documents')) {
+                $query = DB::table('typing_documents')->select('user_id', 'created_at');
+                if (Schema::hasColumn('typing_documents', 'farast_document_id')) {
+                    $query->whereNull('farast_document_id');
+                }
+                $documentSources[] = $query;
+            }
+
+            if ($documentSources !== []) {
+                $documentRows = array_shift($documentSources);
+                foreach ($documentSources as $source) {
+                    $documentRows->unionAll($source);
+                }
+
+                $tcq = DB::query()
+                    ->fromSub($documentRows, 'dashboard_documents')
+                    ->join('users', 'users.id', '=', 'dashboard_documents.user_id')
+                    ->where('dashboard_documents.created_at', '>=', $monthAgo)
+                    ->groupBy('users.id', 'users.name', 'users.mobile')
+                    ->select('users.id', 'users.name', 'users.mobile', DB::raw('COUNT(*) as documents'))
+                    ->orderByDesc('documents')
+                    ->limit(5);
+
+                if ($visibleIds !== null) {
+                    $tcq->whereIn('dashboard_documents.user_id', $visibleIds);
+                }
+
+                $topConsumers = $tcq->get();
+            }
         }
 
         return view('admin.index', [
@@ -202,10 +312,8 @@ class AdminController extends Controller
                 'blocked_users' => $visibleIds === null
                     ? User::where('is_blocked', true)->count()
                     : User::whereIn('id', $visibleIds)->where('is_blocked', true)->count(),
-                'documents' => $scopedCount('typing_documents'),
-                'new_documents_week' => Schema::hasTable('typing_documents')
-                    ? (($visibleIds === null ? DB::table('typing_documents') : DB::table('typing_documents')->whereIn('user_id', $visibleIds))->where('created_at', '>=', $weekAgo)->count())
-                    : 0,
+                'documents' => $documentCount(),
+                'new_documents_week' => $documentCount($weekAgo),
                 'ai' => $scopedCount('ai_interactions'),
                 'ai_today' => Schema::hasTable('ai_interactions')
                     ? (($visibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $visibleIds))->whereDate('created_at', today())->count())
@@ -240,7 +348,7 @@ class AdminController extends Controller
             'charts' => [
                 'labels' => $chartDays,
                 'users' => Schema::hasTable('users') ? $seriesOf('users') : array_fill(0, 30, 0),
-                'documents' => Schema::hasTable('typing_documents') ? $seriesOf('typing_documents') : array_fill(0, 30, 0),
+                'documents' => $documentSeries(),
                 'ai' => Schema::hasTable('ai_interactions') ? $seriesOf('ai_interactions') : array_fill(0, 30, 0),
             ],
             'ticketStats' => $ticketStats,
@@ -267,8 +375,8 @@ class AdminController extends Controller
             ],
             'secretStatus' => $globalScope ? [
                 'gemini' => (bool) (SiteSetting::read('gemini_api_key') ?: config('services.gemini.key')),
-                'files' => (bool) (SiteSetting::read('files_api_key') ?: env('FILES_API_KEY')),
-                'groq' => (bool) (SiteSetting::read('voice_groq_key') ?: env('GROQ_API_KEY', '')),
+                'files' => (bool) (SiteSetting::read('files_api_key') ?: config('services.files.key')),
+                'groq' => (bool) (SiteSetting::read('voice_groq_key') ?: config('services.groq.key')),
             ] : ['gemini' => false, 'files' => false, 'groq' => false],
             'systemHealth' => $globalScope ? [
                 'php' => PHP_VERSION,

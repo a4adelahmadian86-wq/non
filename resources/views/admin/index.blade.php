@@ -60,7 +60,7 @@
             <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>سندهای ایجادشده</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
             @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
-            <article class="metric-card metric-green"><div class="metric-top"><span>وضعیت Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'تنظیم نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
+            <article class="metric-card metric-green"><div class="metric-top"><span>اعتبارنامه Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'ثبت شده' : 'ثبت نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
             @endif
         </section>
 

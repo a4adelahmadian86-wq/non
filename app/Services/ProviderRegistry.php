@@ -36,8 +36,11 @@ final class ProviderRegistry
                 'credential_configured'=>$configured, 'fallback'=>false,
             ];
         }
+        $geminiConfigured = filled(SiteSetting::read('gemini_api_key') ?: config('services.gemini.key'));
+
         foreach ($this->ai->capabilities() as $name=>$capabilities) {
-            $items[]=['id'=>'ai:'.$name,'name'=>$name,'provider'=>$name,'type'=>'ai','model'=>null,'capabilities'=>array_values(array_unique(array_merge(['ai.text'],array_keys((array)$capabilities)))),'priority'=>0,'status'=>filled(SiteSetting::read('gemini_api_key'))?'configured':'unavailable','quota'=>null,'latency_ms'=>null,'reliability'=>null,'quality'=>null,'credential_configured'=>filled(SiteSetting::read('gemini_api_key')),'fallback'=>false];
+            $configured = $name === 'gemini' ? $geminiConfigured : false;
+            $items[]=['id'=>'ai:'.$name,'name'=>$name,'provider'=>$name,'type'=>'ai','model'=>null,'capabilities'=>array_values(array_unique(array_merge(['ai.text'],array_keys((array)$capabilities)))),'priority'=>0,'status'=>$configured?'configured':'unavailable','connection_verified'=>false,'last_success_at'=>null,'quota'=>null,'latency_ms'=>null,'reliability'=>null,'quality'=>null,'credential_configured'=>$configured,'fallback'=>false];
         }
         return $items;
     }
