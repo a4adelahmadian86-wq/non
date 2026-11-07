@@ -26,7 +26,7 @@
         <table style="width:100%;border-collapse:collapse">
             <thead><tr>
                 <th>Provider</th><th>Type</th><th>Model</th><th>Capabilities</th><th>Status</th>
-                <th>API</th><th>تأیید اتصال</th><th>آمادگی مدل</th><th>آخرین اتصال موفق</th>
+                <th>API</th><th>تأیید اتصال</th><th>آمادگی مدل</th><th>آمادگی قابلیت‌ها</th><th>آخرین اتصال موفق</th>
                 <th>آخرین خطا</th><th>Priority</th><th>Quota</th><th>جزئیات</th>
             </tr></thead>
             <tbody>
@@ -40,6 +40,15 @@
                     <td>{{ ($provider['api_reachable'] ?? false) ? 'در دسترس' : 'تأییدنشده / قطع' }}</td>
                     <td>{{ ($provider['connection_verified'] ?? false) ? 'تأییدشده' : 'تأییدنشده' }}</td>
                     <td>{{ ($provider['ready'] ?? false) ? 'آماده' : 'آماده نیست' }}</td>
+                    <td>
+                        @if(!empty($provider['capability_readiness']))
+                            @foreach($provider['capability_readiness'] as $capability => $ready)
+                                <span>{{ $capability }}: {{ $ready ? 'آماده' : 'ناموجود' }}</span>@if(!$loop->last) · @endif
+                            @endforeach
+                        @else
+                            —
+                        @endif
+                    </td>
                     <td>{{ $provider['last_success_at'] ?? 'هنوز ثبت نشده' }}</td>
                     <td>{{ $provider['last_failure_at'] ?? '—' }}</td>
                     <td>{{ $provider['priority'] }}</td>
@@ -47,7 +56,7 @@
                     <td>@if($provider['type'] === 'voice')<a href="{{ route('admin.providers.voice.test', $provider['provider']) }}" target="_blank" rel="noopener noreferrer">آخرین وضعیت ثبت‌شده</a>@else—@endif</td>
                 </tr>
             @empty
-                <tr><td colspan="13">Provider فعالی ثبت نشده است.</td></tr>
+                <tr><td colspan="14">Provider فعالی ثبت نشده است.</td></tr>
             @endforelse
             </tbody>
         </table>
