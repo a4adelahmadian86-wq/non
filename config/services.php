@@ -19,6 +19,14 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
+    'files' => [
+        'key' => env('FILES_API_KEY'),
+    ],
+
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+    ],
+
     // Speech gateway URLs. Production defaults point to the existing Render service.
     'voice' => [
         'local_only' => $voiceLocalOnly,
