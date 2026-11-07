@@ -86,6 +86,12 @@
         <form method="post" action="{{ route('admin.store.course.lessons.store',[$product,$section]) }}" class="course-add-lesson">
           @csrf<strong>افزودن جلسه به این فصل</strong>
           <div class="course-inline-fields"><input name="title" required maxlength="180" placeholder="عنوان جلسه"><select name="lesson_type"><option value="video">ویدئو</option><option value="audio">صوت</option><option value="article">متن آموزشی</option><option value="file">فایل</option><option value="live">جلسه زنده</option></select><input type="url" name="video_url" placeholder="لینک ویدئو (اختیاری)"><input type="number" min="0" name="duration_seconds" placeholder="مدت (ثانیه)" value="0"></div>
+          <div class="course-lesson-form">
+            <label>خلاصه جلسه<input name="summary" maxlength="2000" placeholder="توضیح کوتاه برای دانشجو"></label>
+            <label>انتشار پس از (روز)<input type="number" name="drip_after_days" min="0" placeholder="خالی = بلافاصله"></label>
+            <label>ترتیب جلسه<input type="number" name="sort_order" min="0" value="0"></label>
+            <label class="course-wide">محتوای متنی اولیه<textarea name="content" rows="3" maxlength="50000" placeholder="متن آموزشی یا توضیحات جلسه (اختیاری)"></textarea></label>
+          </div>
           <div class="course-toggles"><label><input type="checkbox" name="is_preview" value="1"> جلسه نمونه رایگان</label><label><input type="checkbox" name="is_published" value="1"> انتشار جلسه</label></div>
           <button type="submit" class="store-outline-btn">افزودن جلسه</button>
         </form>
