@@ -97,10 +97,15 @@ class AdminController extends Controller
                 return 0;
             }
             $q = DB::table($table);
-            if ($visibleIds !== null && $userColumn !== null && Schema::hasColumn($table, $userColumn)) {
-                $q->whereIn($userColumn, $visibleIds);
-            } elseif ($visibleIds !== null && $table === 'users') {
-                $q->whereIn('id', $visibleIds);
+            if ($visibleIds !== null) {
+                if ($table === 'users') {
+                    $q->whereIn('id', $visibleIds);
+                } elseif ($userColumn !== null && Schema::hasColumn($table, $userColumn)) {
+                    $q->whereIn($userColumn, $visibleIds);
+                } else {
+                    // A scoped dashboard must never fall back to an unfiltered aggregate.
+                    return 0;
+                }
             }
             foreach ($filters as $col => $val) {
                 if (Schema::hasColumn($table, is_string($col) ? $col : '')) {
@@ -296,6 +301,10 @@ class AdminController extends Controller
             }
         }
 
+        $voiceAccounts = ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
+            ? VoiceProviderAccount::query()->get()->keyBy('provider')
+            : collect();
+
         return view('admin.index', [
             'rules' => $globalScope ? PricingRule::orderBy('id')->get() : collect(),
             'users' => $users,
@@ -320,6 +329,7 @@ class AdminController extends Controller
                 'new_documents_week' => $documentCount($weekAgo),
                 'ai' => $scopedCount('ai_interactions'),
                 'ai_today' => Schema::hasTable('ai_interactions')
+                    && ($visibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
                     ? (($visibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $visibleIds))->whereDate('created_at', today())->count())
                     : 0,
                 // Voice usage has no user attribution in its schema; expose it only in the global scope.
@@ -395,9 +405,10 @@ class AdminController extends Controller
                 'private_storage_ok' => $this->privateStorageReachable(),
             ] : [],
             'capabilities' => $capabilities,
-            'voiceAccounts' => ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
-                ? VoiceProviderAccount::query()->get()->keyBy('provider')
-                : collect(),
+            'voiceAccounts' => $voiceAccounts,
+            'gladia' => $voiceAccounts->get('gladia'),
+            'azure' => $voiceAccounts->get('azure'),
+            'google' => $voiceAccounts->get('google'),
         ]);
     }
 
