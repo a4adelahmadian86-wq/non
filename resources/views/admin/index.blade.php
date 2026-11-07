@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('content')
 <div class="farast-admin" dir="rtl">
-    @include('admin.partials.sidebar')ide>
+    @include('admin.partials.sidebar')
 
     <main class="farast-admin-main">
         <header class="farast-admin-topbar">
