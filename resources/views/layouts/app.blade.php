@@ -17,7 +17,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @if($isEditor)
 <meta name="farast-capabilities" content='@json($farastCapabilities)'><link rel="stylesheet" href="/css/editor-architecture.css?v=20261014e"><link rel="stylesheet" href="/css/editor-layout.css?v=20261014a"><link rel="stylesheet" href="/css/voice.css?v=20261010">
 @endif
-@if($isAdmin)<link rel="stylesheet" href="/css/admin.css"><link rel="stylesheet" href="/css/farast-control.css">@endif
+@if($isAdmin)<link rel="stylesheet" href="/css/admin.css?v=20261107-health1"><link rel="stylesheet" href="/css/farast-control.css">@endif
 @if($isAuthPage)<link rel="stylesheet" href="/css/auth.css">@endif
 <link rel="stylesheet" href="/css/farast-assistant.css?v=20261106micStates2">
 @stack('styles')
