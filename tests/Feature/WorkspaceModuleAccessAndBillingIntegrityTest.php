@@ -222,4 +222,40 @@ class WorkspaceModuleAccessAndBillingIntegrityTest extends TestCase
         $this->assertDatabaseCount('farast_ocr_jobs', 0);
     }
 
+    public function test_admin_plan_editor_writes_to_the_canonical_commercial_catalog(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.plans.save'), [
+                'code' => 'canonical-admin-plan',
+                'name' => 'Canonical Admin Plan',
+                'price' => 0,
+                'currency' => 'IRR',
+                'billing_interval' => 'monthly',
+                'quotas' => [
+                    'typing_pages' => 40,
+                    'ai_requests' => 80,
+                    'ocr_pages' => 10,
+                    'voice_minutes' => 15,
+                    'export_count' => 20,
+                ],
+                'allow_payg' => '1',
+                'active' => '1',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseHas('farast_commercial_plans', [
+            'code' => 'canonical-admin-plan',
+            'name' => 'Canonical Admin Plan',
+            'price' => 0,
+            'billing_interval' => 'monthly',
+        ]);
+
+        $plan = FarastCommercialPlan::where('code', 'canonical-admin-plan')->firstOrFail();
+        $this->assertSame(80, (int) $plan->quotas['ai_requests']);
+        $this->assertDatabaseMissing('farast_plans', ['code' => 'canonical-admin-plan']);
+    }
+
 }
