@@ -241,4 +241,14 @@ class CommercePhase3Test extends TestCase
         $this->assertSame(10000,(int)$charge->fresh()->total);
         $this->assertSame('refunded',$charge->fresh()->status);
     }
+
+    public function test_cart_actions_render_an_accessible_feedback_region(): void
+    {
+        $this->get(route('cart'))
+            ->assertOk()
+            ->assertSee('id="storeCartActionFeedback"', false)
+            ->assertSee('role="status"', false)
+            ->assertSee('aria-live="polite"', false)
+            ->assertDontSee('alert(err.message)', false);
+    }
 }
