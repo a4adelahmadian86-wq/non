@@ -58,13 +58,34 @@
         </div>
 
         <article class="store-panel">
-          <h2>درباره این فایل</h2>
+          <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
           <div class="body">{!! nl2br(e($product->description ?: $product->short_description ?: 'توضیحی ثبت نشده است.')) !!}</div>
         </article>
+        @if($product->type === 'course' && $product->course)
+          <div class="store-panel course-public-curriculum">
+            <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
+            <div class="course-public-meta">
+              @if($product->course->instructor_name)<span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>@endif
+              <span><i class="fa-solid fa-signal"></i> سطح: {{ ['beginner'=>'مقدماتی','intermediate'=>'متوسط','advanced'=>'پیشرفته','all'=>'همه سطوح'][$product->course->level] ?? 'مقدماتی' }}</span>
+              @if($product->course->duration_minutes)<span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>@endif
+            </div>
+            @forelse($product->course->sections as $section)
+              @php($visibleLessons = $section->lessons->where('is_published',true))
+              @if($visibleLessons->isNotEmpty())
+                <div class="course-public-section"><strong>{{ $loop->iteration }}. {{ $section->title }}</strong><span>{{ $visibleLessons->count() }} جلسه</span></div>
+                @foreach($visibleLessons as $lesson)
+                  <div class="course-public-lesson"><i class="fa-solid fa-{{ $lesson->lesson_type==='video'?'play':($lesson->lesson_type==='audio'?'headphones':'file-lines') }}"></i><span>{{ $lesson->title }}</span>@if($lesson->is_preview)<small>نمونه رایگان</small>@endif @if($lesson->duration_seconds)<small>{{ gmdate('i:s',$lesson->duration_seconds) }}</small>@endif</div>
+                @endforeach
+              @endif
+            @empty
+              <div class="store-preview-empty">سرفصل‌های این دوره هنوز منتشر نشده‌اند.</div>
+            @endforelse
+          </div>
+        @endif
       </section>
 
       <aside class="store-buy-card">
-        <small>{{ $product->category?->name ?? 'فایل دیجیتال' }}</small>
+        <small>{{ $product->type === 'course' ? 'دوره آموزشی' : ($product->category?->name ?? 'فایل دیجیتال') }}</small>
         <h1>{{ $product->title }}</h1>
         <p class="lead">{{ $product->short_description }}</p>
         <div class="price">
@@ -99,7 +120,7 @@
 
         <div class="meta">
           <span><i class="fa-solid fa-code-branch"></i> نسخه {{ $product->version ?: '1.0' }}</span>
-          <span><i class="fa-solid fa-shield-halved"></i> دریافت در کتابخانه پس از پرداخت</span>
+          <span><i class="fa-solid fa-shield-halved"></i> {{ $product->type === 'course' ? 'دسترسی به دوره در کتابخانه آموزشی' : 'دریافت در کتابخانه پس از پرداخت' }}</span>
           <span><i class="fa-solid fa-file-contract"></i> مجوز {{ $product->license_type ?: 'شخصی' }}</span>
           @if($hasPreview)<span><i class="fa-solid fa-eye"></i> نمونه قابل مطالعه</span>@endif
         </div>
@@ -133,6 +154,9 @@
 @endsection
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107premium1">
+<style>
+.course-public-curriculum{margin-top:14px}.course-public-meta{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px}.course-public-meta span{font-size:.7rem;color:var(--st-muted);background:#f4f7fc;border-radius:8px;padding:7px 9px}.course-public-section{display:flex;justify-content:space-between;gap:12px;padding:11px 10px;background:#f6f9fd;border:1px solid var(--st-line);border-radius:9px;margin-top:10px}.course-public-section strong{font-size:.78rem}.course-public-section span{font-size:.68rem;color:var(--st-muted)}.course-public-lesson{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #edf1f6;font-size:.75rem}.course-public-lesson>span{flex:1}.course-public-lesson>i{color:var(--st-blue)}.course-public-lesson small{font-size:.64rem;color:var(--st-muted);background:#f0f4fa;border-radius:99px;padding:4px 7px}
+</style>
 @endpush
 @push('scripts')
 <script>
