@@ -10,7 +10,7 @@
         <nav>
             <a class="is-active" href="#overview"><i class="fa-solid fa-grid-2"></i><span>نمای کلی</span></a>
             @if($console->sectionAllowed(auth()->user(), 'users'))<a href="{{ route('admin.users') }}"><i class="fa-solid fa-users"></i><span>کاربران</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'ai'))<a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>@endif
+            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))<a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'voice'))<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
             @if($console->sectionAllowed(auth()->user(), 'announcements'))<a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>@endif
@@ -59,7 +59,7 @@
             <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>کل حساب‌های ثبت‌شده</small></article>
             <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>سندهای ایجادشده</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
-            @if($console->sectionAllowed(auth()->user(), 'ai'))
+            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
             <article class="metric-card metric-green"><div class="metric-top"><span>وضعیت Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'تنظیم نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
             @endif
         </section>
@@ -68,13 +68,13 @@
             <article class="admin-panel operations-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="live-pill"><i></i> زنده</span></div>
                 <div class="ops-grid">
-                    <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در فهرست اخیر</small></div></div>
+                    <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
                     <div><span class="ops-icon cyan"><i class="fa-solid fa-bolt"></i></span><div><b>{{ number_format($stats['ai_today']) }}</b><small>درخواست AI امروز</small></div></div>
                     @if($console->sectionAllowed(auth()->user(), 'announcements'))<div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>@endif
                 </div>
             </article>
-            @if($console->sectionAllowed(auth()->user(), 'ai'))
+            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
             <article id="ai" class="admin-panel ai-status-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">AI GATEWAY</span><h2>دروازه هوش مصنوعی</h2><p>وضعیت تنظیمات حساس بدون نمایش مقدار کلیدها.</p></div><span class="status-chip {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}"><i class="fa-solid fa-circle"></i>{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'نیازمند تنظیم' }}</span></div>
                 <div class="ai-provider"><span class="provider-mark"><i class="fa-solid fa-sparkles"></i></span><div><b>Gemini</b><small>{{ $settings['gemini_model'] }}</small></div><span class="provider-state {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}">{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'بدون کلید' }}</span></div>
