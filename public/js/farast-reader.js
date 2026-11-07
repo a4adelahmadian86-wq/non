@@ -16,10 +16,12 @@
   const pdfCanvas=root.querySelector('.farast-pdf-canvas');
   const pdfSurface=root.querySelector('.farast-pdf-document');
   const pdfLoading=root.querySelector('.farast-pdf-loading');
+  const outlineSection=root.querySelector('#reader-outline');
+  const outlineHost=root.querySelector('#reader-outline-list');
   const pdfUrl=pdfSurface?.dataset.pdfUrl;
-  const pdfjsReady=window.pdfjsLib
-    ? Promise.resolve(window.pdfjsLib)
-    : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;});
+  const pdfjsReady=pdfUrl
+    ? (window.pdfjsLib ? Promise.resolve(window.pdfjsLib) : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;}))
+    : Promise.resolve(null);
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],docxMatches=[],matchIndex=-1,renderTask=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
@@ -126,14 +128,45 @@
     }
   };
 
+  const loadPdfOutline=async()=>{
+    if(!pdfDoc||!outlineHost||!outlineSection)return;
+    try{
+      const outline=await pdfDoc.getOutline();
+      outlineHost.innerHTML='';
+      if(!outline?.length){outlineSection.hidden=true;return;}
+      const appendItems=async(items,depth=0)=>{
+        for(const item of items||[]){
+          let destination=item.dest;
+          if(typeof destination==='string')destination=await pdfDoc.getDestination(destination);
+          if(Array.isArray(destination)&&destination[0]){
+            try{
+              const page=(await pdfDoc.getPageIndex(destination[0]))+1;
+              const button=document.createElement('button');
+              button.type='button';
+              button.textContent=item.title||('صفحه '+faNumber(page));
+              button.style.paddingInlineStart=(8+depth*14)+'px';
+              button.addEventListener('click',()=>renderPdfPage(page).catch(showPdfError));
+              outlineHost.append(button);
+            }catch(_){}
+          }
+          if(item.items?.length)await appendItems(item.items,Math.min(depth+1,6));
+        }
+      };
+      await appendItems(outline);
+      outlineSection.hidden=!outlineHost.childElementCount;
+    }catch(_){outlineSection.hidden=true;}
+  };
+
   const loadPdf=async()=>{
     if(!pdfUrl){if(pdfLoading)pdfLoading.textContent='فایل PDF برای نمایش پیدا نشد.';return;}
     try{
       const pdfjs=await pdfjsReady;
+      if(!pdfjs)throw new Error('PDF.js module unavailable');
       pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.worker.mjs';
       pdfDoc=await pdfjs.getDocument({url:pdfUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
+      await loadPdfOutline();
     }catch(error){showPdfError(error);}
   };
 
