@@ -294,7 +294,7 @@ class CommerceAuthorizationService
 
                 return $refund;
             });
-        } catch (\\Illuminate\\Database\\QueryException $exception) {
+        } catch (QueryException $exception) {
             // A concurrent retry may win the unique-key insert. Return it only
             // when the full financial request is identical.
             $existing = FarastRefund::where('idempotency_key', $idempotencyKey)->first();
