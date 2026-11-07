@@ -33,7 +33,7 @@ return [
                 ['key' => 'documents.files', 'label' => 'فایل‌ها', 'icon' => 'fa-folder', 'route' => 'library', 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.folders', 'label' => 'پوشه‌ها', 'icon' => 'fa-folder-tree', 'route' => 'platform.documents', 'fragment' => '#folder-panel', 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.shared', 'label' => 'اشتراک‌گذاری‌ها', 'icon' => 'fa-share-nodes', 'route' => 'platform.documents', 'query' => ['shared' => 1], 'permission' => 'documents.share', 'scope' => 'own'],
-                ['key' => 'documents.deleted', 'label' => 'موارد حذف‌شده', 'icon' => 'fa-trash-can', 'route' => 'platform.documents', 'query' => ['trashed' => 1], 'permission' => 'documents.view', 'scope' => 'own'],
+                ['key' => 'documents.deleted', 'label' => 'موارد حذف‌شده', 'icon' => 'fa-trash-can', 'route' => 'platform.documents', 'query' => ['trashed' => 1], 'permission' => 'documents.delete', 'scope' => 'own'],
                 ['key' => 'documents.archive', 'label' => 'بایگانی', 'icon' => 'fa-box-archive', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'own'],
             ],
         ],
