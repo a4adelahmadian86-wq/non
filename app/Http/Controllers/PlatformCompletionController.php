@@ -159,25 +159,28 @@ class PlatformCompletionController extends Controller {
    ->join('farast_commercial_plans','farast_commercial_plans.id','=','farast_subscriptions.plan_id')
    ->where('farast_subscriptions.user_id',$r->user()->id)
    ->where('farast_subscriptions.status','active')
+   ->where('farast_subscriptions.starts_at','<=',now())
+   ->where(function($q){$q->whereNull('farast_subscriptions.ends_at')->orWhere('farast_subscriptions.ends_at','>',now());})
    ->select('farast_subscriptions.*','farast_commercial_plans.name','farast_commercial_plans.code','farast_commercial_plans.price','farast_commercial_plans.currency','farast_commercial_plans.quotas')
    ->orderByDesc('farast_subscriptions.starts_at')->first();
   return view('platform.billing',compact('plans','sub'));
  }
  public function subscribe(Request $r,$plan){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'billing.view'),403);
-  $p=DB::table('farast_commercial_plans')->where('id',$plan)->where('active',1)->first();
-  abort_unless($p,404);
-  if((int)$p->price>0){
-   return back()->withErrors(['plan'=>'این پلن پولی است؛ تا زمانی که پرداخت و تأیید مالی آن به اشتراک متصل نشده، فعال‌سازی مستقیم مجاز نیست.']);
-  }
   $user=$r->user();
-  $starts=now();
-  $ends=match($p->billing_interval){
-   'monthly'=>$starts->copy()->addMonth(),
-   'yearly'=>$starts->copy()->addYear(),
-   default=>null,
-  };
-  DB::transaction(function()use($p,$user,$starts,$ends){
+  $planId=(int)$plan;
+  $activated=DB::transaction(function()use($user,$planId){
+   $p=DB::table('farast_commercial_plans')->where('id',$planId)->where('active',1)->lockForUpdate()->first();
+   abort_unless($p,404);
+   // Paid plans must go through a verified payment flow. This endpoint only
+   // activates free plans and cannot be raced against an admin price update.
+   if((int)$p->price>0)return false;
+   $starts=now();
+   $ends=match($p->billing_interval){
+    'monthly'=>$starts->copy()->addMonth(),
+    'yearly'=>$starts->copy()->addYear(),
+    default=>null,
+   };
    DB::table('farast_subscriptions')->where('user_id',$user->id)->where('status','active')->lockForUpdate()->get();
    DB::table('farast_subscriptions')->where('user_id',$user->id)->where('status','active')->update(['status'=>'replaced','ends_at'=>$starts,'updated_at'=>$starts]);
    DB::table('farast_entitlements')->where('user_id',$user->id)->where('source_type','subscription')->where('status','active')->update(['status'=>'replaced','ends_at'=>$starts,'updated_at'=>$starts]);
@@ -193,7 +196,11 @@ class PlatformCompletionController extends Controller {
     'updated_at'=>$starts,
    ]);
    app(\App\Services\SubscriptionEntitlementService::class)->sync($user,(int)$p->id);
+   return true;
   });
+  if(!$activated){
+   return back()->withErrors(['plan'=>'این پلن پولی است؛ تا زمانی که پرداخت و تأیید مالی آن به اشتراک متصل نشده، فعال‌سازی مستقیم مجاز نیست.']);
+  }
   return back()->with('status','پلن رایگان فعال شد و سهمیه‌های آن در سامانه ثبت شدند.');
  }
  public function adminPlans(){
