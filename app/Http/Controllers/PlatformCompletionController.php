@@ -87,7 +87,8 @@ class PlatformCompletionController extends Controller {
  public function workflow(Request $r){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.view'),403);
   $items=DB::table('farast_workflows')->where('user_id',$r->user()->id)->orderByDesc('updated_at')->get();
-  return view('platform.workflows',compact('items'));
+  $canManageWorkflows=app(AuthorizationService::class)->allows($r->user(),'workflows.manage');
+  return view('platform.workflows',compact('items','canManageWorkflows'));
  }
  public function saveWorkflow(Request $r){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
