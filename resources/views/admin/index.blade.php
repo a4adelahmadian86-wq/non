@@ -237,22 +237,24 @@
 @endif
 
         <section class="admin-footer-actions">
-            <a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><div><b>مرکز مالی</b><small>کیف پول، مالیات و درگاه</small></div><i class="fa-solid fa-arrow-left"></i></a>
-            <a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>
-            <a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>
+            @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><div><b>مرکز مالی</b><small>کیف پول، مالیات و درگاه</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
         </section>
     </main>
 </div>
+@if($console->sectionAllowed(auth()->user(), 'access') || $console->sectionAllowed(auth()->user(), 'organizations') || $console->sectionAllowed(auth()->user(), 'integrations') || $console->sectionAllowed(auth()->user(), 'analytics') || $console->sectionAllowed(auth()->user(), 'audit') || $console->sectionAllowed(auth()->user(), 'finance') || $console->sectionAllowed(auth()->user(), 'emails') || $console->sectionAllowed(auth()->user(), 'social'))
 <section class="admin-section admin-panel-wide" id="platform-control">
 <div class="admin-panel-head"><div><span class="panel-eyebrow">FARAST CONTROL CENTER</span><h2>مدیریت کامل پلتفرم</h2><p>ماژول‌های عملیاتی واقعی از همین کنسول قابل دسترسی‌اند؛ وضعیت‌های «planned» بدون مسیر عملیاتی به‌عنوان قابلیت کامل معرفی نمی‌شوند.</p></div></div>
 <div class="ops-grid">
-<a href="{{ route('admin.access') }}"><span class="ops-icon purple"><i class="fa-solid fa-user-shield"></i></span><div><b>RBAC</b><small>نقش‌ها و مجوزهای granular</small></div></a>
-<a href="{{ route('admin.organizations') }}"><span class="ops-icon"><i class="fa-solid fa-building"></i></span><div><b>{{ number_format($stats['organizations']) }}</b><small>سازمان · {{ number_format($stats['teams']) }} تیم</small></div></a>
-<a href="{{ route('admin.integrations') }}"><span class="ops-icon cyan"><i class="fa-solid fa-plug"></i></span><div><b>Integrations</b><small>Gemini · Voice · Canva OAuth</small></div></a>
-<a href="{{ route('admin.analytics') }}"><span class="ops-icon orange"><i class="fa-solid fa-chart-line"></i></span><div><b>{{ number_format($stats['voice_requests']) }}</b><small>{{ number_format($stats['voice_seconds']) }} ثانیه صوت ثبت‌شده</small></div></a>
-<a href="{{ route('admin.audit') }}"><span class="ops-icon"><i class="fa-solid fa-shield-halved"></i></span><div><b>{{ number_format($stats['audit_events']) }}</b><small>رویداد ممیزی</small></div></a>
-<a href="{{ route('admin.finance') }}"><span class="ops-icon purple"><i class="fa-solid fa-wallet"></i></span><div><b>Finance</b><small>تراکنش، کیف پول و پرداخت</small></div></a>
-<a href="{{ route('admin.emails') }}"><span class="ops-icon cyan"><i class="fa-solid fa-envelope"></i></span><div><b>Email</b><small>تنظیم و تست ایمیل</small></div></a>
-<a href="{{ route('admin.social') }}"><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>Content</b><small>اعلان و شبکه‌های اجتماعی</small></div></a>
+@if($console->sectionAllowed(auth()->user(), 'access'))<a href="{{ route('admin.access') }}"><span class="ops-icon purple"><i class="fa-solid fa-user-shield"></i></span><div><b>RBAC</b><small>نقش‌ها و مجوزهای granular</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'organizations'))<a href="{{ route('admin.organizations') }}"><span class="ops-icon"><i class="fa-solid fa-building"></i></span><div><b>{{ number_format($stats['organizations']) }}</b><small>سازمان · {{ number_format($stats['teams']) }} تیم</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'integrations'))<a href="{{ route('admin.integrations') }}"><span class="ops-icon cyan"><i class="fa-solid fa-plug"></i></span><div><b>Integrations</b><small>Gemini · Voice · Canva OAuth</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}"><span class="ops-icon orange"><i class="fa-solid fa-chart-line"></i></span><div><b>{{ number_format($stats['voice_requests']) }}</b><small>{{ number_format($stats['voice_seconds']) }} ثانیه صوت ثبت‌شده</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'audit'))<a href="{{ route('admin.audit') }}"><span class="ops-icon"><i class="fa-solid fa-shield-halved"></i></span><div><b>{{ number_format($stats['audit_events']) }}</b><small>رویداد ممیزی</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><span class="ops-icon purple"><i class="fa-solid fa-wallet"></i></span><div><b>Finance</b><small>تراکنش، کیف پول و پرداخت</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><span class="ops-icon cyan"><i class="fa-solid fa-envelope"></i></span><div><b>Email</b><small>تنظیم و تست ایمیل</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>Content</b><small>اعلان و شبکه‌های اجتماعی</small></div></a>@endif
 </div></section>
+@endif
 @endsection
