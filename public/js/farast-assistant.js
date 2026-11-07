@@ -594,7 +594,7 @@
     gatewaySourceNode=gatewayAudioContext.createMediaStreamSource(gatewayMediaStream);
     if(window.AudioWorkletNode&&gatewayAudioContext.audioWorklet&&typeof gatewayAudioContext.audioWorklet.addModule==='function'){
       await gatewayAudioContext.audioWorklet.addModule('/js/farast-voice-worklet.js?v=20261102asr2');
-      if(generation!==gatewayGeneration||socket!==gatewayWs||socket.readyState!==WebSocket.OPEN||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return false;}
+      if(generation!==gatewayGeneration||captureGeneration!==gatewayCaptureGeneration||socket!==gatewayWs||socket.readyState!==WebSocket.OPEN||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return false;}
       gatewayWorkletNode=new AudioWorkletNode(gatewayAudioContext,'farast-pcm-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
       gatewayWorkletNode.port.onmessage=function(event){if(generation!==gatewayGeneration||captureGeneration!==gatewayCaptureGeneration||socket.readyState!==WebSocket.OPEN||!conversationActive)return;handleGatewayPcmFrame(generation,socket,new Int16Array(event.data));};
       gatewaySourceNode.connect(gatewayWorkletNode);gatewayWorkletNode.connect(gatewayAudioContext.destination);
@@ -609,7 +609,7 @@
       };
       gatewaySourceNode.connect(gatewayScriptProcessorNode);gatewayScriptProcessorNode.connect(gatewayAudioContext.destination);
     }
-    if(generation!==gatewayGeneration||socket!==gatewayWs||socket.readyState!==WebSocket.OPEN||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return false;}
+    if(generation!==gatewayGeneration||captureGeneration!==gatewayCaptureGeneration||socket!==gatewayWs||socket.readyState!==WebSocket.OPEN||!conversationActive||panel.hidden){releaseGatewayCapture();gatewayStarting=false;return false;}
     gatewayStarting=false;setMicButtonState('ready');panel.classList.add('is-listening');
     voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='میکروفون روشن است؛ هر وقت صحبت کنی، نوبت تو را تشخیص می‌دهم.';status.textContent='میکروفون آماده است؛ گفتارت به‌صورت زنده پردازش می‌شود.';
     return true;
