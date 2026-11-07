@@ -390,13 +390,16 @@ class SupportTicketService
             ->values()
             ->all();
 
-        if ($ticketIds === []) {
+        $sessionEmail = mb_strtolower(trim((string) session('support_guest_email', '')));
+        $accountEmail = mb_strtolower(trim((string) ($user->email ?? '')));
+        if ($ticketIds === [] || $sessionEmail === '' || $accountEmail === '' || ! hash_equals($accountEmail, $sessionEmail)) {
             return 0;
         }
 
         $claimed = Ticket::query()
             ->whereNull('user_id')
             ->whereIn('id', $ticketIds)
+            ->whereRaw('LOWER(guest_email) = ?', [$sessionEmail])
             ->update(['user_id' => $user->id]);
 
         if ($claimed > 0) {
