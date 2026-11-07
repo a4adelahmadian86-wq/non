@@ -85,7 +85,7 @@ class WalletController extends Controller
         $status = strtoupper((string) $request->query('Status', ''));
 
         if ($authority === '') {
-            return redirect()->route('login')->withErrors(['topup' => 'شناسه بازگشت از درگاه معتبر نیست.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'شناسه بازگشت از درگاه معتبر نیست.']);
         }
 
         $payment = Payment::query()
@@ -100,9 +100,14 @@ class WalletController extends Controller
 
         $order = Order::query()
             ->whereKey($payment->order_id)
-            ->where('status', 'pending')
-            ->where('pricing_snapshot->kind', 'wallet_topup')
             ->first();
+
+        if ($order && ($order->pricing_snapshot['kind'] ?? null) !== 'wallet_topup') {
+            $order = null;
+        }
+        if ($order && $order->status !== 'pending') {
+            $order = null;
+        }
 
         if (! $order) {
             if ($payment->status === 'paid') {
