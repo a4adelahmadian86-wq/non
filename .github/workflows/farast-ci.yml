@@ -25,6 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clamav clamav-freshclam
+          sudo systemctl stop clamav-freshclam || true
           sudo freshclam
           clamscan --version
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
