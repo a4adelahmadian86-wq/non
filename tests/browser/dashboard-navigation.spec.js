@@ -5,10 +5,10 @@ async function signInAndOpenDashboard(page) {
   await page.goto('/login?continue=/dashboard');
   await page.locator('input[name="mobile"]').fill('09151234567');
   await page.getByRole('button', { name: /ادامه با شماره موبایل/ }).click();
-  await expect(page).toHaveURL(/\\/login\\/password/);
+  await expect(page).toHaveURL(new RegExp('/login/password'));
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'ورود به حساب' }).click();
-  await expect(page).toHaveURL(/\\/dashboard/);
+  await expect(page).toHaveURL(new RegExp('/dashboard'));
   await expect(page.locator('[data-dashboard-nav]')).toBeVisible();
 }
 
