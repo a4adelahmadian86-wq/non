@@ -65,6 +65,9 @@ class VoiceProviderAccount extends Model
             'gladia' => ['api_key'],
             'azure' => ['subscription_key', 'region'],
             'google' => ['project_id', 'client_email', 'private_key', 'region'],
+            // Backward-compatible gateway account name used by existing deployments.
+            'google-cloud-speech' => ['api_key'],
+            'azure-speech' => ['subscription_key', 'region'],
             default => [],
         };
 
