@@ -31,9 +31,48 @@ class EditorController extends Controller
 
     public function dashboard(CapabilityService $capabilities)
     {
+        $user = request()->user();
+
+        // The dashboard reads both document stores, but keeps their actions explicit:
+        // legacy typing documents open in the editor; canonical workspace documents
+        // open in the workspace library. Linked records are not counted twice.
+        $documents = $user->documents()
+            ->orderByDesc('updated_at')
+            ->paginate(8)
+            ->withQueryString();
+
+        $linkedDocumentIds = $user->documents()
+            ->whereNotNull('farast_document_id')
+            ->select('farast_document_id');
+
+        $workspaceDocumentQuery = FarastDocument::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->whereNull('trashed_at');
+
+        $workspaceDocuments = (clone $workspaceDocumentQuery)
+            ->whereNotIn('id', $linkedDocumentIds)
+            ->orderByDesc('updated_at')
+            ->limit(6)
+            ->get(['id', 'title', 'updated_at', 'is_favorite']);
+
+        $workspaceDocumentCount = (clone $workspaceDocumentQuery)->count();
+        $legacyOnlyDocumentCount = $user->documents()->whereNull('farast_document_id')->count();
+
         return view('dashboard', [
-            'documents' => auth()->user()->documents()->latest()->get(),
-            'capabilities' => $capabilities->forUser(auth()->user()),
+            'documents' => $documents,
+            'workspaceDocuments' => $workspaceDocuments,
+            'documentTotal' => $workspaceDocumentCount + $legacyOnlyDocumentCount,
+            'projects' => $user->projects()
+                ->orderByDesc('updated_at')
+                ->limit(4)
+                ->get(['id', 'name', 'status', 'updated_at', 'estimated_pages', 'used_pages']),
+            'openTicketCount' => $user->tickets()
+                ->whereIn('status', ['open', 'pending', 'user_replied'])
+                ->count(),
+            'walletBalance' => (int) ($user->wallet()->value('balance_rials') ?? 0),
+            'unreadNotificationCount' => app(\\App\\Services\\NotificationService::class)->unreadCount($user->id),
+            'capabilities' => $capabilities->forUser($user),
         ]);
     }
 
