@@ -20,27 +20,9 @@
   const outlineSection=root.querySelector('#reader-outline');
   const outlineHost=root.querySelector('#reader-outline-list');
 
-  // PDF.js 6.x uses the upcoming Map/WeakMap#getOrInsertComputed APIs; provide
-  // spec-shaped fallbacks for stable browsers that do not expose them yet.
-  const installGetOrInsertComputed=prototype=>{
-    if(typeof prototype.getOrInsertComputed==='function')return;
-    Object.defineProperty(prototype,'getOrInsertComputed',{
-      configurable:true,
-      writable:true,
-      value:function(key,callback){
-        if(this.has(key))return this.get(key);
-        const value=callback(key);
-        this.set(key,value);
-        return value;
-      }
-    });
-  };
-  installGetOrInsertComputed(Map.prototype);
-  installGetOrInsertComputed(WeakMap.prototype);
-
   const pdfjsReady=window.pdfjsLib
     ? Promise.resolve(window.pdfjsLib)
-    : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;});
+    : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;});
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null,continuousMode=false,continuousObserver=null,activePdfUrl=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
@@ -349,7 +331,7 @@
     try{
       if(!pdfDoc){
         const pdfjs=await pdfjsReady;
-        pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.worker.mjs';
+        pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.worker.mjs';
         pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
       }
       if(pdfLoading)pdfLoading.hidden=true;
