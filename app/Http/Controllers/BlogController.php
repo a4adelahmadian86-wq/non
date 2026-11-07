@@ -1,8 +1,8 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use Illuminate\\Http\\Request;
+use Illuminate\Http\Request;
 
 class BlogController extends Controller
 {
@@ -136,6 +136,7 @@ class BlogController extends Controller
         $articles = $all
             ->when($q !== '', fn ($items) => $items->filter(fn ($article) => str_contains(mb_strtolower($article['title'].' '.$article['excerpt'].' '.implode(' ', $article['tags']), 'UTF-8'), mb_strtolower($q, 'UTF-8')))
             ->when($category !== '', fn ($items) => $items->where('category_slug', $category))
+            ->when($q === '' && $category === '' && $featured, fn ($items) => $items->reject(fn ($article) => $article['slug'] === $featured['slug']))
             ->values();
         $categories = $all->map(fn ($article) => ['slug'=>$article['category_slug'], 'name'=>$article['category']])->unique('slug')->values();
 
