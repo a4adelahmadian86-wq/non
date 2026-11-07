@@ -8,6 +8,7 @@ use App\Models\StoreCourseSection;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Services\UploadSecurityService;
+use App\Services\StoreProductWorkspaceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -28,8 +29,10 @@ class AdminCourseController extends Controller
     {
         $course = $this->assertCourse($product);
         $course->load(['sections.lessons.resources']);
+        $product->load(['category', 'files']);
+        $workflow = app(StoreProductWorkspaceService::class)->inspect($product);
 
-        return view('admin.store.course', compact('product', 'course'));
+        return view('admin.store.course', compact('product', 'course', 'workflow'));
     }
 
     public function update(Request $request, StoreProduct $product)
