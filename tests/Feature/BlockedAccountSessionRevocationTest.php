@@ -28,7 +28,7 @@ class BlockedAccountSessionRevocationTest extends TestCase
             ->assertRedirect(route('login'));
 
         $this->assertGuest();
-        $this->assertSessionMissing('sensitive_session_value');
+        $this->assertFalse(session()->has('sensitive_session_value'));
     }
 
     public function test_blocked_account_receives_json_forbidden_and_session_is_invalidated(): void
@@ -42,7 +42,7 @@ class BlockedAccountSessionRevocationTest extends TestCase
             ->assertJsonPath('message', 'حساب کاربری شما مسدود شده است.');
 
         $this->assertGuest();
-        $this->assertSessionMissing('sensitive_session_value');
+        $this->assertFalse(session()->has('sensitive_session_value'));
     }
 
     public function test_active_account_passes_through_the_guard(): void
