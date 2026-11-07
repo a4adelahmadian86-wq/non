@@ -50,6 +50,7 @@ class AdminCourseController extends Controller
         $data['certificate_enabled'] = $request->boolean('certificate_enabled');
         $data['drip_enabled'] = $request->boolean('drip_enabled');
         $course->update($data);
+        $this->audit('store.course.settings_updated', $product, ['course_id' => $course->id]);
 
         return back()->with('status', 'تنظیمات دوره ذخیره شد.');
     }
@@ -62,7 +63,8 @@ class AdminCourseController extends Controller
             'description' => 'nullable|string|max:2000',
             'sort_order' => 'nullable|integer|min:0|max:999999',
         ]);
-        $course->sections()->create($data + ['sort_order' => $data['sort_order'] ?? 0]);
+        $section = $course->sections()->create($data + ['sort_order' => $data['sort_order'] ?? 0]);
+        $this->audit('store.course.section_created', $product, ['section_id' => $section->id]);
 
         return back()->with('status', 'فصل جدید اضافه شد.');
     }
@@ -76,6 +78,7 @@ class AdminCourseController extends Controller
             'description' => 'nullable|string|max:2000',
             'sort_order' => 'required|integer|min:0|max:999999',
         ]));
+        $this->audit('store.course.section_updated', $product, ['section_id' => $section->id]);
 
         return back()->with('status', 'فصل به‌روزرسانی شد.');
     }
@@ -85,6 +88,7 @@ class AdminCourseController extends Controller
         $course = $this->assertCourse($product);
         abort_unless($section->course_id === $course->id, 404);
         $lessonIds = $section->lessons()->pluck('id');
+        $this->audit('store.course.section_deleted', $product, ['section_id' => $section->id, 'lesson_ids' => $lessonIds->all()]);
         $this->deleteLessonFiles($product, $lessonIds);
         $section->delete();
 
@@ -99,7 +103,8 @@ class AdminCourseController extends Controller
         $data['slug'] = $this->uniqueLessonSlug($data['title']);
         $data['is_preview'] = $request->boolean('is_preview');
         $data['is_published'] = $request->boolean('is_published');
-        $section->lessons()->create($data);
+        $lesson = $section->lessons()->create($data);
+        $this->audit('store.course.lesson_created', $product, ['section_id' => $section->id, 'lesson_id' => $lesson->id]);
 
         return back()->with('status', 'جلسه جدید ایجاد شد.');
     }
@@ -112,6 +117,7 @@ class AdminCourseController extends Controller
         $data['is_preview'] = $request->boolean('is_preview');
         $data['is_published'] = $request->boolean('is_published');
         $lesson->update($data);
+        $this->audit('store.course.lesson_updated', $product, ['lesson_id' => $lesson->id, 'is_published' => $lesson->is_published]);
 
         return back()->with('status', 'جلسه به‌روزرسانی شد.');
     }
@@ -120,6 +126,7 @@ class AdminCourseController extends Controller
     {
         $course = $this->assertCourse($product);
         abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
+        $this->audit('store.course.lesson_deleted', $product, ['lesson_id' => $lesson->id]);
         $this->deleteLessonFiles($product, collect([$lesson->id]));
         $lesson->delete();
 
@@ -148,7 +155,8 @@ class AdminCourseController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 256 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
-            StoreProductFile::create([
+            DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
+                $resource = StoreProductFile::create([
                 'product_id' => $product->id,
                 'course_lesson_id' => $lesson->id,
                 'purpose' => 'lesson_resource',
@@ -164,7 +172,9 @@ class AdminCourseController extends Controller
                 'scan_status' => 'clean',
                 'scan_engine' => $inspection['scan'],
                 'scanned_at' => now(),
-            ]);
+                ]);
+                $this->audit('store.course.resource_uploaded', $product, ['lesson_id' => $lesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
+            });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof \Illuminate\Validation\ValidationException) {
@@ -181,10 +191,24 @@ class AdminCourseController extends Controller
         $course = $this->assertCourse($product);
         abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
         abort_unless($file->product_id === $product->id && $file->course_lesson_id === $lesson->id && $file->purpose === 'lesson_resource', 404);
+        $this->audit('store.course.resource_deleted', $product, ['lesson_id' => $lesson->id, 'file_id' => $file->id]);
         Storage::disk($file->disk ?: 'private')->delete($file->path);
         $file->delete();
 
         return back()->with('status', 'منبع آموزشی حذف شد.');
+    }
+
+    private function audit(string $eventType, StoreProduct $product, array $meta = []): void
+    {
+        app(\App\Services\AuditEventService::class)->record(
+            $eventType,
+            auth()->id(),
+            null,
+            'store_product',
+            $product->id,
+            $meta,
+            'admin_console'
+        );
     }
 
     private function lessonRules(): array
