@@ -725,9 +725,118 @@ class AdminController extends Controller
         }
     }
 
-    public function updateVoiceProviders(Request $r)
+    public function updateVoiceProviders(Request $r, AuditLogService $audit)
     {
-        return back()->with('status', 'از پنل اصلی تنظیمات صوتی استفاده کنید.');
+        $data = $r->validate([
+            'gladia_api_key' => ['nullable', 'string', 'max:5000'],
+            'gladia_enabled' => ['nullable', 'boolean'],
+            'gladia_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:99999999'],
+            'azure_subscription_key' => ['nullable', 'string', 'max:5000'],
+            'azure_region' => ['nullable', 'string', 'max:120'],
+            'azure_enabled' => ['nullable', 'boolean'],
+            'azure_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:99999999'],
+            'google_project_id' => ['nullable', 'string', 'max:255'],
+            'google_client_email' => ['nullable', 'email', 'max:255'],
+            'google_private_key' => ['nullable', 'string', 'max:12000'],
+            'google_region' => ['nullable', 'string', 'max:120'],
+            'google_enabled' => ['nullable', 'boolean'],
+            'google_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:99999999'],
+        ]);
+
+        $providers = [
+            'gladia' => [
+                'name' => 'Gladia — تایپ زنده',
+                'inputs' => ['api_key' => 'gladia_api_key'],
+                'required' => ['api_key'],
+                'quota' => 'gladia_quota_limit_seconds',
+                'priority' => 10,
+            ],
+            'azure' => [
+                'name' => 'Azure Speech — موتور پشتیبان',
+                'inputs' => ['subscription_key' => 'azure_subscription_key', 'region' => 'azure_region'],
+                'required' => ['subscription_key', 'region'],
+                'quota' => 'azure_quota_limit_seconds',
+                'priority' => 20,
+            ],
+            'google' => [
+                'name' => 'Google Cloud Speech — موتور پشتیبان',
+                'inputs' => ['project_id' => 'google_project_id', 'client_email' => 'google_client_email', 'private_key' => 'google_private_key', 'region' => 'google_region'],
+                'required' => ['project_id', 'client_email', 'private_key', 'region'],
+                'quota' => 'google_quota_limit_seconds',
+                'priority' => 30,
+            ],
+        ];
+
+        DB::transaction(function () use ($r, $data, $providers, $audit) {
+            foreach ($providers as $provider => $definition) {
+                $account = VoiceProviderAccount::query()
+                    ->where('provider', $provider)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $account) {
+                    $account = new VoiceProviderAccount(['provider' => $provider]);
+                }
+
+                $credentials = $account->credentials_array;
+                $credentialsUpdated = false;
+
+                foreach ($definition['inputs'] as $credentialKey => $inputKey) {
+                    if (filled($data[$inputKey] ?? null)) {
+                        $value = trim((string) $data[$inputKey]);
+                        if (($credentials[$credentialKey] ?? null) !== $value) {
+                            $credentials[$credentialKey] = $value;
+                            $credentialsUpdated = true;
+                        }
+                    }
+                }
+
+                $enabled = $r->boolean($provider.'_enabled');
+                $missing = array_values(array_filter(
+                    $definition['required'],
+                    fn (string $key) => ! filled($credentials[$key] ?? null)
+                ));
+
+                if ($enabled && $missing !== []) {
+                    throw \\Illuminate\\Validation\\ValidationException::withMessages([
+                        $provider.'_enabled' => 'برای فعال‌سازی این سرویس، همه اطلاعات اتصال لازم را وارد کنید.',
+                    ]);
+                }
+
+                $account->name = $definition['name'];
+                $account->credentials_array = $credentials;
+                $account->capabilities = [
+                    'locales' => ['fa-IR', 'en-US', 'ar-SA'],
+                    'capabilities' => ['speech.stt', 'speech.streaming'],
+                ];
+                $account->billing_mode = $account->billing_mode ?: 'paid';
+                if (array_key_exists($definition['quota'], $data)) {
+                    $account->quota_limit_seconds = (int) $data[$definition['quota']];
+                }
+                $account->priority = $account->exists ? $account->priority : $definition['priority'];
+                $account->enabled = $enabled;
+                $account->healthy = $missing === [];
+                if ($credentialsUpdated) {
+                    $account->consecutive_failures = 0;
+                    $account->cooldown_until = null;
+                }
+
+                $metadata = (array) ($account->metadata ?? []);
+                if (filled($credentials['region'] ?? null)) {
+                    $metadata['region'] = $credentials['region'];
+                }
+                $account->metadata = $metadata;
+                $account->save();
+
+                $audit->record($r->user()->id, 'voice.provider.settings_updated', $r->ip(), [
+                    'provider' => $provider,
+                    'enabled' => $enabled,
+                    'credentials_updated' => $credentialsUpdated,
+                ]);
+            }
+        });
+
+        return back()->with('status', 'تنظیمات و دسترسی سرویس‌های صوتی ذخیره شد. کلیدها به‌صورت رمزنگاری‌شده نگهداری می‌شوند.');
     }
 
     public function updatePricing(Request $r)
