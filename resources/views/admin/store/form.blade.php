@@ -30,9 +30,19 @@
       </div>
       <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
       <label class="product-field product-field-wide">توضیحات کامل<textarea name="description" rows="6" maxlength="20000" placeholder="شرح کامل محتوا، کاربردها، پیش‌نیازها و آنچه خریدار دریافت می‌کند.">{{ old('description',$product->description) }}</textarea></label>
-      <label class="product-field product-field-wide">مسیر کاور موجود (اختیاری)<input name="cover_path" value="{{ old('cover_path',$product->cover_path) }}" maxlength="500" placeholder="مسیر فایل کاور در فضای ذخیره‌سازی"></label>
+      <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
+      <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
       <div class="product-editor-actions"><button type="submit" class="store-primary-btn">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ایجاد پیش‌نویس محصول' }}</button><span>محصول جدید ابتدا به‌صورت پیش‌نویس ساخته می‌شود.</span></div>
     </form>
+
+    @if($isEdit)
+      <div class="store-panel product-files-panel">
+        <h2>تصویر کاور محصول</h2>
+        @if($product->cover_path)<img src="{{ asset($product->cover_path) }}" alt="کاور {{ $product->title }}" style="display:block;width:min(320px,100%);aspect-ratio:16/9;object-fit:cover;border-radius:12px;margin:12px 0">@else<p>هنوز کاوری ثبت نشده است.</p>@endif
+        <form method="post" action="{{ route('admin.store.cover.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload">@csrf<input type="file" name="cover" accept=".jpg,.jpeg,.png,.webp" required><button type="submit" class="store-outline-btn">بارگذاری کاور و اسکن امنیتی</button></form>
+        <small class="product-help">فرمت‌های JPG، PNG و WebP · حداکثر ۸ مگابایت</small>
+      </div>
+    @endif
 
     @if($isEdit && $product->type==='course')
       <div class="store-panel product-next-step"><div><strong>مرحله بعد: طراحی برنامه آموزشی</strong><p>فصل‌ها، جلسات، ویدئوها، فایل‌های ضمیمه و تنظیمات گواهی را مدیریت کنید.</p></div><a class="store-primary-btn" href="{{ route('admin.store.course.edit',$product) }}">ورود به مدیریت دوره <i class="fa-solid fa-arrow-left"></i></a></div>
