@@ -321,7 +321,9 @@ class StoreController extends Controller
                         foreach (iterator_to_array($child->attributes) as $attribute) {
                             $name = strtolower($attribute->name);
                             $value = $attribute->value;
-                            $safeImage = $name === 'src' && str_starts_with($value, 'data:image/');
+                            $safeImage = $name === 'src'
+                                && strlen($value) <= 8 * 1024 * 1024
+                                && preg_match('#^data:image/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$#i', $value) === 1;
                             if (!in_array($name, $keep, true) || ($name === 'src' && !$safeImage)) {
                                 $child->removeAttribute($attribute->name);
                             } elseif ($name === 'style') {
