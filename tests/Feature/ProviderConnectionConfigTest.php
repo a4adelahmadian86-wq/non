@@ -96,7 +96,8 @@ class ProviderConnectionConfigTest extends TestCase
                 return $groq !== null
                     && $groq['status'] === 'configured'
                     && $groq['connection_verified'] === false
-                    && $groq['ready'] === false;
+                    && $groq['ready'] === false
+                    && $groq['capability_readiness'] === ['chat' => false, 'speech' => false];
             });
     }
 
