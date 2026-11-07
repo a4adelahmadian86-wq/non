@@ -23,11 +23,22 @@
           @endauth
         </div>
       </div>
-      <div class="store-hero-stats">
-        <div><strong>{{ $products->total() }}</strong><span>محصول</span></div>
-        <div><strong>{{ $categories->count() }}</strong><span>دسته</span></div>
-        <div><strong>{{ $free->count() }}</strong><span>رایگان</span></div>
+      <div class="store-hero-visual">
+        <img src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1000&q=85" alt="قفسه کتاب‌ها و منابع دیجیتال" fetchpriority="high">
+        <div class="store-hero-visual-caption"><i class="fa-solid fa-sparkles"></i><span><strong>کتابخانه‌ای برای کشف</strong><small>دانلود و مطالعه در فضای شخصی شما</small></span></div>
+        <div class="store-hero-stats">
+          <div><strong>{{ $products->total() }}</strong><span>محصول</span></div>
+          <div><strong>{{ $categories->count() }}</strong><span>دسته</span></div>
+          <div><strong>{{ $free->count() }}</strong><span>رایگان</span></div>
+        </div>
       </div>
+    </div>
+
+    <div class="store-feature-row" aria-label="مزیت‌های فروشگاه فراست">
+      <div class="store-feature"><i class="fa-solid fa-eye"></i><strong>پیش‌نمایش پیش از خرید</strong><span>نمونه واقعی فایل را بررسی کنید.</span></div>
+      <div class="store-feature"><i class="fa-solid fa-cloud-arrow-down"></i><strong>دریافت آسان</strong><span>محصولات خریداری‌شده در کتابخانه شما.</span></div>
+      <div class="store-feature"><i class="fa-solid fa-heart"></i><strong>فهرست شخصی</strong><span>موارد دلخواه را برای بعد نگه دارید.</span></div>
+      <div class="store-feature"><i class="fa-solid fa-shield-halved"></i><strong>خرید شفاف</strong><span>قیمت، مجوز و توضیحات روشن.</span></div>
     </div>
 
     @if(session('status'))
@@ -41,12 +52,12 @@
       @endforeach
     </div>
 
-    <form method="get" action="{{ route('store') }}" class="store-toolbar" style="background:#fff;border:1px solid #e2e9f2;border-radius:12px;padding:12px 14px;margin-bottom:18px">
+    <form method="get" action="{{ route('store') }}" class="store-toolbar store-toolbar--premium">
       @if($q)<input type="hidden" name="q" value="{{ $q }}">@endif
       @if($category)<input type="hidden" name="category" value="{{ $category }}">@endif
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%">
-        <label style="font-size:.74rem;color:#6b7c93">مرتب‌سازی
-          <select name="sort" onchange="this.form.submit()" style="margin-right:6px;padding:8px 10px;border:1px solid #e2e9f2;border-radius:8px;font:inherit">
+      <div class="store-toolbar-controls">
+        <label class="store-filter-label">مرتب‌سازی
+          <select name="sort" onchange="this.form.submit()" class="store-filter-select">
             <option value="newest" @selected(($sort??'newest')==='newest')>جدیدترین</option>
             <option value="featured" @selected(($sort??'')==='featured')>ویژه</option>
             <option value="price_asc" @selected(($sort??'')==='price_asc')>ارزان‌ترین</option>
@@ -54,14 +65,14 @@
             <option value="title" @selected(($sort??'')==='title')>عنوان</option>
           </select>
         </label>
-        <label style="font-size:.74rem;color:#6b7c93">قیمت
+        <label class="store-filter-label">قیمت
           <select name="price" onchange="this.form.submit()" style="margin-right:6px;padding:8px 10px;border:1px solid #e2e9f2;border-radius:8px;font:inherit">
             <option value="all" @selected(($price??'all')==='all')>همه</option>
             <option value="free" @selected(($price??'')==='free')>فقط رایگان</option>
             <option value="paid" @selected(($price??'')==='paid')>فقط پولی</option>
           </select>
         </label>
-        <span style="margin-right:auto;font-size:.74rem;color:#6b7c93">{{ $products->total() }} مورد</span>
+        <span class="store-results-total">{{ $products->total() }} مورد</span>
       </div>
     </form>
 
