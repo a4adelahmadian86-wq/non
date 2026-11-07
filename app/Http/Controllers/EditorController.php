@@ -36,7 +36,13 @@ class EditorController extends Controller
         // The dashboard reads both document stores, but keeps their actions explicit:
         // legacy typing documents open in the editor; canonical workspace documents
         // open in the workspace library. Linked records are not counted twice.
-        $documents = $user->documents()
+        $documentQuery = $user->documents();
+        $documentStatusFilter = request()->query('status') === 'draft';
+        if ($documentStatusFilter) {
+            $documentQuery->where('status', 'draft');
+        }
+
+        $documents = $documentQuery
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->paginate(8)
@@ -62,6 +68,7 @@ class EditorController extends Controller
 
         return view('dashboard', [
             'documents' => $documents,
+            'documentStatusFilter' => $documentStatusFilter,
             'workspaceDocuments' => $workspaceDocuments,
             'documentTotal' => $workspaceDocumentCount + $legacyOnlyDocumentCount,
             'projects' => $user->projects()
