@@ -101,7 +101,7 @@ class WorkflowEngine
         // Always retry using the original immutable event payload, not a later caller's payload.
         $storedContext = json_decode((string) $event->context, true);
         if (! is_array($storedContext)) {
-            throw new RuntimeException('Stored workflow event context is invalid.');
+            throw new \\RuntimeException('Stored workflow event context is invalid.');
         }
 
         return $this->processEvent($event, $storedContext);
