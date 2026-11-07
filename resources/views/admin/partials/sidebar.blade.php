@@ -31,6 +31,7 @@
         @if($adminConsole->sectionAllowed(auth()->user(), 'announcements'))<a href="{{ route('admin.announcements.index') }}" @if(request()->routeIs('admin.announcements.*')) aria-current="page" @endif><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان‌ها</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'support_admin'))<a href="{{ route('admin.support.management') }}" @if(request()->routeIs('admin.support.management')) aria-current="page" @endif><i class="fa-solid fa-headset"></i><span>مرکز پشتیبانی</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'plans'))<a href="{{ route('admin.plans') }}" @if(request()->routeIs('admin.plans')) aria-current="page" @endif><i class="fa-solid fa-layer-group"></i><span>پلن‌ها و اشتراک‌ها</span></a>@endif
+        @if($adminConsole->sectionAllowed(auth()->user(), 'cms'))<a href="{{ route('admin.cms') }}" @if(request()->routeIs('admin.cms')) aria-current="page" @endif><i class="fa-solid fa-window-maximize"></i><span>مدیریت محتوای سایت</span></a>@endif
     </nav>
     <div class="farast-admin-nav-bottom">
         @if($adminConsole->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><span>ایمیل</span></a>@endif
