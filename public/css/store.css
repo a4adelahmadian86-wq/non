@@ -273,3 +273,17 @@
 @media(max-width:760px){.store-container{width:min(100% - 28px,1240px)}.store-hero--market{grid-template-columns:1fr;gap:20px}.store-hero-visual{min-height:205px}.store-feature-row{grid-template-columns:repeat(2,minmax(0,1fr))}.store-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.store-detail-cover{height:330px}.store-product-overview{align-items:flex-start;flex-wrap:wrap}.store-product-preview-pill{margin-inline-start:52px}}
 @media(max-width:560px){.store-product-grid{grid-template-columns:1fr}.store-product-cover{height:220px}.store-feature-row{gap:9px}.store-feature{min-height:112px;padding:13px}.store-hero-stats div{min-width:54px;padding:7px}.store-hero-stats strong{font-size:.9rem}.store-hero-stats span{font-size:.58rem}.store-toolbar-controls{align-items:stretch}.store-filter-label{justify-content:space-between;flex:1 1 100%}.store-filter-select{flex:1}.store-results-total{margin-inline-start:0}.store-product-preview-pill{margin-inline-start:0}.store-detail-cover{height:260px}}
 @media(prefers-reduced-motion:reduce){.store-feature,.store-product-card,.store-product-cover img,.store-buy-card .add-to-cart{transition:none}}
+
+
+/* Clear purchase journey on product detail pages */
+.store-purchase-flow{margin-top:14px;padding:16px;border:1px solid #e4ebf5;border-radius:16px;background:linear-gradient(150deg,#fff,#f8faff)}
+.store-purchase-flow-heading{display:grid;gap:4px;margin-bottom:13px}
+.store-purchase-flow-heading>span{color:#3474ca;font-size:.64rem;font-weight:800}
+.store-purchase-flow-heading>strong{color:#233d60;font-size:.82rem}
+.store-purchase-flow ol{display:grid;gap:11px;margin:0;padding:0;list-style:none}
+.store-purchase-flow li{display:flex;align-items:flex-start;gap:10px}
+.store-flow-number{display:grid;place-items:center;flex:0 0 27px;width:27px;height:27px;border:1px solid #dce8f8;border-radius:9px;background:#edf4ff;color:#2b69cb;font-size:.72rem;font-weight:900}
+.store-purchase-flow li div{display:grid;gap:3px;min-width:0;padding-top:1px}
+.store-purchase-flow li b{color:#385574;font-size:.7rem}
+.store-purchase-flow li small{color:#8391a5;font-size:.63rem;line-height:1.8}
+@media(prefers-reduced-motion:reduce){.store-purchase-flow *{scroll-behavior:auto}}
