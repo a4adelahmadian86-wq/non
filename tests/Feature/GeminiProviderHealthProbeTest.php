@@ -81,4 +81,26 @@ class GeminiProviderHealthProbeTest extends TestCase
             ->assertOk()
             ->assertSee('تست اتصال Gemini');
     }
+    public function test_gemini_probe_uses_config_cached_credentials_when_database_key_is_absent(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        config([
+            'services.gemini.key' => 'config-gemini-secret',
+            'services.gemini.model' => 'gemini-3.8-flash',
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/v1beta/models' => Http::response([
+                'models' => [['name' => 'models/gemini-3.8-flash']],
+            ], 200),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.providers.ai.test'))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        Http::assertSent(fn ($request) => $request->hasHeader('x-goog-api-key', 'config-gemini-secret'));
+    }
+
 }
