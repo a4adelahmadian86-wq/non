@@ -74,7 +74,7 @@
               @if($visibleLessons->isNotEmpty())
                 <div class="course-public-section"><strong>{{ $loop->iteration }}. {{ $section->title }}</strong><span>{{ $visibleLessons->count() }} جلسه</span></div>
                 @foreach($visibleLessons as $lesson)
-                  <div class="course-public-lesson"><i class="fa-solid fa-{{ $lesson->lesson_type==='video'?'play':($lesson->lesson_type==='audio'?'headphones':'file-lines') }}"></i><span>{{ $lesson->title }}</span>@if($lesson->is_preview)<small>نمونه رایگان</small>@endif @if($lesson->duration_seconds)<small>{{ gmdate('i:s',$lesson->duration_seconds) }}</small>@endif</div>
+                  <div class="course-public-lesson"><i class="fa-solid fa-{{ $lesson->lesson_type==='video'?'play':($lesson->lesson_type==='audio'?'headphones':'file-lines') }}"></i><span>{{ $lesson->title }}</span>@if($lesson->is_preview)<a class="course-preview-link" href="{{ route('store.course.preview',[$product,$lesson]) }}">نمونه رایگان</a>@endif @if($lesson->duration_seconds)<small>{{ gmdate('i:s',$lesson->duration_seconds) }}</small>@endif</div>
                 @endforeach
               @endif
             @empty
@@ -155,7 +155,7 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107premium1">
 <style>
-.course-public-curriculum{margin-top:14px}.course-public-meta{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px}.course-public-meta span{font-size:.7rem;color:var(--st-muted);background:#f4f7fc;border-radius:8px;padding:7px 9px}.course-public-section{display:flex;justify-content:space-between;gap:12px;padding:11px 10px;background:#f6f9fd;border:1px solid var(--st-line);border-radius:9px;margin-top:10px}.course-public-section strong{font-size:.78rem}.course-public-section span{font-size:.68rem;color:var(--st-muted)}.course-public-lesson{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #edf1f6;font-size:.75rem}.course-public-lesson>span{flex:1}.course-public-lesson>i{color:var(--st-blue)}.course-public-lesson small{font-size:.64rem;color:var(--st-muted);background:#f0f4fa;border-radius:99px;padding:4px 7px}
+.course-public-curriculum{margin-top:14px}.course-public-meta{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px}.course-public-meta span{font-size:.7rem;color:var(--st-muted);background:#f4f7fc;border-radius:8px;padding:7px 9px}.course-public-section{display:flex;justify-content:space-between;gap:12px;padding:11px 10px;background:#f6f9fd;border:1px solid var(--st-line);border-radius:9px;margin-top:10px}.course-public-section strong{font-size:.78rem}.course-public-section span{font-size:.68rem;color:var(--st-muted)}.course-public-lesson{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #edf1f6;font-size:.75rem}.course-public-lesson>span{flex:1}.course-public-lesson>i{color:var(--st-blue)}.course-public-lesson small{font-size:.64rem;color:var(--st-muted);background:#f0f4fa;border-radius:99px;padding:4px 7px}.course-public-lesson .course-preview-link{font-size:.64rem;color:#0f8d68;background:#e8f8f1;border-radius:99px;padding:4px 8px;text-decoration:none;white-space:nowrap}
 </style>
 @endpush
 @push('scripts')
