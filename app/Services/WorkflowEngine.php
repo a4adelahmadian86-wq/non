@@ -9,7 +9,7 @@ class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
 
-    public function run(int $workflowId, array $context = []): int
+    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null): int
     {
         $workflow = DB::table('farast_workflows')->where('id', $workflowId)->first();
         if (! $workflow || ! $workflow->enabled) {
@@ -31,18 +31,28 @@ class WorkflowEngine
         ]);
 
         try {
-            DB::transaction(function () use ($steps, $context, $workflow): void {
+            DB::transaction(function () use ($steps, $context, $workflow, $runId, $eventWorkflowId): void {
                 foreach ($steps as $step) {
                     if (! is_array($step)) {
                         throw new \InvalidArgumentException('Workflow step must be an object.');
                     }
                     $this->step($step, $context, (int) $workflow->user_id);
                 }
-            });
 
-            DB::table('farast_workflow_runs')->where('id', $runId)->update([
-                'status' => 'completed', 'finished_at' => now(), 'updated_at' => now(),
-            ]);
+                // Commit side effects and the event-workflow completion marker together.
+                if ($eventWorkflowId !== null) {
+                    DB::table('farast_workflow_event_workflows')->where('id', $eventWorkflowId)->update([
+                        'status' => 'completed',
+                        'last_error' => null,
+                        'finished_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                DB::table('farast_workflow_runs')->where('id', $runId)->update([
+                    'status' => 'completed', 'finished_at' => now(), 'updated_at' => now(),
+                ]);
+            });
         } catch (\Throwable $exception) {
             DB::table('farast_workflow_runs')->where('id', $runId)->update([
                 'status' => 'failed', 'error' => mb_substr($exception->getMessage(), 0, 4000),
@@ -234,13 +244,7 @@ class WorkflowEngine
                 $this->run((int) $mapping->workflow_id, array_merge($context, [
                     'event_type' => $event->event_type,
                     'event_id' => (int) $event->id,
-                ]));
-                DB::table('farast_workflow_event_workflows')->where('id', $mapping->id)->update([
-                    'status' => 'completed',
-                    'last_error' => null,
-                    'finished_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                ]), (int) $mapping->id);
                 $completedNow++;
             } catch (\Throwable $exception) {
                 DB::table('farast_workflow_event_workflows')->where('id', $mapping->id)->update([
