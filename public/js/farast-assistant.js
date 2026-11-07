@@ -496,7 +496,7 @@
     releaseGatewayCapture();
     gatewayWs=null;
     if(socket){try{socket.onopen=socket.onmessage=socket.onerror=socket.onclose=null;if(socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'stop'}));socket.close(1000,'assistant_turn_end');}catch(e){}}
-    gatewayFinalText='';gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
+    gatewayFinalText='';gatewayFinalTurnId=null;gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
   }
   function scheduleGatewayTurnEnd(generation){if(generation!==gatewayGeneration||!gatewayFinalText.trim()||!gatewayLastVoiceAt)return;if(gatewaySilenceTimer)window.clearTimeout(gatewaySilenceTimer);var remaining=Math.max(0,1400-(Date.now()-gatewayLastVoiceAt));gatewaySilenceTimer=window.setTimeout(function(){finishGatewayTurn(generation);},remaining);}
   function noteGatewayAudioActivity(generation,pcm){if(generation!==gatewayGeneration||!pcm)return;var samples=pcm instanceof Int16Array?pcm:new Int16Array(pcm);if(!samples.length)return;var total=0;for(var i=0;i<samples.length;i++)total+=Math.abs(samples[i]);var level=total/samples.length;if(level<420){gatewayVoiceFrames=0;return;}gatewayLastVoiceAt=Date.now();if(level>=900)gatewayVoiceFrames=Math.min(8,gatewayVoiceFrames+1);else gatewayVoiceFrames=0;scheduleGatewayTurnEnd(generation);}
