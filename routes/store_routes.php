@@ -56,4 +56,5 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::delete('/store/{product}/course/lessons/{lesson}/resources/{file}',[AdminCourseController::class,'deleteResource'])->name('store.course.resources.delete');
 
     Route::post('/store/categories',[AdminStoreController::class,'storeCategory'])->name('store.categories.store');
+    Route::post('/store/tags',[AdminStoreController::class,'storeTag'])->name('store.tags.store');
 });
