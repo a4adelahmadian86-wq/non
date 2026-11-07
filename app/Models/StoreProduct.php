@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class StoreProduct extends Model
 {
@@ -20,6 +21,7 @@ class StoreProduct extends Model
     public function tags(): BelongsToMany { return $this->belongsToMany(StoreTag::class, 'store_product_tag', 'product_id', 'tag_id'); }
     public function related(): BelongsToMany { return $this->belongsToMany(self::class, 'store_product_related', 'product_id', 'related_product_id'); }
     public function reviews(): HasMany { return $this->hasMany(StoreProductReview::class, 'product_id'); }
+    public function course(): HasOne { return $this->hasOne(StoreCourse::class, 'product_id'); }
 
     public function scopePublished($query)
     {
