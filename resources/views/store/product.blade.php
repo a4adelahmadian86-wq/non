@@ -10,6 +10,11 @@
       <span>{{ $product->title }}</span>
     </div>
 
+    <div class="store-product-overview">
+      <span class="store-product-overview-mark"><i class="fa-solid fa-gem"></i></span>
+      <div><span class="store-product-overview-kicker">انتخاب هوشمندانه با فراست</span><strong>جزئیات را ببینید، نمونه را بررسی کنید، با اطمینان انتخاب کنید.</strong></div>
+      @if($hasPreview)<span class="store-product-preview-pill"><i class="fa-solid fa-eye"></i> پیش‌نمایش فعال</span>@endif
+    </div>
     <div class="store-detail-grid">
       <section>
         <div class="store-detail-cover">
@@ -94,10 +99,11 @@
 
         <div class="meta">
           <span><i class="fa-solid fa-code-branch"></i> نسخه {{ $product->version ?: '1.0' }}</span>
-          <span><i class="fa-solid fa-shield-halved"></i> دانلود امن پس از پرداخت</span>
+          <span><i class="fa-solid fa-shield-halved"></i> دریافت در کتابخانه پس از پرداخت</span>
           <span><i class="fa-solid fa-file-contract"></i> مجوز {{ $product->license_type ?: 'شخصی' }}</span>
           @if($hasPreview)<span><i class="fa-solid fa-eye"></i> نمونه قابل مطالعه</span>@endif
         </div>
+        <div class="store-product-assurance"><i class="fa-solid fa-circle-check"></i><span><strong>پیش از خرید، مشخصات را بررسی کنید</strong><small>فرمت، مجوز و نمونه‌های قابل مشاهده در همین صفحه درج شده‌اند.</small></span></div>
       </aside>
     </div>
 
