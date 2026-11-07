@@ -101,4 +101,39 @@ class RefundIdempotencyIntegrityTest extends TestCase
 
         $this->assertSame(1, FarastRefund::where('idempotency_key', 'refund-amount-key')->count());
     }
+    public function test_unsettled_postpaid_charge_cannot_be_refunded_or_credit_a_wallet(): void
+    {
+        $user = User::factory()->create();
+        $wallet = Wallet::create(['user_id' => $user->id, 'balance_rials' => 50000]);
+        $commerce = app(CommerceAuthorizationService::class);
+
+        $reservation = $commerce->reserve(
+            $user,
+            'refund.integrity',
+            1,
+            [],
+            [
+                'policy_code' => 'refund.integrity',
+                'unit' => 'request',
+                'postpaid' => true,
+                'idempotency_key' => 'unsettled-postpaid-charge',
+            ],
+        );
+        $commerce->commit($reservation);
+
+        $charge = FarastCharge::where('idempotency_key', 'unsettled-postpaid-charge')->firstOrFail();
+        $this->assertSame('pending', $charge->status);
+        $balanceBefore = (int) $wallet->fresh()->balance_rials;
+
+        try {
+            $commerce->refund($charge, 1000, 'must not refund unsettled charge', 'unsettled-refund-key');
+            $this->fail('A postpaid charge must be settled before it can be refunded.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('charge_not_refundable', $exception->getMessage());
+        }
+
+        $this->assertSame($balanceBefore, (int) $wallet->fresh()->balance_rials);
+        $this->assertSame(0, FarastRefund::where('idempotency_key', 'unsettled-refund-key')->count());
+    }
+
 }
