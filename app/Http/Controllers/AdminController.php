@@ -210,7 +210,7 @@ class AdminController extends Controller
                     ->get();
 
                 foreach ($rows as $row) {
-                    $day = \\Illuminate\\Support\\Carbon::parse($row->d)->toDateString();
+                    $day = \Illuminate\Support\Carbon::parse($row->d)->toDateString();
                     $map[$day] = ($map[$day] ?? 0) + (int) $row->c;
                 }
             }
