@@ -15,13 +15,23 @@ final class ProviderRegistry
     {
         $items=[];
         foreach (VoiceProviderAccount::query()->orderBy('priority')->orderBy('provider')->get() as $a) {
+            $verified = (bool) $a->last_success_at
+                && (! $a->last_failure_at || $a->last_success_at->gt($a->last_failure_at));
+            $configured = filled($a->credentials_array);
+            $status = ! $a->enabled
+                ? 'disabled'
+                : (! $configured
+                    ? 'unconfigured'
+                    : (! $verified ? 'unverified' : ($a->isAvailable() ? 'healthy' : 'degraded')));
+
             $items[]=[
                 'id'=>'voice:'.$a->id,'name'=>$a->name ?: $a->provider,'provider'=>$a->provider,'type'=>'voice',
                 'model'=>$a->model,'capabilities'=>array_values(array_filter(array_merge(['speech.stt'],(array)($a->capabilities['capabilities']??[])))),
-                'priority'=>(int)$a->priority,'status'=>$a->isAvailable()?'healthy':($a->enabled?'degraded':'disabled'),
+                'priority'=>(int)$a->priority,'status'=>$status,'connection_verified'=>$verified,
+                'last_success_at'=>$a->last_success_at?->toIso8601String(),
                 'quota'=>['used'=>(float)$a->quota_used_seconds,'limit'=>$a->quota_limit_seconds===null?null:(float)$a->quota_limit_seconds],
                 'latency_ms'=>$a->last_latency_ms,'reliability'=>(int)$a->reliability_score,'quality'=>(int)$a->quality_score,
-                'credential_configured'=>filled($a->credentials), 'fallback'=>false,
+                'credential_configured'=>$configured, 'fallback'=>false,
             ];
         }
         foreach ($this->ai->capabilities() as $name=>$capabilities) {
