@@ -7,6 +7,7 @@ use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
+use App\Models\StoreTag;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -62,11 +63,16 @@ class AdminStoreController extends Controller
         // A new catalog item must not become public before its protected payload/curriculum exists.
         $data['status'] = 'draft';
         $data['published_at'] = null;
-        $product = DB::transaction(function () use ($data) {
+        $tagIds = $data['tag_ids'] ?? [];
+        $relatedIds = $data['related_product_ids'] ?? [];
+        unset($data['tag_ids'], $data['related_product_ids']);
+        $product = DB::transaction(function () use ($data, $tagIds, $relatedIds) {
             $product = StoreProduct::create($data);
             if ($product->type === 'course') {
                 StoreCourse::firstOrCreate(['product_id' => $product->id]);
             }
+            $product->tags()->sync($tagIds);
+            $product->related()->sync($relatedIds);
             $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
 
             return $product;
@@ -81,8 +87,10 @@ class AdminStoreController extends Controller
 
     public function edit(StoreProduct $product)
     {
-        $product->load(['files', 'previews', 'category', 'course.sections.lessons']);
+        $product->load(['files', 'previews', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
+        $tags = StoreTag::query()->orderBy('name')->get();
+        $relatedProducts = StoreProduct::query()->whereKeyNot($product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
         $contentReady = $product->type === 'course'
             ? $product->course?->sections->contains(fn ($section) => $section->lessons->contains(fn ($lesson) => $lesson->is_published)) ?? false
@@ -97,17 +105,20 @@ class AdminStoreController extends Controller
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
-        return view('admin.store.form', compact('product', 'categories', 'readiness', 'publicationReady'));
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady'));
     }
 
     public function update(Request $request, StoreProduct $product)
     {
         $data = $this->validated($request, $product);
+        $tagIds = $data['tag_ids'] ?? [];
+        $relatedIds = $data['related_product_ids'] ?? [];
+        unset($data['tag_ids'], $data['related_product_ids']);
         if (! empty($data['slug'])) {
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($data['type'] !== $lockedProduct->type) {
                 throw ValidationException::withMessages([
@@ -142,6 +153,8 @@ class AdminStoreController extends Controller
             }
 
             $lockedProduct->update($data);
+            $lockedProduct->tags()->sync($tagIds);
+            $lockedProduct->related()->sync($relatedIds);
             $this->audit('store.product.updated', $lockedProduct, [
                 'type' => $lockedProduct->type,
                 'status' => $lockedProduct->status,
@@ -410,7 +423,13 @@ class AdminStoreController extends Controller
             'version' => 'nullable|string|max:60',
             'seo_title' => 'nullable|string|max:220',
             'seo_description' => 'nullable|string|max:320',
+            'tag_ids' => 'sometimes|array|max:30',
+            'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
+            'related_product_ids' => 'sometimes|array|max:12',
+            'related_product_ids.*' => 'integer|distinct|exists:store_products,id|different:product_id',
         ]);
+        $data['tag_ids'] = $request->input('tag_ids', []);
+        $data['related_product_ids'] = array_values(array_filter($request->input('related_product_ids', []), fn ($id) => ! $product || (int) $id !== (int) $product->id));
         $data['featured'] = $request->boolean('featured');
         $data['sort_order'] = $data['sort_order'] ?? 0;
         $data['preview_pages'] = $data['preview_pages'] ?? 3;
