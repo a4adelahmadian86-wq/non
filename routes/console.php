@@ -28,3 +28,8 @@ Artisan::command('farast:workflows:retry {--limit=50}', function (WorkflowEngine
 Schedule::command('farast:workflows:retry --limit=50')
     ->everyMinute()
     ->withoutOverlapping();
+
+// Move legacy support attachments out of the public web root in bounded batches.
+Schedule::command('farast:secure-ticket-attachments --limit=100')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
