@@ -8,14 +8,7 @@ class ProviderAdminController extends Controller {
  public function updateAi(Request $r){$d=$r->validate(['gemini_api_key'=>'nullable|string|max:500','gemini_model'=>'required|string|max:120','gemini_fallback_model'=>'nullable|string|max:120']);if(filled($d['gemini_api_key']??null))SiteSetting::write('gemini_api_key',trim($d['gemini_api_key']),true);SiteSetting::write('gemini_model',trim($d['gemini_model']));SiteSetting::write('gemini_fallback_model',trim((string)($d['gemini_fallback_model']??'')));app(AuditLogService::class)->record(auth()->id(),'provider.gemini.updated',request()->ip(),['model'=>$d['gemini_model'],'key_replaced'=>filled($d['gemini_api_key']??null)]);return back()->with('status','تنظیمات Gemini ذخیره شد.');}
  public function testVoice(string $provider){
   $a=VoiceProviderAccount::where('provider',$provider)->firstOrFail();
-  $credentials=$a->credentials_array;
-  $required=match($a->provider){
-   'gladia'=>['api_key'],
-   'azure'=>['subscription_key','region'],
-   'google'=>['project_id','client_email','private_key','region'],
-   default=>[],
-  };
-  $configured=$required!==[]&&collect($required)->every(fn($key)=>filled($credentials[$key]??null));
+  $configured=$a->credentialsConfigured();
   $verified=(bool)$a->last_success_at&&(!$a->last_failure_at||$a->last_success_at->gt($a->last_failure_at));
   $ready=$configured&&$a->isAvailable();
   return response()->json([
