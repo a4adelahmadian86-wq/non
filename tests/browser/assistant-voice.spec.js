@@ -649,6 +649,7 @@ test('assistant starts speaking the first streamed sentence promptly and batches
 <script>
   window.__spokenChunks = [];
   window.__streamSentAll = false;
+  window.__sentDeltaCount = 0;
   window.__releaseFinalDelta = null;
   window.__deviceSpeechCalls = 0;
   window.SpeechRecognition = class { start() { throw new Error('browser recognition must not run'); } };
@@ -671,8 +672,9 @@ test('assistant starts speaking the first streamed sentence promptly and batches
       const encoder=new TextEncoder();
       return new Response(new ReadableStream({start(controller){
         controller.enqueue(encoder.encode('data: {"delta":"جمله اول. "}\\n\\n'));
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),100);
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله سوم. "}\\n\\n')),200);
+        window.__sentDeltaCount=1;
+        setTimeout(()=>{controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n'));window.__sentDeltaCount=2;},100);
+        setTimeout(()=>{controller.enqueue(encoder.encode('data: {"delta":"جمله سوم. "}\\n\\n'));window.__sentDeltaCount=3;},200);
         window.__releaseFinalDelta=()=>{
           if(window.__streamSentAll)return;
           window.__streamSentAll=true;
@@ -692,6 +694,7 @@ test('assistant starts speaking the first streamed sentence promptly and batches
   await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
   await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__sentDeltaCount)).toBe(3);
   expect(await page.evaluate(() => window.__streamSentAll)).toBe(false);
   await page.evaluate(() => window.__releaseFinalDelta());
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBeGreaterThan(1);
@@ -1079,13 +1082,15 @@ test('live assistant keeps one microphone session open across consecutive voice 
   await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
 
-  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'سلام فراست'}));
-  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:8000}).toBe(1);
+  const firstFinalAt=Date.now();
+  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'سلام فراست',turn_id:1}));
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:2000}).toBe(1);
+  expect(Date.now()-firstFinalAt).toBeLessThan(1500);
   await expect.poll(()=>page.evaluate(()=>window.__audioEnds),{timeout:8000}).toBe(1);
   await expect.poll(()=>page.locator('[data-fa-status]').textContent()).toContain('در حال گوش دادن');
 
-  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'یک سؤال دیگر دارم'}));
-  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:8000}).toBe(2);
+  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'یک سؤال دیگر دارم',turn_id:2}));
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:2000}).toBe(2);
   expect(await page.evaluate(()=>window.__chatPayloads.map(x=>x.message))).toEqual(['سلام فراست','یک سؤال دیگر دارم']);
   expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(()=>window.__getUserMediaCalls)).toBe(1);
