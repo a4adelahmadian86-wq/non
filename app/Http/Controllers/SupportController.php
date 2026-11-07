@@ -208,6 +208,10 @@ class SupportController extends Controller
                     'is_staff' => false,
                     'created_at' => $msg->created_at->timezone(config('app.timezone'))->format('Y-m-d H:i'),
                     'time' => $msg->created_at->format('H:i'),
+                    'attachments' => collect($msg->attachments ?? [])->values()->map(fn ($attachment, $index) => [
+                        'name' => $attachment['name'] ?? 'پیوست',
+                        'url' => route('support.attachment', ['ticket' => $ticket->id, 'message' => $msg->id, 'index' => $index]),
+                    ])->all(),
                 ],
             ]);
         }
