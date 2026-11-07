@@ -563,6 +563,7 @@ class AdminController extends Controller
             'max_file_mb' => ['nullable', 'integer', 'min:1', 'max:2048'],
             'daily_ai_requests' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'gemini_model' => ['nullable', 'string', 'max:120'],
+            'gemini_fallback_model' => ['nullable', 'string', 'max:120'],
             'can_type' => ['nullable', 'boolean'],
             'can_ai' => ['nullable', 'boolean'],
             'can_voice' => ['nullable', 'boolean'],
@@ -574,7 +575,7 @@ class AdminController extends Controller
             'files_api_key' => ['nullable', 'string', 'max:500'],
         ]);
 
-        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'gemini_model'] as $key) {
+        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'gemini_model', 'gemini_fallback_model'] as $key) {
             if (array_key_exists($key, $data) && $data[$key] !== null) {
                 SiteSetting::write($key, $data[$key]);
             }
