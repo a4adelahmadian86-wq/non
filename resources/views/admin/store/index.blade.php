@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('content')
+@include('admin.store.partials.workspace-nav')
 <section class="store-page" dir="rtl">
   <div class="store-container">
     <div class="store-section-head">
@@ -16,6 +17,9 @@
       <div><span>پیش‌نویس</span><b>{{ number_format($stats['drafts']) }}</b></div>
       <div><span>دوره آموزشی</span><b>{{ number_format($stats['courses']) }}</b></div>
       <div><span>فایل دانلودی</span><b>{{ number_format($stats['files']) }}</b></div>
+      <div><span>سفارش‌های موفق</span><b>{{ number_format($stats['paid_orders']) }}</b></div>
+      <div><span>دسترسی‌های فعال</span><b>{{ number_format($stats['active_accesses']) }}</b></div>
+      <div><span>فروش ثبت‌شده</span><b>{{ number_format($stats['revenue_rials']/10) }} <small>تومان</small></b></div>
     </div>
     <form method="get" class="product-center-filters">
       <input name="q" value="{{ $q }}" placeholder="جستجوی عنوان یا شناسه محصول">
@@ -26,18 +30,28 @@
     </form>
     <div class="store-cart-list">
       @forelse($products as $p)
-        <div class="store-cart-row">
-          <div>
-            <strong>{{ $p->title }}</strong>
-            <small>{{ $p->type === 'course' ? 'دوره آموزشی' : 'فایل دانلودی' }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
+        <article class="store-product-workspace-card">
+          <div class="store-product-workspace-cover">
+            @if($p->cover_path)<img src="{{ asset($p->cover_path) }}" alt="" loading="lazy">@else<i class="fa-solid {{ $p->type === 'course' ? 'fa-graduation-cap' : 'fa-file-arrow-down' }}"></i>@endif
           </div>
-          <div>
-            <a class="store-outline-btn" href="{{ route('admin.store.edit',$p) }}">اطلاعات</a> @if($p->type === 'course')<a class="store-primary-btn" href="{{ route('admin.store.course.edit',$p) }}">مدیریت دوره</a>@endif
+          <div class="store-product-workspace-main">
+            <div class="store-product-workspace-title">
+              <div><span class="store-product-type">{{ $p->type === 'course' ? 'دوره آموزشی' : 'محصول دانلودی' }} · {{ $p->sku }}</span><h3>{{ $p->title }}</h3><small>{{ $p->category?->name ?: 'بدون دسته‌بندی' }}</small></div>
+              <span class="store-status-pill status-{{ $p->status }}">{{ ['draft'=>'پیش‌نویس','published'=>'منتشرشده','archived'=>'بایگانی'][$p->status] ?? $p->status }}</span>
+            </div>
+            <div class="store-product-workspace-metrics">
+              <span><b>{{ number_format($p->price_rials/10) }}</b> تومان</span>
+              <span><b>{{ number_format($p->paid_order_items_count ?? 0) }}</b> فروش موفق</span>
+              <span><b>{{ number_format($p->active_access_count ?? 0) }}</b> دسترسی فعال</span>
+              <span><b>{{ number_format(($p->paid_sales_rials ?? 0)/10) }}</b> تومان درآمد</span>
+            </div>
           </div>
-          <form method="post" action="{{ route('admin.store.destroy',$p) }}" onsubmit="return confirm('حذف شود؟')">@csrf @method('DELETE')
-            <button type="submit" class="store-outline-btn" style="color:#c62828">حذف</button>
-          </form>
-        </div>
+          <div class="store-product-workspace-actions">
+            <a class="store-outline-btn" href="{{ route('admin.store.edit',$p) }}"><i class="fa-solid fa-pen"></i> ویرایش</a>
+            @if($p->type === 'course')<a class="store-primary-btn" href="{{ route('admin.store.course.edit',$p) }}"><i class="fa-solid fa-graduation-cap"></i> برنامه دوره</a>@endif
+            @if($p->status === 'published')<a class="store-icon-action" href="{{ route('store.product',$p->slug) }}" target="_blank" rel="noopener" aria-label="مشاهده صفحه عمومی"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>@endif
+          </div>
+        </article>
       @empty
         <div class="store-empty-state"><h2>محصولی نیست</h2><a class="store-primary-btn" href="{{ route('admin.store.create') }}">ایجاد اولین محصول</a></div>
       @endforelse
