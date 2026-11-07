@@ -21,16 +21,21 @@ final class ProviderRegistry
         $items = [];
 
         foreach (VoiceProviderAccount::query()->orderBy('priority')->orderBy('provider')->get() as $account) {
-            $verified = (bool) $account->last_success_at
-                && (! $account->last_failure_at || $account->last_success_at->gt($account->last_failure_at));
+            $successTime = $account->last_success_at ? strtotime((string) $account->last_success_at) : false;
+            $failureTime = $account->last_failure_at ? strtotime((string) $account->last_failure_at) : false;
             $configured = $account->credentialsConfigured();
-            $failedMostRecently = $account->last_failure_at
-                && (! $account->last_success_at || $account->last_failure_at->gte($account->last_success_at));
+            $failedMostRecently = $failureTime !== false
+                && ($successTime === false || $failureTime >= $successTime);
+            $freshnessSeconds = max(60, (int) config('services.provider_health_freshness_seconds', 86400));
+            $successIsFresh = $successTime !== false
+                && $successTime >= now()->subSeconds($freshnessSeconds)->timestamp;
+            $verified = $successIsFresh && ! $failedMostRecently;
+            $stale = $successTime !== false && ! $successIsFresh && ! $failedMostRecently;
             $status = ! $account->enabled
                 ? 'disabled'
                 : (! $configured
                     ? 'unconfigured'
-                    : ($failedMostRecently ? 'degraded' : (! $verified ? 'unverified' : ($account->isAvailable() ? 'healthy' : 'degraded'))));
+                    : ($failedMostRecently ? 'degraded' : ($stale ? 'stale' : (! $verified ? 'unverified' : ($account->isAvailable() ? 'healthy' : 'degraded')))));
 
             $items[] = [
                 'id' => 'voice:'.$account->id,
@@ -46,6 +51,7 @@ final class ProviderRegistry
                 'ready' => $configured && $account->isAvailable() && $verified,
                 'last_success_at' => $account->last_success_at?->toIso8601String(),
                 'last_failure_at' => $account->last_failure_at?->toIso8601String(),
+                'last_failure_code' => null,
                 'quota' => [
                     'used' => (float) $account->quota_used_seconds,
                     'limit' => $account->quota_limit_seconds === null ? null : (float) $account->quota_limit_seconds,
@@ -95,6 +101,7 @@ final class ProviderRegistry
                     : [],
                 'last_success_at' => $health['last_success_at'],
                 'last_failure_at' => $health['last_failure_at'],
+                'last_failure_code' => $health['last_failure_code'] ?? null,
                 'quota' => null,
                 'latency_ms' => null,
                 'reliability' => null,
@@ -126,6 +133,7 @@ final class ProviderRegistry
             ],
             'last_success_at' => $groqHealth['last_success_at'],
             'last_failure_at' => $groqHealth['last_failure_at'],
+            'last_failure_code' => $groqHealth['last_failure_code'],
             'quota' => null,
             'latency_ms' => null,
             'reliability' => null,
