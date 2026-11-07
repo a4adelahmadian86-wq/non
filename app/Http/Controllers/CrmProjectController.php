@@ -18,7 +18,10 @@ class CrmProjectController extends Controller
 
         $query = FarastProject::query()
             ->with('user:id,name,email,mobile')
-            ->withCount(['documents', 'typingDocuments'])
+            ->withCount([
+                'documents',
+                'typingDocuments' => fn ($typing) => $typing->whereNull('farast_document_id'),
+            ])
             ->latest('updated_at');
 
         $visibleIds = $console->visibleUserIds($request->user());
@@ -131,7 +134,8 @@ class CrmProjectController extends Controller
             ->with([
                 'user:id,name,email,mobile,organization_id',
                 'documents:id,project_id,user_id,title,status,revision,updated_at',
-                'typingDocuments:id,project_id,user_id,title,status,page_count,word_count,price_rials,updated_at',
+                'documents.typingDocument:id,farast_document_id,status,page_count,word_count,price_rials,updated_at',
+                'typingDocuments:id,project_id,user_id,farast_document_id,title,status,page_count,word_count,price_rials,updated_at',
             ])
             ->findOrFail($project);
 
