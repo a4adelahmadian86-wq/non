@@ -132,7 +132,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20260929m1">
+<link rel="stylesheet" href="/css/store.css?v=20261107premium1">
 @endpush
 @push('scripts')
 <script>
