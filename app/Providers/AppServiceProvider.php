@@ -21,10 +21,13 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(Ticket::class, TicketPolicy::class);
 
-        Event::listen(Login::class, function (Login $event) {
+        Event::listen(Login::class, function (Login $event): void {
             try {
                 app(SupportTicketService::class)->claimGuestTickets($event->user);
-            } catch (\Throwable) {
+            } catch (\Throwable $exception) {
+                // Ticket claiming must not make authentication unavailable, but failures
+                // must remain visible to operators and the central error tracker.
+                report($exception);
             }
         });
     }
