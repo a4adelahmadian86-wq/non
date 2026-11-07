@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StoreCategory;
+use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
 use App\Models\StoreWishlist;
@@ -60,7 +61,7 @@ class StoreController extends Controller
 
     public function product(Request $request, string $slug)
     {
-        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related'])
+        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related', 'course.sections.lessons'])
             ->published()
             ->where('slug', $slug)
             ->firstOrFail();
@@ -101,8 +102,25 @@ class StoreController extends Controller
         }
 
         $hasPreview = $product->previews->where('is_active', true)->isNotEmpty();
+        $title = $product->seo_title ?: $product->title;
 
-        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview'));
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'title'));
+    }
+
+    public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)
+    {
+        abort_unless(
+            $product->type === 'course'
+                && $product->status === 'published'
+                && $product->published_at?->lte(now())
+                && $product->course
+                && $lesson->section()->where('course_id', $product->course->id)->exists()
+                && $lesson->is_published
+                && $lesson->is_preview,
+            404
+        );
+
+        return view('store.course-preview', compact('product', 'lesson'));
     }
 
     public function category(string $slug)
