@@ -122,7 +122,7 @@ class CommerceAuthorizationService
                     'metadata'=>['quote'=>$quote,'context'=>$this->safeContext($context)],
                 ]);
             });
-        } catch (\\Illuminate\\Database\\QueryException $exception) {
+        } catch (\Illuminate\Database\QueryException $exception) {
             // Two concurrent requests can both observe an absent key. The unique
             // constraint elects one winner; the loser re-reads and validates it.
             $existing=FarastUsageReservation::where('idempotency_key',$key)->first();
@@ -141,7 +141,7 @@ class CommerceAuthorizationService
         float $quantity,
         array $scope,
         array $context,
-        ?int $organizationId,
+        int|string|null $organizationId,
     ): bool {
         $sameRequest=(int)$existing->actor_id===(int)$actor->id
             && $existing->capability===$capability
