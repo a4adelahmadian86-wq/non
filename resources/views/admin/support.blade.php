@@ -215,8 +215,8 @@
                                 <pre>{{ $m->body }}</pre>
                                 @if(!empty($m->attachments))
                                     <div class="tk-attach-list">
-                                        @foreach((array)$m->attachments as $att)
-                                            <a href="{{ asset('storage/'.($att['path'] ?? '')) }}" target="_blank" rel="noopener">
+                                        @foreach((array)$m->attachments as $index => $att)
+                                            <a href="{{ route('support.attachment', ['ticket' => $active->id, 'message' => $m->id, 'index' => $index]) }}" target="_blank" rel="noopener">
                                                 <i class="fa-solid fa-paperclip"></i> {{ $att['name'] ?? 'پیوست' }}
                                             </a>
                                         @endforeach
