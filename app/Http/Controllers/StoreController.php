@@ -101,8 +101,9 @@ class StoreController extends Controller
         }
 
         $hasPreview = $product->previews->where('is_active', true)->isNotEmpty();
+        $title = $product->seo_title ?: $product->title;
 
-        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview'));
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'title'));
     }
 
     public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)
