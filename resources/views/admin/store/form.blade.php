@@ -1,5 +1,5 @@
-@extends('layouts.app')
-@section('content')
+@extends('layouts.admin')
+@section('admin-content')
 @php($isEdit = $product->exists)
 <section class="store-page" dir="rtl">
   <div class="store-container product-editor">
