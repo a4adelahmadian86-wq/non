@@ -135,6 +135,11 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('#reader-search-count')).toContainText('۱');
     await root.locator('#reader-zoom-in').click();
     await expect(root.locator('#reader-zoom-label')).toContainText('۱۱۰');
+    await root.locator('#reader-scroll-mode').click();
+    await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
+    await expect(root.locator('.farast-pdf-cont-page canvas')).toBeVisible();
+    await root.locator('#reader-scroll-mode').click();
+    await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
   });
 
   test('navigates between sample pages and synchronizes the page indicator and progress', async ({ page }) => {
