@@ -72,13 +72,14 @@
     try{await renderTask.promise;}catch(error){if(error?.name!=='RenderingCancelledException')throw error;}
 
     const textLayer=activeArticle()?.querySelector('.farast-pdf-text-layer');
-    if(textLayer&&window.pdfjsLib?.renderTextLayer){
+    if(textLayer&&window.pdfjsLib?.TextLayer){
       textLayer.innerHTML='';
+      textLayer.classList.add('textLayer');
       textLayer.style.width=viewport.width+'px';
       textLayer.style.height=viewport.height+'px';
       const textContent=await page.getTextContent();
-      const task=pdfjsLib.renderTextLayer({textContent,container:textLayer,viewport,textDivs:[]});
-      await task.promise;
+      const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:textLayer,viewport});
+      await layer.render();
       const query=(searchInput?.value||'').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
         span.style.userSelect='none';span.style.webkitUserSelect='none';
