@@ -1,4 +1,39 @@
 @extends('layouts.app')
+@php
+  $title = $product->title.' | فروشگاه فراست';
+  $productImage = $product->cover_path ? asset($product->cover_path) : null;
+  $productDescription = $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags((string) $product->description), 160);
+  $productStructuredData = array_filter([
+    '@context' => 'https://schema.org',
+    '@type' => 'Product',
+    'name' => $product->title,
+    'description' => $productDescription,
+    'image' => $productImage,
+    'category' => $product->category?->name,
+    'brand' => ['@type' => 'Brand', 'name' => 'FARAST'],
+    'offers' => [
+      '@type' => 'Offer',
+      'priceCurrency' => 'IRR',
+      'price' => (string) ((int) $product->price_rials),
+      'availability' => 'https://schema.org/InStock',
+      'url' => route('store.product', $product->slug),
+    ],
+  ], static fn ($value) => $value !== null && $value !== '');
+@endphp
+@push('head')
+<meta name="description" content="{{ $productDescription }}">
+<link rel="canonical" href="{{ route('store.product', $product->slug) }}">
+<meta property="og:type" content="product">
+<meta property="og:title" content="{{ $product->title }}">
+<meta property="og:description" content="{{ $productDescription }}">
+@if($productImage)<meta property="og:image" content="{{ $productImage }}">@endif
+<meta property="og:url" content="{{ route('store.product', $product->slug) }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ $product->title }}">
+<meta name="twitter:description" content="{{ $productDescription }}">
+@if($productImage)<meta name="twitter:image" content="{{ $productImage }}">@endif
+<script type="application/ld+json">@json($productStructuredData)</script>
+@endpush
 @section('content')
 <section class="store-page" dir="rtl">
   <div class="store-container">
@@ -104,6 +139,17 @@
           @if($hasPreview)<span><i class="fa-solid fa-eye"></i> نمونه قابل مطالعه</span>@endif
         </div>
         <div class="store-product-assurance"><i class="fa-solid fa-circle-check"></i><span><strong>پیش از خرید، مشخصات را بررسی کنید</strong><small>فرمت، مجوز و نمونه‌های قابل مشاهده در همین صفحه درج شده‌اند.</small></span></div>
+        <section class="store-purchase-flow" aria-labelledby="store-purchase-flow-title">
+          <div class="store-purchase-flow-heading">
+            <span>شفاف و مرحله‌به‌مرحله</span>
+            <strong id="store-purchase-flow-title">بعد از انتخاب چه اتفاقی می‌افتد؟</strong>
+          </div>
+          <ol>
+            <li><span class="store-flow-number">۱</span><div><b>افزودن به سبد خرید</b><small>این فایل را به سفارش خود اضافه کنید.</small></div></li>
+            <li><span class="store-flow-number">۲</span><div><b>{{ (int) $product->price_rials === 0 ? 'ثبت سفارش رایگان' : 'تکمیل پرداخت' }}</b><small>{{ (int) $product->price_rials === 0 ? 'برای دریافت این محصول هزینه‌ای پرداخت نمی‌کنید.' : 'مبلغ و جزئیات سفارش را پیش از نهایی‌سازی بررسی کنید.' }}</small></div></li>
+            <li><span class="store-flow-number">۳</span><div><b>دریافت از کتابخانه من</b><small>پس از تکمیل سفارش، فایل کامل در کتابخانه حساب شما قرار می‌گیرد.</small></div></li>
+          </ol>
+        </section>
       </aside>
     </div>
 
