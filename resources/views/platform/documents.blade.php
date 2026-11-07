@@ -70,7 +70,7 @@
                     <span>{{ number_format($shares->total()) }}</span>
                 </div>
                 @forelse($shares as $share)
-                    @php $expired = $share->expires_at && \Illuminate\Support\Carbon::parse($share->expires_at)->isPast(); @endphp
+                    @php $expired = $share->expires_at && \Illuminate\Support\Carbon::parse($share->expires_at)->isPast(); $documentUnavailable = $share->document_status !== 'active' || $share->trashed_at !== null; @endphp
                     <article class="workspace-documents__share">
                         <div class="workspace-documents__share-icon"><i class="fa-solid fa-link"></i></div>
                         <div class="workspace-documents__share-main">
@@ -78,7 +78,7 @@
                             <small>{{ $share->permission === 'edit' ? 'اجازه ویرایش' : 'فقط مشاهده' }} · ایجاد {{ \Illuminate\Support\Carbon::parse($share->created_at)->format('Y/m/d H:i') }}</small>
                             <input type="text" readonly value="{{ url('/shared/documents/'.$share->token) }}" aria-label="لینک اشتراک">
                         </div>
-                        <span class="workspace-documents__share-state {{ $expired ? 'is-expired' : 'is-active' }}">{{ $expired ? 'منقضی شده' : 'قابل استفاده' }}</span>
+                        <span class="workspace-documents__share-state {{ $expired ? 'is-expired' : 'is-active' }}">{{ $documentUnavailable ? 'سند غیرفعال' : ($expired ? 'منقضی شده' : 'قابل استفاده') }}</span>
                         <button type="button" class="workspace-documents__icon-button" data-copy-value="{{ url('/shared/documents/'.$share->token) }}" aria-label="کپی لینک"><i class="fa-regular fa-copy"></i></button>
                         <form method="post" action="{{ route('platform.documents.shares.destroy', $share->share_id) }}" onsubmit="return confirm('این لینک اشتراک برای همیشه لغو شود؟')">
                             @csrf @method('DELETE')
