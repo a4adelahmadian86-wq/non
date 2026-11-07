@@ -617,10 +617,14 @@
   }
   function pauseGatewayCapture(){
     if(gatewaySilenceTimer){window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=null;}
-    if(gatewayWs&&gatewayWs.readyState===WebSocket.OPEN){try{gatewayWs.send(JSON.stringify({type:'end_utterance'}));}catch(e){}}
+    if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}
+    // A mute is not a user-stop endpoint. Discard any partial transcript/audio
+    // and tell the gateway to invalidate queued or in-flight ASR for this capture.
+    gatewayFinalText='';gatewayFinalTurnId=null;
+    if(gatewayWs&&gatewayWs.readyState===WebSocket.OPEN){try{gatewayWs.send(JSON.stringify({type:'pause_capture'}));}catch(e){}}
     releaseGatewayCapture();
     panel.classList.remove('is-listening');
-    gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
+    gatewayLastVoiceAt=0;gatewayVoiceFrames=0;gatewayPcmBuffer=[];
   }
   async function resumeGatewayCapture(){
     if(gatewayStarting)return;
