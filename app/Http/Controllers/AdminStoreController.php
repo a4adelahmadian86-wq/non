@@ -30,6 +30,7 @@ class AdminStoreController extends Controller
                 'libraryItems as active_access_count' => fn ($query) => $query->whereNull('revoked_at'),
             ])
             ->withSum(['orderItems as paid_sales_rials' => fn ($query) => $query->whereHas('order', fn ($order) => $order->where('status', 'paid')->whereNotNull('paid_at'))], 'total_rials')
+            ->withSum(['orderItems as paid_units_sold' => fn ($query) => $query->whereHas('order', fn ($order) => $order->where('status', 'paid')->whereNotNull('paid_at'))], 'quantity')
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')->orWhere('sku', 'like', '%'.$q.'%');
             }))
