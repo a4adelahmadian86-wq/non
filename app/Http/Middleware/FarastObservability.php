@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class FarastObservability
 {
@@ -15,10 +16,15 @@ class FarastObservability
         $requestId = $this->safeIdentifier($request->header('X-Request-Id')) ?? (string) Str::uuid();
         $correlationId = $this->safeIdentifier($request->header('X-Correlation-Id')) ?? $requestId;
 
-        Log::withContext([
-            'request_id' => $requestId,
-            'correlation_id' => $correlationId,
-        ]);
+        try {
+            Log::withContext([
+                'request_id' => $requestId,
+                'correlation_id' => $correlationId,
+            ]);
+        } catch (Throwable $exception) {
+            // Observability is best-effort: a logging outage must not take down the app.
+            error_log('FARAST request context initialization failed: '.get_class($exception));
+        }
 
         $started = hrtime(true);
         $response = null;
@@ -29,12 +35,16 @@ class FarastObservability
             return $response;
         } finally {
             try {
-                Log::info('farast.request.completed', [
-                    'method' => $request->method(),
-                    'path' => $request->path(),
-                    'status' => $response?->getStatusCode(),
-                    'duration_ms' => (int) ((hrtime(true) - $started) / 1_000_000),
-                ]);
+                try {
+                    Log::info('farast.request.completed', [
+                        'method' => $request->method(),
+                        'path' => $request->path(),
+                        'status' => $response?->getStatusCode(),
+                        'duration_ms' => (int) ((hrtime(true) - $started) / 1_000_000),
+                    ]);
+                } catch (Throwable $exception) {
+                    error_log('FARAST request completion logging failed: '.get_class($exception));
+                }
 
                 if ($response) {
                     $response->headers->set('X-Request-Id', $requestId);
@@ -42,7 +52,11 @@ class FarastObservability
                 }
             } finally {
                 // Long-running workers must not leak one request's context into another.
-                Log::withoutContext();
+                try {
+                    Log::withoutContext();
+                } catch (Throwable $exception) {
+                    error_log('FARAST request log context cleanup failed: '.get_class($exception));
+                }
             }
         }
     }
