@@ -21,7 +21,7 @@ class PlatformCompletionController extends Controller {
   $folders=DB::table('document_folders')->where('user_id',$userId)->orderBy('name')->get();
   if($r->boolean('shared')){
    $this->authorizeDocumentAction($r,'documents.share');
-   $shares=DB::table('farast_document_shares as shares')->join('farast_documents as docs','docs.id','=','shares.document_id')->where('shares.owner_id',$userId)->select('shares.id as share_id','shares.token','shares.permission','shares.expires_at','shares.created_at','docs.id as document_id','docs.title','docs.status as document_status','docs.trashed_at')->orderByDesc('shares.created_at')->paginate(24)->withQueryString();
+   $shares=DB::table('farast_document_shares as shares')->join('farast_documents as docs','docs.id','=','shares.document_id')->where('shares.owner_id',$userId)->whereColumn('docs.user_id','shares.owner_id')->select('shares.id as share_id','shares.token','shares.permission','shares.expires_at','shares.created_at','docs.id as document_id','docs.title','docs.status as document_status','docs.trashed_at')->orderByDesc('shares.created_at')->paginate(24)->withQueryString();
    return view('platform.documents',['documents'=>collect(),'folders'=>$folders,'shares'=>$shares,'mode'=>'shared','trashed'=>false,'canShareDocuments'=>$canShareDocuments,'canCreateDocuments'=>$canCreateDocuments,'canEditDocuments'=>$canEditDocuments,'canDeleteDocuments'=>$canDeleteDocuments]);
   }
   $trashed=$r->boolean('trashed');
