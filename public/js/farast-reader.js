@@ -37,7 +37,7 @@
   };
 
   const setZoomLabel=()=>{
-    if(zoomLabel)zoomLabel.textContent=faNumber(Math.round(zoom*100))+'٪';
+    if(zoomLabel)zoomLabel.textContent=zoom===0?'خودکار':faNumber(Math.round(zoom*100))+'٪';
   };
 
   const renderPdfPage=async(number)=>{
@@ -68,7 +68,11 @@
       const textContent=await page.getTextContent();
       const task=pdfjsLib.renderTextLayer({textContent,container:textLayer,viewport,textDivs:[]});
       await task.promise;
-      textLayer.querySelectorAll('span').forEach(span=>{span.style.userSelect='none';span.style.webkitUserSelect='none';});
+      const query=(searchInput?.value||'').trim().toLocaleLowerCase();
+      textLayer.querySelectorAll('span').forEach(span=>{
+        span.style.userSelect='none';span.style.webkitUserSelect='none';
+        span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
+      });
     }
     if(pdfLoading)pdfLoading.hidden=true;
     setPageControls(pdfPage,pdfDoc.numPages);
@@ -133,8 +137,8 @@
   const showItem=async(index)=>{
     itemIndex=clamp(Number(index)||0,0,articles.length-1);
     articles.forEach((article,i)=>article.classList.toggle('is-active',i===itemIndex));
-    root.querySelectorAll('.farast-reader-thumb[data-goto]').forEach((thumb,i)=>{
-      const active=i===itemIndex;
+    root.querySelectorAll('.farast-reader-thumb[data-goto]').forEach(thumb=>{
+      const active=Number(thumb.dataset.goto)===itemIndex;
       thumb.classList.toggle('is-active',active);
       thumb.setAttribute('aria-current',active?'page':'false');
     });
@@ -177,8 +181,8 @@
       if(count>0)pdfMatches.push({page:n,count});
     }
     const total=pdfMatches.reduce((sum,item)=>sum+item.count,0);
-    if(searchCount)searchCount.textContent=total?faNumber(total)+' نتیجه':'بدون نتیجه';
-    if(pdfMatches.length){matchIndex=0;await renderPdfPage(pdfMatches[0].page);}
+    if(searchCount)searchCount.textContent=total?faNumber(total)+' نتیجه در '+faNumber(pdfMatches.length)+' صفحه':'بدون نتیجه';
+    if(pdfMatches.length){matchIndex=0;await renderPdfPage(pdfMatches[0].page);if(searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه';}
   };
 
   root.querySelector('#reader-prev')?.addEventListener('click',()=>{
@@ -199,7 +203,15 @@
   root.querySelector('#reader-zoom-out')?.addEventListener('click',()=>setZoom(zoom===0?.9:zoom-.1).catch(showPdfError));
   root.querySelector('#reader-fit')?.addEventListener('click',()=>fitWidth().catch(showPdfError));
   root.querySelector('#reader-rotate')?.addEventListener('click',()=>{rotation=(rotation+90)%360;if(isPdf()&&pdfDoc)renderPdfPage(pdfPage).catch(showPdfError);else activeArticle()?.querySelector('img')?.style.setProperty('transform','rotate('+rotation+'deg) scale('+zoom+')');});
+  const moveSearchMatch=async(direction)=>{
+    if(!pdfMatches.length)return;
+    matchIndex=(matchIndex+direction+pdfMatches.length)%pdfMatches.length;
+    await renderPdfPage(pdfMatches[matchIndex].page);
+    if(searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه';
+  };
   root.querySelector('#reader-search')?.addEventListener('click',()=>searchPdf().catch(showPdfError));
+  root.querySelector('#reader-search-prev')?.addEventListener('click',()=>moveSearchMatch(-1).catch(showPdfError));
+  root.querySelector('#reader-search-next')?.addEventListener('click',()=>moveSearchMatch(1).catch(showPdfError));
   searchInput?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchPdf().catch(showPdfError);}});
   root.querySelector('#reader-thumbs-toggle')?.addEventListener('click',e=>{const hidden=root.classList.toggle('is-sidebar-hidden');e.currentTarget.setAttribute('aria-expanded',String(!hidden));});
   root.querySelector('#reader-theme')?.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='light'?'dark':'light';});
