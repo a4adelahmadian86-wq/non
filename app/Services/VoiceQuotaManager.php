@@ -57,7 +57,10 @@ class VoiceQuotaManager
 
     public function resetMonthlyPeriodIfNeeded(VoiceProviderAccount $account):void
     {
-        if($account->billing_mode!=='monthly_free')return;
+        $hasMonthlyCap = $account->billing_mode === 'monthly_free'
+            || ($account->billing_mode === 'paid' && $account->quota_limit_seconds !== null);
+        if (! $hasMonthlyCap) return;
+
         $ends=$account->quota_period_ends_at;
         if($ends&&$ends->isFuture())return;
         $start=$ends&&$ends->isPast()?$ends->copy():now();
