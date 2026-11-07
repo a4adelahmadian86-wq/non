@@ -51,8 +51,11 @@ final class ProviderConnectionHealth
         $lastFailureAt = SiteSetting::read($prefix.'.last_failure_at');
         $successTime = $lastSuccessAt ? strtotime((string) $lastSuccessAt) : false;
         $failureTime = $lastFailureAt ? strtotime((string) $lastFailureAt) : false;
+        $freshnessSeconds = max(60, (int) config('services.provider_health_freshness_seconds', 86400));
+        $successIsFresh = $successTime !== false
+            && $successTime >= now()->subSeconds($freshnessSeconds)->timestamp;
         $verified = $fingerprintMatches
-            && $successTime !== false
+            && $successIsFresh
             && ($failureTime === false || $successTime > $failureTime);
 
         $capabilities = [];
@@ -78,6 +81,10 @@ final class ProviderConnectionHealth
         $failureIsCurrent = $fingerprintMatches
             && $failureTime !== false
             && ($successTime === false || $failureTime >= $successTime);
+        $successIsStale = $fingerprintMatches
+            && $successTime !== false
+            && ! $successIsFresh
+            && ! $failureIsCurrent;
         $apiReachable = $fingerprintMatches && (
             $verified
             || ($failureIsCurrent && filter_var(
@@ -90,7 +97,7 @@ final class ProviderConnectionHealth
             ? 'unavailable'
             : ($failureIsCurrent
                 ? 'degraded'
-                : (! $verified ? 'configured' : ($ready ? 'healthy' : 'degraded')));
+                : ($successIsStale ? 'stale' : (! $verified ? 'configured' : ($ready ? 'healthy' : 'degraded'))));
 
         return [
             'configured' => $configured,
@@ -98,7 +105,7 @@ final class ProviderConnectionHealth
             'api_reachable' => $apiReachable,
             'ready' => $ready,
             'status' => $status,
-            'last_success_at' => $verified ? (string) $lastSuccessAt : null,
+            'last_success_at' => $fingerprintMatches && $successTime !== false ? (string) $lastSuccessAt : null,
             'last_failure_at' => $fingerprintMatches && $lastFailureAt ? (string) $lastFailureAt : null,
             'capabilities' => $capabilities,
             'last_failure_code' => $failureIsCurrent ? (string) SiteSetting::read($prefix.'.last_failure_code', 'unknown') : null,
