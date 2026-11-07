@@ -81,6 +81,13 @@ class VoiceProviderDashboardIntegrationTest extends TestCase
         $account->healthy = true;
         $account->save();
 
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)
+            ->get(route('admin.providers.voice.test', 'gladia'))
+            ->assertOk()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('connection_verified', false);
+
         $provider = collect(app(ProviderRegistry::class)->catalog())->firstWhere('provider', 'gladia');
 
         $this->assertSame('unverified', $provider['status']);
