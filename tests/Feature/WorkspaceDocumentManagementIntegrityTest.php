@@ -75,6 +75,35 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
         $this->assertDatabaseHas('farast_documents', ['id' => $document->id, 'title' => 'Owned document']);
     }
 
+    public function test_document_updates_increment_revision_and_write_version_in_same_operation(): void
+    {
+        $owner = $this->makeUser(User::ROLE_EMPLOYEE);
+
+        $this->actingAs($owner)
+            ->post(route('platform.documents.create'), ['title' => 'Initial title', 'content' => '<p>First</p>'])
+            ->assertRedirect();
+
+        $document = FarastDocument::where('user_id', $owner->id)->where('title', 'Initial title')->firstOrFail();
+
+        $this->post(route('platform.documents.update', $document->id), [
+            'title' => 'Updated title',
+            'content' => '<p>Second version</p>',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('farast_documents', [
+            'id' => $document->id,
+            'user_id' => $owner->id,
+            'title' => 'Updated title',
+            'revision' => 2,
+        ]);
+        $this->assertDatabaseCount('farast_document_versions', 2);
+        $this->assertDatabaseHas('farast_document_versions', [
+            'document_id' => $document->id,
+            'user_id' => $owner->id,
+            'content' => '<p>Second version</p>',
+        ]);
+    }
+
     public function test_shared_links_are_real_revocable_and_invalidated_while_document_is_trashed(): void
     {
         $owner = $this->makeUser(User::ROLE_EMPLOYEE);
