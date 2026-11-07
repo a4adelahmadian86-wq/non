@@ -62,6 +62,7 @@ class AdminStoreController extends Controller
         $data['status'] = 'draft';
         $data['published_at'] = null;
         $product = StoreProduct::create($data);
+        $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
 
         if ($product->type === 'course') {
             return redirect()->route('admin.store.course.edit', $product)->with('status', 'محصول دوره ایجاد شد؛ اکنون ساختار آموزشی آن را تکمیل کنید.');
@@ -117,6 +118,7 @@ class AdminStoreController extends Controller
         }
 
         $product->update($data);
+        $this->audit('store.product.updated', $product, ['type' => $product->type, 'status' => $product->status, 'price_rials' => $product->price_rials]);
 
         return back()->with('status', 'محصول به‌روزرسانی شد.');
     }
@@ -125,10 +127,12 @@ class AdminStoreController extends Controller
     {
         if ($product->libraryItems()->exists() || $product->orderItems()->exists()) {
             $product->update(['status' => 'archived', 'published_at' => null]);
+            $this->audit('store.product.archived', $product, ['reason' => 'historical_orders_or_entitlements']);
 
             return redirect()->route('admin.store.index')->with('status', 'این محصول سابقه سفارش یا دسترسی مشتری دارد؛ برای حفظ سوابق و حقوق خریداران بایگانی شد.');
         }
 
+        $this->audit('store.product.deleted', $product, ['type' => $product->type]);
         $product->delete();
 
         return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
@@ -156,12 +160,12 @@ class AdminStoreController extends Controller
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل انتشار نخواهد بود.');
 
             $primary = $request->boolean('is_primary', true);
-            DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
+            $fileRecord = DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
                 if ($primary) {
                     $product->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
                 }
 
-                StoreProductFile::create([
+                return StoreProductFile::create([
                     'product_id' => $product->id,
                     'purpose' => 'product_download',
                     'version' => $product->version,
@@ -178,6 +182,7 @@ class AdminStoreController extends Controller
                     'scanned_at' => now(),
                 ]);
             });
+            $this->audit('store.product.file_uploaded', $product, ['file_id' => $fileRecord->id, 'mime' => $fileRecord->mime, 'size_bytes' => $fileRecord->size_bytes, 'sha256' => $fileRecord->sha256]);
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof ValidationException) {
@@ -192,6 +197,7 @@ class AdminStoreController extends Controller
     public function deleteFile(StoreProduct $product, StoreProductFile $file)
     {
         abort_unless($file->product_id === $product->id && $file->purpose === 'product_download', 404);
+        $this->audit('store.product.file_deleted', $product, ['file_id' => $file->id, 'purpose' => $file->purpose]);
         Storage::disk($file->disk ?: 'private')->delete($file->path);
         $file->delete();
 
@@ -225,6 +231,7 @@ class AdminStoreController extends Controller
                 'is_active' => true,
                 'sort_order' => $sort,
             ]);
+            $this->audit('store.product.preview_uploaded', $product, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof ValidationException) {
@@ -260,6 +267,7 @@ class AdminStoreController extends Controller
 
             $oldPath = (string) $product->cover_path;
             $product->update(['cover_path' => $publicPath]);
+            $this->audit('store.product.cover_updated', $product, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum']]);
             if ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
                 Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
             }
@@ -279,6 +287,7 @@ class AdminStoreController extends Controller
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
     {
         abort_unless($preview->product_id === $product->id, 404);
+        $this->audit('store.product.preview_deleted', $product, ['preview_id' => $preview->id]);
         Storage::disk($preview->disk ?: 'private')->delete($preview->path);
         $preview->delete();
 
@@ -298,6 +307,19 @@ class AdminStoreController extends Controller
         );
 
         return back()->with('status', 'دسته ذخیره شد.');
+    }
+
+    private function audit(string $eventType, StoreProduct $product, array $meta = []): void
+    {
+        app(\App\Services\AuditEventService::class)->record(
+            $eventType,
+            auth()->id(),
+            null,
+            'store_product',
+            $product->id,
+            $meta,
+            'admin_console'
+        );
     }
 
     private function validated(Request $request, ?StoreProduct $product = null): array
