@@ -66,4 +66,21 @@ class FarastObservabilityTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertNotEmpty($response->headers->get('X-Request-Id'));
     }
+
+    public function test_disabled_observability_passes_through_without_touching_the_logger(): void
+    {
+        config(['observability.enabled' => false]);
+        Log::shouldReceive('withContext')->never();
+        Log::shouldReceive('info')->never();
+        Log::shouldReceive('withoutContext')->never();
+
+        $request = Request::create('/up', 'GET');
+        $response = (new FarastObservability())->handle(
+            $request,
+            fn () => response('ok', 200)
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertNull($response->headers->get('X-Request-Id'));
+    }
 }

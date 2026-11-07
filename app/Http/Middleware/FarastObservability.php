@@ -13,6 +13,10 @@ class FarastObservability
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if (! config('observability.enabled', true)) {
+            return $next($request);
+        }
+
         $requestId = $this->safeIdentifier($request->header('X-Request-Id')) ?? (string) Str::uuid();
         $correlationId = $this->safeIdentifier($request->header('X-Correlation-Id')) ?? $requestId;
 
