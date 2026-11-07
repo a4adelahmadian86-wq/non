@@ -123,11 +123,45 @@
         <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
         <small class="product-help">حداکثر ۵۰ مگابایت؛ اگر اسکنر ضدبدافزار فعال نباشد، فایل ثبت و قابل انتشار نمی‌شود.</small>
       </div>
-      <div class="store-panel product-files-panel">
-        <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
-        <div class="store-preview-grid">@forelse($product->previews as $preview)<div>@if($preview->kind==='pdf')<div class="store-preview-pdf">PDF · {{ $preview->page_number }}</div>@else<img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">@endif<form method="post" action="{{ route('admin.store.previews.delete',[$product,$preview]) }}">@csrf @method('DELETE')<button class="product-danger" type="submit">حذف</button></form></div>@empty<div class="course-empty">هنوز پیش‌نمایشی اضافه نشده است.</div>@endforelse</div>
-        <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" required><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه"><button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button></form>
-      </div>
+      @if($product->type !== 'course')
+        <div class="store-panel product-files-panel">
+          <h2>پیش‌نمایش عمومی محصول</h2>
+          <p>تصاویر، PDF، Word و Excel برای مطالعهٔ نمونه؛ فایل‌ها پیش از ذخیره اسکن می‌شوند و فقط از مسیر احراز هویت‌شده نمایش داده خواهند شد.</p>
+          <div class="store-preview-grid">
+            @forelse($product->previews as $preview)
+              <div>
+                @if($preview->kind === 'pdf')
+                  <div class="store-preview-pdf">PDF · {{ $preview->page_number }}</div>
+                @elseif($preview->kind === 'docx')
+                  <div class="store-preview-pdf">WORD · DOCX</div>
+                @elseif($preview->kind === 'xlsx')
+                  <div class="store-preview-pdf">EXCEL · XLSX</div>
+                @else
+                  <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
+                @endif
+                <form method="post" action="{{ route('admin.store.previews.delete',[$product,$preview]) }}">@csrf @method('DELETE')<button class="product-danger" type="submit">حذف</button></form>
+              </div>
+            @empty
+              <div class="course-empty">هنوز پیش‌نمایشی اضافه نشده است.</div>
+            @endforelse
+          </div>
+          <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>
+            @csrf
+            <input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx" required>
+            <small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small>
+            <input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه">
+            <button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button>
+          </form>
+          @if($product->previews->where('is_active', true)->isNotEmpty())
+            <p style="margin-top:12px"><a class="store-outline-btn" href="{{ route('store.reader',$product->slug) }}" target="_blank" rel="noopener noreferrer">باز کردن خوانشگر امن</a></p>
+          @endif
+        </div>
+      @else
+        <div class="store-panel product-files-panel">
+          <h2>پیش‌نمایش دوره</h2>
+          <p>نمونهٔ دوره از طریق جلسه‌های پیش‌نمایش و مسیر اختصاصی دوره مدیریت می‌شود؛ برای دوره فایل پیش‌نمایش عمومی بارگذاری نکنید.</p>
+        </div>
+      @endif
     @endif
 
     <div class="store-panel product-category-panel"><h2>مدیریت سریع دسته‌بندی</h2><form method="post" action="{{ route('admin.store.categories.store') }}">@csrf<input name="name" required maxlength="160" placeholder="نام دسته جدید"><input name="slug" maxlength="180" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن دسته</button></form></div>
