@@ -18,10 +18,11 @@
   const pdfLoading=root.querySelector('.farast-pdf-loading');
   const pdfUrl=pdfSurface?.dataset.pdfUrl;
 
-  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null;
+  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],docxMatches=[],matchIndex=-1,renderTask=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
+  const isDocx=()=>Boolean(activeArticle()?.querySelector('.farast-docx-frame'));
   const faNumber=n=>Number(n).toLocaleString('fa-IR');
 
   const updateProgress=(current,total)=>{
@@ -149,6 +150,8 @@
     }else{
       setPageControls(itemIndex+1,articles.length);
       zoom=1;rotation=0;setZoomLabel();
+      const frame=activeArticle()?.querySelector('.farast-docx-frame');
+      if(frame)frame.style.zoom='1';
       activeArticle()?.style.setProperty('--reader-zoom','1');
     }
     stage?.scrollTo({top:0,behavior:'smooth'});
@@ -158,6 +161,7 @@
     zoom=clamp(next,.6,2.5);
     setZoomLabel();
     if(isPdf()&&pdfDoc)await renderPdfPage(pdfPage);
+    else if(isDocx()){const frame=activeArticle()?.querySelector('.farast-docx-frame');if(frame)frame.style.zoom=String(zoom);}
     else activeArticle()?.style.setProperty('--reader-zoom',String(zoom));
   };
 
@@ -168,10 +172,37 @@
     else setZoom(1);
   };
 
+  const searchDocx=()=>{
+    const query=(searchInput?.value||'').trim().toLocaleLowerCase();
+    const frame=activeArticle()?.querySelector('.farast-docx-frame');
+    const doc=frame?.contentDocument;
+    if(!query){if(searchCount)searchCount.textContent='';return;}
+    if(!doc?.body){if(searchCount)searchCount.textContent='سند Word هنوز بارگذاری نشده';return;}
+    doc.querySelectorAll('mark.farast-docx-hit').forEach(mark=>mark.replaceWith(doc.createTextNode(mark.textContent||'')));
+    docxMatches=[];
+    const walker=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT);
+    const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+    nodes.forEach(node=>{
+      const text=node.nodeValue||'',lower=text.toLocaleLowerCase(),parts=[];
+      let cursor=0,position=lower.indexOf(query);
+      if(position<0)return;
+      while(position>=0){
+        if(position>cursor)parts.push(doc.createTextNode(text.slice(cursor,position)));
+        const mark=doc.createElement('mark');mark.className='farast-docx-hit';mark.textContent=text.slice(position,position+query.length);parts.push(mark);docxMatches.push(mark);
+        cursor=position+query.length;position=lower.indexOf(query,cursor);
+      }
+      if(cursor<text.length)parts.push(doc.createTextNode(text.slice(cursor)));
+      const fragment=doc.createDocumentFragment();parts.forEach(part=>fragment.append(part));node.parentNode?.replaceChild(fragment,node);
+    });
+    if(searchCount)searchCount.textContent=docxMatches.length?faNumber(docxMatches.length)+' نتیجه':'بدون نتیجه';
+    if(docxMatches.length){matchIndex=0;docxMatches[0].scrollIntoView({behavior:'smooth',block:'center'});}
+  };
+
   const searchPdf=async()=>{
     const query=(searchInput?.value||'').trim().toLocaleLowerCase();
     if(!query){if(searchCount)searchCount.textContent='';return;}
-    if(!pdfDoc){if(searchCount)searchCount.textContent='ابتدا سند PDF را باز کنید';return;}
+    if(isDocx()){searchDocx();return;}
+    if(!pdfDoc){if(searchCount)searchCount.textContent='سند هنوز بارگذاری نشده';return;}
     pdfMatches=[];matchIndex=-1;
     for(let n=1;n<=pdfDoc.numPages;n++){
       const page=await pdfDoc.getPage(n);
@@ -204,6 +235,12 @@
   root.querySelector('#reader-fit')?.addEventListener('click',()=>fitWidth().catch(showPdfError));
   root.querySelector('#reader-rotate')?.addEventListener('click',()=>{rotation=(rotation+90)%360;if(isPdf()&&pdfDoc)renderPdfPage(pdfPage).catch(showPdfError);else activeArticle()?.querySelector('img')?.style.setProperty('transform','rotate('+rotation+'deg) scale('+zoom+')');});
   const moveSearchMatch=async(direction)=>{
+    if(isDocx()&&docxMatches.length){
+      matchIndex=(matchIndex+direction+docxMatches.length)%docxMatches.length;
+      docxMatches[matchIndex].scrollIntoView({behavior:'smooth',block:'center'});
+      if(searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(docxMatches.length)+' نتیجه';
+      return;
+    }
     if(!pdfMatches.length)return;
     matchIndex=(matchIndex+direction+pdfMatches.length)%pdfMatches.length;
     await renderPdfPage(pdfMatches[matchIndex].page);
