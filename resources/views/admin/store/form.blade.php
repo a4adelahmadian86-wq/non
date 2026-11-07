@@ -87,6 +87,28 @@
         <form method="post" action="{{ route('admin.store.cover.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="cover" accept=".jpg,.jpeg,.png,.webp" required><button type="submit" class="store-outline-btn">بارگذاری کاور و اسکن امنیتی</button><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small></form>
         <small class="product-help">فرمت‌های JPG، PNG و WebP · حداکثر ۸ مگابایت</small>
       </div>
+      <div class="store-panel product-files-panel product-gallery-panel">
+        <div class="product-editor-heading"><div><span>گالری تصاویر</span><h2>تصاویر تکمیلی محصول</h2></div><span class="product-editor-step">{{ $product->images->count() }} تصویر</span></div>
+        <p>تصاویر گالری در صفحه عمومی محصول نمایش داده می‌شوند. همه تصاویر پیش از انتشار اسکن امنیتی می‌شوند.</p>
+        <div class="product-gallery-grid">
+          @forelse($product->images as $image)
+            <div class="product-gallery-item">
+              <img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy">
+              <div><small>{{ $image->alt ?: 'بدون متن جایگزین' }}</small><form method="post" action="{{ route('admin.store.images.delete',[$product,$image]) }}" onsubmit="return confirm('این تصویر از گالری حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
+            </div>
+          @empty
+            <div class="course-empty">هنوز تصویری به گالری اضافه نشده است.</div>
+          @endforelse
+        </div>
+        <form method="post" action="{{ route('admin.store.images.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>
+          @csrf
+          <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp" required>
+          <input type="text" name="alt" maxlength="180" placeholder="متن جایگزین تصویر (اختیاری)">
+          <small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small>
+          <button type="submit" class="store-outline-btn">افزودن تصویر و اسکن امنیتی</button>
+        </form>
+        <small class="product-help">JPG، PNG یا WebP · حداکثر ۸ مگابایت</small>
+      </div>
     @endif
 
     @if($isEdit && $product->type==='course')
@@ -152,6 +174,15 @@
 .product-editor-actions button{min-height:44px}
 @media(max-width:760px){.product-workflow{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.product-workflow a{padding:10px}.product-editor-actions{bottom:6px}.product-editor-actions button{width:100%}}
 @media(max-width:420px){.product-workflow a{grid-template-columns:29px 1fr;gap:2px 7px}.product-workflow a>span{width:29px;height:29px}}
+
+
+.product-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px;margin:14px 0}
+.product-gallery-item{overflow:hidden;border:1px solid var(--st-line);border-radius:12px;background:#fff}
+.product-gallery-item img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#f4f6fa}
+.product-gallery-item>div{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px}
+.product-gallery-item small{font-size:.62rem;color:var(--st-muted);overflow-wrap:anywhere}
+.product-gallery-item form{margin:0}
+.product-gallery-panel{margin-top:16px}
 
 .product-discovery-links{padding-top:4px}.product-discovery-links select{min-height:118px}.product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
 </style>
