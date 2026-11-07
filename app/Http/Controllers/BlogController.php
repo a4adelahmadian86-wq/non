@@ -1,8 +1,8 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use Illuminate\\Http\\Request;
+use Illuminate\Http\Request;
 
 class BlogController extends Controller
 {
@@ -16,7 +16,7 @@ class BlogController extends Controller
                 'category' => 'بهره‌وری و نوشتن',
                 'category_slug' => 'writing',
                 'date' => '۱۴۰۵/۰۸/۱۲',
-                'read_time' => ۶,
+                'read_time' => 6,
                 'author' => 'تحریریه فراست',
                 'image' => 'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=85',
                 'alt' => 'میز کار و ابزار نوشتن',
@@ -36,7 +36,7 @@ class BlogController extends Controller
                 'category' => 'فایل و اسناد',
                 'category_slug' => 'documents',
                 'date' => '۱۴۰۵/۰۸/۰۹',
-                'read_time' => ۷,
+                'read_time' => 7,
                 'author' => 'تیم محصول فراست',
                 'image' => 'https://images.unsplash.com/photo-1456324504439-367cee3b3c32?auto=format&fit=crop&w=1400&q=85',
                 'alt' => 'کتاب و یادداشت‌های کاغذی روی میز',
@@ -55,7 +55,7 @@ class BlogController extends Controller
                 'category' => 'هوش مصنوعی',
                 'category_slug' => 'ai',
                 'date' => '۱۴۰۵/۰۸/۰۵',
-                'read_time' => ۵,
+                'read_time' => 5,
                 'author' => 'تحریریه فراست',
                 'image' => 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=1400&q=85',
                 'alt' => 'میکروفون برای ضبط و تبدیل صدا',
@@ -74,7 +74,7 @@ class BlogController extends Controller
                 'category' => 'بهره‌وری و نوشتن',
                 'category_slug' => 'writing',
                 'date' => '۱۴۰۵/۰۷/۲۸',
-                'read_time' => ۴,
+                'read_time' => 4,
                 'author' => 'تیم محصول فراست',
                 'image' => 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1400&q=85',
                 'alt' => 'فضای کاری دیجیتال با لپ‌تاپ',
@@ -93,7 +93,7 @@ class BlogController extends Controller
                 'category' => 'هوش مصنوعی',
                 'category_slug' => 'ai',
                 'date' => '۱۴۰۵/۰۷/۲۲',
-                'read_time' => ۶,
+                'read_time' => 6,
                 'author' => 'تحریریه فراست',
                 'image' => 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1400&q=85',
                 'alt' => 'تصویر مفهومی هوش مصنوعی و فناوری',
@@ -112,7 +112,7 @@ class BlogController extends Controller
                 'category' => 'فایل و اسناد',
                 'category_slug' => 'documents',
                 'date' => '۱۴۰۵/۰۷/۱۶',
-                'read_time' => ۵,
+                'read_time' => 5,
                 'author' => 'تیم محصول فراست',
                 'image' => 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&w=1400&q=85',
                 'alt' => 'کتاب‌ها و منابع مطالعه',
@@ -134,8 +134,9 @@ class BlogController extends Controller
         $all = collect(self::articles());
         $featured = $all->firstWhere('featured', true);
         $articles = $all
-            ->when($q !== '', fn ($items) => $items->filter(fn ($article) => str_contains(mb_strtolower($article['title'].' '.$article['excerpt'].' '.implode(' ', $article['tags']), 'UTF-8'), mb_strtolower($q, 'UTF-8')))
+            ->when($q !== '', fn ($items) => $items->filter(fn ($article) => str_contains(mb_strtolower($article['title'].' '.$article['excerpt'].' '.implode(' ', $article['tags']), 'UTF-8'), mb_strtolower($q, 'UTF-8'))))
             ->when($category !== '', fn ($items) => $items->where('category_slug', $category))
+            ->when($q === '' && $category === '' && $featured, fn ($items) => $items->reject(fn ($article) => $article['slug'] === $featured['slug']))
             ->values();
         $categories = $all->map(fn ($article) => ['slug'=>$article['category_slug'], 'name'=>$article['category']])->unique('slug')->values();
 
