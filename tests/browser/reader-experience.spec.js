@@ -80,12 +80,20 @@ function makePdfFixture() {
 }
 
 async function mountPdfReader(page) {
-  await page.goto('/');
+  page.on('console', message => console.log('[PDF QA console]', message.type(), message.text()));
+  page.on('pageerror', error => console.log('[PDF QA pageerror]', error.message));
+  page.on('requestfailed', request => console.log('[PDF QA requestfailed]', request.url(), request.failure()?.errorText));
+  await page.route('**/reader-fixture.html', route => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
+  }));
   await page.route('**/reader-fixture.pdf', route => route.fulfill({
     status: 200,
     contentType: 'application/pdf',
     body: makePdfFixture(),
   }));
+  await page.goto('/reader-fixture.html');
   await page.setContent(
     '<section class="farast-reader" data-reader-root data-theme="dark">' +
       '<header><div class="farast-reader-account"><span>09123456789</span></div></header>' +
