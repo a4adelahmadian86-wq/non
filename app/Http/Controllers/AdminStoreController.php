@@ -73,10 +73,23 @@ class AdminStoreController extends Controller
 
     public function edit(StoreProduct $product)
     {
-        $product->load(['files', 'previews', 'category']);
+        $product->load(['files', 'previews', 'category', 'course.sections.lessons']);
         $categories = StoreCategory::orderBy('sort_order')->get();
 
-        return view('admin.store.form', compact('product', 'categories'));
+        $contentReady = $product->type === 'course'
+            ? $product->course?->sections->contains(fn ($section) => $section->lessons->contains(fn ($lesson) => $lesson->is_published)) ?? false
+            : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
+                && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+
+        $readiness = [
+            ['label' => 'مشخصات و دسته‌بندی', 'ready' => filled($product->title) && filled($product->sku) && $product->category !== null, 'required' => true],
+            ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0, 'required' => true],
+            ['label' => 'تصویر کاور', 'ready' => filled($product->cover_path), 'required' => false],
+            ['label' => $product->type === 'course' ? 'حداقل یک جلسه منتشرشده' : 'فایل اصلی سالم و فعال', 'ready' => $contentReady, 'required' => true],
+        ];
+        $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
+
+        return view('admin.store.form', compact('product', 'categories', 'readiness', 'publicationReady'));
     }
 
     public function update(Request $request, StoreProduct $product)
