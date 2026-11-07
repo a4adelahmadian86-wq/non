@@ -79,7 +79,11 @@ class AdminController extends Controller
         $settings = [];
         if ($globalScope) {
             foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
-                $default = $key === 'assistant_groq_model' ? 'openai/gpt-oss-120b' : (CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
+                $default = match ($key) {
+                    'assistant_groq_model' => 'openai/gpt-oss-120b',
+                    'gemini_model' => config('services.gemini.model', 'gemini-3.8-flash'),
+                    default => CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash',
+                };
                 $settings[$key] = SiteSetting::read($key, $default);
             }
         }
