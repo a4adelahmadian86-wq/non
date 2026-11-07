@@ -165,6 +165,7 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
 
         $this->assertArrayHasKey('collaboration.teams', $managerItems->all());
         $this->assertArrayHasKey('collaboration.members', $managerItems->all());
+        $this->assertArrayHasKey('reports.overview', $managerItems->all());
         $this->assertArrayNotHasKey('organization.profile', $managerItems->all());
         $this->assertArrayNotHasKey('access.users', $managerItems->all());
 
