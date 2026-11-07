@@ -138,6 +138,7 @@ test.describe('FARAST sample reader interactions', () => {
     await root.locator('#reader-scroll-mode').click();
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page canvas')).toBeVisible();
+    await expect(root.locator('.farast-pdf-cont-page')).toHaveAttribute('data-rendered', '1');
     await root.locator('#reader-scroll-mode').click();
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
   });
