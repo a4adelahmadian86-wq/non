@@ -65,6 +65,27 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertNull($product->cover_path);
     }
 
+    public function test_creating_a_course_product_also_creates_its_course_catalog_record(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+
+        $response = $this->actingAs($admin)->post(
+            route('admin.store.store'),
+            $this->payload($category, [
+                'title' => 'دوره آزمایشی',
+                'sku' => 'TEST-COURSE-001',
+                'type' => 'course',
+            ])
+        );
+
+        $product = StoreProduct::query()->where('sku', 'TEST-COURSE-001')->firstOrFail();
+
+        $response->assertRedirect(route('admin.store.course.edit', $product));
+        $this->assertDatabaseHas('store_courses', ['product_id' => $product->id]);
+        $this->assertSame('draft', $product->status);
+    }
+
     public function test_compare_at_price_must_be_greater_than_the_sale_price(): void
     {
         $admin = $this->admin();
