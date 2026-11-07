@@ -176,7 +176,12 @@ class ResolveAdminScope
             return [$user->id];
         }
 
-        $memberIds = DB::table('team_user')->whereIn('team_id', $teamIds)->pluck('user_id')->all();
+        $memberIds = DB::table('team_user')
+            ->join('users', 'users.id', '=', 'team_user.user_id')
+            ->whereIn('team_user.team_id', $teamIds)
+            ->where('users.role', '!=', User::ROLE_ADMIN)
+            ->pluck('team_user.user_id')
+            ->all();
 
         return collect([$user->id])->merge($memberIds)->unique()->values()->all();
     }
