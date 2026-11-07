@@ -17,7 +17,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @if($isEditor)
 <meta name="farast-capabilities" content='@json($farastCapabilities)'><link rel="stylesheet" href="/css/editor-architecture.css?v=20261014e"><link rel="stylesheet" href="/css/editor-layout.css?v=20261014a"><link rel="stylesheet" href="/css/voice.css?v=20261010">
 @endif
-@if($isAdmin)<link rel="stylesheet" href="/css/admin.css?v=20261107-health1"><link rel="stylesheet" href="/css/farast-control.css">@endif
+@if($isAdmin)<link rel="stylesheet" href="/css/admin.css?v=20261107-sidebar1"><link rel="stylesheet" href="/css/farast-control.css">@endif
 @if($isAuthPage)<link rel="stylesheet" href="/css/auth.css">@endif
 <link rel="stylesheet" href="/css/farast-assistant.css?v=20261106micStates2">
 @stack('styles')
@@ -89,6 +89,53 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 <script src="/js/farast-assistant.js?v=20261107voiceSession1"></script>
 @if($isEditor)<script src="/js/editor-layout.js?v=20261014a"></script><script src="/js/editor-core.js?v=20261014g"></script><script src="/js/editor-agent.js?v=20261010a"></script><script src="/js/farast-voice.js?v=20261031serveronly5"></script>@endif
 @stack('scripts')<script>
+(() => {
+  const shell = document.querySelector('.farast-admin');
+  const sidebar = shell?.querySelector('.farast-admin-nav');
+  const nav = sidebar?.querySelector('nav');
+  if (!shell || !sidebar || !nav) return;
+
+  nav.id = nav.id || 'farast-admin-sidebar-links';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'farast-admin-nav-toggle';
+  toggle.setAttribute('aria-controls', nav.id);
+  toggle.innerHTML = '<i class="fa-solid fa-angles-right" aria-hidden="true"></i><span></span>';
+  sidebar.insertBefore(toggle, nav);
+
+  const storageKey = 'farast-admin-sidebar-state-v1';
+  const readPreference = () => {
+    try { return window.localStorage.getItem(storageKey); } catch (_) { return null; }
+  };
+  const savePreference = value => {
+    try { window.localStorage.setItem(storageKey, value); } catch (_) {}
+  };
+  const applyState = expanded => {
+    shell.classList.toggle('is-nav-expanded', expanded);
+    shell.classList.toggle('is-nav-collapsed', !expanded);
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.setAttribute('aria-label', expanded ? 'جمع کردن منوی مدیریت' : 'باز کردن منوی مدیریت');
+    toggle.title = expanded ? 'جمع کردن منوی مدیریت' : 'باز کردن منوی مدیریت';
+    toggle.querySelector('i').className = expanded
+      ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left';
+    toggle.querySelector('span').textContent = expanded ? 'جمع کردن منو' : 'باز کردن منو';
+  };
+
+  const preference = readPreference();
+  const initiallyExpanded = preference === 'expanded'
+    ? true
+    : preference === 'collapsed'
+      ? false
+      : !window.matchMedia('(max-width: 1200px)').matches;
+  applyState(initiallyExpanded);
+
+  toggle.addEventListener('click', () => {
+    const expanded = !shell.classList.contains('is-nav-expanded');
+    applyState(expanded);
+    savePreference(expanded ? 'expanded' : 'collapsed');
+  });
+})();
+</script><script>
 (() => {
   const toggle = document.querySelector('[data-mobile-nav-toggle]');
   const nav = document.getElementById('primaryNavigation');

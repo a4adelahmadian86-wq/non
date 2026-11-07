@@ -9,3 +9,33 @@
 /* Runtime status reflects the server-side health probes, never a hard-coded green light. */
 .farast-admin-live.is-degraded>span{background:#f0a43a;box-shadow:0 0 0 5px rgba(240,164,58,.14)}
 .farast-admin-live.is-scoped>span{background:#7b91b8;box-shadow:0 0 0 5px rgba(123,145,184,.14)}
+
+
+/* Admin console navigation: an explicit, persistent expand/collapse control. */
+.farast-admin-nav-toggle{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;margin:12px 0 4px;padding:10px 11px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.055);color:#dbe6fb;font:inherit;font-size:10px;cursor:pointer;transition:background .18s ease,border-color .18s ease}
+.farast-admin-nav-toggle:hover{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.22)}
+.farast-admin-nav-toggle:focus-visible{outline:2px solid #8fc5ff;outline-offset:3px}
+.farast-admin-nav-toggle i{font-size:11px}
+@media(min-width:761px){
+ .farast-admin.is-nav-expanded{grid-template-columns:268px minmax(0,1fr)}
+ .farast-admin.is-nav-expanded .farast-admin-nav{padding:22px 16px}
+ .farast-admin.is-nav-expanded .farast-admin-brand div,
+ .farast-admin.is-nav-expanded .farast-admin-nav-label,
+ .farast-admin.is-nav-expanded .farast-admin-nav a span,
+ .farast-admin.is-nav-expanded .farast-admin-live div,
+ .farast-admin.is-nav-expanded .farast-admin-nav-bottom span{display:block}
+ .farast-admin.is-nav-expanded .farast-admin-nav a{justify-content:flex-start}
+ .farast-admin.is-nav-collapsed{grid-template-columns:82px minmax(0,1fr)}
+ .farast-admin.is-nav-collapsed .farast-admin-nav{padding:18px 9px}
+ .farast-admin.is-nav-collapsed .farast-admin-brand div,
+ .farast-admin.is-nav-collapsed .farast-admin-nav-label,
+ .farast-admin.is-nav-collapsed .farast-admin-nav a span,
+ .farast-admin.is-nav-collapsed .farast-admin-live div,
+ .farast-admin.is-nav-collapsed .farast-admin-nav-bottom span{display:none}
+ .farast-admin.is-nav-collapsed .farast-admin-brand{justify-content:center;padding-bottom:20px}
+ .farast-admin.is-nav-collapsed .farast-admin-nav a{justify-content:center}
+ .farast-admin.is-nav-collapsed .farast-admin-nav-toggle{min-height:40px;padding:8px 4px}
+ .farast-admin.is-nav-collapsed .farast-admin-nav-toggle span{display:none}
+}
+@media(max-width:760px){.farast-admin-nav-toggle{display:none}}
+@media(prefers-reduced-motion:reduce){.farast-admin-nav-toggle{transition:none}}
