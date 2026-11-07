@@ -1,4 +1,12 @@
 @extends('layouts.app')
+@push('head')
+<meta name="description" content="{{ $product->seo_description ?: \Illuminate\Support\Str::limit(strip_tags($product->short_description ?: $product->description ?: $product->title), 155) }}">
+<meta property="og:title" content="{{ $product->seo_title ?: $product->title }}">
+<meta property="og:description" content="{{ $product->seo_description ?: $product->short_description }}">
+<meta property="og:type" content="product">
+<meta property="og:url" content="{{ request()->url() }}">
+@endpush
+
 @section('content')
 <section class="store-page" dir="rtl">
   <div class="store-container">
