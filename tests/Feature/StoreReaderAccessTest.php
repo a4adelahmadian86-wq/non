@@ -91,6 +91,9 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('متن محرمانه نمونه Word')
             ->assertSee('09123456789')
             ->assertDontSee('<script', false);
+
+        $this->assertStringContainsString('default-src', (string) $response->headers->get('Content-Security-Policy'));
+        $this->assertStringContainsString("script-src", (string) $response->headers->get('Content-Security-Policy')) === false;
     }
 
     public function test_authenticated_reader_sees_account_watermark_and_private_preview_headers(): void
