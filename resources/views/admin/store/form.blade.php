@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section('content')
 @php($isEdit = $product->exists)
+@include('admin.store.partials.workspace-nav')
 <section class="store-page" dir="rtl">
   <div class="store-container product-editor">
     <div class="store-section-head">
@@ -9,8 +10,9 @@
     </div>
     @if(session('status'))<div class="store-alert success" role="status">{{ session('status') }}</div>@endif
     @if($errors->any())<div class="store-alert error" role="alert">{{ $errors->first() }}</div>@endif
+    @if($isEdit)@include('admin.store.partials.workflow-checklist')@endif
 
-    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form">
+    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="product-details">
       @csrf @if($isEdit) @method('PUT') @endif
       <div class="product-editor-heading"><div><span>اطلاعات پایه</span><h2>مشخصات محصول</h2></div><span class="product-editor-step">گام ۱ از ۳</span></div>
       <div class="product-editor-grid">
