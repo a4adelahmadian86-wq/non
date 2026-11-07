@@ -102,7 +102,9 @@ class StoreReaderAccessTest extends TestCase
             ->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('09123456789')
-            ->assertSee('farast-reader-watermark');
+            ->assertSee('farast-reader-watermark')
+            ->assertSee('reader-search-input')
+            ->assertSee('farast-reader.js');
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
 
