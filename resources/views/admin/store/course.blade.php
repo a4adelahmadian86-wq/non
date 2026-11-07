@@ -1,5 +1,5 @@
-@extends('layouts.app')
-@section('content')
+@extends('layouts.admin')
+@section('admin-content')
 <section class="store-page" dir="rtl">
   <div class="store-container course-admin">
     <div class="store-section-head">
