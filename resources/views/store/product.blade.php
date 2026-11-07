@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @php
-  $title = ($product->seo_title ?: $product->title).' | فروشگاه فراست';
+  $productMetaTitle = ($product->seo_title ?: $product->title).' | فروشگاه فراست';
   $galleryImage = $product->images->first(fn ($image) => $image->is_active);
   $productImagePath = $product->cover_path ?: $galleryImage?->path;
   $productImage = $productImagePath ? asset($productImagePath) : null;
@@ -26,7 +26,7 @@
 <meta name="description" content="{{ $productDescription }}">
 <link rel="canonical" href="{{ route('store.product', $product->slug) }}">
 <meta property="og:type" content="product">
-<meta property="og:title" content="{{ $title }}">
+<meta property="og:title" content="{{ $productMetaTitle }}">
 <meta property="og:description" content="{{ $productDescription }}">
 @if($productImage)<meta property="og:image" content="{{ $productImage }}">@endif
 <meta property="og:url" content="{{ route('store.product', $product->slug) }}">
