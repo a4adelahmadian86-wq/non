@@ -16,7 +16,7 @@
         @foreach($navigation as $group)
             @php $hasActive = collect($group['items'])->contains(fn ($item) => !empty($item['active'])); @endphp
             <details class="farast-dashboard-nav__group" @if($hasActive) open @endif>
-                <summary><span><i class="fa-solid {{ $group['icon'] }}" aria-hidden="true"></i><b>{{ $group['label'] }}</b></span><i class="fa-solid fa-chevron-down farast-dashboard-nav__chevron" aria-hidden="true"></i></summary>
+                <summary aria-label="{{ $group['label'] }}" title="{{ $group['label'] }}"><span><i class="fa-solid {{ $group['icon'] }}" aria-hidden="true"></i><b>{{ $group['label'] }}</b></span><i class="fa-solid fa-chevron-down farast-dashboard-nav__chevron" aria-hidden="true"></i></summary>
                 <div class="farast-dashboard-nav__items">
                     @foreach($group['items'] as $item)
                         @if(!empty($item['href']) && empty($item['disabled']))
