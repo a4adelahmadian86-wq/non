@@ -258,4 +258,27 @@ class WorkspaceModuleAccessAndBillingIntegrityTest extends TestCase
         $this->assertDatabaseMissing('farast_plans', ['code' => 'canonical-admin-plan']);
     }
 
+    public function test_team_supervisor_can_view_workflows_but_cannot_create_or_run_them(): void
+    {
+        $supervisor = User::factory()->create(['role' => User::ROLE_TEAM_SUPERVISOR]);
+        $workflowId = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $supervisor->id,
+            'name' => 'Read-only workflow',
+            'trigger_type' => 'document.saved',
+            'steps' => json_encode([['action' => 'notify', 'message' => 'read only']]),
+            'enabled' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($supervisor)
+            ->get(route('platform.workflows'))
+            ->assertOk()
+            ->assertSee('Read-only workflow')
+            ->assertSee('فقط مشاهده')
+            ->assertDontSee('ساخت گردش‌کار');
+
+        $this->post(route('platform.workflows.run', $workflowId))->assertForbidden();
+    }
+
 }
