@@ -29,6 +29,16 @@ A browser-based reader cannot provide absolute DRM. An authenticated user can st
 
 Do not describe the reader as impossible to copy or download. Stronger PDF protection requires a separately deployed and tested server-side PDF stamping/rasterization pipeline or a dedicated DRM/document-delivery service, with explicit operational and performance requirements.
 
+## Automated verification status
+
+The reader branch's latest completed CI run before the current toolbar-regression assertion passed:
+
+- Laravel suite: **302 tests passed, 1,470 assertions**.
+- Playwright suite: **56 browser tests passed**, including a real PDF.js page render, account watermark, text search, page controls, zoom, rotation, theme, sidebar, and sandboxed Excel iframe checks.
+- PHP migrations, route listing, Blade view cache, JavaScript syntax checks, and the voice-stream smoke steps also completed successfully.
+
+The continuous-scroll toolbar regression assertion is being added and must pass in the next CI run before this checklist can be considered green again. These automated fixtures do not replace manual visual QA against representative customer documents and real mobile/desktop browsers.
+
 ## Release checklist
 
 1. Run the full Laravel and Playwright CI workflows.
