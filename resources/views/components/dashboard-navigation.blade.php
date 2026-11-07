@@ -27,8 +27,6 @@
                                     <em class="farast-nav-badge" aria-label="{{ (int)$item['badge'] }} مورد">{{ (int)$item['badge'] > 99 ? '99+' : (int)$item['badge'] }}</em>
                                 @endif
                             </a>
-                        @else
-                            <span class="is-disabled" aria-disabled="true" title="این بخش هنوز در سامانه پیاده‌سازی نشده است"><i class="fa-solid {{ $item['icon'] }}" aria-hidden="true"></i><span>{{ $item['label'] }}</span><small>به‌زودی</small></span>
                         @endif
                     @endforeach
                 </div>
@@ -55,6 +53,22 @@
         toggle.title = collapsed ? 'باز کردن منو' : 'جمع کردن منو';
     };
     try { setCollapsed(localStorage.getItem(key) === '1'); } catch (_) {}
+
+    const syncFragmentActive = () => {
+        const hash = window.location.hash;
+        if (!hash) return;
+        nav.querySelectorAll('a[href]').forEach((link) => {
+            const target = new URL(link.href, window.location.href);
+            if (target.pathname !== window.location.pathname || !target.hash) return;
+            const active = target.hash === hash;
+            link.classList.toggle('is-active', active);
+            if (active) link.setAttribute('aria-current', 'page');
+            else link.removeAttribute('aria-current');
+        });
+    };
+    syncFragmentActive();
+    window.addEventListener('hashchange', syncFragmentActive);
+
     toggle.addEventListener('click', () => {
         const collapsed = !nav.classList.contains('is-collapsed');
         setCollapsed(collapsed);
