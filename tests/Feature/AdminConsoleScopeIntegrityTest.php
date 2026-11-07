@@ -70,4 +70,35 @@ class AdminConsoleScopeIntegrityTest extends TestCase
         $this->assertSame('gemini-2.5-flash', SiteSetting::read('gemini_fallback_model'));
     }
 
+    public function test_team_scope_does_not_include_global_admin_accounts_as_team_members(): void
+    {
+        $organization = Organization::create(['name' => 'Scoped Org', 'slug' => 'scoped-org']);
+        $supervisor = User::factory()->create([
+            'role' => User::ROLE_TEAM_SUPERVISOR,
+            'organization_id' => $organization->id,
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'organization_id' => $organization->id,
+        ]);
+        $team = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Scoped Team',
+            'slug' => 'scoped-team',
+            'supervisor_id' => $supervisor->id,
+        ]);
+
+        DB::table('team_user')->insert([
+            ['team_id' => $team->id, 'user_id' => $admin->id, 'team_role' => 'employee', 'created_at' => now(), 'updated_at' => now()],
+            ['team_id' => $team->id, 'user_id' => $employee->id, 'team_role' => 'employee', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $visibleIds = ResolveAdminScope::visibleUserIds($supervisor, ResolveAdminScope::SCOPE_TEAM);
+
+        $this->assertContains($supervisor->id, $visibleIds);
+        $this->assertContains($employee->id, $visibleIds);
+        $this->assertNotContains($admin->id, $visibleIds);
+    }
+
 }
