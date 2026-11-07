@@ -6,7 +6,7 @@ use App\Http\Controllers\StoreController;
 use App\Http\Controllers\StoreWishlistController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');
+Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->middleware(['auth','throttle:60,10'])->name('store.reader');
 
 Route::middleware('auth')->group(function () {
     Route::get('/wishlist',[StoreWishlistController::class,'index'])->name('wishlist');
