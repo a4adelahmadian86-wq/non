@@ -187,8 +187,8 @@ class StoreController extends Controller
 
             $page = '<!doctype html><html lang="fa" dir="auto"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><style>
                 *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Tahoma,Arial,sans-serif;color:#1f2937;background:#fff}
-                body{padding:clamp(18px,4vw,54px);line-height:1.9}.docx-content{max-width:980px;margin:0 auto;position:relative;z-index:1;overflow-wrap:anywhere}
-                .docx-content table{border-collapse:collapse;max-width:100%;width:100%;margin:1em 0}.docx-content td,.docx-content th{border:1px solid #cbd5e1;padding:7px;vertical-align:top}
+                body{padding:clamp(18px,4vw,54px);line-height:1.9;user-select:none;-webkit-user-select:none}.docx-content{max-width:980px;margin:0 auto;position:relative;z-index:1;overflow-wrap:anywhere}
+                .docx-content table{border-collapse:collapse;max-width:100%;width:100%;margin:1em 0}.docx-content p{margin:.55em 0}.docx-content mark{background:#ffe08a;color:#172033;padding:0 2px}.docx-content td,.docx-content th{border:1px solid #cbd5e1;padding:7px;vertical-align:top}
                 .docx-content img{max-width:100%;height:auto}.docx-content h1,.docx-content h2,.docx-content h3{line-height:1.5;margin:1.3em 0 .6em}
                 .docx-watermark{position:fixed;inset:0;z-index:5;pointer-events:none;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);align-items:center;justify-items:center;opacity:.16;overflow:hidden}
                 .docx-watermark span{font:700 12px Tahoma,Arial;color:#334155;white-space:nowrap;transform:rotate(-25deg);background:rgba(255,255,255,.22);padding:5px}
@@ -212,6 +212,28 @@ class StoreController extends Controller
     /**
      * Keep document structure while dropping active content, remote resources and event attributes.
      */
+    private function sanitizeDocxStyle(string $style): string
+    {
+        $allowed = ['color','background-color','font-family','font-size','font-weight','font-style','text-decoration','text-align','vertical-align','width','height','margin-left','margin-right','margin-top','margin-bottom','padding','border','border-collapse','page-break-before','page-break-after','line-height','direction'];
+        $safe = [];
+        foreach (explode(';', $style) as $declaration) {
+            if (!str_contains($declaration, ':')) {
+                continue;
+            }
+            [$property, $value] = array_map('trim', explode(':', $declaration, 2));
+            $property = strtolower($property);
+            if (!in_array($property, $allowed, true) || $value === '' || preg_match('/url\\s*\\(|expression|javascript|@import/i', $value)) {
+                continue;
+            }
+            if (!preg_match('/^[#(),.%\\w\\s\\-]+$/u', $value)) {
+                continue;
+            }
+            $safe[] = $property.':'.$value;
+        }
+
+        return implode(';', $safe);
+    }
+
     private function sanitizeDocxHtml(string $html): string
     {
         $previous = libxml_use_internal_errors(true);
@@ -244,9 +266,11 @@ class StoreController extends Controller
                     } else {
                         $keep = [];
                         if (in_array($tag, ['td','th'], true)) {
-                            $keep = ['colspan','rowspan'];
+                            $keep = ['colspan','rowspan','style'];
                         } elseif ($tag === 'img') {
                             $keep = ['src','alt','width','height'];
+                        } else {
+                            $keep = ['style'];
                         }
                         foreach (iterator_to_array($child->attributes) as $attribute) {
                             $name = strtolower($attribute->name);
@@ -254,6 +278,8 @@ class StoreController extends Controller
                             $safeImage = $name === 'src' && str_starts_with($value, 'data:image/');
                             if (!in_array($name, $keep, true) || ($name === 'src' && !$safeImage)) {
                                 $child->removeAttribute($attribute->name);
+                            } elseif ($name === 'style') {
+                                $child->setAttribute('style', $this->sanitizeDocxStyle($value));
                             }
                         }
                         $walk($child);
