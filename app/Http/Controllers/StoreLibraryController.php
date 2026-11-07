@@ -29,10 +29,12 @@ class StoreLibraryController extends Controller
     {
         abort_unless($libraryItem->user_id === $request->user()->id && $libraryItem->revoked_at === null, 404);
         $libraryItem->load(['file', 'product']);
+        abort_unless($libraryItem->product && $libraryItem->product->type !== 'course', 422, 'برای ورود به دوره از کتابخانه آموزشی استفاده کنید.');
         abort_unless(
             $libraryItem->file
                 && $libraryItem->file->is_active
-                && (int) $libraryItem->file->product_id === (int) $libraryItem->product_id,
+                && (int) $libraryItem->file->product_id === (int) $libraryItem->product_id
+                && $libraryItem->file->purpose === 'product_download',
             404,
             'فایل فعال نیست.'
         );
@@ -93,6 +95,7 @@ class StoreLibraryController extends Controller
             $file = StoreProductFile::query()
                 ->whereKey($lockedDownload->product_file_id)
                 ->where('product_id', $libraryItem->product_id)
+                ->where('purpose', 'product_download')
                 ->where('is_active', true)
                 ->first();
             abort_unless($file, 404, 'فایل فعال نیست.');
