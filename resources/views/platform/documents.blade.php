@@ -75,7 +75,7 @@
                         <div class="workspace-documents__share-icon"><i class="fa-solid fa-link"></i></div>
                         <div class="workspace-documents__share-main">
                             <strong>{{ $share->title }}</strong>
-                            <small>{{ $share->permission === 'edit' ? 'اجازه ویرایش' : 'فقط مشاهده' }} · ایجاد {{ \\Illuminate\\Support\\Carbon::parse($share->created_at)->format('Y/m/d H:i') }}</small>
+                            <small>{{ $share->permission === 'edit' ? 'اجازه ویرایش' : 'فقط مشاهده' }} · ایجاد {{ \Illuminate\Support\Carbon::parse($share->created_at)->format('Y/m/d H:i') }}</small>
                             <input type="text" readonly value="{{ url('/shared/documents/'.$share->token) }}" aria-label="لینک اشتراک">
                         </div>
                         <span class="workspace-documents__share-state {{ $expired ? 'is-expired' : 'is-active' }}">{{ $expired ? 'منقضی شده' : 'قابل استفاده' }}</span>
@@ -103,7 +103,7 @@
                         <article class="workspace-documents__document" id="workspace-document-{{ $document->id }}">
                             <div class="workspace-documents__document-head">
                                 <span class="workspace-documents__document-icon"><i class="fa-regular fa-file-lines"></i></span>
-                                <div><strong>{{ $document->title }}</strong><small>آخرین تغییر: {{ \\Illuminate\\Support\\Carbon::parse($document->updated_at)->format('Y/m/d · H:i') }}</small></div>
+                                <div><strong>{{ $document->title }}</strong><small>آخرین تغییر: {{ \Illuminate\Support\Carbon::parse($document->updated_at)->format('Y/m/d · H:i') }}</small></div>
                                 @if($document->is_favorite)<span class="workspace-documents__favorite"><i class="fa-solid fa-star"></i> نشان‌دار</span>@endif
                             </div>
 
