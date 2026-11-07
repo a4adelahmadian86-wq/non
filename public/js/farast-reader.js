@@ -98,6 +98,7 @@
     const canvas=wrapper?.querySelector('canvas');
     if(!wrapper||!canvas||wrapper.dataset.rendered==='1'||wrapper.dataset.rendering==='1')return;
     wrapper.dataset.rendering='1';
+    try{
     const page=await pdfDoc.getPage(number);
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
@@ -128,7 +129,9 @@
       });
     }
     wrapper.dataset.rendered='1';
-    delete wrapper.dataset.rendering;
+    }finally{
+      delete wrapper.dataset.rendering;
+    }
   };
 
   const buildContinuousPages=async()=>{
