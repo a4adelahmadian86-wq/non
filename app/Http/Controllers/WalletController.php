@@ -217,8 +217,8 @@ class WalletController extends Controller
         }
 
         return redirect()->route(auth()->check() ? 'wallet' : 'login')->with(
-            $credited ? 'status' : 'status',
-            $credited ? 'افزایش موجودی با موفقیت تأیید شد. پس از ورود، موجودی کیف پول قابل مشاهده است.' : 'این افزایش موجودی قبلاً ثبت شده است.'
+            'status',
+            $credited ? 'افزایش موجودی با موفقیت تأیید شد.' : 'این افزایش موجودی قبلاً ثبت شده است.'
         );
     }
 }
