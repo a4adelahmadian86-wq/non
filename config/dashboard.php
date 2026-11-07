@@ -29,6 +29,7 @@ return [
             'items' => [
                 ['key' => 'documents.all', 'label' => 'همه اسناد', 'icon' => 'fa-files', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'global', 'admin_only' => true],
                 ['key' => 'documents.mine', 'label' => 'اسناد من', 'icon' => 'fa-file-lines', 'route' => 'dashboard', 'permission' => 'documents.view', 'scope' => 'own'],
+                ['key' => 'documents.workspace', 'label' => 'مدیریت اسناد فضای کاری', 'icon' => 'fa-folder-open', 'route' => 'platform.documents', 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.recent', 'label' => 'اسناد اخیر', 'icon' => 'fa-clock-rotate-left', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.files', 'label' => 'فایل‌ها', 'icon' => 'fa-folder', 'route' => 'library', 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.folders', 'label' => 'پوشه‌ها', 'icon' => 'fa-folder-tree', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'own'],
