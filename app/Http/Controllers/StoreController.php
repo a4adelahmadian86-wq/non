@@ -25,7 +25,8 @@ class StoreController extends Controller
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')
                     ->orWhere('short_description', 'like', '%'.$q.'%')
-                    ->orWhere('description', 'like', '%'.$q.'%');
+                    ->orWhere('description', 'like', '%'.$q.'%')
+                    ->orWhereHas('tags', fn ($tagQuery) => $tagQuery->where('name', 'like', '%'.$q.'%'));
             }))
             ->when($category, fn ($query) => $query->whereHas('category', fn ($cat) => $cat->where('slug', $category)))
             ->when($price === 'free', fn ($query) => $query->where('price_rials', 0))
@@ -74,15 +75,22 @@ class StoreController extends Controller
             ->all();
         $request->session()->put('store_recent_ids', $ids);
 
-        $related = $product->related->isNotEmpty()
-            ? $product->related->take(8)
-            : StoreProduct::with('category')
+        $related = $product->related()
+            ->with('category')
+            ->published()
+            ->orderByDesc('featured')
+            ->limit(8)
+            ->get();
+
+        if ($related->isEmpty()) {
+            $related = StoreProduct::with('category')
                 ->published()
                 ->where('id', '!=', $product->id)
                 ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
                 ->orderByDesc('featured')
                 ->limit(8)
                 ->get();
+        }
 
         $alsoViewed = StoreProduct::with('category')
             ->published()
