@@ -14,6 +14,7 @@
 @if($console->sectionAllowed(auth()->user(), 'voice'))<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
             @if($console->sectionAllowed(auth()->user(), 'announcements'))<a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'store'))<a href="{{ route('admin.store.index') }}"><i class="fa-solid fa-boxes-stacked"></i><span>محصولات و دوره‌ها</span></a>@endif
             @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><span>مالی</span></a>@endif
             @if($console->sectionAllowed(auth()->user(), 'access'))<a href="{{ route('admin.access') }}"><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>@endif
             @if($console->sectionAllowed(auth()->user(), 'organizations'))<a href="{{ route('admin.organizations') }}"><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>@endif
