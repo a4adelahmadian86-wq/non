@@ -236,6 +236,10 @@ class CommerceAuthorizationService
                     return $existing;
                 }
 
+                if (! in_array($row->status, ['charged', 'refunded'], true)) {
+                    throw new RuntimeException('charge_not_refundable');
+                }
+
                 $refunded = (int) FarastRefund::where('charge_id', $row->id)
                     ->where('status', 'completed')
                     ->sum('amount');
