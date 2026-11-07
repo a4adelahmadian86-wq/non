@@ -8,6 +8,9 @@
 <meta name="description" content="در مجله فراست، راهنماهای کاربردی درباره نوشتن، هوش مصنوعی، OCR، مدیریت اسناد و بهره‌وری دیجیتال بخوانید.">
 <link rel="canonical" href="{{ route('blog') }}">
 @endpush
+@push('scripts')
+<script src="{{ asset('js/blog.js') }}?v=20261107b" defer></script>
+@endpush
 
 @section('content')
 <section class="farast-blog" dir="rtl">
@@ -62,7 +65,7 @@
 
         <div class="blog-grid">
             @forelse($articles as $article)
-                <article class="blog-card">
+                <article class="blog-card" data-blog-card="{{ $article['slug'] }}">
                     <a class="blog-card-image" href="{{ route('blog.show', $article['slug']) }}">
                         <img src="{{ $article['image'] }}" alt="{{ $article['alt'] }}" loading="lazy">
                         <span>{{ $article['category'] }}</span>
@@ -71,12 +74,13 @@
                         <div class="blog-card-meta"><span>{{ $article['date'] }}</span><span><i class="fa-regular fa-clock"></i> {{ $article['read_time'] }} دقیقه</span></div>
                         <h3><a href="{{ route('blog.show', $article['slug']) }}">{{ $article['title'] }}</a></h3>
                         <p>{{ $article['excerpt'] }}</p>
-                        <div class="blog-card-footer"><span>{{ $article['author'] }}</span><a href="{{ route('blog.show', $article['slug']) }}" aria-label="خواندن {{ $article['title'] }}"><i class="fa-solid fa-arrow-left"></i></a></div>
+                        <div class="blog-card-footer"><span>{{ $article['author'] }}</span><div class="blog-card-footer-actions"><button type="button" data-blog-save="{{ $article['slug'] }}" aria-label="ذخیره مقاله" aria-pressed="false"><i class="fa-regular fa-bookmark"></i></button><a href="{{ route('blog.show', $article['slug']) }}" aria-label="خواندن {{ $article['title'] }}"><i class="fa-solid fa-arrow-left"></i></a></div></div>
                     </div>
                 </article>
             @empty
                 <div class="blog-empty"><i class="fa-solid fa-magnifying-glass"></i><h3>مطلبی پیدا نشد</h3><p>عبارت جستجو یا دسته‌بندی را تغییر دهید.</p><a href="{{ route('blog') }}">نمایش همه مقاله‌ها</a></div>
             @endforelse
+            <div class="blog-empty blog-saved-empty" data-blog-empty-saved hidden><i class="fa-regular fa-bookmark"></i><h3>هنوز مقاله‌ای ذخیره نکرده‌اید</h3><p>با زدن نشانک روی مقاله‌ها، فهرست مطالعه شخصی‌تان را بسازید.</p></div>
         </div>
 
         <aside class="blog-bottom-cta">
@@ -89,5 +93,5 @@
 @endsection
 
 @push('styles')
-<link rel="stylesheet" href="{{ asset('css/blog.css') }}?v=20261107a">
+<link rel="stylesheet" href="{{ asset('css/blog.css') }}?v=20261107b">
 @endpush
