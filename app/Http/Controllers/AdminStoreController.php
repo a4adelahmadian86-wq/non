@@ -103,43 +103,51 @@ class AdminStoreController extends Controller
     public function update(Request $request, StoreProduct $product)
     {
         $data = $this->validated($request, $product);
-        if ($data['type'] !== $product->type) {
-            throw ValidationException::withMessages([
-                'type' => 'نوع محصول پس از ایجاد قابل تغییر نیست؛ برای نوع دیگر یک محصول جدید بسازید تا فایل‌ها و دسترسی‌های قبلی مخلوط نشوند.',
-            ]);
-        }
         if (! empty($data['slug'])) {
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        if (($data['status'] ?? '') === 'published') {
-            if ($data['type'] === 'course') {
-                $hasPublishedLesson = $product->course()
-                    ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
-                    ->exists();
-                if (! $hasPublishedLesson) {
-                    throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده در برنامه آموزشی لازم است.']);
+        DB::transaction(function () use ($product, $data) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            if ($data['type'] !== $lockedProduct->type) {
+                throw ValidationException::withMessages([
+                    'type' => 'نوع محصول پس از ایجاد قابل تغییر نیست؛ برای نوع دیگر یک محصول جدید بسازید تا فایل‌ها و دسترسی‌های قبلی مخلوط نشوند.',
+                ]);
+            }
+
+            if (($data['status'] ?? '') === 'published') {
+                if ($data['type'] === 'course') {
+                    $hasPublishedLesson = $lockedProduct->course()
+                        ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
+                        ->exists();
+                    if (! $hasPublishedLesson) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده در برنامه آموزشی لازم است.']);
+                    }
+                } else {
+                    $hasSafePrimaryFile = $lockedProduct->files()
+                        ->where('purpose', 'product_download')
+                        ->where('is_active', true)
+                        ->where('is_primary', true)
+                        ->where('scan_status', 'clean')
+                        ->exists();
+                    if (! $hasSafePrimaryFile) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
+                    }
+                }
+                if (! $lockedProduct->published_at && empty($data['published_at'])) {
+                    $data['published_at'] = now();
                 }
             } else {
-                $hasSafePrimaryFile = $product->files()
-                    ->where('purpose', 'product_download')
-                    ->where('is_active', true)
-                    ->where('is_primary', true)
-                    ->where('scan_status', 'clean')
-                    ->exists();
-                if (! $hasSafePrimaryFile) {
-                    throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
-                }
+                $data['published_at'] = null;
             }
-            if (! $product->published_at && empty($data['published_at'])) {
-                $data['published_at'] = now();
-            }
-        } elseif (($data['status'] ?? '') !== 'published') {
-            $data['published_at'] = null;
-        }
 
-        $product->update($data);
-        $this->audit('store.product.updated', $product, ['type' => $product->type, 'status' => $product->status, 'price_rials' => $product->price_rials]);
+            $lockedProduct->update($data);
+            $this->audit('store.product.updated', $lockedProduct, [
+                'type' => $lockedProduct->type,
+                'status' => $lockedProduct->status,
+                'price_rials' => $lockedProduct->price_rials,
+            ]);
+        });
 
         return back()->with('status', 'محصول به‌روزرسانی شد.');
     }
@@ -220,24 +228,43 @@ class AdminStoreController extends Controller
     public function deleteFile(StoreProduct $product, StoreProductFile $file)
     {
         abort_unless($file->product_id === $product->id && $file->purpose === 'product_download', 404);
-        if ($product->status === 'published' && $file->is_primary) {
-            $hasReplacement = $product->files()
-                ->where('purpose', 'product_download')
-                ->where('id', '!=', $file->id)
-                ->where('is_active', true)
-                ->where('is_primary', true)
-                ->where('scan_status', 'clean')
-                ->exists();
-            if (! $hasReplacement) {
-                throw ValidationException::withMessages([
-                    'file' => 'این فایل، محتوای اصلی محصول منتشرشده است. ابتدا فایل اصلی جایگزین را بارگذاری و فعال کنید یا محصول را از انتشار خارج کنید.',
-                ]);
-            }
-        }
 
-        $this->audit('store.product.file_deleted', $product, ['file_id' => $file->id, 'purpose' => $file->purpose]);
-        Storage::disk($file->disk ?: 'private')->delete($file->path);
-        $file->delete();
+        [$disk, $path] = DB::transaction(function () use ($product, $file) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $lockedFile = StoreProductFile::query()
+                ->whereKey($file->id)
+                ->where('product_id', $lockedProduct->id)
+                ->where('purpose', 'product_download')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedProduct->status === 'published' && $lockedFile->is_primary) {
+                $hasReplacement = $lockedProduct->files()
+                    ->where('purpose', 'product_download')
+                    ->where('id', '!=', $lockedFile->id)
+                    ->where('is_active', true)
+                    ->where('is_primary', true)
+                    ->where('scan_status', 'clean')
+                    ->exists();
+                if (! $hasReplacement) {
+                    throw ValidationException::withMessages([
+                        'file' => 'این فایل، محتوای اصلی محصول منتشرشده است. ابتدا فایل اصلی جایگزین را بارگذاری و فعال کنید یا محصول را از انتشار خارج کنید.',
+                    ]);
+                }
+            }
+
+            $this->audit('store.product.file_deleted', $lockedProduct, [
+                'file_id' => $lockedFile->id,
+                'purpose' => $lockedFile->purpose,
+            ]);
+            $disk = $lockedFile->disk ?: 'private';
+            $path = $lockedFile->path;
+            $lockedFile->delete();
+
+            return [$disk, $path];
+        });
+
+        Storage::disk($disk)->delete($path);
 
         return back()->with('status', 'فایل حذف شد.');
     }
