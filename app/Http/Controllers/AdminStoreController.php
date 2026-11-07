@@ -18,16 +18,29 @@ class AdminStoreController extends Controller
     public function index(Request $request)
     {
         $q = trim((string) $request->query('q', ''));
+        $type = in_array($request->query('type'), ['digital_file', 'course'], true) ? $request->query('type') : '';
+        $status = in_array($request->query('status'), ['draft', 'published', 'archived'], true) ? $request->query('status') : '';
+
         $products = StoreProduct::query()
             ->with(['category', 'files'])
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')->orWhere('sku', 'like', '%'.$q.'%');
             }))
+            ->when($type !== '', fn ($query) => $query->where('type', $type))
+            ->when($status !== '', fn ($query) => $query->where('status', $status))
             ->orderByDesc('id')
             ->paginate(30)
             ->withQueryString();
 
-        return view('admin.store.index', compact('products', 'q'));
+        $stats = [
+            'total' => StoreProduct::count(),
+            'published' => StoreProduct::where('status', 'published')->count(),
+            'drafts' => StoreProduct::where('status', 'draft')->count(),
+            'courses' => StoreProduct::where('type', 'course')->count(),
+            'files' => StoreProduct::where('type', 'digital_file')->count(),
+        ];
+
+        return view('admin.store.index', compact('products', 'q', 'type', 'status', 'stats'));
     }
 
     public function create()
