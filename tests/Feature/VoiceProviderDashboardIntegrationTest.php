@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\VoiceProviderAccount;
 use App\Services\ProviderRegistry;
+use App\Services\VoiceQuotaManager;
 use App\Services\VoiceProviderRouter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -115,6 +116,26 @@ class VoiceProviderDashboardIntegrationTest extends TestCase
 
         $this->assertFalse($account->fresh()->credentialsConfigured());
         $this->assertNull(app(VoiceProviderRouter::class)->best('fa-IR'));
+    }
+
+    public function test_paid_provider_with_a_monthly_cap_resets_usage_at_period_boundary(): void
+    {
+        $account = new VoiceProviderAccount();
+        $account->provider = 'gladia';
+        $account->billing_mode = 'paid';
+        $account->quota_limit_seconds = 36000;
+        $account->quota_used_seconds = 36000;
+        $account->quota_period_started_at = now()->subMonth();
+        $account->quota_period_ends_at = now()->subSecond();
+        $account->enabled = true;
+        $account->healthy = true;
+        $account->save();
+
+        $available = app(VoiceQuotaManager::class)->availableSeconds($account);
+
+        $this->assertSame(36000, $available);
+        $this->assertSame(0.0, (float) $account->fresh()->quota_used_seconds);
+        $this->assertTrue($account->fresh()->quota_period_ends_at->isFuture());
     }
 
 }
