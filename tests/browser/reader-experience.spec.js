@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+test.use({ serviceWorkers: 'block' });
+
 async function mountReader(page, includeExcel = false) {
   await page.goto('/');
   const total = includeExcel ? 3 : 2;
