@@ -9,6 +9,22 @@ class StoreProductWorkspaceService
     /**
      * A single source of truth for product publishing readiness across admin screens.
      */
+    /**
+     * Keep public catalog state consistent when its required payload is removed.
+     */
+    public function synchronizePublishedState(StoreProduct $product): bool
+    {
+        $product->refresh();
+
+        if ($product->status !== 'published' || $this->inspect($product)['can_publish']) {
+            return false;
+        }
+
+        $product->update(['status' => 'draft', 'published_at' => null]);
+
+        return true;
+    }
+
     public function inspect(StoreProduct $product): array
     {
         $product->loadMissing(['files', 'course.sections.lessons']);
