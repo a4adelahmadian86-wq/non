@@ -7,7 +7,7 @@
       <div>
         <div class="store-hero-kicker">کتابخانه و فایل دیجیتال فراست</div>
         <h1>بخوان، ببین، بعد بخر</h1>
-        <p>مثل فدیبو و طاقچه: پیش‌نمایش واقعی قبل از خرید، سبد خرید، علاقه‌مندی و دانلود فوری پس از پرداخت.</p>
+        <p>نمونه را ببینید، با آگاهی انتخاب کنید و پس از خرید، فایل‌تان را در کتابخانه شخصی فراست در دسترس داشته باشید.</p>
         <form method="get" action="{{ route('store') }}" class="store-search">
           <input name="q" value="{{ $q }}" placeholder="جستجوی عنوان، موضوع یا فایل…" aria-label="جستجوی فروشگاه">
           @if($category)<input type="hidden" name="category" value="{{ $category }}">@endif
@@ -146,7 +146,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20260929m2">
+<link rel="stylesheet" href="/css/store.css?v=20261107premium1">
 @endpush
 @push('scripts')
 <script>
