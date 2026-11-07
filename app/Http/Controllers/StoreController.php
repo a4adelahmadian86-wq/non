@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
 use App\Models\StoreWishlist;
+use App\Services\StoreXlsxPreviewRenderer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -131,6 +132,28 @@ class StoreController extends Controller
             'X-Permitted-Cross-Domain-Policies' => 'none',
             'Content-Disposition' => 'inline',
         ];
+
+        if (($preview->kind ?? '') === 'xlsx' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'xlsx') {
+            $user = request()->user();
+            $identity = trim((string) ($user->mobile ?? ''));
+            if ($identity === '') {
+                $identity = 'شناسه کاربر #'.$user->id;
+            }
+
+            try {
+                $html = app(StoreXlsxPreviewRenderer::class)->render($disk->get($preview->path), $identity);
+            } catch (\\Throwable $exception) {
+                report($exception);
+                abort(422, 'نمایش این فایل Excel ممکن نیست. لطفاً فایل XLSX سالم و ساده‌تری بارگذاری کنید.');
+            }
+
+            $xlsxHeaders = $headers;
+            $xlsxHeaders['Content-Type'] = 'text/html; charset=UTF-8';
+            $xlsxHeaders['Content-Disposition'] = 'inline; filename="farast-excel-preview.html"';
+            $xlsxHeaders['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
+
+            return response($html, 200, $xlsxHeaders);
+        }
 
         if (($preview->kind ?? '') === 'docx' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'docx') {
             return $this->renderDocxPreview($disk->get($preview->path), $headers);
