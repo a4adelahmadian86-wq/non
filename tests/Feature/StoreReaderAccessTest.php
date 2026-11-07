@@ -59,7 +59,7 @@ class StoreReaderAccessTest extends TestCase
             '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
             'xl/workbook.xml' => '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="گزارش" sheetId="1" r:id="rId1"/></sheets></workbook>',
             'xl/_rels/workbook.xml.rels' => '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1"><v>42</v></c></row></sheetData></worksheet>',
+            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1"><v>42</v></c><c r="C1"><f>1+1</f><v>73</v></c></row></sheetData></worksheet>',
         ];
         foreach ($parts as $name => $contents) {
             $archive->addFromString($name, $contents);
@@ -195,11 +195,41 @@ class StoreReaderAccessTest extends TestCase
         $response->assertSee('09123456789')
             ->assertSee('گزارش')
             ->assertSee('42')
+            ->assertSee('73')
+            ->assertDontSee('1+1')
             ->assertSee('فرمول‌ها اجرا نمی‌شوند')
             ->assertDontSee('<script', false);
 
         $this->assertStringContainsString("style-src 'unsafe-inline'", (string) $response->headers->get('Content-Security-Policy'));
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+    }
+
+    public function test_xlsx_preview_rejects_external_relationships(): void
+    {
+        [, $preview] = $this->makePreviewFixture();
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-xlsx-external-');
+        file_put_contents($temporary, $this->makeXlsxBytes());
+
+        $archive = new \\ZipArchive();
+        $this->assertSame(true, $archive->open($temporary));
+        $archive->deleteName('xl/_rels/workbook.xml.rels');
+        $archive->addFromString(
+            'xl/_rels/workbook.xml.rels',
+            '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="https://example.invalid/sheet.xml" TargetMode="External"/></Relationships>'
+        );
+        $archive->close();
+
+        Storage::disk('private')->put('store/previews/sample/external.xlsx', file_get_contents($temporary));
+        @unlink($temporary);
+        $preview->update([
+            'path' => 'store/previews/sample/external.xlsx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'kind' => 'xlsx',
+        ]);
+
+        $this->actingAs($this->makeReaderUser())
+            ->get(route('store.preview', $preview))
+            ->assertStatus(422);
     }
 
     public function test_xlsx_preview_rejects_invalid_archive_payloads(): void
