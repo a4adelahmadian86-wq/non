@@ -66,6 +66,25 @@ class RegistrationExperienceTest extends TestCase
             ->assertSee('id="registerPasswordConfirmation"', false);
     }
 
+    public function test_invalid_registration_otp_does_not_unlock_account_details(): void
+    {
+        OtpChallenge::create([
+            'mobile' => self::PHONE,
+            'code_hash' => Hash::make('123456'),
+            'expires_at' => now()->addMinutes(3),
+        ]);
+
+        $this->withSession(['register.mobile' => self::PHONE])
+            ->postJson(route('register.otp.verify'), ['code' => '000000'])
+            ->assertUnprocessable()
+            ->assertSessionMissing('register.verified_mobile');
+
+        $this->get(route('register'))
+            ->assertOk()
+            ->assertSee('id="registerOtpCode"', false)
+            ->assertDontSee('id="registerName"', false);
+    }
+
     public function test_registration_rejects_an_expired_phone_verification(): void
     {
         $this->withSession($this->verifiedRegistrationSession(now()->subMinutes(11)->timestamp))
