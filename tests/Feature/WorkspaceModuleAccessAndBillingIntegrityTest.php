@@ -205,4 +205,21 @@ class WorkspaceModuleAccessAndBillingIntegrityTest extends TestCase
             'status' => 'active',
         ]);
     }
+    public function test_ocr_does_not_claim_a_job_was_queued_when_no_processor_is_registered(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+
+        $this->actingAs($user)
+            ->postJson(route('platform.ocr'), [
+                'source_path' => 'private/uploads/example.pdf',
+                'provider' => 'auto',
+            ])
+            ->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('status', 'unavailable')
+            ->assertJsonPath('code', 'ocr_worker_unavailable');
+
+        $this->assertDatabaseCount('farast_ocr_jobs', 0);
+    }
+
 }
