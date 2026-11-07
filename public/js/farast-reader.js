@@ -112,6 +112,20 @@
     const context=canvas.getContext('2d',{alpha:false});
     context.setTransform(ratio,0,0,ratio,0,0);
     await page.render({canvasContext:context,viewport}).promise;
+    const textLayer=wrapper.querySelector('.farast-pdf-cont-text');
+    if(textLayer&&window.pdfjsLib?.TextLayer){
+      textLayer.innerHTML='';
+      textLayer.style.width=viewport.width+'px';
+      textLayer.style.height=viewport.height+'px';
+      const textContent=await page.getTextContent();
+      const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:textLayer,viewport});
+      await layer.render();
+      const query=(searchInput?.value||'').trim().toLocaleLowerCase();
+      textLayer.querySelectorAll('span').forEach(span=>{
+        span.style.userSelect='none';span.style.webkitUserSelect='none';
+        span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
+      });
+    }
     wrapper.dataset.rendered='1';
   };
 
@@ -127,6 +141,8 @@
       wrapper.dataset.rendered='0';
       wrapper.setAttribute('aria-label','صفحه '+faNumber(n));
       const canvas=document.createElement('canvas');
+      const textLayer=document.createElement('div');
+      textLayer.className='farast-pdf-cont-text textLayer';
       const watermark=document.createElement('div');
       watermark.className='farast-pdf-cont-watermark';
       for(let mark=0;mark<8;mark++){
@@ -134,11 +150,11 @@
         span.textContent=(root.querySelector('.farast-reader-account span')?.textContent||'حساب کاربر')+' · پیش‌نمایش فراست';
         watermark.append(span);
       }
-      wrapper.append(canvas,watermark);
+      wrapper.append(canvas,textLayer,watermark);
       fragment.append(wrapper);
     }
     continuousHost.append(fragment);
-    pdfSurface?.classList.add('is-continuous');
+    if(pdfSurface){pdfSurface.classList.add('is-continuous');pdfSurface.style.width='100%';pdfSurface.style.minHeight='0';}
     if(window.IntersectionObserver){
       continuousObserver=new IntersectionObserver(entries=>{
         entries.forEach(entry=>{
@@ -152,8 +168,24 @@
         });
       },{root:stage,threshold:[.15,.35,.6]});
       continuousHost.querySelectorAll('[data-pdf-cont-page]').forEach(node=>continuousObserver.observe(node));
+      await renderContinuousPage(pdfPage);
     }else{
       for(let n=1;n<=pdfDoc.numPages;n++)await renderContinuousPage(n);
+    }
+  };
+
+  const refreshContinuousVisiblePages=async()=>{
+    if(!continuousMode||!stage||!continuousHost)return;
+    const stageRect=stage.getBoundingClientRect();
+    const visible=[...continuousHost.querySelectorAll('[data-pdf-cont-page]')].filter(node=>{
+      const rect=node.getBoundingClientRect();
+      return rect.bottom>=stageRect.top-180&&rect.top<=stageRect.bottom+180;
+    });
+    for(const node of visible){
+      node.dataset.rendered='0';
+      const canvas=node.querySelector('canvas');
+      if(canvas){canvas.width=0;canvas.height=0;}
+      await renderContinuousPage(Number(node.dataset.pdfContPage));
     }
   };
 
@@ -260,6 +292,12 @@
   const showItem=async(index)=>{
     itemIndex=clamp(Number(index)||0,0,articles.length-1);
     articles.forEach((article,i)=>article.classList.toggle('is-active',i===itemIndex));
+    if(!isPdf()&&continuousMode){
+      continuousMode=false;continuousObserver?.disconnect();continuousObserver=null;
+      pdfSurface?.classList.remove('is-continuous');
+      if(continuousHost)continuousHost.innerHTML='';
+      scrollModeButton?.setAttribute('aria-pressed','false');
+    }
     root.querySelectorAll('.farast-reader-thumb[data-goto]').forEach(thumb=>{
       const active=Number(thumb.dataset.goto)===itemIndex;
       thumb.classList.toggle('is-active',active);
@@ -283,7 +321,7 @@
   const setZoom=async(next)=>{
     zoom=clamp(next,.6,2.5);
     setZoomLabel();
-    if(isPdf()&&pdfDoc){if(continuousMode){continuousHost?.querySelectorAll('[data-pdf-cont-page]').forEach(node=>{node.dataset.rendered='0';const canvas=node.querySelector('canvas');if(canvas){canvas.width=0;canvas.height=0;}});await renderContinuousPage(pdfPage);}else await renderPdfPage(pdfPage);}
+    if(isPdf()&&pdfDoc){if(continuousMode)await refreshContinuousVisiblePages();else await renderPdfPage(pdfPage);}
     else if(isDocx()){const frame=activeArticle()?.querySelector('.farast-docx-frame');if(frame)frame.style.zoom=String(zoom);}
     else activeArticle()?.style.setProperty('--reader-zoom',String(zoom));
   };
@@ -291,7 +329,7 @@
   const fitWidth=async()=>{
     zoom=0;
     setZoomLabel();
-    if(isPdf()&&pdfDoc){if(continuousMode){continuousHost?.querySelectorAll('[data-pdf-cont-page]').forEach(node=>{node.dataset.rendered='0';const canvas=node.querySelector('canvas');if(canvas){canvas.width=0;canvas.height=0;}});await renderContinuousPage(pdfPage);}else await renderPdfPage(pdfPage);}
+    if(isPdf()&&pdfDoc){if(continuousMode)await refreshContinuousVisiblePages();else await renderPdfPage(pdfPage);}
     else setZoom(1);
   };
 
@@ -356,7 +394,7 @@
   root.querySelector('#reader-zoom-in')?.addEventListener('click',()=>setZoom(zoom===0?1.1:zoom+.1).catch(showPdfError));
   root.querySelector('#reader-zoom-out')?.addEventListener('click',()=>setZoom(zoom===0?.9:zoom-.1).catch(showPdfError));
   root.querySelector('#reader-fit')?.addEventListener('click',()=>fitWidth().catch(showPdfError));
-  root.querySelector('#reader-rotate')?.addEventListener('click',()=>{rotation=(rotation+90)%360;if(isPdf()&&pdfDoc){if(continuousMode){continuousHost?.querySelectorAll('[data-pdf-cont-page]').forEach(node=>{node.dataset.rendered='0';const canvas=node.querySelector('canvas');if(canvas){canvas.width=0;canvas.height=0;}});renderContinuousPage(pdfPage).catch(showPdfError);}else renderPdfPage(pdfPage).catch(showPdfError);}else activeArticle()?.querySelector('img')?.style.setProperty('transform','rotate('+rotation+'deg) scale('+zoom+')');});
+  root.querySelector('#reader-rotate')?.addEventListener('click',()=>{rotation=(rotation+90)%360;if(isPdf()&&pdfDoc){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}else activeArticle()?.querySelector('img')?.style.setProperty('transform','rotate('+rotation+'deg) scale('+zoom+')');});
   scrollModeButton?.addEventListener('click',async()=>{
     if(!isPdf()||!pdfDoc)return;
     continuousMode=!continuousMode;
@@ -405,7 +443,7 @@
   root.addEventListener('copy',e=>e.preventDefault());
   root.addEventListener('cut',e=>e.preventDefault());
   root.addEventListener('dragstart',e=>e.preventDefault());
-  window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom===0){if(continuousMode){continuousHost?.querySelectorAll('[data-pdf-cont-page]').forEach(node=>{node.dataset.rendered='0';const canvas=node.querySelector('canvas');if(canvas){canvas.width=0;canvas.height=0;}});renderContinuousPage(pdfPage).catch(showPdfError);}else renderPdfPage(pdfPage).catch(showPdfError);}});
+  window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom===0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
   setZoomLabel();
   showItem(0).catch(showPdfError);
 })();
