@@ -48,25 +48,43 @@ class DashboardNavigationService
             return null;
         }
 
+        // Incomplete placeholders are intentionally omitted from the live menu.
         $routeName = $item['route'] ?? null;
-        $planned = (bool) ($item['planned'] ?? false);
-
-        if ($routeName !== null && ! Route::has($routeName)) {
-            $planned = true;
-            $routeName = null;
-        }
-
-        if ($routeName === null && ! $planned) {
+        if (($item['planned'] ?? false) || ! is_string($routeName) || ! Route::has($routeName)) {
             return null;
         }
 
-        $href = null;
-        $active = false;
-        if ($routeName !== null) {
-            $href = route($routeName).($item['fragment'] ?? '');
-            $active = request()->routeIs($routeName);
-            if ($active && isset($item['fragment'])) {
-                $active = request()->getRequestUri() === $href;
+        $query = is_array($item['query'] ?? null) ? $item['query'] : [];
+        $href = route($routeName);
+        if ($query !== []) {
+            $href .= '?'.http_build_query($query);
+        }
+        $fragment = (string) ($item['fragment'] ?? '');
+        $href .= $fragment;
+
+        $active = request()->routeIs($routeName) && $fragment === '';
+        if ($active && $query !== []) {
+            foreach ($query as $key => $value) {
+                if ((string) request()->query($key, '') !== (string) $value) {
+                    $active = false;
+                    break;
+                }
+            }
+        }
+        if ($active) {
+            foreach ((array) ($item['active_unless_query'] ?? []) as $key) {
+                if (request()->query($key) !== null) {
+                    $active = false;
+                    break;
+                }
+            }
+        }
+        if (! $active && request()->routeIs($routeName)) {
+            foreach ((array) ($item['active_when_query'] ?? []) as $key) {
+                if (request()->query($key) !== null) {
+                    $active = true;
+                    break;
+                }
             }
         }
 
@@ -78,8 +96,8 @@ class DashboardNavigationService
             'icon' => $item['icon'],
             'href' => $href,
             'active' => $active,
-            'disabled' => $href === null,
-            'planned' => $href === null,
+            'disabled' => false,
+            'planned' => false,
             'permission' => $item['permission'] ?? null,
             'scope' => $item['scope'] ?? null,
             'badge' => $badge,
@@ -93,6 +111,9 @@ class DashboardNavigationService
         }
 
         if (($definition['admin_only'] ?? false) && ! $user->isAdmin()) {
+            return false;
+        }
+        if (($definition['exclude_admin'] ?? false) && $user->isAdmin()) {
             return false;
         }
 

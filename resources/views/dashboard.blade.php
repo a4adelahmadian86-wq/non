@@ -15,9 +15,11 @@
             <p>نمای یکپارچه‌ای از اسناد، پروژه‌ها، اعلان‌ها و وضعیت حساب شما.</p>
         </div>
         <div class="user-dashboard__hero-actions">
-            <a class="user-dashboard__button user-dashboard__button--primary" href="{{ route('projects.create') }}" @if(!$capabilities['active'] || !$capabilities['can_type']) aria-disabled="true" tabindex="-1" @endif>
-                <i class="fa-solid fa-plus"></i> پروژه جدید
-            </a>
+            @if($canCreateProjects && $capabilities['active'] && $capabilities['can_type'])
+                <a class="user-dashboard__button user-dashboard__button--primary" href="{{ route('projects.create') }}">
+                    <i class="fa-solid fa-plus"></i> پروژه جدید
+                </a>
+            @endif
             <a class="user-dashboard__button user-dashboard__button--quiet" href="{{ route('platform.documents') }}">
                 <i class="fa-solid fa-folder-open"></i> مدیریت اسناد
             </a>
@@ -33,7 +35,7 @@
         <article class="user-dashboard__metric">
             <span class="user-dashboard__metric-icon"><i class="fa-solid fa-diagram-project"></i></span>
             <div><strong>{{ number_format($projectTotal) }}</strong><span>پروژه‌ها</span></div>
-            <a href="{{ route('projects.create') }}" aria-label="ایجاد پروژه"><i class="fa-solid fa-arrow-up-left-from-circle"></i></a>
+            @if($canCreateProjects)<a href="{{ route('projects.create') }}" aria-label="ایجاد پروژه"><i class="fa-solid fa-arrow-up-left-from-circle"></i></a>@endif
         </article>
         <article class="user-dashboard__metric">
             <span class="user-dashboard__metric-icon"><i class="fa-solid fa-wallet"></i></span>
@@ -53,9 +55,9 @@
     </section>
 
     <div class="user-dashboard__columns">
-        <section class="user-dashboard__panel user-dashboard__panel--wide">
+        <section id="editor-documents" class="user-dashboard__panel user-dashboard__panel--wide">
             <div class="user-dashboard__panel-head">
-                <div><span class="user-dashboard__kicker">ویرایشگر</span><h2>اسناد اخیر</h2><p>با انتخاب هر سند، همان سند در ویرایشگر باز می‌شود.</p></div>
+                <div><span class="user-dashboard__kicker">ویرایشگر</span><h2>{{ $documentStatusFilter ? 'پیش‌نویس‌های من' : 'اسناد اخیر' }}</h2><p>{{ $documentStatusFilter ? 'فقط پیش‌نویس‌های ذخیره‌شده نمایش داده می‌شوند.' : ($canEditDocuments ? 'با انتخاب هر سند، همان سند در ویرایشگر باز می‌شود.' : 'اسناد خود را به صورت فقط‌خواندنی مشاهده کنید.') }}</p></div>
                 <span class="user-dashboard__count">{{ number_format($documents->total()) }}</span>
             </div>
             @forelse($documents as $document)
@@ -66,7 +68,7 @@
                         <small>آخرین تغییر: {{ optional($document->updated_at)->format('Y/m/d · H:i') }}</small>
                     </div>
                     <span class="user-dashboard__document-meta">{{ number_format($document->page_count) }} صفحه</span>
-                    <a href="{{ route('editor', ['document' => $document->id]) }}" class="user-dashboard__text-link"><span>باز کردن</span><i class="fa-solid fa-arrow-left"></i></a>
+                    @if($canEditDocuments && $capabilities['active'] && $capabilities['can_type'])<a href="{{ route('editor', ['document' => $document->id]) }}" class="user-dashboard__text-link"><span>باز کردن</span><i class="fa-solid fa-arrow-left"></i></a>@else<span class="user-dashboard__document-meta">فقط مشاهده</span>@endif
                 </article>
             @empty
                 <div class="user-dashboard__empty"><i class="fa-regular fa-folder-open"></i><strong>هنوز سندی در ویرایشگر ندارید</strong><span>با ساخت یک پروژه یا سند جدید، کارتان را شروع کنید.</span></div>
@@ -94,7 +96,7 @@
                 <div><span>درخواست AI روزانه</span><strong>{{ $capabilities['unlimited'] ? 'نامحدود' : number_format($capabilities['daily_ai_requests']) }}</strong></div>
                 <div><span>حداکثر حجم فایل</span><strong>{{ number_format($capabilities['max_file_mb']) }} MB</strong></div>
             </div>
-            <div class="user-dashboard__quick-links">
+            <div id="workspace-shortcuts" class="user-dashboard__quick-links">
                 <a href="{{ route('wallet') }}"><i class="fa-solid fa-wallet"></i> کیف پول</a>
                 <a href="{{ route('platform.notifications') }}"><i class="fa-solid fa-bell"></i> اعلان‌ها</a>
                 @if($capabilities['can_support'])<a href="{{ route('support') }}"><i class="fa-solid fa-headset"></i> پشتیبانی</a>@endif
@@ -122,13 +124,13 @@
         <section class="user-dashboard__panel">
             <div class="user-dashboard__panel-head">
                 <div><span class="user-dashboard__kicker">پیگیری</span><h2>پروژه‌های اخیر</h2><p>آخرین پروژه‌های ثبت‌شده شما</p></div>
-                <a href="{{ route('projects.create') }}" class="user-dashboard__text-link">پروژه جدید <i class="fa-solid fa-arrow-left"></i></a>
+                @if($canCreateProjects)<a href="{{ route('projects.create') }}" class="user-dashboard__text-link">پروژه جدید <i class="fa-solid fa-arrow-left"></i></a>@endif
             </div>
             @forelse($projects as $project)
                 <article class="user-dashboard__project">
                     <span class="user-dashboard__project-icon"><i class="fa-solid fa-diagram-project"></i></span>
                     <div><strong>{{ $project->name }}</strong><small>{{ number_format($project->used_pages) }} از {{ number_format($project->estimated_pages) }} صفحه · {{ $project->status }}</small></div>
-                    @if($capabilities['can_type'])<a href="{{ route('editor', ['project' => $project->id]) }}" aria-label="ادامه پروژه {{ $project->name }}"><i class="fa-solid fa-arrow-left"></i></a>@endif
+                    @if($canCreateProjects && $capabilities['can_type'])<a href="{{ route('editor', ['project' => $project->id]) }}" aria-label="ادامه پروژه {{ $project->name }}"><i class="fa-solid fa-arrow-left"></i></a>@endif
                 </article>
             @empty
                 <div class="user-dashboard__empty user-dashboard__empty--small"><i class="fa-solid fa-diagram-project"></i><span>هنوز پروژه‌ای ایجاد نکرده‌اید.</span></div>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FarastProject;
+use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
 use App\Services\ProjectBillingService;
 use App\Services\ProjectInterviewService;
@@ -14,8 +15,9 @@ use Illuminate\Http\Request;
 
 class ProjectController extends Controller
 {
-    public function create(ProjectInterviewService $interview, ProjectBillingService $billing, PricingService $pricing)
+    public function create(ProjectInterviewService $interview, ProjectBillingService $billing, PricingService $pricing, AuthorizationService $authorization)
     {
+        abort_unless($authorization->allows(request()->user(), 'projects.create'), 403);
         $subscription = $billing->includedAllowance(request()->user(), 'manual');
         return view('projects.create', [
             'types' => $interview::TYPES,
@@ -25,8 +27,9 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications, AuditEventService $audit)
+    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications, AuditEventService $audit, AuthorizationService $authorization)
     {
+        abort_unless($authorization->allows($request->user(), 'projects.create'), 403);
         $data = $request->validate([
             'project_type' => ['required','string','in:typing,editing,article,book,resume,exam,contract,forms,report,research_document,presentation,design,poster_card,programming,other'],
             'template' => ['required','string','in:'.implode(',',array_keys($interview::TEMPLATES))],

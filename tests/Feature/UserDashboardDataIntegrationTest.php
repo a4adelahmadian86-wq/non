@@ -143,4 +143,37 @@ class UserDashboardDataIntegrationTest extends TestCase
             ->assertViewHas('documents', fn ($documents) => $documents->total() === 10 && $documents->count() === 8)
             ->assertDontSee('Private foreign document');
     }
+
+    public function test_dashboard_draft_filter_returns_only_draft_documents(): void
+    {
+        $user = User::factory()->create();
+
+        TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'Draft only',
+            'content' => '',
+            'page_count' => 1,
+            'word_count' => 0,
+            'status' => 'draft',
+            'price_rials' => 0,
+        ]);
+
+        TypingDocument::create([
+            'user_id' => $user->id,
+            'title' => 'Completed document',
+            'content' => '',
+            'page_count' => 1,
+            'word_count' => 0,
+            'status' => 'completed',
+            'price_rials' => 0,
+        ]);
+
+        $this->actingAs($user)
+            ->get('/dashboard?status=draft')
+            ->assertOk()
+            ->assertViewHas('documentStatusFilter', true)
+            ->assertViewHas('documents', fn ($documents) => $documents->total() === 1)
+            ->assertSee('Draft only')
+            ->assertDontSee('Completed document');
+    }
 }
