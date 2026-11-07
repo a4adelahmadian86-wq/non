@@ -45,6 +45,8 @@
       <div class="store-alert success"><i class="fa-solid fa-circle-check"></i>{{ session('status') }}</div>
     @endif
 
+    <p class="store-cart-feedback" id="storeCartFeedback" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+
     <div class="store-chips">
       <a class="{{ !$category ? 'active' : '' }}" href="{{ route('store', request()->only(['q','sort','price'])) }}">همه</a>
       @foreach($categories as $cat)
@@ -147,21 +149,66 @@
 @endsection
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107premium1">
+<style>
+.store-cart-feedback{position:relative;margin:0 0 18px;padding:12px 15px 12px 42px;border:1px solid #b9e5d1;border-radius:13px;background:#f0fbf5;color:#176b46;font-size:.8rem;font-weight:700;line-height:1.9}
+.store-cart-feedback[hidden]{display:none}
+.store-cart-feedback[data-state="error"]{border-color:#f1c4c4;background:#fff5f5;color:#a52d36}
+.store-cart-feedback::after{content:"✓";position:absolute;left:14px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#d7f4e4;color:#176b46;font-size:.78rem;font-weight:900}
+.store-cart-feedback[data-state="error"]::after{content:"!";background:#ffe1e1;color:#a52d36}
+.store-card-actions [data-add-cart][aria-busy="true"]{cursor:wait;opacity:.75}
+.store-card-actions [data-add-cart]:disabled{cursor:wait}
+
+</style>
 @endpush
 @push('scripts')
 <script>
 (()=>{
   const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';
-  document.querySelectorAll('[data-add-cart]').forEach(b=>b.addEventListener('click',async()=>{
-    b.disabled=true; const t=b.textContent;
+  const feedback=document.getElementById('storeCartFeedback');
+  const announce=(message,state='success')=>{
+    if(!feedback)return;
+    feedback.hidden=false;
+    feedback.dataset.state=state;
+    feedback.textContent=message;
+  };
+  document.querySelectorAll('[data-add-cart]').forEach(button=>button.addEventListener('click',async()=>{
+    if(button.disabled)return;
+    const originalLabel=button.textContent.trim();
+    button.disabled=true;
+    button.setAttribute('aria-busy','true');
+    button.textContent='در حال افزودن…';
     try{
-      const r=await fetch('/cart/products/'+b.dataset.addCart,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({quantity:1})});
-      const j=await r.json(); if(!r.ok) throw new Error(j.message||'خطا');
-      b.textContent='اضافه شد';
-      if(window.FarastCart?.refresh) window.FarastCart.refresh();
-      const c=document.getElementById('farastCartCount'); if(c&&j.count!=null) c.textContent=j.count;
-      setTimeout(()=>{b.textContent=t;b.disabled=false},1200);
-    }catch(e){alert(e.message);b.disabled=false;b.textContent=t}
+      const response=await fetch('/cart/products/'+encodeURIComponent(button.dataset.addCart),{
+        method:'POST',
+        credentials:'same-origin',
+        headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','Content-Type':'application/json'},
+        body:JSON.stringify({quantity:1})
+      });
+      const raw=await response.text();
+      let payload={};
+      if(raw){
+        try{payload=JSON.parse(raw)}catch(_){payload={}}
+      }
+      if(!response.ok){
+        const message=payload.message||(response.status===401?'برای افزودن محصول ابتدا وارد حساب خود شوید.':'افزودن محصول انجام نشد. لطفاً دوباره تلاش کنید.');
+        throw new Error(message);
+      }
+      button.textContent='اضافه شد';
+      announce(payload.message||'محصول با موفقیت به سبد خرید اضافه شد.');
+      if(window.FarastCart?.refresh)window.FarastCart.refresh();
+      const count=document.getElementById('farastCartCount');
+      if(count&&payload.count!=null)count.textContent=payload.count;
+      window.setTimeout(()=>{
+        button.textContent=originalLabel;
+        button.disabled=false;
+        button.removeAttribute('aria-busy');
+      },1300);
+    }catch(error){
+      button.textContent=originalLabel;
+      button.disabled=false;
+      button.removeAttribute('aria-busy');
+      announce(error.message||'ارتباط برقرار نشد. لطفاً دوباره تلاش کنید.','error');
+    }
   }));
 })();
 </script>
