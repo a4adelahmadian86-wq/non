@@ -42,6 +42,14 @@ class AdminController extends Controller
         $search = trim((string) $request->query('q', ''));
         $statusFilter = $request->query('status');
 
+        // Aggregate counts remain available in the dashboard scope, while personal
+        // user records are loaded only for actors with users.view.
+        $scopeUsersQuery = User::query();
+        if ($visibleIds !== null) {
+            $scopeUsersQuery->whereIn('id', $visibleIds);
+        }
+        $totalScopedUsers = (clone $scopeUsersQuery)->count();
+
         $usersQuery = User::with('wallet')->latest();
         if ($visibleIds !== null) {
             $usersQuery->whereIn('id', $visibleIds);
@@ -61,7 +69,7 @@ class AdminController extends Controller
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
         $canViewUsers = $console->sectionAllowed($actor, 'users');
-        $totalScopedUsers = $canViewUsers ? (clone $usersQuery)->count() : 0;
+        $filteredUserTotal = $canViewUsers ? (clone $usersQuery)->count() : 0;
         // Do not hydrate personal user data unless users.view is granted in this scope.
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
         $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
@@ -176,7 +184,7 @@ class AdminController extends Controller
         return view('admin.index', [
             'rules' => $globalScope ? PricingRule::orderBy('id')->get() : collect(),
             'users' => $users,
-            'userTotalForFilter' => $totalScopedUsers,
+            'userTotalForFilter' => $filteredUserTotal,
             'announcements' => $canManageAnnouncements ? Announcement::latest()->limit(20)->get() : collect(),
             'console' => $console,
             'scope' => $scope,
