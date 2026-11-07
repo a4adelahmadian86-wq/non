@@ -6,7 +6,6 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
-use App\Models\StoreProductImage;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -225,7 +224,8 @@ class AdminStoreController extends Controller
 
             $extension = strtolower($upload->guessExtension() ?: 'jpg');
             $filename = Str::random(32).'.'.$extension;
-            $publicPath = 'store/covers/'.$product->id.'/'.$filename;
+            $storagePath = 'store/covers/'.$product->id.'/'.$filename;
+            $publicPath = 'storage/'.$storagePath;
             $stored = Storage::disk('public')->putFileAs('store/covers/'.$product->id, $upload, $filename);
             if (! $stored) {
                 throw new \\RuntimeException('cover_public_storage_failed');
@@ -233,8 +233,8 @@ class AdminStoreController extends Controller
 
             $oldPath = (string) $product->cover_path;
             $product->update(['cover_path' => $publicPath]);
-            if ($oldPath !== '' && Str::startsWith($oldPath, 'store/covers/'.$product->id.'/')) {
-                Storage::disk('public')->delete($oldPath);
+            if ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
+                Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
             }
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($temporaryPath);
