@@ -87,13 +87,13 @@ class StoreReaderAccessTest extends TestCase
         $response = $this->actingAs($this->makeReaderUser())->get(route('store.preview', $preview));
 
         $response->assertOk()
-            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->assertSee('متن محرمانه نمونه Word')
-            ->assertSee('09123456789')
-            ->assertDontSee('<script', false);
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Disposition', 'inline; filename="farast-word-preview.pdf"');
 
-        $this->assertStringContainsString('default-src', (string) $response->headers->get('Content-Security-Policy'));
-        $this->assertStringNotContainsString('script-src', (string) $response->headers->get('Content-Security-Policy'));
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+        $this->assertGreaterThan(1000, strlen($response->getContent()));
+
+        $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
 
     public function test_authenticated_reader_sees_account_watermark_and_private_preview_headers(): void
