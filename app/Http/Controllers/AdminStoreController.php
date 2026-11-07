@@ -208,33 +208,43 @@ class AdminStoreController extends Controller
 
     public function uploadPreview(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
+        abort_unless($product->type !== 'course', 422, 'برای دوره، نمونه‌ها را در ساختار جلسات دوره تعریف کنید.');
         $request->validate([
-            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf|max:20480',
+            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf,docx,xlsx|max:20480',
             'page_number' => 'nullable|integer|min:1|max:500',
         ]);
 
         $upload = $request->file('preview');
+        $extension = strtolower($upload->getClientOriginalExtension());
         $path = $upload->store('store/previews/'.$product->id, 'private');
         try {
             $inspection = $security->inspect($path, $upload->getMimeType(), 20 * 1024 * 1024, [
-                'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
+                'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/zip',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ]);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ پیش‌نمایش ذخیره نشد.');
 
+            $kind = match ($extension) {
+                'pdf' => 'pdf',
+                'docx' => 'docx',
+                'xlsx' => 'xlsx',
+                default => 'image',
+            };
             $sort = (int) ($product->previews()->max('sort_order') ?? 0) + 1;
-            DB::transaction(function () use ($product, $path, $inspection, $request, $sort) {
+            DB::transaction(function () use ($product, $path, $inspection, $request, $sort, $kind) {
                 StoreProductPreview::create([
                     'product_id' => $product->id,
                     'disk' => 'private',
                     'path' => $path,
                     'mime' => $inspection['mime'],
                     'page_number' => $request->input('page_number') ?: $sort,
-                    'kind' => $inspection['mime'] === 'application/pdf' ? 'pdf' : 'image',
+                    'kind' => $kind,
                     'watermarked' => true,
                     'is_active' => true,
                     'sort_order' => $sort,
                 ]);
-                $this->audit('store.product.preview_uploaded', $product, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
+                $this->audit('store.product.preview_uploaded', $product, ['mime' => $inspection['mime'], 'kind' => $kind, 'sort_order' => $sort]);
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
