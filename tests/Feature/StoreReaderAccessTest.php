@@ -67,7 +67,7 @@ class StoreReaderAccessTest extends TestCase
         $this->get(route('store.preview', $preview))->assertRedirect(route('login'));
     }
 
-    public function test_docx_preview_is_rendered_as_sanitized_html_with_account_watermark(): void
+    public function test_docx_preview_is_rendered_as_paginated_watermarked_pdf(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
 
