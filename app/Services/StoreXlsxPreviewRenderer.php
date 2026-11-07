@@ -311,7 +311,8 @@ class StoreXlsxPreviewRenderer
                 $valueNode = $xpath->query('./*[local-name()="v"]', $cell)->item(0);
                 $value = $valueNode?->textContent ?? '';
                 if ($type === 's') {
-                    $value = $sharedStrings[(int) $value] ?? '';
+                    $sharedIndex = filter_var($value, FILTER_VALIDATE_INT);
+                    $value = $sharedIndex !== false && $sharedIndex >= 0 ? ($sharedStrings[$sharedIndex] ?? '') : '';
                 } elseif ($type === 'inlineStr') {
                     $value = '';
                     foreach ($xpath->query('./*[local-name()="is"]//*[local-name()="t"]', $cell) as $text) {
@@ -356,7 +357,11 @@ class StoreXlsxPreviewRenderer
         foreach ($rows as $row) {
             $maxColumn = max($maxColumn, max(array_keys($row)));
         }
-        $html = '<div class="table-wrap"><table><tbody>';
+        $html = '<div class="table-wrap"><table><thead><tr><th>ردیف</th>';
+        for ($column = 1; $column <= $maxColumn; $column++) {
+            $html .= '<th>'.$this->columnLabel($column).'</th>';
+        }
+        $html .= '</tr></thead><tbody>';
         foreach ($rows as $number => $row) {
             $html .= '<tr><td class="rownum">'.$number.'</td>';
             for ($column = 1; $column <= $maxColumn; $column++) {
@@ -367,6 +372,18 @@ class StoreXlsxPreviewRenderer
         $html .= '</tbody></table></div>';
 
         return $html;
+    }
+
+    private function columnLabel(int $column): string
+    {
+        $label = '';
+        while ($column > 0) {
+            $column--;
+            $label = chr(65 + ($column % 26)).$label;
+            $column = intdiv($column, 26);
+        }
+
+        return $label;
     }
 
     private function escape(string $value): string
