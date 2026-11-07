@@ -10,6 +10,7 @@
         <nav>
             <a class="is-active" href="#overview"><i class="fa-solid fa-grid-2"></i><span>نمای کلی</span></a>
             @if($console->sectionAllowed(auth()->user(), 'users'))<a href="{{ route('admin.users') }}"><i class="fa-solid fa-users"></i><span>کاربران</span></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'users'))<a href="{{ route('admin.crm.projects.index') }}" @if(request()->routeIs('admin.crm.projects.*')) aria-current="page" @endif><i class="fa-solid fa-diagram-project"></i><span>پروژه‌ها و پرونده‌های مشتریان</span></a>@endif
             @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))<a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'voice'))<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
@@ -63,7 +64,7 @@
                 <p>اطلاعات این صفحه از داده‌های واقعی سیستم خوانده می‌شود؛ داشبورد نقش کنسول عملیات را دارد، نه مجموعه‌ای از تب‌های نمایشی.</p>
                 <div class="hero-actions">
                     @if($console->sectionAllowed(auth()->user(), 'store'))<a class="admin-primary" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-plus"></i> افزودن محصول</a><a class="admin-outline" href="{{ route('admin.store.index') }}"><i class="fa-solid fa-boxes-stacked"></i> مرکز محصولات</a>@endif
-                    @if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-outline" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif
+                    @if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-outline" href="{{ route('admin.crm.projects.index') }}"><i class="fa-solid fa-diagram-project"></i> پروژه‌ها و پرونده‌های مشتریان</a><a class="admin-outline" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif
                     @if($console->sectionAllowed(auth()->user(), 'settings'))<a class="admin-outline" href="#ai-settings"><i class="fa-solid fa-sparkles"></i> تنظیم AI</a>@endif
                 </div>
             </div>
