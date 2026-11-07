@@ -56,7 +56,7 @@ class StoreCourseLearningController extends Controller
     {
         $enrollment = $this->enrollment($request, $product);
         $enrollment->load(['course.sections.lessons.resources', 'progress']);
-        $sections = $enrollment->course->sections->map(function ($section) {
+        $sections = $enrollment->course->sections->map(function ($section) use ($enrollment) {
             $section->setRelation('lessons', $section->lessons->filter(fn ($lesson) => $lesson->is_published && $this->lessonAvailable($enrollment, $lesson))->values());
             return $section;
         })->filter(fn ($section) => $section->lessons->isNotEmpty())->values();
