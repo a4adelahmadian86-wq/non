@@ -63,12 +63,16 @@ class ProfessionalCommerceService
         }catch(\Illuminate\Database\QueryException $exception){
             $raced=FarastPriceQuote::where('idempotency_key',$key)->first();
             if(!$raced)throw $exception;
+            $racedContext=$raced->snapshot['context']??[];
             $sameRequest=(int)$raced->actor_id===(int)$actor->id
                 && (int)($raced->organization_id??0)===(int)($organizationId??0)
                 && $raced->capability===$capability
                 && abs((float)$raced->quantity-$quantity)<0.000001
-                && (($raced->snapshot['context']['scope']??[])===$scope);
-            if(!$sameRequest)throw new RuntimeException('idempotency_key_conflict');
+                && (($racedContext['scope']??[])===$scope);
+            foreach(['policy_code','region_code','currency','unit','allow_payg','allow_overage','postpaid'] as $field){
+                if(array_key_exists($field,$context)&&($racedContext[$field]??null)!==$context[$field])$sameRequest=false;
+            }
+            if(!$sameRequest)throw new RuntimeException('idempotency_key_conflict',0,$exception);
             return $raced;
         }
     }
