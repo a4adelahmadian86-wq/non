@@ -265,6 +265,8 @@
         canvas.width=Math.max(1,Math.floor(viewport.width));
         canvas.height=Math.max(1,Math.floor(viewport.height));
         await page.render({canvasContext:ctx,viewport}).promise;
+        // Keep thumbnail previews attributable too; they expose the same page content.
+        paintPdfWatermark(canvas);
       }catch(_){}
     }
   };
