@@ -49,6 +49,8 @@ class ProviderAdminController extends Controller {
       ?'اتصال Gemini برقرار است و مدل انتخاب‌شده در فهرست حساب دیده می‌شود.'
       :'اتصال Gemini برقرار است، اما مدل انتخاب‌شده در فهرست این حساب دیده نشد.',
    ]);
+  }catch(ConnectionException){
+   return response()->json(['ok'=>false,'configured'=>true,'message'=>'ارتباط شبکه با Gemini برقرار نشد؛ دسترسی خروجی سرور را بررسی کنید.'],504);
   }catch(Throwable $exception){
    Log::warning('farast.admin.gemini_test_failed',['error_class'=>get_class($exception)]);
    return response()->json(['ok'=>false,'configured'=>true,'message'=>'خطای داخلی هنگام بررسی اتصال Gemini رخ داد.'],502);
