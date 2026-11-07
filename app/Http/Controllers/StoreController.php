@@ -108,10 +108,16 @@ class StoreController extends Controller
             $inLater = $lists->contains('later');
         }
 
-        $hasPreview = $product->previews->where('is_active', true)->isNotEmpty();
+        // Compute the preview collection in the controller so the view receives a stable,
+        // explicit contract instead of relying on template-local assignment order.
+        $showPreviews = $product->previews
+            ->where('is_active', true)
+            ->take(max(1, (int) ($product->preview_pages ?: 5)))
+            ->values();
+        $hasPreview = $showPreviews->isNotEmpty();
         $title = $product->seo_title ?: $product->title;
 
-        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'title'));
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title'));
     }
 
     public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)
