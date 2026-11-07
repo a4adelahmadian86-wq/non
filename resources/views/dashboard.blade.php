@@ -105,6 +105,7 @@
     </div>
 
     <div class="user-dashboard__columns user-dashboard__columns--bottom">
+        @if(!$documentStatusFilter)
         <section class="user-dashboard__panel">
             <div class="user-dashboard__panel-head">
                 <div><span class="user-dashboard__kicker">کتابخانه</span><h2>اسناد فضای کاری</h2><p>اسناد اصلی ذخیره‌شده در کتابخانه یکپارچه</p></div>
@@ -120,6 +121,7 @@
                 <div class="user-dashboard__empty user-dashboard__empty--small"><i class="fa-regular fa-folder"></i><span>سند مستقل دیگری در کتابخانه ندارید.</span></div>
             @endforelse
         </section>
+        @endif
 
         <section class="user-dashboard__panel">
             <div class="user-dashboard__panel-head">
