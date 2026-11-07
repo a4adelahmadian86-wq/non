@@ -139,9 +139,15 @@ class PlatformCompletionController extends Controller {
  }
  public function ocr(Request $r){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'ocr.use'),403);
-  $x=$r->validate(['source_path'=>'required|string|max:1000','provider'=>'nullable|string|max:50']);
-  $id=DB::table('farast_ocr_jobs')->insertGetId(['user_id'=>$r->user()->id,'source_path'=>$x['source_path'],'provider'=>$x['provider']??'auto','status'=>'queued','created_at'=>now(),'updated_at'=>now()]);
-  return response()->json(['job_id'=>$id,'status'=>'queued']);
+  $r->validate(['source_path'=>'required|string|max:1000','provider'=>'nullable|string|max:50']);
+  // There is currently no registered OCR provider or queue consumer in this
+  // deployment. Do not create jobs that would remain queued forever.
+  return response()->json([
+   'ok'=>false,
+   'status'=>'unavailable',
+   'code'=>'ocr_worker_unavailable',
+   'message'=>'پردازشگر OCR هنوز به صف کار متصل نشده است؛ هیچ کاری ثبت نشد.',
+  ],503);
  }
  public function ocrStatus(Request $r,$id){abort_unless(app(AuthorizationService::class)->allows($r->user(),'ocr.use'),403);$j=DB::table('farast_ocr_jobs')->where('id',$id)->where('user_id',$r->user()->id)->first();abort_unless($j,404);return response()->json($j);}
  public function cms(Request $r){abort_unless(auth()->user()->isAdmin(),403);return view('admin.cms',['pages'=>DB::table('farast_cms_pages')->orderByDesc('updated_at')->get()]);}
