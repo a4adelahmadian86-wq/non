@@ -52,7 +52,81 @@ async function mountReader(page, includeExcel = false) {
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
+
+function makePdfFixture() {
+  const stream = 'BT /F1 24 Tf 72 720 Td (FARAST PDF QA) Tj ET';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf, 'binary'));
+    pdf += (index + 1) + ' 0 obj\n' + object + '\nendobj\n';
+  });
+  const xrefOffset = Buffer.byteLength(pdf, 'binary');
+  pdf += 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
+  offsets.slice(1).forEach(offset => {
+    pdf += String(offset).padStart(10, '0') + ' 00000 n \n';
+  });
+  pdf += 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
+  return Buffer.from(pdf, 'binary');
+}
+
+async function mountPdfReader(page) {
+  await page.goto('/');
+  await page.route('**/reader-fixture.pdf', route => route.fulfill({
+    status: 200,
+    contentType: 'application/pdf',
+    body: makePdfFixture(),
+  }));
+  await page.setContent(
+    '<section class="farast-reader" data-reader-root data-theme="dark">' +
+      '<header><div class="farast-reader-account"><span>09123456789</span></div></header>' +
+      '<nav><button id="reader-prev" type="button">قبلی</button>' +
+        '<label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ 1</span></label>' +
+        '<button id="reader-next" type="button">بعدی</button>' +
+        '<button id="reader-zoom-out" type="button">کوچک</button><output id="reader-zoom-label"></output>' +
+        '<button id="reader-zoom-in" type="button">بزرگ</button><button id="reader-fit" type="button">تناسب عرض</button>' +
+        '<button id="reader-rotate" type="button">چرخش</button><button id="reader-scroll-mode" type="button">پیوسته</button>' +
+        '<div class="reader-search-group"><input id="reader-search-input" type="search">' +
+          '<button id="reader-search" type="button">جست‌وجو</button><button id="reader-search-prev" type="button">قبلی</button>' +
+          '<button id="reader-search-next" type="button">بعدی</button><output id="reader-search-count"></output></div>' +
+        '<button id="reader-thumbs-toggle" type="button" aria-expanded="true">فهرست</button>' +
+        '<button id="reader-theme" type="button">پوسته</button><button id="reader-fs" type="button">تمام‌صفحه</button></nav>' +
+      '<div class="farast-reader-progress" role="progressbar" aria-valuenow="0"><span id="reader-progress"></span></div>' +
+      '<div id="reader-stage"><aside id="reader-sidebar"><div class="farast-reader-thumbs"></div>' +
+        '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section></aside>' +
+        '<main class="farast-reader-canvas"><article class="farast-reader-page-item is-active is-pdf" data-index="0">' +
+          '<div class="farast-reader-page-content"><div class="farast-pdf-document" data-pdf-url="/reader-fixture.pdf">' +
+            '<canvas class="farast-pdf-canvas"></canvas><div class="farast-pdf-text-layer"></div>' +
+            '<div class="farast-pdf-continuous-pages" hidden></div><div class="farast-pdf-loading" role="status">در حال آماده‌سازی PDF…</div>' +
+          '</div></div></article></main></div></section>'
+  );
+  await page.addStyleTag({ content: '.farast-pdf-document{position:relative;width:800px;min-height:600px;background:#fff}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff}' });
+  await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
+}
+
 test.describe('FARAST sample reader interactions', () => {
+  test('loads a real PDF page with PDF.js, account watermark and text search', async ({ page }) => {
+    await mountPdfReader(page);
+    const root = page.locator('[data-reader-root]');
+    const canvas = root.locator('.farast-pdf-canvas');
+    await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+    await expect.poll(() => canvas.evaluate(element => element.width)).toBeGreaterThan(0);
+    await expect.poll(() => canvas.evaluate(element => element.height)).toBeGreaterThan(0);
+    await expect(root.locator('.farast-pdf-text-layer span').first()).toBeVisible();
+    await root.locator('#reader-search-input').fill('FARAST');
+    await root.locator('#reader-search').click();
+    await expect(root.locator('#reader-search-count')).toContainText('۱');
+    await root.locator('#reader-zoom-in').click();
+    await expect(root.locator('#reader-zoom-label')).toContainText('۱۱۰');
+  });
+
   test('navigates between sample pages and synchronizes the page indicator and progress', async ({ page }) => {
     await mountReader(page);
     const root = page.locator('[data-reader-root]');
