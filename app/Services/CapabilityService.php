@@ -28,6 +28,16 @@ class CapabilityService
 
     public function forUser(?User $user): array
     {
+        if ($user?->is_blocked) {
+            return array_merge(self::DEFAULTS, array_fill_keys(self::BOOLEAN_KEYS, false), [
+                'active' => false,
+                'weekly_free_pages' => 0,
+                'max_file_mb' => 0,
+                'daily_ai_requests' => 0,
+                'unlimited' => false,
+            ]);
+        }
+
         if ($user?->isAdmin()) {
             return array_merge(self::DEFAULTS, [
                 'active' => true,
