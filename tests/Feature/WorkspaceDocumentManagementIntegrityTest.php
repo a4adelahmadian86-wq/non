@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FarastDocument;
 use App\Models\User;
+use App\Models\UserCapability;
 use App\Models\TypingDocument;
 use App\Services\AuthorizationService;
 use App\Services\DashboardNavigationService;
@@ -215,6 +216,35 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
 
         $this->get(route('projects.create'))->assertForbidden();
         $this->post(route('projects.store'), [])->assertForbidden();
+    }
+
+
+    public function test_project_creation_requires_active_typing_entitlement_and_dashboard_hides_actions(): void
+    {
+        $user = $this->makeUser(User::ROLE_EMPLOYEE);
+        UserCapability::create([
+            'user_id' => $user->id,
+            'active' => true,
+            'can_type' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('پروژه جدید')
+            ->assertDontSee('ایجاد پروژه');
+
+        $this->get(route('projects.create'))->assertForbidden();
+        $this->post(route('projects.store'), [])->assertForbidden();
+
+        $inactive = $this->makeUser(User::ROLE_EMPLOYEE);
+        UserCapability::create([
+            'user_id' => $inactive->id,
+            'active' => false,
+            'can_type' => true,
+        ]);
+
+        $this->actingAs($inactive)->get(route('projects.create'))->assertForbidden();
     }
 
     public function test_legacy_default_user_role_retains_its_identity_and_receives_employee_permissions(): void
