@@ -374,23 +374,25 @@ class AdminController extends Controller
     {
         $path = 'health-check/'.bin2hex(random_bytes(12)).'.tmp';
         $disk = null;
+        $success = false;
 
         try {
             $disk = Storage::disk('private');
             $disk->put($path, 'farast-health-ok');
-
-            return $disk->get($path) === 'farast-health-ok';
+            $success = $disk->get($path) === 'farast-health-ok';
         } catch (\Throwable) {
-            return false;
+            $success = false;
         } finally {
             if ($disk) {
                 try {
-                    $disk->delete($path);
+                    $success = $disk->delete($path) && $success;
                 } catch (\Throwable) {
-                    // Health probes must not break the dashboard response.
+                    $success = false;
                 }
             }
         }
+
+        return $success;
     }
 
     private function cacheReachable(): bool
