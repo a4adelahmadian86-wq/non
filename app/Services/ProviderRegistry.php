@@ -102,7 +102,7 @@ final class ProviderRegistry
         }
 
         $groqKey = trim((string) (SiteSetting::read('voice_groq_key') ?: config('services.groq.key', '')));
-        $groqModel = trim((string) SiteSetting::read('assistant_groq_model', 'openai/gpt-oss-120b'));
+        $groqModel = trim((string) (SiteSetting::read('assistant_groq_model') ?: 'openai/gpt-oss-120b'));
         $groqHealth = $this->connectionHealth->state('groq', $groqKey, $groqModel, ['chat', 'speech']);
 
         $items[] = [
