@@ -27,6 +27,9 @@ return [
         'key' => env('GROQ_API_KEY'),
     ],
 
+    // A successful manual provider probe expires after this many seconds.
+    'provider_health_freshness_seconds' => max(60, (int) env('PROVIDER_HEALTH_FRESHNESS_SECONDS', 86400)),
+
     // Speech gateway URLs. Production defaults point to the existing Render service.
     'voice' => [
         'local_only' => $voiceLocalOnly,
