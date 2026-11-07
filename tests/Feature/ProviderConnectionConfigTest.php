@@ -142,4 +142,79 @@ class ProviderConnectionConfigTest extends TestCase
             });
     }
 
+
+    public function test_groq_chat_readiness_is_independent_from_speech_model_availability(): void
+    {
+        config(['services.groq.key' => 'config-only-groq-secret']);
+
+        Http::fake([
+            'https://api.groq.com/openai/v1/models' => Http::response([
+                'data' => [['id' => 'openai/gpt-oss-120b']],
+            ], 200),
+        ]);
+
+        $admin = User::create([
+            'name' => 'Provider Chat Ready Admin',
+            'email' => 'provider-chat-ready@example.test',
+            'mobile' => '09123456781',
+            'password' => 'secret',
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/admin/providers/groq/test')
+            ->assertOk()
+            ->assertJsonPath('ready', true)
+            ->assertJsonPath('chat_model_available', true)
+            ->assertJsonPath('speech_model_available', false);
+
+        $this->get('/admin/integrations')
+            ->assertOk()
+            ->assertViewHas('providers', function ($providers): bool {
+                $groq = collect($providers)->firstWhere('provider', 'groq');
+
+                return $groq !== null
+                    && $groq['status'] === 'healthy'
+                    && $groq['api_reachable'] === true
+                    && $groq['ready'] === true
+                    && $groq['capability_readiness'] === ['chat' => true, 'speech' => false];
+            });
+    }
+
+    public function test_api_reachability_remains_visible_when_provider_rejects_credentials(): void
+    {
+        config(['services.groq.key' => 'invalid-groq-secret']);
+
+        Http::fake([
+            'https://api.groq.com/openai/v1/models' => Http::response([
+                'error' => ['message' => 'invalid credential'],
+            ], 401),
+        ]);
+
+        $admin = User::create([
+            'name' => 'Provider Auth Failure Admin',
+            'email' => 'provider-auth-failure@example.test',
+            'mobile' => '09123456782',
+            'password' => 'secret',
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/admin/providers/groq/test')
+            ->assertStatus(502)
+            ->assertJsonPath('api_reachable', true)
+            ->assertJsonPath('connection_verified', false);
+
+        $this->get('/admin/integrations')
+            ->assertOk()
+            ->assertViewHas('providers', function ($providers): bool {
+                $groq = collect($providers)->firstWhere('provider', 'groq');
+
+                return $groq !== null
+                    && $groq['status'] === 'degraded'
+                    && $groq['api_reachable'] === true
+                    && $groq['connection_verified'] === false
+                    && $groq['ready'] === false;
+            });
+    }
 }
