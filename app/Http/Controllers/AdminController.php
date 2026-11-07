@@ -22,6 +22,8 @@ use App\Services\MailConfigService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
@@ -41,6 +43,14 @@ class AdminController extends Controller
         $search = trim((string) $request->query('q', ''));
         $statusFilter = $request->query('status');
 
+        // Aggregate counts remain available in the dashboard scope, while personal
+        // user records are loaded only for actors with users.view.
+        $scopeUsersQuery = User::query();
+        if ($visibleIds !== null) {
+            $scopeUsersQuery->whereIn('id', $visibleIds);
+        }
+        $totalScopedUsers = (clone $scopeUsersQuery)->count();
+
         $usersQuery = User::with('wallet')->latest();
         if ($visibleIds !== null) {
             $usersQuery->whereIn('id', $visibleIds);
@@ -59,13 +69,19 @@ class AdminController extends Controller
         } elseif ($statusFilter === 'admins') {
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
-        $totalScopedUsers = (clone $usersQuery)->count();
-        $users = $usersQuery->limit(100)->get();
+        $canViewUsers = $console->sectionAllowed($actor, 'users');
+        $filteredUserTotal = $canViewUsers ? (clone $usersQuery)->count() : 0;
+        // Do not hydrate personal user data unless users.view is granted in this scope.
+        $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
+        $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
+        $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
 
         $settings = [];
-        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
-            $default = $key === 'assistant_groq_model' ? 'openai/gpt-oss-120b' : (CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
-            $settings[$key] = SiteSetting::read($key, $default);
+        if ($globalScope) {
+            foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
+                $default = $key === 'assistant_groq_model' ? 'openai/gpt-oss-120b' : (CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
+                $settings[$key] = SiteSetting::read($key, $default);
+            }
         }
 
         $weekAgo = now()->subWeek();
@@ -152,7 +168,7 @@ class AdminController extends Controller
         };
 
         $topConsumers = collect();
-        if (Schema::hasTable('typing_documents')) {
+        if ($canViewAnalytics && Schema::hasTable('typing_documents')) {
             $tcq = DB::table('typing_documents')
                 ->join('users', 'users.id', '=', 'typing_documents.user_id')
                 ->where('typing_documents.created_at', '>=', $monthAgo)
@@ -169,14 +185,17 @@ class AdminController extends Controller
         return view('admin.index', [
             'rules' => $globalScope ? PricingRule::orderBy('id')->get() : collect(),
             'users' => $users,
-            'userTotalForFilter' => $usersQuery->count(),
-            'announcements' => Announcement::latest()->limit(20)->get(),
+            'userTotalForFilter' => $filteredUserTotal,
+            'announcements' => $canManageAnnouncements ? Announcement::latest()->limit(20)->get() : collect(),
             'console' => $console,
             'scope' => $scope,
             'scopeSummary' => $console->scopeSummary($actor),
             'allowedSections' => $allowedSections,
             'stats' => [
                 'users' => $totalScopedUsers,
+                'active_users' => $visibleIds === null
+                    ? User::where('is_blocked', false)->count()
+                    : User::whereIn('id', $visibleIds)->where('is_blocked', false)->count(),
                 'new_users_week' => $visibleIds === null
                     ? User::where('created_at', '>=', $weekAgo)->count()
                     : User::whereIn('id', $visibleIds)->where('created_at', '>=', $weekAgo)->count(),
@@ -225,7 +244,7 @@ class AdminController extends Controller
                 'ai' => Schema::hasTable('ai_interactions') ? $seriesOf('ai_interactions') : array_fill(0, 30, 0),
             ],
             'ticketStats' => $ticketStats,
-            'topConsumers' => $topConsumers,
+            'topConsumers' => $canViewAnalytics ? $topConsumers : collect(),
             'recentAudit' => (Schema::hasTable('audit_logs') && $scope === AdminConsoleService::SCOPE_GLOBAL)
                 ? DB::table('audit_logs')->leftJoin('users', 'users.id', '=', 'audit_logs.user_id')
                     ->latest('audit_logs.id')->limit(7)
@@ -261,6 +280,7 @@ class AdminController extends Controller
                 'env' => app()->environment(),
                 'debug' => (bool) config('app.debug'),
                 'storage_writable' => is_writable(storage_path()),
+                'private_storage_ok' => $this->privateStorageReachable(),
             ] : [],
             'capabilities' => $capabilities,
             'voiceAccounts' => ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
@@ -349,14 +369,48 @@ class AdminController extends Controller
         }
     }
 
+
+    private function privateStorageReachable(): bool
+    {
+        $path = 'health-check/'.bin2hex(random_bytes(12)).'.tmp';
+        $disk = null;
+        $success = false;
+
+        try {
+            $disk = Storage::disk('private');
+            $disk->put($path, 'farast-health-ok');
+            $success = $disk->get($path) === 'farast-health-ok';
+        } catch (\Throwable) {
+            $success = false;
+        } finally {
+            if ($disk) {
+                try {
+                    $success = $disk->delete($path) && $success;
+                } catch (\Throwable) {
+                    $success = false;
+                }
+            }
+        }
+
+        return $success;
+    }
+
     private function cacheReachable(): bool
     {
+        $key = 'farast:health:ping:'.bin2hex(random_bytes(12));
+
         try {
-            $key = 'farast:health:ping:'.config('app.key');
             cache()->put($key, 1, 10);
+
             return (bool) cache()->get($key);
         } catch (\Throwable) {
             return false;
+        } finally {
+            try {
+                cache()->forget($key);
+            } catch (\Throwable) {
+                // Health reporting must never break the dashboard response.
+            }
         }
     }
 
@@ -545,6 +599,7 @@ class AdminController extends Controller
             'max_file_mb' => ['nullable', 'integer', 'min:1', 'max:2048'],
             'daily_ai_requests' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'gemini_model' => ['nullable', 'string', 'max:120'],
+            'gemini_fallback_model' => ['nullable', 'string', 'max:120'],
             'can_type' => ['nullable', 'boolean'],
             'can_ai' => ['nullable', 'boolean'],
             'can_voice' => ['nullable', 'boolean'],
@@ -556,7 +611,7 @@ class AdminController extends Controller
             'files_api_key' => ['nullable', 'string', 'max:500'],
         ]);
 
-        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'gemini_model'] as $key) {
+        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'gemini_model', 'gemini_fallback_model'] as $key) {
             if (array_key_exists($key, $data) && $data[$key] !== null) {
                 SiteSetting::write($key, $data[$key]);
             }
@@ -708,9 +763,122 @@ class AdminController extends Controller
         }
     }
 
-    public function updateVoiceProviders(Request $r)
+    public function updateVoiceProviders(Request $r, AuditLogService $audit)
     {
-        return back()->with('status', 'از پنل اصلی تنظیمات صوتی استفاده کنید.');
+        $data = $r->validate([
+            'gladia_api_key' => ['nullable', 'string', 'max:5000'],
+            'gladia_enabled' => ['nullable', 'boolean'],
+            'gladia_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:99999999'],
+            'azure_subscription_key' => ['nullable', 'string', 'max:5000'],
+            'azure_region' => ['nullable', 'string', 'max:120'],
+            'azure_enabled' => ['nullable', 'boolean'],
+            'azure_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:99999999'],
+            'google_project_id' => ['nullable', 'string', 'max:255'],
+            'google_client_email' => ['nullable', 'email', 'max:255'],
+            'google_private_key' => ['nullable', 'string', 'max:12000'],
+            'google_region' => ['nullable', 'string', 'max:120'],
+            'google_enabled' => ['nullable', 'boolean'],
+            'google_quota_limit_seconds' => ['nullable', 'integer', 'min:0', 'max:99999999'],
+        ]);
+
+        $providers = [
+            'gladia' => [
+                'name' => 'Gladia — تایپ زنده',
+                'inputs' => ['api_key' => 'gladia_api_key'],
+                'required' => ['api_key'],
+                'quota' => 'gladia_quota_limit_seconds',
+                'priority' => 10,
+            ],
+            'azure' => [
+                'name' => 'Azure Speech — موتور پشتیبان',
+                'inputs' => ['subscription_key' => 'azure_subscription_key', 'region' => 'azure_region'],
+                'required' => ['subscription_key', 'region'],
+                'quota' => 'azure_quota_limit_seconds',
+                'priority' => 20,
+            ],
+            'google' => [
+                'name' => 'Google Cloud Speech — موتور پشتیبان',
+                'inputs' => ['project_id' => 'google_project_id', 'client_email' => 'google_client_email', 'private_key' => 'google_private_key', 'region' => 'google_region'],
+                'required' => ['project_id', 'client_email', 'private_key', 'region'],
+                'quota' => 'google_quota_limit_seconds',
+                'priority' => 30,
+            ],
+        ];
+
+        DB::transaction(function () use ($r, $data, $providers, $audit) {
+            foreach ($providers as $provider => $definition) {
+                $account = VoiceProviderAccount::query()
+                    ->where('provider', $provider)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $account) {
+                    $account = new VoiceProviderAccount(['provider' => $provider]);
+                }
+
+                $credentials = $account->credentials_array;
+                $credentialsUpdated = false;
+
+                foreach ($definition['inputs'] as $credentialKey => $inputKey) {
+                    if (filled($data[$inputKey] ?? null)) {
+                        $value = trim((string) $data[$inputKey]);
+                        if (($credentials[$credentialKey] ?? null) !== $value) {
+                            $credentials[$credentialKey] = $value;
+                            $credentialsUpdated = true;
+                        }
+                    }
+                }
+
+                $enabled = $r->boolean($provider.'_enabled');
+                $missing = array_values(array_filter(
+                    $definition['required'],
+                    fn (string $key) => ! filled($credentials[$key] ?? null)
+                ));
+
+                if ($enabled && $missing !== []) {
+                    throw ValidationException::withMessages([
+                        $provider.'_enabled' => 'برای فعال‌سازی این سرویس، همه اطلاعات اتصال لازم را وارد کنید.',
+                    ]);
+                }
+
+                $account->name = $definition['name'];
+                $account->credentials_array = $credentials;
+                $account->capabilities = [
+                    'locales' => ['fa-IR', 'en-US', 'ar-SA'],
+                    'capabilities' => ['speech.stt', 'speech.streaming'],
+                ];
+                $account->billing_mode = $account->billing_mode ?: 'paid';
+                if (array_key_exists($definition['quota'], $data)) {
+                    $account->quota_limit_seconds = (int) $data[$definition['quota']];
+                }
+                $account->priority = $account->exists ? $account->priority : $definition['priority'];
+                $account->enabled = $enabled;
+                $account->healthy = $missing === [];
+                if ($credentialsUpdated) {
+                    $account->consecutive_failures = 0;
+                    $account->cooldown_until = null;
+                    // A previous success does not verify newly replaced credentials.
+                    $account->last_success_at = null;
+                    $account->last_failure_at = null;
+                    $account->last_latency_ms = null;
+                }
+
+                $metadata = (array) ($account->metadata ?? []);
+                if (filled($credentials['region'] ?? null)) {
+                    $metadata['region'] = $credentials['region'];
+                }
+                $account->metadata = $metadata;
+                $account->save();
+
+                $audit->record($r->user()->id, 'voice.provider.settings_updated', $r->ip(), [
+                    'provider' => $provider,
+                    'enabled' => $enabled,
+                    'credentials_updated' => $credentialsUpdated,
+                ]);
+            }
+        });
+
+        return back()->with('status', 'تنظیمات و دسترسی سرویس‌های صوتی ذخیره شد. کلیدها به‌صورت رمزنگاری‌شده نگهداری می‌شوند.');
     }
 
     public function updatePricing(Request $r)

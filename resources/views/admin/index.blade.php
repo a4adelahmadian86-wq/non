@@ -10,7 +10,7 @@
         <nav>
             <a class="is-active" href="#overview"><i class="fa-solid fa-grid-2"></i><span>نمای کلی</span></a>
             @if($console->sectionAllowed(auth()->user(), 'users'))<a href="{{ route('admin.users') }}"><i class="fa-solid fa-users"></i><span>کاربران</span></a>@endif
-            <a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>
+            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))<a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'voice'))<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
             <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
             @if($console->sectionAllowed(auth()->user(), 'announcements'))<a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>@endif
@@ -37,7 +37,7 @@
             </div>
             <div class="farast-admin-top-actions">
                 <a href="/" target="_blank" class="admin-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده سایت</a>
-                <div class="farast-admin-user"><span>م</span><div><b>مدیر اصلی</b><small>{{ auth()->user()->mobile }}</small></div><form method="post" action="{{ route('logout') }}">@csrf<button aria-label="خروج"><i class="fa-solid fa-right-from-bracket"></i></button></form></div>
+                <div class="farast-admin-user"><span>م</span><div><b>{{ auth()->user()->name ?: 'کاربر کنسول' }}</b><small>{{ auth()->user()->mobile }}</small></div><form method="post" action="{{ route('logout') }}">@csrf<button aria-label="خروج"><i class="fa-solid fa-right-from-bracket"></i></button></form></div>
             </div>
         </header>
 
@@ -50,7 +50,7 @@
                 <div class="hero-badge"><i class="fa-solid fa-shield-halved"></i> محیط مدیریت امن</div>
                 <h2>یک داشبورد برای دیدن، تصمیم‌گیری و کنترل</h2>
                 <p>اطلاعات این صفحه از داده‌های واقعی سیستم خوانده می‌شود؛ داشبورد نقش کنسول عملیات را دارد، نه مجموعه‌ای از تب‌های نمایشی.</p>
-                <div class="hero-actions"><a class="admin-primary" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a><a class="admin-outline" href="#ai"><i class="fa-solid fa-sparkles"></i> تنظیم AI</a></div>
+                <div class="hero-actions">@if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-primary" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif @if($console->sectionAllowed(auth()->user(), 'settings'))<a class="admin-outline" href="#ai-settings"><i class="fa-solid fa-sparkles"></i> تنظیم AI</a>@endif</div>
             </div>
             <div class="hero-orbit" aria-hidden="true"><div class="orbit-core"><span></span><span></span><span></span><span></span><b></b></div><i class="orbit-dot d1"></i><i class="orbit-dot d2"></i><i class="orbit-dot d3"></i></div>
         </section>
@@ -59,27 +59,32 @@
             <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>کل حساب‌های ثبت‌شده</small></article>
             <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>سندهای ایجادشده</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
-            <article class="metric-card metric-green"><div class="metric-top"><span>وضعیت Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'متصل' : 'تنظیم نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
+            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
+            <article class="metric-card metric-green"><div class="metric-top"><span>وضعیت Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'تنظیم نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
+            @endif
         </section>
 
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="live-pill"><i></i> زنده</span></div>
                 <div class="ops-grid">
-                    <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($users->where('is_blocked', false)->count()) }}</b><small>کاربر فعال در فهرست اخیر</small></div></div>
+                    <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
                     <div><span class="ops-icon cyan"><i class="fa-solid fa-bolt"></i></span><div><b>{{ number_format($stats['ai_today']) }}</b><small>درخواست AI امروز</small></div></div>
-                    <div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>
+                    @if($console->sectionAllowed(auth()->user(), 'announcements'))<div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>@endif
                 </div>
             </article>
+            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
             <article id="ai" class="admin-panel ai-status-panel">
-                <div class="admin-panel-head"><div><span class="panel-eyebrow">AI GATEWAY</span><h2>دروازه هوش مصنوعی</h2><p>وضعیت تنظیمات حساس بدون نمایش مقدار کلیدها.</p></div><span class="status-chip {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}"><i class="fa-solid fa-circle"></i>{{ $secretStatus['gemini'] ? 'آماده' : 'نیازمند تنظیم' }}</span></div>
-                <div class="ai-provider"><span class="provider-mark"><i class="fa-solid fa-sparkles"></i></span><div><b>Gemini</b><small>{{ $settings['gemini_model'] }}</small></div><span class="provider-state {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}">{{ $secretStatus['gemini'] ? 'متصل' : 'بدون کلید' }}</span></div>
-                <div class="ai-provider"><span class="provider-mark files"><i class="fa-solid fa-file-shield"></i></span><div><b>Files</b><small>پردازش ورودی‌های بزرگ</small></div><span class="provider-state {{ $secretStatus['files'] ? 'ok' : 'warn' }}">{{ $secretStatus['files'] ? 'متصل' : 'بدون کلید' }}</span></div>
+                <div class="admin-panel-head"><div><span class="panel-eyebrow">AI GATEWAY</span><h2>دروازه هوش مصنوعی</h2><p>وضعیت تنظیمات حساس بدون نمایش مقدار کلیدها.</p></div><span class="status-chip {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}"><i class="fa-solid fa-circle"></i>{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'نیازمند تنظیم' }}</span></div>
+                <div class="ai-provider"><span class="provider-mark"><i class="fa-solid fa-sparkles"></i></span><div><b>Gemini</b><small>{{ $settings['gemini_model'] }}</small></div><span class="provider-state {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}">{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'بدون کلید' }}</span></div>
+                <div class="ai-provider"><span class="provider-mark files"><i class="fa-solid fa-file-shield"></i></span><div><b>Files</b><small>پردازش ورودی‌های بزرگ</small></div><span class="provider-state {{ $secretStatus['files'] ? 'ok' : 'warn' }}">{{ $secretStatus['files'] ? 'کلید تنظیم شده' : 'بدون کلید' }}</span></div>
                 <a class="panel-link" href="#ai-settings">باز کردن تنظیمات AI <i class="fa-solid fa-arrow-left"></i></a>
             </article>
+@endif
         </section>
 
+@if($console->sectionAllowed(auth()->user(), 'settings'))
         <section id="ai-settings" class="admin-section admin-panel-wide">
             <div class="admin-panel-head"><div><span class="panel-eyebrow">CONFIGURATION</span><h2>تنظیمات مرکزی AI و ظرفیت سرویس</h2><p>کلیدها رمزنگاری‌شده ذخیره می‌شوند و مقدار واقعی آن‌ها در رابط نمایش داده نمی‌شود.</p></div></div>
             <form method="post" action="{{ route('admin.settings.update') }}" class="settings-modern">
@@ -94,7 +99,9 @@
                 <div class="settings-submit"><button class="admin-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره تنظیمات</button></div>
             </form>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'ai_providers'))
         <section id="groq-settings" class="admin-section admin-panel-wide">
             <div class="admin-panel-head">
                 <div><span class="panel-eyebrow">FREE-FIRST ASSISTANT</span><h2>موتور همراه هوشمند و تشخیص گفتار</h2>
@@ -120,7 +127,9 @@
             </form>
             <p class="admin-help-text">رایگان بودن دائمی تضمین‌شده نیست؛ محدودیت‌های پلن رایگان و مدل‌ها تابع سیاست و سهمیه حساب ارائه‌دهنده است. صدای فارسی خروجی فعلاً از صدای دستگاه/مرورگر استفاده می‌کند.</p>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'voice'))
         <section id="voice-settings" class="admin-section admin-panel-wide">
             <div class="admin-panel-head">
                 <div>
@@ -160,7 +169,9 @@
                 </div>
             </form>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'settings'))
         <section class="admin-section admin-panel-wide">
             <div class="admin-panel-head"><div><span class="panel-eyebrow">CAPABILITIES</span><h2>قابلیت‌های پیش‌فرض کاربران</h2><p>این کنترل‌ها به صورت مرکزی اعمال می‌شوند و برای کاربران قابل override هستند.</p></div></div>
             <form method="post" action="{{ route('admin.settings.update') }}" class="capability-modern">
@@ -171,7 +182,9 @@
                 <div class="settings-submit"><button class="admin-outline"><i class="fa-solid fa-check-double"></i> ذخیره دسترسی‌ها</button></div>
             </form>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'users'))
         <section id="users" class="admin-section admin-panel-wide">
             <div class="admin-panel-head"><div><span class="panel-eyebrow">IDENTITY</span><h2>کاربران و دسترسی اختصاصی</h2><p>کنترل وضعیت و ظرفیت مصرف هر کاربر بدون خروج از کنسول.</p></div><span class="count-chip">{{ $users->count() }} کاربر اخیر</span></div>
             <div class="user-modern-list">
@@ -196,8 +209,11 @@
                 @endforelse
             </div>
         </section>
+@endif
 
+        @if($console->sectionAllowed(auth()->user(), 'announcements') || $console->sectionAllowed(auth()->user(), 'pricing'))
         <section id="content" class="admin-section-grid">
+@if($console->sectionAllowed(auth()->user(), 'announcements'))
             <article class="admin-panel content-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">BROADCAST</span><h2>مرکز اعلان</h2><p>انتشار پیام عمومی و کنترل وضعیت اعلان‌ها.</p></div><span class="count-chip">{{ $announcements->count() }}</span></div>
                 <form method="post" action="{{ route('admin.announcements.store') }}" class="announcement-modern">
@@ -210,29 +226,50 @@
                 </form>
                 <div class="announcement-modern-list">@forelse($announcements->take(5) as $announcement)<div class="announcement-modern-row"><span class="announcement-dot type-{{ $announcement->type }}"></span><div><b>{{ $announcement->title }}</b><small>{{ \Illuminate\Support\Str::limit($announcement->body,100) }}</small></div><span class="announcement-state {{ $announcement->is_active ? 'on' : 'off' }}">{{ $announcement->is_active ? 'فعال' : 'خاموش' }}</span><form method="post" action="{{ route('admin.announcements.toggle', $announcement) }}">@csrf<button aria-label="تغییر وضعیت"><i class="fa-solid fa-power-off"></i></button></form></div>@empty<div class="admin-empty">اعلانی ثبت نشده است.</div>@endforelse</div>
             </article>
+@endif
+@if($console->sectionAllowed(auth()->user(), 'pricing'))
             <article id="pricing" class="admin-panel pricing-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">PRICING ENGINE</span><h2>قیمت‌گذاری</h2><p>قواعد فعلی قیمت‌گذاری از backend کنترل می‌شوند.</p></div></div>
                 <div class="pricing-modern-list">@foreach($rules as $rule)<form method="post" action="{{ route('admin.pricing.update') }}" class="pricing-modern-row">@csrf<input type="hidden" name="key" value="{{ $rule->key }}"><label><span>عنوان</span><input name="label" value="{{ $rule->label }}"></label><label><span>مقدار</span><input type="number" name="value" value="{{ $rule->value }}" min="0"></label><button aria-label="ذخیره"><i class="fa-solid fa-floppy-disk"></i></button></form>@endforeach</div>
             </article>
+@endif
         </section>
+@endif
 
         <section class="admin-footer-actions">
-            <a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><div><b>مرکز مالی</b><small>کیف پول، مالیات و درگاه</small></div><i class="fa-solid fa-arrow-left"></i></a>
-            <a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>
-            <a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>
+            @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><div><b>مرکز مالی</b><small>کیف پول، مالیات و درگاه</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
+            @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
         </section>
-    </main>
+    @if($scope === 'global')
+        <section class="admin-section admin-panel-wide" id="system-health">
+            <div class="admin-panel-head">
+                <div><span class="panel-eyebrow">RUNTIME HEALTH</span><h2>وضعیت زیرساخت و اتصال‌های داخلی</h2><p>این شاخص‌ها هنگام بارگذاری داشبورد بررسی می‌شوند؛ وضعیت سرویس‌های بیرونی جداگانه در بخش اتصال‌ها گزارش می‌شود.</p></div>
+            </div>
+            <div class="admin-metric-grid">
+                <article class="metric-card {{ $systemHealth['db_ok'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>پایگاه داده</span><i class="fa-solid fa-database"></i></div><strong>{{ $systemHealth['db_ok'] ? 'دسترس‌پذیر' : 'خطا' }}</strong><small>درایور: {{ $systemHealth['driver'] }}</small></article>
+                <article class="metric-card {{ $systemHealth['cache_ok'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>Cache</span><i class="fa-solid fa-bolt"></i></div><strong>{{ $systemHealth['cache_ok'] ? 'دسترس‌پذیر' : 'خطا' }}</strong><small>آزمون نوشتن، خواندن و پاک‌سازی موقت</small></article>
+                <article class="metric-card {{ $systemHealth['storage_writable'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>ذخیره‌سازی برنامه</span><i class="fa-solid fa-hard-drive"></i></div><strong>{{ $systemHealth['storage_writable'] ? 'قابل نوشتن' : 'غیرقابل نوشتن' }}</strong><small>بررسی مجوز مسیر storage</small></article>
+                <article class="metric-card {{ $systemHealth['private_storage_ok'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>فضای خصوصی فایل‌ها</span><i class="fa-solid fa-lock"></i></div><strong>{{ $systemHealth['private_storage_ok'] ? 'خواندن/نوشتن سالم' : 'خطا' }}</strong><small>آزمون واقعی نوشتن، خواندن و حذف فایل موقت</small></article>
+                <article class="metric-card metric-violet"><div class="metric-top"><span>صف پردازش</span><i class="fa-solid fa-list-check"></i></div><strong>{{ $systemHealth['queue_connection'] }}</strong><small>درایور پیکربندی‌شده؛ بدون ادعای probe زنده</small></article>
+            </div>
+            <p class="health-footnote">محیط: {{ $systemHealth['env'] }} · PHP {{ $systemHealth['php'] }} · Laravel {{ $systemHealth['laravel'] }} · Debug: {{ $systemHealth['debug'] ? 'روشن' : 'خاموش' }}</p>
+        </section>
+        @endif
+        </main>
 </div>
+@if($console->sectionAllowed(auth()->user(), 'access') || $console->sectionAllowed(auth()->user(), 'organizations') || $console->sectionAllowed(auth()->user(), 'integrations') || $console->sectionAllowed(auth()->user(), 'analytics') || $console->sectionAllowed(auth()->user(), 'audit') || $console->sectionAllowed(auth()->user(), 'finance') || $console->sectionAllowed(auth()->user(), 'emails') || $console->sectionAllowed(auth()->user(), 'social'))
 <section class="admin-section admin-panel-wide" id="platform-control">
 <div class="admin-panel-head"><div><span class="panel-eyebrow">FARAST CONTROL CENTER</span><h2>مدیریت کامل پلتفرم</h2><p>ماژول‌های عملیاتی واقعی از همین کنسول قابل دسترسی‌اند؛ وضعیت‌های «planned» بدون مسیر عملیاتی به‌عنوان قابلیت کامل معرفی نمی‌شوند.</p></div></div>
 <div class="ops-grid">
-<a href="{{ route('admin.access') }}"><span class="ops-icon purple"><i class="fa-solid fa-user-shield"></i></span><div><b>RBAC</b><small>نقش‌ها و مجوزهای granular</small></div></a>
-<a href="{{ route('admin.organizations') }}"><span class="ops-icon"><i class="fa-solid fa-building"></i></span><div><b>{{ number_format($stats['organizations']) }}</b><small>سازمان · {{ number_format($stats['teams']) }} تیم</small></div></a>
-<a href="{{ route('admin.integrations') }}"><span class="ops-icon cyan"><i class="fa-solid fa-plug"></i></span><div><b>Integrations</b><small>Gemini · Voice · Canva OAuth</small></div></a>
-<a href="{{ route('admin.analytics') }}"><span class="ops-icon orange"><i class="fa-solid fa-chart-line"></i></span><div><b>{{ number_format($stats['voice_requests']) }}</b><small>{{ number_format($stats['voice_seconds']) }} ثانیه صوت ثبت‌شده</small></div></a>
-<a href="{{ route('admin.audit') }}"><span class="ops-icon"><i class="fa-solid fa-shield-halved"></i></span><div><b>{{ number_format($stats['audit_events']) }}</b><small>رویداد ممیزی</small></div></a>
-<a href="{{ route('admin.finance') }}"><span class="ops-icon purple"><i class="fa-solid fa-wallet"></i></span><div><b>Finance</b><small>تراکنش، کیف پول و پرداخت</small></div></a>
-<a href="{{ route('admin.emails') }}"><span class="ops-icon cyan"><i class="fa-solid fa-envelope"></i></span><div><b>Email</b><small>تنظیم و تست ایمیل</small></div></a>
-<a href="{{ route('admin.social') }}"><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>Content</b><small>اعلان و شبکه‌های اجتماعی</small></div></a>
+@if($console->sectionAllowed(auth()->user(), 'access'))<a href="{{ route('admin.access') }}"><span class="ops-icon purple"><i class="fa-solid fa-user-shield"></i></span><div><b>RBAC</b><small>نقش‌ها و مجوزهای granular</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'organizations'))<a href="{{ route('admin.organizations') }}"><span class="ops-icon"><i class="fa-solid fa-building"></i></span><div><b>{{ number_format($stats['organizations']) }}</b><small>سازمان · {{ number_format($stats['teams']) }} تیم</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'integrations'))<a href="{{ route('admin.integrations') }}"><span class="ops-icon cyan"><i class="fa-solid fa-plug"></i></span><div><b>Integrations</b><small>Gemini · Voice · Canva OAuth</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}"><span class="ops-icon orange"><i class="fa-solid fa-chart-line"></i></span><div><b>{{ number_format($stats['voice_requests']) }}</b><small>{{ number_format($stats['voice_seconds']) }} ثانیه صوت ثبت‌شده</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'audit'))<a href="{{ route('admin.audit') }}"><span class="ops-icon"><i class="fa-solid fa-shield-halved"></i></span><div><b>{{ number_format($stats['audit_events']) }}</b><small>رویداد ممیزی</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><span class="ops-icon purple"><i class="fa-solid fa-wallet"></i></span><div><b>Finance</b><small>تراکنش، کیف پول و پرداخت</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><span class="ops-icon cyan"><i class="fa-solid fa-envelope"></i></span><div><b>Email</b><small>تنظیم و تست ایمیل</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>Content</b><small>اعلان و شبکه‌های اجتماعی</small></div></a>@endif
 </div></section>
+@endif
 @endsection

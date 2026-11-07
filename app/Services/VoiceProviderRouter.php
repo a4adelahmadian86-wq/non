@@ -16,6 +16,7 @@ class VoiceProviderRouter
             ->where('healthy', true)
             ->when($excludeAccountIds !== [], fn ($q) => $q->whereNotIn('id', $excludeAccountIds))
             ->get()
+            ->filter(fn (VoiceProviderAccount $account) => $account->credentialsConfigured())
             ->filter(fn (VoiceProviderAccount $account) => $this->supportsLocale($account, $locale))
             ->filter(fn (VoiceProviderAccount $account) => $account->isAvailable())
             ->filter(fn (VoiceProviderAccount $account) => $this->quota->canStart($account, 1))

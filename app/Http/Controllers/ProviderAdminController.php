@@ -6,7 +6,26 @@ use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 class ProviderAdminController extends Controller {
  public function updateAi(Request $r){$d=$r->validate(['gemini_api_key'=>'nullable|string|max:500','gemini_model'=>'required|string|max:120','gemini_fallback_model'=>'nullable|string|max:120']);if(filled($d['gemini_api_key']??null))SiteSetting::write('gemini_api_key',trim($d['gemini_api_key']),true);SiteSetting::write('gemini_model',trim($d['gemini_model']));SiteSetting::write('gemini_fallback_model',trim((string)($d['gemini_fallback_model']??'')));app(AuditLogService::class)->record(auth()->id(),'provider.gemini.updated',request()->ip(),['model'=>$d['gemini_model'],'key_replaced'=>filled($d['gemini_api_key']??null)]);return back()->with('status','تنظیمات Gemini ذخیره شد.');}
- public function testVoice(string $provider){$a=VoiceProviderAccount::where('provider',$provider)->firstOrFail();return response()->json(['ok'=>true,'provider'=>$a->provider,'configured'=>filled($a->credentials_array),'enabled'=>$a->enabled,'healthy'=>$a->healthy,'message'=>'اعتبارسنجی شبکه‌ای provider از محیط اجرا و credential واقعی انجام می‌شود؛ این endpoint مقدار secret را برنمی‌گرداند.']);}
+ public function testVoice(string $provider){
+  $a=VoiceProviderAccount::where('provider',$provider)->firstOrFail();
+  $configured=$a->credentialsConfigured();
+  $verified=(bool)$a->last_success_at&&(!$a->last_failure_at||$a->last_success_at->gt($a->last_failure_at));
+  $ready=$configured&&$a->isAvailable();
+  return response()->json([
+   'ok'=>$ready&&$verified,
+   'provider'=>$a->provider,
+   'configured'=>$configured,
+   'enabled'=>$a->enabled,
+   'ready'=>$ready,
+   'healthy'=>$a->healthy,
+   'connection_verified'=>$verified,
+   'last_success_at'=>$a->last_success_at?->toIso8601String(),
+   'last_failure_at'=>$a->last_failure_at?->toIso8601String(),
+   'message'=>$verified
+    ?($ready?'آخرین درخواست واقعی موفق بوده و سرویس در حال حاضر آماده است.':'آخرین درخواست موفق بوده، اما سرویس اکنون به‌دلیل وضعیت فعال‌سازی یا سهمیه آماده نیست.')
+    :($a->last_failure_at?'آخرین درخواست واقعی ناموفق بوده است؛ وضعیت سرویس نیازمند بررسی است.':($ready?'تنظیمات آماده‌اند، اما هنوز درخواست موفقی برای تأیید اتصال ثبت نشده است.':'تنظیمات یا وضعیت عملیاتی این سرویس کامل نیست.')),
+  ],$ready?200:503);
+ }
  // Groq key is encrypted in SiteSetting and is shared by assistant chat and speech-to-text.
  public function updateGroq(Request $r){
   $d=$r->validate([
