@@ -171,7 +171,7 @@ class StoreController extends Controller
 
         try {
             file_put_contents($sourcePath, $docxBytes);
-            $document = \PhpOffice\PhpWord\IOFactory::load($sourcePath);
+            $document = \PhpOffice\PhpWord\IOFactory::createReader('Word2007')->load($sourcePath);
             $writer = \PhpOffice\PhpWord\IOFactory::createWriter($document, 'HTML');
             $writer->save($htmlPath);
             $html = file_get_contents($htmlPath) ?: '';
