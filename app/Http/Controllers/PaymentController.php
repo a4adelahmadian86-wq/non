@@ -213,7 +213,7 @@ class PaymentController extends Controller
                         }
                     } else {
                         $file = $product->files()->where('purpose', 'product_download')->where('is_active', true)
-                            ->where('scan_status', 'clean')->orderByDesc('is_primary')->first();
+                            ->whereIn('scan_status', ['clean', 'legacy'])->orderByDesc('is_primary')->first();
                         if (! $file) {
                             throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
                         }
