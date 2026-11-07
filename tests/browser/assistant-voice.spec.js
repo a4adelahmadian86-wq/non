@@ -523,6 +523,9 @@ test('assistant keeps listening during TTS without interrupting the active answe
   await page.evaluate(()=>{window.__staleAudioCallback=window.__scriptProcessor.onaudioprocess;});
   // Turning the button red must stop the real MediaStream tracks without interrupting TTS.
   await page.locator('.farast-voice-mic').click();
+  const pauseCommands=await page.evaluate(()=>window.__wsInstances[0].sent.filter(x=>typeof x==='string').map(x=>JSON.parse(x).type));
+  expect(pauseCommands).toContain('pause_capture');
+  expect(pauseCommands).not.toContain('end_utterance');
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
