@@ -50,7 +50,6 @@
               </a>
             @endif
           </div>
-          @php $showPreviews = $product->previews->where('is_active', true)->take($product->preview_pages ?: 5); @endphp
           @if($showPreviews->isNotEmpty())
             <div class="store-preview-grid">
               @foreach($showPreviews as $preview)
