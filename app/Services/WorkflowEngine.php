@@ -231,10 +231,10 @@ class WorkflowEngine
             }
 
             try {
-                $this->run((int) $mapping->workflow_id, $context + [
+                $this->run((int) $mapping->workflow_id, array_merge($context, [
                     'event_type' => $event->event_type,
                     'event_id' => (int) $event->id,
-                ]);
+                ]));
                 DB::table('farast_workflow_event_workflows')->where('id', $mapping->id)->update([
                     'status' => 'completed',
                     'last_error' => null,
