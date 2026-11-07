@@ -8,6 +8,7 @@ use App\Models\StoreCourseLessonProgress;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -16,31 +17,23 @@ class StoreCourseLearningController extends Controller
     private function enrollment(Request $request, StoreProduct $product): StoreCourseEnrollment
     {
         abort_unless($product->type === 'course' && $product->course, 404);
-        $libraryItem = StoreLibraryItem::query()
+        $libraryItems = StoreLibraryItem::query()
             ->where('user_id', $request->user()->id)
             ->where('product_id', $product->id)
             ->whereNull('revoked_at')
-            ->latest('granted_at')
-            ->firstOrFail();
+            ->orderByDesc('granted_at')
+            ->get();
 
-        $course = $product->course;
-        $enrollment = StoreCourseEnrollment::firstOrCreate(
-            ['library_item_id' => $libraryItem->id],
-            [
-                'course_id' => $course->id,
-                'product_id' => $product->id,
-                'user_id' => $request->user()->id,
-                'starts_at' => $libraryItem->granted_at ?? now(),
-                'expires_at' => $course->access_duration_days
-                    ? ($libraryItem->granted_at ?? now())->copy()->addDays($course->access_duration_days)
-                    : null,
-            ]
-        );
+        abort_if($libraryItems->isEmpty(), 404);
+        foreach ($libraryItems as $libraryItem) {
+            $enrollment = app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
+            if ($enrollment && (! $enrollment->expires_at || $enrollment->expires_at->isFuture())) {
+                abort_unless($enrollment->user_id === $request->user()->id, 404);
+                return $enrollment;
+            }
+        }
 
-        abort_unless($enrollment->user_id === $request->user()->id, 404);
-        abort_if($enrollment->expires_at && $enrollment->expires_at->isPast(), 403, 'مدت دسترسی این دوره به پایان رسیده است.');
-
-        return $enrollment;
+        abort(403, 'مدت دسترسی این دوره به پایان رسیده است.');
     }
 
     private function lessonAvailable(StoreCourseEnrollment $enrollment, StoreCourseLesson $lesson): bool
