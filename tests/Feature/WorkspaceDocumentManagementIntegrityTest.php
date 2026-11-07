@@ -200,6 +200,9 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
             ->get('/dashboard')
             ->assertOk()
             ->assertDontSee('پروژه جدید');
+
+        $this->get(route('projects.create'))->assertForbidden();
+        $this->post(route('projects.store'), [])->assertForbidden();
     }
 
     public function test_legacy_default_user_role_retains_its_identity_and_receives_employee_permissions(): void
