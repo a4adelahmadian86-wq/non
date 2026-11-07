@@ -25,6 +25,10 @@ class CommerceAuthorizationService
 
     public function authorize(User $actor, string $capability, array $scope = [], float $quantity = 1, array $context = []): AuthorizationDecision
     {
+        if ($actor->is_blocked) {
+            return $this->decision(false, null, 'none', 0, (string) ($context['unit'] ?? 'unit'), [], null, [], 'account_blocked');
+        }
+
         $quantity=max(0,$quantity);
         $organizationId=$actor->organization_id ?: ($scope['organization_id'] ?? null);
         $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId);
@@ -56,6 +60,10 @@ class CommerceAuthorizationService
 
     public function reserve(User $actor,string $capability,float $quantity,array $scope=[],array $context=[]): FarastUsageReservation
     {
+        if ($actor->is_blocked) {
+            throw new RuntimeException('account_blocked');
+        }
+
         $key=(string)($context['idempotency_key']??Str::uuid());
         $organizationId=$actor->organization_id ?: ($scope['organization_id']??null);
 
