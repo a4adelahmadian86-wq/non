@@ -105,6 +105,9 @@ class DashboardNavigationService
         if (($definition['admin_only'] ?? false) && ! $user->isAdmin()) {
             return false;
         }
+        if (($definition['exclude_admin'] ?? false) && $user->isAdmin()) {
+            return false;
+        }
 
         $permission = $definition['permission'] ?? null;
         if ($permission !== null && ! $this->allows($user, $permission, $definition['scope'] ?? 'own')) {
