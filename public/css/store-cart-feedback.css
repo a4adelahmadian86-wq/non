@@ -1,0 +1,7 @@
+.store-cart-feedback{position:relative;margin:0 0 18px;padding:12px 15px 12px 42px;border:1px solid #b9e5d1;border-radius:13px;background:#f0fbf5;color:#176b46;font-size:.8rem;font-weight:700;line-height:1.9}
+.store-cart-feedback[hidden]{display:none}
+.store-cart-feedback[data-state="error"]{border-color:#f1c4c4;background:#fff5f5;color:#a52d36}
+.store-cart-feedback::after{content:"✓";position:absolute;left:14px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#d7f4e4;color:#176b46;font-size:.78rem;font-weight:900}
+.store-cart-feedback[data-state="error"]::after{content:"!";background:#ffe1e1;color:#a52d36}
+.store-card-actions [data-add-cart][aria-busy="true"]{cursor:wait;opacity:.75}
+.store-card-actions [data-add-cart]:disabled{cursor:wait}
