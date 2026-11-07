@@ -130,7 +130,24 @@ class EditorController extends Controller
         $file = $request->file('source');
         $folder = auth()->check() ? 'typing/'.auth()->id() : 'typing/pending';
         $path = $file->store($folder, 'private');
-        try { $security->inspect($path, $file->getMimeType(), $limit * 1024 * 1024); \App\Models\FarastStorageObject::create(['user_id'=>auth()->id(),'disk'=>'private','path'=>$path,'mime'=>$file->getMimeType(),'size'=>Storage::disk('private')->size($path),'checksum'=>hash('sha256',Storage::disk('private')->get($path)),'status'=>'quarantined','classification'=>'upload','provenance'=>['pipeline'=>'upload_security','scan'=>'required']]); } catch (\Throwable $e) { Storage::disk('private')->delete($path); throw $e; }
+        try {
+            $inspection = $security->inspect($path, $file->getMimeType(), $limit * 1024 * 1024);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن امنیتی فایل در دسترس نیست؛ تا فعال‌شدن ضدبدافزار، بارگذاری و پردازش فایل متوقف است.');
+            \App\Models\FarastStorageObject::create([
+                'user_id' => auth()->id(),
+                'disk' => 'private',
+                'path' => $path,
+                'mime' => $inspection['mime'],
+                'size' => $inspection['size'],
+                'checksum' => $inspection['checksum'],
+                'status' => 'approved',
+                'classification' => 'upload',
+                'provenance' => ['pipeline' => 'upload_security', 'scan' => $inspection['scan']],
+            ]);
+        } catch (\Throwable $e) {
+            Storage::disk('private')->delete($path);
+            throw $e;
+        }
         $pending = [
             'path' => $path,
             'mime' => $file->getMimeType(),
@@ -170,7 +187,25 @@ class EditorController extends Controller
             $resourceId.'.'.$extension,
             'private'
         );
-        try { $security->inspect($path, $file->getMimeType(), 20 * 1024 * 1024); \App\Models\FarastStorageObject::create(['user_id'=>$request->user()->id,'document_id'=>$document->farast_document_id,'disk'=>'private','path'=>$path,'mime'=>$file->getMimeType(),'size'=>Storage::disk('private')->size($path),'checksum'=>hash('sha256',Storage::disk('private')->get($path)),'status'=>'quarantined','classification'=>'editor_asset','provenance'=>['pipeline'=>'upload_security','scan'=>'required']]); } catch (\Throwable $e) { Storage::disk('private')->delete($path); throw $e; }
+        try {
+            $inspection = $security->inspect($path, $file->getMimeType(), 20 * 1024 * 1024);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن امنیتی فایل در دسترس نیست؛ بارگذاری تصویر تا فعال‌شدن ضدبدافزار متوقف است.');
+            \App\Models\FarastStorageObject::create([
+                'user_id' => $request->user()->id,
+                'document_id' => $document->farast_document_id,
+                'disk' => 'private',
+                'path' => $path,
+                'mime' => $inspection['mime'],
+                'size' => $inspection['size'],
+                'checksum' => $inspection['checksum'],
+                'status' => 'approved',
+                'classification' => 'editor_asset',
+                'provenance' => ['pipeline' => 'upload_security', 'scan' => $inspection['scan']],
+            ]);
+        } catch (\Throwable $e) {
+            Storage::disk('private')->delete($path);
+            throw $e;
+        }
 
         return response()->json([
             'ok' => true,
