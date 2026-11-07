@@ -57,7 +57,7 @@
     <div class="user-dashboard__columns">
         <section id="editor-documents" class="user-dashboard__panel user-dashboard__panel--wide">
             <div class="user-dashboard__panel-head">
-                <div><span class="user-dashboard__kicker">ویرایشگر</span><h2>{{ $documentStatusFilter ? 'پیش‌نویس‌های من' : 'اسناد اخیر' }}</h2><p>{{ $documentStatusFilter ? 'فقط پیش‌نویس‌های ذخیره‌شده نمایش داده می‌شوند.' : 'با انتخاب هر سند، همان سند در ویرایشگر باز می‌شود.' }}</p></div>
+                <div><span class="user-dashboard__kicker">ویرایشگر</span><h2>{{ $documentStatusFilter ? 'پیش‌نویس‌های من' : 'اسناد اخیر' }}</h2><p>{{ $documentStatusFilter ? 'فقط پیش‌نویس‌های ذخیره‌شده نمایش داده می‌شوند.' : ($canEditDocuments ? 'با انتخاب هر سند، همان سند در ویرایشگر باز می‌شود.' : 'اسناد خود را به صورت فقط‌خواندنی مشاهده کنید.') }}</p></div>
                 <span class="user-dashboard__count">{{ number_format($documents->total()) }}</span>
             </div>
             @forelse($documents as $document)
@@ -68,7 +68,7 @@
                         <small>آخرین تغییر: {{ optional($document->updated_at)->format('Y/m/d · H:i') }}</small>
                     </div>
                     <span class="user-dashboard__document-meta">{{ number_format($document->page_count) }} صفحه</span>
-                    <a href="{{ route('editor', ['document' => $document->id]) }}" class="user-dashboard__text-link"><span>باز کردن</span><i class="fa-solid fa-arrow-left"></i></a>
+                    @if($canEditDocuments && $capabilities['active'] && $capabilities['can_type'])<a href="{{ route('editor', ['document' => $document->id]) }}" class="user-dashboard__text-link"><span>باز کردن</span><i class="fa-solid fa-arrow-left"></i></a>@else<span class="user-dashboard__document-meta">فقط مشاهده</span>@endif
                 </article>
             @empty
                 <div class="user-dashboard__empty"><i class="fa-regular fa-folder-open"></i><strong>هنوز سندی در ویرایشگر ندارید</strong><span>با ساخت یک پروژه یا سند جدید، کارتان را شروع کنید.</span></div>
