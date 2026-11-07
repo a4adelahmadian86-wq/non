@@ -67,6 +67,7 @@ class EditorController extends Controller
                 ->orderByDesc('updated_at')
                 ->limit(4)
                 ->get(['id', 'name', 'status', 'updated_at', 'estimated_pages', 'used_pages']),
+            'projectTotal' => $user->projects()->count(),
             'openTicketCount' => $user->tickets()
                 ->whereIn('status', ['open', 'pending', 'user_replied'])
                 ->count(),
