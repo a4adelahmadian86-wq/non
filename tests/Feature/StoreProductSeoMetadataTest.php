@@ -57,6 +57,8 @@ class StoreProductSeoMetadataTest extends TestCase
             ->assertSee('property="og:title" content="عنوان مخصوص موتور جست‌وجو | فروشگاه فراست"', false)
             ->assertSee('property="og:description" content="توضیح اختصاصی سئو"', false)
             ->assertSee('name="twitter:title" content="عنوان مخصوص موتور جست‌وجو | فروشگاه فراست"', false)
+            ->assertSee('rel="canonical"', false)
+            ->assertSee('property="og:type" content="product"', false)
             ->assertSee('og:image', false)
             ->assertSee('store/product-images/'.$product->id.'/gallery.webp', false)
             ->assertSee('application/ld+json', false)
