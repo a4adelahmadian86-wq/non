@@ -189,7 +189,12 @@ class StoreController extends Controller
                 $identity = 'شناسه کاربر #'.$user->id;
             }
             $watermark = e($identity);
-            $marks = str_repeat('<span>'.$watermark.' · پیش‌نمایش فراست</span>', 12);
+            $marks = '';
+            for ($mark = 0; $mark < 12; $mark++) {
+                $top = 8 + (($mark % 4) * 25);
+                $left = 4 + (intdiv($mark, 4) * 32);
+                $marks .= '<span style="top:'.$top.'%;left:'.$left.'%;">'.$watermark.' · پیش‌نمایش فراست</span>';
+            }
 
             // Convert Word content to a paginated PDF on the server. The watermark is
             // part of the generated PDF, not a removable browser overlay.
@@ -207,7 +212,7 @@ class StoreController extends Controller
                 .docx-content img{max-width:100%;height:auto}
                 .docx-content h1,.docx-content h2,.docx-content h3,.docx-content h4{line-height:1.5;margin:1.2em 0 .5em;page-break-after:avoid}
                 .docx-content blockquote{margin:1em 1.5em;padding:0 1em;border-right:3px solid #94a3b8;color:#475569}
-                .docx-watermark{position:fixed;inset:0;z-index:20;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);align-items:center;justify-items:center;opacity:.15;pointer-events:none}
+                .docx-watermark{position:fixed;inset:0;z-index:20;opacity:.15;pointer-events:none}.docx-watermark span{position:absolute;display:block;transform:rotate(-25deg)}
                 .docx-watermark span{font:700 10px "DejaVu Sans",Tahoma,sans-serif;color:#334155;white-space:nowrap;transform:rotate(-25deg);background:rgba(255,255,255,.18);padding:5px}
             </style></head><body><div class="docx-watermark">'.$marks.'</div><main class="docx-content">'.$body.'</main></body></html>';
 
