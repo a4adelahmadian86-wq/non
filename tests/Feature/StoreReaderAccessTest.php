@@ -93,7 +93,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee('<script', false);
 
         $this->assertStringContainsString('default-src', (string) $response->headers->get('Content-Security-Policy'));
-        $this->assertStringContainsString("script-src", (string) $response->headers->get('Content-Security-Policy')) === false;
+        $this->assertStringNotContainsString('script-src', (string) $response->headers->get('Content-Security-Policy'));
     }
 
     public function test_authenticated_reader_sees_account_watermark_and_private_preview_headers(): void
