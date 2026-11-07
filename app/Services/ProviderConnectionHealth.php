@@ -68,16 +68,6 @@ final class ProviderConnectionHealth
             }
         }
 
-        // A key or model rotation invalidates capability claims from the old probe.
-        if (! $fingerprintMatches) {
-            $capabilities = [];
-        }
-
-        $ready = $verified;
-        foreach ($requiredCapabilities as $capability) {
-            $ready = $ready && ($capabilities[$capability] ?? false);
-        }
-
         $failureIsCurrent = $fingerprintMatches
             && $failureTime !== false
             && ($successTime === false || $failureTime >= $successTime);
@@ -85,6 +75,17 @@ final class ProviderConnectionHealth
             && $successTime !== false
             && ! $successIsFresh
             && ! $failureIsCurrent;
+
+        // Credential/model rotation, failed probes, and expired probes invalidate
+        // capability claims until a fresh successful probe confirms them again.
+        if (! $fingerprintMatches || $failureIsCurrent || $successIsStale) {
+            $capabilities = [];
+        }
+
+        $ready = $verified;
+        foreach ($requiredCapabilities as $capability) {
+            $ready = $ready && ($capabilities[$capability] ?? false);
+        }
         $apiReachable = $fingerprintMatches && (
             $verified
             || ($failureIsCurrent && filter_var(
