@@ -64,7 +64,7 @@
         .role-access-locked{display:flex;align-items:center;gap:9px;padding:13px 15px;border:1px solid #f1e4c9;border-radius:12px;background:#fff9ed;color:#8a6528;font-size:11px}
         .role-access-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 15px}
         .role-access-search{flex:1 1 260px;min-width:220px;position:relative}
-        .role-access-search input{width:100%;height:42px;padding:0 14px;border:1px solid #dfe6f0;border-radius:11px;background:#fbfcfe;font:11px inherit;outline:0}
+        .role-access-search input{width:100%;height:42px;padding:0 14px;border:1px solid #dfe6f0;border-radius:11px;background:#fbfcfe;font:11px Vazirmatn,IRANSansWeb_Medium,Tahoma,sans-serif;outline:0}
         .role-access-search input:focus{border-color:#80a9e8;box-shadow:0 0 0 3px rgba(40,103,201,.09)}
         .role-access-summary{font-size:10px;color:#72829a}
         .role-access-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -72,7 +72,7 @@
         .role-access-group-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
         .role-access-group-head h3{font-size:12px;margin:0;color:#2b3b57}
         .role-access-group-actions{display:flex;gap:5px}
-        .role-access-group-actions button{border:0;background:transparent;color:#2867c9;font:9px inherit;cursor:pointer;padding:4px}
+        .role-access-group-actions button{border:0;background:transparent;color:#2867c9;font:9px Vazirmatn,IRANSansWeb_Medium,Tahoma,sans-serif;cursor:pointer;padding:4px}
         .role-access-permission{display:flex;align-items:center;gap:9px;padding:9px 8px;border-top:1px solid #eef1f6;cursor:pointer}
         .role-access-permission:first-of-type{border-top:0}
         .role-access-permission input{width:16px;height:16px;flex:0 0 auto;accent-color:#2867c9}
@@ -82,7 +82,7 @@
         .role-access-empty{display:none;padding:18px;text-align:center;color:#8290a5;font-size:11px}
         .role-access-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:16px;padding-top:15px;border-top:1px solid #edf0f5}
         .role-access-actions p{font-size:9px;color:#8996aa;margin:0}
-        .role-access-save{border:0;border-radius:10px;background:linear-gradient(135deg,#1769ff,#3d82f4);color:#fff;padding:11px 18px;font:11px inherit;cursor:pointer;box-shadow:0 8px 18px rgba(23,105,255,.18)}
+        .role-access-save{border:0;border-radius:10px;background:linear-gradient(135deg,#1769ff,#3d82f4);color:#fff;padding:11px 18px;font:11px Vazirmatn,IRANSansWeb_Medium,Tahoma,sans-serif;cursor:pointer;box-shadow:0 8px 18px rgba(23,105,255,.18)}
         .role-access-save:hover{filter:brightness(1.04)}
         @media(max-width:800px){.role-access-page{padding:16px 12px 36px}.role-access-hero{padding:20px;flex-direction:column}.role-access-hero h1{font-size:22px}.role-access-role{padding:15px}.role-access-groups{grid-template-columns:1fr}}
         @media(max-width:480px){.role-access-role-head{flex-direction:column}.role-access-count{align-self:flex-start}.role-access-actions{align-items:stretch;flex-direction:column}.role-access-save{width:100%}}
