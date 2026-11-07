@@ -54,6 +54,34 @@ class EditorUploadSecurityTest extends TestCase
         }
     }
 
+    public function test_quarantined_source_object_cannot_enter_ocr_pipeline(): void
+    {
+        Storage::fake('private');
+        $user = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $path = 'typing/'.$user->id.'/quarantined.pdf';
+        $bytes = 'not scanned';
+        Storage::disk('private')->put($path, $bytes);
+        FarastStorageObject::create([
+            'user_id' => $user->id,
+            'disk' => 'private',
+            'path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($bytes),
+            'checksum' => hash('sha256', $bytes),
+            'status' => 'quarantined',
+            'classification' => 'upload',
+            'provenance' => ['scan' => 'not_configured'],
+        ]);
+        session([
+            'pending_upload' => ['path' => $path, 'mime' => 'application/pdf', 'name' => 'quarantined.pdf'],
+            'typing_preflight_accepted' => ['path' => $path, 'hash' => hash('sha256', $bytes), 'pages' => 1],
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/editor/analyze', ['path' => $path, 'mime' => 'application/pdf', 'source_name' => 'quarantined.pdf'])
+            ->assertStatus(423);
+    }
+
     public function test_editor_upload_creates_approved_storage_object_only_after_clean_scan(): void
     {
         Storage::fake('private');
