@@ -12,7 +12,7 @@
             <h1>مدیریت اسناد</h1>
             <p>اسناد، پوشه‌ها، موارد حذف‌شده و لینک‌های اشتراک خود را از یک محل مدیریت کنید.</p>
         </div>
-        @if($mode !== 'shared' && !$trashed)
+        @if($mode !== 'shared' && !$trashed && $canCreateDocuments)
             <form class="workspace-documents__new" method="post" action="{{ route('platform.documents.create') }}">
                 @csrf
                 <input name="title" maxlength="255" placeholder="عنوان سند جدید" required aria-label="عنوان سند جدید">
@@ -30,8 +30,8 @@
 
     <nav class="workspace-documents__tabs" aria-label="فیلتر اسناد">
         <a href="{{ route('platform.documents') }}" class="{{ $mode === 'documents' ? 'is-active' : '' }}"><i class="fa-solid fa-file-lines"></i> اسناد فعال</a>
-        <a href="{{ route('platform.documents', ['favorite' => 1]) }}" class="{{ $mode === 'favorites' ? 'is-active' : '' }}"><i class="fa-solid fa-star"></i> نشان‌دارها</a>
-        <a href="{{ route('platform.documents', ['trashed' => 1]) }}" class="{{ $mode === 'trashed' ? 'is-active' : '' }}"><i class="fa-solid fa-trash-can"></i> سطل زباله</a>
+        @if($canEditDocuments)<a href="{{ route('platform.documents', ['favorite' => 1]) }}" class="{{ $mode === 'favorites' ? 'is-active' : '' }}"><i class="fa-solid fa-star"></i> نشان‌دارها</a>@endif
+        @if($canDeleteDocuments)<a href="{{ route('platform.documents', ['trashed' => 1]) }}" class="{{ $mode === 'trashed' ? 'is-active' : '' }}"><i class="fa-solid fa-trash-can"></i> سطل زباله</a>@endif
         @if($canShareDocuments)<a href="{{ route('platform.documents', ['shared' => 1]) }}" class="{{ $mode === 'shared' ? 'is-active' : '' }}"><i class="fa-solid fa-share-nodes"></i> اشتراک‌ها</a>@endif
     </nav>
 
@@ -49,7 +49,7 @@
                     <i class="fa-regular fa-folder"></i><span>{{ $folder->name }}</span>
                 </a>
             @endforeach
-            <form class="workspace-documents__folder-form" method="post" action="{{ route('platform.folders.create') }}">
+            @if($canCreateDocuments)<form class="workspace-documents__folder-form" method="post" action="{{ route('platform.folders.create') }}">
                 @csrf
                 <label for="new-folder-name">پوشه جدید</label>
                 <input id="new-folder-name" name="name" maxlength="120" placeholder="نام پوشه" required>
@@ -60,7 +60,7 @@
                     @endforeach
                 </select>
                 <button type="submit"><i class="fa-solid fa-folder-plus"></i> ساخت پوشه</button>
-            </form>
+            </form>@endif
         </aside>
 
         <section class="workspace-documents__content">
@@ -108,22 +108,22 @@
                             </div>
 
                             @if($mode === 'trashed')
-                                <div class="workspace-documents__document-actions">
+                                @if($canDeleteDocuments)<div class="workspace-documents__document-actions">
                                     <form method="post" action="{{ route('platform.documents.restore', $document->id) }}">@csrf<button type="submit"><i class="fa-solid fa-rotate-left"></i> بازیابی سند</button></form>
                                     <form method="post" action="{{ route('platform.documents.destroy', $document->id) }}" onsubmit="return confirm('سند و نسخه‌های آن برای همیشه حذف شوند؟')">@csrf @method('DELETE')<button class="is-danger" type="submit"><i class="fa-solid fa-trash-can"></i> حذف دائمی</button></form>
-                                </div>
+                                </div>@endif
                             @else
-                                <form class="workspace-documents__editor" method="post" action="{{ route('platform.documents.update', $document->id) }}">
+                                @if($canEditDocuments)<form class="workspace-documents__editor" method="post" action="{{ route('platform.documents.update', $document->id) }}">
                                     @csrf
                                     <label>عنوان سند<input name="title" value="{{ $document->title }}" maxlength="255" required></label>
                                     <label>پوشه<select name="folder_id"><option value="">بدون پوشه</option>@foreach($folders as $folder)<option value="{{ $folder->id }}" @selected((int)$document->folder_id === (int)$folder->id)>{{ $folder->name }}</option>@endforeach</select></label>
                                     <label class="workspace-documents__body-label">محتوا<textarea name="content" rows="5">{{ $document->content }}</textarea></label>
                                     <button type="submit" class="workspace-documents__save"><i class="fa-solid fa-floppy-disk"></i> ذخیره و ثبت نسخه</button>
-                                </form>
+                                </form>@else<div class="workspace-documents__read-only"><p>{{ $document->content }}</p></div>@endif
                                 <div class="workspace-documents__document-actions">
-                                    <form method="post" action="{{ route('platform.documents.favorite', $document->id) }}">@csrf<button type="submit"><i class="fa-solid fa-star"></i> {{ $document->is_favorite ? 'حذف از نشان‌دارها' : 'افزودن به نشان‌دارها' }}</button></form>
+                                    @if($canEditDocuments)<form method="post" action="{{ route('platform.documents.favorite', $document->id) }}">@csrf<button type="submit"><i class="fa-solid fa-star"></i> {{ $document->is_favorite ? 'حذف از نشان‌دارها' : 'افزودن به نشان‌دارها' }}</button></form>@endif
                                     @if($canShareDocuments)<button type="button" data-share-endpoint="{{ route('platform.documents.share', $document->id) }}"><i class="fa-solid fa-share-nodes"></i> ساخت لینک اشتراک</button>@endif
-                                    <form method="post" action="{{ route('platform.documents.trash', $document->id) }}">@csrf<button class="is-danger" type="submit"><i class="fa-solid fa-trash-can"></i> انتقال به سطل زباله</button></form>
+                                    @if($canDeleteDocuments)<form method="post" action="{{ route('platform.documents.trash', $document->id) }}">@csrf<button class="is-danger" type="submit"><i class="fa-solid fa-trash-can"></i> انتقال به سطل زباله</button></form>@endif
                                 </div>
                                 @if($canShareDocuments)<div class="workspace-documents__share-result" hidden>
                                     <label>لینک اشتراک<input type="text" readonly data-share-output></label>
