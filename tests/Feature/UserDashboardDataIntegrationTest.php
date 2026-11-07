@@ -1,16 +1,16 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\FarastDocument;
-use App\\Models\\FarastProject;
-use App\\Models\\Ticket;
-use App\\Models\\TypingDocument;
-use App\\Models\\User;
-use App\\Models\\Wallet;
-use App\\Services\\NotificationService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Tests\\TestCase;
+use App\Models\FarastDocument;
+use App\Models\FarastProject;
+use App\Models\Ticket;
+use App\Models\TypingDocument;
+use App\Models\User;
+use App\Models\Wallet;
+use App\Services\NotificationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class UserDashboardDataIntegrationTest extends TestCase
 {
