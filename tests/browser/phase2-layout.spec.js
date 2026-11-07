@@ -65,6 +65,7 @@ test('explicit page break survives reload', async ({ page }) => {
 });
 
 test('table and image remain represented across pagination', async ({ page }) => {
+  page.on('response', async response => { if (response.url().includes('/editor/assets')) console.log('[editor-assets]', response.status(), await response.text()); });
   await openEditor(page);
   await page.locator('.farast-editor').first().click();
   await page.keyboard.insertText('متن '.repeat(180));
