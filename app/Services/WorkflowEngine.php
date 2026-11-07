@@ -152,6 +152,10 @@ class WorkflowEngine
                                         ->where('started_at', '<=', now()->subMinutes(30));
                                 });
                         });
+                })->orWhereNotExists(function ($unfinished) {
+                    $unfinished->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                        ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
+                        ->where('status', '!=', 'completed');
                 });
             })
             ->orderBy('id')
