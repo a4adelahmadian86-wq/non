@@ -460,7 +460,7 @@
   root.querySelectorAll('[data-fa-text]').forEach(function(b){b.addEventListener('click',function(){primeAssistantAudioPlayback();send(b.getAttribute('data-fa-text'));});});
   root.querySelector('[data-fa-tour]').addEventListener('click',startTour);
   var liveTurnEnding=false,gatewayStatusMessage='',renderGatewayReadyUrl='',renderGatewayReadyAt=0;
-  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewaySilenceTimer=null,gatewayFinalTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayCaptureGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[],pendingVoiceTurns=[];
+  var gatewayWs=null,gatewayMediaStream=null,gatewayAudioContext=null,gatewaySourceNode=null,gatewayWorkletNode=null,gatewayScriptProcessorNode=null,gatewayPcmBuffer=[],gatewayStarting=false,gatewayFinalText='',gatewayFinalTurnId=null,gatewaySilenceTimer=null,gatewayFinalTimer=null,gatewayLastVoiceAt=0,gatewayVoiceFrames=0,gatewayGeneration=0,gatewayCaptureGeneration=0,gatewayStopTimer=null,gatewayStopping=false,gatewayMicrophoneMuted=false,gatewayBargeInFrames=0,gatewayBargeInBuffer=[],pendingVoiceTurns=[];
   function releaseGatewayCapture(){
     gatewayCaptureGeneration++;gatewayMicrophoneMuted=false;
     if(gatewayWorkletNode){try{gatewayWorkletNode.disconnect();}catch(e){}gatewayWorkletNode=null;}
@@ -485,7 +485,7 @@
         if(!gatewayStopping)return;
         gatewayStopping=false;gatewayStarting=false;gatewayGeneration++;
         try{socket.onopen=socket.onmessage=socket.onerror=socket.onclose=null;socket.close(1000,'assistant_stop_timeout');}catch(e){}
-        gatewayFinalText='';gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
+        gatewayFinalText='';gatewayFinalTurnId=null;gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
         voiceTitle.textContent='میکروفون خاموش است';voiceCaption.textContent='برای شروع دوباره، دکمهٔ «صحبت کن» را لمس کن.';status.textContent='میکروفون خاموش شد.';
       },8000);
       return;
@@ -729,8 +729,22 @@
         else if(data.type==='speech_started'){if(!busy){voiceTitle.textContent='گوش می‌دهم';status.textContent='صدای شما تشخیص داده شد؛ منتظر پایان جمله هستم.';}}
         else if(data.type==='processing'){if(!busy){voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='مکث گفتار تشخیص داده شد؛ متن درخواست در حال نهایی‌شدن است.';status.textContent='در حال تبدیل نوبت گفتار به متن…';}}
         else if(data.type==='interim'){var interimText=String(data.text||'').trim();if(!busy&&interimText){if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}voiceCaption.textContent=interimText;status.textContent='در حال تشخیص گفتار…';}}
-        else if(data.type==='final'){var finalPart=String(data.text||'').replace(/\s+/g,' ').trim();if(finalPart){gatewayFinalText=mergeFinalTranscript(gatewayFinalText,finalPart);if(gatewayFinalTimer)window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=window.setTimeout(function(){gatewayFinalTimer=null;finishGatewayTurn(generation);},600);}}
-        else if(data.type==='empty'){if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}gatewayFinalText='';voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتاری تشخیص داده نشد؛ هر وقت آماده‌ای ادامه بده.';status.textContent='هنوز جمله‌ای برای پاسخ‌دادن دریافت نشده است.';}
+        else if(data.type==='final'){
+          var finalPart=String(data.text||'').replace(/\s+/g,' ').trim();
+          var incomingTurnId=data.turn_id!==undefined&&data.turn_id!==null&&Number.isFinite(Number(data.turn_id))?Number(data.turn_id):null;
+          if(finalPart){
+            if(incomingTurnId!==null&&gatewayFinalTurnId!==null&&incomingTurnId!==gatewayFinalTurnId){
+              if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}
+              finishGatewayTurn(generation);
+            }
+            if(incomingTurnId!==null)gatewayFinalTurnId=incomingTurnId;
+            gatewayFinalText=mergeFinalTranscript(gatewayFinalText,finalPart);
+            if(gatewayFinalTimer)window.clearTimeout(gatewayFinalTimer);
+            var aggregationDelay=incomingTurnId!==null?180:600;
+            gatewayFinalTimer=window.setTimeout(function(){gatewayFinalTimer=null;finishGatewayTurn(generation);},aggregationDelay);
+          }
+        }
+        else if(data.type==='empty'){if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}gatewayFinalText='';gatewayFinalTurnId=null;voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent='گفتاری تشخیص داده نشد؛ هر وقت آماده‌ای ادامه بده.';status.textContent='هنوز جمله‌ای برای پاسخ‌دادن دریافت نشده است.';}
         else if(data.type==='provider_error'){var hasFinalTranscript=!!gatewayFinalText.trim();if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}if(hasFinalTranscript){gatewayFinalTimer=window.setTimeout(function(){gatewayFinalTimer=null;finishGatewayTurn(generation);},0);}else{gatewayFinalText='';}var providerMessage=data.code==='asr_rate_limited'?'محدودیت موقت سرویس تشخیص گفتار؛ چند لحظه دیگر دوباره صحبت کن.':'تشخیص این نوبت گفتار ناموفق بود؛ اتصال برقرار است و می‌توانی دوباره صحبت کنی.';voiceTitle.textContent='گوش می‌دهم';voiceCaption.textContent=providerMessage;status.textContent=providerMessage;}
         else if(data.type==='error'){var gatewayErrorMessage=data.code==='unauthorized_or_not_configured'?'اعتبار اتصال زنده تأیید نشد؛ توکن مشترک Laravel و Render باید یکسان باشد.':'اتصال درگاه گفتار برقرار نشد.';if(providerReadyReject)providerReadyReject(new Error(gatewayErrorMessage));stopGatewayRecognition();panel.classList.remove('is-listening');root.querySelector('.farast-assistant-mic').classList.remove('is-recording');voiceTitle.textContent='اتصال مکالمه قطع شد';voiceCaption.textContent=gatewayErrorMessage;status.textContent=gatewayErrorMessage;}
       };
@@ -771,7 +785,7 @@
     if(gatewaySilenceTimer){window.clearTimeout(gatewaySilenceTimer);gatewaySilenceTimer=null;}
     if(gatewayFinalTimer){window.clearTimeout(gatewayFinalTimer);gatewayFinalTimer=null;}
     var text=gatewayFinalText.trim();if(!text)return;
-    liveTurnEnding=true;gatewayFinalText='';gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
+    liveTurnEnding=true;gatewayFinalText='';gatewayFinalTurnId=null;gatewayLastVoiceAt=0;gatewayVoiceFrames=0;
     liveTurnEnding=false;
     if(busy){
       pendingVoiceTurns.push(text);
