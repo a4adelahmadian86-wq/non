@@ -50,4 +50,20 @@ class FarastObservabilityTest extends TestCase
         $this->assertMatchesRegularExpression('/\A[0-9a-f-]{36}\z/i', $requestId);
         $this->assertSame($requestId, $correlationId);
     }
+
+    public function test_logging_failures_do_not_break_the_request(): void
+    {
+        Log::shouldReceive('withContext')->once()->andThrow(new \RuntimeException('logger unavailable'));
+        Log::shouldReceive('info')->once()->andThrow(new \RuntimeException('logger unavailable'));
+        Log::shouldReceive('withoutContext')->once()->andThrow(new \RuntimeException('logger unavailable'));
+
+        $request = Request::create('/up', 'GET');
+        $response = (new FarastObservability())->handle(
+            $request,
+            fn () => response('ok', 200)
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertNotEmpty($response->headers->get('X-Request-Id'));
+    }
 }
