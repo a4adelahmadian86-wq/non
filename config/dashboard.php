@@ -62,26 +62,26 @@ return [
             'items' => [
                 ['key' => 'ai.assistant', 'label' => 'دستیار هوشمند', 'icon' => 'fa-wand-magic-sparkles', 'planned' => true, 'permission' => 'ai.use', 'scope' => 'own'],
                 ['key' => 'ai.history', 'label' => 'تاریخچه گفتگوها', 'icon' => 'fa-clock-rotate-left', 'route' => 'assistant.history', 'permission' => 'ai.use', 'scope' => 'own'],
-                ['key' => 'ai.models', 'label' => 'مدل‌ها و تنظیمات', 'icon' => 'fa-sliders', 'route' => 'admin.index', 'fragment' => '#ai-settings', 'admin_only' => true, 'permission' => 'settings.manage', 'scope' => 'global'],
-                ['key' => 'ai.usage', 'label' => 'مصرف هوش مصنوعی', 'icon' => 'fa-chart-simple', 'route' => 'admin.analytics', 'permission' => 'reports.view', 'scope' => 'organization'],
+                ['key' => 'ai.models', 'label' => 'مدل‌ها و تنظیمات', 'icon' => 'fa-sliders', 'route' => 'admin.index', 'fragment' => '#ai-settings', 'admin_only' => true, 'permission' => 'ai.manage', 'scope' => 'global'],
+                ['key' => 'ai.usage', 'label' => 'مصرف هوش مصنوعی', 'icon' => 'fa-chart-simple', 'route' => 'admin.analytics', 'permission' => 'reports.team', 'scope' => 'organization'],
             ],
         ],
         [
             'key' => 'collaboration', 'label' => 'تیم و همکاری', 'icon' => 'fa-people-group',
             'items' => [
-                ['key' => 'collaboration.teams', 'label' => 'تیم‌ها و سازمان‌ها', 'icon' => 'fa-user-group', 'route' => 'admin.organizations', 'permission' => 'org.manage', 'scope' => 'organization'],
+                ['key' => 'collaboration.teams', 'label' => 'تیم‌ها و سازمان‌ها', 'icon' => 'fa-user-group', 'route' => 'admin.organizations', 'permission' => 'organization.manage', 'scope' => 'organization'],
                 ['key' => 'collaboration.members', 'label' => 'اعضای سازمان', 'icon' => 'fa-users', 'route' => 'admin.users', 'permission' => 'users.view', 'scope' => 'organization'],
-                ['key' => 'collaboration.roles', 'label' => 'نقش‌ها', 'icon' => 'fa-user-shield', 'route' => 'admin.access', 'admin_only' => true, 'permission' => 'roles.manage', 'scope' => 'organization'],
-                ['key' => 'collaboration.invites', 'label' => 'دعوت‌ها', 'icon' => 'fa-envelope-open-text', 'planned' => true, 'permission' => 'teams.manage', 'scope' => 'organization'],
+                ['key' => 'collaboration.roles', 'label' => 'نقش‌ها', 'icon' => 'fa-user-shield', 'route' => 'admin.access', 'admin_only' => true, 'permission' => 'access.manage', 'scope' => 'global'],
+                ['key' => 'collaboration.invites', 'label' => 'دعوت‌ها', 'icon' => 'fa-envelope-open-text', 'planned' => true, 'permission' => 'team.manage', 'scope' => 'organization'],
             ],
         ],
         [
             'key' => 'reports', 'label' => 'گزارش‌ها و تحلیل‌ها', 'icon' => 'fa-chart-line',
             'items' => [
-                ['key' => 'reports.overview', 'label' => 'نمای گزارش‌ها', 'icon' => 'fa-chart-pie', 'route' => 'admin.analytics', 'admin_only' => true, 'permission' => 'reports.view', 'scope' => 'organization'],
-                ['key' => 'reports.usage', 'label' => 'مصرف منابع', 'icon' => 'fa-gauge-high', 'route' => 'admin.analytics', 'permission' => 'reports.view', 'scope' => 'organization'],
+                ['key' => 'reports.overview', 'label' => 'نمای گزارش‌ها', 'icon' => 'fa-chart-pie', 'route' => 'admin.analytics', 'admin_only' => true, 'permission' => 'reports.team', 'scope' => 'team'],
+                ['key' => 'reports.usage', 'label' => 'مصرف منابع', 'icon' => 'fa-gauge-high', 'route' => 'admin.analytics', 'permission' => 'reports.team', 'scope' => 'team'],
                 ['key' => 'reports.finance', 'label' => 'گزارش مالی', 'icon' => 'fa-coins', 'route' => 'admin.finance', 'admin_only' => true, 'permission' => 'finance.view', 'scope' => 'organization'],
-                ['key' => 'reports.exports', 'label' => 'خروجی‌ها', 'icon' => 'fa-file-export', 'planned' => true, 'permission' => 'reports.export', 'scope' => 'organization'],
+                ['key' => 'reports.exports', 'label' => 'خروجی‌ها', 'icon' => 'fa-file-export', 'planned' => true, 'permission' => 'reports.team', 'scope' => 'team'],
             ],
         ],
         [
@@ -97,24 +97,24 @@ return [
             'key' => 'access', 'label' => 'مدیریت کاربران و دسترسی‌ها', 'icon' => 'fa-user-lock',
             'items' => [
                 ['key' => 'access.users', 'label' => 'کاربران', 'icon' => 'fa-users', 'route' => 'admin.users', 'admin_only' => true, 'permission' => 'users.view', 'scope' => 'organization'],
-                ['key' => 'access.roles', 'label' => 'نقش‌ها و مجوزها', 'icon' => 'fa-key', 'route' => 'admin.access', 'admin_only' => true, 'permission' => 'roles.manage', 'scope' => 'organization'],
-                ['key' => 'access.sessions', 'label' => 'نشست‌های فعال', 'icon' => 'fa-desktop', 'planned' => true, 'admin_only' => true, 'permission' => 'security.view', 'scope' => 'organization'],
+                ['key' => 'access.roles', 'label' => 'نقش‌ها و مجوزها', 'icon' => 'fa-key', 'route' => 'admin.access', 'admin_only' => true, 'permission' => 'access.manage', 'scope' => 'global'],
+                ['key' => 'access.sessions', 'label' => 'نشست‌های فعال', 'icon' => 'fa-desktop', 'planned' => true, 'admin_only' => true, 'permission' => 'audit.view', 'scope' => 'global'],
             ],
         ],
         [
             'key' => 'organization', 'label' => 'مدیریت سازمان', 'icon' => 'fa-building',
             'items' => [
-                ['key' => 'organization.profile', 'label' => 'پروفایل سازمان', 'icon' => 'fa-id-card', 'route' => 'admin.organizations', 'admin_only' => true, 'permission' => 'org.manage', 'scope' => 'organization'],
+                ['key' => 'organization.profile', 'label' => 'پروفایل سازمان', 'icon' => 'fa-id-card', 'route' => 'admin.organizations', 'admin_only' => true, 'permission' => 'organization.manage', 'scope' => 'organization'],
                 ['key' => 'organization.billing', 'label' => 'صورتحساب سازمان', 'icon' => 'fa-file-invoice-dollar', 'route' => 'admin.finance', 'admin_only' => true, 'permission' => 'finance.view', 'scope' => 'organization'],
-                ['key' => 'organization.plans', 'label' => 'پلن‌ها', 'icon' => 'fa-crown', 'route' => 'admin.plans', 'admin_only' => true, 'permission' => 'settings.manage', 'scope' => 'global'],
+                ['key' => 'organization.plans', 'label' => 'پلن‌ها', 'icon' => 'fa-crown', 'route' => 'admin.plans', 'admin_only' => true, 'permission' => 'billing.manage', 'scope' => 'global'],
             ],
         ],
         [
             'key' => 'security', 'label' => 'امنیت و نظارت', 'icon' => 'fa-shield-halved',
             'items' => [
-                ['key' => 'security.audit', 'label' => 'گزارش ممیزی', 'icon' => 'fa-clipboard-list', 'route' => 'admin.audit', 'admin_only' => true, 'permission' => 'security.view', 'scope' => 'organization'],
-                ['key' => 'security.logs', 'label' => 'لاگ‌ها', 'icon' => 'fa-list-ul', 'route' => 'admin.audit', 'admin_only' => true, 'permission' => 'security.view', 'scope' => 'organization'],
-                ['key' => 'security.alerts', 'label' => 'هشدارهای امنیتی', 'icon' => 'fa-triangle-exclamation', 'planned' => true, 'admin_only' => true, 'permission' => 'security.view', 'scope' => 'organization'],
+                ['key' => 'security.audit', 'label' => 'گزارش ممیزی', 'icon' => 'fa-clipboard-list', 'route' => 'admin.audit', 'admin_only' => true, 'permission' => 'audit.view', 'scope' => 'global'],
+                ['key' => 'security.logs', 'label' => 'لاگ‌ها', 'icon' => 'fa-list-ul', 'route' => 'admin.audit', 'admin_only' => true, 'permission' => 'audit.view', 'scope' => 'global'],
+                ['key' => 'security.alerts', 'label' => 'هشدارهای امنیتی', 'icon' => 'fa-triangle-exclamation', 'planned' => true, 'admin_only' => true, 'permission' => 'audit.view', 'scope' => 'global'],
             ],
         ],
         [
@@ -124,8 +124,8 @@ return [
                 ['key' => 'settings.preferences', 'label' => 'ترجیحات', 'icon' => 'fa-sliders', 'planned' => true],
                 ['key' => 'settings.finance', 'label' => 'مالی', 'icon' => 'fa-wallet', 'route' => 'admin.finance', 'admin_only' => true, 'permission' => 'finance.view', 'scope' => 'organization'],
                 ['key' => 'settings.email', 'label' => 'ایمیل', 'icon' => 'fa-envelope', 'route' => 'admin.emails', 'admin_only' => true, 'permission' => 'settings.manage', 'scope' => 'global'],
-                ['key' => 'settings.integrations', 'label' => 'یکپارچه‌سازی‌ها', 'icon' => 'fa-plug', 'route' => 'admin.integrations', 'admin_only' => true, 'permission' => 'settings.manage', 'scope' => 'global'],
-                ['key' => 'settings.providers', 'label' => 'ارائه‌دهندگان', 'icon' => 'fa-server', 'route' => 'admin.index', 'fragment' => '#voice-settings', 'admin_only' => true, 'permission' => 'settings.manage', 'scope' => 'global'],
+                ['key' => 'settings.integrations', 'label' => 'یکپارچه‌سازی‌ها', 'icon' => 'fa-plug', 'route' => 'admin.integrations', 'admin_only' => true, 'permission' => 'integrations.manage', 'scope' => 'global'],
+                ['key' => 'settings.providers', 'label' => 'ارائه‌دهندگان', 'icon' => 'fa-server', 'route' => 'admin.index', 'fragment' => '#voice-settings', 'admin_only' => true, 'permission' => 'ai.manage', 'scope' => 'global'],
                 ['key' => 'settings.cms', 'label' => 'مدیریت محتوا', 'icon' => 'fa-newspaper', 'route' => 'admin.cms', 'admin_only' => true, 'permission' => 'settings.manage', 'scope' => 'global'],
             ],
         ],
