@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\ResolveAdminScope;
 use App\Models\Organization;
+use App\Models\Permission;
+use App\Models\RolePermission;
 use App\Models\SiteSetting;
 use App\Models\Team;
 use App\Models\User;
@@ -105,6 +107,35 @@ class AdminConsoleScopeIntegrityTest extends TestCase
         $this->assertContains($supervisor->id, $visibleIds);
         $this->assertContains($employee->id, $visibleIds);
         $this->assertNotContains($admin->id, $visibleIds);
+    }
+
+    public function test_role_permission_changes_are_validated_and_applied_as_one_transaction(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $documentsPermission = Permission::where('key', 'documents.view')->firstOrFail();
+        $usersPermission = Permission::where('key', 'users.view')->firstOrFail();
+
+        RolePermission::where('role', User::ROLE_EMPLOYEE)->delete();
+        RolePermission::create([
+            'role' => User::ROLE_EMPLOYEE,
+            'permission_id' => $documentsPermission->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.access'))
+            ->post(route('admin.access.roles.update', User::ROLE_EMPLOYEE), [
+                'permissions' => ['users.view'],
+            ])
+            ->assertRedirect(route('admin.access'));
+
+        $this->assertDatabaseHas('role_permissions', [
+            'role' => User::ROLE_EMPLOYEE,
+            'permission_id' => $usersPermission->id,
+        ]);
+        $this->assertDatabaseMissing('role_permissions', [
+            'role' => User::ROLE_EMPLOYEE,
+            'permission_id' => $documentsPermission->id,
+        ]);
     }
 
 }
