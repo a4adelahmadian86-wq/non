@@ -130,7 +130,6 @@ class AuthController extends Controller
         $request->session()->forget(['login.phone', 'register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at']);
         Auth::login($user, true);
         $request->session()->regenerate();
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended(route('editor'));
     }
@@ -160,7 +159,6 @@ class AuthController extends Controller
         Auth::login($user, true);
         $request->session()->regenerate();
         $request->session()->forget(['login.phone']);
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended($user->isAdmin() ? route('admin.index') : route('editor'));
     }
@@ -274,7 +272,6 @@ class AuthController extends Controller
         Auth::login($user, true);
         $request->session()->regenerate();
         $request->session()->forget(['email_login.email', 'email_login.user_id', 'email_login.mobile']);
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended($user->isAdmin() ? route('admin.index') : route('editor'));
     }
@@ -336,7 +333,6 @@ class AuthController extends Controller
         $request->session()->forget(['password_reset.mobile', 'password_reset.verified', 'password_reset.verified_mobile', 'password_reset.verified_at']);
         Auth::login($user, true);
         $request->session()->regenerate();
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended($user->isAdmin() ? route('admin.index') : route('editor'))->with('status', 'رمز عبور با موفقیت تغییر کرد.');
     }
