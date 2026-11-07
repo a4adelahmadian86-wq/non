@@ -20,11 +20,11 @@ class CanvaServiceTest extends TestCase {
   SiteSetting::write('canva_redirect_uri','https://example.test/canva/callback');
   $user=new User(['mobile'=>'09120000003','name'=>'Canva Invalid Token Test','role'=>User::ROLE_EMPLOYEE,'is_verified'=>true,'is_blocked'=>false]);$user->save();
   session(['canva_oauth'=>['state'=>'state-123','verifier'=>'verifier-123']]);
-  \\Illuminate\\Support\\Facades\\Http::fake(['https://api.canva.com/rest/v1/oauth/token'=>\\Illuminate\\Support\\Facades\\Http::response(['refresh_token'=>'refresh-only','expires_in'=>3600],200)]);
+  \Illuminate\Support\Facades\Http::fake(['https://api.canva.com/rest/v1/oauth/token'=>\Illuminate\Support\Facades\Http::response(['refresh_token'=>'refresh-only','expires_in'=>3600],200)]);
   try {
    app(CanvaService::class)->callback($user,'authorization-code','state-123');
    $this->fail('An incomplete token response must not create a connected account.');
-  } catch (\\RuntimeException $exception) {
+  } catch (\RuntimeException $exception) {
    $this->assertSame('canva_token_response_invalid',$exception->getMessage());
   }
   $this->assertDatabaseMissing('canva_connections',['user_id'=>$user->id]);
@@ -36,7 +36,7 @@ class CanvaServiceTest extends TestCase {
   SiteSetting::write('canva_redirect_uri','https://example.test/canva/callback');
   $user=new User(['mobile'=>'09120000004','name'=>'Canva Valid Token Test','role'=>User::ROLE_EMPLOYEE,'is_verified'=>true,'is_blocked'=>false]);$user->save();
   session(['canva_oauth'=>['state'=>'state-456','verifier'=>'verifier-456']]);
-  \\Illuminate\\Support\\Facades\\Http::fake(['https://api.canva.com/rest/v1/oauth/token'=>\\Illuminate\\Support\\Facades\\Http::response(['access_token'=>'access-123','refresh_token'=>'refresh-123','expires_in'=>3600,'scope'=>'design:meta:read'],200)]);
+  \Illuminate\Support\Facades\Http::fake(['https://api.canva.com/rest/v1/oauth/token'=>\Illuminate\Support\Facades\Http::response(['access_token'=>'access-123','refresh_token'=>'refresh-123','expires_in'=>3600,'scope'=>'design:meta:read'],200)]);
   $connection=app(CanvaService::class)->callback($user,'authorization-code','state-456');
   $this->assertSame('access-123',$connection->access_token);
   $this->assertSame('connected',$connection->status);
