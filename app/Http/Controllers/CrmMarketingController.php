@@ -159,6 +159,7 @@ class CrmMarketingController extends Controller
     public function sendCampaign(Request $request, int $campaign, AdminConsoleService $console, CrmAudienceService $audiences)
     {
         $visibleIds = $this->scope($request, $console);
+        $ownerIds = $this->ownerScope($request, $console);
 
         $sentCount = DB::transaction(function () use ($campaign, $request, $visibleIds, $ownerIds, $audiences) {
             $record = DB::table('crm_marketing_campaigns')->where('id', $campaign)->lockForUpdate()->first();
