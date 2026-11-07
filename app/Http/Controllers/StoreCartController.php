@@ -136,7 +136,7 @@ class StoreCartController extends Controller
                 } else {
                     $file = $product->files->where('purpose', 'product_download')->firstWhere('is_primary', true)
                         ?: $product->files->where('purpose', 'product_download')->firstWhere('is_active', true);
-                    if (! $file || ! $file->is_active || $file->scan_status !== 'clean') {
+                    if (! $file || ! $file->is_active || ! in_array($file->scan_status, ['clean', 'legacy'], true)) {
                         throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
                     }
                 }
