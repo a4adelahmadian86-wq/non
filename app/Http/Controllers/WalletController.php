@@ -16,8 +16,9 @@ class WalletController extends Controller
     {
         $wallet = auth()->user()->wallet()->firstOrCreate([], ['balance_rials' => 0]);
         $transactions = $wallet->transactions()->latest()->limit(30)->get();
+        $gatewayEnabled = app(ZarinpalService::class)->enabled();
 
-        return view('wallet', compact('wallet', 'transactions'));
+        return view('wallet', compact('wallet', 'transactions', 'gatewayEnabled'));
     }
 
     public function topUp(Request $request, ZarinpalService $zarinpal)
