@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FarastCharge;
 use App\Models\FarastPricingPolicyVersion;
+use App\Models\FarastRefund;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\CommerceAuthorizationService;
@@ -79,7 +80,7 @@ class RefundIdempotencyIntegrityTest extends TestCase
         }
 
         $this->assertSame($balanceBefore, (int) Wallet::where('user_id', $secondUser->id)->value('balance_rials'));
-        $this->assertSame(1, \App\Models\FarastRefund::where('idempotency_key', 'shared-refund-key')->count());
+        $this->assertSame(1, FarastRefund::where('idempotency_key', 'shared-refund-key')->count());
     }
 
     public function test_same_refund_key_cannot_be_reused_with_a_different_amount_or_reason(): void
@@ -98,6 +99,6 @@ class RefundIdempotencyIntegrityTest extends TestCase
             $this->assertSame('refund_idempotency_key_conflict', $exception->getMessage());
         }
 
-        $this->assertSame(1, \App\Models\FarastRefund::where('idempotency_key', 'refund-amount-key')->count());
+        $this->assertSame(1, FarastRefund::where('idempotency_key', 'refund-amount-key')->count());
     }
 }
