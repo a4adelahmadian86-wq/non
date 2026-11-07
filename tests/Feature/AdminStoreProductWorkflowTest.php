@@ -188,6 +188,40 @@ class AdminStoreProductWorkflowTest extends TestCase
         Storage::disk('public')->assertExists(str_replace('storage/', '', $image->path));
     }
 
+    public function test_gallery_image_deletion_removes_only_the_owned_public_asset(): void
+    {
+        Storage::fake('public');
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول گالری',
+            'slug' => 'gallery-delete-product',
+            'sku' => 'GALLERY-DELETE-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $relativePath = 'store/product-images/'.$product->id.'/gallery.jpg';
+        Storage::disk('public')->put($relativePath, 'image-data');
+        $image = StoreProductImage::create([
+            'product_id' => $product->id,
+            'path' => 'storage/'.$relativePath,
+            'alt' => 'نمای محصول',
+            'kind' => 'image',
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->delete(route('admin.store.images.delete', [$product, $image]))
+            ->assertRedirect(route('admin.store.edit', $product));
+
+        $this->assertDatabaseMissing('store_product_images', ['id' => $image->id]);
+        Storage::disk('public')->assertMissing($relativePath);
+    }
+
     public function test_compare_at_price_must_be_greater_than_the_sale_price(): void
     {
         $admin = $this->admin();
