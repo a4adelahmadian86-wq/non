@@ -82,6 +82,34 @@ class EditorUploadSecurityTest extends TestCase
             ->assertStatus(423);
     }
 
+    public function test_uploaded_file_cannot_be_changed_after_clean_scan_and_before_ocr(): void
+    {
+        Storage::fake('private');
+        $user = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $path = 'typing/'.$user->id.'/changed.pdf';
+        $bytes = 'tampered after scan';
+        Storage::disk('private')->put($path, $bytes);
+        FarastStorageObject::create([
+            'user_id' => $user->id,
+            'disk' => 'private',
+            'path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($bytes),
+            'checksum' => hash('sha256', 'original scanned content'),
+            'status' => 'approved',
+            'classification' => 'upload',
+            'provenance' => ['scan' => 'clean'],
+        ]);
+        session([
+            'pending_upload' => ['path' => $path, 'mime' => 'application/pdf', 'name' => 'changed.pdf'],
+            'typing_preflight_accepted' => ['path' => $path, 'hash' => hash('sha256', $bytes), 'pages' => 1],
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/editor/analyze', ['path' => $path, 'mime' => 'application/pdf', 'source_name' => 'changed.pdf'])
+            ->assertStatus(409);
+    }
+
     public function test_editor_upload_creates_approved_storage_object_only_after_clean_scan(): void
     {
         Storage::fake('private');
