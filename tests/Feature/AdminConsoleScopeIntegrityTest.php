@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AdminConsoleScopeIntegrityTest extends TestCase
@@ -157,6 +158,7 @@ class AdminConsoleScopeIntegrityTest extends TestCase
 
     public function test_global_admin_dashboard_surfaces_internal_connection_health(): void
     {
+        Storage::fake('private');
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
         $this->actingAs($admin)
@@ -164,7 +166,8 @@ class AdminConsoleScopeIntegrityTest extends TestCase
             ->assertOk()
             ->assertSee('id="system-health"')
             ->assertSee('پایگاه داده')
-            ->assertSee('صف پردازش');
+            ->assertSee('صف پردازش')
+            ->assertSee('فضای خصوصی فایل‌ها');
     }
 
 }
