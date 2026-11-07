@@ -199,11 +199,38 @@ class AdminStoreController extends Controller
     public function deleteFile(StoreProduct $product, StoreProductFile $file)
     {
         abort_unless($file->product_id === $product->id && $file->purpose === 'product_download', 404);
+
+        $hasHistoricalAccess = DB::table('store_library_items')->where('product_file_id', $file->id)->exists();
+        if ($hasHistoricalAccess) {
+            if ($file->is_primary && $product->status === 'published') {
+                $replacementExists = $product->files()
+                    ->where('purpose', 'product_download')
+                    ->where('is_active', true)
+                    ->where('is_primary', true)
+                    ->where('scan_status', 'clean')
+                    ->where('id', '!=', $file->id)
+                    ->exists();
+                if (! $replacementExists) {
+                    throw ValidationException::withMessages([
+                        'file' => 'این فایل دسترسی خریداران قبلی را تأمین می‌کند. ابتدا فایل اصلی جایگزین را بارگذاری و فعال کنید؛ سپس فایل قبلی از محصول جدید کنار گذاشته می‌شود.',
+                    ]);
+                }
+            }
+
+            $file->update(['is_primary' => false]);
+            $this->audit('store.product.file_retained_for_buyers', $product, ['file_id' => $file->id]);
+            return back()->with('status', 'فایل از فروش جدید کنار گذاشته شد اما برای حفظ دسترسی خریداران قبلی نگهداری شد.');
+        }
+
         $this->audit('store.product.file_deleted', $product, ['file_id' => $file->id, 'purpose' => $file->purpose]);
         Storage::disk($file->disk ?: 'private')->delete($file->path);
         $file->delete();
 
-        return back()->with('status', 'فایل حذف شد.');
+        if (app(StoreProductWorkspaceService::class)->synchronizePublishedState($product)) {
+            $this->audit('store.product.unpublished_incomplete', $product, ['reason' => 'required_file_removed']);
+        }
+
+        return back()->with('status', 'فایل حذف شد؛ وضعیت انتشار محصول نیز با محتوای باقی‌مانده هماهنگ شد.');
     }
 
     public function uploadPreview(Request $request, StoreProduct $product, UploadSecurityService $security)
