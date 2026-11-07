@@ -22,7 +22,9 @@ return Application::configure(basePath:dirname(__DIR__))
         // دامنه‌ی کنسول مدیریت برای همه مسیرهای /admin حل می‌شود (معماری داشبورد واحد + Scope).
         $middleware->web(append: [App\Http\Middleware\ResolveAdminScope::class]);
         $middleware->append(App\Http\Middleware\EnsurePrivateStorageDisk::class);
-        if(filter_var(env('FARAST_OBSERVABILITY_ENABLED',true),FILTER_VALIDATE_BOOLEAN))$middleware->append(App\Http\Middleware\FarastObservability::class);
+        if (config('observability.enabled', true)) {
+            $middleware->append(App\Http\Middleware\FarastObservability::class);
+        }
     })
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
