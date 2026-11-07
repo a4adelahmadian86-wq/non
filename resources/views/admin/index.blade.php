@@ -26,7 +26,7 @@
             @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><span>شبکه‌های اجتماعی</span></a>@endif
         </div>
         @if($scope === 'global')
-            @php($runtimeReady = (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false))
+            @php($runtimeReady = (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false))
             <div class="farast-admin-live {{ $runtimeReady ? 'is-healthy' : 'is-degraded' }}">
                 <span></span>
                 <div><b>سلامت زیرساخت</b><small>{{ $runtimeReady ? 'بررسی داخلی موفق' : 'نیازمند بررسی عملیاتی' }}</small></div>
