@@ -221,7 +221,8 @@ class StoreController extends Controller
         libxml_use_internal_errors($previous);
 
         $allowed = ['div','p','span','table','thead','tbody','tfoot','tr','td','th','ul','ol','li','br','strong','b','em','i','u','h1','h2','h3','h4','h5','h6','blockquote','img'];
-        $root = $dom->getElementById('farast-docx-root');
+        $xpath = new \\DOMXPath($dom);
+        $root = $xpath->query('//*[@id="farast-docx-root"]')->item(0);
         if (!$root) {
             return '';
         }
