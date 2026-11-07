@@ -165,6 +165,7 @@
 
   const buildContinuousPages=async()=>{
     if(!pdfDoc||!continuousHost)return;
+    continuousHost.hidden=false;
     continuousObserver?.disconnect();
     continuousHost.innerHTML='';
     const fragment=document.createDocumentFragment();
@@ -436,7 +437,7 @@
     }else{
       continuousObserver?.disconnect();continuousObserver=null;
       pdfSurface?.classList.remove('is-continuous');
-      if(continuousHost)continuousHost.innerHTML='';
+      if(continuousHost){continuousHost.innerHTML='';continuousHost.hidden=true;}
       if(pdfSurface){pdfSurface.style.width='';pdfSurface.style.minHeight='';}
       await renderPdfPage(pdfPage);
     }
