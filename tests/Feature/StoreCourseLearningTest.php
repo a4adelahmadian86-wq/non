@@ -152,7 +152,8 @@ class StoreCourseLearningTest extends TestCase
         $user = $this->makeUser();
         [$product, $course] = $this->makeCourse('multiple-entitlements', 10000);
 
-        $this->grantCourse($user, $product); // Original enrollment has no expiry.
+        $originalEntitlement = $this->grantCourse($user, $product); // Original enrollment has no expiry.
+        $originalEntitlement->update(['granted_at' => now()->subDays(10)]);
         $course->update(['access_duration_days' => 1]);
 
         $order = Order::create([
