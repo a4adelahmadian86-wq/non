@@ -115,7 +115,7 @@ class AdminStoreController extends Controller
     public function uploadPreview(Request $request, StoreProduct $product)
     {
         $request->validate([
-            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf|max:20480',
+            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf,docx|max:20480',
             'page_number' => 'nullable|integer|min:1|max:500',
         ]);
 
@@ -129,7 +129,9 @@ class AdminStoreController extends Controller
             'path' => $path,
             'mime' => $upload->getClientMimeType(),
             'page_number' => $request->input('page_number') ?: $sort,
-            'kind' => str_contains((string) $upload->getClientMimeType(), 'pdf') ? 'pdf' : 'image',
+            'kind' => str_contains((string) $upload->getClientMimeType(), 'pdf')
+                ? 'pdf'
+                : (strtolower($upload->getClientOriginalExtension()) === 'docx' ? 'docx' : 'image'),
             'watermarked' => true,
             'is_active' => true,
             'sort_order' => $sort,
