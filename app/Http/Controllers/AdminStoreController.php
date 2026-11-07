@@ -49,10 +49,14 @@ class AdminStoreController extends Controller
     public function create()
     {
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
+        $tags = StoreTag::query()->orderBy('name')->get();
+        $relatedProducts = StoreProduct::query()->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
         return view('admin.store.form', [
             'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
             'categories' => $categories,
+            'tags' => $tags,
+            'relatedProducts' => $relatedProducts,
         ]);
     }
 
@@ -90,7 +94,7 @@ class AdminStoreController extends Controller
         $product->load(['files', 'previews', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
-        $relatedProducts = StoreProduct::query()->whereKeyNot($product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
+        $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
         $contentReady = $product->type === 'course'
             ? $product->course?->sections->contains(fn ($section) => $section->lessons->contains(fn ($lesson) => $lesson->is_published)) ?? false
@@ -426,7 +430,7 @@ class AdminStoreController extends Controller
             'tag_ids' => 'sometimes|array|max:30',
             'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
             'related_product_ids' => 'sometimes|array|max:12',
-            'related_product_ids.*' => 'integer|distinct|exists:store_products,id|different:product_id',
+            'related_product_ids.*' => 'integer|distinct|exists:store_products,id',
         ]);
         $data['tag_ids'] = $request->input('tag_ids', []);
         $data['related_product_ids'] = array_values(array_filter($request->input('related_product_ids', []), fn ($id) => ! $product || (int) $id !== (int) $product->id));
