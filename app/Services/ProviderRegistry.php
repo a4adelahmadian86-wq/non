@@ -90,6 +90,9 @@ final class ProviderRegistry
                 'connection_verified' => $health['connection_verified'],
                 'api_reachable' => $health['api_reachable'],
                 'ready' => $health['ready'],
+                'capability_readiness' => $name === 'gemini'
+                    ? ['text' => (bool) ($health['capabilities']['text'] ?? false)]
+                    : [],
                 'last_success_at' => $health['last_success_at'],
                 'last_failure_at' => $health['last_failure_at'],
                 'quota' => null,
@@ -103,7 +106,7 @@ final class ProviderRegistry
 
         $groqKey = trim((string) (SiteSetting::read('voice_groq_key') ?: config('services.groq.key', '')));
         $groqModel = trim((string) (SiteSetting::read('assistant_groq_model') ?: 'openai/gpt-oss-120b'));
-        $groqHealth = $this->connectionHealth->state('groq', $groqKey, $groqModel, ['chat', 'speech']);
+        $groqHealth = $this->connectionHealth->state('groq', $groqKey, $groqModel, ['chat']);
 
         $items[] = [
             'id' => 'ai:groq',
@@ -117,6 +120,10 @@ final class ProviderRegistry
             'connection_verified' => $groqHealth['connection_verified'],
             'api_reachable' => $groqHealth['api_reachable'],
             'ready' => $groqHealth['ready'],
+            'capability_readiness' => [
+                'chat' => (bool) ($groqHealth['capabilities']['chat'] ?? false),
+                'speech' => (bool) ($groqHealth['capabilities']['speech'] ?? false),
+            ],
             'last_success_at' => $groqHealth['last_success_at'],
             'last_failure_at' => $groqHealth['last_failure_at'],
             'quota' => null,

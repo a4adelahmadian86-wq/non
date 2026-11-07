@@ -60,7 +60,7 @@ class ProviderAdminController extends Controller
 
             if (! $response->successful()) {
                 $status = $response->status();
-                $health->recordFailure('gemini', $key, $selectedModel, 'http_'.$status);
+                $health->recordFailure('gemini', $key, $selectedModel, 'http_'.$status, true);
                 $message = match ($status) {
                     401, 403 => 'کلید معتبر نیست یا دسترسی Gemini API برای این پروژه فعال نشده است.',
                     429 => 'محدودیت نرخ یا سهمیهٔ حساب Gemini مانع پاسخ‌گویی شد.',
@@ -200,7 +200,7 @@ class ProviderAdminController extends Controller
 
             if (! $response->successful()) {
                 $status = $response->status();
-                $health->recordFailure('groq', $key, $model, 'http_'.$status);
+                $health->recordFailure('groq', $key, $model, 'http_'.$status, true);
 
                 return response()->json([
                     'ok' => false,
