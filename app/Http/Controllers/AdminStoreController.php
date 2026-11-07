@@ -26,9 +26,11 @@ class AdminStoreController extends Controller
         $status = in_array($request->query('status'), ['draft', 'published', 'archived'], true) ? $request->query('status') : '';
 
         $products = StoreProduct::query()
-            ->with(['category', 'files'])
+            ->with(['category', 'files', 'images'])
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
-                $inner->where('title', 'like', '%'.$q.'%')->orWhere('sku', 'like', '%'.$q.'%');
+                $inner->where('title', 'like', '%'.$q.'%')
+                    ->orWhere('sku', 'like', '%'.$q.'%')
+                    ->orWhereHas('tags', fn ($tagQuery) => $tagQuery->where('name', 'like', '%'.$q.'%'));
             }))
             ->when($type !== '', fn ($query) => $query->where('type', $type))
             ->when($status !== '', fn ($query) => $query->where('status', $status))
