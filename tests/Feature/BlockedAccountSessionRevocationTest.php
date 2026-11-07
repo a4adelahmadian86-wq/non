@@ -25,7 +25,8 @@ class BlockedAccountSessionRevocationTest extends TestCase
         $this->actingAs($user)
             ->withSession(['sensitive_session_value' => 'must-be-cleared'])
             ->get('/__test/active-account-guard')
-            ->assertRedirect(route('login'));
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('warning', 'حساب کاربری شما مسدود شده است. برای پیگیری با پشتیبانی تماس بگیرید.');
 
         $this->assertGuest();
         $this->assertFalse(session()->has('sensitive_session_value'));
