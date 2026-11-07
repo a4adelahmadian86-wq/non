@@ -22,6 +22,8 @@
         @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}" @if(request()->routeIs('admin.finance')) aria-current="page" @endif><i class="fa-solid fa-wallet"></i><span>مالی و پرداخت‌ها</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'integrations'))<a href="{{ route('admin.integrations') }}" @if(request()->routeIs('admin.integrations')) aria-current="page" @endif><i class="fa-solid fa-plug"></i><span>یکپارچه‌سازی سرویس‌ها</span></a>@endif
+        @if($adminConsole->sectionAllowed(auth()->user(), 'settings'))<a href="{{ route('admin.index') }}#ai-settings"><i class="fa-solid fa-sliders"></i><span>تنظیمات مرکزی AI</span></a>@endif
+        @if($adminConsole->sectionAllowed(auth()->user(), 'pricing'))<a href="{{ route('admin.index') }}#pricing"><i class="fa-solid fa-tags"></i><span>قیمت‌گذاری خدمات</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'voice'))<a href="{{ route('admin.index') }}#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'ai_providers'))<a href="{{ route('admin.index') }}#groq-settings"><i class="fa-solid fa-brain"></i><span>ارائه‌دهندگان AI</span></a>@endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}" @if(request()->routeIs('admin.analytics')) aria-current="page" @endif><i class="fa-solid fa-chart-line"></i><span>تحلیل و گزارش</span></a>@endif
