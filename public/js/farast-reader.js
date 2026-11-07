@@ -17,6 +17,9 @@
   const pdfSurface=root.querySelector('.farast-pdf-document');
   const pdfLoading=root.querySelector('.farast-pdf-loading');
   const pdfUrl=pdfSurface?.dataset.pdfUrl;
+  const pdfjsReady=window.pdfjsLib
+    ? Promise.resolve(window.pdfjsLib)
+    : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;});
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],docxMatches=[],matchIndex=-1,renderTask=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
@@ -124,10 +127,11 @@
   };
 
   const loadPdf=async()=>{
-    if(!pdfUrl||!window.pdfjsLib){if(pdfLoading)pdfLoading.textContent='موتور PDF بارگذاری نشد. اتصال اینترنت را بررسی کنید.';return;}
-    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    if(!pdfUrl){if(pdfLoading)pdfLoading.textContent='فایل PDF برای نمایش پیدا نشد.';return;}
     try{
-      pdfDoc=await pdfjsLib.getDocument({url:pdfUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
+      const pdfjs=await pdfjsReady;
+      pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.worker.mjs';
+      pdfDoc=await pdfjs.getDocument({url:pdfUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
     }catch(error){showPdfError(error);}
