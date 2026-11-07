@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
+use App\Models\StoreProductFile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AdminStoreProductWorkflowTest extends TestCase
@@ -100,6 +102,50 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSessionHasErrors('compare_at_price_rials');
 
         $this->assertDatabaseMissing('store_products', ['sku' => 'TEST-PRODUCT-001']);
+    }
+
+    public function test_last_primary_file_cannot_be_deleted_while_product_is_published(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول منتشرشده',
+            'slug' => 'published-product',
+            'sku' => 'PUBLISHED-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $path = 'store/products/'.$product->id.'/primary.pdf';
+        Storage::disk('private')->put($path, 'safe-test-content');
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => $path,
+            'original_name' => 'primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 17,
+            'sha256' => hash('sha256', 'safe-test-content'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'test',
+            'scanned_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->delete(route('admin.store.files.delete', [$product, $file]))
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHasErrors('file');
+
+        $this->assertDatabaseHas('store_product_files', ['id' => $file->id]);
+        Storage::disk('private')->assertExists($path);
     }
 
     public function test_published_file_product_requires_an_active_clean_primary_file_on_every_update(): void
