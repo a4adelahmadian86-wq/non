@@ -80,8 +80,7 @@
 
   const buildPdfThumbs=async()=>{
     if(!pdfDoc||!thumbsHost)return;
-    const original=thumbsHost.querySelector('.farast-reader-thumb');
-    if(original)original.remove();
+    thumbsHost.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(t=>t.remove());
     const fragment=document.createDocumentFragment();
     for(let n=1;n<=pdfDoc.numPages;n++){
       const button=document.createElement('button');
@@ -146,6 +145,7 @@
     if(isPdf()){
       if(!pdfDoc)await loadPdf();
       else await renderPdfPage(1);
+      if(pdfDoc)await buildPdfThumbs();
     }else{
       setPageControls(itemIndex+1,articles.length);
       zoom=1;rotation=0;setZoomLabel();
