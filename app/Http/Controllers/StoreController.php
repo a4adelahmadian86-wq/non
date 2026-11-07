@@ -311,8 +311,11 @@ class StoreController extends Controller
                 }
 
                 $relationships = $archive->getFromIndex($index);
-                if (!is_string($relationships) || stripos($relationships, 'TargetMode="External"') === false) {
+                if (!is_string($relationships)) {
                     continue;
+                }
+                if (strlen($relationships) > 2 * 1024 * 1024) {
+                    abort(422, 'اندازه پیوندهای داخلی فایل Word از حد مجاز بیشتر است.');
                 }
 
                 $xml = new \DOMDocument();
@@ -325,7 +328,7 @@ class StoreController extends Controller
                 }
 
                 $xpath = new \DOMXPath($xml);
-                if ($xpath->query('//*[local-name()="Relationship" and translate(@TargetMode, "EXTERNAL", "external")="external"]')->length > 0) {
+                if ($xpath->query('//*[local-name()="Relationship" and translate(normalize-space(@TargetMode), "EXTERNAL", "external")="external"]')->length > 0) {
                     abort(422, 'پیوند خارجی در فایل Word مجاز نیست.');
                 }
             }
