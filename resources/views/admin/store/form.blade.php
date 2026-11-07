@@ -112,6 +112,8 @@
             <div style="position:relative">
               @if(($preview->kind ?? '')==='pdf' || str_contains((string)$preview->mime,'pdf'))
                 <div style="aspect-ratio:3/4;display:grid;place-items:center;background:#f0f4fa;border-radius:8px;border:1px solid #e2e9f2;font-size:.7rem">PDF · صفحه {{ $preview->page_number }}</div>
+              @elseif(($preview->kind ?? '')==='xlsx')
+                <div style="aspect-ratio:3/4;display:grid;place-items:center;background:#edf7f0;border-radius:8px;border:1px solid #d4e9da;font-size:.8rem;font-weight:800;color:#23754a">Excel · XLSX</div>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:8px;border:1px solid #e2e9f2">
               @endif
@@ -125,7 +127,7 @@
         </div>
         <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           @csrf
-          <input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx" required>
+          <input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx" required>
           <input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه" style="width:120px;padding:8px;border:1px solid #e2e9f2;border-radius:8px">
           <button type="submit" class="store-primary-btn">آپلود پیش‌نمایش</button>
         </form>
