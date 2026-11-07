@@ -52,6 +52,7 @@ class StoreXlsxPreviewRenderer
 
                 $safeIdentity = $this->escape($identity !== '' ? $identity : 'حساب کاربر');
                 $tables = [];
+                $tabs = [];
                 $cellCount = 0;
 
                 foreach ($sheets as $sheetIndex => $sheet) {
@@ -75,7 +76,9 @@ class StoreXlsxPreviewRenderer
                     $xml = $this->loadXml($zip, $sheetPath, 20 * 1024 * 1024);
                     $rows = $this->readWorksheet($xml, $sharedStrings, $cellCount);
                     $name = $this->escape($sheet->getAttribute('name') ?: 'Sheet '.($sheetIndex + 1));
-                    $tables[] = '<section class="sheet"><h2>'.($sheetIndex + 1).'. '.$name.'</h2>'.$this->table($rows).'</section>';
+                    $sheetId = 'sheet-'.($sheetIndex + 1);
+                    $tabs[] = '<a href="#'.$sheetId.'">'.$name.'</a>';
+                    $tables[] = '<section class="sheet" id="'.$sheetId.'"><h2>'.($sheetIndex + 1).'. '.$name.'</h2>'.$this->table($rows).'</section>';
                 }
 
                 if ($tables === []) {
@@ -94,7 +97,7 @@ class StoreXlsxPreviewRenderer
                     body{padding:24px 18px 50px;font-size:13px;line-height:1.8;user-select:none;-webkit-user-select:none}
                     .workbook{max-width:1200px;margin:auto;position:relative;background:#fff;border:1px solid #dce4ef;border-radius:14px;padding:24px;box-shadow:0 12px 40px rgba(15,35,65,.08);overflow:hidden}
                     .intro{position:relative;z-index:2;padding:0 0 16px;border-bottom:1px solid #e7edf5}.intro h1{font-size:18px;margin:0 0 5px}.intro p{margin:0;color:#64748b;font-size:12px}
-                    .sheet{position:relative;z-index:1;margin-top:24px}.sheet h2{font-size:14px;margin:0 0 10px;color:#1d4d79}
+                    .sheet-nav{position:relative;z-index:2;display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}.sheet-nav a{display:inline-block;padding:6px 10px;border:1px solid #dce4ef;border-radius:7px;background:#f8fafc;color:#245b87;text-decoration:none;font-size:11px}.sheet-nav a:focus{outline:2px solid #3b82f6;outline-offset:2px}.sheet{position:relative;z-index:1;margin-top:24px;scroll-margin-top:12px}.sheet h2{font-size:14px;margin:0 0 10px;color:#1d4d79}
                     .table-wrap{width:100%;overflow:auto;border:1px solid #dce4ef;border-radius:8px}
                     table{border-collapse:collapse;width:100%;min-width:520px;font-size:11px;direction:rtl}
                     th,td{border:1px solid #e2e8f0;padding:7px 9px;text-align:right;vertical-align:top;min-width:90px;max-width:280px;overflow-wrap:anywhere}
@@ -105,7 +108,7 @@ class StoreXlsxPreviewRenderer
                     .watermark{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:.14;overflow:hidden}.watermark span{position:absolute;white-space:nowrap;transform:rotate(-24deg);font-weight:700;color:#26364b;background:rgba(255,255,255,.24);padding:5px 8px}
                     @media(max-width:700px){body{padding:10px}.workbook{padding:14px}.sheet{margin-top:18px}}
                     @media print{body{background:#fff;padding:0}.workbook{box-shadow:none;border:0}.watermark{position:fixed}}
-                </style></head><body><div class="watermark">'.$marks.'</div><main class="workbook"><header class="intro"><h1>پیش‌نمایش کتاب کار Excel</h1><p>حالت فقط‌خواندنی · '.count($tables).' برگه · فرمول‌ها اجرا نمی‌شوند و فقط مقدار ذخیره‌شده نمایش داده می‌شود.</p></header>'.implode('', $tables).'<p class="notice">این سند برای مطالعه ارائه شده است. ویرایش، اجرای فرمول و دریافت فایل از این محیط پشتیبانی نمی‌شود.</p></main></body></html>';
+                </style></head><body><div class="watermark">'.$marks.'</div><main class="workbook"><header class="intro"><h1>پیش‌نمایش کتاب کار Excel</h1><p>حالت فقط‌خواندنی · '.count($tables).' برگه · فرمول‌ها اجرا نمی‌شوند و فقط مقدار ذخیره‌شده نمایش داده می‌شود.</p></header><nav class="sheet-nav" aria-label="برگه‌های فایل Excel">'.implode('', $tabs).'</nav>'.implode('', $tables).'<p class="notice">این سند برای مطالعه ارائه شده است. ویرایش، اجرای فرمول و دریافت فایل از این محیط پشتیبانی نمی‌شود.</p></main></body></html>';
             } finally {
                 $zip->close();
             }
