@@ -195,11 +195,22 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
     public function test_observer_dashboard_does_not_offer_project_creation(): void
     {
         $observer = $this->makeUser(User::ROLE_OBSERVER);
+        TypingDocument::create([
+            'user_id' => $observer->id,
+            'title' => 'Observer document',
+            'content' => '',
+            'page_count' => 1,
+            'word_count' => 0,
+            'status' => 'draft',
+            'price_rials' => 0,
+        ]);
 
         $this->actingAs($observer)
             ->get('/dashboard')
             ->assertOk()
-            ->assertDontSee('پروژه جدید');
+            ->assertDontSee('پروژه جدید')
+            ->assertDontSee('باز کردن')
+            ->assertSee('فقط مشاهده');
 
         $this->get(route('projects.create'))->assertForbidden();
         $this->post(route('projects.store'), [])->assertForbidden();
