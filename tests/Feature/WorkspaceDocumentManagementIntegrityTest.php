@@ -136,6 +136,16 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
         $this->assertArrayNotHasKey('documents.shared', $items->all());
     }
 
+    public function test_observer_dashboard_does_not_offer_project_creation(): void
+    {
+        $observer = $this->makeUser(User::ROLE_OBSERVER);
+
+        $this->actingAs($observer)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('پروژه جدید');
+    }
+
     public function test_legacy_default_user_role_is_normalized_to_employee(): void
     {
         $user = $this->makeUser('user');
