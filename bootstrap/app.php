@@ -20,7 +20,7 @@ return Application::configure(basePath:dirname(__DIR__))
             'editor/voice/stream-usage',
         ]);
         // دامنه‌ی کنسول مدیریت برای همه مسیرهای /admin حل می‌شود (معماری داشبورد واحد + Scope).
-        $middleware->web(append: [App\Http\Middleware\ResolveAdminScope::class]);
+        $middleware->web(append: [App\Http\Middleware\EnsureActiveAccount::class, App\Http\Middleware\ResolveAdminScope::class]);
         $middleware->append(App\Http\Middleware\EnsurePrivateStorageDisk::class);
         if(filter_var(env('FARAST_OBSERVABILITY_ENABLED',true),FILTER_VALIDATE_BOOLEAN))$middleware->append(App\Http\Middleware\FarastObservability::class);
     })
