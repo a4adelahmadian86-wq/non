@@ -518,12 +518,20 @@ test('assistant keeps listening during TTS without interrupting the active answe
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__sentAudioFrames)).toBeGreaterThan(framesBeforeTtsNoise);
 
+  // Keep a queued callback reference to prove that stopping capture invalidates
+  // even a frame already waiting in the browser event queue.
+  await page.evaluate(()=>{window.__staleAudioCallback=window.__scriptProcessor.onaudioprocess;});
   // Turning the button red must stop the real MediaStream tracks without interrupting TTS.
   await page.locator('.farast-voice-mic').click();
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
   expect(await page.evaluate(()=>window.__scriptProcessor.onaudioprocess)).toBe(null);
+  await page.evaluate(()=>{
+    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.5)};
+    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
+    window.__staleAudioCallback({inputBuffer,outputBuffer});
+  });
   const framesWhileOff=await page.evaluate(()=>window.__sentAudioFrames);
   await page.waitForTimeout(80);
   expect(await page.evaluate(()=>window.__sentAudioFrames)).toBe(framesWhileOff);
