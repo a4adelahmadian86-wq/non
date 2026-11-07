@@ -103,7 +103,8 @@ class WalletTopUpTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->get('/wallet/top-up/zarinpal/callback?Authority=A000000000000000000000000000000002&Status=NOK')
+        $this->actingAs($user)
+            ->get('/wallet/top-up/zarinpal/callback?Authority=A000000000000000000000000000000002&Status=NOK')
             ->assertRedirect(route('wallet'))
             ->assertSessionHasErrors('topup');
 
@@ -136,7 +137,8 @@ class WalletTopUpTest extends TestCase
         ]);
         Http::fake();
 
-        $this->get('/wallet/top-up/zarinpal/callback?Authority=A000000000000000000000000000000003&Status=OK')
+        $this->actingAs($user)
+            ->get('/wallet/top-up/zarinpal/callback?Authority=A000000000000000000000000000000003&Status=OK')
             ->assertRedirect(route('wallet'))
             ->assertSessionHasErrors('topup');
 
