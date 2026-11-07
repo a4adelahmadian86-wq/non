@@ -60,7 +60,7 @@ class ProfessionalCommerceService
 
         try{
             return FarastPriceQuote::create($attributes+['idempotency_key'=>$key]);
-        }catch(\\Illuminate\\Database\\QueryException $exception){
+        }catch(\Illuminate\Database\QueryException $exception){
             $raced=FarastPriceQuote::where('idempotency_key',$key)->first();
             if(!$raced)throw $exception;
             $sameRequest=(int)$raced->actor_id===(int)$actor->id
