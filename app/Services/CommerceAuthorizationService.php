@@ -222,21 +222,104 @@ class CommerceAuthorizationService
 
     public function refund(FarastCharge|string $charge,int $amount,string $reason,string $idempotencyKey): FarastRefund
     {
-        return DB::transaction(function()use($charge,$amount,$reason,$idempotencyKey){
-            $row=$charge instanceof FarastCharge?FarastCharge::whereKey($charge->id)->lockForUpdate()->firstOrFail():FarastCharge::where('charge_id',$charge)->lockForUpdate()->firstOrFail();
-            if($amount<=0)throw new RuntimeException('invalid_refund_amount');
-            if($existing=FarastRefund::where('idempotency_key',$idempotencyKey)->first())return $existing;
-            $refunded=(int)FarastRefund::where('charge_id',$row->id)->where('status','completed')->sum('amount');
-            if($amount>(int)$row->total-$refunded)throw new RuntimeException('refund_exceeds_charge');
-            $refund=FarastRefund::create(['refund_id'=>Str::uuid(),'idempotency_key'=>$idempotencyKey,'charge_id'=>$row->id,'actor_id'=>$row->actor_id,'amount'=>$amount,'currency'=>$row->currency,'status'=>'completed','reason'=>$reason,'metadata'=>['charge_snapshot'=>$row->snapshot]]);
-            if($row->actor_id&&$amount>0){
-                $wallet=Wallet::firstOrCreate(['user_id'=>$row->actor_id],['balance_rials'=>0]);$wallet=Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
-                $before=(int)$wallet->balance_rials;$wallet->update(['balance_rials'=>$before+$amount]);
-                WalletTransaction::create(['wallet_id'=>$wallet->id,'type'=>'credit','amount_rials'=>$amount,'balance_before'=>$before,'balance_after'=>$before+$amount,'reference_type'=>'farast_refund','reference_id'=>$refund->id,'description'=>'بازپرداخت اعتبار FARAST','idempotency_key'=>'refund-'.$idempotencyKey]);
+        if ($amount <= 0) {
+            throw new RuntimeException('invalid_refund_amount');
+        }
+
+        if (trim($idempotencyKey) === '' || strlen($idempotencyKey) > 180) {
+            throw new RuntimeException('invalid_refund_idempotency_key');
+        }
+
+        try {
+            return DB::transaction(function () use ($charge, $amount, $reason, $idempotencyKey) {
+                $row = $charge instanceof FarastCharge
+                    ? FarastCharge::whereKey($charge->id)->lockForUpdate()->firstOrFail()
+                    : FarastCharge::where('charge_id', $charge)->lockForUpdate()->firstOrFail();
+
+                if ($existing = FarastRefund::where('idempotency_key', $idempotencyKey)->first()) {
+                    if (! $this->refundRequestMatches($existing, $row, $amount, $reason)) {
+                        throw new RuntimeException('refund_idempotency_key_conflict');
+                    }
+
+                    return $existing;
+                }
+
+                if (! in_array($row->status, ['charged', 'refunded'], true)) {
+                    throw new RuntimeException('charge_not_refundable');
+                }
+
+                $refunded = (int) FarastRefund::where('charge_id', $row->id)
+                    ->where('status', 'completed')
+                    ->sum('amount');
+
+                if ($amount > (int) $row->total - $refunded) {
+                    throw new RuntimeException('refund_exceeds_charge');
+                }
+
+                $refund = FarastRefund::create([
+                    'refund_id' => Str::uuid(),
+                    'idempotency_key' => $idempotencyKey,
+                    'charge_id' => $row->id,
+                    'actor_id' => $row->actor_id,
+                    'amount' => $amount,
+                    'currency' => $row->currency,
+                    'status' => 'completed',
+                    'reason' => $reason,
+                    'metadata' => ['charge_snapshot' => $row->snapshot],
+                ]);
+
+                if ($row->actor_id && $amount > 0) {
+                    $wallet = Wallet::firstOrCreate(['user_id' => $row->actor_id], ['balance_rials' => 0]);
+                    $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+                    $before = (int) $wallet->balance_rials;
+                    $wallet->update(['balance_rials' => $before + $amount]);
+
+                    WalletTransaction::create([
+                        'wallet_id' => $wallet->id,
+                        'type' => 'credit',
+                        'amount_rials' => $amount,
+                        'balance_before' => $before,
+                        'balance_after' => $before + $amount,
+                        'reference_type' => 'farast_refund',
+                        'reference_id' => $refund->id,
+                        'description' => 'بازپرداخت اعتبار FARAST',
+                        'idempotency_key' => 'refund-'.$idempotencyKey,
+                    ]);
+                }
+
+                if ($amount + $refunded >= (int) $row->total) {
+                    $row->update(['status' => 'refunded']);
+                }
+
+                return $refund;
+            });
+        } catch (\\Illuminate\\Database\\QueryException $exception) {
+            // A concurrent retry may win the unique-key insert. Return it only
+            // when the full financial request is identical.
+            $existing = FarastRefund::where('idempotency_key', $idempotencyKey)->first();
+            if (! $existing) {
+                throw $exception;
             }
-            if($amount+$refunded>=(int)$row->total)$row->update(['status'=>'refunded']);
-            return $refund;
-        });
+
+            $chargeRow = $charge instanceof FarastCharge
+                ? FarastCharge::whereKey($charge->id)->first()
+                : FarastCharge::where('charge_id', $charge)->first();
+
+            if (! $chargeRow || ! $this->refundRequestMatches($existing, $chargeRow, $amount, $reason)) {
+                throw new RuntimeException('refund_idempotency_key_conflict', 0, $exception);
+            }
+
+            return $existing;
+        }
+    }
+
+    private function refundRequestMatches(FarastRefund $refund, FarastCharge $charge, int $amount, string $reason): bool
+    {
+        return (int) $refund->charge_id === (int) $charge->id
+            && (int) ($refund->actor_id ?? 0) === (int) ($charge->actor_id ?? 0)
+            && (int) $refund->amount === $amount
+            && $refund->currency === $charge->currency
+            && $refund->reason === $reason;
     }
 
     private function createCharge(FarastUsageEvent $event,FarastUsageReservation $reservation,array $quote,array $resultContext):FarastCharge
