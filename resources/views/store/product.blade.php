@@ -1,8 +1,10 @@
 @extends('layouts.app')
 @php
-  $title = $product->title.' | فروشگاه فراست';
-  $productImage = $product->cover_path ? asset($product->cover_path) : null;
-  $productDescription = $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags((string) $product->description), 160);
+  $title = ($product->seo_title ?: $product->title).' | فروشگاه فراست';
+  $galleryImage = $product->images->first(fn ($image) => $image->is_active);
+  $productImagePath = $product->cover_path ?: $galleryImage?->path;
+  $productImage = $productImagePath ? asset($productImagePath) : null;
+  $productDescription = $product->seo_description ?: ($product->short_description ?: \Illuminate\Support\Str::limit(strip_tags((string) $product->description), 160));
   $productStructuredData = array_filter([
     '@context' => 'https://schema.org',
     '@type' => 'Product',
@@ -24,12 +26,12 @@
 <meta name="description" content="{{ $productDescription }}">
 <link rel="canonical" href="{{ route('store.product', $product->slug) }}">
 <meta property="og:type" content="product">
-<meta property="og:title" content="{{ $product->title }}">
+<meta property="og:title" content="{{ $title }}">
 <meta property="og:description" content="{{ $productDescription }}">
 @if($productImage)<meta property="og:image" content="{{ $productImage }}">@endif
 <meta property="og:url" content="{{ route('store.product', $product->slug) }}">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{{ $product->title }}">
+<meta name="twitter:title" content="{{ $title }}">
 <meta name="twitter:description" content="{{ $productDescription }}">
 @if($productImage)<meta name="twitter:image" content="{{ $productImage }}">@endif
 <script type="application/ld+json">@json($productStructuredData)</script>
