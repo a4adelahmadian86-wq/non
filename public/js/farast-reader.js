@@ -116,7 +116,7 @@
         span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
       });
     }
-    if(pdfLoading)pdfLoading.hidden=true;
+    if(pdfLoading){pdfLoading.hidden=true;pdfLoading.style.display='none';}
     setPageControls(pdfPage,pdfDoc.numPages);
   };
 
@@ -341,7 +341,7 @@
   };
 
   const showPdfError=error=>{
-    if(pdfLoading){pdfLoading.hidden=false;pdfLoading.textContent='بارگذاری سند انجام نشد. فایل ممکن است خراب یا غیرقابل نمایش باشد.';}
+    if(pdfLoading){pdfLoading.hidden=false;pdfLoading.style.display='grid';pdfLoading.textContent='بارگذاری سند انجام نشد. فایل ممکن است خراب یا غیرقابل نمایش باشد.';}
     console.error('FARAST reader PDF error',error);
   };
 
