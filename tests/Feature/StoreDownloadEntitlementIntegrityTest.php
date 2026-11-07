@@ -285,4 +285,37 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             'download_count' => 10,
         ]);
     }
+    public function test_library_page_shows_download_details_and_accessible_feedback(): void
+    {
+        $user = $this->makeUser('09123456780');
+        [$product, $file] = $this->makeProduct('library-ui-product');
+        [$libraryItem] = $this->makeDownload($user, $product, $file);
+
+        $this->actingAs($user)
+            ->get(route('library'))
+            ->assertOk()
+            ->assertSee('libraryDownloadFeedback', false)
+            ->assertSee('aria-live="polite"', false)
+            ->assertSee('product-v1.pdf')
+            ->assertSee('خریداری‌شده')
+            ->assertSee('دریافت امن فایل')
+            ->assertDontSee('alert(');
+    }
+
+    public function test_library_keeps_course_access_separate_from_file_downloads(): void
+    {
+        $user = $this->makeUser('09123456781');
+        [$product, $file] = $this->makeProduct('library-course');
+        $product->update(['type' => 'course']);
+        $this->makeDownload($user, $product, $file);
+
+        $this->actingAs($user)
+            ->get(route('library'))
+            ->assertOk()
+            ->assertSee('دوره آموزشی')
+            ->assertSee('ورود به دوره')
+            ->assertSee(route('store.course.learn', $product), false)
+            ->assertDontSee('class="store-primary-btn library-download"', false);
+    }
+
 }

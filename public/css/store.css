@@ -273,3 +273,39 @@
 @media(max-width:760px){.store-container{width:min(100% - 28px,1240px)}.store-hero--market{grid-template-columns:1fr;gap:20px}.store-hero-visual{min-height:205px}.store-feature-row{grid-template-columns:repeat(2,minmax(0,1fr))}.store-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.store-detail-cover{height:330px}.store-product-overview{align-items:flex-start;flex-wrap:wrap}.store-product-preview-pill{margin-inline-start:52px}}
 @media(max-width:560px){.store-product-grid{grid-template-columns:1fr}.store-product-cover{height:220px}.store-feature-row{gap:9px}.store-feature{min-height:112px;padding:13px}.store-hero-stats div{min-width:54px;padding:7px}.store-hero-stats strong{font-size:.9rem}.store-hero-stats span{font-size:.58rem}.store-toolbar-controls{align-items:stretch}.store-filter-label{justify-content:space-between;flex:1 1 100%}.store-filter-select{flex:1}.store-results-total{margin-inline-start:0}.store-product-preview-pill{margin-inline-start:0}.store-detail-cover{height:260px}}
 @media(prefers-reduced-motion:reduce){.store-feature,.store-product-card,.store-product-cover img,.store-buy-card .add-to-cart{transition:none}}
+
+/* FARAST customer library — purchase confidence and accessible download states */
+.library-page{padding-top:38px}
+.library-heading{align-items:center;margin-bottom:25px}
+.library-heading-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.library-count{display:inline-flex;align-items:center;gap:8px;padding:10px 13px;border:1px solid #e1e9f3;border-radius:11px;background:#fff;color:#59708d;font-size:.74rem;font-weight:800}
+.library-count i{color:var(--st-blue)}
+.library-feedback{display:flex;align-items:center;gap:10px;padding:13px 15px;margin:0 0 18px;border:1px solid transparent;border-radius:13px;font-size:.78rem;line-height:1.8}
+.library-feedback[hidden]{display:none}
+.library-feedback.error{border-color:#f3d1d1;background:#fff3f2;color:#a52d35}
+.library-feedback.success{border-color:#cdebdc;background:#effaf4;color:#14734f}
+.library-product-grid{align-items:stretch}
+.library-product-card{overflow:hidden}
+.library-product-cover{position:relative;height:190px;background:linear-gradient(140deg,#10264b,#2866c4 70%,#8db4ee)}
+.library-cover-placeholder{height:100%;display:grid;align-content:center;justify-items:center;gap:12px;color:#fff}
+.library-cover-placeholder i{font-size:2.8rem}
+.library-cover-placeholder span{font-size:.58rem;letter-spacing:.2em;opacity:.72;font-weight:800}
+.library-cover-badge{position:absolute;top:12px;right:12px;display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid rgba(255,255,255,.45);border-radius:999px;background:rgba(8,31,67,.66);color:#fff;font-size:.62rem;font-weight:800;backdrop-filter:blur(8px)}
+.library-product-copy{gap:10px}
+.library-product-copy h2{min-height:3.1em}
+.library-product-copy p{min-height:0}
+.library-file-meta{display:grid;gap:7px;padding:11px 12px;border:1px solid #e9eef5;border-radius:11px;background:#f8fafd;color:#718198;font-size:.66rem;line-height:1.7}
+.library-file-meta span{display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}
+.library-file-meta i{width:14px;color:#3974cb;flex:0 0 14px}
+.library-product-copy .library-download{width:100%;justify-content:center;min-height:43px;margin-top:auto;border-radius:11px;background:linear-gradient(135deg,#1959bd,#397eeb);box-shadow:0 9px 20px rgba(35,96,194,.15)}
+.library-product-copy .library-download:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 13px 24px rgba(35,96,194,.22)}
+.library-product-copy .library-download:disabled{opacity:.68;cursor:wait}
+.library-product-copy .library-download:focus-visible,.library-heading-actions a:focus-visible{outline:3px solid rgba(23,105,255,.3);outline-offset:3px}
+.library-unavailable{display:flex;align-items:center;gap:8px;padding:11px 12px;border:1px solid #f1dfbd;border-radius:11px;background:#fff9ee;color:#8a641e;font-size:.7rem;line-height:1.7}
+.library-empty{max-width:760px;margin:24px auto;padding:58px 24px;border:1px solid #e2eaf4;border-style:solid;background:linear-gradient(145deg,#fff,#f5f8fd);box-shadow:0 15px 42px rgba(17,42,78,.055)}
+.library-empty-icon{width:68px;height:68px;display:grid;place-items:center;margin:0 auto 15px;border-radius:21px;background:#eaf2ff;color:#2b69c9;font-size:1.65rem}
+.library-empty p{max-width:48ch;margin:0 auto 18px;font-size:.78rem;line-height:2}
+.library-empty .store-primary-btn{justify-content:center}
+.library-pagination{margin-top:24px}
+@media(max-width:760px){.library-heading{align-items:flex-start}.library-heading-actions{width:100%}.library-heading-actions>*{flex:1;justify-content:center}.library-product-cover{height:175px}}
+@media(max-width:560px){.library-page{padding-top:25px}.library-heading-actions{gap:8px}.library-heading-actions>*{flex:1 1 100%}.library-product-grid{grid-template-columns:1fr}.library-product-cover{height:210px}.library-empty{padding:42px 18px}.library-product-copy h2{min-height:0}}
