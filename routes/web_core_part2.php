@@ -156,9 +156,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/analytics', [AdminPlatformController::class, 'analytics'])->middleware('admin.section:analytics')->name('analytics');
     Route::get('/audit', [AdminPlatformController::class, 'audit'])->middleware('admin.section:audit')->name('audit');
     Route::post('/providers/ai', [ProviderAdminController::class, 'updateAi'])->middleware('admin.section:ai_providers')->name('providers.ai.update');
+    Route::get('/providers/ai/test', [ProviderAdminController::class, 'testAi'])->middleware(['admin.section:ai_providers', 'throttle:5,1'])->name('providers.ai.test');
     Route::get('/providers/voice/{provider}/test', [ProviderAdminController::class, 'testVoice'])->middleware('admin.section:voice')->name('providers.voice.test');
     Route::post('/providers/groq', [ProviderAdminController::class, 'updateGroq'])->middleware('admin.section:ai_providers')->name('providers.groq.update');
-    Route::get('/providers/groq/test', [ProviderAdminController::class, 'testGroq'])->middleware('admin.section:ai_providers')->name('providers.groq.test');
+    Route::get('/providers/groq/test', [ProviderAdminController::class, 'testGroq'])->middleware(['admin.section:ai_providers', 'throttle:5,1'])->name('providers.groq.test');
 
     Route::get('/support-sms', [AdminController::class, 'supportSms'])->middleware('admin.section:support_admin')->name('support.sms');
     Route::post('/support-sms', [AdminController::class, 'updateSupportSms'])->middleware('admin.section:support_admin')->name('support.sms.update');
