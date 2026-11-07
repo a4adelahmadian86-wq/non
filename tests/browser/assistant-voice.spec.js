@@ -1165,8 +1165,10 @@ test('live assistant queues speech received while answering and processes it aft
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  window.__micTrack={enabled:true,kind:'audio',stop(){}};
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[window.__micTrack],getAudioTracks:()=>[window.__micTrack]})}});
+  window.__micTracks=[];
+  function makeMicTrack(){const track={enabled:true,kind:'audio',readyState:'live',stop(){this.enabled=false;this.readyState='ended';}};window.__micTracks.push(track);return track;}
+  window.__micTrack=makeMicTrack();
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__micTrack=makeMicTrack();return {getTracks:()=>[window.__micTrack],getAudioTracks:()=>[window.__micTrack]};}}});
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=1;this.ended=false;this.paused=true;}
     load(){this.ended=false;this.dispatchEvent(new Event('canplay'));}
@@ -1211,6 +1213,7 @@ test('live assistant queues speech received while answering and processes it aft
   expect(await page.evaluate(()=>window.__micTrack.enabled)).toBe(false);
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__micTrack.enabled),{timeout:4000}).toBe(true);
+  expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   await expect.poll(()=>page.evaluate(()=>{
     const socket=window.__wsInstances[window.__wsInstances.length-1];
     return !!socket&&socket.readyState===1;
