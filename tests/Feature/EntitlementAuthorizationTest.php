@@ -24,8 +24,8 @@ class EntitlementAuthorizationTest extends TestCase
 
     public function test_organization_entitlements_and_projects_cannot_cross_owner_boundaries(): void
     {
-        $organizationA = \\App\\Models\\Organization::create(['name' => 'Entitlement Org A', 'slug' => 'entitlement-org-a', 'status' => 'active']);
-        $organizationB = \\App\\Models\\Organization::create(['name' => 'Entitlement Org B', 'slug' => 'entitlement-org-b', 'status' => 'active']);
+        $organizationA = \App\Models\Organization::create(['name' => 'Entitlement Org A', 'slug' => 'entitlement-org-a', 'status' => 'active']);
+        $organizationB = \App\Models\Organization::create(['name' => 'Entitlement Org B', 'slug' => 'entitlement-org-b', 'status' => 'active']);
 
         $userA = $this->user();
         $userA->organization_id = $organizationA->id;
@@ -34,7 +34,7 @@ class EntitlementAuthorizationTest extends TestCase
         $userB->organization_id = $organizationB->id;
         $userB->save();
 
-        \\App\\Models\\FarastEntitlement::create([
+        \App\Models\FarastEntitlement::create([
             'organization_id' => $organizationA->id,
             'user_id' => null,
             'capability_code' => 'organization.shared',
@@ -49,14 +49,14 @@ class EntitlementAuthorizationTest extends TestCase
         $this->assertTrue($service->allows($userA, 'organization.shared'));
         $this->assertFalse($service->allows($userB, 'organization.shared'));
         $this->assertFalse($service->consume($userB, 'organization.shared')['ok']);
-        $this->assertSame(0, (int) \\App\\Models\\FarastEntitlement::where('capability_code', 'organization.shared')->value('used_quantity'));
+        $this->assertSame(0, (int) \App\Models\FarastEntitlement::where('capability_code', 'organization.shared')->value('used_quantity'));
 
         $project = FarastProject::create([
             'user_id' => $userA->id, 'name' => 'Private project', 'project_type' => 'typing', 'workflow' => 'manual',
             'template_code' => 'simple_typing', 'status' => 'active', 'context' => [],
             'billing_state' => [], 'output_state' => [],
         ]);
-        \\App\\Models\\FarastEntitlement::create([
+        \App\Models\FarastEntitlement::create([
             'user_id' => $userB->id, 'capability_code' => 'project.private',
             'mode' => 'project_purchase', 'status' => 'active', 'quantity' => 2,
             'used_quantity' => 0, 'starts_at' => now()->subMinute(),
