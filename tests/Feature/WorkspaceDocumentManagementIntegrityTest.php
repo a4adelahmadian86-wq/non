@@ -124,6 +124,29 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
         $this->assertArrayNotHasKey('ai.assistant', $items->all());
     }
 
+    public function test_organization_navigation_is_scoped_and_global_admin_links_are_separate(): void
+    {
+        $manager = $this->makeUser(User::ROLE_ORGANIZATION_MANAGER);
+        $managerItems = collect(app(DashboardNavigationService::class)->forUser($manager))
+            ->flatMap(fn (array $group) => $group['items'])
+            ->keyBy('key');
+
+        $this->assertArrayHasKey('collaboration.teams', $managerItems->all());
+        $this->assertArrayHasKey('collaboration.members', $managerItems->all());
+        $this->assertArrayNotHasKey('organization.profile', $managerItems->all());
+        $this->assertArrayNotHasKey('access.users', $managerItems->all());
+
+        $admin = $this->makeUser(User::ROLE_ADMIN);
+        $adminItems = collect(app(DashboardNavigationService::class)->forUser($admin))
+            ->flatMap(fn (array $group) => $group['items'])
+            ->keyBy('key');
+
+        $this->assertArrayHasKey('organization.profile', $adminItems->all());
+        $this->assertArrayHasKey('access.users', $adminItems->all());
+        $this->assertArrayNotHasKey('collaboration.teams', $adminItems->all());
+        $this->assertArrayNotHasKey('collaboration.members', $adminItems->all());
+    }
+
     public function test_observer_navigation_hides_write_and_share_destinations(): void
     {
         $observer = $this->makeUser(User::ROLE_OBSERVER);
