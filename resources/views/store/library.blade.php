@@ -4,7 +4,7 @@
 <section class="store-page" dir="rtl">
     <div class="store-container">
         <div class="store-section-head">
-            <div><span class="eyebrow">کتابخانه دیجیتال</span><h1>فایل‌های خریداری‌شده</h1><p>دسترسی به فایل‌های مجاز شما از یک فضای واحد.</p></div>
+            <div><span class="eyebrow">کتابخانه دیجیتال</span><h1>کتابخانه من</h1><p>فایل‌های دانلودی و دوره‌های آموزشی خریداری‌شده در یک فضای امن.</p></div>
             <a class="store-outline-btn" href="{{ route('store') }}"><i class="fa-solid fa-store"></i> بازگشت به فروشگاه</a>
         </div>
 
@@ -23,21 +23,21 @@
                             @if($item->product?->cover_path)
                                 <img src="{{ asset($item->product->cover_path) }}" alt="{{ $item->product->title }}" loading="lazy">
                             @else
-                                <i class="fa-solid fa-file-lines"></i>
+                                <i class="fa-solid fa-{{ $item->product?->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i>
                             @endif
                         </div>
                         <div class="store-product-copy">
-                            <small>{{ $item->product?->category?->name ?? 'فایل دیجیتال' }}</small>
+                            <small>{{ $item->product?->type === 'course' ? 'دوره آموزشی' : ($item->product?->category?->name ?? 'فایل دیجیتال') }}</small>
                             <h2>{{ $item->product?->title ?? 'محصول حذف‌شده' }}</h2>
                             <p>نسخه {{ $item->product?->version ?: 'اصلی' }} · دسترسی از {{ optional($item->granted_at)->format('Y/m/d') }}</p>
-                            <button type="button" class="store-primary-btn library-download" data-library-download="{{ $item->id }}"><i class="fa-solid fa-download"></i> دریافت امن</button>
+                            @if($item->product?->type === 'course')<a class="store-primary-btn" href="{{ route('store.course.learn',$item->product) }}"><i class="fa-solid fa-graduation-cap"></i> ورود به دوره</a>@else<button type="button" class="store-primary-btn library-download" data-library-download="{{ $item->id }}"><i class="fa-solid fa-download"></i> دریافت امن</button>@endif
                         </div>
                     </article>
                 @endforeach
             </div>
             {{ $items->links() }}
         @else
-            <div class="store-empty-state"><i class="fa-solid fa-box-open"></i><h2>کتابخانه هنوز خالی است</h2><p>پس از خرید، فایل‌ها اینجا قرار می‌گیرند.</p><a class="store-primary-btn" href="{{ route('store') }}">مشاهده فروشگاه</a></div>
+            <div class="store-empty-state"><i class="fa-solid fa-box-open"></i><h2>کتابخانه هنوز خالی است</h2><p>پس از خرید فایل یا دوره آموزشی، دسترسی آن از اینجا فعال می‌شود.</p><a class="store-primary-btn" href="{{ route('store') }}">مشاهده فروشگاه</a></div>
         @endif
     </div>
 </section>

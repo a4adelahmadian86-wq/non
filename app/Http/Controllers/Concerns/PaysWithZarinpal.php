@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProductFile;
 use App\Services\EmailService;
+use App\Services\StoreCourseEnrollmentService;
 use App\Services\ZarinpalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -135,22 +136,28 @@ trait PaysWithZarinpal
                     }
 
                     $snapshot = $item->product_snapshot ?? [];
-                    $fileId = (int) ($snapshot['file_id'] ?? 0);
-                    // Preserve the file selected at checkout; support older pending orders without snapshots.
-                    $file = $fileId > 0
-                        ? StoreProductFile::query()->whereKey($fileId)->where('product_id', $product->id)->first()
-                        : ($product->files()->where('is_primary', true)->first()
-                            ?: $product->files()->where('is_active', true)->first());
+                    $file = null;
+                    if ($product->type === 'course') {
+                        if (! $product->course || ! $product->course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
+                            throw new \RuntimeException('برنامه آموزشی این دوره برای تحویل آماده نیست.');
+                        }
+                    } else {
+                        $fileId = (int) ($snapshot['file_id'] ?? 0);
+                        // Preserve the exact file selected at checkout, including legacy pending orders.
+                        $file = $fileId > 0
+                            ? StoreProductFile::query()->whereKey($fileId)->where('product_id', $product->id)->where('purpose', 'product_download')->first()
+                            : ($product->files()->where('purpose', 'product_download')->where('is_primary', true)->first()
+                                ?: $product->files()->where('purpose', 'product_download')->where('is_active', true)->first());
 
-                    if (! $file || ! $file->is_active) {
-                        throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
+                        if (! $file || ! $file->is_active) {
+                            throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
+                        }
+                        $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
+                        if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
+                            throw new \RuntimeException('نسخه فایل محصول پس از ثبت سفارش تغییر کرده است.');
+                        }
                     }
-
-                    $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
-                    if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
-                        throw new \RuntimeException('نسخه فایل محصول پس از ثبت سفارش تغییر کرده است.');
-                    }
-                    StoreLibraryItem::firstOrCreate(
+                    $libraryItem = StoreLibraryItem::firstOrCreate(
                         [
                             'user_id' => $locked->user_id,
                             'product_id' => $product->id,
@@ -158,11 +165,12 @@ trait PaysWithZarinpal
                         ],
                         [
                             'order_item_id' => $item->id,
-                            'product_file_id' => $file->id,
+                            'product_file_id' => $file?->id,
                             'granted_at' => now(),
                             'revoked_at' => null,
                         ]
                     );
+                    app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
                 $lockedPayment->update([
@@ -203,6 +211,6 @@ trait PaysWithZarinpal
             }
         }
 
-        return redirect()->route('library')->with('status', 'پرداخت زرین‌پال موفق بود؛ فایل‌ها در کتابخانه شماست.');
+        return redirect()->route('library')->with('status', 'پرداخت زرین‌پال موفق بود؛ فایل یا دوره در کتابخانه شما فعال شد.');
     }
 }
