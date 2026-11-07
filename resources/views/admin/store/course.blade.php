@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('content')
+@include('admin.store.partials.workspace-nav')
 <section class="store-page" dir="rtl">
   <div class="store-container course-admin">
     <div class="store-section-head">
@@ -8,6 +9,7 @@
     </div>
     @if(session('status'))<div class="store-alert success" role="status">{{ session('status') }}</div>@endif
     @if($errors->any())<div class="store-alert error" role="alert">{{ $errors->first() }}</div>@endif
+    @include('admin.store.partials.workflow-checklist')
 
     <form method="post" action="{{ route('admin.store.course.update',$product) }}" class="store-panel course-settings">
       @csrf @method('PUT')
@@ -28,7 +30,7 @@
       <button class="store-primary-btn" type="submit">ذخیره تنظیمات دوره</button>
     </form>
 
-    <div class="course-curriculum-head"><div><span class="eyebrow">CURRICULUM BUILDER</span><h2>برنامه آموزشی</h2><p>هر فصل می‌تواند چندین جلسه و هر جلسه منابع مستقل داشته باشد.</p></div><div class="course-counts"><b>{{ $course->sections->count() }}</b><span>فصل</span><b>{{ $course->sections->sum(fn($s)=>$s->lessons->count()) }}</b><span>جلسه</span></div></div>
+    <div class="course-curriculum-head" id="course-curriculum"><div><span class="eyebrow">CURRICULUM BUILDER</span><h2>برنامه آموزشی</h2><p>هر فصل می‌تواند چندین جلسه و هر جلسه منابع مستقل داشته باشد.</p></div><div class="course-counts"><b>{{ $course->sections->count() }}</b><span>فصل</span><b>{{ $course->sections->sum(fn($s)=>$s->lessons->count()) }}</b><span>جلسه</span></div></div>
 
     <form method="post" action="{{ route('admin.store.course.sections.store',$product) }}" class="store-panel course-add-section">
       @csrf
