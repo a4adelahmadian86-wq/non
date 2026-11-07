@@ -241,7 +241,7 @@ class AdminStoreController extends Controller
             $publicPath = 'storage/'.$storagePath;
             $stored = Storage::disk('public')->putFileAs('store/covers/'.$product->id, $upload, $filename);
             if (! $stored) {
-                throw new \\RuntimeException('cover_public_storage_failed');
+                throw new \RuntimeException('cover_public_storage_failed');
             }
 
             $oldPath = (string) $product->cover_path;
