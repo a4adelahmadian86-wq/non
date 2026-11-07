@@ -30,6 +30,7 @@ class AuthController extends Controller
     public function phoneContinue(Request $request)
     {
         $phone = $this->validatedPhone($request);
+        $request->session()->forget(['register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at']);
         $user = User::where('mobile', $phone)->first();
 
         if ($user && $user->is_blocked) {
@@ -51,6 +52,7 @@ class AuthController extends Controller
     public function requestOtp(Request $request, SmsService $sms)
     {
         $phone = $this->validatedPhone($request);
+        $request->session()->forget(['register.verified', 'register.verified_mobile', 'register.verified_at']);
 
         if (User::where('mobile', $phone)->exists()) {
             throw ValidationException::withMessages(['mobile' => 'این شماره دارای حساب است. رمز عبور خود را وارد کنید.']);
@@ -68,6 +70,8 @@ class AuthController extends Controller
         abort_unless($phone, 422, 'فرآیند ثبت‌نام پیدا نشد.');
         $this->consumeSmsOtp($phone, (string) $request->input('code'));
         $request->session()->put('register.verified', true);
+        $request->session()->put('register.verified_mobile', $phone);
+        $request->session()->put('register.verified_at', now()->timestamp);
 
         return redirect()->route('register');
     }
@@ -82,14 +86,14 @@ class AuthController extends Controller
 
         return view('auth.register', [
             'phone' => $phone,
-            'verified' => (bool) $request->session()->get('register.verified', false),
+            'verified' => $this->isPhoneVerified($request, 'register', (string) $phone),
         ]);
     }
 
     public function registerStore(Request $request, EmailService $emailService)
     {
         $phone = $request->session()->get('register.mobile');
-        abort_unless($phone && (bool) $request->session()->get('register.verified', false), 403, 'ابتدا شماره موبایل را تأیید کنید.');
+        abort_unless($phone && $this->isPhoneVerified($request, 'register', (string) $phone), 403, 'ابتدا همین شماره موبایل را تأیید کنید.');
 
         if (User::where('mobile', $phone)->exists()) {
             return redirect()->route('login')->with('warning', 'این شماره قبلاً دارای حساب است.');
@@ -123,10 +127,9 @@ class AuthController extends Controller
             // ثبت‌نام نباید به خاطر ایمیل شکست بخورد
         }
 
-        $request->session()->forget(['login.phone', 'register.mobile', 'register.verified']);
+        $request->session()->forget(['login.phone', 'register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at']);
         Auth::login($user, true);
         $request->session()->regenerate();
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended(route('editor'));
     }
@@ -156,7 +159,6 @@ class AuthController extends Controller
         Auth::login($user, true);
         $request->session()->regenerate();
         $request->session()->forget(['login.phone']);
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended($user->isAdmin() ? route('admin.index') : route('editor'));
     }
@@ -170,6 +172,7 @@ class AuthController extends Controller
     {
         $request->validate(['email' => ['required', 'email', 'max:255']]);
         $email = mb_strtolower(trim((string) $request->input('email')));
+        $request->session()->forget(['email_login.user_id', 'email_login.mobile']);
         $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
 
         if (! $user || ! $user->email) {
@@ -269,7 +272,6 @@ class AuthController extends Controller
         Auth::login($user, true);
         $request->session()->regenerate();
         $request->session()->forget(['email_login.email', 'email_login.user_id', 'email_login.mobile']);
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended($user->isAdmin() ? route('admin.index') : route('editor'));
     }
@@ -282,6 +284,7 @@ class AuthController extends Controller
     public function sendPasswordResetOtp(Request $request, SmsService $sms)
     {
         $phone = $this->validatedPhone($request);
+        $request->session()->forget(['password_reset.verified', 'password_reset.verified_mobile', 'password_reset.verified_at']);
 
         if (! User::where('mobile', $phone)->exists()) {
             throw ValidationException::withMessages(['mobile' => 'حسابی با این شماره پیدا نشد.']);
@@ -299,13 +302,16 @@ class AuthController extends Controller
         abort_unless($phone, 422);
         $this->consumeSmsOtp($phone, (string) $request->input('code'));
         $request->session()->put('password_reset.verified', true);
+        $request->session()->put('password_reset.verified_mobile', $phone);
+        $request->session()->put('password_reset.verified_at', now()->timestamp);
 
         return redirect()->route('password.reset');
     }
 
     public function resetPasswordForm(Request $request)
     {
-        abort_unless((bool) $request->session()->get('password_reset.verified', false), 403);
+        $phone = (string) $request->session()->get('password_reset.mobile', '');
+        abort_unless($phone !== '' && $this->isPhoneVerified($request, 'password_reset', $phone), 403);
 
         return view('auth.reset-password');
     }
@@ -313,9 +319,10 @@ class AuthController extends Controller
     public function resetPassword(Request $request, EmailService $emailService)
     {
         $phone = $request->session()->get('password_reset.mobile');
-        abort_unless($phone && (bool) $request->session()->get('password_reset.verified', false), 403);
+        abort_unless($phone && $this->isPhoneVerified($request, 'password_reset', (string) $phone), 403);
         $data = $request->validate(['password' => ['required', 'string', 'min:8', 'confirmed']]);
         $user = User::where('mobile', $phone)->firstOrFail();
+        abort_if($user->is_blocked, 403, 'حساب کاربری شما غیرفعال است.');
         $user->update(['password' => $data['password']]);
 
         try {
@@ -323,10 +330,9 @@ class AuthController extends Controller
         } catch (\Throwable) {
         }
 
-        $request->session()->forget(['password_reset.mobile', 'password_reset.verified']);
+        $request->session()->forget(['password_reset.mobile', 'password_reset.verified', 'password_reset.verified_mobile', 'password_reset.verified_at']);
         Auth::login($user, true);
         $request->session()->regenerate();
-        SupportController::claimGuestTickets($user);
 
         return redirect()->intended($user->isAdmin() ? route('admin.index') : route('editor'))->with('status', 'رمز عبور با موفقیت تغییر کرد.');
     }
@@ -358,6 +364,18 @@ class AuthController extends Controller
             '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
             '٬' => '', ' ' => '', '-' => '', '‌' => '',
         ]);
+    }
+
+    private function isPhoneVerified(Request $request, string $flow, string $phone): bool
+    {
+        $verifiedPhone = (string) $request->session()->get($flow.'.verified_mobile', '');
+        $verifiedAt = (int) $request->session()->get($flow.'.verified_at', 0);
+
+        return $verifiedPhone !== ''
+            && hash_equals($phone, $verifiedPhone)
+            && $verifiedAt > 0
+            && $verifiedAt <= now()->timestamp
+            && $verifiedAt >= now()->subMinutes(10)->timestamp;
     }
 
     private function enforceOtpSendLimit(string $channel, string $destination, string $field): void
