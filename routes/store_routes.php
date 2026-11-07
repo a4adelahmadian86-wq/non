@@ -20,7 +20,6 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // Wallet top-up callback is public; its authority is verified server-to-server before crediting the order owner.
-Route::post('/wallet/top-up',[\\App\\Http\\Controllers\\WalletController::class,'topUp'])->middleware(['auth','throttle:10,10'])->name('wallet.topup');
 Route::get('/wallet/top-up/zarinpal/callback',[\\App\\Http\\Controllers\\WalletController::class,'topUpCallback'])->middleware('throttle:30,10')->name('wallet.topup.callback');
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function () {
