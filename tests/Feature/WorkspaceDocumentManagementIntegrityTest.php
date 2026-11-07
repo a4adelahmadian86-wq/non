@@ -213,6 +213,7 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
         $this->assertTrue(app(AuthorizationService::class)->allows($user, 'documents.create'));
         $this->assertTrue(app(AuthorizationService::class)->allows($user, 'documents.share'));
         $this->assertTrue(app(AuthorizationService::class)->allows($user, 'documents.delete'));
+        $this->assertTrue(app(AuthorizationService::class)->allows($user, 'projects.create'));
     }
 
     private function makeUser(string $role): User
