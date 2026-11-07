@@ -115,7 +115,7 @@ class AdminStoreController extends Controller
     public function uploadPreview(Request $request, StoreProduct $product)
     {
         $request->validate([
-            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf,docx|max:20480',
+            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf,docx,xlsx|max:20480',
             'page_number' => 'nullable|integer|min:1|max:500',
         ]);
 
