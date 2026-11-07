@@ -72,7 +72,7 @@ class EditorController extends Controller
                 ->whereIn('status', ['open', 'pending', 'user_replied'])
                 ->count(),
             'walletBalance' => (int) ($user->wallet()->value('balance_rials') ?? 0),
-            'unreadNotificationCount' => app(\\App\\Services\\NotificationService::class)->unreadCount($user->id),
+            'unreadNotificationCount' => app(\App\Services\NotificationService::class)->unreadCount($user->id),
             'capabilities' => $capabilities->forUser($user),
         ]);
     }
