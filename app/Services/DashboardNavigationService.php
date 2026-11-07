@@ -131,11 +131,15 @@ class DashboardNavigationService
      */
     private function itemBadge(?string $key, ?User $user): ?int
     {
-        if (! $user || ! $key || ! Schema::hasTable('tickets')) {
+        if (! $user || ! in_array($key, ['support.my', 'support.manage'], true)) {
             return null;
         }
 
         try {
+            if (! Schema::hasTable('tickets')) {
+                return null;
+            }
+
             return match ($key) {
                 'support.my' => $this->customerUnreadCount($user),
                 'support.manage' => $user->isAdmin() ? Ticket::needsReply()->count() : null,
