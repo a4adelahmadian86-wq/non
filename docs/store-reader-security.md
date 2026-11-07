@@ -12,7 +12,7 @@ The original product file is not used as a public preview URL. Preview records a
 
 - Preview upload limit: 20 MiB.
 - DOCX: at most 5,000 ZIP entries and 100 MiB expanded content; relationship XML parts are limited to 2 MiB.
-- XLSX: at most 2,000 ZIP entries and 80 MiB expanded content; at most 10 visible worksheets, 2,000 rows per sheet, 40 columns, and 80,000 parsed cells. Individual workbook and XML parts have additional size limits in the renderer.
+- XLSX: at most 2,000 ZIP entries and 80 MiB expanded content; at most 10 total worksheets (hidden sheets are skipped), 2,000 rows per sheet, 40 columns, and 80,000 parsed cells. Individual workbook and XML parts have additional size limits in the renderer.
 
 These are defensive ceilings, not a promise that every Office feature is reproduced. Complex Word layouts, embedded objects, advanced Excel formatting, charts, drawings, and images may not be identical to desktop Office applications.
 
