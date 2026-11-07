@@ -43,3 +43,20 @@
   .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions>*:not(.farast-dashboard-nav__collapse){display:initial}
   .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__collapse{display:grid}
 }
+
+
+/* Keep the compact brand mark and its recovery control side by side. */
+.farast-dashboard-nav.is-collapsed{width:90px}
+.dashboard-shell-inner:has(.farast-dashboard-nav.is-collapsed){margin-right:90px}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand{justify-content:space-between}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions{position:static;transform:none;gap:0;margin:0}
+@media(max-width:1100px){
+  .farast-dashboard-nav.is-collapsed{width:90px}
+  .dashboard-shell-inner:has(.farast-dashboard-nav.is-collapsed){margin-right:90px}
+}
+@media(max-width:760px){
+  .farast-dashboard-nav.is-collapsed{width:100%}
+  .dashboard-shell-inner:has(.farast-dashboard-nav.is-collapsed){margin-right:0}
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand{justify-content:flex-start}
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions{position:static;transform:none;gap:6px;margin-inline-start:auto}
+}
