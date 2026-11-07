@@ -94,8 +94,9 @@ class AdminCourseController extends Controller
         $this->audit('store.course.section_deleted', $product, ['section_id' => $section->id, 'lesson_ids' => $lessonIds->all()]);
         $this->deleteLessonFiles($product, $lessonIds);
         $section->delete();
+        $this->syncPublication($product, 'course_section_removed');
 
-        return back()->with('status', 'فصل و جلسات آن حذف شدند.');
+        return back()->with('status', 'فصل و جلسات آن حذف شدند؛ وضعیت انتشار دوره نیز بررسی شد.');
     }
 
     public function storeLesson(Request $request, StoreProduct $product, StoreCourseSection $section)
@@ -121,8 +122,9 @@ class AdminCourseController extends Controller
         $data['is_published'] = $request->boolean('is_published');
         $lesson->update($data);
         $this->audit('store.course.lesson_updated', $product, ['lesson_id' => $lesson->id, 'is_published' => $lesson->is_published]);
+        $this->syncPublication($product, 'published_lesson_removed');
 
-        return back()->with('status', 'جلسه به‌روزرسانی شد.');
+        return back()->with('status', 'جلسه به‌روزرسانی شد؛ وضعیت انتشار دوره نیز بررسی شد.');
     }
 
     public function deleteLesson(StoreProduct $product, StoreCourseLesson $lesson)
@@ -132,8 +134,9 @@ class AdminCourseController extends Controller
         $this->audit('store.course.lesson_deleted', $product, ['lesson_id' => $lesson->id]);
         $this->deleteLessonFiles($product, collect([$lesson->id]));
         $lesson->delete();
+        $this->syncPublication($product, 'course_lesson_removed');
 
-        return back()->with('status', 'جلسه و منابع آن حذف شدند.');
+        return back()->with('status', 'جلسه و منابع آن حذف شدند؛ وضعیت انتشار دوره نیز بررسی شد.');
     }
 
     public function uploadResource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, UploadSecurityService $security)
@@ -199,6 +202,13 @@ class AdminCourseController extends Controller
         $file->delete();
 
         return back()->with('status', 'منبع آموزشی حذف شد.');
+    }
+
+    private function syncPublication(StoreProduct $product, string $reason): void
+    {
+        if (app(StoreProductWorkspaceService::class)->synchronizePublishedState($product)) {
+            $this->audit('store.product.unpublished_incomplete', $product, ['reason' => $reason]);
+        }
     }
 
     private function audit(string $eventType, StoreProduct $product, array $meta = []): void
