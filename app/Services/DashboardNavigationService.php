@@ -122,6 +122,14 @@ class DashboardNavigationService
             return false;
         }
 
+        $capability = $definition['capability'] ?? null;
+        if (is_string($capability) && $capability !== '') {
+            $capabilities = $this->capabilities->forUser($user);
+            if (! ($capabilities['active'] ?? false) || ! ($capabilities[$capability] ?? false)) {
+                return false;
+            }
+        }
+
         return true;
     }
 
