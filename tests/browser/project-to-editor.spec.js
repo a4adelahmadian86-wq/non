@@ -13,6 +13,7 @@ test('logs in through the real auth flow, creates a typing project, and opens th
   const consoleErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  page.on('response', async response => { if (response.url().includes('/editor/assets')) console.log('[editor-assets]', response.status(), await response.text()); });
   const password = `${process.env.GITHUB_RUN_ID || 'local'}-farast-e2e`;
 
   await page.goto('/login?continue=/projects/new');
