@@ -22,6 +22,7 @@ use App\Services\MailConfigService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
@@ -798,7 +799,7 @@ class AdminController extends Controller
                 ));
 
                 if ($enabled && $missing !== []) {
-                    throw \\Illuminate\\Validation\\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         $provider.'_enabled' => 'برای فعال‌سازی این سرویس، همه اطلاعات اتصال لازم را وارد کنید.',
                     ]);
                 }
