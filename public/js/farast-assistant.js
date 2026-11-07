@@ -366,7 +366,9 @@
       if(force&&pendingSpeech.trim())combined=combined?(combined+' '+pendingSpeech.trim()):pendingSpeech.trim();
       if(force){speechBatch=[];pendingSpeech='';if(combined)enqueueSpeech(combined);return;}
       var anotherCompleteSentence=/[.!?؟۔](?:\s+|$)/u.test(pendingSpeech);
-      var shouldFlush=firstSpeechBatchSent?(speechBatch.length>=2||combined.length>=240):(combined.length>=180||(speechBatch.length>=1&&!anotherCompleteSentence));
+      // Start the first TTS request sooner: waiting for 260 buffered characters
+      // can dominate the time-to-first-audio even after the model has begun streaming.
+      var shouldFlush=firstSpeechBatchSent?(speechBatch.length>=2||combined.length>=200):(combined.length>=140||(speechBatch.length>=1&&!anotherCompleteSentence));
       if(shouldFlush){speechBatch=[];if(combined){enqueueSpeech(combined);firstSpeechBatchSent=true;}}
     }
     function acceptDelta(delta){
@@ -378,8 +380,8 @@
         if(match&&match[1].trim()){
           speechBatch.push(match[1].trim());pendingSpeech=pendingSpeech.slice(match[0].length).trimStart();flushSpeechBatch(false);continue;
         }
-        if(pendingSpeech.length>260){
-          var splitAt=pendingSpeech.lastIndexOf(' ',220);
+        if(pendingSpeech.length>180){
+          var splitAt=pendingSpeech.lastIndexOf(' ',150);
           if(splitAt>40){speechBatch.push(pendingSpeech.slice(0,splitAt));pendingSpeech=pendingSpeech.slice(splitAt+1);flushSpeechBatch(false);continue;}
         }
         break;
