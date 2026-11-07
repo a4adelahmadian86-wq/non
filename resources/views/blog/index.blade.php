@@ -60,7 +60,10 @@
 
         <div class="blog-section-heading">
             <div><span class="blog-eyebrow">برای کنجکاوها</span><h2>{{ $q ? 'نتایج جستجو' : ($category ? 'مقاله‌های این دسته' : 'تازه‌های مجله') }}</h2></div>
-            <span class="blog-results-count">{{ $articles->count() }} مطلب</span>
+            <div class="blog-heading-actions">
+                <span class="blog-results-count">{{ $articles->count() }} مطلب</span>
+                <button type="button" class="blog-saved-filter" data-blog-filter-saved aria-pressed="false"><i class="fa-regular fa-bookmark"></i> ذخیره‌شده‌ها <b data-saved-count>۰</b></button>
+            </div>
         </div>
 
         <div class="blog-grid">
