@@ -220,7 +220,7 @@ class WorkflowEventDispatchTest extends TestCase
 
         $engine->dispatch('document.saved', ['user_id' => $owner->id], 'shared-event-key');
 
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already bound to another event');
         $engine->dispatch('document.saved', ['user_id' => $other->id], 'shared-event-key');
     }
