@@ -145,6 +145,86 @@ class WorkflowEventDispatchTest extends TestCase
         ]);
     }
 
+    public function test_failed_workflow_event_retries_only_failed_steps_and_completes(): void
+    {
+        $user = $this->user('09152223351');
+        $successfulWorkflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Successful first workflow',
+            'enabled' => true,
+            'trigger_type' => 'document.saved',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'اعلان اول']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $failingWorkflow = DB::table('farast_workflows')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Temporarily invalid workflow',
+            'enabled' => true,
+            'trigger_type' => 'document.saved',
+            'steps' => json_encode([['action' => 'unsupported_action']], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $engine = app(WorkflowEngine::class);
+        $context = ['user_id' => $user->id, 'document_id' => 991];
+        $completed = $engine->dispatch('document.saved', $context, 'document:991:revision:1');
+
+        $this->assertSame(1, $completed);
+        $eventId = DB::table('farast_workflow_events')->where('idempotency_key', 'document:991:revision:1')->value('id');
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'failed',
+            'matched_workflows' => 2,
+            'failed_workflows' => 1,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'event_id' => $eventId,
+            'workflow_id' => $successfulWorkflow,
+            'status' => 'completed',
+            'attempts' => 1,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'event_id' => $eventId,
+            'workflow_id' => $failingWorkflow,
+            'status' => 'failed',
+            'attempts' => 1,
+        ]);
+
+        DB::table('farast_workflows')->where('id', $failingWorkflow)->update([
+            'steps' => json_encode([['action' => 'notify', 'title' => 'اعلان دوم']], JSON_UNESCAPED_UNICODE),
+            'updated_at' => now(),
+        ]);
+
+        $retried = $engine->retryFailedEvents();
+        $this->assertSame(1, $retried);
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'completed',
+            'failed_workflows' => 0,
+        ]);
+        $this->assertNotNull(DB::table('farast_workflow_events')->where('id', $eventId)->value('processed_at'));
+        $this->assertSame(1, DB::table('farast_workflow_runs')->where('workflow_id', $successfulWorkflow)->count());
+        $this->assertSame(2, DB::table('farast_workflow_runs')->where('workflow_id', $failingWorkflow)->count());
+        $this->assertSame(2, DB::table('farast_notifications')->where('user_id', $user->id)->where('type', 'workflow')->count());
+        $this->assertSame(0, $engine->dispatch('document.saved', $context, 'document:991:revision:1'));
+    }
+
+    public function test_event_idempotency_key_cannot_be_reused_for_another_owner(): void
+    {
+        $owner = $this->user('09152223352');
+        $other = $this->user('09152223353');
+        $engine = app(WorkflowEngine::class);
+
+        $engine->dispatch('document.saved', ['user_id' => $owner->id], 'shared-event-key');
+
+        $this->expectException(\\RuntimeException::class);
+        $this->expectExceptionMessage('already bound to another event');
+        $engine->dispatch('document.saved', ['user_id' => $other->id], 'shared-event-key');
+    }
+
     public function test_event_dispatch_never_runs_another_users_workflow(): void
     {
         $owner = $this->user('09152223345');
