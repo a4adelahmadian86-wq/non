@@ -65,7 +65,16 @@ class PlatformCompletionController extends Controller {
   return back()->with('status','سند ذخیره شد.');
  }
  public function favorite(Request $r,$id){$this->authorizeDocumentAction($r,'documents.edit');$d=$this->doc($r,$id);$updated=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->whereNull('trashed_at')->update(['is_favorite'=>!$d->is_favorite,'updated_at'=>now()]);abort_unless($updated===1,404);return back();}
- public function trash(Request $r,$id){$this->authorizeDocumentAction($r,'documents.delete');$this->doc($r,$id);$updated=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->whereNull('trashed_at')->update(['status'=>'trashed','trashed_at'=>now(),'updated_at'=>now()]);abort_unless($updated===1,404);return back()->with('status','سند به سطل زباله منتقل شد.');}
+ public function trash(Request $r,$id){
+  $this->authorizeDocumentAction($r,'documents.delete');
+  $this->doc($r,$id);
+  DB::transaction(function()use($id){
+   $updated=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->whereNull('trashed_at')->update(['status'=>'trashed','trashed_at'=>now(),'updated_at'=>now()]);
+   abort_unless($updated===1,404);
+   DB::table('farast_document_shares')->where('document_id',$id)->where('owner_id',auth()->id())->update(['expires_at'=>now(),'updated_at'=>now()]);
+  });
+  return back()->with('status','سند به سطل زباله منتقل شد.');
+ }
  public function restore(Request $r,$id){$this->authorizeDocumentAction($r,'documents.delete');$updated=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','trashed')->whereNotNull('trashed_at')->update(['status'=>'active','trashed_at'=>null,'updated_at'=>now()]);abort_unless($updated,404);return back()->with('status','سند بازیابی شد.');}
  public function destroy(Request $r,$id){$this->authorizeDocumentAction($r,'documents.delete');$deleted=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','trashed')->delete();abort_unless($deleted===1,404);return back()->with('status','سند برای همیشه حذف شد.');}
  public function versions(Request $r,$id){$this->authorizeDocumentAction($r,'documents.view');$this->doc($r,$id);return response()->json(DB::table('farast_document_versions')->where('document_id',$id)->orderByDesc('created_at')->get());}
