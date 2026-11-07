@@ -19,15 +19,17 @@ final class ProviderConnectionHealth
 
         SiteSetting::write($prefix.'.fingerprint', $this->fingerprint($provider, $key, $model), true);
         SiteSetting::write($prefix.'.last_success_at', now()->toIso8601String());
+        SiteSetting::write($prefix.'.api_reachable', '1');
         SiteSetting::write($prefix.'.capabilities', json_encode($capabilities, JSON_UNESCAPED_SLASHES));
     }
 
-    public function recordFailure(string $provider, string $key, string $model, string $reason): void
+    public function recordFailure(string $provider, string $key, string $model, string $reason, bool $apiReachable = false): void
     {
         $prefix = $this->prefix($provider);
 
         SiteSetting::write($prefix.'.fingerprint', $this->fingerprint($provider, $key, $model), true);
         SiteSetting::write($prefix.'.last_failure_at', now()->toIso8601String());
+        SiteSetting::write($prefix.'.api_reachable', $apiReachable ? '1' : '0');
         SiteSetting::write($prefix.'.last_failure_code', preg_replace('/[^a-z0-9_:-]/i', '', $reason) ?: 'unknown');
     }
 
@@ -70,6 +72,13 @@ final class ProviderConnectionHealth
         $failureIsCurrent = $fingerprintMatches
             && $failureTime !== false
             && ($successTime === false || $failureTime >= $successTime);
+        $apiReachable = $fingerprintMatches && (
+            $verified
+            || ($failureIsCurrent && filter_var(
+                (string) SiteSetting::read($prefix.'.api_reachable', '0'),
+                FILTER_VALIDATE_BOOLEAN
+            ))
+        );
 
         $status = ! $configured
             ? 'unavailable'
@@ -80,7 +89,7 @@ final class ProviderConnectionHealth
         return [
             'configured' => $configured,
             'connection_verified' => $verified,
-            'api_reachable' => $verified,
+            'api_reachable' => $apiReachable,
             'ready' => $ready,
             'status' => $status,
             'last_success_at' => $verified ? (string) $lastSuccessAt : null,
