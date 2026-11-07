@@ -58,6 +58,9 @@ class StoreXlsxPreviewRenderer
                     if (!$sheet instanceof DOMElement) {
                         continue;
                     }
+                    if (in_array(strtolower($sheet->getAttribute('state')), ['hidden', 'veryhidden'], true)) {
+                        continue;
+                    }
 
                     $relationshipId = $sheet->getAttributeNS(
                         'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
