@@ -5,7 +5,7 @@
     @if($product->cover_path)
       <img src="{{ asset($product->cover_path) }}" alt="{{ $product->title }}" loading="lazy">
     @else
-      <i class="fa-solid fa-file-lines"></i>
+      <span class="store-cover-placeholder"><i class="fa-solid fa-file-lines"></i><b>FARAST</b></span>
     @endif
   </a>
   <div class="store-product-copy">
