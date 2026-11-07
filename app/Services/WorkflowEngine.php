@@ -58,7 +58,7 @@ class WorkflowEngine
     public function dispatch(string $eventType, array $context, string $idempotencyKey): int
     {
         if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
-            throw new \\InvalidArgumentException('Unsupported workflow event.');
+            throw new \InvalidArgumentException('Unsupported workflow event.');
         }
         if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
             return 0;
@@ -79,13 +79,13 @@ class WorkflowEngine
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-        } catch (\\Illuminate\\Database\\QueryException $exception) {
+        } catch (\Illuminate\Database\QueryException $exception) {
             $existing = DB::table('farast_workflow_events')->where('idempotency_key', $idempotencyKey)->first();
             if (! $existing) {
                 throw $exception;
             }
             if ((int) $existing->user_id !== $userId || $existing->event_type !== $eventType) {
-                throw new \\RuntimeException('Workflow event idempotency key is already bound to another event.');
+                throw new \RuntimeException('Workflow event idempotency key is already bound to another event.');
             }
             if (($existing->status ?? null) === 'completed') {
                 return 0;
@@ -201,7 +201,7 @@ class WorkflowEngine
                 }
 
                 if ($locked->status === 'running' && $locked->started_at
-                    && \\Illuminate\\Support\\Carbon::parse($locked->started_at)->gt(now()->subMinutes(30))) {
+                    && \Illuminate\Support\Carbon::parse($locked->started_at)->gt(now()->subMinutes(30))) {
                     return false;
                 }
 
@@ -233,7 +233,7 @@ class WorkflowEngine
                     'updated_at' => now(),
                 ]);
                 $completedNow++;
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 DB::table('farast_workflow_event_workflows')->where('id', $mapping->id)->update([
                     'status' => 'failed',
                     'last_error' => mb_substr($exception->getMessage(), 0, 4000),
@@ -257,7 +257,7 @@ class WorkflowEngine
             'status' => $complete ? 'completed' : ($active > 0 ? 'processing' : 'failed'),
             'matched_workflows' => $total,
             'failed_workflows' => $failed,
-            'error_summary' => $errors ? mb_substr(implode("\\n", $errors), 0, 4000) : null,
+            'error_summary' => $errors ? mb_substr(implode("\n", $errors), 0, 4000) : null,
             'processed_at' => $complete ? now() : null,
             'updated_at' => now(),
         ]);
