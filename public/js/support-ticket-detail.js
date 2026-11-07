@@ -119,8 +119,8 @@
     let attachHtml = '';
     if (Array.isArray(m.attachments) && m.attachments.length) {
       attachHtml = '<div class="tk-attach-list">' + m.attachments.map((a) => {
-        const path = a.path ? '/storage/' + a.path : '#';
-        return '<a href="' + path + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + escapeHtml(a.name || 'پیوست') + '</a>';
+        const url = a.url || '#';
+        return '<a href="' + url + '" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ' + escapeHtml(a.name || 'پیوست') + '</a>';
       }).join('') + '</div>';
     }
 
