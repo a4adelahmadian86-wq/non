@@ -67,7 +67,7 @@ class RefundIdempotencyIntegrityTest extends TestCase
         $retry = $commerce->refund($firstCharge, 1000, 'support adjustment', 'shared-refund-key');
 
         $this->assertSame($firstRefund->id, $retry->id);
-        $this->assertSame(1, FarastCharge::where('id', $firstCharge->id)->first()->refunds()->count());
+        $this->assertSame(1, FarastRefund::where('charge_id', $firstCharge->id)->count());
 
         $balanceBefore = (int) Wallet::where('user_id', $secondUser->id)->value('balance_rials');
 
