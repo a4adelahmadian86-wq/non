@@ -35,6 +35,7 @@ async function mountReader(page) {
       </div>
     </section>
   `);
+  await page.addStyleTag({ content: '.farast-reader-page-content img { transform: scale(var(--reader-zoom, 1)); transform-origin: top center; }' });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
