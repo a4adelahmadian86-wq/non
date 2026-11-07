@@ -147,6 +147,40 @@ class StoreCourseLearningTest extends TestCase
             ->value('completed_at'));
     }
 
+    public function test_older_active_entitlement_survives_a_newer_expired_purchase(): void
+    {
+        $user = $this->makeUser();
+        [$product, $course] = $this->makeCourse('multiple-entitlements', 10000);
+
+        $this->grantCourse($user, $product); // Original enrollment has no expiry.
+        $course->update(['access_duration_days' => 1]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 10000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 10000,
+            'status' => 'paid',
+            'pricing_snapshot' => ['kind' => 'store'],
+            'paid_at' => now()->subDays(3),
+        ]);
+        $newerPurchase = StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'product_file_id' => null,
+            'granted_at' => now()->subDays(3),
+        ]);
+        app(StoreCourseEnrollmentService::class)->grant($newerPurchase, $product);
+
+        $this->actingAs($user)
+            ->get(route('store.course.learn', $product))
+            ->assertOk()
+            ->assertSee('فصل اول');
+    }
+
     public function test_drip_released_lesson_cannot_be_opened_before_its_release_day(): void
     {
         $user = $this->makeUser();
