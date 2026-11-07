@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\VoiceProviderAccount;
 use App\Services\ProviderRegistry;
+use App\Services\VoiceProviderRouter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -98,6 +99,22 @@ class VoiceProviderDashboardIntegrationTest extends TestCase
 
         $this->assertSame('healthy', $provider['status']);
         $this->assertTrue($provider['connection_verified']);
+    }
+
+    public function test_voice_router_skips_enabled_accounts_with_incomplete_credentials(): void
+    {
+        config(['services.voice.local_only' => false]);
+
+        $account = new VoiceProviderAccount();
+        $account->provider = 'azure';
+        $account->name = 'Azure Speech';
+        $account->credentials_array = ['subscription_key' => 'partial-secret'];
+        $account->enabled = true;
+        $account->healthy = true;
+        $account->save();
+
+        $this->assertFalse($account->fresh()->credentialsConfigured());
+        $this->assertNull(app(VoiceProviderRouter::class)->best('fa-IR'));
     }
 
 }
