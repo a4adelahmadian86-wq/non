@@ -55,4 +55,19 @@ class AdminConsoleScopeIntegrityTest extends TestCase
             ->assertSee('کاربران')
             ->assertDontSee('private-aggregate@example.test');
     }
+    public function test_dashboard_gemini_fallback_model_field_is_persisted(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.index'))
+            ->post(route('admin.settings.update'), [
+                'gemini_model' => 'gemini-3.8-flash',
+                'gemini_fallback_model' => 'gemini-2.5-flash',
+            ])
+            ->assertRedirect(route('admin.index'));
+
+        $this->assertSame('gemini-2.5-flash', SiteSetting::read('gemini_fallback_model'));
+    }
+
 }
