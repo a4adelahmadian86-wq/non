@@ -1,12 +1,11 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\Permission;
-use App\\Models\\User;
-use App\\Services\\AuthorizationService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Tests\\TestCase;
+use App\Models\User;
+use App\Services\AuthorizationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class AdminConsoleScopeIntegrityTest extends TestCase
 {
@@ -36,7 +35,8 @@ class AdminConsoleScopeIntegrityTest extends TestCase
             ->assertDontSee('name="gemini_api_key"')
             ->assertDontSee('name="voice_groq_key"')
             ->assertDontSee('id="voice-settings"')
-            ->assertDontSee('id="content"');
+            ->assertDontSee('id="content"')
+            ->assertDontSee('id="ai"');
 
         $this->actingAs($viewer)->get(route('admin.users'))->assertForbidden();
     }
