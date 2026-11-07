@@ -306,6 +306,7 @@
       if(continuousHost)continuousHost.innerHTML='';
       scrollModeButton?.setAttribute('aria-pressed','false');
     }
+    if(scrollModeButton)scrollModeButton.hidden=!isPdf();
     root.querySelectorAll('.farast-reader-thumb[data-goto]').forEach(thumb=>{
       const active=Number(thumb.dataset.goto)===itemIndex;
       thumb.classList.toggle('is-active',active);
