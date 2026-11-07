@@ -82,7 +82,7 @@
                   <div class="farast-pdf-loading" role="status">در حال آماده‌سازی سند PDF…</div>
                 </div>
               @elseif(($preview->kind ?? '') === 'docx')
-                <iframe class="farast-docx-frame" src="{{ route('store.preview',$preview) }}" title="سند Word نمونه {{ $i+1 }}" loading="{{ $i===0 ? 'eager' : 'lazy' }}" referrerpolicy="same-origin"></iframe>
+                <iframe class="farast-docx-frame" src="{{ route('store.preview',$preview) }}" title="سند Word نمونه {{ $i+1 }}" loading="{{ $i===0 ? 'eager' : 'lazy' }}" referrerpolicy="same-origin" sandbox="allow-same-origin"></iframe>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="صفحه نمونه {{ $i+1 }}" draggable="false" loading="{{ $i===0 ? 'eager' : 'lazy' }}">
               @endif
