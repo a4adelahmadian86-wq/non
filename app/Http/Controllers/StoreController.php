@@ -118,16 +118,22 @@ class StoreController extends Controller
         $disk = Storage::disk($preview->disk ?: 'private');
         abort_unless($disk->exists($preview->path), 404);
 
-        return $disk->response($preview->path, null, [
+        $headers = [
             'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
             'Pragma' => 'no-cache',
             'Expires' => '0',
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
             'X-Frame-Options' => 'SAMEORIGIN',
-            'Content-Security-Policy' => "frame-ancestors 'self'",
+            'Content-Security-Policy' => \"frame-ancestors 'self'\",
             'Content-Disposition' => 'inline',
-        ]);
+        ];
+
+        if (($preview->kind ?? '') === 'docx' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'docx') {
+            return $this->renderDocxPreview($disk->get($preview->path), $headers);
+        }
+
+        return $disk->response($preview->path, null, $headers);
     }
 
     public function reader(string $slug)
@@ -152,4 +158,117 @@ class StoreController extends Controller
             ->header('Pragma', 'no-cache')
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
+    /**
+     * Convert an uploaded DOCX preview to a read-only, sanitized HTML document.
+     * The source document is never exposed through a public storage URL.
+     */
+    private function renderDocxPreview(string $docxBytes, array $headers)
+    {
+        abort_unless(class_exists(\\PhpOffice\\PhpWord\\IOFactory::class), 503, 'موتور نمایش Word در دسترس نیست.');
+
+        $sourcePath = tempnam(sys_get_temp_dir(), 'farast-docx-');
+        $htmlPath = tempnam(sys_get_temp_dir(), 'farast-html-');
+
+        try {
+            file_put_contents($sourcePath, $docxBytes);
+            $document = \\PhpOffice\\PhpWord\\IOFactory::load($sourcePath);
+            $writer = \\PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'HTML');
+            $writer->save($htmlPath);
+            $html = file_get_contents($htmlPath) ?: '';
+            $body = $this->sanitizeDocxHtml($html);
+
+            $user = request()->user();
+            $identity = trim((string) ($user->mobile ?? ''));
+            if ($identity === '') {
+                $identity = 'شناسه کاربر #'.$user->id;
+            }
+            $watermark = e($identity);
+            $marks = str_repeat('<span>'.$watermark.' · پیش‌نمایش فراست</span>', 12);
+
+            $page = '<!doctype html><html lang="fa" dir="auto"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><style>
+                *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Tahoma,Arial,sans-serif;color:#1f2937;background:#fff}
+                body{padding:clamp(18px,4vw,54px);line-height:1.9}.docx-content{max-width:980px;margin:0 auto;position:relative;z-index:1;overflow-wrap:anywhere}
+                .docx-content table{border-collapse:collapse;max-width:100%;width:100%;margin:1em 0}.docx-content td,.docx-content th{border:1px solid #cbd5e1;padding:7px;vertical-align:top}
+                .docx-content img{max-width:100%;height:auto}.docx-content h1,.docx-content h2,.docx-content h3{line-height:1.5;margin:1.3em 0 .6em}
+                .docx-watermark{position:fixed;inset:0;z-index:5;pointer-events:none;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);align-items:center;justify-items:center;opacity:.16;overflow:hidden}
+                .docx-watermark span{font:700 12px Tahoma,Arial;color:#334155;white-space:nowrap;transform:rotate(-25deg);background:rgba(255,255,255,.22);padding:5px}
+                @media print{body{padding:0}.docx-watermark{opacity:.28}}
+            </style></head><body><div class="docx-watermark">'.$marks.'</div><main class="docx-content">'.$body.'</main></body></html>';
+
+            return response($page, 200, $headers + ['Content-Type' => 'text/html; charset=UTF-8']);
+        } catch (\\Throwable $exception) {
+            report($exception);
+            abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
+        } finally {
+            if (is_file($sourcePath)) {
+                @unlink($sourcePath);
+            }
+            if (is_file($htmlPath)) {
+                @unlink($htmlPath);
+            }
+        }
+    }
+
+    /**
+     * Keep document structure while dropping active content, remote resources and event attributes.
+     */
+    private function sanitizeDocxHtml(string $html): string
+    {
+        $previous = libxml_use_internal_errors(true);
+        $dom = new \\DOMDocument('1.0', 'UTF-8');
+        $dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-docx-root">'.$html.'</div>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        $allowed = ['div','p','span','table','thead','tbody','tfoot','tr','td','th','ul','ol','li','br','strong','b','em','i','u','h1','h2','h3','h4','h5','h6','blockquote','img'];
+        $root = $dom->getElementById('farast-docx-root');
+        if (!$root) {
+            return '';
+        }
+
+        $walk = function (\\DOMNode $node) use (&$walk, $allowed): void {
+            for ($child = $node->firstChild; $child; ) {
+                $next = $child->nextSibling;
+                if ($child instanceof \\DOMElement) {
+                    $tag = strtolower($child->tagName);
+                    if (!in_array($tag, $allowed, true)) {
+                        if (in_array($tag, ['script','style','iframe','object','embed','link','meta','form'], true)) {
+                            $node->removeChild($child);
+                        } else {
+                            while ($child->firstChild) {
+                                $node->insertBefore($child->firstChild, $child);
+                            }
+                            $node->removeChild($child);
+                        }
+                    } else {
+                        $keep = [];
+                        if (in_array($tag, ['td','th'], true)) {
+                            $keep = ['colspan','rowspan'];
+                        } elseif ($tag === 'img') {
+                            $keep = ['src','alt','width','height'];
+                        }
+                        foreach (iterator_to_array($child->attributes) as $attribute) {
+                            $name = strtolower($attribute->name);
+                            $value = $attribute->value;
+                            $safeImage = $name === 'src' && str_starts_with($value, 'data:image/');
+                            if (!in_array($name, $keep, true) || ($name === 'src' && !$safeImage)) {
+                                $child->removeAttribute($attribute->name);
+                            }
+                        }
+                        $walk($child);
+                    }
+                }
+                $child = $next;
+            }
+        };
+        $walk($root);
+
+        $result = '';
+        foreach ($root->childNodes as $child) {
+            $result .= $dom->saveHTML($child);
+        }
+
+        return $result;
+    }
+
 }
