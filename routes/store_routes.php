@@ -37,6 +37,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
     Route::put('/store/{product}',[AdminStoreController::class,'update'])->name('store.update');
     Route::delete('/store/{product}',[AdminStoreController::class,'destroy'])->name('store.destroy');
+    Route::post('/store/{product}/cover',[AdminStoreController::class,'uploadCover'])->middleware('throttle:10,10')->name('store.cover.upload');
     Route::post('/store/{product}/files',[AdminStoreController::class,'uploadFile'])->middleware('throttle:10,10')->name('store.files.upload');
     Route::delete('/store/{product}/files/{file}',[AdminStoreController::class,'deleteFile'])->name('store.files.delete');
     Route::post('/store/{product}/previews',[AdminStoreController::class,'uploadPreview'])->middleware('throttle:10,10')->name('store.previews.upload');
