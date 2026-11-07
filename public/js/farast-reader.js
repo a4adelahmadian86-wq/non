@@ -51,7 +51,7 @@
 
   // Paint the account mark into the rendered page bitmap, not only as removable HTML.
   const paintPdfWatermark=canvas=>{
-    if(!canvas?.width||!canvas?.height)return;
+    if(!canvas?.width||!canvas?.height||activeArticle()?.classList.contains('is-server-watermarked'))return;
     const identity=(root.querySelector('.farast-reader-account span')?.textContent||'حساب کاربر').trim();
     const context=canvas.getContext('2d');
     if(!context)return;
