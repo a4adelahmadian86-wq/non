@@ -158,7 +158,7 @@ class AdminController extends Controller
         };
 
         $topConsumers = collect();
-        if (Schema::hasTable('typing_documents')) {
+        if ($canViewAnalytics && Schema::hasTable('typing_documents')) {
             $tcq = DB::table('typing_documents')
                 ->join('users', 'users.id', '=', 'typing_documents.user_id')
                 ->where('typing_documents.created_at', '>=', $monthAgo)
@@ -360,12 +360,20 @@ class AdminController extends Controller
 
     private function cacheReachable(): bool
     {
+        $key = 'farast:health:ping:'.bin2hex(random_bytes(12));
+
         try {
-            $key = 'farast:health:ping:'.config('app.key');
             cache()->put($key, 1, 10);
+
             return (bool) cache()->get($key);
         } catch (\Throwable) {
             return false;
+        } finally {
+            try {
+                cache()->forget($key);
+            } catch (\Throwable) {
+                // Health reporting must never break the dashboard response.
+            }
         }
     }
 
