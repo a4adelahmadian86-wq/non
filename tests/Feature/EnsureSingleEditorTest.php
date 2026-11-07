@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Http\Middleware\EnsureSingleEditor;
 use App\Models\EditorSession;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Tests\TestCase;
 
 class EnsureSingleEditorTest extends TestCase
 {
+    use RefreshDatabase;
     public function test_first_editor_request_creates_one_session_and_reuses_its_token(): void
     {
         $user = User::factory()->create();
