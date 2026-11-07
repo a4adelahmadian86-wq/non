@@ -119,6 +119,62 @@ class AdminDashboardCanonicalDocumentMetricsTest extends TestCase
             ->assertSee('کلید ثبت شده · اتصال تأییدنشده');
     }
 
+    public function test_organization_dashboard_document_metrics_exclude_other_organizations(): void
+    {
+        config(['farast_admin.multi_role_console' => true]);
+
+        $organization = \App\Models\Organization::create([
+            'name' => 'Dashboard Scoped Org',
+            'slug' => 'dashboard-scoped-org',
+            'status' => 'active',
+        ]);
+
+        $manager = User::create([
+            'name' => 'Scoped Dashboard Manager',
+            'email' => 'scoped-dashboard-manager@example.test',
+            'mobile' => '09123456786',
+            'password' => 'secret',
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+            'organization_id' => $organization->id,
+        ]);
+
+        $member = User::create([
+            'name' => 'Scoped Member',
+            'email' => 'scoped-dashboard-member@example.test',
+            'mobile' => '09123456785',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+            'organization_id' => $organization->id,
+        ]);
+
+        $outsider = User::factory()->create();
+
+        foreach ([$member, $outsider] as $owner) {
+            FarastDocument::create([
+                'user_id' => $owner->id,
+                'title' => 'Scoped canonical '.$owner->id,
+                'content' => '',
+                'status' => 'active',
+                'is_favorite' => false,
+            ]);
+
+            TypingDocument::create([
+                'user_id' => $owner->id,
+                'title' => 'Scoped legacy '.$owner->id,
+                'content' => '',
+                'page_count' => 1,
+                'word_count' => 0,
+                'status' => 'draft',
+                'price_rials' => 0,
+            ]);
+        }
+
+        $this->actingAs($manager)
+            ->get('/admin')
+            ->assertOk()
+            ->assertViewHas('stats', fn (array $stats) => $stats['documents'] === 2);
+    }
+
     private function makeAdmin(): User
     {
         return User::create([
