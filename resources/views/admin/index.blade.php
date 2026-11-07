@@ -148,11 +148,6 @@
             </div>
             <form method="post" action="{{ route('admin.voice.providers.update') }}" class="settings-modern">
                 @csrf
-                @php
-                    $gladia = $voiceAccounts['gladia'] ?? null;
-                    $azure = $voiceAccounts['azure'] ?? null;
-                    $google = $voiceAccounts['google'] ?? null;
-                @endphp
                 <div class="modern-field" style="grid-column:1/-1">
                     <span><i class="fa-solid fa-wave-square"></i> Gladia — تایپ زنده</span>
                     <input type="text" name="gladia_api_key" placeholder="{{ $gladia && filled($gladia->credentials_array['api_key'] ?? null) ? 'کلید Gladia تنظیم شده؛ برای تغییر وارد کنید' : 'Gladia API Key' }}" autocomplete="off">
