@@ -3,7 +3,7 @@
 <section class="store-page" dir="rtl">
   <div class="store-container">
     <div class="store-section-head">
-      <div><span class="eyebrow">مدیریت فروشگاه</span><h1>محصولات</h1></div>
+      <div><span class="eyebrow">مدیریت فروشگاه</span><h1>مرکز مدیریت محصولات</h1><p>محصولات دانلودی و دوره‌های آموزشی را از یک پنل مدیریت کنید.</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a class="store-outline-btn" href="{{ route('admin.index') }}">بازگشت ادمین</a>
         <a class="store-primary-btn" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-plus"></i> محصول جدید</a>
@@ -19,10 +19,10 @@
         <div class="store-cart-row">
           <div>
             <strong>{{ $p->title }}</strong>
-            <small>{{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان</small>
+            <small>{{ $p->type === 'course' ? 'دوره آموزشی' : 'فایل دانلودی' }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
           </div>
           <div>
-            <a class="store-outline-btn" href="{{ route('admin.store.edit',$p) }}">ویرایش</a>
+            <a class="store-outline-btn" href="{{ route('admin.store.edit',$p) }}">اطلاعات</a> @if($p->type === 'course')<a class="store-primary-btn" href="{{ route('admin.store.course.edit',$p) }}">مدیریت دوره</a>@endif
           </div>
           <form method="post" action="{{ route('admin.store.destroy',$p) }}" onsubmit="return confirm('حذف شود؟')">@csrf @method('DELETE')
             <button type="submit" class="store-outline-btn" style="color:#c62828">حذف</button>
