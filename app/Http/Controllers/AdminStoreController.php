@@ -46,7 +46,7 @@ class AdminStoreController extends Controller
 
     public function create()
     {
-        $categories = StoreCategory::orderBy('sort_order')->get();
+        $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
 
         return view('admin.store.form', [
             'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
@@ -106,7 +106,7 @@ class AdminStoreController extends Controller
                     ->where('is_primary', true)
                     ->where('scan_status', 'clean')
                     ->exists();
-                if (! $hasSafePrimaryFile && $product->status !== 'published') {
+                if (! $hasSafePrimaryFile) {
                     throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
                 }
             }
@@ -199,6 +199,21 @@ class AdminStoreController extends Controller
     public function deleteFile(StoreProduct $product, StoreProductFile $file)
     {
         abort_unless($file->product_id === $product->id && $file->purpose === 'product_download', 404);
+        if ($product->status === 'published' && $file->is_primary) {
+            $hasReplacement = $product->files()
+                ->where('purpose', 'product_download')
+                ->where('id', '!=', $file->id)
+                ->where('is_active', true)
+                ->where('is_primary', true)
+                ->where('scan_status', 'clean')
+                ->exists();
+            if (! $hasReplacement) {
+                throw ValidationException::withMessages([
+                    'file' => 'این فایل، محتوای اصلی محصول منتشرشده است. ابتدا فایل اصلی جایگزین را بارگذاری و فعال کنید یا محصول را از انتشار خارج کنید.',
+                ]);
+            }
+        }
+
         $this->audit('store.product.file_deleted', $product, ['file_id' => $file->id, 'purpose' => $file->purpose]);
         Storage::disk($file->disk ?: 'private')->delete($file->path);
         $file->delete();
@@ -337,14 +352,13 @@ class AdminStoreController extends Controller
             'short_description' => 'nullable|string|max:2000',
             'description' => 'nullable|string|max:20000',
             'price_rials' => 'required|integer|min:0|max:999999999999',
-            'compare_at_price_rials' => 'nullable|integer|min:0|gte:price_rials',
+            'compare_at_price_rials' => 'nullable|integer|min:0|gt:price_rials',
             'status' => 'required|in:draft,published,archived',
             'featured' => 'nullable|boolean',
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'preview_pages' => 'nullable|integer|min:0|max:50',
             'license_type' => 'nullable|string|max:60',
             'version' => 'nullable|string|max:60',
-            'cover_path' => 'nullable|string|max:500',
             'seo_title' => 'nullable|string|max:220',
             'seo_description' => 'nullable|string|max:320',
         ]);
