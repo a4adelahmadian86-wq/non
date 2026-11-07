@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminCourseController;
 use App\Http\Controllers\AdminStoreController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StoreController;
@@ -19,7 +20,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/checkout/zarinpal/callback',[PaymentController::class,'zarinpalCallback'])->middleware('throttle:30,10')->name('checkout.zarinpal.callback');
 });
 
-// Wallet top-up callback is public; its authority is verified server-to-server before crediting the order owner.
 Route::get('/wallet/top-up/zarinpal/callback',[\App\Http\Controllers\WalletController::class,'topUpCallback'])->middleware('throttle:30,10')->name('wallet.topup.callback');
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -29,9 +29,21 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
     Route::put('/store/{product}',[AdminStoreController::class,'update'])->name('store.update');
     Route::delete('/store/{product}',[AdminStoreController::class,'destroy'])->name('store.destroy');
-    Route::post('/store/{product}/files',[AdminStoreController::class,'uploadFile'])->name('store.files.upload');
+    Route::post('/store/{product}/files',[AdminStoreController::class,'uploadFile'])->middleware('throttle:10,10')->name('store.files.upload');
     Route::delete('/store/{product}/files/{file}',[AdminStoreController::class,'deleteFile'])->name('store.files.delete');
-    Route::post('/store/{product}/previews',[AdminStoreController::class,'uploadPreview'])->name('store.previews.upload');
+    Route::post('/store/{product}/previews',[AdminStoreController::class,'uploadPreview'])->middleware('throttle:10,10')->name('store.previews.upload');
     Route::delete('/store/{product}/previews/{preview}',[AdminStoreController::class,'deletePreview'])->name('store.previews.delete');
+
+    Route::get('/store/{product}/course',[AdminCourseController::class,'edit'])->name('store.course.edit');
+    Route::put('/store/{product}/course',[AdminCourseController::class,'update'])->name('store.course.update');
+    Route::post('/store/{product}/course/sections',[AdminCourseController::class,'storeSection'])->name('store.course.sections.store');
+    Route::put('/store/{product}/course/sections/{section}',[AdminCourseController::class,'updateSection'])->name('store.course.sections.update');
+    Route::delete('/store/{product}/course/sections/{section}',[AdminCourseController::class,'deleteSection'])->name('store.course.sections.delete');
+    Route::post('/store/{product}/course/sections/{section}/lessons',[AdminCourseController::class,'storeLesson'])->name('store.course.lessons.store');
+    Route::put('/store/{product}/course/lessons/{lesson}',[AdminCourseController::class,'updateLesson'])->name('store.course.lessons.update');
+    Route::delete('/store/{product}/course/lessons/{lesson}',[AdminCourseController::class,'deleteLesson'])->name('store.course.lessons.delete');
+    Route::post('/store/{product}/course/lessons/{lesson}/resources',[AdminCourseController::class,'uploadResource'])->middleware('throttle:10,10')->name('store.course.resources.upload');
+    Route::delete('/store/{product}/course/lessons/{lesson}/resources/{file}',[AdminCourseController::class,'deleteResource'])->name('store.course.resources.delete');
+
     Route::post('/store/categories',[AdminStoreController::class,'storeCategory'])->name('store.categories.store');
 });
