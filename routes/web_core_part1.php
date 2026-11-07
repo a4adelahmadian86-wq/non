@@ -80,6 +80,11 @@ Route::post('/login/email',[AuthController::class,'requestEmailOtp'])->middlewar
 Route::post('/login/email/verify',[AuthController::class,'verifyEmailOtp'])->middleware('throttle:10,10')->name('login.email.verify');
 Route::get('/login/email/mobile',[AuthController::class,'emailMobileForm'])->name('login.email.mobile');
 Route::post('/login/email/mobile',[AuthController::class,'requestEmailMobileOtp'])->middleware('throttle:5,10')->name('login.email.mobile.request');
+Route::get('/forgot-password',[AuthController::class,'forgotPasswordForm'])->name('password.request');
+Route::post('/forgot-password',[AuthController::class,'sendPasswordResetOtp'])->middleware('throttle:5,10')->name('password.email');
+Route::post('/forgot-password/verify',[AuthController::class,'verifyPasswordResetOtp'])->middleware('throttle:10,10')->name('password.verify');
+Route::get('/reset-password',[AuthController::class,'resetPasswordForm'])->name('password.reset');
+Route::post('/reset-password',[AuthController::class,'resetPassword'])->middleware('throttle:10,10')->name('password.update');
 Route::post('/logout',[AuthController::class,'logout'])->middleware('auth')->name('logout');
 
 Route::get('/editor/voice/status',[VoiceController::class,'voiceStatus'])->middleware(['throttle:60,1','web'])->name('editor.voice.status');
