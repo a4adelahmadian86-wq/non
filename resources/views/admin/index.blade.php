@@ -208,6 +208,7 @@
 @endif
 
         <section id="content" class="admin-section-grid">
+@if($console->sectionAllowed(auth()->user(), 'announcements'))
             <article class="admin-panel content-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">BROADCAST</span><h2>مرکز اعلان</h2><p>انتشار پیام عمومی و کنترل وضعیت اعلان‌ها.</p></div><span class="count-chip">{{ $announcements->count() }}</span></div>
                 <form method="post" action="{{ route('admin.announcements.store') }}" class="announcement-modern">
@@ -220,10 +221,13 @@
                 </form>
                 <div class="announcement-modern-list">@forelse($announcements->take(5) as $announcement)<div class="announcement-modern-row"><span class="announcement-dot type-{{ $announcement->type }}"></span><div><b>{{ $announcement->title }}</b><small>{{ \Illuminate\Support\Str::limit($announcement->body,100) }}</small></div><span class="announcement-state {{ $announcement->is_active ? 'on' : 'off' }}">{{ $announcement->is_active ? 'فعال' : 'خاموش' }}</span><form method="post" action="{{ route('admin.announcements.toggle', $announcement) }}">@csrf<button aria-label="تغییر وضعیت"><i class="fa-solid fa-power-off"></i></button></form></div>@empty<div class="admin-empty">اعلانی ثبت نشده است.</div>@endforelse</div>
             </article>
+@endif
+@if($console->sectionAllowed(auth()->user(), 'pricing'))
             <article id="pricing" class="admin-panel pricing-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">PRICING ENGINE</span><h2>قیمت‌گذاری</h2><p>قواعد فعلی قیمت‌گذاری از backend کنترل می‌شوند.</p></div></div>
                 <div class="pricing-modern-list">@foreach($rules as $rule)<form method="post" action="{{ route('admin.pricing.update') }}" class="pricing-modern-row">@csrf<input type="hidden" name="key" value="{{ $rule->key }}"><label><span>عنوان</span><input name="label" value="{{ $rule->label }}"></label><label><span>مقدار</span><input type="number" name="value" value="{{ $rule->value }}" min="0"></label><button aria-label="ذخیره"><i class="fa-solid fa-floppy-disk"></i></button></form>@endforeach</div>
             </article>
+@endif
         </section>
 
         <section class="admin-footer-actions">
