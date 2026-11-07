@@ -90,6 +90,9 @@ final class ProviderRegistry
                 'connection_verified' => $health['connection_verified'],
                 'api_reachable' => $health['api_reachable'],
                 'ready' => $health['ready'],
+                'capability_readiness' => $name === 'gemini'
+                    ? ['text' => (bool) ($health['capabilities']['text'] ?? false)]
+                    : [],
                 'last_success_at' => $health['last_success_at'],
                 'last_failure_at' => $health['last_failure_at'],
                 'quota' => null,
