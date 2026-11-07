@@ -6,10 +6,6 @@ use Illuminate\Database\Migrations\Migration;
 return new class extends Migration {
     public function up(): void
     {
-        \Illuminate\Support\Facades\DB::table('users')
-            ->where('role', 'user')
-            ->update(['role' => 'employee']);
-
         app(AuthorizationService::class)->syncDefaults();
     }
 
