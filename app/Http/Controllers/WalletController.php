@@ -1,14 +1,14 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\Order;
-use App\\Models\\Payment;
-use App\\Models\\Wallet;
-use App\\Models\\WalletTransaction;
-use App\\Services\\ZarinpalService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
+use App\Services\ZarinpalService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WalletController extends Controller
 {
@@ -66,7 +66,7 @@ class WalletController extends Controller
                 'amount_rials' => $amount,
                 'status' => 'pending',
             ]);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $order->update(['status' => 'failed']);
             report($exception);
 
@@ -96,7 +96,7 @@ class WalletController extends Controller
             ->first();
 
         if (! $payment) {
-            return redirect()->route('login')->withErrors(['topup' => 'تراکنش افزایش موجودی پیدا نشد.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'تراکنش افزایش موجودی پیدا نشد.']);
         }
 
         $order = Order::query()
@@ -112,14 +112,14 @@ class WalletController extends Controller
 
         if (! $order) {
             if ($payment->status === 'paid') {
-                return redirect()->route('login')->with('status', 'این افزایش موجودی قبلاً ثبت شده است.');
+                return redirect()->route(auth()->check() ? 'wallet' : 'login')->with('status', 'این افزایش موجودی قبلاً ثبت شده است.');
             }
 
-            return redirect()->route('login')->withErrors(['topup' => 'سفارش افزایش موجودی قابل تأیید نیست.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'سفارش افزایش موجودی قابل تأیید نیست.']);
         }
 
         if ((int) $payment->amount_rials !== (int) $order->total_rials || (int) $order->total_rials < 10000) {
-            return redirect()->route('login')->withErrors(['topup' => 'مبلغ تراکنش با سفارش افزایش موجودی مطابقت ندارد.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'مبلغ تراکنش با سفارش افزایش موجودی مطابقت ندارد.']);
         }
 
         if ($status !== 'OK') {
@@ -133,19 +133,19 @@ class WalletController extends Controller
                 }
             });
 
-            return redirect()->route('login')->withErrors(['topup' => 'پرداخت افزایش موجودی لغو شد؛ مبلغی به کیف پول اضافه نشد.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'پرداخت افزایش موجودی لغو شد؛ مبلغی به کیف پول اضافه نشد.']);
         }
 
         try {
             $verification = $zarinpal->verify($authority, (int) $payment->amount_rials);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
 
-            return redirect()->route('login')->withErrors(['topup' => 'تأیید پرداخت از درگاه در دسترس نیست؛ موجودی تا تأیید قطعی تغییر نمی‌کند.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'تأیید پرداخت از درگاه در دسترس نیست؛ موجودی تا تأیید قطعی تغییر نمی‌کند.']);
         }
 
         if (! in_array((int) $verification['code'], [100, 101], true)) {
-            return redirect()->route('login')->withErrors(['topup' => 'تأیید پرداخت ناموفق بود؛ موجودی کیف پول تغییر نکرد.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'تأیید پرداخت ناموفق بود؛ موجودی کیف پول تغییر نکرد.']);
         }
 
         $credited = false;
@@ -210,13 +210,13 @@ class WalletController extends Controller
                 $lockedOrder->update(['status' => 'paid', 'paid_at' => now()]);
                 $credited = true;
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
 
-            return redirect()->route('login')->withErrors(['topup' => 'ثبت نهایی افزایش موجودی انجام نشد؛ برای جلوگیری از ثبت تکراری، وضعیت تراکنش بررسی خواهد شد.']);
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'ثبت نهایی افزایش موجودی انجام نشد؛ برای جلوگیری از ثبت تکراری، وضعیت تراکنش بررسی خواهد شد.']);
         }
 
-        return redirect()->route('login')->with(
+        return redirect()->route(auth()->check() ? 'wallet' : 'login')->with(
             $credited ? 'status' : 'status',
             $credited ? 'افزایش موجودی با موفقیت تأیید شد. پس از ورود، موجودی کیف پول قابل مشاهده است.' : 'این افزایش موجودی قبلاً ثبت شده است.'
         );
