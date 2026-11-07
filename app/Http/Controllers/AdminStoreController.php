@@ -396,9 +396,9 @@ class AdminStoreController extends Controller
             }
             $publicPath = 'storage/'.$directory.'/'.$filename;
 
-            $sort = (int) ($product->images()->max('sort_order') ?? 0) + 1;
-            DB::transaction(function () use ($product, $data, $publicPath, $inspection, $sort) {
+            DB::transaction(function () use ($product, $data, $publicPath, $inspection) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $sort = (int) ($lockedProduct->images()->max('sort_order') ?? 0) + 1;
                 $image = $lockedProduct->images()->create([
                     'path' => $publicPath,
                     'alt' => $data['alt'] ?: $lockedProduct->title,
