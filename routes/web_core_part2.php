@@ -58,6 +58,7 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::delete('/workspace/documents/{id}', [PlatformCompletionController::class, 'destroy'])->name('platform.documents.destroy');
     Route::get('/workspace/documents/{id}/versions', [PlatformCompletionController::class, 'versions'])->name('platform.documents.versions');
     Route::post('/workspace/documents/{id}/share', [PlatformCompletionController::class, 'share'])->name('platform.documents.share');
+    Route::delete('/workspace/shares/{id}', [PlatformCompletionController::class, 'revokeShare'])->name('platform.documents.shares.destroy');
     Route::get('/workspace/notifications', [PlatformCompletionController::class, 'notifications'])->name('platform.notifications');
     Route::post('/workspace/notifications/{id}/read', [PlatformCompletionController::class, 'readNotification'])->name('platform.notifications.read');
     Route::get('/workspace/workflows', [PlatformCompletionController::class, 'workflow'])->name('platform.workflows');
