@@ -179,7 +179,10 @@ class StoreController extends Controller
         $htmlPath = tempnam(sys_get_temp_dir(), 'farast-html-');
 
         try {
-            file_put_contents($sourcePath, $docxBytes);
+            if (file_put_contents($sourcePath, $docxBytes) === false) {
+                abort(500, 'ذخیره موقت سند Word ممکن نشد.');
+            }
+            $this->assertSafeDocxArchive($sourcePath);
             $document = \PhpOffice\PhpWord\IOFactory::createReader('Word2007')->load($sourcePath);
             $writer = \PhpOffice\PhpWord\IOFactory::createWriter($document, 'HTML');
             $writer->save($htmlPath);
@@ -252,6 +255,82 @@ class StoreController extends Controller
             if (is_file($htmlPath)) {
                 @unlink($htmlPath);
             }
+        }
+    }
+
+    /**
+     * Reject malformed or oversized DOCX archives before passing them to PHPWord.
+     */
+    private function assertSafeDocxArchive(string $path): void
+    {
+        abort_unless(class_exists(\ZipArchive::class), 503, 'پشتیبانی ZIP در سرور فعال نیست.');
+
+        $archive = new \ZipArchive();
+        if ($archive->open($path) !== true) {
+            abort(422, 'ساختار فایل Word معتبر نیست.');
+        }
+
+        try {
+            if ($archive->numFiles < 1 || $archive->numFiles > 5000) {
+                abort(422, 'تعداد اجزای فایل Word از حد مجاز بیشتر است.');
+            }
+
+            $uncompressedBytes = 0;
+            $compressedBytes = 0;
+            for ($index = 0; $index < $archive->numFiles; $index++) {
+                $entry = $archive->statIndex($index);
+                if (!is_array($entry)) {
+                    abort(422, 'ساختار فایل Word قابل خواندن نیست.');
+                }
+
+                $name = (string) ($entry['name'] ?? '');
+                if ($name === '' || str_starts_with($name, '/') || preg_match('#(^|[/\\\\])\.\.([/\\\\]|$)#', $name)) {
+                    abort(422, 'مسیر داخلی نامعتبر در فایل Word شناسایی شد.');
+                }
+
+                $uncompressedBytes += (int) ($entry['size'] ?? 0);
+                $compressedBytes += (int) ($entry['comp_size'] ?? 0);
+                if ($uncompressedBytes > 100 * 1024 * 1024) {
+                    abort(422, 'حجم بازشده فایل Word از حد مجاز بیشتر است.');
+                }
+            }
+
+            if ($compressedBytes > 0 && $uncompressedBytes > max(20 * 1024 * 1024, $compressedBytes * 200)) {
+                abort(422, 'نسبت فشرده‌سازی فایل Word غیرعادی است.');
+            }
+
+            if ($archive->locateName('[Content_Types].xml') === false || $archive->locateName('word/document.xml') === false) {
+                abort(422, 'فایل بارگذاری‌شده یک سند DOCX معتبر نیست.');
+            }
+
+            for ($index = 0; $index < $archive->numFiles; $index++) {
+                $entry = $archive->statIndex($index);
+                $name = (string) ($entry['name'] ?? '');
+                if (!str_ends_with(strtolower($name), '.rels')) {
+                    continue;
+                }
+
+                $relationships = $archive->getFromIndex($index);
+                if (!is_string($relationships) || stripos($relationships, 'TargetMode="External"') === false) {
+                    continue;
+                }
+
+                $xml = new \DOMDocument();
+                $previous = libxml_use_internal_errors(true);
+                $loaded = $xml->loadXML($relationships, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+                libxml_clear_errors();
+                libxml_use_internal_errors($previous);
+                if (!$loaded) {
+                    abort(422, 'پیوندهای داخلی فایل Word معتبر نیستند.');
+                }
+
+                $xpath = new \DOMXPath($xml);
+                if ($xpath->query('//*[local-name()="Relationship" and translate(@TargetMode, "EXTERNAL", "external")="external"]')->length > 0) {
+                    abort(422, 'پیوند خارجی در فایل Word مجاز نیست.');
+                }
+            }
+        } finally {
+            $archive->close();
         }
     }
 
