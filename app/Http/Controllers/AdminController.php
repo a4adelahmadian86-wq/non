@@ -380,13 +380,13 @@ class AdminController extends Controller
             $disk->put($path, 'farast-health-ok');
 
             return $disk->get($path) === 'farast-health-ok';
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return false;
         } finally {
             if ($disk) {
                 try {
                     $disk->delete($path);
-                } catch (\\Throwable) {
+                } catch (\Throwable) {
                     // Health probes must not break the dashboard response.
                 }
             }
