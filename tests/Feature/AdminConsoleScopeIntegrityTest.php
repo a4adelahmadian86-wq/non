@@ -44,7 +44,8 @@ class AdminConsoleScopeIntegrityTest extends TestCase
             ->assertDontSee('id="voice-settings"')
             ->assertDontSee('id="content"')
             ->assertDontSee('id="ai"')
-            ->assertDontSee('id="platform-control"');
+            ->assertDontSee('id="platform-control"')
+            ->assertDontSee('id="system-health"');
 
         $this->actingAs($viewer)->get(route('admin.users'))->assertForbidden();
     }
