@@ -86,7 +86,7 @@ class AdminStoreController extends Controller
                     ->where('is_primary', true)
                     ->where('scan_status', 'clean')
                     ->exists();
-                if (! $hasSafePrimaryFile) {
+                if (! $hasSafePrimaryFile && $product->status !== 'published') {
                     throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
                 }
             }
