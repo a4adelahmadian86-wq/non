@@ -160,7 +160,7 @@ class StoreController extends Controller
 
             try {
                 $html = app(StoreXlsxPreviewRenderer::class)->render($disk->get($preview->path), $identity);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 report($exception);
                 abort(422, 'نمایش این فایل Excel ممکن نیست. لطفاً فایل XLSX سالم و ساده‌تری بارگذاری کنید.');
             }
