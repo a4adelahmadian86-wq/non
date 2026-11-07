@@ -69,8 +69,8 @@ class CrmMarketingCampaignTest extends TestCase
 
     public function test_marketing_segments_and_campaigns_are_scoped_to_their_creator_domain(): void
     {
-        $orgA = \\App\\Models\\Organization::create(['name' => 'Campaign Scope A', 'slug' => 'campaign-scope-a', 'status' => 'active']);
-        $orgB = \\App\\Models\\Organization::create(['name' => 'Campaign Scope B', 'slug' => 'campaign-scope-b', 'status' => 'active']);
+        $orgA = \App\Models\Organization::create(['name' => 'Campaign Scope A', 'slug' => 'campaign-scope-a', 'status' => 'active']);
+        $orgB = \App\Models\Organization::create(['name' => 'Campaign Scope B', 'slug' => 'campaign-scope-b', 'status' => 'active']);
 
         $adminA = $this->user('09151110007');
         $adminA->organization_id = $orgA->id;
@@ -87,7 +87,7 @@ class CrmMarketingCampaignTest extends TestCase
         $customerB->save();
 
         config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
-        \\App\\Models\\SiteSetting::write('dashboard_scope_override', 'organization');
+        \App\Models\SiteSetting::write('dashboard_scope_override', 'organization');
 
         $this->actingAs($adminA)->postJson('/admin/crm/marketing/segments', [
             'name' => 'سگمنت سازمان الف',
