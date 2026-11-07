@@ -41,6 +41,7 @@ return [
         'emails'        => ['permission' => 'settings.manage',    'min_scope' => 'global'],
         'social'        => ['permission' => 'settings.manage',    'min_scope' => 'global'],
         'plans'         => ['permission' => 'billing.manage',     'min_scope' => 'global'],
+        'store'         => ['permission' => 'store.manage',       'min_scope' => 'global'],
         'cms'           => ['permission' => 'settings.manage',    'min_scope' => 'global'],
         'settings'      => ['permission' => 'settings.manage',    'min_scope' => 'global'],
         'pricing'       => ['permission' => 'billing.manage',     'min_scope' => 'global'],
