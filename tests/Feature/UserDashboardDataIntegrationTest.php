@@ -168,12 +168,22 @@ class UserDashboardDataIntegrationTest extends TestCase
             'price_rials' => 0,
         ]);
 
+        FarastDocument::create([
+            'user_id' => $user->id,
+            'title' => 'Non-draft workspace document',
+            'content' => '<p>Workspace content</p>',
+            'status' => 'active',
+            'is_favorite' => false,
+        ]);
+
         $this->actingAs($user)
             ->get('/dashboard?status=draft')
             ->assertOk()
             ->assertViewHas('documentStatusFilter', true)
             ->assertViewHas('documents', fn ($documents) => $documents->total() === 1)
             ->assertSee('Draft only')
-            ->assertDontSee('Completed document');
+            ->assertDontSee('Completed document')
+            ->assertDontSee('Non-draft workspace document')
+            ->assertDontSee('اسناد فضای کاری');
     }
 }
