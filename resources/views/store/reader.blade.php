@@ -119,6 +119,5 @@
 @endpush
 
 @push('scripts')
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" referrerpolicy="no-referrer"></script>
 <script src="/js/farast-reader.js?v=20261107phase2"></script>
 @endpush
