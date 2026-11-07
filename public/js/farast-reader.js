@@ -427,19 +427,24 @@
   root.querySelector('#reader-fit')?.addEventListener('click',()=>fitWidth().catch(showPdfError));
   root.querySelector('#reader-rotate')?.addEventListener('click',()=>{rotation=(rotation+90)%360;if(isPdf()&&pdfDoc){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}else activeArticle()?.querySelector('img')?.style.setProperty('transform','rotate('+rotation+'deg) scale('+zoom+')');});
   scrollModeButton?.addEventListener('click',async()=>{
-    if(!isPdf()||!pdfDoc)return;
-    continuousMode=!continuousMode;
-    scrollModeButton.setAttribute('aria-pressed',String(continuousMode));
-    scrollModeButton.title=continuousMode?'بازگشت به تک‌صفحه‌ای':'پیمایش پیوسته';
-    if(continuousMode){
-      await buildContinuousPages();
-      await navigatePdfPage(pdfPage);
-    }else{
-      continuousObserver?.disconnect();continuousObserver=null;
-      pdfSurface?.classList.remove('is-continuous');
-      if(continuousHost){continuousHost.innerHTML='';continuousHost.hidden=true;}
-      if(pdfSurface){pdfSurface.style.width='';pdfSurface.style.minHeight='';}
-      await renderPdfPage(pdfPage);
+    if(!isPdf()||!pdfDoc||scrollModeButton.disabled)return;
+    scrollModeButton.disabled=true;
+    try{
+      continuousMode=!continuousMode;
+      scrollModeButton.setAttribute('aria-pressed',String(continuousMode));
+      scrollModeButton.title=continuousMode?'بازگشت به تک‌صفحه‌ای':'پیمایش پیوسته';
+      if(continuousMode){
+        await buildContinuousPages();
+        await navigatePdfPage(pdfPage);
+      }else{
+        continuousObserver?.disconnect();continuousObserver=null;
+        pdfSurface?.classList.remove('is-continuous');
+        if(continuousHost){continuousHost.innerHTML='';continuousHost.hidden=true;}
+        if(pdfSurface){pdfSurface.style.width='';pdfSurface.style.minHeight='';}
+        await renderPdfPage(pdfPage);
+      }
+    }finally{
+      scrollModeButton.disabled=false;
     }
   });
   const moveSearchMatch=async(direction)=>{
