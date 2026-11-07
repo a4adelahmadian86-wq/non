@@ -67,6 +67,32 @@ class StoreReaderAccessTest extends TestCase
         $this->get(route('store.preview', $preview))->assertRedirect(route('login'));
     }
 
+    public function test_docx_preview_is_rendered_as_sanitized_html_with_account_watermark(): void
+    {
+        [$product, $preview] = $this->makePreviewFixture();
+
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-docx-test-');
+        $document = new \\PhpOffice\\PhpWord\\PhpWord();
+        $document->addSection()->addText('متن محرمانه نمونه Word');
+        \\PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'Word2007')->save($temporary);
+        Storage::disk('private')->put('store/previews/sample/preview.docx', file_get_contents($temporary));
+        @unlink($temporary);
+
+        $preview->update([
+            'path' => 'store/previews/sample/preview.docx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'kind' => 'docx',
+        ]);
+
+        $response = $this->actingAs($this->makeReaderUser())->get(route('store.preview', $preview));
+
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertSee('متن محرمانه نمونه Word')
+            ->assertSee('09123456789')
+            ->assertDontSee('<script', false);
+    }
+
     public function test_authenticated_reader_sees_account_watermark_and_private_preview_headers(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
