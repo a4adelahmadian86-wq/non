@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Services\EditorDocumentService;
 use App\Models\Ticket;
+use App\Services\AuthorizationService;
 
 class PlatformCompletionController extends Controller {
  private function doc(Request $r,$id){$d=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->first();abort_unless($d,404);return $d;}
@@ -14,11 +15,14 @@ class PlatformCompletionController extends Controller {
   $this->authorizeDocumentAction($r,'documents.view');
   $userId=(int)$r->user()->id;
   $canShareDocuments=app(AuthorizationService::class)->allows($r->user(),'documents.share');
+  $canCreateDocuments=app(AuthorizationService::class)->allows($r->user(),'documents.create');
+  $canEditDocuments=app(AuthorizationService::class)->allows($r->user(),'documents.edit');
+  $canDeleteDocuments=app(AuthorizationService::class)->allows($r->user(),'documents.delete');
   $folders=DB::table('document_folders')->where('user_id',$userId)->orderBy('name')->get();
   if($r->boolean('shared')){
    $this->authorizeDocumentAction($r,'documents.share');
    $shares=DB::table('farast_document_shares as shares')->join('farast_documents as docs','docs.id','=','shares.document_id')->where('shares.owner_id',$userId)->select('shares.id as share_id','shares.token','shares.permission','shares.expires_at','shares.created_at','docs.id as document_id','docs.title')->orderByDesc('shares.created_at')->paginate(24)->withQueryString();
-   return view('platform.documents',['documents'=>collect(),'folders'=>$folders,'shares'=>$shares,'mode'=>'shared','trashed'=>false,'canShareDocuments'=>$canShareDocuments]);
+   return view('platform.documents',['documents'=>collect(),'folders'=>$folders,'shares'=>$shares,'mode'=>'shared','trashed'=>false,'canShareDocuments'=>$canShareDocuments,'canCreateDocuments'=>$canCreateDocuments,'canEditDocuments'=>$canEditDocuments,'canDeleteDocuments'=>$canDeleteDocuments]);
   }
   $trashed=$r->boolean('trashed');
   $q=DB::table('farast_documents')->where('user_id',$userId);
