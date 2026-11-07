@@ -143,7 +143,7 @@ class PlatformCompletionController extends Controller {
   $id=DB::table('farast_ocr_jobs')->insertGetId(['user_id'=>$r->user()->id,'source_path'=>$x['source_path'],'provider'=>$x['provider']??'auto','status'=>'queued','created_at'=>now(),'updated_at'=>now()]);
   return response()->json(['job_id'=>$id,'status'=>'queued']);
  }
- public function ocrStatus(Request $r,$id){$j=DB::table('farast_ocr_jobs')->where('id',$id)->where('user_id',auth()->id())->first();abort_unless($j,404);return response()->json($j);}
+ public function ocrStatus(Request $r,$id){abort_unless(app(AuthorizationService::class)->allows($r->user(),'ocr.use'),403);$j=DB::table('farast_ocr_jobs')->where('id',$id)->where('user_id',$r->user()->id)->first();abort_unless($j,404);return response()->json($j);}
  public function cms(Request $r){abort_unless(auth()->user()->isAdmin(),403);return view('admin.cms',['pages'=>DB::table('farast_cms_pages')->orderByDesc('updated_at')->get()]);}
  public function saveCms(Request $r){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['slug'=>'required|string|max:160','title'=>'required|string|max:255','body'=>'nullable|string','status'=>'required|in:draft,published']);DB::table('farast_cms_pages')->updateOrInsert(['slug'=>$x['slug']],['title'=>$x['title'],'body'=>$x['body']??'','status'=>$x['status'],'published_at'=>$x['status']==='published'?now():null,'updated_by'=>auth()->id(),'updated_at'=>now(),'created_at'=>now()]);return back()->with('status','صفحه CMS ذخیره شد.');}
  public function billing(Request $r){
@@ -236,7 +236,7 @@ class PlatformCompletionController extends Controller {
   $stats=['open'=>Ticket::whereIn('status',['open','user_replied'])->count(),'answered'=>Ticket::where('status','answered')->count(),'pending'=>Ticket::where('status','pending')->count(),'closed'=>Ticket::where('status','closed')->count()];
   return view('admin.support',compact('tickets','active','stats'));
  }
- public function usage(){return response()->json(DB::table('farast_usage_counters')->where('user_id',auth()->id())->orderByDesc('period_start')->get());}
+ public function usage(Request $r){abort_unless(app(AuthorizationService::class)->allows($r->user(),'reports.view'),403);return response()->json(DB::table('farast_usage_counters')->where('user_id',$r->user()->id)->orderByDesc('period_start')->get());}
  public function createFolder(Request $r){$this->authorizeDocumentAction($r,'documents.create');$x=$r->validate(['name'=>'required|string|max:120','parent_id'=>'nullable|integer']);$this->assertFolderOwnership(isset($x['parent_id'])?(int)$x['parent_id']:null);DB::table('document_folders')->insert(['user_id'=>auth()->id(),'name'=>$x['name'],'parent_id'=>$x['parent_id']??null,'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','پوشه ایجاد شد.');}
  public function teamMembers(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$t=DB::table('teams')->find($team);abort_unless($t,404);return response()->json(DB::table('team_user')->join('users','users.id','=','team_user.user_id')->where('team_id',$team)->select('users.id','users.name','users.email','team_user.team_role')->get());}
  public function addTeamMember(Request $r,$team){abort_unless(auth()->user()->isAdmin(),403);$x=$r->validate(['user_id'=>'required|integer','team_role'=>'required|in:owner,supervisor,employee']);DB::table('team_user')->updateOrInsert(['team_id'=>$team,'user_id'=>$x['user_id']],['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','عضو تیم به‌روزرسانی شد.');}
