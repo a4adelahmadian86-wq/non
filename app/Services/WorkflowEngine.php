@@ -120,13 +120,22 @@ class WorkflowEngine
 
         $events = DB::table('farast_workflow_events')
             ->where('status', '!=', 'completed')
-            ->where('attempts', '<', 10)
             ->where(function ($query) {
-                $query->whereIn('status', ['pending', 'failed'])
-                    ->orWhere(function ($stale) {
-                        $stale->where('status', 'processing')
-                            ->where('updated_at', '<=', now()->subMinutes(30));
-                    });
+                $query->whereNotExists(function ($empty) {
+                    $empty->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                        ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id');
+                })->orWhereExists(function ($retryable) {
+                    $retryable->select(DB::raw(1))->from('farast_workflow_event_workflows')
+                        ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
+                        ->where('attempts', '<', 5)
+                        ->where(function ($states) {
+                            $states->whereIn('status', ['pending', 'failed'])
+                                ->orWhere(function ($stale) {
+                                    $stale->where('status', 'running')
+                                        ->where('started_at', '<=', now()->subMinutes(30));
+                                });
+                        });
+                });
             })
             ->orderBy('id')
             ->limit(max(1, min($limit, 200)))
