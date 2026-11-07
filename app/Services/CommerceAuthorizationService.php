@@ -15,6 +15,7 @@ use App\Models\FarastWalletReservation;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -130,7 +131,7 @@ class CommerceAuthorizationService
                     'metadata'=>['quote'=>$quote,'context'=>$this->safeContext($context)],
                 ]);
             });
-        } catch (\Illuminate\Database\QueryException $exception) {
+        } catch (QueryException $exception) {
             // Two concurrent requests can both observe an absent key. The unique
             // constraint elects one winner; the loser re-reads and validates it.
             $existing=FarastUsageReservation::where('idempotency_key',$key)->first();
