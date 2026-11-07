@@ -304,14 +304,32 @@ class EditorController extends Controller
             $path = $pending['path'];
             $newPath = 'typing/'.auth()->id().'/'.basename($path);
             if ($path !== $newPath && Storage::disk('private')->exists($path)) {
-                Storage::disk('private')->move($path, $newPath);
-                $path = $newPath;
+                $moved = Storage::disk('private')->move($path, $newPath);
+                if ($moved) {
+                    \App\Models\FarastStorageObject::query()
+                        ->whereNull('user_id')
+                        ->where('disk', 'private')
+                        ->where('path', $path)
+                        ->where('classification', 'upload')
+                        ->where('status', 'approved')
+                        ->update(['user_id' => auth()->id(), 'path' => $newPath]);
+                    $path = $newPath;
+                }
             }
             $data['path'] = $path;
         }
 
         abort_unless(Str::startsWith($data['path'], 'typing/'.auth()->id().'/'), 403);
         abort_unless(Storage::disk('private')->exists($data['path']), 404);
+
+        $approvedUpload = \App\Models\FarastStorageObject::query()
+            ->where('user_id', auth()->id())
+            ->where('disk', 'private')
+            ->where('path', $data['path'])
+            ->where('classification', 'upload')
+            ->where('status', 'approved')
+            ->first();
+        abort_unless($approvedUpload, 423, 'فایل هنوز از بررسی امنیتی عبور نکرده یا مجوز پردازش آن معتبر نیست.');
         $data['mime'] = Storage::disk('private')->mimeType($data['path']) ?: $data['mime'];
         abort_unless(in_array($data['mime'], ['image/jpeg','image/png','image/webp','application/pdf','application/zip'], true), 415, 'نوع فایل برای پردازش پشتیبانی نمی‌شود.');
         $bytes = Storage::disk('private')->get($data['path']);
