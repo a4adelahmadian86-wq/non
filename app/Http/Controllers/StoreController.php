@@ -125,7 +125,10 @@ class StoreController extends Controller
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
             'X-Frame-Options' => 'SAMEORIGIN',
-            'Content-Security-Policy' => "frame-ancestors 'self'",
+            'Content-Security-Policy' => "default-src 'none'; frame-ancestors 'self'",
+            'Cross-Origin-Resource-Policy' => 'same-origin',
+            'Referrer-Policy' => 'no-referrer',
+            'X-Permitted-Cross-Domain-Policies' => 'none',
             'Content-Disposition' => 'inline',
         ];
 
