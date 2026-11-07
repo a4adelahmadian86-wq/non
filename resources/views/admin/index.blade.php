@@ -26,10 +26,9 @@
             @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><span>شبکه‌های اجتماعی</span></a>@endif
         </div>
         @if($scope === 'global')
-            @php($runtimeReady = (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false))
-            <div class="farast-admin-live {{ $runtimeReady ? 'is-healthy' : 'is-degraded' }}">
+            <div class="farast-admin-live {{ (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false) ? 'is-healthy' : 'is-degraded' }}">
                 <span></span>
-                <div><b>سلامت زیرساخت</b><small>{{ $runtimeReady ? 'بررسی داخلی موفق' : 'نیازمند بررسی عملیاتی' }}</small></div>
+                <div><b>سلامت زیرساخت</b><small>{{ (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false) ? 'بررسی داخلی موفق' : 'نیازمند بررسی عملیاتی' }}</small></div>
             </div>
         @else
             <div class="farast-admin-live is-scoped"><span></span><div><b>فضای مدیریتی محدود</b><small>نمایش داده‌های مجاز این دامنه</small></div></div>
