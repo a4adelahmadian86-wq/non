@@ -336,6 +336,7 @@ class EditorController extends Controller
         $maxBytes = (int) $caps['max_file_mb'] * 1024 * 1024;
         abort_unless($caps['unlimited'] || strlen($bytes) <= $maxBytes, 413, 'حجم فایل برای حساب شما بیشتر از سقف مجاز است.');
         $hash = hash('sha256', $bytes);
+        abort_unless(hash_equals((string) $approvedUpload->checksum, $hash), 409, 'محتوای فایل پس از اسکن امنیتی تغییر کرده است؛ فایل را دوباره بارگذاری کنید.');
 
         $accepted = $request->session()->get('typing_preflight_accepted');
         abort_unless(
