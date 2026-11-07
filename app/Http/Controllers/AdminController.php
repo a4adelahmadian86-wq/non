@@ -22,6 +22,7 @@ use App\Services\MailConfigService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
@@ -279,6 +280,7 @@ class AdminController extends Controller
                 'env' => app()->environment(),
                 'debug' => (bool) config('app.debug'),
                 'storage_writable' => is_writable(storage_path()),
+                'private_storage_ok' => $this->privateStorageReachable(),
             ] : [],
             'capabilities' => $capabilities,
             'voiceAccounts' => ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
@@ -364,6 +366,30 @@ class AdminController extends Controller
             return true;
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+
+    private function privateStorageReachable(): bool
+    {
+        $path = 'health-check/'.bin2hex(random_bytes(12)).'.tmp';
+        $disk = null;
+
+        try {
+            $disk = Storage::disk('private');
+            $disk->put($path, 'farast-health-ok');
+
+            return $disk->get($path) === 'farast-health-ok';
+        } catch (\\Throwable) {
+            return false;
+        } finally {
+            if ($disk) {
+                try {
+                    $disk->delete($path);
+                } catch (\\Throwable) {
+                    // Health probes must not break the dashboard response.
+                }
+            }
         }
     }
 
