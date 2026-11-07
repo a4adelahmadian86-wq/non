@@ -92,8 +92,8 @@ class StoreReaderAccessTest extends TestCase
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void
     {
-        $controller = app(\\App\\Http\\Controllers\\StoreController::class);
-        $method = new \\ReflectionMethod($controller, 'sanitizeDocxHtml');
+        $controller = app(\App\Http\Controllers\StoreController::class);
+        $method = new \ReflectionMethod($controller, 'sanitizeDocxHtml');
         $method->setAccessible(true);
 
         // 5.6 MB of base64 data represents more than the 4 MiB decoded-image ceiling.
