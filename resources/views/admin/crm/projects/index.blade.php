@@ -1,5 +1,5 @@
-@extends('layouts.app')
-@section('content')
+@extends('layouts.admin')
+@section('admin-content')
 <section class="farast-crm" dir="rtl">
   <header class="farast-crm__header">
     <div>
@@ -54,7 +54,7 @@
 @endsection
 @push('styles')
 <style>
-.farast-crm{max-width:1500px;margin:0 auto;padding:30px clamp(14px,3vw,42px) 60px;color:#18243b;font-family:Vazirmatn,Tahoma,sans-serif}
+.farast-crm{max-width:1500px;margin:0 auto;padding:0 0 30px;color:#18243b;font-family:Vazirmatn,Tahoma,sans-serif}
 .farast-crm__header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px}
 .farast-crm__eyebrow{font-size:10px;font-weight:800;letter-spacing:1.4px;color:#6380a9}
 .farast-crm h1{font-size:clamp(22px,3vw,30px);margin:8px 0;color:#14213a}
