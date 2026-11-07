@@ -31,7 +31,7 @@
 @if($productImage)<meta property="og:image" content="{{ $productImage }}">@endif
 <meta property="og:url" content="{{ route('store.product', $product->slug) }}">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{{ $title }}">
+<meta name="twitter:title" content="{{ $productMetaTitle }}">
 <meta name="twitter:description" content="{{ $productDescription }}">
 @if($productImage)<meta name="twitter:image" content="{{ $productImage }}">@endif
 <script type="application/ld+json">@json($productStructuredData)</script>
