@@ -32,6 +32,14 @@
             <span>FARAST</span>
           @endif
         </div>
+        @php($galleryImages = $product->images->where('is_active', true))
+        @if($galleryImages->isNotEmpty())
+          <div class="store-product-gallery" aria-label="گالری تصاویر محصول">
+            @foreach($galleryImages as $image)
+              <figure><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy"></figure>
+            @endforeach
+          </div>
+        @endif
 
         <div class="store-panel">
           <div class="store-panel-head">
@@ -163,6 +171,11 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107premium1">
 <style>
+
+.store-product-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:12px 0 16px}
+.store-product-gallery figure{margin:0;overflow:hidden;border:1px solid var(--st-line);border-radius:12px;background:#f5f7fa}
+.store-product-gallery img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+
 .course-public-curriculum{margin-top:14px}.course-public-meta{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px}.course-public-meta span{font-size:.7rem;color:var(--st-muted);background:#f4f7fc;border-radius:8px;padding:7px 9px}.course-public-section{display:flex;justify-content:space-between;gap:12px;padding:11px 10px;background:#f6f9fd;border:1px solid var(--st-line);border-radius:9px;margin-top:10px}.course-public-section strong{font-size:.78rem}.course-public-section span{font-size:.68rem;color:var(--st-muted)}.course-public-lesson{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #edf1f6;font-size:.75rem}.course-public-lesson>span{flex:1}.course-public-lesson>i{color:var(--st-blue)}.course-public-lesson small{font-size:.64rem;color:var(--st-muted);background:#f0f4fa;border-radius:99px;padding:4px 7px}.course-public-lesson .course-preview-link{font-size:.64rem;color:#0f8d68;background:#e8f8f1;border-radius:99px;padding:4px 8px;text-decoration:none;white-space:nowrap}
 </style>
 @endpush
