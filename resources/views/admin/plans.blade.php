@@ -1,6 +1,6 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
-@section('content')
+@section('admin-content')
 <div class="container" dir="rtl">
     <h1>مدیریت پلن و سهمیه</h1>
 
