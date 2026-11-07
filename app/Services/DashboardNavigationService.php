@@ -79,6 +79,14 @@ class DashboardNavigationService
                 }
             }
         }
+        if (! $active && request()->routeIs($routeName)) {
+            foreach ((array) ($item['active_when_query'] ?? []) as $key) {
+                if (request()->query($key) !== null) {
+                    $active = true;
+                    break;
+                }
+            }
+        }
 
         $badge = $this->itemBadge($item['key'] ?? null, $user);
 
