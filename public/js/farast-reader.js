@@ -19,6 +19,22 @@
   const rotateButton=root.querySelector('#reader-rotate');
   const outlineSection=root.querySelector('#reader-outline');
   const outlineHost=root.querySelector('#reader-outline-list');
+
+  // PDF.js 6.x uses the upcoming Map#getOrInsertComputed API; provide a spec-shaped fallback
+  // for stable Chromium/Firefox releases that do not expose it yet.
+  if(typeof Map.prototype.getOrInsertComputed!=='function'){
+    Object.defineProperty(Map.prototype,'getOrInsertComputed',{
+      configurable:true,
+      writable:true,
+      value:function(key,callback){
+        if(this.has(key))return this.get(key);
+        const value=callback(key);
+        this.set(key,value);
+        return value;
+      }
+    });
+  }
+
   const pdfjsReady=window.pdfjsLib
     ? Promise.resolve(window.pdfjsLib)
     : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;});
