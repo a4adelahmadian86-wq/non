@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -180,6 +181,7 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => 'این ایمیل در حساب کاربری شما ثبت نشده است.']);
         }
 
+        $this->enforceOtpSendLimit('email', $email, 'email');
         $code = (string) random_int(100000, 999999);
         EmailOtpChallenge::where('email', $email)->whereNull('consumed_at')->update(['consumed_at' => now()]);
         EmailOtpChallenge::create(['email' => $email, 'code_hash' => Hash::make($code), 'expires_at' => now()->addMinutes(3)]);
@@ -369,8 +371,24 @@ class AuthController extends Controller
         ]);
     }
 
+    private function enforceOtpSendLimit(string $channel, string $destination, string $field): void
+    {
+        $normalized = mb_strtolower(trim($destination));
+        $key = 'farast:otp:send:'.$channel.':'.hash('sha256', $normalized);
+
+        if (RateLimiter::tooManyAttempts($key, 3)) {
+            $waitSeconds = RateLimiter::availableIn($key);
+            throw ValidationException::withMessages([
+                $field => 'برای امنیت حساب، پس از '.$waitSeconds.' ثانیه دوباره درخواست کد بدهید.',
+            ]);
+        }
+
+        RateLimiter::hit($key, 600);
+    }
+
     private function issueSmsOtp(string $phone, SmsService $sms): void
     {
+        $this->enforceOtpSendLimit('sms', $phone, 'mobile');
         $code = (string) random_int(100000, 999999);
         OtpChallenge::where('mobile', $phone)->whereNull('consumed_at')->update(['consumed_at' => now()]);
         OtpChallenge::create(['mobile' => $phone, 'code_hash' => Hash::make($code), 'expires_at' => now()->addMinutes(3)]);
