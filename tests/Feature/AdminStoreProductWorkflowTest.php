@@ -174,6 +174,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         });
 
         $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
             ->post(route('admin.store.images.upload', $product), [
                 'image' => UploadedFile::fake()->image('gallery.jpg', 800, 600),
                 'alt' => 'نمای محصول',
