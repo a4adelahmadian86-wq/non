@@ -35,7 +35,7 @@
         <article class="user-dashboard__metric">
             <span class="user-dashboard__metric-icon"><i class="fa-solid fa-diagram-project"></i></span>
             <div><strong>{{ number_format($projectTotal) }}</strong><span>پروژه‌ها</span></div>
-            @if($canCreateProjects)<a href="{{ route('projects.create') }}" aria-label="ایجاد پروژه"><i class="fa-solid fa-arrow-up-left-from-circle"></i></a>@endif
+            @if($canCreateProjects && $capabilities['active'] && $capabilities['can_type'])<a href="{{ route('projects.create') }}" aria-label="ایجاد پروژه"><i class="fa-solid fa-arrow-up-left-from-circle"></i></a>@endif
         </article>
         <article class="user-dashboard__metric">
             <span class="user-dashboard__metric-icon"><i class="fa-solid fa-wallet"></i></span>
@@ -126,13 +126,13 @@
         <section class="user-dashboard__panel">
             <div class="user-dashboard__panel-head">
                 <div><span class="user-dashboard__kicker">پیگیری</span><h2>پروژه‌های اخیر</h2><p>آخرین پروژه‌های ثبت‌شده شما</p></div>
-                @if($canCreateProjects)<a href="{{ route('projects.create') }}" class="user-dashboard__text-link">پروژه جدید <i class="fa-solid fa-arrow-left"></i></a>@endif
+                @if($canCreateProjects && $capabilities['active'] && $capabilities['can_type'])<a href="{{ route('projects.create') }}" class="user-dashboard__text-link">پروژه جدید <i class="fa-solid fa-arrow-left"></i></a>@endif
             </div>
             @forelse($projects as $project)
                 <article class="user-dashboard__project">
                     <span class="user-dashboard__project-icon"><i class="fa-solid fa-diagram-project"></i></span>
                     <div><strong>{{ $project->name }}</strong><small>{{ number_format($project->used_pages) }} از {{ number_format($project->estimated_pages) }} صفحه · {{ $project->status }}</small></div>
-                    @if($canCreateProjects && $capabilities['can_type'])<a href="{{ route('editor', ['project' => $project->id]) }}" aria-label="ادامه پروژه {{ $project->name }}"><i class="fa-solid fa-arrow-left"></i></a>@endif
+                    @if($canCreateProjects && $capabilities['active'] && $capabilities['can_type'])<a href="{{ route('editor', ['project' => $project->id]) }}" aria-label="ادامه پروژه {{ $project->name }}"><i class="fa-solid fa-arrow-left"></i></a>@endif
                 </article>
             @empty
                 <div class="user-dashboard__empty user-dashboard__empty--small"><i class="fa-solid fa-diagram-project"></i><span>هنوز پروژه‌ای ایجاد نکرده‌اید.</span></div>
