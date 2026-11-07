@@ -61,7 +61,7 @@
 @endsection
 
 @push('styles')
-<link rel="stylesheet" href="{{ asset('css/blog.css') }}?v=20261107a">
+<link rel="stylesheet" href="{{ asset('css/blog.css') }}?v=20261107b">
 @endpush
 @push('scripts')
 <script src="{{ asset('js/blog.js') }}?v=20261107a" defer></script>
