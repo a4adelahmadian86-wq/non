@@ -15,9 +15,15 @@ use Illuminate\Http\Request;
 
 class ProjectController extends Controller
 {
-    public function create(ProjectInterviewService $interview, ProjectBillingService $billing, PricingService $pricing, AuthorizationService $authorization)
+    public function create(ProjectInterviewService $interview, ProjectBillingService $billing, PricingService $pricing, AuthorizationService $authorization, CapabilityService $capabilities)
     {
-        abort_unless($authorization->allows(request()->user(), 'projects.create'), 403);
+        $userCapabilities = $capabilities->forUser(request()->user());
+        abort_unless(
+            $authorization->allows(request()->user(), 'projects.create')
+                && $userCapabilities['active']
+                && $userCapabilities['can_type'],
+            403
+        );
         $subscription = $billing->includedAllowance(request()->user(), 'manual');
         return view('projects.create', [
             'types' => $interview::TYPES,
@@ -27,9 +33,15 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications, AuditEventService $audit, AuthorizationService $authorization)
+    public function store(Request $request, ProjectInterviewService $interview, UserKnowledgeService $knowledge, ProjectBillingService $billing, ApplicationRegistry $applications, AuditEventService $audit, AuthorizationService $authorization, CapabilityService $capabilities)
     {
-        abort_unless($authorization->allows($request->user(), 'projects.create'), 403);
+        $userCapabilities = $capabilities->forUser($request->user());
+        abort_unless(
+            $authorization->allows($request->user(), 'projects.create')
+                && $userCapabilities['active']
+                && $userCapabilities['can_type'],
+            403
+        );
         $data = $request->validate([
             'project_type' => ['required','string','in:typing,editing,article,book,resume,exam,contract,forms,report,research_document,presentation,design,poster_card,programming,other'],
             'template' => ['required','string','in:'.implode(',',array_keys($interview::TEMPLATES))],

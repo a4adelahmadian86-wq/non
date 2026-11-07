@@ -48,6 +48,11 @@ class EditorController extends Controller
             ->paginate(8)
             ->withQueryString();
 
+        $userCapabilities = $capabilities->forUser($user);
+        $canCreateProjects = app(\App\Services\AuthorizationService::class)->allows($user, 'projects.create')
+            && $userCapabilities['active']
+            && $userCapabilities['can_type'];
+
         $linkedDocumentIds = $user->documents()
             ->whereNotNull('farast_document_id')
             ->select('farast_document_id');
@@ -76,14 +81,14 @@ class EditorController extends Controller
                 ->limit(4)
                 ->get(['id', 'name', 'status', 'updated_at', 'estimated_pages', 'used_pages']),
             'projectTotal' => $user->projects()->count(),
-            'canCreateProjects' => app(\App\Services\AuthorizationService::class)->allows($user, 'projects.create'),
+            'canCreateProjects' => $canCreateProjects,
             'canEditDocuments' => app(\App\Services\AuthorizationService::class)->allows($user, 'documents.edit'),
             'openTicketCount' => $user->tickets()
                 ->whereIn('status', ['open', 'pending', 'user_replied'])
                 ->count(),
             'walletBalance' => (int) ($user->wallet()->value('balance_rials') ?? 0),
             'unreadNotificationCount' => app(\App\Services\NotificationService::class)->unreadCount($user->id),
-            'capabilities' => $capabilities->forUser($user),
+            'capabilities' => $userCapabilities,
         ]);
     }
 
