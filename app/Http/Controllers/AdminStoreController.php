@@ -7,6 +7,7 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
 use App\Services\UploadSecurityService;
+use App\Services\StoreProductWorkspaceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +25,11 @@ class AdminStoreController extends Controller
 
         $products = StoreProduct::query()
             ->with(['category', 'files'])
+            ->withCount([
+                'orderItems as paid_order_items_count' => fn ($query) => $query->whereHas('order', fn ($order) => $order->where('status', 'paid')->whereNotNull('paid_at')),
+                'libraryItems as active_access_count' => fn ($query) => $query->whereNull('revoked_at'),
+            ])
+            ->withSum(['orderItems as paid_sales_rials' => fn ($query) => $query->whereHas('order', fn ($order) => $order->where('status', 'paid')->whereNotNull('paid_at'))], 'total_rials')
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')->orWhere('sku', 'like', '%'.$q.'%');
             }))
@@ -39,6 +45,9 @@ class AdminStoreController extends Controller
             'drafts' => StoreProduct::where('status', 'draft')->count(),
             'courses' => StoreProduct::where('type', 'course')->count(),
             'files' => StoreProduct::where('type', 'digital_file')->count(),
+            'paid_orders' => DB::table('store_order_items')->join('orders', 'orders.id', '=', 'store_order_items.order_id')->whereNotNull('store_order_items.product_id')->where('orders.status', 'paid')->whereNotNull('orders.paid_at')->distinct('orders.id')->count('orders.id'),
+            'revenue_rials' => (int) DB::table('store_order_items')->join('orders', 'orders.id', '=', 'store_order_items.order_id')->whereNotNull('store_order_items.product_id')->where('orders.status', 'paid')->whereNotNull('orders.paid_at')->sum('store_order_items.total_rials'),
+            'active_accesses' => DB::table('store_library_items')->whereNull('revoked_at')->count(),
         ];
 
         return view('admin.store.index', compact('products', 'q', 'type', 'status', 'stats'));
@@ -75,8 +84,9 @@ class AdminStoreController extends Controller
     {
         $product->load(['files', 'previews', 'category']);
         $categories = StoreCategory::orderBy('sort_order')->get();
+        $workflow = app(StoreProductWorkspaceService::class)->inspect($product);
 
-        return view('admin.store.form', compact('product', 'categories'));
+        return view('admin.store.form', compact('product', 'categories', 'workflow'));
     }
 
     public function update(Request $request, StoreProduct $product)
@@ -92,23 +102,12 @@ class AdminStoreController extends Controller
         }
 
         if (($data['status'] ?? '') === 'published') {
-            if ($data['type'] === 'course') {
-                $hasPublishedLesson = $product->course()
-                    ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
-                    ->exists();
-                if (! $hasPublishedLesson) {
-                    throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده در برنامه آموزشی لازم است.']);
-                }
-            } else {
-                $hasSafePrimaryFile = $product->files()
-                    ->where('purpose', 'product_download')
-                    ->where('is_active', true)
-                    ->where('is_primary', true)
-                    ->where('scan_status', 'clean')
-                    ->exists();
-                if (! $hasSafePrimaryFile && $product->status !== 'published') {
-                    throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
-                }
+            $readiness = app(StoreProductWorkspaceService::class)->inspect($product);
+            if (! $readiness['can_publish'] && $product->status !== 'published') {
+                $message = $data['type'] === 'course'
+                    ? 'برای انتشار دوره، اطلاعات پایه، قیمت و دست‌کم یک جلسه منتشرشده لازم است.'
+                    : 'برای انتشار محصول، اطلاعات پایه، قیمت و یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.';
+                throw ValidationException::withMessages(['status' => $message]);
             }
             if (! $product->published_at && empty($data['published_at'])) {
                 $data['published_at'] = now();
