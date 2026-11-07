@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ResolveAdminScope;
+use App\Models\Organization;
+use App\Models\SiteSetting;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminConsoleScopeIntegrityTest extends TestCase
