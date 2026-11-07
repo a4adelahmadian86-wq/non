@@ -41,7 +41,7 @@
             </div>
             <div class="store-product-workspace-metrics">
               <span><b>{{ number_format($p->price_rials/10) }}</b> تومان</span>
-              <span><b>{{ number_format($p->paid_order_items_count ?? 0) }}</b> فروش موفق</span>
+              <span><b>{{ number_format($p->paid_units_sold ?? 0) }}</b> واحد فروخته‌شده</span>
               <span><b>{{ number_format($p->active_access_count ?? 0) }}</b> دسترسی فعال</span>
               <span><b>{{ number_format(($p->paid_sales_rials ?? 0)/10) }}</b> تومان درآمد</span>
             </div>
@@ -63,6 +63,6 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107center1">
 <style>
-.product-center-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px}.product-center-stats>div{background:#fff;border:1px solid var(--st-line);border-radius:13px;padding:14px;display:grid;gap:6px}.product-center-stats span{font-size:.7rem;color:var(--st-muted)}.product-center-stats b{font-size:1.25rem;color:var(--st-ink)}.product-center-filters{display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:8px;margin-bottom:16px}.product-center-filters input,.product-center-filters select{min-width:0;border:1px solid var(--st-line);border-radius:10px;background:#fff;padding:10px 12px;font:inherit;font-size:.76rem;color:var(--st-ink)}@media(max-width:850px){.product-center-stats{grid-template-columns:repeat(3,1fr)}.product-center-filters{grid-template-columns:1fr 1fr}.product-center-filters input{grid-column:1/-1}}@media(max-width:480px){.product-center-stats{grid-template-columns:repeat(2,1fr)}}
+.product-center-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}.product-center-stats>div{background:#fff;border:1px solid var(--st-line);border-radius:13px;padding:14px;display:grid;gap:6px}.product-center-stats span{font-size:.7rem;color:var(--st-muted)}.product-center-stats b{font-size:1.25rem;color:var(--st-ink)}.product-center-filters{display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:8px;margin-bottom:16px}.product-center-filters input,.product-center-filters select{min-width:0;border:1px solid var(--st-line);border-radius:10px;background:#fff;padding:10px 12px;font:inherit;font-size:.76rem;color:var(--st-ink)}@media(max-width:850px){.product-center-stats{grid-template-columns:repeat(3,1fr)}.product-center-filters{grid-template-columns:1fr 1fr}.product-center-filters input{grid-column:1/-1}}@media(max-width:480px){.product-center-stats{grid-template-columns:repeat(2,1fr)}}
 </style>
 @endpush
