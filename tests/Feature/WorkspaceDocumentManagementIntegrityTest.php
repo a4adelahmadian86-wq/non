@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FarastDocument;
 use App\Models\User;
+use App\Models\TypingDocument;
 use App\Services\AuthorizationService;
 use App\Services\DashboardNavigationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
