@@ -117,6 +117,12 @@ class AdminStoreController extends Controller
 
     public function destroy(StoreProduct $product)
     {
+        if ($product->libraryItems()->exists() || $product->orderItems()->exists()) {
+            $product->update(['status' => 'archived', 'published_at' => null]);
+
+            return redirect()->route('admin.store.index')->with('status', 'این محصول سابقه سفارش یا دسترسی مشتری دارد؛ برای حفظ سوابق و حقوق خریداران بایگانی شد.');
+        }
+
         $product->delete();
 
         return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
