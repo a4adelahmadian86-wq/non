@@ -6,12 +6,15 @@ use App\Http\Controllers\AuthController;
 use App\Models\User;
 use App\Services\EmailService;
 use App\Services\SmsService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class AuthOtpSessionBindingTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_registration_rejects_a_verified_flag_bound_to_another_phone(): void
     {
         $session = app('session')->driver();
