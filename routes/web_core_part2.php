@@ -47,6 +47,10 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/editor/voice/insert', [VoiceController::class, 'insertTranscript'])->middleware(['throttle:120,10', 'capability:can_voice'])->name('editor.voice.insert');
     Route::post('/editor/export/{format}', [ExportController::class, 'export'])->whereIn('format', ['docx', 'pdf'])->middleware('throttle:10,10')->name('editor.export');
     Route::post('/editor/heartbeat', [EditorController::class, 'heartbeat'])->middleware('throttle:60,1')->name('editor.heartbeat');
+});
+
+// The single-editor lock protects editor state only; it must not block the rest of the workspace.
+Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [EditorController::class, 'dashboard'])->name('dashboard');
     Route::get('/workspace/documents', [PlatformCompletionController::class, 'documents'])->name('platform.documents');
     Route::post('/workspace/documents', [PlatformCompletionController::class, 'createDocument'])->name('platform.documents.create');
@@ -62,13 +66,13 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::get('/workspace/notifications', [PlatformCompletionController::class, 'notifications'])->name('platform.notifications');
     Route::post('/workspace/notifications/{id}/read', [PlatformCompletionController::class, 'readNotification'])->name('platform.notifications.read');
     Route::get('/workspace/workflows', [PlatformCompletionController::class, 'workflow'])->name('platform.workflows');
-    Route::post('/workspace/workflows', [PlatformCompletionController::class, 'saveWorkflow'])->name('platform.workflows.save');
-    Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->name('platform.workflows.run');
+    Route::post('/workspace/workflows', [PlatformCompletionController::class, 'saveWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.save');
+    Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.run');
     Route::get('/workspace/security', [PlatformCompletionController::class, 'security'])->name('platform.security');
-    Route::post('/workspace/ocr', [PlatformCompletionController::class, 'ocr'])->name('platform.ocr');
-    Route::get('/workspace/ocr/{id}', [PlatformCompletionController::class, 'ocrStatus'])->name('platform.ocr.status');
+    Route::post('/workspace/ocr', [PlatformCompletionController::class, 'ocr'])->middleware('throttle:10,1')->name('platform.ocr');
+    Route::get('/workspace/ocr/{id}', [PlatformCompletionController::class, 'ocrStatus'])->middleware('throttle:60,1')->name('platform.ocr.status');
     Route::get('/workspace/billing', [PlatformCompletionController::class, 'billing'])->name('platform.billing');
-    Route::post('/workspace/billing/{plan}', [PlatformCompletionController::class, 'subscribe'])->name('platform.billing.subscribe');
+    Route::post('/workspace/billing/{plan}', [PlatformCompletionController::class, 'subscribe'])->middleware('throttle:5,10')->name('platform.billing.subscribe');
 
     Route::get('/support', [SupportController::class, 'index'])->middleware('capability:can_support')->name('support');
     Route::get('/support/create', [SupportController::class, 'createForm'])->middleware('capability:can_support')->name('support.create.form');
