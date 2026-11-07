@@ -210,7 +210,7 @@ class StoreReaderAccessTest extends TestCase
         $temporary = tempnam(sys_get_temp_dir(), 'farast-xlsx-external-');
         file_put_contents($temporary, $this->makeXlsxBytes());
 
-        $archive = new \\ZipArchive();
+        $archive = new \ZipArchive();
         $this->assertSame(true, $archive->open($temporary));
         $archive->deleteName('xl/_rels/workbook.xml.rels');
         $archive->addFromString(
