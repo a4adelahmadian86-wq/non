@@ -195,7 +195,10 @@ class StoreController extends Controller
                 @media print{body{padding:0}.docx-watermark{opacity:.28}}
             </style></head><body><div class="docx-watermark">'.$marks.'</div><main class="docx-content">'.$body.'</main></body></html>';
 
-            return response($page, 200, $headers + ['Content-Type' => 'text/html; charset=UTF-8']);
+            $docxHeaders = $headers;
+            $docxHeaders['Content-Security-Policy'] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; object-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
+
+            return response($page, 200, $docxHeaders + ['Content-Type' => 'text/html; charset=UTF-8']);
         } catch (\Throwable $exception) {
             report($exception);
             abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
