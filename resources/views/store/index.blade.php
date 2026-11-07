@@ -66,7 +66,7 @@
           </select>
         </label>
         <label class="store-filter-label">قیمت
-          <select name="price" onchange="this.form.submit()" style="margin-right:6px;padding:8px 10px;border:1px solid #e2e9f2;border-radius:8px;font:inherit">
+          <select name="price" onchange="this.form.submit()" class="store-filter-select">
             <option value="all" @selected(($price??'all')==='all')>همه</option>
             <option value="free" @selected(($price??'')==='free')>فقط رایگان</option>
             <option value="paid" @selected(($price??'')==='paid')>فقط پولی</option>
