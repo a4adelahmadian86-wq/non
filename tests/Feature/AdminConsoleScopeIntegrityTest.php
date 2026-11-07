@@ -170,4 +170,15 @@ class AdminConsoleScopeIntegrityTest extends TestCase
             ->assertSee('فضای خصوصی فایل‌ها');
     }
 
+    public function test_integrations_dashboard_handles_ai_providers_without_voice_request_history(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.integrations'))
+            ->assertOk()
+            ->assertSee('هنوز ثبت نشده')
+            ->assertSee('Gemini');
+    }
+
 }
