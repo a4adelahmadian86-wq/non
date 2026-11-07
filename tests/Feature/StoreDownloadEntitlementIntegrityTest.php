@@ -285,4 +285,21 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             'download_count' => 10,
         ]);
     }
+    public function test_library_page_shows_download_details_and_accessible_feedback(): void
+    {
+        $user = $this->makeUser('09123456780');
+        [$product, $file] = $this->makeProduct('library-ui-product');
+        [$libraryItem] = $this->makeDownload($user, $product, $file);
+
+        $this->actingAs($user)
+            ->get(route('library'))
+            ->assertOk()
+            ->assertSee('libraryDownloadFeedback', false)
+            ->assertSee('aria-live="polite"', false)
+            ->assertSee('product-v1.pdf')
+            ->assertSee('خریداری‌شده')
+            ->assertSee('دریافت امن فایل')
+            ->assertDontSee('alert(');
+    }
+
 }
