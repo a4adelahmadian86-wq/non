@@ -107,23 +107,26 @@ class CrmProjectController extends Controller
             $console->authorizeAction($request->user(), 'users', (int) $specialist->id);
         }
 
-        $humanTask = DB::table('farast_human_tasks')
-            ->where('id', $task)
-            ->where('project_id', $record->id)
-            ->first();
+        DB::transaction(function () use ($record, $task, $data, $request): void {
+            $humanTask = DB::table('farast_human_tasks')
+                ->where('id', $task)
+                ->where('project_id', $record->id)
+                ->lockForUpdate()
+                ->first();
 
-        abort_unless($humanTask, 404);
+            abort_unless($humanTask, 404);
 
-        DB::table('farast_human_tasks')->where('id', $task)->update([
-            'specialist_id' => $data['specialist_id'],
-            'updated_at' => now(),
-        ]);
+            DB::table('farast_human_tasks')->where('id', $task)->update([
+                'specialist_id' => $data['specialist_id'],
+                'updated_at' => now(),
+            ]);
 
-        app(\App\Services\AuditLogService::class)->record($request->user()->id, 'crm.project.human_task.assigned', $request->ip(), [
-            'project_id' => $record->id,
-            'task_id' => $task,
-            'specialist_id' => $data['specialist_id'],
-        ]);
+            app(\App\Services\AuditLogService::class)->record($request->user()->id, 'crm.project.human_task.assigned', $request->ip(), [
+                'project_id' => $record->id,
+                'task_id' => $task,
+                'specialist_id' => $data['specialist_id'],
+            ]);
+        });
 
         return response()->json(['ok' => true, 'task_id' => $task, 'specialist_id' => $data['specialist_id']]);
     }
