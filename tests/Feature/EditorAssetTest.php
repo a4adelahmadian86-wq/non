@@ -6,6 +6,7 @@ use App\Models\FarastStorageObject;
 use App\Models\TypingDocument;
 use App\Models\User;
 use App\Services\EditorDocumentService;
+use App\Services\UploadSecurityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -46,7 +47,7 @@ class EditorAssetTest extends TestCase
 
         $assetFile = UploadedFile::fake()->image('test.png', 1, 1);
         $assetBytes = file_get_contents($assetFile->getRealPath());
-        $this->instance(UploadSecurityService::class, \\Mockery::mock(UploadSecurityService::class, function ($mock) use ($assetFile, $assetBytes) {
+        $this->instance(UploadSecurityService::class, \Mockery::mock(UploadSecurityService::class, function ($mock) use ($assetFile, $assetBytes) {
             $mock->shouldReceive('inspect')->once()->andReturn([
                 'safe' => true,
                 'mime' => 'image/png',
