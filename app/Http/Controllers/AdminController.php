@@ -821,6 +821,10 @@ class AdminController extends Controller
                 if ($credentialsUpdated) {
                     $account->consecutive_failures = 0;
                     $account->cooldown_until = null;
+                    // A previous success does not verify newly replaced credentials.
+                    $account->last_success_at = null;
+                    $account->last_failure_at = null;
+                    $account->last_latency_ms = null;
                 }
 
                 $metadata = (array) ($account->metadata ?? []);
