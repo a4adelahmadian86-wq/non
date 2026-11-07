@@ -37,7 +37,7 @@
             </div>
             <div class="farast-admin-top-actions">
                 <a href="/" target="_blank" class="admin-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده سایت</a>
-                <div class="farast-admin-user"><span>م</span><div><b>مدیر اصلی</b><small>{{ auth()->user()->mobile }}</small></div><form method="post" action="{{ route('logout') }}">@csrf<button aria-label="خروج"><i class="fa-solid fa-right-from-bracket"></i></button></form></div>
+                <div class="farast-admin-user"><span>م</span><div><b>{{ auth()->user()->name ?: 'کاربر کنسول' }}</b><small>{{ auth()->user()->mobile }}</small></div><form method="post" action="{{ route('logout') }}">@csrf<button aria-label="خروج"><i class="fa-solid fa-right-from-bracket"></i></button></form></div>
             </div>
         </header>
 
@@ -59,27 +59,28 @@
             <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>کل حساب‌های ثبت‌شده</small></article>
             <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>سندهای ایجادشده</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
-            <article class="metric-card metric-green"><div class="metric-top"><span>وضعیت Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'متصل' : 'تنظیم نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
+            <article class="metric-card metric-green"><div class="metric-top"><span>وضعیت Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'تنظیم نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
         </section>
 
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="live-pill"><i></i> زنده</span></div>
                 <div class="ops-grid">
-                    <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($users->where('is_blocked', false)->count()) }}</b><small>کاربر فعال در فهرست اخیر</small></div></div>
+                    <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در فهرست اخیر</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
                     <div><span class="ops-icon cyan"><i class="fa-solid fa-bolt"></i></span><div><b>{{ number_format($stats['ai_today']) }}</b><small>درخواست AI امروز</small></div></div>
                     <div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>
                 </div>
             </article>
             <article id="ai" class="admin-panel ai-status-panel">
-                <div class="admin-panel-head"><div><span class="panel-eyebrow">AI GATEWAY</span><h2>دروازه هوش مصنوعی</h2><p>وضعیت تنظیمات حساس بدون نمایش مقدار کلیدها.</p></div><span class="status-chip {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}"><i class="fa-solid fa-circle"></i>{{ $secretStatus['gemini'] ? 'آماده' : 'نیازمند تنظیم' }}</span></div>
-                <div class="ai-provider"><span class="provider-mark"><i class="fa-solid fa-sparkles"></i></span><div><b>Gemini</b><small>{{ $settings['gemini_model'] }}</small></div><span class="provider-state {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}">{{ $secretStatus['gemini'] ? 'متصل' : 'بدون کلید' }}</span></div>
-                <div class="ai-provider"><span class="provider-mark files"><i class="fa-solid fa-file-shield"></i></span><div><b>Files</b><small>پردازش ورودی‌های بزرگ</small></div><span class="provider-state {{ $secretStatus['files'] ? 'ok' : 'warn' }}">{{ $secretStatus['files'] ? 'متصل' : 'بدون کلید' }}</span></div>
+                <div class="admin-panel-head"><div><span class="panel-eyebrow">AI GATEWAY</span><h2>دروازه هوش مصنوعی</h2><p>وضعیت تنظیمات حساس بدون نمایش مقدار کلیدها.</p></div><span class="status-chip {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}"><i class="fa-solid fa-circle"></i>{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'نیازمند تنظیم' }}</span></div>
+                <div class="ai-provider"><span class="provider-mark"><i class="fa-solid fa-sparkles"></i></span><div><b>Gemini</b><small>{{ $settings['gemini_model'] }}</small></div><span class="provider-state {{ $secretStatus['gemini'] ? 'ok' : 'warn' }}">{{ $secretStatus['gemini'] ? 'کلید تنظیم شده' : 'بدون کلید' }}</span></div>
+                <div class="ai-provider"><span class="provider-mark files"><i class="fa-solid fa-file-shield"></i></span><div><b>Files</b><small>پردازش ورودی‌های بزرگ</small></div><span class="provider-state {{ $secretStatus['files'] ? 'ok' : 'warn' }}">{{ $secretStatus['files'] ? 'کلید تنظیم شده' : 'بدون کلید' }}</span></div>
                 <a class="panel-link" href="#ai-settings">باز کردن تنظیمات AI <i class="fa-solid fa-arrow-left"></i></a>
             </article>
         </section>
 
+@if($console->sectionAllowed(auth()->user(), 'settings'))
         <section id="ai-settings" class="admin-section admin-panel-wide">
             <div class="admin-panel-head"><div><span class="panel-eyebrow">CONFIGURATION</span><h2>تنظیمات مرکزی AI و ظرفیت سرویس</h2><p>کلیدها رمزنگاری‌شده ذخیره می‌شوند و مقدار واقعی آن‌ها در رابط نمایش داده نمی‌شود.</p></div></div>
             <form method="post" action="{{ route('admin.settings.update') }}" class="settings-modern">
@@ -94,7 +95,9 @@
                 <div class="settings-submit"><button class="admin-primary"><i class="fa-solid fa-floppy-disk"></i> ذخیره تنظیمات</button></div>
             </form>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'ai_providers'))
         <section id="groq-settings" class="admin-section admin-panel-wide">
             <div class="admin-panel-head">
                 <div><span class="panel-eyebrow">FREE-FIRST ASSISTANT</span><h2>موتور همراه هوشمند و تشخیص گفتار</h2>
@@ -120,7 +123,9 @@
             </form>
             <p class="admin-help-text">رایگان بودن دائمی تضمین‌شده نیست؛ محدودیت‌های پلن رایگان و مدل‌ها تابع سیاست و سهمیه حساب ارائه‌دهنده است. صدای فارسی خروجی فعلاً از صدای دستگاه/مرورگر استفاده می‌کند.</p>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'voice'))
         <section id="voice-settings" class="admin-section admin-panel-wide">
             <div class="admin-panel-head">
                 <div>
@@ -160,7 +165,9 @@
                 </div>
             </form>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'settings'))
         <section class="admin-section admin-panel-wide">
             <div class="admin-panel-head"><div><span class="panel-eyebrow">CAPABILITIES</span><h2>قابلیت‌های پیش‌فرض کاربران</h2><p>این کنترل‌ها به صورت مرکزی اعمال می‌شوند و برای کاربران قابل override هستند.</p></div></div>
             <form method="post" action="{{ route('admin.settings.update') }}" class="capability-modern">
@@ -171,7 +178,9 @@
                 <div class="settings-submit"><button class="admin-outline"><i class="fa-solid fa-check-double"></i> ذخیره دسترسی‌ها</button></div>
             </form>
         </section>
+@endif
 
+@if($console->sectionAllowed(auth()->user(), 'users'))
         <section id="users" class="admin-section admin-panel-wide">
             <div class="admin-panel-head"><div><span class="panel-eyebrow">IDENTITY</span><h2>کاربران و دسترسی اختصاصی</h2><p>کنترل وضعیت و ظرفیت مصرف هر کاربر بدون خروج از کنسول.</p></div><span class="count-chip">{{ $users->count() }} کاربر اخیر</span></div>
             <div class="user-modern-list">
@@ -196,6 +205,7 @@
                 @endforelse
             </div>
         </section>
+@endif
 
         <section id="content" class="admin-section-grid">
             <article class="admin-panel content-panel">
