@@ -30,7 +30,7 @@ class EditorAssetTest extends TestCase
      * Create a real document resource and its storage-object record.
      * Status changes here simulate a trusted review/scanning decision.
      */
-    private function makeAsset(string $status = 'quarantined'): array
+    private function makeAsset(string $status = 'approved'): array
     {
         Storage::fake('private');
         $user = $this->makeUser();
@@ -44,9 +44,21 @@ class EditorAssetTest extends TestCase
         $documents->save($document, '<p><br></p>', 'تصویر', null, 'manual');
         $document = $document->fresh();
 
+        $assetFile = UploadedFile::fake()->image('test.png', 1, 1);
+        $assetBytes = file_get_contents($assetFile->getRealPath());
+        $this->instance(UploadSecurityService::class, \\Mockery::mock(UploadSecurityService::class, function ($mock) use ($assetFile, $assetBytes) {
+            $mock->shouldReceive('inspect')->once()->andReturn([
+                'safe' => true,
+                'mime' => 'image/png',
+                'size' => $assetFile->getSize(),
+                'checksum' => hash('sha256', $assetBytes),
+                'scan' => 'clean',
+            ]);
+        }));
+
         $response = $this->actingAs($user)->postJson('/editor/assets', [
             'document_id' => $document->id,
-            'asset' => UploadedFile::fake()->image('test.png', 1, 1),
+            'asset' => $assetFile,
         ]);
         $response->assertOk()->assertJsonPath('resource.type', 'image');
         $resource = $response->json('resource');
@@ -68,26 +80,30 @@ class EditorAssetTest extends TestCase
         $documents->save($document, '<p>تصویر</p>', 'تصویر', null, 'manual', null, $model);
 
         $object = FarastStorageObject::query()->where('path', $resource['storage_path'])->firstOrFail();
-        if ($status !== 'quarantined') {
+        if ($status !== 'approved') {
             $object->update(['status' => $status]);
         }
 
         return [$user, $document->fresh(), $resource, $object->fresh()];
     }
 
-    public function test_newly_uploaded_quarantined_asset_is_not_delivered_until_approved(): void
+    public function test_cleanly_scanned_asset_is_approved_and_delivered(): void
     {
         [$user, , $resource, $object] = $this->makeAsset();
 
-        $this->assertSame('quarantined', $object->status);
-        $this->actingAs($user)->get($resource['url'])->assertNotFound();
-
-        $object->update(['status' => 'approved']);
+        $this->assertSame('approved', $object->status);
         $this->actingAs($user)
             ->get($resource['url'])
             ->assertOk()
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('Content-Type', 'image/png');
+    }
+
+    public function test_quarantined_asset_is_not_delivered_until_review_is_approved(): void
+    {
+        [$user, , $resource] = $this->makeAsset('quarantined');
+
+        $this->actingAs($user)->get($resource['url'])->assertNotFound();
     }
 
     public function test_rejected_asset_is_never_delivered(): void
