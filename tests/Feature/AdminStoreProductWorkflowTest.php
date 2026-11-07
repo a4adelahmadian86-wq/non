@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreTag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -86,6 +87,41 @@ class AdminStoreProductWorkflowTest extends TestCase
         $response->assertRedirect(route('admin.store.course.edit', $product));
         $this->assertDatabaseHas('store_courses', ['product_id' => $product->id]);
         $this->assertSame('draft', $product->status);
+    }
+
+    public function test_product_creation_synchronizes_tags_and_related_products(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $tag = StoreTag::create(['name' => 'طراحی', 'slug' => 'design']);
+        $related = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول مکمل',
+            'slug' => 'related-product',
+            'sku' => 'RELATED-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 50000,
+            'status' => 'draft',
+        ]);
+
+        $response = $this->actingAs($admin)->post(
+            route('admin.store.store'),
+            $this->payload($category, [
+                'tag_ids' => [$tag->id],
+                'related_product_ids' => [$related->id],
+            ])
+        );
+
+        $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
+        $response->assertRedirect(route('admin.store.edit', $product));
+        $this->assertDatabaseHas('store_product_tag', [
+            'product_id' => $product->id,
+            'tag_id' => $tag->id,
+        ]);
+        $this->assertDatabaseHas('store_product_related', [
+            'product_id' => $product->id,
+            'related_product_id' => $related->id,
+        ]);
     }
 
     public function test_compare_at_price_must_be_greater_than_the_sale_price(): void
