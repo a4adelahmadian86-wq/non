@@ -59,7 +59,7 @@ class StoreController extends Controller
 
     public function product(Request $request, string $slug)
     {
-        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related'])
+        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related', 'course.sections.lessons'])
             ->published()
             ->where('slug', $slug)
             ->firstOrFail();
