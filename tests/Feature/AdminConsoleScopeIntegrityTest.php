@@ -138,4 +138,20 @@ class AdminConsoleScopeIntegrityTest extends TestCase
         ]);
     }
 
+    public function test_organization_manager_sees_only_their_organization_without_global_create_controls(): void
+    {
+        $organization = Organization::create(['name' => 'Manager Org', 'slug' => 'manager-org']);
+        $manager = User::factory()->create([
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+            'organization_id' => $organization->id,
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('admin.organizations'))
+            ->assertOk()
+            ->assertSee('Manager Org')
+            ->assertDontSee('admin.organizations.store')
+            ->assertDontSee('ایجاد سازمان');
+    }
+
 }
