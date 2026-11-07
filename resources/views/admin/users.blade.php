@@ -13,22 +13,7 @@
     ];
 @endphp
 <div class="farast-admin" dir="rtl">
-    <aside class="farast-admin-nav">
-        <div class="farast-admin-brand">
-            <span class="farast-admin-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
-            <div><strong>فراست</strong><small>مرکز عملیات</small></div>
-        </div>
-        <div class="farast-admin-nav-label">کنسول مدیریت</div>
-        <nav>
-            <a href="{{ route('admin.index') }}#overview"><i class="fa-solid fa-grid-2"></i><span>نمای کلی</span></a>
-            <a class="is-active" href="{{ route('admin.users') }}"><i class="fa-solid fa-users"></i><span>کاربران</span></a>
-            @if($console->sectionAllowed($actor, 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><span>مالی</span></a>@endif
-            @if($console->sectionAllowed($actor, 'access'))<a href="{{ route('admin.access') }}"><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>@endif
-            @if($console->sectionAllowed($actor, 'organizations'))<a href="{{ route('admin.organizations') }}"><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>@endif
-            @if($console->sectionAllowed($actor, 'audit'))<a href="{{ route('admin.audit') }}"><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>@endif
-        </nav>
-        <div class="farast-admin-live"><span></span><div><b>دامنه: {{ $scopeSummary['label'] ?? '' }}</b><small>{{ number_format($scopeSummary['visible_users'] ?? 0) }} کاربر قابل مشاهده</small></div></div>
-    </aside>
+    @include('admin.partials.sidebar')ide>
 
     <main class="farast-admin-main">
         <header class="farast-admin-topbar">
