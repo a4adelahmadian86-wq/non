@@ -81,6 +81,11 @@ class AdminStoreController extends Controller
     public function update(Request $request, StoreProduct $product)
     {
         $data = $this->validated($request, $product);
+        if ($data['type'] !== $product->type) {
+            throw ValidationException::withMessages([
+                'type' => 'نوع محصول پس از ایجاد قابل تغییر نیست؛ برای نوع دیگر یک محصول جدید بسازید تا فایل‌ها و دسترسی‌های قبلی مخلوط نشوند.',
+            ]);
+        }
         if (! empty($data['slug'])) {
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
