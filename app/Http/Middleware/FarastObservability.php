@@ -1,12 +1,12 @@
 <?php
 
-namespace App\\Http\\Middleware;
+namespace App\Http\Middleware;
 
 use Closure;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Log;
-use Illuminate\\Support\\Str;
-use Symfony\\Component\\HttpFoundation\\Response;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class FarastObservability
 {
@@ -48,7 +48,7 @@ class FarastObservability
     }
 
     /**
-     * Accept only bounded, single-line identifiers from trusted tracing headers.
+     * Accept only bounded, single-line identifiers from tracing headers.
      * Invalid or attacker-controlled values are replaced with a generated ID.
      */
     private function safeIdentifier(?string $value): ?string
@@ -59,7 +59,7 @@ class FarastObservability
 
         $value = trim($value);
 
-        if ($value === '' || preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\\z/D', $value) !== 1) {
+        if ($value === '' || preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,63}\z/D', $value) !== 1) {
             return null;
         }
 
