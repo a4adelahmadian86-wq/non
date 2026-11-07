@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
 use App\Services\UploadSecurityService;
@@ -367,6 +368,86 @@ class AdminStoreController extends Controller
         Storage::disk('private')->delete($temporaryPath);
 
         return back()->with('status', 'کاور محصول پس از اسکن امنیتی ذخیره شد.');
+    }
+
+    public function uploadImage(Request $request, StoreProduct $product, UploadSecurityService $security)
+    {
+        $data = $request->validate([
+            'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192',
+            'alt' => 'nullable|string|max:180',
+        ]);
+        $upload = $request->file('image');
+        $temporaryPath = $upload->store('store/quarantine/product-images/'.$product->id, 'private');
+        $publicPath = null;
+
+        try {
+            $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
+                'image/jpeg', 'image/png', 'image/webp',
+            ]);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ تصویر ذخیره نشد.');
+            abort_unless(hash_equals($inspection['checksum'], (string) hash_file('sha256', $upload->getRealPath())), 409, 'محتوای تصویر هنگام انتقال تغییر کرده است.');
+
+            $extension = strtolower($upload->guessExtension() ?: 'jpg');
+            $filename = Str::random(32).'.'.$extension;
+            $directory = 'store/product-images/'.$product->id;
+            $stored = Storage::disk('public')->putFileAs($directory, $upload, $filename);
+            if (! $stored) {
+                throw new \RuntimeException('product_image_storage_failed');
+            }
+            $publicPath = 'storage/'.$directory.'/'.$filename;
+
+            $sort = (int) ($product->images()->max('sort_order') ?? 0) + 1;
+            DB::transaction(function () use ($product, $data, $publicPath, $inspection, $sort) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $image = $lockedProduct->images()->create([
+                    'path' => $publicPath,
+                    'alt' => $data['alt'] ?: $lockedProduct->title,
+                    'kind' => 'image',
+                    'sort_order' => $sort,
+                    'is_active' => true,
+                ]);
+                $this->audit('store.product.image_uploaded', $lockedProduct, [
+                    'image_id' => $image->id,
+                    'mime' => $inspection['mime'],
+                    'sha256' => $inspection['checksum'],
+                ]);
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('private')->delete($temporaryPath);
+            if ($publicPath) {
+                Storage::disk('public')->delete(Str::after($publicPath, 'storage/'));
+            }
+            if ($exception instanceof ValidationException) {
+                throw $exception;
+            }
+            abort(503, 'بارگذاری تصویر به دلیل ناموفق بودن بررسی امنیتی یا ذخیره‌سازی متوقف شد.');
+        }
+
+        Storage::disk('private')->delete($temporaryPath);
+
+        return back()->with('status', 'تصویر گالری پس از اسکن امنیتی اضافه شد.');
+    }
+
+    public function deleteImage(StoreProduct $product, StoreProductImage $image)
+    {
+        abort_unless($image->product_id === $product->id, 404);
+
+        $path = DB::transaction(function () use ($product, $image) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $lockedImage = $lockedProduct->images()->whereKey($image->id)->lockForUpdate()->firstOrFail();
+            $path = (string) $lockedImage->path;
+            $this->audit('store.product.image_deleted', $lockedProduct, ['image_id' => $lockedImage->id]);
+            $lockedImage->delete();
+
+            return $path;
+        });
+
+        $ownedPrefix = 'storage/store/product-images/'.$product->id.'/';
+        if (Str::startsWith($path, $ownedPrefix)) {
+            Storage::disk('public')->delete(Str::after($path, 'storage/'));
+        }
+
+        return back()->with('status', 'تصویر گالری حذف شد.');
     }
 
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
