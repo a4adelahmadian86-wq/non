@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\CommerceAuthorizationService;
 use App\Services\PricingEngine;
+use App\Services\ProfessionalCommerceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
