@@ -7,7 +7,7 @@ use RuntimeException;
 
 class UploadSecurityService
 {
-    private array $allowed=['image/jpeg','image/png','image/webp','image/gif','application/pdf','application/zip'];
+    private array $allowed=['image/jpeg','image/png','image/webp','image/gif','application/pdf','application/zip','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
 
     public function inspect(string $path,?string $expectedMime=null,?int $maxBytes=null):array
     {
