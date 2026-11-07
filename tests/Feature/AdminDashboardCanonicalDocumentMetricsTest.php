@@ -116,7 +116,7 @@ class AdminDashboardCanonicalDocumentMetricsTest extends TestCase
                     && $gemini['credential_configured'] === true
                     && $gemini['connection_verified'] === false;
             })
-            ->assertSee('کلید ثبت شده · اتصال تأییدنشده');
+            ->assertSee('اعتبارنامه ثبت شده · نیازمند تست');
     }
 
     public function test_organization_dashboard_document_metrics_exclude_other_organizations(): void
