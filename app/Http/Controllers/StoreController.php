@@ -164,15 +164,15 @@ class StoreController extends Controller
      */
     private function renderDocxPreview(string $docxBytes, array $headers)
     {
-        abort_unless(class_exists(\\PhpOffice\\PhpWord\\IOFactory::class), 503, 'موتور نمایش Word در دسترس نیست.');
+        abort_unless(class_exists(\PhpOffice\\PhpWord\\IOFactory::class), 503, 'موتور نمایش Word در دسترس نیست.');
 
         $sourcePath = tempnam(sys_get_temp_dir(), 'farast-docx-');
         $htmlPath = tempnam(sys_get_temp_dir(), 'farast-html-');
 
         try {
             file_put_contents($sourcePath, $docxBytes);
-            $document = \\PhpOffice\\PhpWord\\IOFactory::load($sourcePath);
-            $writer = \\PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'HTML');
+            $document = \PhpOffice\\PhpWord\\IOFactory::load($sourcePath);
+            $writer = \PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'HTML');
             $writer->save($htmlPath);
             $html = file_get_contents($htmlPath) ?: '';
             $body = $this->sanitizeDocxHtml($html);
@@ -196,7 +196,7 @@ class StoreController extends Controller
             </style></head><body><div class="docx-watermark">'.$marks.'</div><main class="docx-content">'.$body.'</main></body></html>';
 
             return response($page, 200, $headers + ['Content-Type' => 'text/html; charset=UTF-8']);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
             abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
         } finally {
@@ -215,22 +215,22 @@ class StoreController extends Controller
     private function sanitizeDocxHtml(string $html): string
     {
         $previous = libxml_use_internal_errors(true);
-        $dom = new \\DOMDocument('1.0', 'UTF-8');
+        $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->loadHTML('<?xml encoding="UTF-8"><div id="farast-docx-root">'.$html.'</div>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
 
         $allowed = ['div','p','span','table','thead','tbody','tfoot','tr','td','th','ul','ol','li','br','strong','b','em','i','u','h1','h2','h3','h4','h5','h6','blockquote','img'];
-        $xpath = new \\DOMXPath($dom);
+        $xpath = new \DOMXPath($dom);
         $root = $xpath->query('//*[@id="farast-docx-root"]')->item(0);
         if (!$root) {
             return '';
         }
 
-        $walk = function (\\DOMNode $node) use (&$walk, $allowed): void {
+        $walk = function (\DOMNode $node) use (&$walk, $allowed): void {
             for ($child = $node->firstChild; $child; ) {
                 $next = $child->nextSibling;
-                if ($child instanceof \\DOMElement) {
+                if ($child instanceof \DOMElement) {
                     $tag = strtolower($child->tagName);
                     if (!in_array($tag, $allowed, true)) {
                         if (in_array($tag, ['script','style','iframe','object','embed','link','meta','form'], true)) {
