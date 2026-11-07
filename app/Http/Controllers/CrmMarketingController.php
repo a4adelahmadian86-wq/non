@@ -18,6 +18,20 @@ class CrmMarketingController extends Controller
         return $console->visibleUserIds($request->user());
     }
 
+    private function ownerScope(Request $request, AdminConsoleService $console): ?array
+    {
+        $visibleIds = $this->scope($request, $console);
+
+        if ($visibleIds === null) {
+            return null;
+        }
+
+        // A scoped admin may not appear in visibleUserIds (organization members
+        // intentionally exclude admin accounts), but must retain access to records
+        // they created themselves.
+        return array_values(array_unique(array_merge($visibleIds, [(int) $request->user()->id])));
+    }
+
     private function filters(Request $request): array
     {
         return $request->validate([
@@ -32,10 +46,14 @@ class CrmMarketingController extends Controller
 
     public function segments(Request $request, AdminConsoleService $console)
     {
-        $this->scope($request, $console);
+        $ownerIds = $this->ownerScope($request, $console);
+        $query = DB::table('crm_customer_segments');
+        if ($ownerIds !== null) {
+            $query->whereIn('created_by', $ownerIds);
+        }
 
         return response()->json([
-            'data' => DB::table('crm_customer_segments')->orderByDesc('created_at')->paginate(25),
+            'data' => $query->orderByDesc('created_at')->paginate(25),
         ]);
     }
 
@@ -86,12 +104,15 @@ class CrmMarketingController extends Controller
 
     public function campaigns(Request $request, AdminConsoleService $console)
     {
-        $this->scope($request, $console);
+        $ownerIds = $this->ownerScope($request, $console);
+        $query = DB::table('crm_marketing_campaigns')
+            ->leftJoin('crm_customer_segments', 'crm_customer_segments.id', '=', 'crm_marketing_campaigns.segment_id');
+        if ($ownerIds !== null) {
+            $query->whereIn('crm_marketing_campaigns.created_by', $ownerIds);
+        }
 
         return response()->json([
-            'data' => DB::table('crm_marketing_campaigns')
-                ->leftJoin('crm_customer_segments', 'crm_customer_segments.id', '=', 'crm_marketing_campaigns.segment_id')
-                ->orderByDesc('crm_marketing_campaigns.created_at')
+            'data' => $query->orderByDesc('crm_marketing_campaigns.created_at')
                 ->paginate(25, [
                     'crm_marketing_campaigns.*',
                     'crm_customer_segments.name as segment_name',
@@ -102,6 +123,7 @@ class CrmMarketingController extends Controller
     public function storeCampaign(Request $request, AdminConsoleService $console, CrmAudienceService $audiences)
     {
         $visibleIds = $this->scope($request, $console);
+        $ownerIds = $this->ownerScope($request, $console);
         $data = $request->validate([
             'name' => 'required|string|max:160',
             'segment_id' => 'required|integer|exists:crm_customer_segments,id',
@@ -110,7 +132,7 @@ class CrmMarketingController extends Controller
         ]);
 
         $segment = DB::table('crm_customer_segments')->where('id', $data['segment_id'])->first();
-        abort_unless($segment, 404);
+        abort_unless($segment && ($ownerIds === null || in_array((int) $segment->created_by, $ownerIds, true)), 404);
         $filters = json_decode($segment->filters, true) ?: [];
         $count = $audiences->query($filters, $visibleIds)->count();
 
@@ -137,14 +159,15 @@ class CrmMarketingController extends Controller
     public function sendCampaign(Request $request, int $campaign, AdminConsoleService $console, CrmAudienceService $audiences)
     {
         $visibleIds = $this->scope($request, $console);
+        $ownerIds = $this->ownerScope($request, $console);
 
-        $sentCount = DB::transaction(function () use ($campaign, $request, $visibleIds, $audiences) {
+        $sentCount = DB::transaction(function () use ($campaign, $request, $visibleIds, $ownerIds, $audiences) {
             $record = DB::table('crm_marketing_campaigns')->where('id', $campaign)->lockForUpdate()->first();
-            abort_unless($record, 404);
+            abort_unless($record && ($ownerIds === null || in_array((int) $record->created_by, $ownerIds, true)), 404);
             abort_unless($record->status === 'draft', 409, 'این کمپین قبلاً ارسال یا پردازش شده است.');
 
             $segment = DB::table('crm_customer_segments')->where('id', $record->segment_id)->first();
-            abort_unless($segment, 409);
+            abort_unless($segment && ($ownerIds === null || in_array((int) $segment->created_by, $ownerIds, true)), 409);
             $filters = json_decode($segment->filters, true) ?: [];
             $audience = $audiences->query($filters, $visibleIds);
             $count = (clone $audience)->count();
