@@ -77,10 +77,15 @@ class AdminController extends Controller
                 return 0;
             }
             $q = DB::table($table);
-            if ($visibleIds !== null && $userColumn !== null && Schema::hasColumn($table, $userColumn)) {
-                $q->whereIn($userColumn, $visibleIds);
-            } elseif ($visibleIds !== null && $table === 'users') {
-                $q->whereIn('id', $visibleIds);
+            if ($visibleIds !== null) {
+                if ($table === 'users') {
+                    $q->whereIn('id', $visibleIds);
+                } elseif ($userColumn !== null && Schema::hasColumn($table, $userColumn)) {
+                    $q->whereIn($userColumn, $visibleIds);
+                } else {
+                    // A scoped dashboard must never fall back to an unfiltered aggregate.
+                    return 0;
+                }
             }
             foreach ($filters as $col => $val) {
                 if (Schema::hasColumn($table, is_string($col) ? $col : '')) {
@@ -189,6 +194,7 @@ class AdminController extends Controller
                     : 0,
                 'ai' => $scopedCount('ai_interactions'),
                 'ai_today' => Schema::hasTable('ai_interactions')
+                    && ($visibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
                     ? (($visibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $visibleIds))->whereDate('created_at', today())->count())
                     : 0,
                 // Voice usage has no user attribution in its schema; expose it only in the global scope.
