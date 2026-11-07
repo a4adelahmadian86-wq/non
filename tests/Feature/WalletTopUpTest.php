@@ -1,15 +1,15 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\Order;
-use App\\Models\\Payment;
-use App\\Models\\SiteSetting;
-use App\\Models\\User;
-use App\\Models\\Wallet;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\Http;
-use Tests\\TestCase;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Models\SiteSetting;
+use App\Models\User;
+use App\Models\Wallet;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
 
 class WalletTopUpTest extends TestCase
 {
