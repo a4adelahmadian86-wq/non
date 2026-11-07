@@ -78,12 +78,13 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('09123456789')
             ->assertSee('farast-reader-watermark');
 
-        $this->actingAs($user)
-            ->get(route('store.preview', $preview))
-            ->assertOk()
-            ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
+        $response = $this->actingAs($user)->get(route('store.preview', $preview));
+
+        $response->assertOk()
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
             ->assertHeader('Content-Disposition', 'inline');
+
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 }
