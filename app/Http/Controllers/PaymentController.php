@@ -15,6 +15,7 @@ use App\Services\EmailService;
 use App\Services\FreeQuotaService;
 use App\Services\PricingService;
 use App\Services\ProjectBillingService;
+use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -205,11 +206,18 @@ class PaymentController extends Controller
                     if (! $product || $product->status !== 'published') {
                         throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
                     }
-                    $file = $product->files->firstWhere('is_primary', true) ?: $product->files->firstWhere('is_active', true);
-                    if (! $file || ! $file->is_active) {
-                        throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
+                    $file = null;
+                    if ($product->type === 'course') {
+                        if (! $product->course || ! $product->course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
+                            throw new \RuntimeException('برنامه آموزشی این دوره برای تحویل آماده نیست.');
+                        }
+                    } else {
+                        $file = $product->files()->where('purpose', 'product_download')->where('is_active', true)
+                            ->where('scan_status', 'clean')->orderByDesc('is_primary')->first();
+                        if (! $file) {
+                            throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
+                        }
                     }
-
                     $unit = max(0, (int) $product->price_rials);
                     $line = $unit * max(1, (int) $item->quantity);
                     $subtotal += $line;
@@ -238,8 +246,8 @@ class PaymentController extends Controller
                             'quantity' => $row[0]->quantity,
                             'unit_price_rials' => $row[3],
                             'line_total_rials' => $row[4],
-                            'file_id' => $row[2]->id,
-                            'file_sha256' => $row[2]->sha256,
+                            'file_id' => $row[2]?->id,
+                            'file_sha256' => $row[2]?->sha256,
                         ])->values()->all(),
                     ],
                     'terms_accepted_at' => now(),
@@ -278,16 +286,17 @@ class PaymentController extends Controller
                 ]);
 
                 foreach ($validatedItems as [$item, $product, $file]) {
-                    StoreLibraryItem::firstOrCreate(
+                    $libraryItem = StoreLibraryItem::firstOrCreate(
                         ['user_id' => auth()->id(), 'product_id' => $product->id, 'order_id' => $locked->id],
                         [
                             'order_item_id' => $item->id,
-                            'product_file_id' => $file->id,
+                            'product_file_id' => $file?->id,
                             'license_code' => null,
                             'granted_at' => now(),
                             'revoked_at' => null,
                         ]
                     );
+                    app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
@@ -299,7 +308,7 @@ class PaymentController extends Controller
             }
             if ($paidOrder) $this->dispatchPaidOrderWorkflow($paidOrder);
 
-            return redirect()->route('store')->with('status', 'خرید با موفقیت ثبت شد؛ فایل‌ها در کتابخانه شما قرار گرفتند.');
+            return redirect()->route('store')->with('status', 'خرید با موفقیت ثبت شد؛ فایل یا دوره در کتابخانه شما فعال شد.');
         } catch (\RuntimeException $e) {
             return back()->withErrors(['payment' => $e->getMessage()]);
         }
