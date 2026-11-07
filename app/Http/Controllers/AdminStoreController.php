@@ -190,12 +190,13 @@ class AdminStoreController extends Controller
 
             $primary = $request->boolean('is_primary', true);
             $fileRecord = DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 if ($primary) {
-                    $product->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
+                    $lockedProduct->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
                 }
 
                 $record = StoreProductFile::create([
-                    'product_id' => $product->id,
+                    'product_id' => $lockedProduct->id,
                     'purpose' => 'product_download',
                     'version' => $product->version,
                     'disk' => 'private',
@@ -210,7 +211,7 @@ class AdminStoreController extends Controller
                     'scan_engine' => $inspection['scan'],
                     'scanned_at' => now(),
                 ]);
-                $this->audit('store.product.file_uploaded', $product, ['file_id' => $record->id, 'mime' => $record->mime, 'size_bytes' => $record->size_bytes, 'sha256' => $record->sha256]);
+                $this->audit('store.product.file_uploaded', $lockedProduct, ['file_id' => $record->id, 'mime' => $record->mime, 'size_bytes' => $record->size_bytes, 'sha256' => $record->sha256]);
 
                 return $record;
             });
