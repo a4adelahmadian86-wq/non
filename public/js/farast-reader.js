@@ -175,14 +175,7 @@
       const canvas=document.createElement('canvas');
       const textLayer=document.createElement('div');
       textLayer.className='farast-pdf-cont-text textLayer';
-      const watermark=document.createElement('div');
-      watermark.className='farast-pdf-cont-watermark';
-      for(let mark=0;mark<8;mark++){
-        const span=document.createElement('span');
-        span.textContent=(root.querySelector('.farast-reader-account span')?.textContent||'حساب کاربر')+' · پیش‌نمایش فراست';
-        watermark.append(span);
-      }
-      wrapper.append(canvas,textLayer,watermark);
+      wrapper.append(canvas,textLayer);
       fragment.append(wrapper);
     }
     continuousHost.append(fragment);
