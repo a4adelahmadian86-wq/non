@@ -131,7 +131,9 @@ class AdminStoreController extends Controller
             'page_number' => $request->input('page_number') ?: $sort,
             'kind' => str_contains((string) $upload->getClientMimeType(), 'pdf')
                 ? 'pdf'
-                : (strtolower($upload->getClientOriginalExtension()) === 'docx' ? 'docx' : 'image'),
+                : (strtolower($upload->getClientOriginalExtension()) === 'docx'
+                    ? 'docx'
+                    : (strtolower($upload->getClientOriginalExtension()) === 'xlsx' ? 'xlsx' : 'image')),
             'watermarked' => true,
             'is_active' => true,
             'sort_order' => $sort,
