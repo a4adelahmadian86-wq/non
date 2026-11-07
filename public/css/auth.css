@@ -42,3 +42,23 @@ body.auth-page #app-main{min-height:calc(100svh - 70px)}
 .auth-step span.active{background:linear-gradient(90deg,#1e5fc4,#6b9df0)}
 @media(max-width:520px){.auth-shell{padding:24px 14px}.auth-card{padding:26px 20px;border-radius:21px}.auth-brand{margin-bottom:24px}}
 @media(prefers-reduced-motion:reduce){.auth-btn,.email-login-hero,.auth-field input{transition:none}}
+
+
+/* Secondary authentication flows: shared mobile-first progress and feedback */
+.auth-secondary-card{position:relative;overflow:hidden}
+.auth-secondary-card:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#174da9,#367cf0,#9ab9ef)}
+.auth-secondary-card .auth-brand .mark{display:grid;place-items:center}
+.auth-secondary-card .auth-brand p strong{color:#2a4e82;font-size:12px;letter-spacing:.02em}
+.auth-field-hint{display:block;margin-top:7px;color:#8795a8;font-size:10px;line-height:1.8}
+.auth-field input[aria-invalid="true"]{border-color:#d65a62;box-shadow:0 0 0 3px rgba(214,90,98,.1)}
+.auth-flow-progress{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;list-style:none;margin:0 0 22px;padding:0}
+.auth-flow-progress li{min-width:0;padding:9px 5px;border:1px solid #e8edf4;border-radius:10px;background:#f8fafd;color:#91a0b4;text-align:center;font-size:9px;line-height:1.6}
+.auth-flow-progress li.active{border-color:#cbdcf7;background:#f1f6ff;color:#315b99;font-weight:800}
+.auth-secondary-card .auth-message[hidden]{display:none}
+.auth-secondary-card .auth-message:focus{outline:3px solid rgba(44,105,208,.16);outline-offset:2px}
+.auth-secondary-card .auth-btn[aria-busy="true"]{opacity:.78;cursor:wait}
+.auth-secondary-card .auth-field input[dir="ltr"]{text-align:left}
+.register-phone-summary{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 18px;padding:12px 13px;border:1px solid #e2eaf4;border-radius:13px;background:#f8fafd;color:#718198;font-size:11px}
+.register-phone-summary>i{color:#3974cb}
+.register-phone-summary strong{margin-inline-start:auto;color:#243b5e;font-size:12px;letter-spacing:.02em}
+@media(max-width:420px){.auth-flow-progress{gap:5px}.auth-flow-progress li{padding:8px 3px;font-size:8px}.auth-secondary-card .auth-brand{margin-bottom:22px}.auth-field-hint{font-size:9px}.register-phone-summary{font-size:10px}.register-phone-summary strong{width:100%;margin-inline-start:25px}}
