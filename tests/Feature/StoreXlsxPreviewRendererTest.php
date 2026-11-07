@@ -50,6 +50,7 @@ class StoreXlsxPreviewRendererTest extends TestCase
         $this->assertStringContainsString('نام محصول', $html);
         $this->assertStringContainsString('09123456789', $html);
         $this->assertStringContainsString('فرمول‌ها اجرا نمی‌شوند', $html);
+        $this->assertStringContainsString('۲۰۰۰ ردیف و ۴۰ ستون', $html);
         $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
         $this->assertStringNotContainsString('<script>', $html);
         $this->assertStringContainsString('>2</td>', $html);
