@@ -5,7 +5,7 @@ return [
         [
             'key' => 'workspace', 'label' => 'میز کار', 'icon' => 'fa-table-cells-large',
             'items' => [
-                ['key' => 'workspace.overview', 'label' => 'نمای کلی', 'icon' => 'fa-grid-2', 'route' => 'dashboard'],
+                ['key' => 'workspace.overview', 'label' => 'نمای کلی', 'icon' => 'fa-grid-2', 'route' => 'dashboard', 'active_unless_query' => ['status']],
                 ['key' => 'workspace.recent', 'label' => 'اسناد اخیر', 'icon' => 'fa-clock-rotate-left', 'route' => 'dashboard', 'fragment' => '#editor-documents'],
                 ['key' => 'workspace.tasks', 'label' => 'وظایف من', 'icon' => 'fa-list-check', 'planned' => true],
                 ['key' => 'workspace.action', 'label' => 'موارد نیازمند اقدام', 'icon' => 'fa-bell-exclamation', 'planned' => true],
