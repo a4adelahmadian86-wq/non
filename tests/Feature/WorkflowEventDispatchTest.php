@@ -210,6 +210,18 @@ class WorkflowEventDispatchTest extends TestCase
         $this->assertSame(2, DB::table('farast_workflow_runs')->where('workflow_id', $failingWorkflow)->count());
         $this->assertSame(2, DB::table('farast_notifications')->where('user_id', $user->id)->where('type', 'workflow')->count());
         $this->assertSame(0, $engine->dispatch('document.saved', $context, 'document:991:revision:1'));
+
+        // Recover the rare crash window where all step transactions committed but
+        // the parent event's final status update did not.
+        DB::table('farast_workflow_events')->where('id', $eventId)->update([
+            'status' => 'processing',
+            'processed_at' => null,
+        ]);
+        $this->assertSame(0, $engine->retryFailedEvents());
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'completed',
+        ]);
     }
 
     public function test_event_idempotency_key_cannot_be_reused_for_another_owner(): void
