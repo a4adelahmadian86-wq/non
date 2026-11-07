@@ -157,7 +157,10 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('farast-reader-watermark')
             ->assertSee('is-pdf')
             ->assertSee('reader-search-input')
-            ->assertSee('farast-reader.js');
+            ->assertSee('farast-reader.js')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
+            ->assertHeader('Referrer-Policy', 'no-referrer');
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
 
@@ -169,6 +172,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Disposition', 'inline');
 
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString("frame-ancestors 'self'", (string) $response->headers->get('Content-Security-Policy'));
         $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
 }
