@@ -8,7 +8,7 @@ use App\Models\Ticket;
 use App\Services\AuthorizationService;
 
 class PlatformCompletionController extends Controller {
- private function doc(Request $r,$id){$d=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->first();abort_unless($d,404);return $d;}
+ private function doc(Request $r,$id){$d=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->whereNull('trashed_at')->first();abort_unless($d,404);return $d;}
  private function assertFolderOwnership(?int $folderId):void{if($folderId===null)return;$owned=DB::table('document_folders')->where('id',$folderId)->where('user_id',auth()->id())->exists();abort_unless($owned,404);}
  private function authorizeDocumentAction(Request $r,string $permission):void{abort_unless(app(AuthorizationService::class)->allows($r->user(),$permission),403);}
  public function documents(Request $r){
@@ -36,8 +36,34 @@ class PlatformCompletionController extends Controller {
   }
   return view('platform.documents',['documents'=>$q->orderByDesc('updated_at')->orderByDesc('id')->paginate(24)->withQueryString(),'folders'=>$folders,'shares'=>collect(),'mode'=>$trashed?'trashed':($r->boolean('favorite')?'favorites':'documents'),'trashed'=>$trashed,'canShareDocuments'=>$canShareDocuments,'canCreateDocuments'=>$canCreateDocuments,'canEditDocuments'=>$canEditDocuments,'canDeleteDocuments'=>$canDeleteDocuments]);
  }
- public function createDocument(Request $r, EditorDocumentService $documents){$this->authorizeDocumentAction($r,'documents.create');$d=$r->validate(['title'=>'required|string|max:255','content'=>'nullable|string','folder_id'=>'nullable|integer']);$this->assertFolderOwnership(isset($d['folder_id'])?(int)$d['folder_id']:null);$content=$d['content']??'';$model=$documents->normalizeHtml($content);$id=DB::table('farast_documents')->insertGetId(['user_id'=>auth()->id(),'title'=>$d['title'],'content'=>$content,'content_json'=>json_encode($model,JSON_UNESCAPED_UNICODE),'document_format'=>'farast-v1','page_settings'=>json_encode($documents->defaultPageSettings(),JSON_UNESCAPED_UNICODE),'revision'=>1,'last_saved_at'=>now(),'folder_id'=>$d['folder_id']??null,'created_at'=>now(),'updated_at'=>now()]);DB::table('farast_document_versions')->insert(['document_id'=>$id,'user_id'=>auth()->id(),'content'=>$content,'label'=>'نسخه اولیه','created_at'=>now(),'updated_at'=>now()]);return redirect()->route('platform.documents')->with('status','سند ایجاد شد.');}
- public function updateDocument(Request $r,$id, EditorDocumentService $documents){$this->authorizeDocumentAction($r,'documents.edit');$d=$this->doc($r,$id);$x=$r->validate(['title'=>'required|string|max:255','content'=>'nullable|string','folder_id'=>'nullable|integer']);$this->assertFolderOwnership(isset($x['folder_id'])?(int)$x['folder_id']:null);$content=$x['content']??'';$model=$documents->normalizeHtml($content);$revision=((int)($d->revision??0))+1;DB::table('farast_documents')->where('id',$id)->update(['title'=>$x['title'],'content'=>$content,'content_json'=>json_encode($model,JSON_UNESCAPED_UNICODE),'revision'=>$revision,'last_saved_at'=>now(),'folder_id'=>$x['folder_id']??null,'updated_at'=>now()]);DB::table('farast_document_versions')->insert(['document_id'=>$id,'user_id'=>auth()->id(),'content'=>$content,'label'=>$r->input('version_label'),'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','سند ذخیره شد.');}
+ public function createDocument(Request $r, EditorDocumentService $documents){
+  $this->authorizeDocumentAction($r,'documents.create');
+  $d=$r->validate(['title'=>'required|string|max:255','content'=>'nullable|string','folder_id'=>'nullable|integer']);
+  $this->assertFolderOwnership(isset($d['folder_id'])?(int)$d['folder_id']:null);
+  $content=$d['content']??'';
+  $model=$documents->normalizeHtml($content);
+  DB::transaction(function()use($d,$content,$model,$documents){
+   $id=DB::table('farast_documents')->insertGetId(['user_id'=>auth()->id(),'title'=>$d['title'],'content'=>$content,'content_json'=>json_encode($model,JSON_UNESCAPED_UNICODE),'document_format'=>'farast-v1','page_settings'=>json_encode($documents->defaultPageSettings(),JSON_UNESCAPED_UNICODE),'revision'=>1,'last_saved_at'=>now(),'folder_id'=>$d['folder_id']??null,'created_at'=>now(),'updated_at'=>now()]);
+   DB::table('farast_document_versions')->insert(['document_id'=>$id,'user_id'=>auth()->id(),'content'=>$content,'label'=>'نسخه اولیه','created_at'=>now(),'updated_at'=>now()]);
+  });
+  return redirect()->route('platform.documents')->with('status','سند ایجاد شد.');
+ }
+ public function updateDocument(Request $r,$id, EditorDocumentService $documents){
+  $this->authorizeDocumentAction($r,'documents.edit');
+  $x=$r->validate(['title'=>'required|string|max:255','content'=>'nullable|string','folder_id'=>'nullable|integer']);
+  $this->assertFolderOwnership(isset($x['folder_id'])?(int)$x['folder_id']:null);
+  $content=$x['content']??'';
+  $model=$documents->normalizeHtml($content);
+  DB::transaction(function()use($r,$id,$x,$content,$model){
+   $current=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->whereNull('trashed_at')->lockForUpdate()->first();
+   abort_unless($current,404);
+   $revision=((int)($current->revision??0))+1;
+   $updated=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','active')->whereNull('trashed_at')->update(['title'=>$x['title'],'content'=>$content,'content_json'=>json_encode($model,JSON_UNESCAPED_UNICODE),'revision'=>$revision,'last_saved_at'=>now(),'folder_id'=>$x['folder_id']??null,'updated_at'=>now()]);
+   abort_unless($updated===1,404);
+   DB::table('farast_document_versions')->insert(['document_id'=>$id,'user_id'=>auth()->id(),'content'=>$content,'label'=>$r->input('version_label'),'created_at'=>now(),'updated_at'=>now()]);
+  });
+  return back()->with('status','سند ذخیره شد.');
+ }
  public function favorite(Request $r,$id){$this->authorizeDocumentAction($r,'documents.edit');$d=$this->doc($r,$id);DB::table('farast_documents')->where('id',$id)->update(['is_favorite'=>!$d->is_favorite,'updated_at'=>now()]);return back();}
  public function trash(Request $r,$id){$this->authorizeDocumentAction($r,'documents.delete');$this->doc($r,$id);DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->update(['status'=>'trashed','trashed_at'=>now(),'updated_at'=>now()]);return back()->with('status','سند به سطل زباله منتقل شد.');}
  public function restore(Request $r,$id){$this->authorizeDocumentAction($r,'documents.delete');$updated=DB::table('farast_documents')->where('id',$id)->where('user_id',auth()->id())->where('status','trashed')->whereNotNull('trashed_at')->update(['status'=>'active','trashed_at'=>null,'updated_at'=>now()]);abort_unless($updated,404);return back()->with('status','سند بازیابی شد.');}
