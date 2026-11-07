@@ -56,49 +56,106 @@ class CommerceAuthorizationService
 
     public function reserve(User $actor,string $capability,float $quantity,array $scope=[],array $context=[]): FarastUsageReservation
     {
-        return DB::transaction(function()use($actor,$capability,$quantity,$scope,$context){
-            $key=(string)($context['idempotency_key']??Str::uuid());
-            $organizationId=$actor->organization_id ?: ($scope['organization_id']??null);
-            $existing=FarastUsageReservation::where('idempotency_key',$key)->lockForUpdate()->first();
-            if($existing){
-                $sameRequest=(int)$existing->actor_id===(int)$actor->id
-                    && $existing->capability===$capability
-                    && abs((float)$existing->quantity-$quantity)<0.000001
-                    && (int)($existing->organization_id??0)===(int)($organizationId??0)
-                    && (int)($existing->project_id??0)===(int)($scope['project_id']??0)
-                    && (int)($existing->document_id??0)===(int)($scope['document_id']??0);
-                $storedContext=is_array($existing->metadata['context']??null)?$existing->metadata['context']:[];
-                foreach(['policy_code','unit','currency','region_code','allow_payg','allow_overage','postpaid'] as $field){
-                    if(array_key_exists($field,$context) && ($storedContext[$field]??null)!==$context[$field])$sameRequest=false;
+        $key=(string)($context['idempotency_key']??Str::uuid());
+        $organizationId=$actor->organization_id ?: ($scope['organization_id']??null);
+
+        try {
+            return DB::transaction(function() use($actor,$capability,$quantity,$scope,$context,$key,$organizationId){
+                $existing=FarastUsageReservation::where('idempotency_key',$key)->lockForUpdate()->first();
+                if($existing){
+                    if(!$this->reservationMatches($existing,$actor,$capability,$quantity,$scope,$context,$organizationId)){
+                        throw new RuntimeException('idempotency_key_conflict');
+                    }
+                    return $existing;
                 }
-                if(!$sameRequest)throw new RuntimeException('idempotency_key_conflict');
-                return $existing;
+
+                $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId,true);
+                $planMeta=is_array($entitlement?->metadata)?$entitlement->metadata:[];
+                foreach(['allow_payg','allow_overage','postpaid'] as $flag)if(!array_key_exists($flag,$context)&&array_key_exists($flag,$planMeta))$context[$flag]=(bool)$planMeta[$flag];
+                $pricingContext=$context;
+                $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription')
+                    ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id))))
+                    : 0;
+                $baseQuote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext);
+                $adjustments=$this->promotions->trustedAdjustments($actor,$capability,$quantity,(int)($baseQuote['subtotal']??0),$context);
+                $pricingContext['trusted_adjustments']=$adjustments;
+                $quote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext);
+                $quote['adjustments']=$adjustments['metadata']??[];
+                $mode=$this->mode($actor,$capability,$quantity,$entitlement,$quote,$context);
+
+                if($entitlement && $entitlement->quantity!==null && !in_array($mode,['payg','overage'],true)){
+                    $available=max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id));
+                    if($available<$quantity)throw new RuntimeException('quota_exhausted');
+                }
+
+                if($quote['total']>0&&!($context['postpaid']??false)){
+                    $wallet=Wallet::firstOrCreate(['user_id'=>$actor->id],['balance_rials'=>0]);
+                    $wallet=Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+                    $held=(int)FarastWalletReservation::where('wallet_id',$wallet->id)->where('status','reserved')->sum('amount');
+                    if((int)$wallet->balance_rials-$held<(int)$quote['total'])throw new RuntimeException('insufficient_credit');
+                    FarastWalletReservation::create([
+                        'reservation_id'=>Str::uuid(),
+                        'idempotency_key'=>$key,
+                        'wallet_id'=>$wallet->id,
+                        'amount'=>(int)$quote['total'],
+                        'currency'=>$quote['currency'],
+                        'status'=>'reserved',
+                        'expires_at'=>now()->addMinutes((int)($context['reservation_ttl_minutes']??15)),
+                    ]);
+                }
+
+                return FarastUsageReservation::create([
+                    'reservation_id'=>Str::uuid(),
+                    'idempotency_key'=>$key,
+                    'actor_id'=>$actor->id,
+                    'organization_id'=>$organizationId,
+                    'project_id'=>$scope['project_id']??null,
+                    'document_id'=>$scope['document_id']??null,
+                    'entitlement_id'=>$entitlement?->id,
+                    'pricing_policy_version_id'=>$quote['pricing_policy_version_id']??null,
+                    'capability'=>$capability,
+                    'quantity'=>$quantity,
+                    'unit'=>$entitlement?->unit?:($quote['unit']??($context['unit']??'unit')),
+                    'mode'=>$mode,
+                    'status'=>'reserved',
+                    'expires_at'=>now()->addMinutes((int)($context['reservation_ttl_minutes']??15)),
+                    'metadata'=>['quote'=>$quote,'context'=>$this->safeContext($context)],
+                ]);
+            });
+        } catch (\Illuminate\Database\QueryException $exception) {
+            // Two concurrent requests can both observe an absent key. The unique
+            // constraint elects one winner; the loser re-reads and validates it.
+            $existing=FarastUsageReservation::where('idempotency_key',$key)->first();
+            if(!$existing)throw $exception;
+            if(!$this->reservationMatches($existing,$actor,$capability,$quantity,$scope,$context,$organizationId)){
+                throw new RuntimeException('idempotency_key_conflict',0,$exception);
             }
-            $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId,true);
-            $planMeta=is_array($entitlement?->metadata)?$entitlement->metadata:[];
-            foreach(['allow_payg','allow_overage','postpaid'] as $flag)if(!array_key_exists($flag,$context)&&array_key_exists($flag,$planMeta))$context[$flag]=(bool)$planMeta[$flag];
-            $pricingContext=$context; $pricingContext['included_quantity']=($entitlement && $entitlement->mode==='subscription') ? ($entitlement->quantity===null ? $quantity : min($quantity,max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id)))) : 0; $baseQuote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext); $adjustments=$this->promotions->trustedAdjustments($actor,$capability,$quantity,(int)($baseQuote['subtotal']??0),$context); $pricingContext['trusted_adjustments']=$adjustments; $quote=$this->pricing->quote((string)($context['policy_code']??$capability),$quantity,$pricingContext); $quote['adjustments']=$adjustments['metadata']??[];
-            $mode=$this->mode($actor,$capability,$quantity,$entitlement,$quote,$context);
-            if($entitlement && $entitlement->quantity!==null && !in_array($mode,['payg','overage'],true)){
-                $available=max(0,(float)$entitlement->quantity-(float)$entitlement->used_quantity-$this->reservedForEntitlement((int)$entitlement->id));
-                if($available<$quantity)throw new RuntimeException('quota_exhausted');
-            }
-            if($quote['total']>0&&!($context['postpaid']??false)){
-                $wallet=Wallet::firstOrCreate(['user_id'=>$actor->id],['balance_rials'=>0]);
-                $wallet=Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
-                $held=(int)FarastWalletReservation::where('wallet_id',$wallet->id)->where('status','reserved')->sum('amount');
-                if((int)$wallet->balance_rials-$held<(int)$quote['total'])throw new RuntimeException('insufficient_credit');
-                FarastWalletReservation::create(['reservation_id'=>Str::uuid(),'idempotency_key'=>$key,'wallet_id'=>$wallet->id,'amount'=>(int)$quote['total'],'currency'=>$quote['currency'],'status'=>'reserved','expires_at'=>now()->addMinutes((int)($context['reservation_ttl_minutes']??15))]);
-            }
-            return FarastUsageReservation::create([
-                'reservation_id'=>Str::uuid(),'idempotency_key'=>$key,'actor_id'=>$actor->id,'organization_id'=>$organizationId,
-                'project_id'=>$scope['project_id']??null,'document_id'=>$scope['document_id']??null,'entitlement_id'=>$entitlement?->id,
-                'pricing_policy_version_id'=>$quote['pricing_policy_version_id']??null,'capability'=>$capability,'quantity'=>$quantity,
-                'unit'=>$entitlement?->unit?:($quote['unit']??($context['unit']??'unit')),'mode'=>$mode,'status'=>'reserved',
-                'expires_at'=>now()->addMinutes((int)($context['reservation_ttl_minutes']??15)),
-                'metadata'=>['quote'=>$quote,'context'=>$this->safeContext($context)],
-            ]);
-        });
+            return $existing;
+        }
+    }
+
+    private function reservationMatches(
+        FarastUsageReservation $existing,
+        User $actor,
+        string $capability,
+        float $quantity,
+        array $scope,
+        array $context,
+        int|string|null $organizationId,
+    ): bool {
+        $sameRequest=(int)$existing->actor_id===(int)$actor->id
+            && $existing->capability===$capability
+            && abs((float)$existing->quantity-$quantity)<0.000001
+            && (int)($existing->organization_id??0)===(int)($organizationId??0)
+            && (int)($existing->project_id??0)===(int)($scope['project_id']??0)
+            && (int)($existing->document_id??0)===(int)($scope['document_id']??0);
+
+        $storedContext=is_array($existing->metadata['context']??null)?$existing->metadata['context']:[];
+        foreach(['policy_code','unit','currency','region_code','allow_payg','allow_overage','postpaid'] as $field){
+            if(array_key_exists($field,$context) && ($storedContext[$field]??null)!==$context[$field])$sameRequest=false;
+        }
+
+        return $sameRequest;
     }
 
     public function commit(FarastUsageReservation|string $reservation,array $resultContext=[]): FarastUsageEvent

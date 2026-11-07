@@ -27,6 +27,40 @@ class CommercePhase3Test extends TestCase
         ]);
     }
 
+    public function test_same_reservation_idempotency_key_returns_one_hold_for_repeated_requests(): void
+    {
+        $this->policy('reserve.repeat', 10000, 0);
+        $user = User::factory()->create();
+        Wallet::create(['user_id' => $user->id, 'balance_rials' => 30000]);
+        $commerce = app(CommerceAuthorizationService::class);
+        $context = ['policy_code' => 'reserve.repeat', 'unit' => 'request', 'idempotency_key' => 'reserve-repeat-key'];
+
+        $first = $commerce->reserve($user, 'reserve.repeat', 1, [], $context);
+        $second = $commerce->reserve($user, 'reserve.repeat', 1, [], $context);
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, DB::table('farast_usage_reservations')->where('idempotency_key', 'reserve-repeat-key')->count());
+        $this->assertSame(1, DB::table('farast_wallet_reservations')->where('idempotency_key', 'reserve-repeat-key')->count());
+    }
+
+    public function test_same_quote_idempotency_key_returns_the_existing_quote_for_same_request(): void
+    {
+        $this->policy('quote.repeat', 10000, 0);
+        $user = User::factory()->create();
+        $quotes = app(ProfessionalCommerceService::class);
+        $context = [
+            'policy_code' => 'quote.repeat',
+            'scope' => ['project_id' => 77],
+            'idempotency_key' => 'quote-repeat-key',
+        ];
+
+        $first = $quotes->quote($user, 'quote.repeat', 1, $context);
+        $second = $quotes->quote($user, 'quote.repeat', 1, $context);
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, DB::table('farast_price_quotes')->where('idempotency_key', 'quote-repeat-key')->count());
+    }
+
     public function test_reservation_idempotency_key_is_bound_to_actor_and_request_payload(): void
     {
         $this->policy('reserve.first', 10000, 0);
