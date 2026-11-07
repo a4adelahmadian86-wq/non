@@ -99,6 +99,9 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
             ->assertOk()
             ->assertSee('سند غیرفعال');
 
+        $this->post(route('platform.documents.restore', $document->id))->assertRedirect();
+        $this->get('/shared/documents/'.$token)->assertNotFound();
+
         $this->delete(route('platform.documents.shares.destroy', $shareId))->assertRedirect();
         $this->assertDatabaseMissing('farast_document_shares', ['id' => $shareId]);
     }
