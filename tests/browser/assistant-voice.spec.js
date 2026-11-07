@@ -10,6 +10,8 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   window.__micRequests = 0;
   window.__micRequestedAfterReady = false;
   window.__trackStopped = false;
+  window.__permissionPending = false;
+  window.__resolveMicPermission = null;
   window.__track = { kind: 'audio', enabled: true, readyState: 'live', stop() { this.readyState = 'ended'; window.__trackStopped = true; } };
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
@@ -29,7 +31,8 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{
     window.__micRequests++;
     window.__micRequestedAfterReady=window.__wsInstances.length===1&&window.__wsInstances[0].sent.some(x=>typeof x==='string'&&JSON.parse(x).type==='start')&&window.__wsInstances[0].readyState===1&&window.__providerReady;
-    return {getTracks:()=>[window.__track],getAudioTracks:()=>[window.__track]};
+    window.__permissionPending=true;
+    return await new Promise(resolve=>{window.__resolveMicPermission=()=>{window.__permissionPending=false;resolve({getTracks:()=>[window.__track],getAudioTracks:()=>[window.__track]});};});
   }}});
   const NativeWebSocket=FakeWebSocket;
   window.fetch=async(url,options={})=>{
@@ -51,6 +54,9 @@ test('live gateway wakes before requesting microphone and fully releases tracks 
   expect(await page.evaluate(() => window.__micRequests)).toBe(0);
   await expect.poll(() => page.evaluate(() => window.__micRequests), { timeout: 8000 }).toBe(1);
   expect(await page.evaluate(() => window.__micRequestedAfterReady)).toBe(true);
+  expect(await page.evaluate(() => window.__permissionPending)).toBe(true);
+  await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-connecting/);
+  await page.evaluate(() => window.__resolveMicPermission());
   await expect(page.locator('.farast-voice-mic')).toHaveClass(/is-ready/);
   await expect.poll(() => page.evaluate(() => !!window.__scriptProcessor)).toBe(true);
   await page.locator('.farast-voice-mic').click();
@@ -446,7 +452,9 @@ test('assistant keeps listening during TTS without interrupting the active answe
   window.__stoppedTracks = 0;
   window.__getUserMediaCalls = 0;
   window.__order = [];
-  window.__track = { enabled: true, stop() { window.__stoppedTracks++; } };
+  window.__tracks = [];
+  function makeTrack(){const track={kind:'audio',enabled:true,readyState:'live',stop(){this.enabled=false;this.readyState='ended';window.__stoppedTracks++;}};window.__tracks.push(track);return track;}
+  window.__track = makeTrack();
   class FakeWebSocket extends EventTarget {
     constructor(url) { super(); this.url=url; this.readyState=0; this.sent=[]; window.__wsInstances.push(this); setTimeout(()=>{this.readyState=1;this.dispatchEvent(new Event('open'));},0); }
     send(data) { this.sent.push(data); if(data instanceof ArrayBuffer)window.__sentAudioFrames++; if(typeof data==='string' && JSON.parse(data).type==='start') queueMicrotask(()=>this.emit({type:'ready',provider:'mock-local'})); }
@@ -462,7 +470,7 @@ test('assistant keeps listening during TTS without interrupting the active answe
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__order.push('get-user-media');window.__getUserMediaCalls++;return {getTracks:()=>[window.__track]};}}});
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__order.push('get-user-media');window.__getUserMediaCalls++;const track=window.__getUserMediaCalls===1?window.__track:makeTrack();return {getTracks:()=>[track],getAudioTracks:()=>[track]};}}});
   window.Audio=class {
     constructor(){this.duration=2;this.handlers={};this.paused=false;window.__audioInstances.push(this);}
     addEventListener(name,fn){this.handlers[name]=fn;}
@@ -510,23 +518,33 @@ test('assistant keeps listening during TTS without interrupting the active answe
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__sentAudioFrames)).toBeGreaterThan(framesBeforeTtsNoise);
 
+  // Keep a queued callback reference to prove that stopping capture invalidates
+  // even a frame already waiting in the browser event queue.
+  await page.evaluate(()=>{window.__staleAudioCallback=window.__scriptProcessor.onaudioprocess;});
   // Turning the button red must stop the real MediaStream tracks without interrupting TTS.
   await page.locator('.farast-voice-mic').click();
   expect(await page.evaluate(()=>window.__audioInstances[0].paused)).toBe(false);
   expect(await page.evaluate(()=>window.__track.enabled)).toBe(false);
   expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
   expect(await page.evaluate(()=>window.__scriptProcessor.onaudioprocess)).toBe(null);
+  await page.evaluate(()=>{
+    const inputBuffer={getChannelData:()=>new Float32Array(4096).fill(0.5)};
+    const outputBuffer={getChannelData:()=>new Float32Array(4096)};
+    window.__staleAudioCallback({inputBuffer,outputBuffer});
+  });
   const framesWhileOff=await page.evaluate(()=>window.__sentAudioFrames);
   await page.waitForTimeout(80);
   expect(await page.evaluate(()=>window.__sentAudioFrames)).toBe(framesWhileOff);
 
-  // Re-enabling capture opens a fresh gateway and a fresh microphone stream.
+  // Re-enabling capture reuses the authenticated gateway, but requests a fresh stream.
+  const statusRequestsBeforeResume=await page.evaluate(()=>window.__order.filter(x=>x==='status-request').length);
   await page.locator('.farast-voice-mic').click();
-  await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length),{timeout:5000}).toBe(2);
   await expect.poll(()=>page.evaluate(()=>window.__getUserMediaCalls),{timeout:5000}).toBe(2);
   await expect.poll(()=>page.evaluate(()=>typeof window.__scriptProcessor?.onaudioprocess==='function')).toBe(true);
-  expect(await page.evaluate(()=>window.__track.enabled)).toBe(true);
-  expect(await page.evaluate(()=>window.__wsInstances[1].readyState)).toBe(1);
+  expect(await page.evaluate(()=>window.__tracks[1].enabled)).toBe(true);
+  expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
+  expect(await page.evaluate(()=>window.__wsInstances[0].readyState)).toBe(1);
+  expect(await page.evaluate(()=>window.__order.filter(x=>x==='status-request').length)).toBe(statusRequestsBeforeResume);
   expect(await page.evaluate(()=>window.__stoppedTracks)).toBe(1);
   await page.keyboard.press('Escape');
   await expect(page.locator('.farast-assistant-panel')).toBeVisible();
@@ -625,12 +643,13 @@ test('a failed utterance keeps the live microphone stream open for the next turn
 });
 
 
-test('assistant batches adjacent streamed sentences into continuous server audio chunks without browser speech APIs', async ({ page }) => {
+test('assistant starts speaking the first streamed sentence promptly and batches later sentences without browser speech APIs', async ({ page }) => {
   const assistantJs = fs.readFileSync(path.join(process.cwd(), 'public/js/farast-assistant.js'), 'utf8');
   await page.setContent(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="csrf-token" content="test-csrf"></head><body data-assistant-auth="1">
 <script>
   window.__spokenChunks = [];
   window.__streamSentAll = false;
+  window.__sentDeltaCount = 0;
   window.__releaseFinalDelta = null;
   window.__deviceSpeechCalls = 0;
   window.SpeechRecognition = class { start() { throw new Error('browser recognition must not run'); } };
@@ -653,8 +672,9 @@ test('assistant batches adjacent streamed sentences into continuous server audio
       const encoder=new TextEncoder();
       return new Response(new ReadableStream({start(controller){
         controller.enqueue(encoder.encode('data: {"delta":"جمله اول. "}\\n\\n'));
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n')),100);
-        setTimeout(()=>controller.enqueue(encoder.encode('data: {"delta":"جمله سوم. "}\\n\\n')),200);
+        window.__sentDeltaCount=1;
+        setTimeout(()=>{controller.enqueue(encoder.encode('data: {"delta":"جمله دوم. "}\\n\\n'));window.__sentDeltaCount=2;},100);
+        setTimeout(()=>{controller.enqueue(encoder.encode('data: {"delta":"جمله سوم. "}\\n\\n'));window.__sentDeltaCount=3;},200);
         window.__releaseFinalDelta=()=>{
           if(window.__streamSentAll)return;
           window.__streamSentAll=true;
@@ -674,10 +694,16 @@ test('assistant batches adjacent streamed sentences into continuous server audio
   await page.locator('.farast-assistant-form input[name="message"]').fill('سلام فراست');
   await page.locator('.farast-assistant-send').click();
   await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__sentDeltaCount)).toBe(3);
   expect(await page.evaluate(() => window.__streamSentAll)).toBe(false);
   await page.evaluate(() => window.__releaseFinalDelta());
-  await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBe(2);
-  expect(await page.evaluate(() => window.__spokenChunks)).toEqual(['جمله اول. جمله دوم. جمله سوم.','جمله چهارم.']);
+  await expect.poll(() => page.evaluate(() => window.__spokenChunks.length)).toBeGreaterThan(1);
+  const spokenChunks=await page.evaluate(() => window.__spokenChunks);
+  expect(spokenChunks[0]).toBe('جمله اول.');
+  const completeSpokenText=spokenChunks.join(' ');
+  expect(completeSpokenText).toContain('جمله دوم.');
+  expect(completeSpokenText).toContain('جمله سوم.');
+  expect(completeSpokenText).toContain('جمله چهارم.');
   expect(await page.evaluate(() => window.__deviceSpeechCalls)).toBe(0);
 });
 
@@ -1056,13 +1082,15 @@ test('live assistant keeps one microphone session open across consecutive voice 
   await expect.poll(()=>page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   await expect.poll(()=>page.evaluate(()=>!!window.__scriptProcessor)).toBe(true);
 
-  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'سلام فراست'}));
-  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:8000}).toBe(1);
+  const firstFinalAt=Date.now();
+  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'سلام فراست',turn_id:1}));
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:2000}).toBe(1);
+  expect(Date.now()-firstFinalAt).toBeLessThan(1500);
   await expect.poll(()=>page.evaluate(()=>window.__audioEnds),{timeout:8000}).toBe(1);
   await expect.poll(()=>page.locator('[data-fa-status]').textContent()).toContain('در حال گوش دادن');
 
-  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'یک سؤال دیگر دارم'}));
-  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:8000}).toBe(2);
+  await page.evaluate(()=>window.__wsInstances[0].emit({type:'final',text:'یک سؤال دیگر دارم',turn_id:2}));
+  await expect.poll(()=>page.evaluate(()=>window.__chatPayloads.length),{timeout:2000}).toBe(2);
   expect(await page.evaluate(()=>window.__chatPayloads.map(x=>x.message))).toEqual(['سلام فراست','یک سؤال دیگر دارم']);
   expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   expect(await page.evaluate(()=>window.__getUserMediaCalls)).toBe(1);
@@ -1147,8 +1175,10 @@ test('live assistant queues speech received while answering and processes it aft
     close(){this.state='closed';return Promise.resolve();}
   };
   window.AudioWorkletNode=undefined;
-  window.__micTrack={enabled:true,kind:'audio',stop(){}};
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[window.__micTrack],getAudioTracks:()=>[window.__micTrack]})}});
+  window.__micTracks=[];
+  function makeMicTrack(){const track={enabled:true,kind:'audio',readyState:'live',stop(){this.enabled=false;this.readyState='ended';}};window.__micTracks.push(track);return track;}
+  window.__micTrack=makeMicTrack();
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.__micTrack=makeMicTrack();return {getTracks:()=>[window.__micTrack],getAudioTracks:()=>[window.__micTrack]};}}});
   window.Audio=class extends EventTarget {
     constructor(){super();this.duration=1;this.ended=false;this.paused=true;}
     load(){this.ended=false;this.dispatchEvent(new Event('canplay'));}
@@ -1193,6 +1223,7 @@ test('live assistant queues speech received while answering and processes it aft
   expect(await page.evaluate(()=>window.__micTrack.enabled)).toBe(false);
   await page.locator('.farast-voice-mic').click();
   await expect.poll(()=>page.evaluate(()=>window.__micTrack.enabled),{timeout:4000}).toBe(true);
+  expect(await page.evaluate(()=>window.__wsInstances.length)).toBe(1);
   await expect.poll(()=>page.evaluate(()=>{
     const socket=window.__wsInstances[window.__wsInstances.length-1];
     return !!socket&&socket.readyState===1;
