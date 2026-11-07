@@ -109,6 +109,7 @@
     @endif
 
     <div class="store-panel product-category-panel"><h2>مدیریت سریع دسته‌بندی</h2><form method="post" action="{{ route('admin.store.categories.store') }}">@csrf<input name="name" required maxlength="160" placeholder="نام دسته جدید"><input name="slug" maxlength="180" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن دسته</button></form></div>
+    <div class="store-panel product-category-panel product-tag-panel"><h2>مدیریت سریع برچسب‌ها</h2><form method="post" action="{{ route('admin.store.tags.store') }}">@csrf<input name="name" required maxlength="100" placeholder="نام برچسب جدید"><input name="slug" maxlength="120" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن برچسب</button></form><small class="product-help">پس از ذخیره، برچسب در فهرست برچسب‌های قابل انتخاب محصول قرار می‌گیرد.</small></div>
   </div>
 </section>
 @endsection
