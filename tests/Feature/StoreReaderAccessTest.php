@@ -96,6 +96,55 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
 
+    public function test_docx_preview_rejects_external_relationships(): void
+    {
+        [, $preview] = $this->makePreviewFixture();
+
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-docx-external-');
+        $document = new \\PhpOffice\\PhpWord\\PhpWord();
+        $document->addSection()->addText('سند دارای پیوند خارجی');
+        \\PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'Word2007')->save($temporary);
+
+        $archive = new \\ZipArchive();
+        $this->assertSame(true, $archive->open($temporary));
+        $archive->deleteName('word/_rels/document.xml.rels');
+        $archive->addFromString(
+            'word/_rels/document.xml.rels',
+            '<?xml version="1.0" encoding="UTF-8"?>'
+                .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                .'<Relationship Id="rIdExternal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/" TargetMode="External"/>'
+                .'</Relationships>'
+        );
+        $archive->close();
+
+        Storage::disk('private')->put('store/previews/sample/external.docx', file_get_contents($temporary));
+        @unlink($temporary);
+        $preview->update([
+            'path' => 'store/previews/sample/external.docx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'kind' => 'docx',
+        ]);
+
+        $this->actingAs($this->makeReaderUser())
+            ->get(route('store.preview', $preview))
+            ->assertStatus(422);
+    }
+
+    public function test_docx_preview_rejects_invalid_zip_payloads(): void
+    {
+        [, $preview] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/previews/sample/invalid.docx', 'not a zip archive');
+        $preview->update([
+            'path' => 'store/previews/sample/invalid.docx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'kind' => 'docx',
+        ]);
+
+        $this->actingAs($this->makeReaderUser())
+            ->get(route('store.preview', $preview))
+            ->assertStatus(422);
+    }
+
     public function test_authenticated_reader_sees_account_watermark_and_private_preview_headers(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
