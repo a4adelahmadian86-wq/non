@@ -20,10 +20,11 @@
   const outlineSection=root.querySelector('#reader-outline');
   const outlineHost=root.querySelector('#reader-outline-list');
 
-  // PDF.js 6.x uses the upcoming Map#getOrInsertComputed API; provide a spec-shaped fallback
-  // for stable Chromium/Firefox releases that do not expose it yet.
-  if(typeof Map.prototype.getOrInsertComputed!=='function'){
-    Object.defineProperty(Map.prototype,'getOrInsertComputed',{
+  // PDF.js 6.x uses the upcoming Map/WeakMap#getOrInsertComputed APIs; provide
+  // spec-shaped fallbacks for stable browsers that do not expose them yet.
+  const installGetOrInsertComputed=prototype=>{
+    if(typeof prototype.getOrInsertComputed==='function')return;
+    Object.defineProperty(prototype,'getOrInsertComputed',{
       configurable:true,
       writable:true,
       value:function(key,callback){
@@ -33,7 +34,9 @@
         return value;
       }
     });
-  }
+  };
+  installGetOrInsertComputed(Map.prototype);
+  installGetOrInsertComputed(WeakMap.prototype);
 
   const pdfjsReady=window.pdfjsLib
     ? Promise.resolve(window.pdfjsLib)
