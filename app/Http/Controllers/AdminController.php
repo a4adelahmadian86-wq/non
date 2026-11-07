@@ -297,6 +297,10 @@ class AdminController extends Controller
             }
         }
 
+        $voiceAccounts = ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
+            ? VoiceProviderAccount::query()->get()->keyBy('provider')
+            : collect();
+
         return view('admin.index', [
             'rules' => $globalScope ? PricingRule::orderBy('id')->get() : collect(),
             'users' => $users,
@@ -397,9 +401,10 @@ class AdminController extends Controller
                 'private_storage_ok' => $this->privateStorageReachable(),
             ] : [],
             'capabilities' => $capabilities,
-            'voiceAccounts' => ($scope === AdminConsoleService::SCOPE_GLOBAL && Schema::hasTable('voice_provider_accounts'))
-                ? VoiceProviderAccount::query()->get()->keyBy('provider')
-                : collect(),
+            'voiceAccounts' => $voiceAccounts,
+            'gladia' => $voiceAccounts->get('gladia'),
+            'azure' => $voiceAccounts->get('azure'),
+            'google' => $voiceAccounts->get('google'),
         ]);
     }
 
