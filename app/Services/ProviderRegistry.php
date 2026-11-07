@@ -40,8 +40,38 @@ final class ProviderRegistry
 
         foreach ($this->ai->capabilities() as $name=>$capabilities) {
             $configured = $name === 'gemini' ? $geminiConfigured : false;
-            $items[]=['id'=>'ai:'.$name,'name'=>$name,'provider'=>$name,'type'=>'ai','model'=>null,'capabilities'=>array_values(array_unique(array_merge(['ai.text'],array_keys((array)$capabilities)))),'priority'=>0,'status'=>$configured?'configured':'unavailable','connection_verified'=>false,'last_success_at'=>null,'quota'=>null,'latency_ms'=>null,'reliability'=>null,'quality'=>null,'credential_configured'=>$configured,'fallback'=>false];
+            $items[]=[
+                'id'=>'ai:'.$name,'name'=>$name,'provider'=>$name,'type'=>'ai',
+                'model'=>$name === 'gemini' ? (string) SiteSetting::read('gemini_model', config('services.gemini.model', 'gemini-3.8-flash')) : null,
+                'capabilities'=>array_values(array_unique(array_merge(['ai.text'],array_keys((array)$capabilities)))),
+                'priority'=>0,'status'=>$configured?'configured':'unavailable','connection_verified'=>false,
+                'last_success_at'=>null,'quota'=>null,'latency_ms'=>null,'reliability'=>null,'quality'=>null,
+                'credential_configured'=>$configured,'fallback'=>false,
+            ];
         }
+
+        // Groq is configured and used by the global assistant/ASR path, but is
+        // not an AiProviderRegistry adapter. Expose it without claiming a live test.
+        $groqConfigured = filled(SiteSetting::read('voice_groq_key') ?: config('services.groq.key'));
+        $items[] = [
+            'id' => 'ai:groq',
+            'name' => 'Groq',
+            'provider' => 'groq',
+            'type' => 'ai',
+            'model' => (string) SiteSetting::read('assistant_groq_model', 'openai/gpt-oss-120b'),
+            'capabilities' => ['ai.text', 'speech.stt'],
+            'priority' => 0,
+            'status' => $groqConfigured ? 'configured' : 'unavailable',
+            'connection_verified' => false,
+            'last_success_at' => null,
+            'quota' => null,
+            'latency_ms' => null,
+            'reliability' => null,
+            'quality' => null,
+            'credential_configured' => $groqConfigured,
+            'fallback' => false,
+        ];
+
         return $items;
     }
 
