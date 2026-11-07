@@ -47,6 +47,10 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/editor/voice/insert', [VoiceController::class, 'insertTranscript'])->middleware(['throttle:120,10', 'capability:can_voice'])->name('editor.voice.insert');
     Route::post('/editor/export/{format}', [ExportController::class, 'export'])->whereIn('format', ['docx', 'pdf'])->middleware('throttle:10,10')->name('editor.export');
     Route::post('/editor/heartbeat', [EditorController::class, 'heartbeat'])->middleware('throttle:60,1')->name('editor.heartbeat');
+});
+
+// The single-editor lock protects editor state only; it must not block the rest of the workspace.
+Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [EditorController::class, 'dashboard'])->name('dashboard');
     Route::get('/workspace/documents', [PlatformCompletionController::class, 'documents'])->name('platform.documents');
     Route::post('/workspace/documents', [PlatformCompletionController::class, 'createDocument'])->name('platform.documents.create');
