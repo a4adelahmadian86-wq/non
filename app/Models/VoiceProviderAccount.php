@@ -54,6 +54,35 @@ class VoiceProviderAccount extends Model
         return $this->hasMany(VoiceProviderUsage::class);
     }
 
+
+    public function credentialsConfigured(): bool
+    {
+        if ($this->provider === 'sherpa-onnx') {
+            return true;
+        }
+
+        $required = match ($this->provider) {
+            'gladia' => ['api_key'],
+            'azure' => ['subscription_key', 'region'],
+            'google' => ['project_id', 'client_email', 'private_key', 'region'],
+            default => [],
+        };
+
+        if ($required === []) {
+            return false;
+        }
+
+        $credentials = $this->credentials_array;
+
+        foreach ($required as $key) {
+            if (! filled($credentials[$key] ?? null)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public function remainingSeconds(): ?int
     {
         if ($this->quota_limit_seconds === null) return null;
