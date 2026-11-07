@@ -111,7 +111,7 @@ class AuthSecondaryFlowsExperienceTest extends TestCase
         RateLimiter::clear($key);
 
         $sms = Mockery::mock(SmsService::class);
-        $sms->shouldReceive('sendOtp')->once()->with(self::PHONE)->andReturnNull();
+        $sms->shouldReceive('sendOtp')->once()->with(self::PHONE, Mockery::type('string'))->andReturnNull();
         $this->instance(SmsService::class, $sms);
 
         $this->postJson(route('password.email'), ['mobile' => self::PHONE])
