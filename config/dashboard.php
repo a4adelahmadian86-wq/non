@@ -28,10 +28,10 @@ return [
             'key' => 'documents', 'label' => 'اسناد و فایل‌ها', 'icon' => 'fa-folder-open',
             'items' => [
                 ['key' => 'documents.all', 'label' => 'همه اسناد', 'icon' => 'fa-files', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'global', 'admin_only' => true],
-                ['key' => 'documents.mine', 'label' => 'اسناد من', 'icon' => 'fa-file-lines', 'route' => 'platform.documents', 'active_unless_query' => ['favorite', 'trashed', 'shared'], 'permission' => 'documents.view', 'scope' => 'own'],
+                ['key' => 'documents.mine', 'label' => 'اسناد من', 'icon' => 'fa-file-lines', 'route' => 'platform.documents', 'active_unless_query' => ['favorite', 'trashed', 'shared', 'folder'], 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.recent', 'label' => 'اسناد اخیر', 'icon' => 'fa-clock-rotate-left', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.files', 'label' => 'فایل‌ها', 'icon' => 'fa-folder', 'route' => 'library', 'permission' => 'documents.view', 'scope' => 'own'],
-                ['key' => 'documents.folders', 'label' => 'پوشه‌ها', 'icon' => 'fa-folder-tree', 'route' => 'platform.documents', 'fragment' => '#folder-panel', 'permission' => 'documents.view', 'scope' => 'own'],
+                ['key' => 'documents.folders', 'label' => 'پوشه‌ها', 'icon' => 'fa-folder-tree', 'route' => 'platform.documents', 'fragment' => '#folder-panel', 'active_when_query' => ['folder'], 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'documents.shared', 'label' => 'اشتراک‌گذاری‌ها', 'icon' => 'fa-share-nodes', 'route' => 'platform.documents', 'query' => ['shared' => 1], 'permission' => 'documents.share', 'scope' => 'own'],
                 ['key' => 'documents.deleted', 'label' => 'موارد حذف‌شده', 'icon' => 'fa-trash-can', 'route' => 'platform.documents', 'query' => ['trashed' => 1], 'permission' => 'documents.delete', 'scope' => 'own'],
                 ['key' => 'documents.archive', 'label' => 'بایگانی', 'icon' => 'fa-box-archive', 'planned' => true, 'permission' => 'documents.view', 'scope' => 'own'],
