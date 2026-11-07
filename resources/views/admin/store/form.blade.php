@@ -38,7 +38,7 @@
     </form>
 
     @if($isEdit)
-      <div class="store-panel product-files-panel">
+      <div class="store-panel product-files-panel" id="product-cover">
         <h2>تصویر کاور محصول</h2>
         @if($product->cover_path)<img src="{{ asset($product->cover_path) }}" alt="کاور {{ $product->title }}" style="display:block;width:min(320px,100%);aspect-ratio:16/9;object-fit:cover;border-radius:12px;margin:12px 0">@else<p>هنوز کاوری ثبت نشده است.</p>@endif
         <form method="post" action="{{ route('admin.store.cover.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload">@csrf<input type="file" name="cover" accept=".jpg,.jpeg,.png,.webp" required><button type="submit" class="store-outline-btn">بارگذاری کاور و اسکن امنیتی</button></form>
@@ -49,7 +49,7 @@
     @if($isEdit && $product->type==='course')
       <div class="store-panel product-next-step"><div><strong>مرحله بعد: طراحی برنامه آموزشی</strong><p>فصل‌ها، جلسات، ویدئوها، فایل‌های ضمیمه و تنظیمات گواهی را مدیریت کنید.</p></div><a class="store-primary-btn" href="{{ route('admin.store.course.edit',$product) }}">ورود به مدیریت دوره <i class="fa-solid fa-arrow-left"></i></a></div>
     @elseif($isEdit)
-      <div class="store-panel product-files-panel">
+      <div class="store-panel product-files-panel" id="product-files">
         <div class="product-editor-heading"><div><span>محتوای قابل دریافت</span><h2>فایل‌های محصول</h2></div><span class="product-editor-step">اسکن امنیتی الزامی</span></div>
         <p>فایل‌ها در فضای خصوصی نگهداری می‌شوند. فقط فایل اصلیِ اسکن‌شده و فعال پس از خرید قابل دریافت خواهد بود.</p>
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
@@ -58,7 +58,7 @@
         <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload">@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
         <small class="product-help">حداکثر ۵۰ مگابایت؛ اگر اسکنر ضدبدافزار فعال نباشد، فایل ثبت و قابل انتشار نمی‌شود.</small>
       </div>
-      <div class="store-panel product-files-panel">
+      <div class="store-panel product-files-panel" id="product-previews">
         <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
         <div class="store-preview-grid">@forelse($product->previews as $preview)<div>@if($preview->kind==='pdf')<div class="store-preview-pdf">PDF · {{ $preview->page_number }}</div>@else<img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">@endif<form method="post" action="{{ route('admin.store.previews.delete',[$product,$preview]) }}">@csrf @method('DELETE')<button class="product-danger" type="submit">حذف</button></form></div>@empty<div class="course-empty">هنوز پیش‌نمایشی اضافه نشده است.</div>@endforelse</div>
         <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload">@csrf<input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" required><input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه"><button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button></form>
