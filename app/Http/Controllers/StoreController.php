@@ -49,7 +49,7 @@ class StoreController extends Controller
 
         $recentIds = collect($request->session()->get('store_recent_ids', []))->take(12)->all();
         $recent = $recentIds
-            ? StoreProduct::with('category')->published()->whereIn('id', $recentIds)->get()->sortBy(fn ($p) => array_search($p->id, $recentIds))->values()
+            ? StoreProduct::with(['category', 'images'])->published()->whereIn('id', $recentIds)->get()->sortBy(fn ($p) => array_search($p->id, $recentIds))->values()
             : collect();
 
         $isBrowsing = $q !== '' || $category || $price !== 'all' || $sort !== 'newest';
@@ -76,14 +76,14 @@ class StoreController extends Controller
         $request->session()->put('store_recent_ids', $ids);
 
         $related = $product->related()
-            ->with('category')
+            ->with(['category', 'images'])
             ->published()
             ->orderByDesc('featured')
             ->limit(8)
             ->get();
 
         if ($related->isEmpty()) {
-            $related = StoreProduct::with('category')
+            $related = StoreProduct::with(['category', 'images'])
                 ->published()
                 ->where('id', '!=', $product->id)
                 ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
@@ -92,7 +92,7 @@ class StoreController extends Controller
                 ->get();
         }
 
-        $alsoViewed = StoreProduct::with('category')
+        $alsoViewed = StoreProduct::with(['category', 'images'])
             ->published()
             ->where('id', '!=', $product->id)
             ->whereIn('id', collect($ids)->reject(fn ($id) => (int) $id === (int) $product->id)->take(8))
