@@ -164,15 +164,15 @@ class StoreController extends Controller
      */
     private function renderDocxPreview(string $docxBytes, array $headers)
     {
-        abort_unless(class_exists(\PhpOffice\\PhpWord\\IOFactory::class), 503, 'موتور نمایش Word در دسترس نیست.');
+        abort_unless(class_exists(\PhpOffice\PhpWord\IOFactory::class), 503, 'موتور نمایش Word در دسترس نیست.');
 
         $sourcePath = tempnam(sys_get_temp_dir(), 'farast-docx-');
         $htmlPath = tempnam(sys_get_temp_dir(), 'farast-html-');
 
         try {
             file_put_contents($sourcePath, $docxBytes);
-            $document = \PhpOffice\\PhpWord\\IOFactory::load($sourcePath);
-            $writer = \PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'HTML');
+            $document = \PhpOffice\PhpWord\IOFactory::load($sourcePath);
+            $writer = \PhpOffice\PhpWord\IOFactory::createWriter($document, 'HTML');
             $writer->save($htmlPath);
             $html = file_get_contents($htmlPath) ?: '';
             $body = $this->sanitizeDocxHtml($html);
