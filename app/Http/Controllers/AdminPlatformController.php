@@ -58,28 +58,75 @@ class AdminPlatformController extends Controller {
    $activeUsers->whereIn('id',$visibleIds);
   }
 
-  $documents=DB::table('typing_documents');
-  $ai=DB::table('ai_interactions');
-  if($visibleIds!==null){
-   $documents->whereIn('user_id',$visibleIds);
-   $ai->whereIn('user_id',$visibleIds);
+  // Use the same canonical-document contract as the main admin overview:
+  // active workspace documents are authoritative; legacy editor adapters are
+  // included only when they are not linked to a canonical document.
+  $documentCount=0;
+  if(Schema::hasTable('farast_documents')){
+   $canonical=DB::table('farast_documents');
+   if(Schema::hasColumn('farast_documents','status'))$canonical->where('status','active');
+   if(Schema::hasColumn('farast_documents','trashed_at'))$canonical->whereNull('trashed_at');
+   if($visibleIds!==null){
+    if(!Schema::hasColumn('farast_documents','user_id'))$canonical=null;
+    else $canonical->whereIn('user_id',$visibleIds);
+   }
+   if($canonical!==null)$documentCount+=(int)$canonical->count();
+  }
+  if(Schema::hasTable('typing_documents')){
+   $legacy=DB::table('typing_documents');
+   if(Schema::hasColumn('typing_documents','farast_document_id'))$legacy->whereNull('farast_document_id');
+   if($visibleIds!==null){
+    if(!Schema::hasColumn('typing_documents','user_id'))$legacy=null;
+    else $legacy->whereIn('user_id',$visibleIds);
+   }
+   if($legacy!==null)$documentCount+=(int)$legacy->count();
   }
 
-  $payments=DB::table('payments')->where('payments.status','paid');
-  if($visibleIds!==null){
-   $payments->join('orders','orders.id','=','payments.order_id')->whereIn('orders.user_id',$visibleIds);
+  $aiTotal=0;
+  $aiToday=0;
+  if(Schema::hasTable('ai_interactions')
+   &&($visibleIds===null||Schema::hasColumn('ai_interactions','user_id'))){
+   $ai=DB::table('ai_interactions');
+   if($visibleIds!==null)$ai->whereIn('user_id',$visibleIds);
+   $aiTotal=(int)(clone $ai)->count();
+   if(Schema::hasColumn('ai_interactions','created_at'))$aiToday=(int)(clone $ai)->whereDate('created_at',today())->count();
+  }
+
+  $revenue=0;
+  if(Schema::hasTable('payments')
+   &&Schema::hasColumn('payments','status')
+   &&Schema::hasColumn('payments','amount_rials')){
+   $payments=DB::table('payments')->where('payments.status','paid');
+   if($visibleIds!==null){
+    if(Schema::hasTable('orders')
+     &&Schema::hasColumn('payments','order_id')
+     &&Schema::hasColumn('orders','user_id')){
+     $payments->join('orders','orders.id','=','payments.order_id')
+      ->whereIn('orders.user_id',$visibleIds);
+     $revenue=(int)$payments->sum('payments.amount_rials');
+    }
+   }else{
+    $revenue=(int)$payments->sum('payments.amount_rials');
+   }
   }
 
   $global=$visibleIds===null;
+  $voiceSeconds=0;
+  $voiceRequests=0;
+  if($global&&Schema::hasTable('voice_provider_usage')){
+   if(Schema::hasColumn('voice_provider_usage','audio_seconds'))$voiceSeconds=(int)DB::table('voice_provider_usage')->sum('audio_seconds');
+   if(Schema::hasColumn('voice_provider_usage','requests'))$voiceRequests=(int)DB::table('voice_provider_usage')->sum('requests');
+  }
+
   $stats=[
    'users'=>$users->count(),
    'active_users'=>$activeUsers->count(),
-   'documents'=>Schema::hasTable('typing_documents')?$documents->count():0,
-   'ai_total'=>Schema::hasTable('ai_interactions')?(clone $ai)->count():0,
-   'ai_today'=>Schema::hasTable('ai_interactions')?(clone $ai)->whereDate('created_at',today())->count():0,
-   'voice_seconds'=>$global&&Schema::hasTable('voice_provider_usage')?(int)DB::table('voice_provider_usage')->sum('audio_seconds'):0,
-   'voice_requests'=>$global&&Schema::hasTable('voice_provider_usage')?(int)DB::table('voice_provider_usage')->sum('requests'):0,
-   'revenue'=>Schema::hasTable('payments')?(int)$payments->sum('payments.amount_rials'):0,
+   'documents'=>$documentCount,
+   'ai_total'=>$aiTotal,
+   'ai_today'=>$aiToday,
+   'voice_seconds'=>$voiceSeconds,
+   'voice_requests'=>$voiceRequests,
+   'revenue'=>$revenue,
   ];
   $providers=$global&&Schema::hasTable('voice_provider_accounts')
    ?VoiceProviderAccount::get(['provider','model','enabled','healthy','quota_used_seconds','quota_limit_seconds','last_latency_ms','last_success_at','last_failure_at'])
