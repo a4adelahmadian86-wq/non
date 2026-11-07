@@ -15,8 +15,8 @@
     <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero-copy">
             <span class="home-kicker"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> FARAST</span>
-            <h1 id="home-title">چه کاری می‌خواهید انجام دهید؟</h1>
-            <p>فقط مسیر را بگویید. فراست نیاز را ساختاربندی می‌کند، ابزار و workflow مناسب را انتخاب می‌کند و شما را مستقیم وارد محیط کار می‌کند.</p>
+            <h1 id="home-title">از ایده تا نتیجه، مسیرتان را با فراست شروع کنید</h1>
+            <p>فایل دارید، می‌خواهید چیزی خلق کنید یا به یک سرویس هوشمند نیاز دارید؟ فراست مسیر مناسب را پیدا می‌کند تا بدون پیچیدگی وارد جریان کار شوید.</p>
         </div>
         <div class="home-hero-rule" aria-hidden="true"></div>
     </section>
@@ -25,8 +25,8 @@
         <section class="discovery-panel" aria-labelledby="discovery-title">
             <div class="discovery-heading">
                 <span class="home-kicker">شروع هوشمند</span>
-                <h2 id="discovery-title">از کجا شروع می‌کنید؟</h2>
-                <p id="discovery-help">یکی را انتخاب کنید؛ سؤال بعدی فقط وقتی نمایش داده می‌شود که روی تصمیم بعدی اثر داشته باشد.</p>
+                <h2 id="discovery-title">امروز چه کاری را پیش می‌برید؟</h2>
+                <p id="discovery-help">یک نقطه شروع انتخاب کنید؛ فراست فقط اطلاعات ضروری را می‌پرسد و شما را به ابزار درست می‌رساند.</p>
             </div>
 
             <div class="intent-grid" id="intentGrid">
