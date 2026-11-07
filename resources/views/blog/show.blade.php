@@ -2,6 +2,18 @@
 
 @php
     $title = $article['title'].' | مجله فراست';
+    $structuredData = [
+        '@context' => 'https://schema.org',
+        '@type' => 'BlogPosting',
+        'headline' => $article['title'],
+        'description' => $article['excerpt'],
+        'image' => [$article['image']],
+        'author' => ['@type' => 'Organization', 'name' => $article['author']],
+        'publisher' => ['@type' => 'Organization', 'name' => 'فراست'],
+        'articleSection' => $article['category'],
+        'keywords' => implode(', ', $article['tags']),
+        'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => route('blog.show', $article['slug'])],
+    ];
 @endphp
 
 @push('head')
@@ -16,20 +28,7 @@
 <meta name="twitter:title" content="{{ $article['title'] }}">
 <meta name="twitter:description" content="{{ $article['excerpt'] }}">
 <meta name="twitter:image" content="{{ $article['image'] }}">
-<script type="application/ld+json">
-@json([
-    '@context' => 'https://schema.org',
-    '@type' => 'BlogPosting',
-    'headline' => $article['title'],
-    'description' => $article['excerpt'],
-    'image' => [$article['image']],
-    'author' => ['@type' => 'Organization', 'name' => $article['author']],
-    'publisher' => ['@type' => 'Organization', 'name' => 'فراست'],
-    'articleSection' => $article['category'],
-    'keywords' => implode(', ', $article['tags']),
-    'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => route('blog.show', $article['slug'])],
-])
-</script>
+<script type="application/ld+json">@json($structuredData)</script>
 @endpush
 
 @section('content')
