@@ -6,3 +6,6 @@
 @media(max-width:430px){.ops-grid{grid-template-columns:1fr}.hero-copy p{font-size:10px}.farast-admin-nav a{min-width:43px;padding-inline:5px}.farast-admin-nav a span{font-size:6.5px}.farast-admin-heading h1{font-size:21px}}
 
 #platform-control .ops-grid>a{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;background:#fbfcfe;border:1px solid #e4e9f0;border-radius:12px;padding:12px;transition:.16s}#platform-control .ops-grid>a:hover{transform:translateY(-1px);border-color:#c7d5e8;background:#fff}#platform-control .ops-grid>a small,#platform-control .ops-grid>a b{display:block}
+/* Runtime status reflects the server-side health probes, never a hard-coded green light. */
+.farast-admin-live.is-degraded>span{background:#f0a43a;box-shadow:0 0 0 5px rgba(240,164,58,.14)}
+.farast-admin-live.is-scoped>span{background:#7b91b8;box-shadow:0 0 0 5px rgba(123,145,184,.14)}

@@ -25,7 +25,14 @@
             @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><span>ایمیل</span></a>@endif
             @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><span>شبکه‌های اجتماعی</span></a>@endif
         </div>
-        <div class="farast-admin-live"><span></span><div><b>سامانه عملیاتی</b><small>کنترل‌های زنده فعال هستند</small></div></div>
+        @if($scope === 'global')
+            <div class="farast-admin-live {{ (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false) ? 'is-healthy' : 'is-degraded' }}">
+                <span></span>
+                <div><b>سلامت زیرساخت</b><small>{{ (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false) ? 'بررسی داخلی موفق' : 'نیازمند بررسی عملیاتی' }}</small></div>
+            </div>
+        @else
+            <div class="farast-admin-live is-scoped"><span></span><div><b>فضای مدیریتی محدود</b><small>نمایش داده‌های مجاز این دامنه</small></div></div>
+        @endif
     </aside>
 
     <main class="farast-admin-main">
@@ -140,11 +147,6 @@
             </div>
             <form method="post" action="{{ route('admin.voice.providers.update') }}" class="settings-modern">
                 @csrf
-                @php
-                    $gladia = $voiceAccounts['gladia'] ?? null;
-                    $azure = $voiceAccounts['azure'] ?? null;
-                    $google = $voiceAccounts['google'] ?? null;
-                @endphp
                 <div class="modern-field" style="grid-column:1/-1">
                     <span><i class="fa-solid fa-wave-square"></i> Gladia — تایپ زنده</span>
                     <input type="text" name="gladia_api_key" placeholder="{{ $gladia && filled($gladia->credentials_array['api_key'] ?? null) ? 'کلید Gladia تنظیم شده؛ برای تغییر وارد کنید' : 'Gladia API Key' }}" autocomplete="off">
