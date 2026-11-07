@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 class ProviderAdminController extends Controller {
  public function updateAi(Request $r){$d=$r->validate(['gemini_api_key'=>'nullable|string|max:500','gemini_model'=>'required|string|max:120','gemini_fallback_model'=>'nullable|string|max:120']);if(filled($d['gemini_api_key']??null))SiteSetting::write('gemini_api_key',trim($d['gemini_api_key']),true);SiteSetting::write('gemini_model',trim($d['gemini_model']));SiteSetting::write('gemini_fallback_model',trim((string)($d['gemini_fallback_model']??'')));app(AuditLogService::class)->record(auth()->id(),'provider.gemini.updated',request()->ip(),['model'=>$d['gemini_model'],'key_replaced'=>filled($d['gemini_api_key']??null)]);return back()->with('status','تنظیمات Gemini ذخیره شد.');}
  public function testAi(){
@@ -48,9 +49,7 @@ class ProviderAdminController extends Controller {
       ?'اتصال Gemini برقرار است و مدل انتخاب‌شده در فهرست حساب دیده می‌شود.'
       :'اتصال Gemini برقرار است، اما مدل انتخاب‌شده در فهرست این حساب دیده نشد.',
    ]);
-  }catch(ConnectionException){
-   return response()->json(['ok'=>false,'configured'=>true,'message'=>'ارتباط شبکه با Gemini برقرار نشد؛ دسترسی خروجی سرور را بررسی کنید.'],504);
-  }catch(\\Throwable $exception){
+  }catch(Throwable $exception){
    Log::warning('farast.admin.gemini_test_failed',['error_class'=>get_class($exception)]);
    return response()->json(['ok'=>false,'configured'=>true,'message'=>'خطای داخلی هنگام بررسی اتصال Gemini رخ داد.'],502);
   }
