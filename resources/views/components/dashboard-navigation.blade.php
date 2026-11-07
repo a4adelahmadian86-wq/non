@@ -59,7 +59,7 @@
         if (!hash) return;
         nav.querySelectorAll('a[href]').forEach((link) => {
             const target = new URL(link.href, window.location.href);
-            if (target.pathname !== window.location.pathname || !target.hash) return;
+            if (target.pathname !== window.location.pathname || target.search !== window.location.search) return;
             const active = target.hash === hash;
             link.classList.toggle('is-active', active);
             if (active) link.setAttribute('aria-current', 'page');
