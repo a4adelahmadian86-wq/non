@@ -15,10 +15,15 @@ class EntitlementService
             return ['allowed' => true, 'mode' => 'administrator', 'remaining' => null, 'reason' => null];
         }
 
+        if ($project && (int) $project->user_id !== (int) $user->id) {
+            return ['allowed' => false, 'mode' => 'none', 'remaining' => 0, 'reason' => 'project_forbidden'];
+        }
+
         $rows = FarastEntitlement::query()
             ->where('capability_code', $capability)
             ->where('status', 'active')
             ->where(fn ($q) => $q->where('user_id', $user->id)->orWhereNull('user_id'))
+            ->where(fn ($q) => $q->whereNull('organization_id')->orWhere('organization_id', $user->organization_id))
             ->where(function ($q) use ($project) {
                 if ($project) {
                     $q->where('project_id', $project->id)->orWhereNull('project_id');
@@ -70,11 +75,16 @@ class EntitlementService
             return ['ok' => true, 'mode' => 'administrator', 'remaining' => null];
         }
 
+        if ($project && (int) $project->user_id !== (int) $user->id) {
+            return ['ok' => false, 'mode' => 'none', 'remaining' => 0, 'reason' => 'project_forbidden'];
+        }
+
         return \DB::transaction(function () use ($user, $capability, $quantity, $project) {
             $row = FarastEntitlement::query()
                 ->where('capability_code', $capability)
                 ->where('status', 'active')
                 ->where(fn ($q) => $q->where('user_id', $user->id)->orWhereNull('user_id'))
+                ->where(fn ($q) => $q->whereNull('organization_id')->orWhere('organization_id', $user->organization_id))
                 ->where(function ($q) use ($project) {
                     if ($project) {
                         $q->where('project_id', $project->id)->orWhereNull('project_id');

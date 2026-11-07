@@ -58,9 +58,22 @@ class CommerceAuthorizationService
     {
         return DB::transaction(function()use($actor,$capability,$quantity,$scope,$context){
             $key=(string)($context['idempotency_key']??Str::uuid());
-            $existing=FarastUsageReservation::where('idempotency_key',$key)->first();
-            if($existing)return $existing;
             $organizationId=$actor->organization_id ?: ($scope['organization_id']??null);
+            $existing=FarastUsageReservation::where('idempotency_key',$key)->lockForUpdate()->first();
+            if($existing){
+                $sameRequest=(int)$existing->actor_id===(int)$actor->id
+                    && $existing->capability===$capability
+                    && abs((float)$existing->quantity-$quantity)<0.000001
+                    && (int)($existing->organization_id??0)===(int)($organizationId??0)
+                    && (int)($existing->project_id??0)===(int)($scope['project_id']??0)
+                    && (int)($existing->document_id??0)===(int)($scope['document_id']??0);
+                $storedContext=is_array($existing->metadata['context']??null)?$existing->metadata['context']:[];
+                foreach(['policy_code','unit','currency','region_code','allow_payg','allow_overage','postpaid'] as $field){
+                    if(array_key_exists($field,$context) && ($storedContext[$field]??null)!==$context[$field])$sameRequest=false;
+                }
+                if(!$sameRequest)throw new RuntimeException('idempotency_key_conflict');
+                return $existing;
+            }
             $entitlement=$this->findEntitlement($actor,$capability,$scope,$organizationId,true);
             $planMeta=is_array($entitlement?->metadata)?$entitlement->metadata:[];
             foreach(['allow_payg','allow_overage','postpaid'] as $flag)if(!array_key_exists($flag,$context)&&array_key_exists($flag,$planMeta))$context[$flag]=(bool)$planMeta[$flag];

@@ -21,19 +21,56 @@ class ProfessionalCommerceService
     {
         if($quantity<0)throw new RuntimeException('quantity_must_be_non_negative');
         $key=(string)($context['idempotency_key']??Str::uuid());
+        $organizationId=$actor->organization_id;
+        $scope=$context['scope']??[];
         $existing=FarastPriceQuote::where('idempotency_key',$key)->first();
-        if($existing&&$existing->expires_at?->isFuture())return $existing;
-        $decision=$this->commerce->authorize($actor,$capability,$context['scope']??[],$quantity,array_merge($context,['reserve'=>false]));
+
+        if($existing){
+            $storedScope=$existing->snapshot['context']['scope']??[];
+            $sameRequest=(int)$existing->actor_id===(int)$actor->id
+                && (int)($existing->organization_id??0)===(int)($organizationId??0)
+                && $existing->capability===$capability
+                && abs((float)$existing->quantity-$quantity)<0.000001
+                && $storedScope===$scope;
+            $storedContext=$existing->snapshot['context']??[];
+            foreach(['policy_code','region_code','currency','unit','allow_payg','allow_overage','postpaid'] as $field){
+                if(array_key_exists($field,$context)&&($storedContext[$field]??null)!==$context[$field])$sameRequest=false;
+            }
+            if(!$sameRequest)throw new RuntimeException('idempotency_key_conflict');
+            if($existing->expires_at?->isFuture())return $existing;
+        }
+
+        $decision=$this->commerce->authorize($actor,$capability,$scope,$quantity,array_merge($context,['reserve'=>false]));
         $quote=$decision->pricingPolicy;
         $expires=now()->addSeconds(max(30,(int)($context['quote_ttl_seconds']??300)));
-        return FarastPriceQuote::updateOrCreate(['idempotency_key'=>$key],[
-            'quote_id'=>(string)Str::uuid(),'actor_id'=>$actor->id,'organization_id'=>$actor->organization_id,
+        $attributes=[
+            'quote_id'=>(string)Str::uuid(),'actor_id'=>$actor->id,'organization_id'=>$organizationId,
             'capability'=>$capability,'quantity'=>$quantity,'unit'=>$decision->unit,'currency'=>$quote['currency']??'IRR',
             'pricing_policy_version_id'=>$decision->pricingPolicyVersionId,'subtotal'=>(int)($quote['subtotal']??0),
             'discount'=>(int)($quote['discount']??0),'fee'=>(int)($quote['fee']??0),'tax'=>(int)($quote['tax']??0),
             'total'=>(int)($quote['total']??0),'status'=>$decision->allowed?'valid':'denied','expires_at'=>$expires,
             'snapshot'=>['decision'=>$decision->toArray(),'quote'=>$quote,'context'=>$this->safeContext($context)],
-        ]);
+        ];
+
+        if($existing){
+            $existing->fill($attributes);
+            $existing->save();
+            return $existing->fresh();
+        }
+
+        try{
+            return FarastPriceQuote::create($attributes+['idempotency_key'=>$key]);
+        }catch(\Illuminate\Database\QueryException $exception){
+            $raced=FarastPriceQuote::where('idempotency_key',$key)->first();
+            if(!$raced)throw $exception;
+            $sameRequest=(int)$raced->actor_id===(int)$actor->id
+                && (int)($raced->organization_id??0)===(int)($organizationId??0)
+                && $raced->capability===$capability
+                && abs((float)$raced->quantity-$quantity)<0.000001
+                && (($raced->snapshot['context']['scope']??[])===$scope);
+            if(!$sameRequest)throw new RuntimeException('idempotency_key_conflict');
+            return $raced;
+        }
     }
 
     public function createProduct(array $data): FarastCommercialProduct { return FarastCommercialProduct::create($data); }

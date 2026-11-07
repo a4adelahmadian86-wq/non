@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\CommerceAuthorizationService;
 use App\Services\PricingEngine;
+use App\Services\ProfessionalCommerceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -24,6 +25,81 @@ class CommercePhase3Test extends TestCase
             'tax_basis_points'=>$taxBp,'payg_multiplier_basis_points'=>10000,'included_quantity'=>0,
             'effective_from'=>now()->subMinute(),'checksum'=>hash('sha256',$code.'|1|'.$price),
         ]);
+    }
+
+    public function test_reservation_idempotency_key_is_bound_to_actor_and_request_payload(): void
+    {
+        $this->policy('reserve.first', 10000, 0);
+        $this->policy('reserve.second', 10000, 0);
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        Wallet::create(['user_id' => $owner->id, 'balance_rials' => 50000]);
+        Wallet::create(['user_id' => $other->id, 'balance_rials' => 50000]);
+        $commerce = app(CommerceAuthorizationService::class);
+
+        $commerce->reserve($owner, 'reserve.first', 1, [], [
+            'policy_code' => 'reserve.first',
+            'idempotency_key' => 'bound-reservation-key',
+        ]);
+
+        foreach ([
+            [$other, 'reserve.first', 1, 'reserve.first'],
+            [$owner, 'reserve.second', 1, 'reserve.second'],
+            [$owner, 'reserve.first', 2, 'reserve.first'],
+        ] as [$actor, $capability, $quantity, $policy]) {
+            try {
+                $commerce->reserve($actor, $capability, $quantity, [], [
+                    'policy_code' => $policy,
+                    'idempotency_key' => 'bound-reservation-key',
+                ]);
+                $this->fail('A reused idempotency key with a different request must be rejected.');
+            } catch (\RuntimeException $exception) {
+                $this->assertSame('idempotency_key_conflict', $exception->getMessage());
+            }
+        }
+
+        $this->assertSame(1, DB::table('farast_usage_reservations')->where('idempotency_key', 'bound-reservation-key')->count());
+        $this->assertSame(1, DB::table('farast_wallet_reservations')->where('idempotency_key', 'bound-reservation-key')->count());
+    }
+
+    public function test_price_quote_idempotency_key_cannot_be_reused_by_another_actor_or_scope(): void
+    {
+        $this->policy('quote.bound', 12000, 0);
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        Wallet::create(['user_id' => $owner->id, 'balance_rials' => 50000]);
+        Wallet::create(['user_id' => $other->id, 'balance_rials' => 50000]);
+        $quotes = app(ProfessionalCommerceService::class);
+
+        $quotes->quote($owner, 'quote.bound', 1, [
+            'policy_code' => 'quote.bound',
+            'scope' => ['project_id' => 101],
+            'idempotency_key' => 'bound-quote-key',
+        ]);
+
+        try {
+            $quotes->quote($other, 'quote.bound', 1, [
+                'policy_code' => 'quote.bound',
+                'scope' => ['project_id' => 101],
+                'idempotency_key' => 'bound-quote-key',
+            ]);
+            $this->fail('A quote key must not expose another actor\'s quote.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('idempotency_key_conflict', $exception->getMessage());
+        }
+
+        try {
+            $quotes->quote($owner, 'quote.bound', 1, [
+                'policy_code' => 'quote.bound',
+                'scope' => ['project_id' => 202],
+                'idempotency_key' => 'bound-quote-key',
+            ]);
+            $this->fail('A quote key must not be reused for a different scope.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('idempotency_key_conflict', $exception->getMessage());
+        }
+
+        $this->assertSame(1, DB::table('farast_price_quotes')->where('idempotency_key', 'bound-quote-key')->count());
     }
 
     public function test_pricing_is_deterministic_and_preserves_policy_version(): void
