@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StoreCategory;
+use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
@@ -61,8 +62,15 @@ class AdminStoreController extends Controller
         // A new catalog item must not become public before its protected payload/curriculum exists.
         $data['status'] = 'draft';
         $data['published_at'] = null;
-        $product = StoreProduct::create($data);
-        $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
+        $product = DB::transaction(function () use ($data) {
+            $product = StoreProduct::create($data);
+            if ($product->type === 'course') {
+                StoreCourse::firstOrCreate(['product_id' => $product->id]);
+            }
+            $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
+
+            return $product;
+        });
 
         if ($product->type === 'course') {
             return redirect()->route('admin.store.course.edit', $product)->with('status', 'محصول دوره ایجاد شد؛ اکنون ساختار آموزشی آن را تکمیل کنید.');
