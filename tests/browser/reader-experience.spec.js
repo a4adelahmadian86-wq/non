@@ -22,9 +22,11 @@ async function mountReader(page, includeExcel = false) {
         <button id="reader-fit" type="button">تناسب عرض</button>
         <button id="reader-rotate" type="button">چرخش</button>
         <button id="reader-scroll-mode" type="button">پیوسته</button>
-        <input id="reader-search-input" type="search">
-        <button id="reader-search" type="button">جست‌وجو</button>
-        <output id="reader-search-count"></output>
+        <div class="reader-search-group">
+          <input id="reader-search-input" type="search">
+          <button id="reader-search" type="button">جست‌وجو</button>
+          <output id="reader-search-count"></output>
+        </div>
         <button id="reader-thumbs-toggle" type="button" aria-expanded="true">فهرست</button>
         <button id="reader-theme" type="button">پوسته</button>
         <button id="reader-fs" type="button">تمام‌صفحه</button>
@@ -35,7 +37,9 @@ async function mountReader(page, includeExcel = false) {
           <button class="farast-reader-thumb is-active" data-goto="0" aria-current="page">۱</button>
           <button class="farast-reader-thumb" data-goto="1" aria-current="false">۲</button>
           ${excelMarkup}
-        </div></aside>
+        </div>
+          <section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section>
+        </aside>
         <main class="farast-reader-canvas">
           <div class="farast-reader-page-item is-active" data-index="0"><div class="farast-reader-page-content"><img alt="صفحه اول" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="></div></div>
           <div class="farast-reader-page-item" data-index="1"><div class="farast-reader-page-content"><img alt="صفحه دوم" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="></div></div>
@@ -88,6 +92,9 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(iframe).toHaveAttribute('sandbox', '');
     await expect(root.locator('#reader-page-number')).toHaveValue('3');
     await expect(root.locator('#reader-scroll-mode')).toBeHidden();
+    await expect(root.locator('.reader-search-group')).toBeHidden();
+    await expect(root.locator('#reader-outline')).toBeHidden();
+    await expect(root.locator('#reader-rotate')).toBeHidden();
     await root.locator('#reader-zoom-in').click();
     await expect(iframe).toHaveCSS('transform', /matrix\(1\.1,/);
   });
