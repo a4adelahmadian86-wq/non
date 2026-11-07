@@ -41,7 +41,7 @@ test.describe('Dashboard navigation recovery', () => {
     await toggle.click();
     await expect(nav).not.toHaveClass(/is-collapsed/);
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await expect(nav.getByRole('link', { name: /فضای کاری|داشبورد/ }).first()).toBeVisible();
+    await expect(nav.locator('.farast-dashboard-nav__items a').first()).toBeVisible();
   });
 
   test('mobile collapsed navigation keeps a visible, usable reopen control', async ({ page }) => {
