@@ -10,7 +10,7 @@
       <p>حساب خود را با شماره موبایل تأییدشده بسازید و به فضای کاری فراست وارد شوید.</p>
     </div>
 
-    <ol class="auth-step register-progress" aria-label="مراحل ساخت حساب">
+    <ol class="register-progress" aria-label="مراحل ساخت حساب">
       <li class="active"><span>۱</span><small>تأیید شماره</small></li>
       <li class="{{ $verified ? 'active' : '' }}"><span>۲</span><small>اطلاعات حساب</small></li>
     </ol>
