@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\BlogController;
 use App\Http\Controllers\GlobalAssistantController;
 use App\Http\Controllers\AdminPlatformController;
 use App\Http\Controllers\CanvaController;
@@ -26,7 +27,9 @@ use App\Http\Controllers\PlatformCompletionController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
-Route::get('/', function () { $recentProjects=auth()->check()&&Schema::hasTable('farast_projects')?auth()->user()->projects()->latest()->limit(3)->get():collect(); return view('home',compact('recentProjects')); })->name('home');\nRoute::get('/blog', [BlogController::class, 'index'])->name('blog');\nRoute::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('blog.show');
+Route::get('/', function () { $recentProjects=auth()->check()&&Schema::hasTable('farast_projects')?auth()->user()->projects()->latest()->limit(3)->get():collect(); return view('home',compact('recentProjects')); })->name('home');
+Route::get('/blog', [BlogController::class, 'index'])->name('blog');
+Route::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('blog.show');
 Route::get('/store',[StoreController::class,'index'])->name('store');
 Route::get('/store/category/{slug}',[StoreController::class,'category'])->name('store.category');
 Route::get('/store/product/{slug}',[StoreController::class,'product'])->name('store.product');
