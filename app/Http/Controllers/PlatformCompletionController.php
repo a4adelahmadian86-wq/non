@@ -225,7 +225,8 @@ class PlatformCompletionController extends Controller {
    'postpaid'=>'nullable|boolean',
    'active'=>'nullable|boolean',
   ]);
-  DB::table('farast_commercial_plans')->updateOrInsert(['code'=>$x['code']],[
+  $existing=DB::table('farast_commercial_plans')->where('code',$x['code'])->exists();
+  $values=[
    'name'=>$x['name'],
    'price'=>$x['price'],
    'currency'=>strtoupper($x['currency']),
@@ -236,8 +237,9 @@ class PlatformCompletionController extends Controller {
    'postpaid'=>$r->boolean('postpaid',false),
    'active'=>$r->boolean('active',true),
    'updated_at'=>now(),
-   'created_at'=>now(),
-  ]);
+  ];
+  if(!$existing)$values['created_at']=now();
+  DB::table('farast_commercial_plans')->updateOrInsert(['code'=>$x['code']],$values);
   return back()->with('status','پلن تجاری در کاتالوگ اصلی ذخیره شد.');
  }
  public function adminSupport(Request $request){
