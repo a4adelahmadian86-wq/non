@@ -128,6 +128,12 @@ class StoreCourseLearningTest extends TestCase
         $this->grantCourse($user, $product);
 
         $this->actingAs($user)
+            ->get(route('store.course.learn', $product))
+            ->assertOk()
+            ->assertSee('فصل اول')
+            ->assertSee('جلسه اول');
+
+        $this->actingAs($user)
             ->get(route('store.course.lesson', [$product, $lesson]))
             ->assertOk()
             ->assertSee('محتوای آموزشی آزمایشی');
