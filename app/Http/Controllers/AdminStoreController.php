@@ -8,6 +8,7 @@ use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -150,26 +151,28 @@ class AdminStoreController extends Controller
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل انتشار نخواهد بود.');
 
             $primary = $request->boolean('is_primary', true);
-            if ($primary) {
-                $product->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
-            }
+            DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
+                if ($primary) {
+                    $product->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
+                }
 
-            StoreProductFile::create([
-                'product_id' => $product->id,
-                'purpose' => 'product_download',
-                'version' => $product->version,
-                'disk' => 'private',
-                'path' => $path,
-                'original_name' => $upload->getClientOriginalName(),
-                'mime' => $inspection['mime'],
-                'size_bytes' => $inspection['size'],
-                'sha256' => $inspection['checksum'],
-                'is_primary' => $primary,
-                'is_active' => true,
-                'scan_status' => 'clean',
-                'scan_engine' => $inspection['scan'],
-                'scanned_at' => now(),
-            ]);
+                StoreProductFile::create([
+                    'product_id' => $product->id,
+                    'purpose' => 'product_download',
+                    'version' => $product->version,
+                    'disk' => 'private',
+                    'path' => $path,
+                    'original_name' => $upload->getClientOriginalName(),
+                    'mime' => $inspection['mime'],
+                    'size_bytes' => $inspection['size'],
+                    'sha256' => $inspection['checksum'],
+                    'is_primary' => $primary,
+                    'is_active' => true,
+                    'scan_status' => 'clean',
+                    'scan_engine' => $inspection['scan'],
+                    'scanned_at' => now(),
+                ]);
+            });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof ValidationException) {
