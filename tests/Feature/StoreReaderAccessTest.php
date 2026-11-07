@@ -101,11 +101,11 @@ class StoreReaderAccessTest extends TestCase
         [, $preview] = $this->makePreviewFixture();
 
         $temporary = tempnam(sys_get_temp_dir(), 'farast-docx-external-');
-        $document = new \\PhpOffice\\PhpWord\\PhpWord();
+        $document = new \PhpOffice\PhpWord\PhpWord();
         $document->addSection()->addText('سند دارای پیوند خارجی');
-        \\PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'Word2007')->save($temporary);
+        \PhpOffice\PhpWord\IOFactory::createWriter($document, 'Word2007')->save($temporary);
 
-        $archive = new \\ZipArchive();
+        $archive = new \ZipArchive();
         $this->assertSame(true, $archive->open($temporary));
         $archive->deleteName('word/_rels/document.xml.rels');
         $archive->addFromString(
