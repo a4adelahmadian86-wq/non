@@ -202,11 +202,11 @@ class WorkspaceDocumentManagementIntegrityTest extends TestCase
             ->assertDontSee('پروژه جدید');
     }
 
-    public function test_legacy_default_user_role_is_normalized_to_employee(): void
+    public function test_legacy_default_user_role_retains_its_identity_and_receives_employee_permissions(): void
     {
         $user = $this->makeUser('user');
 
-        $this->assertSame(User::ROLE_EMPLOYEE, $user->fresh()->role);
+        $this->assertSame('user', $user->fresh()->role);
         $this->assertTrue(app(AuthorizationService::class)->allows($user, 'documents.create'));
         $this->assertTrue(app(AuthorizationService::class)->allows($user, 'documents.share'));
         $this->assertTrue(app(AuthorizationService::class)->allows($user, 'documents.delete'));
