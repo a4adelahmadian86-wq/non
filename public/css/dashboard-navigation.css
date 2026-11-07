@@ -260,3 +260,5 @@
   .user-dashboard__metric,.user-dashboard__button,.user-dashboard__panel,.user-dashboard__quick-links a{transition:none}
   .user-dashboard__metric:hover,.user-dashboard__quick-links a:hover,.user-dashboard__button:hover{transform:none}
 }
+
+.farast-dashboard-nav__collapse:disabled{opacity:.55;cursor:wait}
