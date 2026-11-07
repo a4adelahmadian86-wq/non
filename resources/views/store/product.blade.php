@@ -104,6 +104,11 @@
         <small>{{ $product->type === 'course' ? 'دوره آموزشی' : ($product->category?->name ?? 'فایل دیجیتال') }}</small>
         <h1>{{ $product->title }}</h1>
         <p class="lead">{{ $product->short_description }}</p>
+        @if($product->tags->isNotEmpty())
+          <div class="store-product-tags" aria-label="برچسب‌های محصول">
+            @foreach($product->tags as $tag)<span>{{ $tag->name }}</span>@endforeach
+          </div>
+        @endif
         <div class="price">
           @if((int)$product->price_rials===0) رایگان
           @else
@@ -171,6 +176,10 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107premium1">
 <style>
+
+
+.store-product-tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
+.store-product-tags span{padding:5px 9px;border-radius:99px;background:#f1f5fb;color:#536783;font-size:.65rem;font-weight:700}
 
 .store-product-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:12px 0 16px}
 .store-product-gallery figure{margin:0;overflow:hidden;border:1px solid var(--st-line);border-radius:12px;background:#f5f7fa}
