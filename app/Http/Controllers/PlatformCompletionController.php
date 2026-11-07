@@ -176,6 +176,8 @@ class PlatformCompletionController extends Controller {
    // Paid plans must go through a verified payment flow. This endpoint only
    // activates free plans and cannot be raced against an admin price update.
    if((int)$p->price>0)return false;
+   // Serialize concurrent plan switches for the same account, even when no active subscription exists yet.
+   DB::table('users')->where('id',$user->id)->lockForUpdate()->first();
    $starts=now();
    $ends=match($p->billing_interval){
     'monthly'=>$starts->copy()->addMonth(),
