@@ -21,7 +21,9 @@ class ProviderAdminController extends Controller {
    'connection_verified'=>$verified,
    'last_success_at'=>$a->last_success_at?->toIso8601String(),
    'last_failure_at'=>$a->last_failure_at?->toIso8601String(),
-   'message'=>$verified?'آخرین درخواست واقعی این سرویس با موفقیت انجام شده است.':($ready?'تنظیمات آماده‌اند، اما هنوز درخواست موفقی برای تأیید اتصال ثبت نشده است.':'تنظیمات یا وضعیت عملیاتی این سرویس کامل نیست.'),
+   'message'=>$verified
+    ?($ready?'آخرین درخواست واقعی موفق بوده و سرویس در حال حاضر آماده است.':'آخرین درخواست موفق بوده، اما سرویس اکنون به‌دلیل وضعیت فعال‌سازی یا سهمیه آماده نیست.')
+    :($a->last_failure_at?'آخرین درخواست واقعی ناموفق بوده است؛ وضعیت سرویس نیازمند بررسی است.':($ready?'تنظیمات آماده‌اند، اما هنوز درخواست موفقی برای تأیید اتصال ثبت نشده است.':'تنظیمات یا وضعیت عملیاتی این سرویس کامل نیست.')),
   ],$ready?200:503);
  }
  // Groq key is encrypted in SiteSetting and is shared by assistant chat and speech-to-text.
