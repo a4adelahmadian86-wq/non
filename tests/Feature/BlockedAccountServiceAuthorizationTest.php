@@ -1,13 +1,13 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\User;
-use App\\Services\\CapabilityService;
-use App\\Services\\CommerceAuthorizationService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
+use App\Models\User;
+use App\Services\CapabilityService;
+use App\Services\CommerceAuthorizationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class BlockedAccountServiceAuthorizationTest extends TestCase
 {
