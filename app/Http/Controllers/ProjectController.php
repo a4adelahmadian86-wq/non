@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FarastProject;
+use App\Services\AuthorizationService;
 use App\Services\CapabilityService;
 use App\Services\ProjectBillingService;
 use App\Services\ProjectInterviewService;
