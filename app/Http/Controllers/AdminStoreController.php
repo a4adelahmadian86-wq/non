@@ -379,6 +379,26 @@ class AdminStoreController extends Controller
         return back()->with('status', 'پیش‌نمایش حذف شد.');
     }
 
+    public function storeTag(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:100',
+            'slug' => 'nullable|string|max:120',
+        ]);
+        $base = Str::slug($data['slug'] ?: $data['name']) ?: 'tag-'.Str::random(6);
+        $slug = $base;
+        $suffix = 1;
+        while (StoreTag::query()->where('slug', $slug)->exists()) {
+            $slug = $base.'-'.$suffix++;
+        }
+        StoreTag::firstOrCreate(
+            ['slug' => $slug],
+            ['name' => $data['name']]
+        );
+
+        return back()->with('status', 'برچسب ذخیره شد؛ اکنون می‌توانید آن را به محصول اختصاص دهید.');
+    }
+
     public function storeCategory(Request $request)
     {
         $data = $request->validate([
