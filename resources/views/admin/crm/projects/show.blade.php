@@ -33,7 +33,7 @@
         <p class="farast-crm__muted">سندی در فضای کاری به این پروژه متصل نشده است.</p>
       @endforelse
       <h3>اسناد تایپ و سفارش خدمات</h3>
-      @forelse($record->typingDocuments as $document)
+      @forelse($record->typingDocuments->whereNull('farast_document_id') as $document)
         <div class="farast-crm__row"><div><strong>{{ $document->title }}</strong><small>{{ number_format((int)$document->page_count) }} صفحه · {{ number_format((int)$document->word_count) }} واژه · {{ $document->updated_at?->format('Y/m/d H:i') }}</small></div><span>{{ $document->status }}</span></div>
       @empty
         <p class="farast-crm__muted">سند تایپی متصل به این پروژه وجود ندارد.</p>
