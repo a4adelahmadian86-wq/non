@@ -40,7 +40,7 @@ return [
         [
             'key' => 'editor', 'label' => 'ویرایشگر', 'icon' => 'fa-pen-ruler',
             'items' => [
-                ['key' => 'editor.start', 'label' => 'ویرایشگر', 'icon' => 'fa-pen-to-square', 'route' => 'editor', 'permission' => 'editor.use', 'scope' => 'own'],
+                ['key' => 'editor.start', 'label' => 'ویرایشگر', 'icon' => 'fa-pen-to-square', 'route' => 'editor', 'permission' => 'documents.create', 'scope' => 'own'],
                 ['key' => 'editor.recent', 'label' => 'اسناد اخیر', 'icon' => 'fa-clock-rotate-left', 'route' => 'dashboard', 'permission' => 'documents.view', 'scope' => 'own'],
                 ['key' => 'editor.templates', 'label' => 'قالب‌ها', 'icon' => 'fa-layer-group', 'planned' => true],
                 ['key' => 'editor.drafts', 'label' => 'پیش‌نویس‌ها', 'icon' => 'fa-file-pen', 'route' => 'dashboard', 'query' => ['status' => 'draft'], 'permission' => 'documents.view', 'scope' => 'own'],
