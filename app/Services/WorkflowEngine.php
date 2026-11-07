@@ -41,12 +41,19 @@ class WorkflowEngine
 
                 // Commit side effects and the event-workflow completion marker together.
                 if ($eventWorkflowId !== null) {
-                    DB::table('farast_workflow_event_workflows')->where('id', $eventWorkflowId)->update([
-                        'status' => 'completed',
-                        'last_error' => null,
-                        'finished_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    $updated = DB::table('farast_workflow_event_workflows')
+                        ->where('id', $eventWorkflowId)
+                        ->where('status', 'running')
+                        ->update([
+                            'status' => 'completed',
+                            'last_error' => null,
+                            'finished_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                    if ($updated !== 1) {
+                        throw new \\RuntimeException('Workflow event lease was lost before commit.');
+                    }
                 }
 
                 DB::table('farast_workflow_runs')->where('id', $runId)->update([
