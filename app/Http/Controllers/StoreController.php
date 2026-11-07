@@ -165,9 +165,9 @@ class StoreController extends Controller
     private function renderDocxPreview(string $docxBytes, array $headers)
     {
         abort_unless(
-            class_exists(\\PhpOffice\\PhpWord\\IOFactory::class)
-                && class_exists(\\Dompdf\\Dompdf::class)
-                && class_exists(\\Dompdf\\Options::class),
+            class_exists(\PhpOffice\PhpWord\IOFactory::class)
+                && class_exists(\Dompdf\Dompdf::class)
+                && class_exists(\Dompdf\Options::class),
             503,
             'موتور نمایش Word در دسترس نیست.'
         );
@@ -177,8 +177,8 @@ class StoreController extends Controller
 
         try {
             file_put_contents($sourcePath, $docxBytes);
-            $document = \\PhpOffice\\PhpWord\\IOFactory::createReader('Word2007')->load($sourcePath);
-            $writer = \\PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'HTML');
+            $document = \PhpOffice\PhpWord\IOFactory::createReader('Word2007')->load($sourcePath);
+            $writer = \PhpOffice\PhpWord\IOFactory::createWriter($document, 'HTML');
             $writer->save($htmlPath);
             $html = file_get_contents($htmlPath) ?: '';
             $body = $this->sanitizeDocxHtml($html);
@@ -197,7 +197,7 @@ class StoreController extends Controller
                 @page{size:A4;margin:22mm 18mm 22mm}
                 *{box-sizing:border-box}html,body{margin:0;font-family:"DejaVu Sans",Tahoma,sans-serif;color:#1f2937;background:#fff}
                 body{font-size:10pt;line-height:1.85;overflow-wrap:anywhere}
-                .docx-content{width:100%;direction:auto}
+                .docx-content{width:100%;direction:rtl}
                 .docx-content table{border-collapse:collapse;width:100%;margin:1em 0;page-break-inside:auto}
                 .docx-content tr{page-break-inside:avoid;page-break-after:auto}
                 .docx-content thead{display:table-header-group}.docx-content tfoot{display:table-footer-group}
@@ -211,7 +211,7 @@ class StoreController extends Controller
                 .docx-watermark span{font:700 10px "DejaVu Sans",Tahoma,sans-serif;color:#334155;white-space:nowrap;transform:rotate(-25deg);background:rgba(255,255,255,.18);padding:5px}
             </style></head><body><div class="docx-watermark">'.$marks.'</div><main class="docx-content">'.$body.'</main></body></html>';
 
-            $options = new \\Dompdf\\Options();
+            $options = new \Dompdf\Options();
             $options->set('isRemoteEnabled', false);
             $options->set('isPhpEnabled', false);
             $options->set('isJavascriptEnabled', false);
@@ -219,7 +219,7 @@ class StoreController extends Controller
             $options->set('defaultFont', 'DejaVu Sans');
             $options->set('dpi', 96);
 
-            $renderer = new \\Dompdf\\Dompdf($options);
+            $renderer = new \Dompdf\Dompdf($options);
             $renderer->setPaper('A4', 'portrait');
             $renderer->loadHtml($page, 'UTF-8');
             $renderer->render();
@@ -234,7 +234,7 @@ class StoreController extends Controller
             $pdfHeaders['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
 
             return response($renderer->output(), 200, $pdfHeaders);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
             abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
         } finally {
