@@ -13,19 +13,15 @@
   const stage=root.querySelector('#reader-stage');
   const searchInput=root.querySelector('#reader-search-input');
   const searchCount=root.querySelector('#reader-search-count');
-  const pdfCanvas=root.querySelector('.farast-pdf-canvas');
-  const pdfSurface=root.querySelector('.farast-pdf-document');
-  const pdfLoading=root.querySelector('.farast-pdf-loading');
-  const continuousHost=root.querySelector('.farast-pdf-continuous-pages');
+  let pdfCanvas=null,pdfSurface=null,pdfLoading=null,continuousHost=null;
   const scrollModeButton=root.querySelector('#reader-scroll-mode');
   const outlineSection=root.querySelector('#reader-outline');
   const outlineHost=root.querySelector('#reader-outline-list');
-  const pdfUrl=pdfSurface?.dataset.pdfUrl;
-  const pdfjsReady=pdfUrl
-    ? (window.pdfjsLib ? Promise.resolve(window.pdfjsLib) : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;}))
-    : Promise.resolve(null);
+  const pdfjsReady=window.pdfjsLib
+    ? Promise.resolve(window.pdfjsLib)
+    : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;});
 
-  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],docxMatches=[],matchIndex=-1,renderTask=null,continuousMode=false,continuousObserver=null;
+  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],docxMatches=[],matchIndex=-1,renderTask=null,continuousMode=false,continuousObserver=null,activePdfUrl=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -311,12 +307,36 @@
   };
 
   const loadPdf=async()=>{
-    if(!pdfUrl){if(pdfLoading)pdfLoading.textContent='فایل PDF برای نمایش پیدا نشد.';return;}
+    const surface=activeArticle()?.querySelector('.farast-pdf-document');
+    const nextUrl=surface?.dataset.pdfUrl;
+    if(!surface||!nextUrl){showPdfError(new Error('PDF preview URL unavailable'));return;}
+
+    if(activePdfUrl!==nextUrl){
+      if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
+      if(pdfDoc){try{await pdfDoc.destroy();}catch(_){}pdfDoc=null;}
+      continuousObserver?.disconnect();continuousObserver=null;continuousMode=false;
+      pdfSurface?.classList.remove('is-continuous');
+      if(continuousHost)continuousHost.innerHTML='';
+      pdfSurface=surface;
+      pdfCanvas=surface.querySelector('.farast-pdf-canvas');
+      pdfLoading=surface.querySelector('.farast-pdf-loading');
+      continuousHost=surface.querySelector('.farast-pdf-continuous-pages');
+      activePdfUrl=nextUrl;
+      pdfPage=1;pdfMatches=[];matchIndex=-1;
+      scrollModeButton?.setAttribute('aria-pressed','false');
+    }else{
+      pdfSurface=surface;
+      pdfCanvas=surface.querySelector('.farast-pdf-canvas');
+      pdfLoading=surface.querySelector('.farast-pdf-loading');
+      continuousHost=surface.querySelector('.farast-pdf-continuous-pages');
+    }
+
     try{
-      const pdfjs=await pdfjsReady;
-      if(!pdfjs)throw new Error('PDF.js module unavailable');
-      pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.worker.mjs';
-      pdfDoc=await pdfjs.getDocument({url:pdfUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
+      if(!pdfDoc){
+        const pdfjs=await pdfjsReady;
+        pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/build/pdf.worker.mjs';
+        pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
+      }
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
       await loadPdfOutline();
@@ -345,8 +365,7 @@
     });
     root.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(t=>t.remove());
     if(isPdf()){
-      if(!pdfDoc)await loadPdf();
-      else await navigatePdfPage(1);
+      await loadPdf();
       if(pdfDoc)await buildPdfThumbs();
     }else{
       setPageControls(itemIndex+1,articles.length);
