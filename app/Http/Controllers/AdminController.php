@@ -59,13 +59,19 @@ class AdminController extends Controller
         } elseif ($statusFilter === 'admins') {
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
-        $totalScopedUsers = (clone $usersQuery)->count();
-        $users = $usersQuery->limit(100)->get();
+        $canViewUsers = $console->sectionAllowed($actor, 'users');
+        $totalScopedUsers = $canViewUsers ? (clone $usersQuery)->count() : 0;
+        // Do not hydrate personal user data unless users.view is granted in this scope.
+        $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
+        $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
+        $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
 
         $settings = [];
-        foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
-            $default = $key === 'assistant_groq_model' ? 'openai/gpt-oss-120b' : (CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
-            $settings[$key] = SiteSetting::read($key, $default);
+        if ($globalScope) {
+            foreach (['weekly_free_pages', 'max_file_mb', 'daily_ai_requests', 'can_type', 'can_ai', 'can_voice', 'can_export_docx', 'can_export_pdf', 'can_feedback', 'can_support', 'gemini_model', 'gemini_fallback_model', 'assistant_groq_model'] as $key) {
+                $default = $key === 'assistant_groq_model' ? 'openai/gpt-oss-120b' : (CapabilityService::DEFAULTS[$key] ?? 'gemini-3.8-flash');
+                $settings[$key] = SiteSetting::read($key, $default);
+            }
         }
 
         $weekAgo = now()->subWeek();
@@ -169,14 +175,17 @@ class AdminController extends Controller
         return view('admin.index', [
             'rules' => $globalScope ? PricingRule::orderBy('id')->get() : collect(),
             'users' => $users,
-            'userTotalForFilter' => $usersQuery->count(),
-            'announcements' => Announcement::latest()->limit(20)->get(),
+            'userTotalForFilter' => $totalScopedUsers,
+            'announcements' => $canManageAnnouncements ? Announcement::latest()->limit(20)->get() : collect(),
             'console' => $console,
             'scope' => $scope,
             'scopeSummary' => $console->scopeSummary($actor),
             'allowedSections' => $allowedSections,
             'stats' => [
                 'users' => $totalScopedUsers,
+                'active_users' => $visibleIds === null
+                    ? User::where('is_blocked', false)->count()
+                    : User::whereIn('id', $visibleIds)->where('is_blocked', false)->count(),
                 'new_users_week' => $visibleIds === null
                     ? User::where('created_at', '>=', $weekAgo)->count()
                     : User::whereIn('id', $visibleIds)->where('created_at', '>=', $weekAgo)->count(),
@@ -225,7 +234,7 @@ class AdminController extends Controller
                 'ai' => Schema::hasTable('ai_interactions') ? $seriesOf('ai_interactions') : array_fill(0, 30, 0),
             ],
             'ticketStats' => $ticketStats,
-            'topConsumers' => $topConsumers,
+            'topConsumers' => $canViewAnalytics ? $topConsumers : collect(),
             'recentAudit' => (Schema::hasTable('audit_logs') && $scope === AdminConsoleService::SCOPE_GLOBAL)
                 ? DB::table('audit_logs')->leftJoin('users', 'users.id', '=', 'audit_logs.user_id')
                     ->latest('audit_logs.id')->limit(7)
