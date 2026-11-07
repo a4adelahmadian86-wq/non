@@ -122,6 +122,7 @@ class VoiceProviderDashboardIntegrationTest extends TestCase
     {
         $account = new VoiceProviderAccount();
         $account->provider = 'gladia';
+        $account->name = 'Gladia';
         $account->billing_mode = 'paid';
         $account->quota_limit_seconds = 36000;
         $account->quota_used_seconds = 36000;
