@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\VoiceProviderAccount;
+use App\Services\ProviderRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -70,4 +71,26 @@ class VoiceProviderDashboardIntegrationTest extends TestCase
 
         $this->assertDatabaseMissing('voice_provider_accounts', ['provider' => 'gladia']);
     }
+    public function test_provider_registry_does_not_call_configured_credentials_a_verified_connection(): void
+    {
+        $account = new VoiceProviderAccount();
+        $account->provider = 'gladia';
+        $account->name = 'Gladia';
+        $account->credentials_array = ['api_key' => 'configured-secret'];
+        $account->enabled = true;
+        $account->healthy = true;
+        $account->save();
+
+        $provider = collect(app(ProviderRegistry::class)->catalog())->firstWhere('provider', 'gladia');
+
+        $this->assertSame('unverified', $provider['status']);
+        $this->assertFalse($provider['connection_verified']);
+
+        $account->update(['last_success_at' => now()]);
+        $provider = collect(app(ProviderRegistry::class)->catalog())->firstWhere('provider', 'gladia');
+
+        $this->assertSame('healthy', $provider['status']);
+        $this->assertTrue($provider['connection_verified']);
+    }
+
 }
