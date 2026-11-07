@@ -154,4 +154,16 @@ class AdminConsoleScopeIntegrityTest extends TestCase
             ->assertDontSee('ایجاد سازمان');
     }
 
+    public function test_global_admin_dashboard_surfaces_internal_connection_health(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.index'))
+            ->assertOk()
+            ->assertSee('id="system-health"')
+            ->assertSee('پایگاه داده')
+            ->assertSee('صف پردازش');
+    }
+
 }
