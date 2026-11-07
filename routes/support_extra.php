@@ -9,5 +9,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 });
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('/support/tickets/{ticket}/messages/{message}/attachments/{index}', [SupportController::class, 'attachment'])->whereNumber('index')->name('support.attachment');
     Route::post('/support/tickets/{ticket}/csat', [SupportController::class, 'csat'])->name('support.csat');
 });
