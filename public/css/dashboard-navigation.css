@@ -22,3 +22,41 @@
   align-items: center;
   gap: 0.55rem;
 }
+
+
+/* Dashboard navigation recovery and compact-state accessibility. */
+.farast-dashboard-nav__brand{position:relative}
+.farast-dashboard-nav__brand-actions{display:flex;align-items:center;gap:6px;margin-inline-start:auto}
+.farast-dashboard-nav__collapse{flex:0 0 30px;position:relative;z-index:2}
+.farast-dashboard-nav__collapse:focus-visible{outline:2px solid #9bc5ff;outline-offset:3px}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand{position:relative;justify-content:center}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions{position:absolute;inset-inline-end:0;top:50%;transform:translateY(-50%);margin:0}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions>*:not(.farast-dashboard-nav__collapse){display:none}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__collapse{display:grid;width:28px;height:28px;background:#17315d;border-color:rgba(155,197,255,.35);color:#e4efff}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__collapse:hover{background:#244779;color:#fff}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__collapse i{transform:none}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__items a[title]{cursor:pointer}
+@media(max-width:760px){
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__groups,
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__footer{display:none}
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions{position:static;transform:none;margin-inline-start:auto}
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions>*:not(.farast-dashboard-nav__collapse){display:initial}
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__collapse{display:grid}
+}
+
+
+/* Keep the compact brand mark and its recovery control side by side. */
+.farast-dashboard-nav.is-collapsed{width:90px}
+.dashboard-shell-inner:has(.farast-dashboard-nav.is-collapsed){margin-right:90px}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand{justify-content:space-between}
+.farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions{position:static;transform:none;gap:0;margin:0}
+@media(max-width:1100px){
+  .farast-dashboard-nav.is-collapsed{width:90px}
+  .dashboard-shell-inner:has(.farast-dashboard-nav.is-collapsed){margin-right:90px}
+}
+@media(max-width:760px){
+  .farast-dashboard-nav.is-collapsed{width:100%}
+  .dashboard-shell-inner:has(.farast-dashboard-nav.is-collapsed){margin-right:0}
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand{justify-content:flex-start}
+  .farast-dashboard-nav.is-collapsed .farast-dashboard-nav__brand-actions{position:static;transform:none;gap:6px;margin-inline-start:auto}
+}

@@ -7,7 +7,7 @@
     <div class="farast-dashboard-nav__brand">
         <span class="farast-dashboard-nav__mark" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
         <div class="farast-dashboard-nav__brand-copy"><strong>فراست</strong><small>{{ $isAdminNavigation ? 'مرکز عملیات' : 'فضای کاری' }}</small></div>
-        <div style="display:flex;align-items:center;gap:6px;margin-inline-start:auto">
+        <div class="farast-dashboard-nav__brand-actions">
             @include('components.notification-bell')
             <button type="button" class="farast-dashboard-nav__collapse" data-dashboard-nav-toggle aria-expanded="true" aria-controls="farast-dashboard-groups" aria-label="جمع کردن منوی داشبورد" title="جمع کردن منو"><i class="fa-solid fa-angles-right" aria-hidden="true"></i></button>
         </div>
@@ -16,11 +16,11 @@
         @foreach($navigation as $group)
             @php $hasActive = collect($group['items'])->contains(fn ($item) => !empty($item['active'])); @endphp
             <details class="farast-dashboard-nav__group" @if($hasActive) open @endif>
-                <summary><span><i class="fa-solid {{ $group['icon'] }}" aria-hidden="true"></i><b>{{ $group['label'] }}</b></span><i class="fa-solid fa-chevron-down farast-dashboard-nav__chevron" aria-hidden="true"></i></summary>
+                <summary aria-label="{{ $group['label'] }}" title="{{ $group['label'] }}"><span><i class="fa-solid {{ $group['icon'] }}" aria-hidden="true"></i><b>{{ $group['label'] }}</b></span><i class="fa-solid fa-chevron-down farast-dashboard-nav__chevron" aria-hidden="true"></i></summary>
                 <div class="farast-dashboard-nav__items">
                     @foreach($group['items'] as $item)
                         @if(!empty($item['href']) && empty($item['disabled']))
-                            <a href="{{ $item['href'] }}" class="{{ !empty($item['active']) ? 'is-active' : '' }}" @if(!empty($item['active'])) aria-current="page" @endif>
+                            <a href="{{ $item['href'] }}" class="{{ !empty($item['active']) ? 'is-active' : '' }}" aria-label="{{ $item['label'] }}" title="{{ $item['label'] }}" @if(!empty($item['active'])) aria-current="page" @endif>
                                 <i class="fa-solid {{ $item['icon'] }}" aria-hidden="true"></i>
                                 <span>{{ $item['label'] }}</span>
                                 @if(!empty($item['badge']) && (int)$item['badge'] > 0)
@@ -51,8 +51,11 @@
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-label', collapsed ? 'باز کردن منوی داشبورد' : 'جمع کردن منوی داشبورد');
         toggle.title = collapsed ? 'باز کردن منو' : 'جمع کردن منو';
+        toggle.innerHTML = collapsed
+            ? '<i class="fa-solid fa-angles-left" aria-hidden="true"></i>'
+            : '<i class="fa-solid fa-angles-right" aria-hidden="true"></i>';
     };
-    try { setCollapsed(localStorage.getItem(key) === '1'); } catch (_) {}
+    try { setCollapsed(localStorage.getItem(key) === '1'); } catch (_) { setCollapsed(false); }
 
     const syncFragmentActive = () => {
         const hash = window.location.hash;
