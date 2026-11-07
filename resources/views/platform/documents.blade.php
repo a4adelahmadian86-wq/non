@@ -32,7 +32,7 @@
         <a href="{{ route('platform.documents') }}" class="{{ $mode === 'documents' ? 'is-active' : '' }}"><i class="fa-solid fa-file-lines"></i> اسناد فعال</a>
         <a href="{{ route('platform.documents', ['favorite' => 1]) }}" class="{{ $mode === 'favorites' ? 'is-active' : '' }}"><i class="fa-solid fa-star"></i> نشان‌دارها</a>
         <a href="{{ route('platform.documents', ['trashed' => 1]) }}" class="{{ $mode === 'trashed' ? 'is-active' : '' }}"><i class="fa-solid fa-trash-can"></i> سطل زباله</a>
-        <a href="{{ route('platform.documents', ['shared' => 1]) }}" class="{{ $mode === 'shared' ? 'is-active' : '' }}"><i class="fa-solid fa-share-nodes"></i> اشتراک‌ها</a>
+        @if($canShareDocuments)<a href="{{ route('platform.documents', ['shared' => 1]) }}" class="{{ $mode === 'shared' ? 'is-active' : '' }}"><i class="fa-solid fa-share-nodes"></i> اشتراک‌ها</a>@endif
     </nav>
 
     <div class="workspace-documents__layout">
@@ -122,13 +122,13 @@
                                 </form>
                                 <div class="workspace-documents__document-actions">
                                     <form method="post" action="{{ route('platform.documents.favorite', $document->id) }}">@csrf<button type="submit"><i class="fa-solid fa-star"></i> {{ $document->is_favorite ? 'حذف از نشان‌دارها' : 'افزودن به نشان‌دارها' }}</button></form>
-                                    <button type="button" data-share-endpoint="{{ route('platform.documents.share', $document->id) }}"><i class="fa-solid fa-share-nodes"></i> ساخت لینک اشتراک</button>
+                                    @if($canShareDocuments)<button type="button" data-share-endpoint="{{ route('platform.documents.share', $document->id) }}"><i class="fa-solid fa-share-nodes"></i> ساخت لینک اشتراک</button>@endif
                                     <form method="post" action="{{ route('platform.documents.trash', $document->id) }}">@csrf<button class="is-danger" type="submit"><i class="fa-solid fa-trash-can"></i> انتقال به سطل زباله</button></form>
                                 </div>
-                                <div class="workspace-documents__share-result" hidden>
+                                @if($canShareDocuments)<div class="workspace-documents__share-result" hidden>
                                     <label>لینک اشتراک<input type="text" readonly data-share-output></label>
                                     <span role="status" aria-live="polite" data-share-status></span>
-                                </div>
+                                </div>@endif
                             @endif
                         </article>
                     @empty
