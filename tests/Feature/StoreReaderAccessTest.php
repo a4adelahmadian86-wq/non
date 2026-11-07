@@ -106,6 +106,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertOk()
             ->assertSee('09123456789')
             ->assertSee('farast-reader-watermark')
+            ->assertSee('is-pdf')
             ->assertSee('reader-search-input')
             ->assertSee('farast-reader.js');
 
@@ -114,8 +115,11 @@ class StoreReaderAccessTest extends TestCase
         $response->assertOk()
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
+            ->assertHeader('Cross-Origin-Resource-Policy', 'same-origin')
+            ->assertHeader('Referrer-Policy', 'no-referrer')
             ->assertHeader('Content-Disposition', 'inline');
 
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
 }
