@@ -15,6 +15,8 @@
   const searchCount=root.querySelector('#reader-search-count');
   let pdfCanvas=null,pdfSurface=null,pdfLoading=null,continuousHost=null;
   const scrollModeButton=root.querySelector('#reader-scroll-mode');
+  const searchGroup=root.querySelector('.reader-search-group');
+  const rotateButton=root.querySelector('#reader-rotate');
   const outlineSection=root.querySelector('#reader-outline');
   const outlineHost=root.querySelector('#reader-outline-list');
   const pdfjsReady=window.pdfjsLib
@@ -351,7 +353,11 @@
       if(continuousHost)continuousHost.innerHTML='';
       scrollModeButton?.setAttribute('aria-pressed','false');
     }
-    if(scrollModeButton)scrollModeButton.hidden=!isPdf();
+    const pdfActive=isPdf();
+    if(scrollModeButton)scrollModeButton.hidden=!pdfActive;
+    if(searchGroup)searchGroup.hidden=!pdfActive;
+    if(outlineSection&&!pdfActive)outlineSection.hidden=true;
+    if(rotateButton)rotateButton.hidden=Boolean(activeArticle()?.querySelector('.farast-xlsx-frame'));
     root.querySelectorAll('.farast-reader-thumb[data-goto]').forEach(thumb=>{
       const active=Number(thumb.dataset.goto)===itemIndex;
       thumb.classList.toggle('is-active',active);
