@@ -9,6 +9,24 @@
     </div>
     @if(session('status'))<div class="store-alert success" role="status">{{ session('status') }}</div>@endif
     @if($errors->any())<div class="store-alert error" role="alert">{{ $errors->first() }}</div>@endif
+    @if($isEdit)
+      <section class="store-panel product-readiness" aria-labelledby="product-readiness-title">
+        <div class="product-readiness-head">
+          <div><span>کنترل پیش از انتشار</span><h2 id="product-readiness-title">آمادگی محصول برای فروش</h2></div>
+          <strong class="{{ $publicationReady ? 'is-ready' : 'is-pending' }}">{{ $publicationReady ? 'آماده انتشار' : 'نیازمند تکمیل' }}</strong>
+        </div>
+        <div class="product-readiness-list">
+          @foreach($readiness as $item)
+            <div class="{{ $item['ready'] ? 'is-ready' : ($item['required'] ? 'is-pending' : 'is-optional') }}">
+              <i class="fa-solid {{ $item['ready'] ? 'fa-circle-check' : ($item['required'] ? 'fa-circle-exclamation' : 'fa-circle-minus') }}" aria-hidden="true"></i>
+              <span>{{ $item['label'] }}</span>
+              <small>{{ $item['ready'] ? 'تکمیل شده' : ($item['required'] ? 'الزامی' : 'اختیاری') }}</small>
+            </div>
+          @endforeach
+        </div>
+        <p>این بررسی وضعیت واقعی اطلاعات ذخیره‌شده را نشان می‌دهد. کنترل نهایی انتشار همچنان در سرور انجام می‌شود.</p>
+      </section>
+    @endif
 
     <div class="product-workflow" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
@@ -83,6 +101,22 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107product1">
 <style>
+
+
+.product-readiness{margin:0 0 16px;padding:18px}
+.product-readiness-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.product-readiness-head span{font-size:.66rem;color:var(--st-blue);font-weight:900}
+.product-readiness-head h2{font-size:.92rem;margin:4px 0 0}
+.product-readiness-head>strong{padding:7px 11px;border-radius:99px;font-size:.68rem}
+.product-readiness .is-ready{color:#18764a}.product-readiness .is-pending{color:#a45a12}
+.product-readiness-head>strong.is-ready{background:#eaf7ef}.product-readiness-head>strong.is-pending{background:#fff4e7}
+.product-readiness-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}
+.product-readiness-list>div{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:5px 8px;padding:10px;border:1px solid var(--st-line);border-radius:11px;background:#fbfcfe}
+.product-readiness-list i{grid-row:span 2;font-size:.9rem}
+.product-readiness-list span{font-size:.69rem;font-weight:800;color:var(--st-ink)}
+.product-readiness-list small{font-size:.62rem;color:var(--st-muted)}
+.product-readiness>p{margin:12px 0 0;color:var(--st-muted);font-size:.65rem}
+@media(max-width:760px){.product-readiness-list{grid-template-columns:repeat(2,minmax(0,1fr))}.product-readiness{padding:14px}}
 
 .product-workflow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}
 .product-workflow a{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;align-items:center;gap:2px 10px;padding:13px;border:1px solid var(--st-line);border-radius:14px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,box-shadow .18s}
