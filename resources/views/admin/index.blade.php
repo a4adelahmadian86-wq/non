@@ -87,6 +87,7 @@
                     <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
                     <div><span class="ops-icon cyan"><i class="fa-solid fa-bolt"></i></span><div><b>{{ number_format($stats['ai_today']) }}</b><small>درخواست AI امروز</small></div></div>
+                    @if($console->sectionAllowed(auth()->user(), 'users'))<div><span class="ops-icon purple"><i class="fa-solid fa-diagram-project"></i></span><div><b>{{ number_format($stats['projects']) }}</b><small>{{ number_format($stats['active_projects']) }} پروژه فعال مشتریان</small></div></div>@endif
                     @if($console->sectionAllowed(auth()->user(), 'announcements'))<div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>@endif
                 </div>
             </article>
