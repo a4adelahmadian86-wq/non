@@ -106,7 +106,7 @@
 
       <div class="store-panel" style="margin-top:18px">
         <h2>پیش‌نمایش (خوانشگر)</h2>
-        <p style="font-size:.75rem;color:#6b7c93;margin:0 0 12px">تصویر یا PDF صفحات نمونه — در خوانشگر تمام‌صفحه نمایش داده می‌شود.</p>
+        <p style="font-size:.75rem;color:#6b7c93;margin:0 0 12px">تصویر، PDF یا Word (DOCX) را به‌عنوان نمونه مطالعه بارگذاری کنید. PDF و Word در محیط خوانشگر امن نمایش داده می‌شوند.</p>
         <div class="store-preview-grid" style="margin-bottom:14px">
           @forelse($product->previews as $preview)
             <div style="position:relative">
@@ -125,7 +125,7 @@
         </div>
         <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           @csrf
-          <input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" required>
+          <input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx" required>
           <input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه" style="width:120px;padding:8px;border:1px solid #e2e9f2;border-radius:8px">
           <button type="submit" class="store-primary-btn">آپلود پیش‌نمایش</button>
         </form>
