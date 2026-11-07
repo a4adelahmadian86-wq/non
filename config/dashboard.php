@@ -78,7 +78,7 @@ return [
         [
             'key' => 'reports', 'label' => 'گزارش‌ها و تحلیل‌ها', 'icon' => 'fa-chart-line',
             'items' => [
-                ['key' => 'reports.overview', 'label' => 'نمای گزارش‌ها', 'icon' => 'fa-chart-pie', 'route' => 'admin.analytics', 'admin_only' => true, 'permission' => 'reports.team', 'scope' => 'team'],
+                ['key' => 'reports.overview', 'label' => 'نمای گزارش‌ها', 'icon' => 'fa-chart-pie', 'route' => 'admin.analytics', 'permission' => 'reports.team', 'scope' => 'team'],
                 ['key' => 'reports.usage', 'label' => 'مصرف منابع', 'icon' => 'fa-gauge-high', 'planned' => true, 'permission' => 'reports.team', 'scope' => 'team'],
                 ['key' => 'reports.finance', 'label' => 'گزارش مالی', 'icon' => 'fa-coins', 'route' => 'admin.finance', 'admin_only' => true, 'permission' => 'finance.view', 'scope' => 'organization'],
                 ['key' => 'reports.exports', 'label' => 'خروجی‌ها', 'icon' => 'fa-file-export', 'planned' => true, 'permission' => 'reports.team', 'scope' => 'team'],
