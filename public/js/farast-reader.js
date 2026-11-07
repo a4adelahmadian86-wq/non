@@ -53,6 +53,35 @@
     if(zoomLabel)zoomLabel.textContent=zoom===0?'خودکار':faNumber(Math.round(zoom*100))+'٪';
   };
 
+  // Paint the account mark into the rendered page bitmap, not only as removable HTML.
+  const paintPdfWatermark=canvas=>{
+    if(!canvas?.width||!canvas?.height)return;
+    const identity=(root.querySelector('.farast-reader-account span')?.textContent||'حساب کاربر').trim();
+    const context=canvas.getContext('2d');
+    if(!context)return;
+    const width=canvas.width,height=canvas.height;
+    const label=identity+' · پیش‌نمایش فراست';
+    const fontSize=Math.max(16,Math.min(30,Math.round(width/48)));
+    context.save();
+    context.setTransform(1,0,0,1,0,0);
+    context.globalAlpha=.19;
+    context.fillStyle='#26364b';
+    context.font='700 '+fontSize+'px Tahoma, Arial, sans-serif';
+    context.textAlign='center';
+    const stepX=Math.max(260,Math.round(width/2.15));
+    const stepY=Math.max(150,Math.round(height/4.2));
+    for(let y=stepY/2;y<height+stepY;y+=stepY){
+      for(let x=stepX/2;x<width+stepX;x+=stepX){
+        context.save();
+        context.translate(x,y);
+        context.rotate(-Math.PI/7);
+        context.fillText(label,0,0);
+        context.restore();
+      }
+    }
+    context.restore();
+  };
+
   const renderPdfPage=async(number)=>{
     if(!pdfDoc||!pdfCanvas)return;
     pdfPage=clamp(Number(number)||1,1,pdfDoc.numPages);
@@ -72,6 +101,7 @@
     context.setTransform(ratio,0,0,ratio,0,0);
     renderTask=page.render({canvasContext:context,viewport});
     try{await renderTask.promise;}catch(error){if(error?.name!=='RenderingCancelledException')throw error;}
+    paintPdfWatermark(pdfCanvas);
 
     const textLayer=activeArticle()?.querySelector('.farast-pdf-text-layer');
     if(textLayer&&window.pdfjsLib?.TextLayer){
@@ -114,6 +144,7 @@
     const context=canvas.getContext('2d',{alpha:false});
     context.setTransform(ratio,0,0,ratio,0,0);
     await page.render({canvasContext:context,viewport}).promise;
+    paintPdfWatermark(canvas);
     const textLayer=wrapper.querySelector('.farast-pdf-cont-text');
     if(textLayer&&window.pdfjsLib?.TextLayer){
       textLayer.innerHTML='';
