@@ -123,17 +123,9 @@ class WalletController extends Controller
         }
 
         if ($status !== 'OK') {
-            DB::transaction(function () use ($order, $payment): void {
-                $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
-                $lockedPayment = Payment::query()->whereKey($payment->id)->lockForUpdate()->first();
-
-                if ($lockedOrder && $lockedPayment && $lockedOrder->status === 'pending' && $lockedPayment->status === 'pending') {
-                    $lockedPayment->update(['status' => 'failed']);
-                    $lockedOrder->update(['status' => 'failed']);
-                }
-            });
-
-            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'پرداخت افزایش موجودی لغو شد؛ مبلغی به کیف پول اضافه نشد.']);
+            // Callback query parameters are controlled by the browser. Do not mutate
+            // payment state based only on Status=NOK; a later verified callback may arrive.
+            return redirect()->route(auth()->check() ? 'wallet' : 'login')->withErrors(['topup' => 'پرداخت تأیید نشد؛ هیچ اعتباری اضافه نشده است. در صورت کسر وجه، وضعیت تراکنش را پیگیری کنید.']);
         }
 
         try {
