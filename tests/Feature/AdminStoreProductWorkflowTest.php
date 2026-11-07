@@ -5,10 +5,13 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductImage;
 use App\Models\StoreTag;
 use App\Models\User;
+use App\Services\UploadSecurityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class AdminStoreProductWorkflowTest extends TestCase
@@ -122,6 +125,66 @@ class AdminStoreProductWorkflowTest extends TestCase
             'product_id' => $product->id,
             'related_product_id' => $related->id,
         ]);
+    }
+
+    public function test_admin_can_create_a_tag_from_the_product_editor(): void
+    {
+        $this->actingAs($this->admin())
+            ->from(route('admin.store.create'))
+            ->post(route('admin.store.tags.store'), [
+                'name' => 'بازاریابی',
+                'slug' => 'marketing',
+            ])
+            ->assertRedirect(route('admin.store.create'));
+
+        $this->assertDatabaseHas('store_tags', [
+            'name' => 'بازاریابی',
+            'slug' => 'marketing',
+        ]);
+    }
+
+    public function test_product_gallery_upload_is_scanned_and_saved_to_public_storage(): void
+    {
+        Storage::fake('private');
+        Storage::fake('public');
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول گالری',
+            'slug' => 'gallery-product',
+            'sku' => 'GALLERY-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->mock(UploadSecurityService::class, function ($mock) {
+            $mock->shouldReceive('inspect')->once()->andReturnUsing(function ($path) {
+                $checksum = hash_file('sha256', Storage::disk('private')->path($path));
+
+                return [
+                    'safe' => true,
+                    'mime' => 'image/jpeg',
+                    'size' => Storage::disk('private')->size($path),
+                    'checksum' => $checksum,
+                    'scan' => 'test-clean',
+                ];
+            });
+        });
+
+        $this->actingAs($admin)
+            ->post(route('admin.store.images.upload', $product), [
+                'image' => UploadedFile::fake()->image('gallery.jpg', 800, 600),
+                'alt' => 'نمای محصول',
+            ])
+            ->assertRedirect(route('admin.store.edit', $product));
+
+        $image = StoreProductImage::query()->where('product_id', $product->id)->firstOrFail();
+        $this->assertSame('نمای محصول', $image->alt);
+        $this->assertTrue($image->is_active);
+        $this->assertStringStartsWith('storage/store/product-images/'.$product->id.'/', $image->path);
+        Storage::disk('public')->assertExists(str_replace('storage/', '', $image->path));
     }
 
     public function test_compare_at_price_must_be_greater_than_the_sale_price(): void
