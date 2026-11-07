@@ -35,6 +35,11 @@
     if(pageInput){pageInput.max=String(total);pageInput.value=String(current);}
     if(pageTotal)pageTotal.textContent='/ '+faNumber(total);
     updateProgress(current,total);
+    root.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(thumb=>{
+      const active=Number(thumb.dataset.pdfPage)===Number(current);
+      thumb.classList.toggle('is-active',active);
+      thumb.setAttribute('aria-current',active?'page':'false');
+    });
   };
 
   const setZoomLabel=()=>{
@@ -125,7 +130,6 @@
       pdfDoc=await pdfjsLib.getDocument({url:pdfUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
-      buildPdfThumbs();
     }catch(error){showPdfError(error);}
   };
 
