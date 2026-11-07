@@ -84,6 +84,7 @@ class EntitlementService
                 ->where('capability_code', $capability)
                 ->where('status', 'active')
                 ->where(fn ($q) => $q->where('user_id', $user->id)->orWhereNull('user_id'))
+                ->where(fn ($q) => $q->whereNull('organization_id')->orWhere('organization_id', $user->organization_id))
                 ->where(function ($q) use ($project) {
                     if ($project) {
                         $q->where('project_id', $project->id)->orWhereNull('project_id');
