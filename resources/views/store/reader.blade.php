@@ -74,7 +74,7 @@
       <div class="farast-reader-shortcuts"><kbd>←</kbd><kbd>→</kbd> جابه‌جایی صفحه <span>·</span> <kbd>+</kbd><kbd>−</kbd> بزرگ‌نمایی <span>·</span> <kbd>F</kbd> تمام‌صفحه</div>
     </main>
   </div>
-  <div class="farast-reader-security-note"><i class="fa-solid fa-lock"></i><span>این پیش‌نمایش برای حساب شما نشان‌گذاری شده است. دریافت مستقیم فایل و چاپ از محیط مطالعه در دسترس نیست.</span></div>
+  <div class="farast-reader-security-note"><i class="fa-solid fa-lock"></i><span>این پیش‌نمایش با شناسه حساب شما نشان‌گذاری شده است تا بازنشر بدون مجوز دشوارتر و قابل پیگیری‌تر باشد.</span></div>
 </section>
 @endsection
 
@@ -150,7 +150,6 @@
   root.addEventListener('copy',e=>e.preventDefault());
   root.addEventListener('cut',e=>e.preventDefault());
   root.addEventListener('dragstart',e=>e.preventDefault());
-  window.addEventListener('beforeprint',()=>window.dispatchEvent(new Event('farast-reader-print-blocked')));
   setZoom(1);show(0);
 })();
 </script>
