@@ -241,7 +241,21 @@
             @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
             @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
         </section>
-    </main>
+    @if($scope === 'global')
+        <section class="admin-section admin-panel-wide" id="system-health">
+            <div class="admin-panel-head">
+                <div><span class="panel-eyebrow">RUNTIME HEALTH</span><h2>وضعیت زیرساخت و اتصال‌های داخلی</h2><p>این شاخص‌ها هنگام بارگذاری داشبورد بررسی می‌شوند؛ وضعیت سرویس‌های بیرونی جداگانه در بخش اتصال‌ها گزارش می‌شود.</p></div>
+            </div>
+            <div class="admin-metric-grid">
+                <article class="metric-card {{ $systemHealth['db_ok'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>پایگاه داده</span><i class="fa-solid fa-database"></i></div><strong>{{ $systemHealth['db_ok'] ? 'دسترس‌پذیر' : 'خطا' }}</strong><small>درایور: {{ $systemHealth['driver'] }}</small></article>
+                <article class="metric-card {{ $systemHealth['cache_ok'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>Cache</span><i class="fa-solid fa-bolt"></i></div><strong>{{ $systemHealth['cache_ok'] ? 'دسترس‌پذیر' : 'خطا' }}</strong><small>آزمون نوشتن، خواندن و پاک‌سازی موقت</small></article>
+                <article class="metric-card {{ $systemHealth['storage_writable'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>ذخیره‌سازی برنامه</span><i class="fa-solid fa-hard-drive"></i></div><strong>{{ $systemHealth['storage_writable'] ? 'قابل نوشتن' : 'غیرقابل نوشتن' }}</strong><small>بررسی مجوز مسیر storage</small></article>
+                <article class="metric-card metric-violet"><div class="metric-top"><span>صف پردازش</span><i class="fa-solid fa-list-check"></i></div><strong>{{ $systemHealth['queue_connection'] }}</strong><small>درایور پیکربندی‌شده؛ بدون ادعای probe زنده</small></article>
+            </div>
+            <p class="health-footnote">محیط: {{ $systemHealth['env'] }} · PHP {{ $systemHealth['php'] }} · Laravel {{ $systemHealth['laravel'] }} · Debug: {{ $systemHealth['debug'] ? 'روشن' : 'خاموش' }}</p>
+        </section>
+        @endif
+        </main>
 </div>
 @if($console->sectionAllowed(auth()->user(), 'access') || $console->sectionAllowed(auth()->user(), 'organizations') || $console->sectionAllowed(auth()->user(), 'integrations') || $console->sectionAllowed(auth()->user(), 'analytics') || $console->sectionAllowed(auth()->user(), 'audit') || $console->sectionAllowed(auth()->user(), 'finance') || $console->sectionAllowed(auth()->user(), 'emails') || $console->sectionAllowed(auth()->user(), 'social'))
 <section class="admin-section admin-panel-wide" id="platform-control">
