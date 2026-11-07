@@ -10,36 +10,49 @@
     @if(session('status'))<div class="store-alert success" role="status">{{ session('status') }}</div>@endif
     @if($errors->any())<div class="store-alert error" role="alert">{{ $errors->first() }}</div>@endif
 
-    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form">
+    <div class="product-workflow" aria-label="مراحل آماده‌سازی محصول">
+      <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
+      <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
+      <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
+      <a href="#product-discovery"><span>۴</span><b>نمایش</b><small>سئو و رسانه</small></a>
+    </div>
+    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
-      <div class="product-editor-heading"><div><span>اطلاعات پایه</span><h2>مشخصات محصول</h2></div><span class="product-editor-step">گام ۱ از ۳</span></div>
+      <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
         <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
         <label class="product-field">شناسه محصول (SKU) *<input name="sku" value="{{ old('sku',$product->sku) }}" required maxlength="80" placeholder="مثلاً COURSE-001"></label>
         <label class="product-field">نشانی اختصاصی (Slug)<input name="slug" value="{{ old('slug',$product->slug) }}" maxlength="240" placeholder="خودکار از عنوان ساخته می‌شود"></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
-        <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required></label>
-        <label class="product-field">قیمت قبل از تخفیف (ریال)<input type="number" name="compare_at_price_rials" value="{{ old('compare_at_price_rials',$product->compare_at_price_rials) }}" min="0"></label>
-        <label class="product-field">وضعیت انتشار *<select name="status" required>@foreach(['draft'=>'پیش‌نویس','published'=>'منتشرشده','archived'=>'بایگانی'] as $value=>$label)<option value="{{ $value }}" @selected(old('status',$product->status)===$value)>{{ $label }}</option>@endforeach</select><small>انتشار فقط پس از تکمیل فایل اصلی یا حداقل یک جلسه منتشرشده مجاز است.</small></label>
+        <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
+        <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
+        <label class="product-field">قیمت قبل از تخفیف (ریال)<input type="number" name="compare_at_price_rials" value="{{ old('compare_at_price_rials',$product->compare_at_price_rials) }}" min="0" max="999999999999" inputmode="numeric"><small>برای نمایش تخفیف، باید از قیمت فروش بیشتر باشد.</small></label>
+        @if($isEdit)
+          <label class="product-field">وضعیت انتشار *<select name="status" required>@foreach(['draft'=>'پیش‌نویس','published'=>'منتشرشده','archived'=>'بایگانی'] as $value=>$label)<option value="{{ $value }}" @selected(old('status',$product->status)===$value)>{{ $label }}</option>@endforeach</select><small>انتشار فقط پس از تکمیل الزامات محصول و بررسی فایل اصلی یا جلسات دوره ممکن است.</small></label>
+        @else
+          <input type="hidden" name="status" value="draft"><div class="product-draft-note"><i class="fa-solid fa-shield-halved"></i><span><b>شروع امن با پیش‌نویس</b><small>محصول ابتدا خصوصی ساخته می‌شود؛ پس از بارگذاری محتوا و بررسی نهایی می‌توانید آن را منتشر کنید.</small></span></div>
+        @endif
         <label class="product-field">نسخه / ویرایش<input name="version" value="{{ old('version',$product->version) }}" maxlength="60" placeholder="مثلاً 1.0"></label>
         <label class="product-field">نوع مجوز استفاده<input name="license_type" value="{{ old('license_type',$product->license_type) }}" maxlength="60" placeholder="مثلاً شخصی / استاندارد"></label>
         <label class="product-field">ترتیب نمایش<input type="number" name="sort_order" value="{{ old('sort_order',$product->sort_order ?? 0) }}" min="0"></label>
         <label class="product-field">تعداد صفحات نمونه<input type="number" name="preview_pages" value="{{ old('preview_pages',$product->preview_pages ?? 3) }}" min="0" max="50"></label>
         <label class="product-field product-field-check"><input type="checkbox" name="featured" value="1" @checked(old('featured',$product->featured))> نمایش به‌عنوان محصول ویژه</label>
       </div>
+      <div class="product-editor-subhead" id="product-content"><span>گام سوم</span><strong>محتوا و معرفی محصول</strong><small>به مشتری کمک کنید پیش از خرید ارزش محصول را دقیق بشناسد.</small></div>
       <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
       <label class="product-field product-field-wide">توضیحات کامل<textarea name="description" rows="6" maxlength="20000" placeholder="شرح کامل محتوا، کاربردها، پیش‌نیازها و آنچه خریدار دریافت می‌کند.">{{ old('description',$product->description) }}</textarea></label>
+      <div class="product-editor-subhead" id="product-discovery"><span>گام چهارم</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
       <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
       <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ایجاد پیش‌نویس محصول' }}</button><span>محصول جدید ابتدا به‌صورت پیش‌نویس ساخته می‌شود.</span></div>
+      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ایجاد پیش‌نویس و ادامه تکمیل' }}</button><span>اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.</span></div>
     </form>
 
     @if($isEdit)
       <div class="store-panel product-files-panel">
-        <h2>تصویر کاور محصول</h2>
+        <div class="product-editor-heading"><div><span>رسانه محصول</span><h2>تصویر کاور</h2></div><span class="product-editor-step">حداکثر ۸ مگابایت</span></div>
         @if($product->cover_path)<img src="{{ asset($product->cover_path) }}" alt="کاور {{ $product->title }}" style="display:block;width:min(320px,100%);aspect-ratio:16/9;object-fit:cover;border-radius:12px;margin:12px 0">@else<p>هنوز کاوری ثبت نشده است.</p>@endif
-        <form method="post" action="{{ route('admin.store.cover.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload">@csrf<input type="file" name="cover" accept=".jpg,.jpeg,.png,.webp" required><button type="submit" class="store-outline-btn">بارگذاری کاور و اسکن امنیتی</button></form>
+        <form method="post" action="{{ route('admin.store.cover.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="cover" accept=".jpg,.jpeg,.png,.webp" required><button type="submit" class="store-outline-btn">بارگذاری کاور و اسکن امنیتی</button><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small></form>
         <small class="product-help">فرمت‌های JPG، PNG و WebP · حداکثر ۸ مگابایت</small>
       </div>
     @endif
@@ -53,13 +66,13 @@
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
           <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'اسکن سالم':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small></span><form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
-        <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload">@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
+        <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
         <small class="product-help">حداکثر ۵۰ مگابایت؛ اگر اسکنر ضدبدافزار فعال نباشد، فایل ثبت و قابل انتشار نمی‌شود.</small>
       </div>
       <div class="store-panel product-files-panel">
         <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
         <div class="store-preview-grid">@forelse($product->previews as $preview)<div>@if($preview->kind==='pdf')<div class="store-preview-pdf">PDF · {{ $preview->page_number }}</div>@else<img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">@endif<form method="post" action="{{ route('admin.store.previews.delete',[$product,$preview]) }}">@csrf @method('DELETE')<button class="product-danger" type="submit">حذف</button></form></div>@empty<div class="course-empty">هنوز پیش‌نمایشی اضافه نشده است.</div>@endforelse</div>
-        <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload">@csrf<input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" required><input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه"><button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button></form>
+        <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" required><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه"><button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button></form>
       </div>
     @endif
 
@@ -70,6 +83,72 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107product1">
 <style>
+
+.product-workflow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.product-workflow a{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;align-items:center;gap:2px 10px;padding:13px;border:1px solid var(--st-line);border-radius:14px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,box-shadow .18s}
+.product-workflow a:hover,.product-workflow a:focus-visible{border-color:#9bb9e7;box-shadow:0 5px 18px rgba(35,91,170,.08);outline:none}
+.product-workflow a>span{grid-row:span 2;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#edf4ff;color:#2868c8;font-weight:900}
+.product-workflow b{font-size:.75rem}.product-workflow small{font-size:.64rem;color:var(--st-muted)}
+.product-editor-subhead{grid-column:1/-1;display:grid;gap:3px;padding:12px 14px;margin-top:4px;border:1px solid #e5edf7;border-radius:12px;background:linear-gradient(100deg,#f7faff,#fff)}
+.product-editor-subhead span{color:var(--st-blue);font-size:.65rem;font-weight:900}
+.product-editor-subhead strong{font-size:.83rem;color:var(--st-ink)}
+.product-editor-subhead small{font-size:.66rem;color:var(--st-muted)}
+.product-draft-note{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid #dce9fa;border-radius:11px;background:#f5f9ff;color:#2868c8}
+.product-draft-note>i{font-size:1.1rem}.product-draft-note span{display:grid;gap:4px}.product-draft-note b{font-size:.74rem}.product-draft-note small{font-size:.66rem;color:#637a99;line-height:1.8}
+.product-price-preview{color:#2868c8!important;font-weight:800!important}
+.product-selected-file{flex:1 1 100%;color:var(--st-muted);font-size:.67rem}
+.product-editor-form input:focus-visible,.product-editor-form select:focus-visible,.product-editor-form textarea:focus-visible{outline:3px solid rgba(44,105,204,.14);border-color:#83a9e5}
+.product-editor-form [aria-invalid=true]{border-color:#c84b4b!important;background:#fffafa!important}
+.product-editor-actions{position:sticky;bottom:12px;z-index:5;padding:12px;border:1px solid #dfe8f4;border-radius:14px;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);box-shadow:0 8px 28px rgba(15,35,70,.1)}
+.product-editor-actions button{min-height:44px}
+@media(max-width:760px){.product-workflow{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.product-workflow a{padding:10px}.product-editor-actions{bottom:6px}.product-editor-actions button{width:100%}}
+@media(max-width:420px){.product-workflow a{grid-template-columns:29px 1fr;gap:2px 7px}.product-workflow a>span{width:29px;height:29px}}
+
 .product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
 </style>
+@endpush
+
+@push('scripts')
+<script>
+(() => {
+  const form = document.getElementById('productEditorForm');
+  if (!form) return;
+  const price = form.querySelector('[name="price_rials"]');
+  const pricePreview = form.querySelector('[data-price-preview]');
+  const updatePrice = () => {
+    if (!pricePreview || !price) return;
+    const raw = Number(price.value || 0);
+    const toman = Math.floor(raw / 10);
+    pricePreview.textContent = 'معادل ' + new Intl.NumberFormat('fa-IR').format(toman) + ' تومان';
+  };
+  price?.addEventListener('input', updatePrice);
+  updatePrice();
+
+  form.querySelectorAll('input[type="file"]').forEach(input => {
+    input.addEventListener('change', () => {
+      const output = input.closest('form')?.querySelector('[data-file-name]');
+      if (!output) return;
+      const file = input.files?.[0];
+      output.textContent = file
+        ? file.name + ' · ' + new Intl.NumberFormat('fa-IR').format(Math.ceil(file.size / 1024)) + ' کیلوبایت'
+        : 'فایلی انتخاب نشده است.';
+    });
+  });
+
+  form.addEventListener('submit', event => {
+    const button = document.getElementById('productSaveButton');
+    if (button?.dataset.submitting === '1') {
+      event.preventDefault();
+      return;
+    }
+    if (!form.reportValidity()) return;
+    if (button) {
+      button.dataset.submitting = '1';
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'در حال ذخیره اطلاعات…';
+    }
+  });
+})();
+</script>
 @endpush
