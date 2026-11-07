@@ -195,7 +195,8 @@
         if(best){pdfPage=best.number;setPageControls(best.number,pdfDoc.numPages);}
       },{root:stage,threshold:[.05,.15,.35,.6]});
       continuousHost.querySelectorAll('[data-pdf-cont-page]').forEach(node=>continuousObserver.observe(node));
-      await renderContinuousPage(pdfPage);
+      // Start the current page without blocking the toolbar while the canvas and text layer render.
+      renderContinuousPage(pdfPage).catch(showPdfError);
     }else{
       for(let n=1;n<=pdfDoc.numPages;n++)await renderContinuousPage(n);
     }
