@@ -164,15 +164,21 @@ class StoreController extends Controller
      */
     private function renderDocxPreview(string $docxBytes, array $headers)
     {
-        abort_unless(class_exists(\PhpOffice\PhpWord\IOFactory::class), 503, 'موتور نمایش Word در دسترس نیست.');
+        abort_unless(
+            class_exists(\\PhpOffice\\PhpWord\\IOFactory::class)
+                && class_exists(\\Dompdf\\Dompdf::class)
+                && class_exists(\\Dompdf\\Options::class),
+            503,
+            'موتور نمایش Word در دسترس نیست.'
+        );
 
         $sourcePath = tempnam(sys_get_temp_dir(), 'farast-docx-');
         $htmlPath = tempnam(sys_get_temp_dir(), 'farast-html-');
 
         try {
             file_put_contents($sourcePath, $docxBytes);
-            $document = \PhpOffice\PhpWord\IOFactory::createReader('Word2007')->load($sourcePath);
-            $writer = \PhpOffice\PhpWord\IOFactory::createWriter($document, 'HTML');
+            $document = \\PhpOffice\\PhpWord\\IOFactory::createReader('Word2007')->load($sourcePath);
+            $writer = \\PhpOffice\\PhpWord\\IOFactory::createWriter($document, 'HTML');
             $writer->save($htmlPath);
             $html = file_get_contents($htmlPath) ?: '';
             $body = $this->sanitizeDocxHtml($html);
@@ -185,21 +191,50 @@ class StoreController extends Controller
             $watermark = e($identity);
             $marks = str_repeat('<span>'.$watermark.' · پیش‌نمایش فراست</span>', 12);
 
-            $page = '<!doctype html><html lang="fa" dir="auto"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><style>
-                *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Tahoma,Arial,sans-serif;color:#1f2937;background:#fff}
-                body{padding:clamp(18px,4vw,54px);line-height:1.9;user-select:none;-webkit-user-select:none}.docx-content{max-width:980px;margin:0 auto;position:relative;z-index:1;overflow-wrap:anywhere}
-                .docx-content table{border-collapse:collapse;max-width:100%;width:100%;margin:1em 0}.docx-content p{margin:.55em 0}.docx-content mark{background:#ffe08a;color:#172033;padding:0 2px}.docx-content td,.docx-content th{border:1px solid #cbd5e1;padding:7px;vertical-align:top}
-                .docx-content img{max-width:100%;height:auto}.docx-content h1,.docx-content h2,.docx-content h3{line-height:1.5;margin:1.3em 0 .6em}
-                .docx-watermark{position:fixed;inset:0;z-index:5;pointer-events:none;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);align-items:center;justify-items:center;opacity:.16;overflow:hidden}
-                .docx-watermark span{font:700 12px Tahoma,Arial;color:#334155;white-space:nowrap;transform:rotate(-25deg);background:rgba(255,255,255,.22);padding:5px}
-                @media print{body{padding:0}.docx-watermark{opacity:.28}}
+            // Convert Word content to a paginated PDF on the server. The watermark is
+            // part of the generated PDF, not a removable browser overlay.
+            $page = '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><style>
+                @page{size:A4;margin:22mm 18mm 22mm}
+                *{box-sizing:border-box}html,body{margin:0;font-family:"DejaVu Sans",Tahoma,sans-serif;color:#1f2937;background:#fff}
+                body{font-size:10pt;line-height:1.85;overflow-wrap:anywhere}
+                .docx-content{width:100%;direction:auto}
+                .docx-content table{border-collapse:collapse;width:100%;margin:1em 0;page-break-inside:auto}
+                .docx-content tr{page-break-inside:avoid;page-break-after:auto}
+                .docx-content thead{display:table-header-group}.docx-content tfoot{display:table-footer-group}
+                .docx-content p{margin:.45em 0;orphans:2;widows:2}
+                .docx-content li{margin:.2em 0}
+                .docx-content td,.docx-content th{border:1px solid #cbd5e1;padding:6px;vertical-align:top}
+                .docx-content img{max-width:100%;height:auto}
+                .docx-content h1,.docx-content h2,.docx-content h3,.docx-content h4{line-height:1.5;margin:1.2em 0 .5em;page-break-after:avoid}
+                .docx-content blockquote{margin:1em 1.5em;padding:0 1em;border-right:3px solid #94a3b8;color:#475569}
+                .docx-watermark{position:fixed;inset:0;z-index:20;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);align-items:center;justify-items:center;opacity:.15;pointer-events:none}
+                .docx-watermark span{font:700 10px "DejaVu Sans",Tahoma,sans-serif;color:#334155;white-space:nowrap;transform:rotate(-25deg);background:rgba(255,255,255,.18);padding:5px}
             </style></head><body><div class="docx-watermark">'.$marks.'</div><main class="docx-content">'.$body.'</main></body></html>';
 
-            $docxHeaders = $headers;
-            $docxHeaders['Content-Security-Policy'] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; object-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
+            $options = new \\Dompdf\\Options();
+            $options->set('isRemoteEnabled', false);
+            $options->set('isPhpEnabled', false);
+            $options->set('isJavascriptEnabled', false);
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('defaultFont', 'DejaVu Sans');
+            $options->set('dpi', 96);
 
-            return response($page, 200, $docxHeaders + ['Content-Type' => 'text/html; charset=UTF-8']);
-        } catch (\Throwable $exception) {
+            $renderer = new \\Dompdf\\Dompdf($options);
+            $renderer->setPaper('A4', 'portrait');
+            $renderer->loadHtml($page, 'UTF-8');
+            $renderer->render();
+
+            $canvas = $renderer->getCanvas();
+            $font = $renderer->getFontMetrics()->getFont('DejaVu Sans', 'normal');
+            $canvas->page_text(260, 820, '{PAGE_NUM} / {PAGE_COUNT}', $font, 8, [0.38, 0.43, 0.52]);
+
+            $pdfHeaders = $headers;
+            $pdfHeaders['Content-Type'] = 'application/pdf';
+            $pdfHeaders['Content-Disposition'] = 'inline; filename="farast-word-preview.pdf"';
+            $pdfHeaders['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
+
+            return response($renderer->output(), 200, $pdfHeaders);
+        } catch (\\Throwable $exception) {
             report($exception);
             abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
         } finally {
