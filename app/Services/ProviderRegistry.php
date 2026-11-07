@@ -18,11 +18,13 @@ final class ProviderRegistry
             $verified = (bool) $a->last_success_at
                 && (! $a->last_failure_at || $a->last_success_at->gt($a->last_failure_at));
             $configured = $a->credentialsConfigured();
+            $failedMostRecently = $a->last_failure_at
+                && (! $a->last_success_at || $a->last_failure_at->gte($a->last_success_at));
             $status = ! $a->enabled
                 ? 'disabled'
                 : (! $configured
                     ? 'unconfigured'
-                    : (! $verified ? 'unverified' : ($a->isAvailable() ? 'healthy' : 'degraded')));
+                    : ($failedMostRecently ? 'degraded' : (! $verified ? 'unverified' : ($a->isAvailable() ? 'healthy' : 'degraded'))));
 
             $items[]=[
                 'id'=>'voice:'.$a->id,'name'=>$a->name ?: $a->provider,'provider'=>$a->provider,'type'=>'voice',
