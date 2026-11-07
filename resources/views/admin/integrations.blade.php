@@ -1,5 +1,5 @@
-@extends('layouts.app')
-@section('content')
+@extends('layouts.admin')
+@section('admin-content')
 <div class="farast-control-page" dir="rtl">
 <header><div><span class="eyebrow">INTEGRATIONS / API</span><h1>یکپارچه‌سازی و سرویس‌دهنده‌ها</h1><p>اعتبارنامه‌ها فقط سمت سرور نگهداری می‌شوند و مقدار secret هرگز دوباره نمایش داده نمی‌شود.</p></div><a href="{{ route('admin.index') }}">بازگشت به مرکز عملیات</a></header>
 @if(session('status'))<div class="control-success">{{ session('status') }}</div>@endif

@@ -1,6 +1,6 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
-@section('content')
+@section('admin-content')
 @php
     $slaService = app(\App\Services\SupportSlaService::class);
     $active = $active ?? null;

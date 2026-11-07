@@ -1,6 +1,6 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
-@section('content')
+@section('admin-content')
 @php
     $filters = $filters ?? [];
     $stats = $stats ?? ['total' => 0, 'active' => 0, 'pinned' => 0, 'scheduled' => 0];

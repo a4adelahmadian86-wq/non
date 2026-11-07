@@ -2,8 +2,9 @@
   <a class="store-product-cover" href="{{ route('store.product',$product->slug) }}">
     @if((int)$product->price_rials===0)<span class="store-badge free">رایگان</span>
     @elseif($product->featured)<span class="store-badge">ویژه</span>@endif
-    @if($product->cover_path)
-      <img src="{{ asset($product->cover_path) }}" alt="{{ $product->title }}" loading="lazy">
+    @php($cardImage = $product->cover_path ?: $product->images->where('is_active', true)->first()?->path)
+    @if($cardImage)
+      <img src="{{ asset($cardImage) }}" alt="{{ $product->title }}" loading="lazy">
     @else
       <span class="store-cover-placeholder"><i class="fa-solid fa-{{ $product->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i><b>FARAST</b></span>
     @endif

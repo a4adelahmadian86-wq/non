@@ -23,7 +23,9 @@ class DashboardRuntimeHealthIndicatorTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin')
             ->assertOk()
-            ->assertSee('سلامت زیرساخت')
+            ->assertSee('id="system-health"', false)
+            ->assertSee('وضعیت زیرساخت و اتصال‌های داخلی')
+            ->assertSee('RUNTIME HEALTH')
             ->assertDontSee('کنترل‌های زنده فعال هستند');
     }
 }

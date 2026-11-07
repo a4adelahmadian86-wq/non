@@ -1,40 +1,7 @@
 @extends('layouts.app')
 @section('content')
 <div class="farast-admin" dir="rtl">
-    <aside class="farast-admin-nav">
-        <div class="farast-admin-brand">
-            <span class="farast-admin-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
-            <div><strong>فراست</strong><small>مرکز عملیات</small></div>
-        </div>
-        <div class="farast-admin-nav-label">کنسول مدیریت · دامنه: {{ \App\Services\AdminConsoleService::scopeOf(auth()->user()) }}</div>
-        <nav>
-            <a class="is-active" href="#overview"><i class="fa-solid fa-grid-2"></i><span>نمای کلی</span></a>
-            @if($console->sectionAllowed(auth()->user(), 'users'))<a href="{{ route('admin.users') }}"><i class="fa-solid fa-users"></i><span>کاربران</span></a>@endif
-            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))<a href="#ai"><i class="fa-solid fa-sparkles"></i><span>هوش مصنوعی</span></a>@endif
-@if($console->sectionAllowed(auth()->user(), 'voice'))<a href="#voice-settings"><i class="fa-solid fa-microphone-lines"></i><span>سرویس‌های صوتی</span></a>@endif
-            <a href="#operations"><i class="fa-solid fa-chart-line"></i><span>عملیات</span></a>
-            @if($console->sectionAllowed(auth()->user(), 'announcements'))<a href="#content"><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'store'))<a href="{{ route('admin.store.index') }}"><i class="fa-solid fa-boxes-stacked"></i><span>محصولات و دوره‌ها</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><span>مالی</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'access'))<a href="{{ route('admin.access') }}"><i class="fa-solid fa-user-shield"></i><span>نقش‌ها و مجوزها</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'organizations'))<a href="{{ route('admin.organizations') }}"><i class="fa-solid fa-building"></i><span>سازمان‌ها و تیم‌ها</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'integrations'))<a href="{{ route('admin.integrations') }}"><i class="fa-solid fa-plug"></i><span>یکپارچه‌سازی‌ها</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}"><i class="fa-solid fa-chart-line"></i><span>تحلیل‌ها</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'audit'))<a href="{{ route('admin.audit') }}"><i class="fa-solid fa-shield-halved"></i><span>ممیزی و امنیت</span></a>@endif
-        </nav>
-        <div class="farast-admin-nav-bottom">
-            @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><span>ایمیل</span></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><span>شبکه‌های اجتماعی</span></a>@endif
-        </div>
-        @if($scope === 'global')
-            <div class="farast-admin-live {{ (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false) ? 'is-healthy' : 'is-degraded' }}">
-                <span></span>
-                <div><b>سلامت زیرساخت</b><small>{{ (bool) ($systemHealth['db_ok'] ?? false) && (bool) ($systemHealth['cache_ok'] ?? false) && (bool) ($systemHealth['storage_writable'] ?? false) && (bool) ($systemHealth['private_storage_ok'] ?? false) ? 'بررسی داخلی موفق' : 'نیازمند بررسی عملیاتی' }}</small></div>
-            </div>
-        @else
-            <div class="farast-admin-live is-scoped"><span></span><div><b>فضای مدیریتی محدود</b><small>نمایش داده‌های مجاز این دامنه</small></div></div>
-        @endif
-    </aside>
+    @include('admin.partials.sidebar')
 
     <main class="farast-admin-main">
         <header class="farast-admin-topbar">
@@ -58,7 +25,11 @@
                 <div class="hero-badge"><i class="fa-solid fa-shield-halved"></i> محیط مدیریت امن</div>
                 <h2>یک داشبورد برای دیدن، تصمیم‌گیری و کنترل</h2>
                 <p>اطلاعات این صفحه از داده‌های واقعی سیستم خوانده می‌شود؛ داشبورد نقش کنسول عملیات را دارد، نه مجموعه‌ای از تب‌های نمایشی.</p>
-                <div class="hero-actions">@if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-primary" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif @if($console->sectionAllowed(auth()->user(), 'settings'))<a class="admin-outline" href="#ai-settings"><i class="fa-solid fa-sparkles"></i> تنظیم AI</a>@endif</div>
+                <div class="hero-actions">
+                    @if($console->sectionAllowed(auth()->user(), 'store'))<a class="admin-primary" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-plus"></i> افزودن محصول</a><a class="admin-outline" href="{{ route('admin.store.index') }}"><i class="fa-solid fa-boxes-stacked"></i> مرکز محصولات</a>@endif
+                    @if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-outline" href="{{ route('admin.crm.projects.index') }}"><i class="fa-solid fa-diagram-project"></i> پروژه‌ها و پرونده‌های مشتریان</a><a class="admin-outline" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif
+                    @if($console->sectionAllowed(auth()->user(), 'settings'))<a class="admin-outline" href="#ai-settings"><i class="fa-solid fa-sparkles"></i> تنظیم AI</a>@endif
+                </div>
             </div>
             <div class="hero-orbit" aria-hidden="true"><div class="orbit-core"><span></span><span></span><span></span><span></span><b></b></div><i class="orbit-dot d1"></i><i class="orbit-dot d2"></i><i class="orbit-dot d3"></i></div>
         </section>
@@ -79,6 +50,7 @@
                     <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
                     <div><span class="ops-icon cyan"><i class="fa-solid fa-bolt"></i></span><div><b>{{ number_format($stats['ai_today']) }}</b><small>درخواست AI امروز</small></div></div>
+                    @if($console->sectionAllowed(auth()->user(), 'users'))<div><span class="ops-icon purple"><i class="fa-solid fa-diagram-project"></i></span><div><b>{{ number_format($stats['projects']) }}</b><small>{{ number_format($stats['active_projects']) }} پروژه فعال مشتریان</small></div></div>@endif
                     @if($console->sectionAllowed(auth()->user(), 'announcements'))<div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>@endif
                 </div>
             </article>
@@ -276,3 +248,14 @@
 </div></section>
 @endif
 @endsection
+
+
+@push('styles')
+<style>
+.farast-admin-nav-create-product{margin:5px 10px 12px;padding:11px 13px!important;border:1px solid rgba(69,145,255,.28);border-radius:12px;background:linear-gradient(115deg,rgba(45,112,219,.16),rgba(67,151,231,.07));color:#d9e9ff!important;font-weight:800;display:flex!important;align-items:center;gap:10px}
+.farast-admin-nav-create-product i{color:#70b4ff;font-size:1rem}
+.farast-admin-nav-create-product b{margin-inline-start:auto;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#2e73d2;color:white;font-size:1rem}
+.farast-admin-nav a[aria-current="page"]{outline:1px solid rgba(111,174,255,.22)}
+@media(max-width:760px){.farast-admin-nav-create-product{margin-inline:8px}}
+</style>
+@endpush

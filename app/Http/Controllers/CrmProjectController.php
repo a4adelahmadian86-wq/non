@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FarastProject;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\AdminConsoleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,10 @@ class CrmProjectController extends Controller
 
         $query = FarastProject::query()
             ->with('user:id,name,email,mobile')
-            ->withCount(['documents', 'typingDocuments'])
+            ->withCount([
+                'documents',
+                'typingDocuments' => fn ($typing) => $typing->whereNull('farast_document_id'),
+            ])
             ->latest('updated_at');
 
         $visibleIds = $console->visibleUserIds($request->user());
@@ -25,8 +29,11 @@ class CrmProjectController extends Controller
             $query->whereIn('user_id', $visibleIds);
         }
 
-        if ($request->filled('q')) {
-            $term = trim((string) $request->query('q'));
+        $term = trim((string) $request->query('q', ''));
+        $status = trim((string) $request->query('status', ''));
+        $projectType = trim((string) $request->query('project_type', ''));
+
+        if ($term !== '') {
             $query->where(function ($builder) use ($term) {
                 $builder->where('name', 'like', '%'.$term.'%')
                     ->orWhere('project_type', 'like', '%'.$term.'%')
@@ -37,17 +44,42 @@ class CrmProjectController extends Controller
                     });
             });
         }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
+        if ($status !== '') {
+            $query->where('status', $status);
         }
-        if ($request->filled('project_type')) {
-            $query->where('project_type', $request->query('project_type'));
+        if ($projectType !== '') {
+            $query->where('project_type', $projectType);
         }
 
-        return response()->json([
-            'data' => $query->paginate(min(max($request->integer('per_page', 25), 1), 100)),
-            'filters' => $request->only(['q', 'status', 'project_type']),
+        $projects = $query->paginate(min(max($request->integer('per_page', 25), 1), 100))->withQueryString();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'data' => $projects,
+                'filters' => $request->only(['q', 'status', 'project_type']),
+            ]);
+        }
+
+        $summaryQuery = FarastProject::query();
+        if ($visibleIds !== null) {
+            $summaryQuery->whereIn('user_id', $visibleIds);
+        }
+        $statusCounts = (clone $summaryQuery)
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $stats = [
+            'total' => (clone $summaryQuery)->count(),
+            'active' => (int) ($statusCounts['active'] ?? 0),
+            'completed' => (int) ($statusCounts['completed'] ?? 0),
+            'pending' => (int) ($statusCounts['pending'] ?? 0),
+        ];
+
+        return view('admin.crm.projects.index', [
+            'projects' => $projects,
+            'filters' => ['q' => $term, 'status' => $status, 'project_type' => $projectType],
+            'stats' => $stats,
         ]);
     }
 
@@ -57,7 +89,7 @@ class CrmProjectController extends Controller
         $console->authorizeAction($request->user(), 'users', (int) $record->user_id);
 
         $data = $request->validate([
-            'specialist_id' => 'required|nullable|integer|exists:users,id',
+            'specialist_id' => 'present|nullable|integer|exists:users,id',
         ]);
 
         if ($data['specialist_id'] !== null) {
@@ -75,23 +107,26 @@ class CrmProjectController extends Controller
             $console->authorizeAction($request->user(), 'users', (int) $specialist->id);
         }
 
-        $humanTask = DB::table('farast_human_tasks')
-            ->where('id', $task)
-            ->where('project_id', $record->id)
-            ->first();
+        DB::transaction(function () use ($record, $task, $data, $request): void {
+            $humanTask = DB::table('farast_human_tasks')
+                ->where('id', $task)
+                ->where('project_id', $record->id)
+                ->lockForUpdate()
+                ->first();
 
-        abort_unless($humanTask, 404);
+            abort_unless($humanTask, 404);
 
-        DB::table('farast_human_tasks')->where('id', $task)->update([
-            'specialist_id' => $data['specialist_id'],
-            'updated_at' => now(),
-        ]);
+            DB::table('farast_human_tasks')->where('id', $task)->update([
+                'specialist_id' => $data['specialist_id'],
+                'updated_at' => now(),
+            ]);
 
-        app(\App\Services\AuditLogService::class)->record($request->user()->id, 'crm.project.human_task.assigned', $request->ip(), [
-            'project_id' => $record->id,
-            'task_id' => $task,
-            'specialist_id' => $data['specialist_id'],
-        ]);
+            app(\App\Services\AuditLogService::class)->record($request->user()->id, 'crm.project.human_task.assigned', $request->ip(), [
+                'project_id' => $record->id,
+                'task_id' => $task,
+                'specialist_id' => $data['specialist_id'],
+            ]);
+        });
 
         return response()->json(['ok' => true, 'task_id' => $task, 'specialist_id' => $data['specialist_id']]);
     }
@@ -102,7 +137,8 @@ class CrmProjectController extends Controller
             ->with([
                 'user:id,name,email,mobile,organization_id',
                 'documents:id,project_id,user_id,title,status,revision,updated_at',
-                'typingDocuments:id,project_id,user_id,title,status,page_count,word_count,price_rials,updated_at',
+                'documents.typingDocument:id,farast_document_id,status,page_count,word_count,price_rials,updated_at',
+                'typingDocuments:id,project_id,user_id,farast_document_id,title,status,page_count,word_count,price_rials,updated_at',
             ])
             ->findOrFail($project);
 
@@ -116,21 +152,7 @@ class CrmProjectController extends Controller
                 ->where('user_id', $record->user_id)
                 ->latest()
                 ->limit(50)
-                ->get()
-                ->map(fn (Order $order) => [
-                    'id' => $order->id,
-                    'document_id' => $order->document_id,
-                    'status' => $order->status,
-                    'total_rials' => $order->total_rials,
-                    'paid_at' => $order->paid_at,
-                    'payments' => $order->payments->map(fn ($payment) => [
-                        'id' => $payment->id,
-                        'gateway' => $payment->gateway,
-                        'status' => $payment->status,
-                        'amount_rials' => $payment->amount_rials,
-                        'paid_at' => $payment->paid_at,
-                    ])->values(),
-                ]);
+                ->get();
 
         $humanTasks = collect();
         if (Schema::hasTable('farast_human_tasks')) {
@@ -151,15 +173,51 @@ class CrmProjectController extends Controller
                 ]);
         }
 
-        return response()->json([
-            'project' => $record,
-            'orders' => $orders,
-            'human_tasks' => $humanTasks,
-            'financials' => [
-                'estimated_price_rials' => (int) $record->estimated_price_rials,
-                'paid_rials' => (int) $record->paid_rials,
-                'remaining_rials' => max(0, (int) $record->estimated_price_rials - (int) $record->paid_rials),
-            ],
-        ]);
+        $financials = [
+            'estimated_price_rials' => (int) $record->estimated_price_rials,
+            'paid_rials' => (int) $record->paid_rials,
+            'remaining_rials' => max(0, (int) $record->estimated_price_rials - (int) $record->paid_rials),
+        ];
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'project' => $record,
+                'orders' => $orders->map(fn (Order $order) => [
+                    'id' => $order->id,
+                    'document_id' => $order->document_id,
+                    'status' => $order->status,
+                    'total_rials' => $order->total_rials,
+                    'paid_at' => $order->paid_at,
+                    'payments' => $order->payments->map(fn ($payment) => [
+                        'id' => $payment->id,
+                        'gateway' => $payment->gateway,
+                        'status' => $payment->status,
+                        'amount_rials' => $payment->amount_rials,
+                        'paid_at' => $payment->paid_at,
+                    ])->values(),
+                ]),
+                'human_tasks' => $humanTasks,
+                'financials' => $financials,
+            ]);
+        }
+
+        $visibleIds = $console->visibleUserIds($request->user());
+        $specialistsQuery = User::query()
+            ->whereIn('role', [
+                User::ROLE_ADMIN,
+                User::ROLE_ORGANIZATION_MANAGER,
+                User::ROLE_TEAM_SUPERVISOR,
+                User::ROLE_EMPLOYEE,
+            ])
+            ->where('is_blocked', false)
+            ->orderBy('name');
+        if ($visibleIds !== null) {
+            $specialistsQuery->whereIn('id', $visibleIds);
+        }
+        $specialists = $specialistsQuery->get(['id', 'name', 'role']);
+
+        return view('admin.crm.projects.show', compact(
+            'record', 'orders', 'humanTasks', 'financials', 'specialists'
+        ));
     }
 }

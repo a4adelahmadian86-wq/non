@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\StoreCategory;
+use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
+use App\Models\StoreTag;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +26,11 @@ class AdminStoreController extends Controller
         $status = in_array($request->query('status'), ['draft', 'published', 'archived'], true) ? $request->query('status') : '';
 
         $products = StoreProduct::query()
-            ->with(['category', 'files'])
+            ->with(['category', 'files', 'images', 'tags'])
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
-                $inner->where('title', 'like', '%'.$q.'%')->orWhere('sku', 'like', '%'.$q.'%');
+                $inner->where('title', 'like', '%'.$q.'%')
+                    ->orWhere('sku', 'like', '%'.$q.'%')
+                    ->orWhereHas('tags', fn ($tagQuery) => $tagQuery->where('name', 'like', '%'.$q.'%'));
             }))
             ->when($type !== '', fn ($query) => $query->where('type', $type))
             ->when($status !== '', fn ($query) => $query->where('status', $status))
@@ -46,11 +51,15 @@ class AdminStoreController extends Controller
 
     public function create()
     {
-        $categories = StoreCategory::orderBy('sort_order')->get();
+        $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
+        $tags = StoreTag::query()->orderBy('name')->get();
+        $relatedProducts = StoreProduct::query()->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
         return view('admin.store.form', [
             'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
             'categories' => $categories,
+            'tags' => $tags,
+            'relatedProducts' => $relatedProducts,
         ]);
     }
 
@@ -61,8 +70,20 @@ class AdminStoreController extends Controller
         // A new catalog item must not become public before its protected payload/curriculum exists.
         $data['status'] = 'draft';
         $data['published_at'] = null;
-        $product = StoreProduct::create($data);
-        $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
+        $tagIds = $data['tag_ids'] ?? [];
+        $relatedIds = $data['related_product_ids'] ?? [];
+        unset($data['tag_ids'], $data['related_product_ids']);
+        $product = DB::transaction(function () use ($data, $tagIds, $relatedIds) {
+            $product = StoreProduct::create($data);
+            if ($product->type === 'course') {
+                StoreCourse::firstOrCreate(['product_id' => $product->id]);
+            }
+            $product->tags()->sync($tagIds);
+            $product->related()->sync($relatedIds);
+            $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
+
+            return $product;
+        });
 
         if ($product->type === 'course') {
             return redirect()->route('admin.store.course.edit', $product)->with('status', 'محصول دوره ایجاد شد؛ اکنون ساختار آموزشی آن را تکمیل کنید.');
@@ -73,52 +94,80 @@ class AdminStoreController extends Controller
 
     public function edit(StoreProduct $product)
     {
-        $product->load(['files', 'previews', 'category']);
+        $product->load(['files', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
+        $tags = StoreTag::query()->orderBy('name')->get();
+        $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
-        return view('admin.store.form', compact('product', 'categories'));
+        $contentReady = $product->type === 'course'
+            ? $product->course?->sections->contains(fn ($section) => $section->lessons->contains(fn ($lesson) => $lesson->is_published)) ?? false
+            : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
+                && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+
+        $readiness = [
+            ['label' => 'مشخصات و دسته‌بندی', 'ready' => filled($product->title) && filled($product->sku) && $product->category !== null, 'required' => true],
+            ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0, 'required' => true],
+            ['label' => 'تصویر کاور', 'ready' => filled($product->cover_path), 'required' => false],
+            ['label' => $product->type === 'course' ? 'حداقل یک جلسه منتشرشده' : 'فایل اصلی سالم و فعال', 'ready' => $contentReady, 'required' => true],
+        ];
+        $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
+
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady'));
     }
 
     public function update(Request $request, StoreProduct $product)
     {
         $data = $this->validated($request, $product);
-        if ($data['type'] !== $product->type) {
-            throw ValidationException::withMessages([
-                'type' => 'نوع محصول پس از ایجاد قابل تغییر نیست؛ برای نوع دیگر یک محصول جدید بسازید تا فایل‌ها و دسترسی‌های قبلی مخلوط نشوند.',
-            ]);
-        }
+        $tagIds = $data['tag_ids'] ?? [];
+        $relatedIds = $data['related_product_ids'] ?? [];
+        unset($data['tag_ids'], $data['related_product_ids']);
         if (! empty($data['slug'])) {
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        if (($data['status'] ?? '') === 'published') {
-            if ($data['type'] === 'course') {
-                $hasPublishedLesson = $product->course()
-                    ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
-                    ->exists();
-                if (! $hasPublishedLesson) {
-                    throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده در برنامه آموزشی لازم است.']);
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            if ($data['type'] !== $lockedProduct->type) {
+                throw ValidationException::withMessages([
+                    'type' => 'نوع محصول پس از ایجاد قابل تغییر نیست؛ برای نوع دیگر یک محصول جدید بسازید تا فایل‌ها و دسترسی‌های قبلی مخلوط نشوند.',
+                ]);
+            }
+
+            if (($data['status'] ?? '') === 'published') {
+                if ($data['type'] === 'course') {
+                    $hasPublishedLesson = $lockedProduct->course()
+                        ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
+                        ->exists();
+                    if (! $hasPublishedLesson) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده در برنامه آموزشی لازم است.']);
+                    }
+                } else {
+                    $hasSafePrimaryFile = $lockedProduct->files()
+                        ->where('purpose', 'product_download')
+                        ->where('is_active', true)
+                        ->where('is_primary', true)
+                        ->where('scan_status', 'clean')
+                        ->exists();
+                    if (! $hasSafePrimaryFile) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
+                    }
+                }
+                if (! $lockedProduct->published_at && empty($data['published_at'])) {
+                    $data['published_at'] = now();
                 }
             } else {
-                $hasSafePrimaryFile = $product->files()
-                    ->where('purpose', 'product_download')
-                    ->where('is_active', true)
-                    ->where('is_primary', true)
-                    ->where('scan_status', 'clean')
-                    ->exists();
-                if (! $hasSafePrimaryFile && $product->status !== 'published') {
-                    throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
-                }
+                $data['published_at'] = null;
             }
-            if (! $product->published_at && empty($data['published_at'])) {
-                $data['published_at'] = now();
-            }
-        } elseif (($data['status'] ?? '') !== 'published') {
-            $data['published_at'] = null;
-        }
 
-        $product->update($data);
-        $this->audit('store.product.updated', $product, ['type' => $product->type, 'status' => $product->status, 'price_rials' => $product->price_rials]);
+            $lockedProduct->update($data);
+            $lockedProduct->tags()->sync($tagIds);
+            $lockedProduct->related()->sync($relatedIds);
+            $this->audit('store.product.updated', $lockedProduct, [
+                'type' => $lockedProduct->type,
+                'status' => $lockedProduct->status,
+                'price_rials' => $lockedProduct->price_rials,
+            ]);
+        });
 
         return back()->with('status', 'محصول به‌روزرسانی شد.');
     }
@@ -161,12 +210,13 @@ class AdminStoreController extends Controller
 
             $primary = $request->boolean('is_primary', true);
             $fileRecord = DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 if ($primary) {
-                    $product->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
+                    $lockedProduct->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
                 }
 
                 $record = StoreProductFile::create([
-                    'product_id' => $product->id,
+                    'product_id' => $lockedProduct->id,
                     'purpose' => 'product_download',
                     'version' => $product->version,
                     'disk' => 'private',
@@ -181,7 +231,7 @@ class AdminStoreController extends Controller
                     'scan_engine' => $inspection['scan'],
                     'scanned_at' => now(),
                 ]);
-                $this->audit('store.product.file_uploaded', $product, ['file_id' => $record->id, 'mime' => $record->mime, 'size_bytes' => $record->size_bytes, 'sha256' => $record->sha256]);
+                $this->audit('store.product.file_uploaded', $lockedProduct, ['file_id' => $record->id, 'mime' => $record->mime, 'size_bytes' => $record->size_bytes, 'sha256' => $record->sha256]);
 
                 return $record;
             });
@@ -199,9 +249,43 @@ class AdminStoreController extends Controller
     public function deleteFile(StoreProduct $product, StoreProductFile $file)
     {
         abort_unless($file->product_id === $product->id && $file->purpose === 'product_download', 404);
-        $this->audit('store.product.file_deleted', $product, ['file_id' => $file->id, 'purpose' => $file->purpose]);
-        Storage::disk($file->disk ?: 'private')->delete($file->path);
-        $file->delete();
+
+        [$disk, $path] = DB::transaction(function () use ($product, $file) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $lockedFile = StoreProductFile::query()
+                ->whereKey($file->id)
+                ->where('product_id', $lockedProduct->id)
+                ->where('purpose', 'product_download')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedProduct->status === 'published' && $lockedFile->is_primary) {
+                $hasReplacement = $lockedProduct->files()
+                    ->where('purpose', 'product_download')
+                    ->where('id', '!=', $lockedFile->id)
+                    ->where('is_active', true)
+                    ->where('is_primary', true)
+                    ->where('scan_status', 'clean')
+                    ->exists();
+                if (! $hasReplacement) {
+                    throw ValidationException::withMessages([
+                        'file' => 'این فایل، محتوای اصلی محصول منتشرشده است. ابتدا فایل اصلی جایگزین را بارگذاری و فعال کنید یا محصول را از انتشار خارج کنید.',
+                    ]);
+                }
+            }
+
+            $this->audit('store.product.file_deleted', $lockedProduct, [
+                'file_id' => $lockedFile->id,
+                'purpose' => $lockedFile->purpose,
+            ]);
+            $disk = $lockedFile->disk ?: 'private';
+            $path = $lockedFile->path;
+            $lockedFile->delete();
+
+            return [$disk, $path];
+        });
+
+        Storage::disk($disk)->delete($path);
 
         return back()->with('status', 'فایل حذف شد.');
     }
@@ -288,6 +372,86 @@ class AdminStoreController extends Controller
         return back()->with('status', 'کاور محصول پس از اسکن امنیتی ذخیره شد.');
     }
 
+    public function uploadImage(Request $request, StoreProduct $product, UploadSecurityService $security)
+    {
+        $data = $request->validate([
+            'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192',
+            'alt' => 'nullable|string|max:180',
+        ]);
+        $upload = $request->file('image');
+        $temporaryPath = $upload->store('store/quarantine/product-images/'.$product->id, 'private');
+        $publicPath = null;
+
+        try {
+            $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
+                'image/jpeg', 'image/png', 'image/webp',
+            ]);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ تصویر ذخیره نشد.');
+            abort_unless(hash_equals($inspection['checksum'], (string) hash_file('sha256', $upload->getRealPath())), 409, 'محتوای تصویر هنگام انتقال تغییر کرده است.');
+
+            $extension = strtolower($upload->guessExtension() ?: 'jpg');
+            $filename = Str::random(32).'.'.$extension;
+            $directory = 'store/product-images/'.$product->id;
+            $stored = Storage::disk('public')->putFileAs($directory, $upload, $filename);
+            if (! $stored) {
+                throw new \RuntimeException('product_image_storage_failed');
+            }
+            $publicPath = 'storage/'.$directory.'/'.$filename;
+
+            DB::transaction(function () use ($product, $data, $publicPath, $inspection) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $sort = (int) ($lockedProduct->images()->max('sort_order') ?? 0) + 1;
+                $image = $lockedProduct->images()->create([
+                    'path' => $publicPath,
+                    'alt' => $data['alt'] ?: $lockedProduct->title,
+                    'kind' => 'image',
+                    'sort_order' => $sort,
+                    'is_active' => true,
+                ]);
+                $this->audit('store.product.image_uploaded', $lockedProduct, [
+                    'image_id' => $image->id,
+                    'mime' => $inspection['mime'],
+                    'sha256' => $inspection['checksum'],
+                ]);
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('private')->delete($temporaryPath);
+            if ($publicPath) {
+                Storage::disk('public')->delete(Str::after($publicPath, 'storage/'));
+            }
+            if ($exception instanceof ValidationException) {
+                throw $exception;
+            }
+            abort(503, 'بارگذاری تصویر به دلیل ناموفق بودن بررسی امنیتی یا ذخیره‌سازی متوقف شد.');
+        }
+
+        Storage::disk('private')->delete($temporaryPath);
+
+        return back()->with('status', 'تصویر گالری پس از اسکن امنیتی اضافه شد.');
+    }
+
+    public function deleteImage(StoreProduct $product, StoreProductImage $image)
+    {
+        abort_unless($image->product_id === $product->id, 404);
+
+        $path = DB::transaction(function () use ($product, $image) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $lockedImage = $lockedProduct->images()->whereKey($image->id)->lockForUpdate()->firstOrFail();
+            $path = (string) $lockedImage->path;
+            $this->audit('store.product.image_deleted', $lockedProduct, ['image_id' => $lockedImage->id]);
+            $lockedImage->delete();
+
+            return $path;
+        });
+
+        $ownedPrefix = 'storage/store/product-images/'.$product->id.'/';
+        if (Str::startsWith($path, $ownedPrefix)) {
+            Storage::disk('public')->delete(Str::after($path, 'storage/'));
+        }
+
+        return back()->with('status', 'تصویر گالری حذف شد.');
+    }
+
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
     {
         abort_unless($preview->product_id === $product->id, 404);
@@ -296,6 +460,26 @@ class AdminStoreController extends Controller
         $preview->delete();
 
         return back()->with('status', 'پیش‌نمایش حذف شد.');
+    }
+
+    public function storeTag(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:100',
+            'slug' => 'nullable|string|max:120',
+        ]);
+        $base = Str::slug($data['slug'] ?: $data['name']) ?: 'tag-'.Str::random(6);
+        $slug = $base;
+        $suffix = 1;
+        while (StoreTag::query()->where('slug', $slug)->exists()) {
+            $slug = $base.'-'.$suffix++;
+        }
+        StoreTag::firstOrCreate(
+            ['slug' => $slug],
+            ['name' => $data['name']]
+        );
+
+        return back()->with('status', 'برچسب ذخیره شد؛ اکنون می‌توانید آن را به محصول اختصاص دهید.');
     }
 
     public function storeCategory(Request $request)
@@ -337,17 +521,22 @@ class AdminStoreController extends Controller
             'short_description' => 'nullable|string|max:2000',
             'description' => 'nullable|string|max:20000',
             'price_rials' => 'required|integer|min:0|max:999999999999',
-            'compare_at_price_rials' => 'nullable|integer|min:0|gte:price_rials',
+            'compare_at_price_rials' => 'nullable|integer|min:0|gt:price_rials',
             'status' => 'required|in:draft,published,archived',
             'featured' => 'nullable|boolean',
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'preview_pages' => 'nullable|integer|min:0|max:50',
             'license_type' => 'nullable|string|max:60',
             'version' => 'nullable|string|max:60',
-            'cover_path' => 'nullable|string|max:500',
             'seo_title' => 'nullable|string|max:220',
             'seo_description' => 'nullable|string|max:320',
+            'tag_ids' => 'sometimes|array|max:30',
+            'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
+            'related_product_ids' => 'sometimes|array|max:12',
+            'related_product_ids.*' => 'integer|distinct|exists:store_products,id',
         ]);
+        $data['tag_ids'] = $request->input('tag_ids', []);
+        $data['related_product_ids'] = array_values(array_filter($request->input('related_product_ids', []), fn ($id) => ! $product || (int) $id !== (int) $product->id));
         $data['featured'] = $request->boolean('featured');
         $data['sort_order'] = $data['sort_order'] ?? 0;
         $data['preview_pages'] = $data['preview_pages'] ?? 3;

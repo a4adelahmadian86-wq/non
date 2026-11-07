@@ -25,7 +25,8 @@ class StoreController extends Controller
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')
                     ->orWhere('short_description', 'like', '%'.$q.'%')
-                    ->orWhere('description', 'like', '%'.$q.'%');
+                    ->orWhere('description', 'like', '%'.$q.'%')
+                    ->orWhereHas('tags', fn ($tagQuery) => $tagQuery->where('name', 'like', '%'.$q.'%'));
             }))
             ->when($category, fn ($query) => $query->whereHas('category', fn ($cat) => $cat->where('slug', $category)))
             ->when($price === 'free', fn ($query) => $query->where('price_rials', 0))
@@ -48,7 +49,7 @@ class StoreController extends Controller
 
         $recentIds = collect($request->session()->get('store_recent_ids', []))->take(12)->all();
         $recent = $recentIds
-            ? StoreProduct::with('category')->published()->whereIn('id', $recentIds)->get()->sortBy(fn ($p) => array_search($p->id, $recentIds))->values()
+            ? StoreProduct::with(['category', 'images'])->published()->whereIn('id', $recentIds)->get()->sortBy(fn ($p) => array_search($p->id, $recentIds))->values()
             : collect();
 
         $isBrowsing = $q !== '' || $category || $price !== 'all' || $sort !== 'newest';
@@ -74,17 +75,24 @@ class StoreController extends Controller
             ->all();
         $request->session()->put('store_recent_ids', $ids);
 
-        $related = $product->related->isNotEmpty()
-            ? $product->related->take(8)
-            : StoreProduct::with('category')
+        $related = $product->related()
+            ->with(['category', 'images'])
+            ->published()
+            ->orderByDesc('featured')
+            ->limit(8)
+            ->get();
+
+        if ($related->isEmpty()) {
+            $related = StoreProduct::with(['category', 'images'])
                 ->published()
                 ->where('id', '!=', $product->id)
                 ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
                 ->orderByDesc('featured')
                 ->limit(8)
                 ->get();
+        }
 
-        $alsoViewed = StoreProduct::with('category')
+        $alsoViewed = StoreProduct::with(['category', 'images'])
             ->published()
             ->where('id', '!=', $product->id)
             ->whereIn('id', collect($ids)->reject(fn ($id) => (int) $id === (int) $product->id)->take(8))
@@ -100,10 +108,16 @@ class StoreController extends Controller
             $inLater = $lists->contains('later');
         }
 
-        $hasPreview = $product->previews->where('is_active', true)->isNotEmpty();
+        // Compute the preview collection in the controller so the view receives a stable,
+        // explicit contract instead of relying on template-local assignment order.
+        $showPreviews = $product->previews
+            ->where('is_active', true)
+            ->take(max(1, (int) ($product->preview_pages ?: 5)))
+            ->values();
+        $hasPreview = $showPreviews->isNotEmpty();
         $title = $product->seo_title ?: $product->title;
 
-        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'title'));
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title'));
     }
 
     public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)

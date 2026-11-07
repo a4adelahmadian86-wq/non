@@ -1,5 +1,5 @@
-@extends('layouts.app')
-@section('content')
+@extends('layouts.admin')
+@section('admin-content')
 <section class="store-page" dir="rtl">
   <div class="store-container">
     <div class="store-section-head">
@@ -27,9 +27,13 @@
     <div class="store-cart-list">
       @forelse($products as $p)
         <div class="store-cart-row">
-          <div>
-            <strong>{{ $p->title }}</strong>
-            <small>{{ $p->type === 'course' ? 'دوره آموزشی' : 'فایل دانلودی' }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
+          <div class="product-index-identity">
+            @php($thumb = $p->cover_path ?: $p->images->where('is_active', true)->first()?->path)
+            @if($thumb)<img src="{{ asset($thumb) }}" alt="" loading="lazy">@else<span class="product-index-placeholder"><i class="fa-solid fa-box"></i></span>@endif
+            <span><strong>{{ $p->title }}</strong>
+              <small>{{ $p->type === 'course' ? 'دوره آموزشی' : 'فایل دانلودی' }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
+              @if($p->tags->isNotEmpty())<small class="product-index-tags">{{ $p->tags->pluck('name')->take(4)->implode('، ') }}</small>@endif
+            </span>
           </div>
           <div>
             <a class="store-outline-btn" href="{{ route('admin.store.edit',$p) }}">اطلاعات</a> @if($p->type === 'course')<a class="store-primary-btn" href="{{ route('admin.store.course.edit',$p) }}">مدیریت دوره</a>@endif
@@ -49,6 +53,7 @@
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107center1">
 <style>
+.product-index-identity{display:flex;align-items:center;gap:12px;min-width:0}.product-index-identity>img,.product-index-placeholder{width:54px;height:54px;flex:0 0 54px;border-radius:10px;object-fit:cover;background:#f0f4fa}.product-index-placeholder{display:grid;place-items:center;color:#7a8da8}.product-index-identity>span{display:grid;gap:4px;min-width:0}.product-index-identity strong{font-size:.8rem}.product-index-identity small{overflow-wrap:anywhere}.product-index-tags{color:var(--st-blue)!important}
 .product-center-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px}.product-center-stats>div{background:#fff;border:1px solid var(--st-line);border-radius:13px;padding:14px;display:grid;gap:6px}.product-center-stats span{font-size:.7rem;color:var(--st-muted)}.product-center-stats b{font-size:1.25rem;color:var(--st-ink)}.product-center-filters{display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:8px;margin-bottom:16px}.product-center-filters input,.product-center-filters select{min-width:0;border:1px solid var(--st-line);border-radius:10px;background:#fff;padding:10px 12px;font:inherit;font-size:.76rem;color:var(--st-ink)}@media(max-width:850px){.product-center-stats{grid-template-columns:repeat(3,1fr)}.product-center-filters{grid-template-columns:1fr 1fr}.product-center-filters input{grid-column:1/-1}}@media(max-width:480px){.product-center-stats{grid-template-columns:repeat(2,1fr)}}
 </style>
 @endpush

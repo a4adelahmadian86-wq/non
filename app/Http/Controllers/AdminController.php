@@ -327,6 +327,9 @@ class AdminController extends Controller
                     : User::whereIn('id', $visibleIds)->where('is_blocked', true)->count(),
                 'documents' => $documentCount(),
                 'new_documents_week' => $documentCount($weekAgo),
+                // Project workspace is the canonical bridge between customer requests, documents, billing and human tasks.
+                'projects' => $scopedCount('farast_projects'),
+                'active_projects' => $scopedCount('farast_projects', ['status' => 'active']),
                 'ai' => $scopedCount('ai_interactions'),
                 'ai_today' => Schema::hasTable('ai_interactions')
                     && ($visibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))

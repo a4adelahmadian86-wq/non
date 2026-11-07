@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class FarastDocument extends Model
 {
@@ -46,6 +47,11 @@ class FarastDocument extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(FarastProject::class);
+    }
+
+    public function typingDocument(): HasOne
+    {
+        return $this->hasOne(TypingDocument::class, 'farast_document_id', 'id');
     }
 
     public function versions(): HasMany

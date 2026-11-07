@@ -39,3 +39,12 @@
 }
 @media(max-width:760px){.farast-admin-nav-toggle{display:none}}
 @media(prefers-reduced-motion:reduce){.farast-admin-nav-toggle{transition:none}}
+
+/* Mobile admin navigation remains reachable when the shared module list grows. */
+@media(max-width:760px){
+ .farast-admin-nav{overflow-x:auto;overflow-y:hidden}
+ .farast-admin-nav nav{justify-content:flex-start;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+ .farast-admin-nav nav::-webkit-scrollbar{display:none}
+ .farast-admin-nav nav>a{flex:0 0 58px}
+ .farast-admin-nav .farast-admin-nav-create-product b{display:none}
+}

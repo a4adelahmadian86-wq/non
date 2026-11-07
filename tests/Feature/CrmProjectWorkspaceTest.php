@@ -201,4 +201,33 @@ class CrmProjectWorkspaceTest extends TestCase
         $this->actingAs($employee)->getJson('/admin/crm/projects')->assertForbidden();
         $this->getJson('/admin/crm/projects/'.$project->id)->assertForbidden();
     }
+    public function test_project_workspace_has_html_pages_for_admin_navigation(): void
+    {
+        $admin = $this->makeUser('09123330111', User::ROLE_ADMIN);
+        $customer = $this->makeUser('09123330112');
+        $project = FarastProject::create([
+            'user_id' => $customer->id,
+            'name' => 'پرونده قابل مشاهده در داشبورد',
+            'project_type' => 'typing',
+            'workflow' => 'manual',
+            'template_code' => 'standard',
+            'status' => 'active',
+            'estimated_pages' => 2,
+            'estimated_price_rials' => 300000,
+            'paid_rials' => 100000,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.crm.projects.index'))
+            ->assertOk()
+            ->assertSee('پروژه‌ها و پرونده‌های مشتریان')
+            ->assertSee('پرونده قابل مشاهده در داشبورد');
+
+        $this->get(route('admin.crm.projects.show', $project->id))
+            ->assertOk()
+            ->assertSee('اسناد و خروجی‌های پروژه')
+            ->assertSee('وضعیت مالی پروژه')
+            ->assertSee('وظایف و ارجاع به متخصص');
+    }
+
 }
