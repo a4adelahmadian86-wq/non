@@ -119,8 +119,13 @@ class StoreController extends Controller
         abort_unless($disk->exists($preview->path), 404);
 
         return $disk->response($preview->path, null, [
-            'Cache-Control' => 'private, max-age=300',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
             'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            'X-Frame-Options' => 'SAMEORIGIN',
+            'Content-Security-Policy' => "frame-ancestors 'self'",
             'Content-Disposition' => 'inline',
         ]);
     }
@@ -135,6 +140,16 @@ class StoreController extends Controller
         $previews = $product->previews;
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
 
-        return view('store.reader', compact('product', 'previews'));
+        $user = request()->user();
+        $readerIdentity = trim((string) ($user->mobile ?? ''));
+        if ($readerIdentity === '') {
+            $readerIdentity = 'شناسه کاربر #'.$user->id;
+        }
+
+        return response()
+            ->view('store.reader', compact('product', 'previews', 'readerIdentity'))
+            ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 }
