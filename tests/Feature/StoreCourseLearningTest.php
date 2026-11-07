@@ -194,4 +194,38 @@ class StoreCourseLearningTest extends TestCase
             ->get(route('store.course.lesson', [$product, $lesson]))
             ->assertForbidden();
     }
+    public function test_progress_updates_preserve_position_when_completion_changes(): void
+    {
+        $user = $this->makeUser();
+        [$product, , , $lesson] = $this->makeCourse('progress-preservation', 10000);
+        $this->grantCourse($user, $product);
+
+        $this->actingAs($user)
+            ->postJson(route('store.course.progress', [$product, $lesson]), ['last_position_seconds' => 125])
+            ->assertOk()
+            ->assertJson(['ok' => true, 'completed' => false]);
+
+        $this->postJson(route('store.course.progress', [$product, $lesson]), ['completed' => true])
+            ->assertOk()
+            ->assertJson(['ok' => true, 'completed' => true]);
+
+        $progress = DB::table('store_course_lesson_progress')
+            ->where('lesson_id', $lesson->id)
+            ->first();
+
+        $this->assertSame(125, (int) $progress->last_position_seconds);
+        $this->assertNotNull($progress->completed_at);
+
+        $this->postJson(route('store.course.progress', [$product, $lesson]), ['completed' => false])
+            ->assertOk()
+            ->assertJson(['ok' => true, 'completed' => false]);
+
+        $progress = DB::table('store_course_lesson_progress')
+            ->where('lesson_id', $lesson->id)
+            ->first();
+
+        $this->assertSame(125, (int) $progress->last_position_seconds);
+        $this->assertNull($progress->completed_at);
+    }
+
 }
