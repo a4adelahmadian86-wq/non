@@ -6,6 +6,8 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductDocument;
+use App\Models\StoreProductDocumentPage;
+use App\Models\StoreProductPreview;
 use App\Models\StoreProductImage;
 use App\Models\StoreTag;
 use App\Models\User;
@@ -512,5 +514,110 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame(2, (new \setasign\Fpdi\Fpdi())->setSourceFile(Storage::disk('private')->path($preview->path)));
     }
 
+
+    public function test_delivery_policy_is_exposed_and_reader_only_publication_requires_a_ready_reader(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.create'))
+            ->assertOk()
+            ->assertSee('name="download_policy"', false)
+            ->assertSee('فقط مطالعه آنلاین');
+
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول مطالعه آنلاین',
+            'slug' => 'reader-only-product',
+            'sku' => 'READER-ONLY-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'download_policy' => 'reader_only',
+            'status' => 'draft',
+        ]);
+
+        $path = 'store/products/'.$product->id.'/reader-only.pdf';
+        $bytes = 'private-reader-source';
+        Storage::disk('private')->put($path, $bytes);
+        $hash = hash('sha256', $bytes);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => $path,
+            'original_name' => 'reader-only.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen($bytes),
+            'sha256' => $hash,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $hash,
+            'processing_status' => 'extracted',
+            'detected_type' => 'pdf',
+            'page_count' => 1,
+            'structure_json' => ['reader' => ['ready' => false, 'page_count' => 1]],
+        ]);
+        StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/reader-only-full.pdf',
+            'mime' => 'application/pdf',
+            'page_number' => 1,
+            'source_page_count' => 1,
+            'included_page_count' => 1,
+            'kind' => 'pdf',
+            'access_level' => 'full',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $publishPayload = $this->payload($category, [
+            'title' => $product->title,
+            'sku' => $product->sku,
+            'status' => 'published',
+            'download_policy' => 'reader_only',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->put(route('admin.store.update', $product), $publishPayload)
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHasErrors('status');
+
+        $this->assertSame('draft', $product->fresh()->status);
+
+        $document->update([
+            'structure_json' => ['reader' => ['ready' => true, 'page_count' => 1]],
+        ]);
+        $document->pages()->create([
+            'page_number' => 1,
+            'page_kind' => 'pdf_page',
+            'locator_key' => 'pdf:1',
+            'locator_json' => ['page' => 1],
+            'content_text' => 'متن صفحه آزمایشی',
+            'content_html' => '<p>متن صفحه آزمایشی</p>',
+            'content_sha256' => hash('sha256', 'متن صفحه آزمایشی'),
+            'has_extracted_text' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->put(route('admin.store.update', $product), $publishPayload)
+            ->assertRedirect(route('admin.store.edit', $product));
+
+        $this->assertSame('published', $product->fresh()->status);
+        $this->assertSame('reader_only', $product->fresh()->download_policy);
+    }
 
 }
