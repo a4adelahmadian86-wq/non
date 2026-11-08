@@ -5,11 +5,11 @@ import urllib.request
 from pathlib import Path
 
 MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")) )
-REVISION = "cafdcbdb455e4a9ab2ef18dccb3e21dce6a25ee9"
-REPOSITORY = "MahtaFetrat/Mana-Persian-Piper"
+REVISION = "7a6c333ec560f0e688371adc2fbb7bbe105028c6"
+REPOSITORY = "rhasspy/piper-voices"
 FILES = {
-    "fa_IR-mana-medium.onnx": "e390c0e74ba71fd97c49ba662ee0c6e1724b462ba2d4561698af4f564840f126",
-    "fa_IR-mana-medium.onnx.json": None,
+    "fa_IR-amir-medium.onnx": "fb815380d969ea372b0b21b0de14421f58fe481047e153e69685d079b6e1a9d1",
+    "fa_IR-amir-medium.onnx.json": None,
 }
 
 
