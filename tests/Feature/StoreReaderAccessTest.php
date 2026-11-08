@@ -535,4 +535,44 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee('store/reader-audio/sample/narration.mp3');
     }
 
+
+    public function test_workbook_preview_injects_a_fresh_watermark_for_each_viewer(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $html = app(\\App\\Services\\StoreXlsxPreviewRenderer::class)->render(
+            $this->makeXlsxBytes(),
+            '__FARAST_READER_IDENTITY__',
+            true
+        );
+        $path = 'store/previews/'.$product->id.'/workbook-sample.html';
+        Storage::disk('private')->put($path, $html);
+        $preview = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => $path,
+            'mime' => 'text/html',
+            'page_number' => 2,
+            'kind' => 'html',
+            'access_level' => 'sample',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+
+        $guestIp = '203.0.113.77';
+        $guestResponse = $this->withServerVariables(['REMOTE_ADDR' => $guestIp])
+            ->get(route('store.preview', $preview));
+        $guestResponse->assertOk()
+            ->assertSee($guestIp)
+            ->assertDontSee('__FARAST_READER_IDENTITY__');
+
+        $user = $this->makeReaderUser();
+        $memberResponse = $this->actingAs($user)->get(route('store.preview', $preview));
+        $memberResponse->assertOk()
+            ->assertSee('09123456789')
+            ->assertDontSee($guestIp)
+            ->assertDontSee('__FARAST_READER_IDENTITY__');
+    }
+
+
 }
