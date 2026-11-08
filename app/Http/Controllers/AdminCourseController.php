@@ -309,8 +309,8 @@ class AdminCourseController extends Controller
     private function lessonHasPublishableContent(array $data, ?StoreCourseLesson $lesson = null, ?int $excludeResourceId = null): bool
     {
         $type = $data['lesson_type'] ?? $lesson?->lesson_type;
-        $hasUrl = filled($data['video_url'] ?? $lesson?->video_url);
-        $hasContent = filled($data['content'] ?? $lesson?->content);
+        $hasUrl = filled(array_key_exists('video_url', $data) ? $data['video_url'] : $lesson?->video_url);
+        $hasContent = filled(array_key_exists('content', $data) ? $data['content'] : $lesson?->content);
         $resources = $lesson?->resources()
             ->where('is_active', true)
             ->where('scan_status', 'clean')
