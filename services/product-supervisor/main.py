@@ -10,7 +10,9 @@ from typing import Literal
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pypdf import PdfReader, PdfWriter
 
 app = FastAPI(
     title="FARAST Product Supervisor",
@@ -326,6 +328,51 @@ async def review_product_file(
         "publication_authorized": False,
         "automated_publication": False,
     }
+
+
+@app.post("/v1/tools/pdf-sample", dependencies=[Depends(authenticate)])
+async def create_pdf_sample(file: UploadFile = File(...), pages: str = Form(...)):
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="sample_source_too_large")
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=415, detail="sample_source_not_pdf")
+    try:
+        requested = json.loads(pages)
+        if not isinstance(requested, list) or not requested or len(requested) > 12:
+            raise ValueError("invalid_pages")
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        if reader.is_encrypted or len(reader.pages) > 300:
+            raise ValueError("unsupported_pdf")
+        selected = sorted({int(page) for page in requested if isinstance(page, int) and not isinstance(page, bool)})
+        if not selected or any(page < 1 or page > len(reader.pages) for page in selected):
+            raise ValueError("page_out_of_range")
+        writer = PdfWriter()
+        for page_number in selected:
+            writer.add_page(reader.pages[page_number - 1])
+        writer.add_metadata({
+            "/Title": "FARAST Product Sample",
+            "/Producer": "FARAST first-party sample builder",
+        })
+        output = io.BytesIO()
+        writer.write(output)
+        sample_bytes = output.getvalue()
+        if not sample_bytes.startswith(b"%PDF-") or len(sample_bytes) > MAX_UPLOAD_BYTES:
+            raise ValueError("sample_output_invalid")
+        return Response(
+            content=sample_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'inline; filename="farast-product-sample.pdf"',
+                "Cache-Control": "no-store",
+                "X-FARAST-Sample-Pages": ",".join(str(page) for page in selected),
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=422, detail="sample_pdf_processing_failed") from None
 
 
 @app.get("/health")
