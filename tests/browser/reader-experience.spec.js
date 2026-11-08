@@ -509,6 +509,7 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
         { type: 'heading', level: 1, text: 'فصل اول' },
         { type: 'paragraph', text: 'متن توضیحی' },
         { type: 'list_item', list_kind: 'bullet', list_level: 1, text: 'گزینه نخست' },
+        { type: 'list_item', list_kind: 'number', list_level: 2, text: 'زیرگزینه شماره‌دار' },
         { type: 'table_row', table_index: 1, row_index: 1, cells: ['عنوان', 'مقدار'], text: 'عنوان | مقدار' },
         { type: 'table_row', table_index: 1, row_index: 2, cells: ['محتوا', '<img src=x onerror=alert(1)>'], text: 'محتوا | <img src=x onerror=alert(1)>' }
       ],
@@ -518,7 +519,8 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
   await expect(page.locator('[data-reader-text-layer] h1')).toHaveText('فصل اول');
   await expect(page.locator('[data-reader-text-layer] p')).toHaveText('متن توضیحی');
-  await expect(page.locator('[data-reader-text-layer] ul li')).toHaveText('گزینه نخست');
+  await expect(page.locator('[data-reader-text-layer] ul > li').first()).toContainText('گزینه نخست');
+  await expect(page.locator('[data-reader-text-layer] ul > li > ol > li')).toHaveText('زیرگزینه شماره‌دار');
   const table = page.locator('.farast-reader-docx-table');
   await expect(table).toBeVisible();
   await expect(table.locator('tbody tr')).toHaveCount(2);
