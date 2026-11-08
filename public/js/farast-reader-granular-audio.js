@@ -21,6 +21,27 @@
     return Math.max(1, Number(root.querySelector('#reader-page-number')?.value || Number(article.dataset.index || 0) + 1) || 1);
   };
 
+  const formatTime = seconds => {
+    const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+    return String(Math.floor(safe / 60)).padStart(2, '0') + ':' + String(safe % 60).padStart(2, '0');
+  };
+  const syncSnippetControls = () => {
+    const button = root.querySelector('[data-audio-play]');
+    const icon = button?.querySelector('i');
+    const playing = Boolean(activeAudio && !activeAudio.paused);
+    if (icon) icon.className = playing ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+    if (button) button.setAttribute('aria-label', playing ? 'مکث صدای انتخاب‌شده' : 'ادامه صدای انتخاب‌شده');
+    if (activeAudio) {
+      const current = root.querySelector('[data-audio-current]');
+      const duration = root.querySelector('[data-audio-duration]');
+      const seek = root.querySelector('[data-audio-seek]');
+      if (current) current.textContent = formatTime(activeAudio.currentTime);
+      if (duration && Number.isFinite(activeAudio.duration)) duration.textContent = formatTime(activeAudio.duration);
+      if (seek && Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
+        seek.value = String(Math.round(activeAudio.currentTime / activeAudio.duration * 1000));
+      }
+    }
+  };
   const stop = () => {
     requestId++;
     if (activeAudio) {
@@ -34,6 +55,7 @@
     }
     activeElement?.classList.remove('reader-audio-selection-active');
     activeElement = null;
+    syncSnippetControls();
   };
 
   const speak = async (text, page, element, label) => {
@@ -75,12 +97,19 @@
       activeAudio.volume = Number(root.querySelector('[data-audio-volume]')?.value || 1);
       activeElement = element || null;
       activeElement?.classList.add('reader-audio-selection-active');
-      activeAudio.addEventListener('ended', stop, { once: true });
+      activeAudio.addEventListener('timeupdate', syncSnippetControls);
+      activeAudio.addEventListener('play', syncSnippetControls);
+      activeAudio.addEventListener('pause', syncSnippetControls);
+      activeAudio.addEventListener('ended', () => {
+        if (status()) status().textContent = 'پایان صدای انتخاب‌شده';
+        stop();
+      }, { once: true });
       activeAudio.addEventListener('error', () => {
         if (status()) status().textContent = 'پخش صدای انتخاب‌شده ناموفق بود.';
         stop();
       }, { once: true });
       await activeAudio.play();
+      syncSnippetControls();
       if (status()) status().textContent = label || 'در حال خواندن بخش انتخاب‌شده';
     } catch (error) {
       if (id === requestId && status()) status().textContent = error.message || 'پخش صدای انتخاب‌شده ناموفق بود.';
@@ -218,6 +247,31 @@
     speak(text, pageFor(anchor), anchor.closest(speechTarget) || anchor, 'در حال خواندن عبارت انتخاب‌شده');
     selection.removeAllRanges();
   });
+
+  root.addEventListener('click', event => {
+    const button = event.target.closest('[data-audio-play]');
+    if (!button || !activeAudio) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (activeAudio.paused) {
+      activeAudio.play().catch(() => {
+        if (status()) status().textContent = 'ادامهٔ صدای انتخاب‌شده ممکن نشد.';
+      });
+    } else {
+      activeAudio.pause();
+      if (status()) status().textContent = 'صدای انتخاب‌شده متوقف شد.';
+    }
+    syncSnippetControls();
+  }, true);
+
+  root.addEventListener('input', event => {
+    if (!activeAudio || !event.target.matches('[data-audio-seek]')) return;
+    event.stopImmediatePropagation();
+    if (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0) {
+      activeAudio.currentTime = activeAudio.duration * Math.max(0, Math.min(1000, Number(event.target.value) || 0)) / 1000;
+      syncSnippetControls();
+    }
+  }, true);
 
   root.addEventListener('farast:reader-section-change', stop);
   root.addEventListener('farast:reader-page-change', stop);
