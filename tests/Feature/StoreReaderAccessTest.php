@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
+use App\Models\StoreLibraryItem;
+use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -97,6 +99,53 @@ class StoreReaderAccessTest extends TestCase
             ->get(route('store.preview', $preview))
             ->assertOk()
             ->assertSee('%PDF-1.4 sample');
+    }
+
+    public function test_reader_only_purchase_unlocks_full_content_without_issuing_a_download(): void
+    {
+        [$product, $sample] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/previews/sample/full.pdf', '%PDF-1.4 full');
+        $full = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => 'store/previews/sample/full.pdf',
+            'mime' => 'application/pdf',
+            'page_number' => 1,
+            'kind' => 'pdf',
+            'access_level' => 'full',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+        $product->update(['download_policy' => 'reader_only']);
+
+        $this->get(route('store.reader', $product->slug))->assertOk()->assertSee('preview.pdf')->assertDontSee('full.pdf');
+        $this->get(route('store.preview', $full))->assertForbidden();
+
+        $user = $this->makeReaderUser();
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100,
+            'total_rials' => 100,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        $libraryItem = StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'granted_at' => now(),
+        ]);
+
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('full.pdf')
+            ->assertDontSee('preview.pdf');
+        $this->actingAs($user)->get(route('store.preview', $full))
+            ->assertOk()
+            ->assertSee('%PDF-1.4 full');
+        $this->actingAs($user)->post(route('library.download.issue', $libraryItem))
+            ->assertForbidden();
     }
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void
