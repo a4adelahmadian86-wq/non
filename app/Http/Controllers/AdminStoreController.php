@@ -105,12 +105,11 @@ class AdminStoreController extends Controller
 
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
             && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
-        $hasFullReaderAsset = $product->previews->contains(fn ($preview) => $preview->is_active && $preview->access_level === 'full');
         $hasReadyReaderDocument = ($product->download_policy ?? 'signed') === 'reader_only'
             && $publicationReadiness->hasReadyPrimaryReader($product);
         $contentReady = $product->type === 'course'
             ? ($product->course?->sections()->whereHas('lessons', fn ($query) => $query->publishable())->exists() ?? false)
-            : ($hasSafePrimaryFile && (($product->download_policy ?? 'signed') !== 'reader_only' || ($hasFullReaderAsset && $hasReadyReaderDocument)));
+            : ($hasSafePrimaryFile && (($product->download_policy ?? 'signed') !== 'reader_only' || $hasReadyReaderDocument));
 
         $supervisorSettings = (array) data_get($product->metadata, 'ai_supervisor', []);
         $supervisorEnabled = (bool) data_get($supervisorSettings, 'enabled', false);
@@ -198,16 +197,10 @@ class AdminStoreController extends Controller
                         throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
                     }
                     $downloadPolicy = $data['download_policy'] ?? $lockedProduct->download_policy;
-                    if ($downloadPolicy === 'reader_only') {
-                        $hasFullReaderAsset = $lockedProduct->previews()
-                            ->where('is_active', true)
-                            ->where('access_level', 'full')
-                            ->exists();
-                        if (! $hasFullReaderAsset || ! $publicationReadiness->hasReadyPrimaryReader($lockedProduct)) {
-                            throw ValidationException::withMessages([
-                                'status' => 'برای انتشار محصول فقط‌خواندنی، فایل اصلی باید استخراج کامل شده و صفحات خوانشگر آن آماده باشند؛ همچنین نسخه کامل خصوصی خوانشگر باید فعال باشد.',
-                            ]);
-                        }
+                    if ($downloadPolicy === 'reader_only' && ! $publicationReadiness->hasReadyPrimaryReader($lockedProduct)) {
+                        throw ValidationException::withMessages([
+                            'status' => 'برای انتشار محصول فقط‌خواندنی، فایل اصلی باید استخراج کامل شده و صفحات کامل خوانشگر آن آماده باشند.',
+                        ]);
                     }
                 }
                 if (! $lockedProduct->published_at && empty($data['published_at'])) {
