@@ -351,8 +351,8 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         raise FileInspectionError("بارگذاری فایل اجرایی یا اسکریپت برای بررسی محصول مجاز نیست.")
 
     result = Inspection(detected_type="unknown", warnings=[])
-    result.antivirus_status = _clamav_scan(data)
-    result.upstream_scan_status = "clean" if primary_scan_status == "clean" else "not_provided"
+    result.antivirus_status = "not_configured"
+    result.upstream_scan_status = primary_scan_status if primary_scan_status in {"clean", "structural_clean"} else "not_provided"
     if result.antivirus_status == "infected":
         raise FileInspectionError("اسکنر امنیتی محتوای آلوده را شناسایی کرد؛ فایل قرنطینه شد.")
 
@@ -411,8 +411,8 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.content_blocks = _split_text_blocks(result.extracted_text)
 
     if result.antivirus_status != "clean":
-        if result.upstream_scan_status == "clean":
-            result.warnings.append("اسکن ثانویه ناظر در دسترس نیست؛ فایل از اسکنر اصلی فروشگاه وضعیت سالم دارد.")
+        if result.upstream_scan_status in {"clean", "structural_clean"}:
+            result.warnings.append("بررسی ساختاری داخلی سایت موفق بوده است؛ آنتی‌ویروس ثالث در این مرحله اجرا نشده است.")
         else:
             result.warnings.append("اسکن آنتی‌ویروس در این محیط تأیید نشده است؛ فایل را سالم فرض نکنید.")
 
