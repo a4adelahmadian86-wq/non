@@ -442,7 +442,9 @@ class StoreController extends Controller
                 'readerMode',
                 'readerDocument',
                 'readerAudioUrl',
-                'readerAudioTiming'
+                'readerAudioTiming',
+                'readerAudioPollUrl',
+                'readerAudioStatus'
             ))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
