@@ -177,7 +177,7 @@
                   <div class="store-preview-pdf">PDF · {{ $preview->page_number }}</div>
                 @elseif($preview->kind === 'docx')
                   <div class="store-preview-pdf">WORD · DOCX</div>
-                @elseif($preview->kind === 'xlsx')
+                @elseif(in_array($preview->kind, ['xlsx', 'html'], true))
                   <div class="store-preview-pdf">EXCEL · XLSX</div>
                 @else
                   <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
