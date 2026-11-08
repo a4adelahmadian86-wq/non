@@ -250,10 +250,11 @@
         if (categoryNode) categoryNode.textContent = categoryOption ? categoryOption.textContent + (suggestions.category_reason ? ' — ' + suggestions.category_reason : '') : (suggestions.category_reason || 'دسته مشخصی پیشنهاد نشد.');
         renderList(modal?.querySelector('[data-ai-content-points]'), suggestions.selling_points || []);
         renderList(modal?.querySelector('[data-ai-content-unknowns]'), suggestions.unknowns || []);
-        const sourceCount = (payload.sources || []).length + (payload.course_lesson_count ? 1 : 0);
+        const sourceCount = (payload.sources || []).length;
+        const lessonCount = Number(payload.course_lesson_count || 0);
         const factCount = (suggestions.used_fact_ids || []).length;
         const evidence = modal?.querySelector('[data-ai-content-evidence]');
-        if (evidence) evidence.textContent = 'گزارش کامل ' + sourceCount + ' منبع دانش بررسی شد؛ ' + factCount + ' واقعیت دارای شاهد در پیشنهادها استفاده شده است. این پیشنهاد هنوز ذخیره نشده است.';
+        if (evidence) evidence.textContent = 'گزارش کامل ' + sourceCount + ' فایل و ' + lessonCount + ' درس بررسی شد؛ ' + factCount + ' واقعیت دارای شاهد در پیشنهادها استفاده شده است. این پیشنهاد هنوز ذخیره نشده است.';
         openModal();
         if (statusNode) statusNode.textContent = 'پیشنهاد آماده است؛ قبل از اعمال، تمام فیلدها را بازبینی کن.';
       } catch (error) {
