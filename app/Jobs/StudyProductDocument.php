@@ -52,9 +52,33 @@ class StudyProductDocument implements ShouldQueue
             throw new \RuntimeException('document_source_stream_unavailable');
         }
 
+        $studyStream = $stream;
+        $convertedStream = null;
+        $studyFilename = $document->original_name;
         try {
+            if (strtolower((string) $document->extension) === 'docx'
+                && class_exists(\PhpOffice\PhpWord\IOFactory::class)
+                && class_exists(\Dompdf\Dompdf::class)
+                && class_exists(\ZipArchive::class)) {
+                $sourceBytes = stream_get_contents($stream);
+                if (! is_string($sourceBytes) || $sourceBytes === '') {
+                    throw new \RuntimeException('document_docx_read_failed');
+                }
+                $pdfBytes = app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview($sourceBytes);
+                if (! is_string($pdfBytes) || ! str_starts_with($pdfBytes, '%PDF-') || strlen($pdfBytes) > 50 * 1024 * 1024) {
+                    throw new \RuntimeException('document_docx_pdf_conversion_failed');
+                }
+                $convertedStream = fopen('php://temp', 'w+b');
+                if (! is_resource($convertedStream) || fwrite($convertedStream, $pdfBytes) !== strlen($pdfBytes)) {
+                    throw new \RuntimeException('document_docx_pdf_stream_failed');
+                }
+                rewind($convertedStream);
+                $studyStream = $convertedStream;
+                $studyFilename = pathinfo($document->original_name, PATHINFO_FILENAME).'.pdf';
+            }
+
             $product = $document->product;
-            $review = $supervisor->reviewFile($stream, $document->original_name, [
+            $review = $supervisor->reviewFile($studyStream, $studyFilename, [
                 'product_id' => (string) $product->id,
                 'product_title' => (string) $product->title,
                 'product_type' => (string) $product->type,
@@ -64,6 +88,7 @@ class StudyProductDocument implements ShouldQueue
                 'description' => mb_substr((string) $product->description, 0, 8000),
             ]);
         } finally {
+            if (is_resource($convertedStream)) fclose($convertedStream);
             fclose($stream);
         }
 
