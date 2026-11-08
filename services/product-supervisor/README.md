@@ -31,7 +31,8 @@ The original PDF, DOCX, XLSX, PPTX, TXT or ZIP is never uploaded to Gemini. Lega
 
 The repository root `render.yaml` defines a separate Render web service named `farast-product-supervisor`. Render generates `SUPERVISOR_API_TOKEN`. Configure these secrets only in the Render service's Environment page:
 
-- `GROQ_API_KEY` — required for file text review, image review and audio transcription. Enable ZDR before processing customer files.
+- `GROQ_API_KEY` — required for file text review, image review and audio transcription.
+- `GROQ_ZDR_CONFIRMED=true` — required to unlock Groq requests. The service fails closed while this is absent/false. Set it only after enabling ZDR in the Groq account's Data Controls.
 - `GEMINI_API_KEY` — required only for product metadata and persisted database-report verification; never used to analyze uploaded file contents.
 - `GLADIA_API_KEY` — currently ignored; Gladia is not integrated or called.
 
@@ -45,7 +46,7 @@ This service is intentionally separate from the site's existing AI and voice gat
 
 1. Open the [dedicated Render service](https://dashboard.render.com/web/srv-dbo0dgbrjlhs73a2vong) and select **Environment**.
 2. Create a dedicated key in [Google AI Studio API Keys](https://aistudio.google.com/app/apikey) and add it as `GEMINI_API_KEY`. This key is only used for product metadata and persisted database-report verification, never for file content review.
-3. Add `GROQ_API_KEY` for file text review, image understanding and audio transcription. Enable Zero Data Retention in the Groq console before sending customer data. Set optional `GROQ_TEXT_MODEL=openai/gpt-oss-20b` or keep the code default.
+3. Add `GROQ_API_KEY` for file text review, image understanding and audio transcription. Enable Zero Data Retention in the Groq console, then set `GROQ_ZDR_CONFIRMED=true`. Without this explicit confirmation, the service sends no file text, images or audio to Groq. Set optional `GROQ_TEXT_MODEL=openai/gpt-oss-20b` or keep the code default.
 4. Keep the generated `SUPERVISOR_API_TOKEN` value; do not replace it with the site's voice token or another AI key.
 5. Save the environment changes and manually deploy the service. Automatic deploys are disabled for this service.
 6. Confirm `/health` reports `providers.groq.text_review: true` and, when the Gemini key is valid, `providers.gemini.configured: true`. Use authenticated `/v1/ready` to verify the service token and provider configuration. If the Gemini key field accidentally contains the model identifier (for example `gemini-2.5-flash`) instead of an API key, readiness reports Gemini as not configured.
@@ -92,6 +93,7 @@ pip install -r requirements.txt
 export SUPERVISOR_API_TOKEN='local-only-secret'
 export GEMINI_API_KEY='your-google-ai-studio-key'
 export GROQ_API_KEY='your-groq-key'
+export GROQ_ZDR_CONFIRMED='true' # only after enabling ZDR in Groq Data Controls
 export GROQ_TEXT_MODEL='openai/gpt-oss-20b'
 uvicorn main:app --reload --port 8091
 ```
