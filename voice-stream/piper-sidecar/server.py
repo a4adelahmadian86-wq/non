@@ -1,3 +1,4 @@
+import base64
 import hmac
 import io
 import json
@@ -52,36 +53,98 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "engine": "piper-mana-local", "locale": "fa-IR", "voice_id": VOICE_ID})
 
     def do_POST(self) -> None:
-        if self.path != "/v1/synthesize":
+        if self.path not in {"/v1/synthesize", "/v1/synthesize/segments"}:
             self.send_json(404, {"ok": False})
             return
+        segment_mode = self.path.endswith("/segments")
         if not self.authorized():
             self.send_json(401, {"ok": False, "message": "invalid_voice_token"})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > 40 * 1024:
+            max_request_bytes = 1024 * 1024 if segment_mode else 40 * 1024
+            if length <= 0 or length > max_request_bytes:
                 self.send_json(413, {"ok": False, "message": "invalid_request_size"})
                 return
             payload = json.loads(self.rfile.read(length))
             if not isinstance(payload, dict):
                 self.send_json(400, {"ok": False, "message": "invalid_json"})
                 return
-            text = str(payload.get("text", "")).strip()
             language = str(payload.get("language", "fa-IR"))
             voice_id = str(payload.get("voice_id", VOICE_ID))
             if language != "fa-IR" or voice_id != VOICE_ID:
                 self.send_json(400, {"ok": False, "message": "unsupported_voice"})
                 return
-            if not text or len(text) > MAX_TEXT_LENGTH:
-                self.send_json(422, {"ok": False, "message": "invalid_text"})
-                return
 
-            audio_buffer = io.BytesIO()
-            with SYNTHESIS_LOCK:
-                with wave.open(audio_buffer, "wb") as wav_file:
-                    VOICE.synthesize_wav(text, wav_file)
-            audio = audio_buffer.getvalue()
+            segment_timings = []
+            if segment_mode:
+                segments = payload.get("segments")
+                if not isinstance(segments, list) or not 1 <= len(segments) <= 100:
+                    self.send_json(422, {"ok": False, "message": "invalid_segments"})
+                    return
+                normalized = []
+                total_chars = 0
+                for item in segments:
+                    if not isinstance(item, dict):
+                        self.send_json(422, {"ok": False, "message": "invalid_segment"})
+                        return
+                    segment_text = str(item.get("text", "")).strip()
+                    if not segment_text or len(segment_text) > 3000:
+                        self.send_json(422, {"ok": False, "message": "invalid_segment_text"})
+                        return
+                    total_chars += len(segment_text)
+                    normalized.append(segment_text)
+                if total_chars > 60000:
+                    self.send_json(413, {"ok": False, "message": "segment_text_limit"})
+                    return
+
+                frame_parts = []
+                audio_params = None
+                total_frames = 0
+                with SYNTHESIS_LOCK:
+                    for index, segment_text in enumerate(normalized):
+                        segment_buffer = io.BytesIO()
+                        with wave.open(segment_buffer, "wb") as segment_wav:
+                            VOICE.synthesize_wav(segment_text, segment_wav)
+                        with wave.open(io.BytesIO(segment_buffer.getvalue()), "rb") as segment_wav:
+                            current_params = segment_wav.getparams()
+                            if audio_params is None:
+                                audio_params = current_params
+                            elif (current_params.nchannels, current_params.sampwidth, current_params.framerate) != (audio_params.nchannels, audio_params.sampwidth, audio_params.framerate):
+                                self.send_json(502, {"ok": False, "message": "inconsistent_audio_format"})
+                                return
+                            start_ms = round(total_frames * 1000 / audio_params.framerate)
+                            frames = segment_wav.readframes(segment_wav.getnframes())
+                            frame_parts.append(frames)
+                            total_frames += segment_wav.getnframes()
+                            end_ms = round(total_frames * 1000 / audio_params.framerate)
+                            segment_timings.append({"segment_index": index, "start_ms": start_ms, "end_ms": end_ms})
+                            silence_frames = int(audio_params.framerate * 0.18)
+                            if index < len(normalized) - 1 and silence_frames > 0:
+                                frame_parts.append(bytes(silence_frames * audio_params.nchannels * audio_params.sampwidth))
+                                total_frames += silence_frames
+
+                if audio_params is None:
+                    self.send_json(502, {"ok": False, "message": "empty_audio"})
+                    return
+                audio_buffer = io.BytesIO()
+                with wave.open(audio_buffer, "wb") as combined_wav:
+                    combined_wav.setnchannels(audio_params.nchannels)
+                    combined_wav.setsampwidth(audio_params.sampwidth)
+                    combined_wav.setframerate(audio_params.framerate)
+                    combined_wav.writeframes(b"".join(frame_parts))
+                audio = audio_buffer.getvalue()
+            else:
+                text = str(payload.get("text", "")).strip()
+                if not text or len(text) > MAX_TEXT_LENGTH:
+                    self.send_json(422, {"ok": False, "message": "invalid_text"})
+                    return
+                audio_buffer = io.BytesIO()
+                with SYNTHESIS_LOCK:
+                    with wave.open(audio_buffer, "wb") as wav_file:
+                        VOICE.synthesize_wav(text, wav_file)
+                audio = audio_buffer.getvalue()
+
             if not audio:
                 self.send_json(502, {"ok": False, "message": "empty_audio"})
                 return
@@ -92,6 +155,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Farast-TTS-Provider", "piper-mana-local")
             self.send_header("X-Farast-Voice-Id", VOICE_ID)
+            if segment_mode:
+                timing_header = base64.urlsafe_b64encode(json.dumps(segment_timings, separators=(",", ":")).encode("utf-8")).decode("ascii")
+                self.send_header("X-Farast-Segment-Timings", timing_header)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(audio)
