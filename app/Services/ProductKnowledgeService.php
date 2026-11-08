@@ -332,6 +332,7 @@ class ProductKnowledgeService
             'facts_included' => $factsIncluded,
             'sources' => $sources,
             'course_lessons' => $courseLessons,
+            'course_lesson_count' => count($courseLessons),
             'source_fingerprints' => $fingerprints,
             'product_context' => [
                 'title' => (string) $product->title,
