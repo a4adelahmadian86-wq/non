@@ -48,6 +48,7 @@
       layer.style.webkitUserSelect = 'text';
 
       const speechPage = Math.max(1, Number(payload.page_number || article.dataset.readerPage || 1));
+      article.tabIndex = 0;
       let speechWordIndex = 0;
       const appendSpeechText = (element, value) => {
         const source = String(value || '');
@@ -57,6 +58,15 @@
         }
         element.dataset.readerSpeechText = source;
         element.dataset.page = String(speechPage);
+        const scopeLabel = element.classList.contains('reader-document-paragraph') ? 'پاراگراف'
+          : element.classList.contains('reader-document-heading') ? 'عنوان'
+          : element.classList.contains('reader-document-cell') ? 'سلول جدول'
+          : element.classList.contains('reader-document-row') ? 'ردیف جدول' : '';
+        if (scopeLabel) {
+          element.tabIndex = 0;
+          element.setAttribute('role', 'group');
+          element.setAttribute('aria-label', 'خواندن ' + scopeLabel);
+        }
         const sentences = source.match(/[^.!؟۔؛]+[.!؟۔؛]?/gu) || [source];
         sentences.forEach(sentenceText => {
           if (!sentenceText) return;
