@@ -62,6 +62,10 @@ class ProductSupervisorSnapshotBuilder
             }
         }
 
+        $documentKnowledge = in_array('content', $checks, true)
+            ? app(DocumentKnowledgeContextBuilder::class)->forProduct((int) $product->id, 12000)
+            : null;
+
         return [
             'product_id' => (string) $product->id,
             'product_type' => $product->type,
@@ -76,6 +80,7 @@ class ProductSupervisorSnapshotBuilder
             'seo_description' => $product->seo_description,
             'category_name' => $product->category?->name,
             'tags' => $product->tags->pluck('name')->take(30)->values()->all(),
+            'document_knowledge' => $documentKnowledge,
             'has_cover' => filled($product->cover_path),
             'media_fingerprint' => $mediaFingerprint,
             'course_fingerprint' => $courseFingerprint,
