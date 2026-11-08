@@ -3,6 +3,8 @@
   const root = document.querySelector('[data-reader-root]');
   const speechUrl = root?.dataset.readerSpeechUrl || '';
   if (!root || !speechUrl) return;
+  const audioDock = root.querySelector('[data-reader-audio]');
+  if (audioDock) audioDock.hidden = false;
 
   const status = () => root.querySelector('[data-audio-status]');
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
