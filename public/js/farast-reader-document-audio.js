@@ -200,7 +200,8 @@
     playRange,
     playPage,
     pause() { rangeEnd = null; audio.pause(); },
-    get available() { return timings.length > 0; }
+    get available() { return timings.length > 0; },
+    get currentTime() { return audio.currentTime; }
   };
 
   dock.hidden = false;
