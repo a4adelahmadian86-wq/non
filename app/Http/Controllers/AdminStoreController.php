@@ -104,11 +104,15 @@ class AdminStoreController extends Controller
             : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
                 && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
 
+        $supervisorEnabled = (bool) data_get($product->metadata, 'ai_supervisor.enabled', false);
         $readiness = [
-            ['label' => 'مشخصات و دسته‌بندی', 'ready' => filled($product->title) && filled($product->sku) && $product->category !== null, 'required' => true],
-            ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0, 'required' => true],
+            ['label' => 'مشخصات و دسته‌بندی', 'ready' => filled($product->title) && filled($product->sku) && $product->category !== null && (bool) $product->category?->is_active, 'required' => true],
+            ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0 && ($product->compare_at_price_rials === null || $product->compare_at_price_rials > $product->price_rials), 'required' => true],
+            ['label' => 'معرفی محصول', 'ready' => filled($product->short_description) || filled($product->description), 'required' => false],
             ['label' => 'تصویر کاور', 'ready' => filled($product->cover_path), 'required' => false],
             ['label' => $product->type === 'course' ? 'حداقل یک جلسه منتشرشده' : 'فایل اصلی سالم و فعال', 'ready' => $contentReady, 'required' => true],
+            ['label' => 'اطلاعات سئو', 'ready' => filled($product->seo_title) && filled($product->seo_description), 'required' => false],
+            ['label' => 'سیاست ناظر هوشمند', 'ready' => ! $supervisorEnabled || filled(data_get($product->metadata, 'ai_supervisor.mode')), 'required' => false],
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
@@ -134,6 +138,9 @@ class AdminStoreController extends Controller
             }
 
             if (($data['status'] ?? '') === 'published') {
+                if (! $lockedProduct->category()->where('is_active', true)->exists()) {
+                    throw ValidationException::withMessages(['category_id' => 'برای انتشار محصول، دسته‌بندی آن باید فعال باشد.']);
+                }
                 if ($data['type'] === 'course') {
                     $hasPublishedLesson = $lockedProduct->course()
                         ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
@@ -208,7 +215,7 @@ class AdminStoreController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل انتشار نخواهد بود.');
 
-            $primary = $request->boolean('is_primary', true);
+            $primary = $request->boolean('is_primary');
             $fileRecord = DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 if ($primary) {
@@ -305,10 +312,11 @@ class AdminStoreController extends Controller
             ]);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ پیش‌نمایش ذخیره نشد.');
 
-            $sort = (int) ($product->previews()->max('sort_order') ?? 0) + 1;
-            DB::transaction(function () use ($product, $path, $inspection, $request, $sort) {
+            DB::transaction(function () use ($product, $path, $inspection, $request) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
                 StoreProductPreview::create([
-                    'product_id' => $product->id,
+                    'product_id' => $lockedProduct->id,
                     'disk' => 'private',
                     'path' => $path,
                     'mime' => $inspection['mime'],
@@ -318,7 +326,7 @@ class AdminStoreController extends Controller
                     'is_active' => true,
                     'sort_order' => $sort,
                 ]);
-                $this->audit('store.product.preview_uploaded', $product, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
+                $this->audit('store.product.preview_uploaded', $lockedProduct, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
@@ -455,9 +463,17 @@ class AdminStoreController extends Controller
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
     {
         abort_unless($preview->product_id === $product->id, 404);
-        $this->audit('store.product.preview_deleted', $product, ['preview_id' => $preview->id]);
-        Storage::disk($preview->disk ?: 'private')->delete($preview->path);
-        $preview->delete();
+        [$disk, $path] = DB::transaction(function () use ($product, $preview) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $lockedPreview = $lockedProduct->previews()->whereKey($preview->id)->lockForUpdate()->firstOrFail();
+            $this->audit('store.product.preview_deleted', $lockedProduct, ['preview_id' => $lockedPreview->id]);
+            $disk = $lockedPreview->disk ?: 'private';
+            $path = $lockedPreview->path;
+            $lockedPreview->delete();
+
+            return [$disk, $path];
+        });
+        Storage::disk($disk)->delete($path);
 
         return back()->with('status', 'پیش‌نمایش حذف شد.');
     }
@@ -474,10 +490,14 @@ class AdminStoreController extends Controller
         while (StoreTag::query()->where('slug', $slug)->exists()) {
             $slug = $base.'-'.$suffix++;
         }
-        StoreTag::firstOrCreate(
+        $tag = StoreTag::firstOrCreate(
             ['slug' => $slug],
             ['name' => $data['name']]
         );
+
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $tag->id, 'name' => $tag->name], 201);
+        }
 
         return back()->with('status', 'برچسب ذخیره شد؛ اکنون می‌توانید آن را به محصول اختصاص دهید.');
     }
@@ -489,10 +509,14 @@ class AdminStoreController extends Controller
             'slug' => 'nullable|string|max:180',
         ]);
         $slug = Str::slug($data['slug'] ?: $data['name']) ?: 'cat-'.Str::random(6);
-        StoreCategory::firstOrCreate(
+        $category = StoreCategory::firstOrCreate(
             ['slug' => $slug],
             ['name' => $data['name'], 'is_active' => true, 'sort_order' => 0]
         );
+
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $category->id, 'name' => $category->name], 201);
+        }
 
         return back()->with('status', 'دسته ذخیره شد.');
     }
