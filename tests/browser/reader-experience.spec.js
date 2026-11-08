@@ -609,6 +609,7 @@ test('plays the exact repeated paragraph occurrence and supports blank-page mous
         this.volume = 1;
         this.src = '';
         this.currentSrc = '';
+        window.__fakeReaderAudio = this;
       }
       setAttribute() {}
       load() { this.currentSrc = this.src; this.dispatchEvent(new Event('loadedmetadata')); }
