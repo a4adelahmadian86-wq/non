@@ -296,7 +296,7 @@ class GlobalAssistantController extends Controller
             $product = StoreProduct::query()->find($productId);
             if (! $product) return '';
 
-            $isOwner = (int) $product->user_id === (int) $user->id;
+            $isOwner = (int) $product->seller_id === (int) $user->id;
             if (! $isOwner && $product->status !== 'published') return '';
 
             $hasEntitlement = $isOwner || DB::table('store_library_items')
