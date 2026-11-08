@@ -79,6 +79,7 @@
   let wordMarks = [];
   let raf = 0;
   let lastPageRequest = 0;
+  let rangeEnd = null;
 
   const formatTime = seconds => {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -151,6 +152,8 @@
           const mark = document.createElement('span');
           mark.className = 'reader-audio-word';
           mark.dataset.segment = String(item.index);
+          mark.dataset.word = word;
+          mark.dataset.page = String(page);
           mark.setAttribute('role', 'button');
           mark.setAttribute('aria-label', (activeTrack.granularity === 'segment' ? 'رفتن به بخش ' : 'رفتن به کلمه ') + word);
           mark.tabIndex = 0;
@@ -264,7 +267,7 @@
   audio.addEventListener('play', () => { playButton.innerHTML = '<i class="fa-solid fa-pause"></i>'; playButton.setAttribute('aria-label', 'مکث'); dock.classList.add('is-playing'); status.textContent = 'در حال همراهی با متن'; startFrameLoop(); });
   audio.addEventListener('pause', () => { playButton.innerHTML = '<i class="fa-solid fa-play"></i>'; playButton.setAttribute('aria-label', 'پخش'); dock.classList.remove('is-playing'); cancelAnimationFrame(raf); });
   audio.addEventListener('loadedmetadata', () => { durationLabel.textContent = formatTime(audio.duration); });
-  audio.addEventListener('timeupdate', () => { if (Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000)); currentLabel.textContent = formatTime(audio.currentTime); updateHighlight(audio.currentTime); });
+  audio.addEventListener('timeupdate', () => { if (Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000)); currentLabel.textContent = formatTime(audio.currentTime); updateHighlight(audio.currentTime); if (rangeEnd !== null && audio.currentTime >= rangeEnd) { rangeEnd = null; audio.pause(); } });
   audio.addEventListener('seeking', () => updateHighlight(audio.currentTime));
   audio.addEventListener('ended', () => { status.textContent = 'این بخش به پایان رسید'; caption.textContent = 'برای ادامه، بخش بعدی را انتخاب کنید.'; });
   audio.addEventListener('error', () => { status.textContent = 'بارگذاری صوت ناموفق بود؛ فایل یا دسترسی آن را بررسی کنید.'; });
@@ -297,6 +300,15 @@
   selectSection(Number(initial?.dataset.index || 0));
   window.FarastAudioReader = {
     selectSection,
+    playRange(start, end, label) {
+      const from = Math.max(0, Number(start) || 0), to = Number(end);
+      if (!Number.isFinite(to) || to <= from) return false;
+      rangeEnd = to;
+      audio.currentTime = from;
+      if (label) caption.textContent = String(label).slice(0, 180);
+      audio.play().catch(() => { status.textContent = 'پخش صوت ممکن نشد؛ دسترسی فایل را بررسی کنید.'; });
+      return true;
+    },
     setPage(page) { activePage = Number(page) || 1; buildMarks(activePage); },
     destroy() { audio.pause(); observer.disconnect(); cancelAnimationFrame(raf); clearMarks(); }
   };
