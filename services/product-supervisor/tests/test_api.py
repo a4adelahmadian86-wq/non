@@ -80,7 +80,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(body["provider_status"]["gladia"], "disabled")
         self.assertEqual(body["provider_status"]["gemini"], "not_requested")
         self.assertEqual(body["provider_status"]["groq_text"], "not_configured")
-        self.assertTrue(any("هیچ متن فایلی به سرویس خارجی ارسال نشد" in warning for warning in body["warnings"]))
+        self.assertTrue(any("هیچ متن فایلی به Groq ارسال نشد" in warning for warning in body["warnings"]))
         self.assertEqual(body["analysis_batch_count"], 0)
         self.assertEqual(body["failed_analysis_batches"], 0)
 
