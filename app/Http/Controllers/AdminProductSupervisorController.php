@@ -202,10 +202,10 @@ class AdminProductSupervisorController extends Controller
         $review = [
             'review_id' => (string) ($review['review_id'] ?? ''),
             'summary' => mb_substr((string) ($review['summary'] ?? ''), 0, 700),
-            'findings' => array_slice(is_array($review['findings'] ?? null) ? $review['findings'] : [], 0, 6),
+            'findings' => array_slice(is_array($review['findings'] ?? null) ? $review['findings'] : [], 0, 4),
             'warnings' => array_map(
                 static fn ($warning) => mb_substr((string) $warning, 0, 400),
-                array_slice(is_array($review['warnings'] ?? null) ? $review['warnings'] : [], 0, 8)
+                array_slice(is_array($review['warnings'] ?? null) ? $review['warnings'] : [], 0, 6)
             ),
             'provider_status' => (array) ($review['provider_status'] ?? []),
             'inspection' => [
@@ -213,7 +213,7 @@ class AdminProductSupervisorController extends Controller
                 'extracted_characters' => (int) ($inspection['extracted_characters'] ?? 0),
                 'antivirus_status' => (string) ($inspection['antivirus_status'] ?? 'not_configured'),
                 'upstream_scan_status' => (string) ($inspection['upstream_scan_status'] ?? 'not_provided'),
-                'archive_entries' => array_slice(is_array($inspection['archive_entries'] ?? null) ? $inspection['archive_entries'] : [], 0, 30),
+                'archive_entries' => array_slice(is_array($inspection['archive_entries'] ?? null) ? $inspection['archive_entries'] : [], 0, 10),
             ],
             'security_gate' => (string) ($review['security_gate'] ?? 'manual_scan_required'),
             'publication_authorized' => false,
