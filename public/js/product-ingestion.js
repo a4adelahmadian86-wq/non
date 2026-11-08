@@ -232,13 +232,11 @@
       const audio = payload.audio_status || 'not_started';
       const sample = payload.sample_status || 'not_available';
       const pages = Array.isArray(payload.sample_pages) ? payload.sample_pages : [];
-      if (status === 'completed') {
-        setStep(audio === 'completed' ? null : (sample === 'completed' ? 'audio' : 'sample'), [
-          ...completedSteps, 'study', ...(sample !== 'pending' ? ['sample'] : []), ...(audio !== 'pending' ? ['audio'] : []),
-        ]);
-      } else {
-        setStep(null, [...completedSteps, 'study']);
-      }
+      const done = [...completedSteps];
+      if (status === 'completed') done.push('study');
+      if (status === 'completed' && sample !== 'pending') done.push('sample');
+      if (audio === 'completed') done.push('audio');
+      setStep(null, done);
 
       const messages = {
         completed: 'مطالعه محتوایی فایل تکمیل شد.',
