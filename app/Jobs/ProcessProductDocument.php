@@ -244,6 +244,9 @@ class ProcessProductDocument implements ShouldQueue
                 'review_id' => $payload['review_id'] ?? null,
                 'summary' => $payload['summary'] ?? null,
                 'findings' => $payload['findings'] ?? [],
+                'media_reports' => [
+                    'visual' => mb_substr((string) ($payload['visual_report'] ?? ''), 0, 4000),
+                ],
                 'warnings' => $payload['warnings'] ?? [],
                 'provider_status' => $payload['provider_status'] ?? [],
                 'analysis_batch_count' => (int) ($payload['analysis_batch_count'] ?? 0),
