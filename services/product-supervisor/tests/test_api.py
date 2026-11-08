@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from main import app
+from main import app, validate_evidence_facts
 
 
 class ProductSupervisorFileApiTests(unittest.TestCase):
