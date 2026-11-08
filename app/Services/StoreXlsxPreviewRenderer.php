@@ -355,7 +355,7 @@ class StoreXlsxPreviewRenderer
 
         $formats = [];
         foreach ($xpath->query('//*[local-name()="cellXfs"]/*[local-name()="xf"]') as $xf) {
-            if (!$xf instanceof DOMElement) { $formats[] = ''; continue; }
+            if (!$xf instanceof DOMElement) { $formats[] = ['css' => '', 'numFmtId' => 0, 'formatCode' => null]; continue; }
             $css = [];
             $fontId = (int) $xf->getAttribute('fontId');
             $fillId = (int) $xf->getAttribute('fillId');
