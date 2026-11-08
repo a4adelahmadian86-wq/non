@@ -19,6 +19,8 @@ services:
         value: gemini-2.5-flash
       - key: GROQ_API_KEY
         sync: false
+      - key: GROQ_ZDR_CONFIRMED
+        value: "false"
       - key: GROQ_TEXT_MODEL
         value: openai/gpt-oss-20b
       - key: GROQ_VISION_MODEL
