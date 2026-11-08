@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import unittest
+import tarfile
 import zipfile
 
 from docx import Document
@@ -78,6 +79,32 @@ class FilePipelineTests(unittest.TestCase):
         self.assertIn("متن فصل اول", result.extracted_text)
         self.assertEqual(result.embedded_documents[0]["name"], "chapters/readme.txt")
         self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "chapters/readme.txt")
+
+    def test_tar_archive_reads_bounded_document_members_without_extracting_to_disk(self):
+        stream = io.BytesIO()
+        content = "متن داخل آرشیو TAR".encode("utf-8")
+        with tarfile.open(fileobj=stream, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+            info = tarfile.TarInfo("docs/chapter.txt")
+            info.size = len(content)
+            archive.addfile(info, io.BytesIO(content))
+
+        result = inspect_file(stream.getvalue(), "book.tar")
+        self.assertEqual(result.detected_type, "tar")
+        self.assertIn("docs/chapter.txt", result.archive_entries)
+        self.assertIn("متن داخل آرشیو TAR", result.extracted_text)
+        self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "docs/chapter.txt")
+
+    def test_tar_gzip_archive_is_inspected_without_extracting_to_disk(self):
+        stream = io.BytesIO()
+        content = b"Compressed TAR content"
+        with tarfile.open(fileobj=stream, mode="w:gz", format=tarfile.USTAR_FORMAT) as archive:
+            info = tarfile.TarInfo("readme.txt")
+            info.size = len(content)
+            archive.addfile(info, io.BytesIO(content))
+
+        result = inspect_file(stream.getvalue(), "book.tar.gz")
+        self.assertEqual(result.detected_type, "tar")
+        self.assertIn("Compressed TAR content", result.extracted_text)
 
     def test_nested_archives_are_listed_but_not_recursively_extracted(self):
         nested = io.BytesIO()
