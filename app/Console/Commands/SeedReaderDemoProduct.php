@@ -55,7 +55,7 @@ class SeedReaderDemoProduct extends Command
             $disk->put($prepared['word'][0], $bytes);
         }
         if ($this->option('refresh') || !$disk->exists($prepared['excel'][0])) {
-            $html = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($disk->get($assets['xlsx'][0]), 'FARAST_READER_IDENTITY_TOKEN');
+            $html = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($disk->get($assets['xlsx'][0]), '');
             $disk->put($prepared['excel'][0], $html);
         }
 
