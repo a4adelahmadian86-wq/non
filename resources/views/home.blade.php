@@ -16,7 +16,15 @@
         <div class="home-hero-copy">
             <span class="home-kicker"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> FARAST</span>
             <h1 id="home-title">از ایده تا نتیجه، مسیرتان را با فراست شروع کنید</h1>
-            <p>فایل دارید، می‌خواهید چیزی خلق کنید یا به یک سرویس هوشمند نیاز دارید؟ فراست مسیر مناسب را پیدا می‌کند تا بدون پیچیدگی وارد جریان کار شوید.</p>
+            <p>محصول دیجیتال موردنیازتان را پیدا کنید یا کار با سند را همین‌جا آغاز کنید؛ از ورود فایل و تبدیل گفتار به متن تا ویرایش و آماده‌سازی خروجی، در یک مسیر روشن و یکپارچه.</p>
+            <div class="home-hero-actions">
+                <a class="home-hero-cta home-hero-cta--primary" href="#homeDiscovery"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> شروع یک کار جدید</a>
+                <a class="home-hero-cta home-hero-cta--secondary" href="{{ route('store') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> ورود به فروشگاه</a>
+            </div>
+            <div class="home-hero-assurance" aria-label="دو مسیر اصلی فراست">
+                <span><i class="fa-solid fa-book-open" aria-hidden="true"></i> محصولات دیجیتال</span>
+                <span><i class="fa-solid fa-file-pen" aria-hidden="true"></i> خدمات و ابزارهای سند</span>
+            </div>
         </div>
         <div class="home-hero-rule" aria-hidden="true"></div>
     </section>
@@ -53,6 +61,24 @@
         </article>
     </section>
 
+    @if($homeCategories->isNotEmpty())
+    <nav class="home-category-nav" aria-label="دسته‌بندی محصولات فروشگاه">
+        <div class="home-category-nav__heading">
+            <strong>دسته‌بندی‌ها</strong>
+            <a href="{{ route('store') }}">مشاهده همه <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+        </div>
+        <div class="home-category-nav__list">
+            @foreach($homeCategories as $category)
+                <a href="{{ route('store', ['category' => $category->slug]) }}">
+                    <span class="home-category-nav__icon"><i class="{{ $category->icon ?: 'fa-solid fa-folder-open' }}" aria-hidden="true"></i></span>
+                    <span>{{ $category->name }}</span>
+                    <small>{{ number_format($category->published_products_count) }}</small>
+                </a>
+            @endforeach
+        </div>
+    </nav>
+    @endif
+
     @if($homeProducts->isNotEmpty())
     <section class="home-products" aria-labelledby="home-products-title">
         <div class="home-section-heading">
@@ -73,7 +99,7 @@
                         @else
                             <span class="home-product-placeholder" aria-hidden="true"><i class="fa-solid fa-{{ $product->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i><b>FARAST</b></span>
                         @endif
-                        <span class="home-product-kind">{{ $product->type === 'course' ? 'دوره آموزشی' : 'فایل دیجیتال' }}</span>
+                        <span class="home-product-kind">{{ $product->type === 'course' ? 'دوره آموزشی' : ($product->category?->name ?? 'محصول دیجیتال') }}</span>
                     </a>
                     <div class="home-product-body">
                         <h3><a href="{{ route('store.product', $product->slug) }}">{{ $product->title }}</a></h3>
@@ -130,6 +156,30 @@
         </div>
     </section>
 
+    <section class="home-process" aria-labelledby="home-process-title">
+        <div class="home-section-heading home-section-heading--center">
+            <div>
+                <span class="home-kicker">مسیر ساده و شفاف</span>
+                <h2 id="home-process-title">از انتخاب تا انجام کار</h2>
+                <p>برای استفاده از فراست لازم نیست از ابتدا همه جزئیات را بدانید؛ مسیر را مرحله‌به‌مرحله پیش ببرید.</p>
+            </div>
+        </div>
+        <div class="home-process-grid">
+            <article class="home-process-step">
+                <span class="home-process-step__number">۱</span>
+                <div><h3>مسیرتان را انتخاب کنید</h3><p>محصول دیجیتال می‌خواهید یا قصد دارید روی یک فایل و سند کار کنید؟</p></div>
+            </article>
+            <article class="home-process-step">
+                <span class="home-process-step__number">۲</span>
+                <div><h3>فایل را وارد کنید یا بسازید</h3><p>از فایل موجود شروع کنید یا پروژه‌ای تازه با قالب مناسب بسازید.</p></div>
+            </article>
+            <article class="home-process-step">
+                <span class="home-process-step__number">۳</span>
+                <div><h3>بازبینی و ادامه دهید</h3><p>محتوا را در محیط کار بررسی و ویرایش کنید و گزینه‌های خروجی را دنبال کنید.</p></div>
+            </article>
+        </div>
+    </section>
+
     <main class="home-discovery" id="homeDiscovery">
         <section class="discovery-panel" aria-labelledby="discovery-title">
             <div class="discovery-heading">
@@ -183,6 +233,36 @@
         </section>
         @endif
     </main>
+
+    <section class="home-faq" aria-labelledby="home-faq-title">
+        <div class="home-section-heading home-section-heading--center">
+            <div>
+                <span class="home-kicker">پیش از شروع</span>
+                <h2 id="home-faq-title">پاسخ چند پرسش کاربردی</h2>
+                <p>اطلاعات اصلی را شفاف می‌گوییم تا با دید روشن‌تری انتخاب کنید.</p>
+            </div>
+        </div>
+        <div class="home-faq-grid">
+            <details class="home-faq-item">
+                <summary>فراست فروشگاه است یا ابزار انجام کار؟</summary>
+                <p>هر دو مسیر را در یک سایت ارائه می‌کند: می‌توانید محصولات دیجیتال منتشرشده را بررسی کنید یا برای کار با فایل و سند وارد محیط خدمات شوید.</p>
+            </details>
+            <details class="home-faq-item">
+                <summary>برای شروع کار با فایل چه مراحلی دارم؟</summary>
+                <p>نوع محتوای فایل را مشخص می‌کنید، فایل را بارگذاری می‌کنید و پس از آماده‌شدن برآورد، جزئیات را پیش از تأیید بررسی می‌کنید.</p>
+            </details>
+            <details class="home-faq-item">
+                <summary>هزینه خدمات چگونه مشخص می‌شود؟</summary>
+                <p>برای فرایندهای مشمول برآورد، اطلاعات فایل بررسی می‌شود و مبلغ قابل پرداخت پیش از تأیید به شما نمایش داده می‌شود. جزئیات روش محاسبه در صفحه قیمت‌گذاری آمده است.</p>
+                <a href="{{ route('pricing') }}">مشاهده روش قیمت‌گذاری <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+            </details>
+            <details class="home-faq-item">
+                <summary>چطور به کار نیمه‌تمامم برگردم؟</summary>
+                <p>پس از ورود به حساب، از فضای کاربری یا بخش پروژه‌های اخیر می‌توانید کارهای ذخیره‌شده خود را ادامه دهید.</p>
+                <a href="{{ route('dashboard') }}">ورود به فضای کاربری <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+            </details>
+        </div>
+    </section>
 </div>
 @endsection
 

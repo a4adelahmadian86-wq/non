@@ -34,7 +34,7 @@ Route::get('/', function () {
 
     $homeProducts = Schema::hasTable('store_products')
         ? \App\Models\StoreProduct::query()
-            ->with('images')
+            ->with(['images', 'category'])
             ->published()
             ->orderByDesc('featured')
             ->orderBy('sort_order')
@@ -43,7 +43,18 @@ Route::get('/', function () {
             ->get()
         : collect();
 
-    return view('home', compact('recentProjects', 'homeProducts'));
+    $homeCategories = Schema::hasTable('store_categories') && Schema::hasTable('store_products')
+        ? \App\Models\StoreCategory::query()
+            ->where('is_active', true)
+            ->whereNull('parent_id')
+            ->whereHas('products', fn ($query) => $query->published())
+            ->withCount(['products as published_products_count' => fn ($query) => $query->published()])
+            ->orderBy('sort_order')
+            ->limit(6)
+            ->get()
+        : collect();
+
+    return view('home', compact('recentProjects', 'homeProducts', 'homeCategories'));
 })->name('home');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('blog.show');
