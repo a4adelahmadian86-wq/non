@@ -26,3 +26,5 @@
 @keyframes ingestFade{from{opacity:0}to{opacity:1}}@keyframes ingestRise{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes ingestPulse{50%{transform:scale(1.12);box-shadow:0 0 0 5px rgba(37,99,235,.08)}}
 @media(max-width:600px){.product-ingestion-dialog{padding:15px;border-radius:18px}.product-ingestion-timeline{grid-template-columns:1fr 1fr}.product-ingestion-step{padding:8px}.product-ingestion-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.product-ingestion-file-head{align-items:flex-start;flex-wrap:wrap}.product-ingestion-status{margin-right:54px}.product-ingestion-dialog>footer>*{flex:1}}
 @media(prefers-reduced-motion:reduce){.product-ingestion-dialog,.product-ingestion-backdrop,.product-ingestion-step.is-running i{animation:none!important;transition:none!important}}
+
+.product-ingestion-step.is-pending{border-style:dashed;background:#fafafa;color:#94a3b8}.product-ingestion-step.is-pending i{background:#f1f5f9}
