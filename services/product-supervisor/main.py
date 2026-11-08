@@ -113,7 +113,7 @@ async def review_product_file(
     product_id: str = Form(..., min_length=1, max_length=80),
     product_title: str = Form(..., min_length=2, max_length=220),
     product_type: Literal["digital_file", "course"] = Form(...),
-    primary_scan_status: Literal["clean"] = Form(...),
+    primary_scan_status: Literal["clean", "structural_checks_passed"] = Form(...),
     category_name: str | None = Form(default=None, max_length=160),
     tags_json: str = Form(default="[]", max_length=5000),
     description: str | None = Form(default=None, max_length=8000),
@@ -294,7 +294,7 @@ async def review_product_file(
         "findings": safe_findings,
         "warnings": [str(item)[:400] for item in warnings[:20]],
         "redacted_sensitive_items": redaction_count,
-        "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("structural_checks_passed" if inspection.antivirus_status == "clean" else ("upstream_scan_verified" if inspection.upstream_scan_status == "clean" else "manual_scan_required")),
+        "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("structural_checks_passed" if inspection.antivirus_status == "clean" or inspection.upstream_scan_status == "structural_checks_passed" else ("upstream_scan_verified" if inspection.upstream_scan_status == "clean" else "manual_scan_required")),
         "publication_authorized": False,
         "automated_publication": False,
     }
