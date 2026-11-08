@@ -61,7 +61,7 @@ class StoreReaderAccessTest extends TestCase
             '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
             'xl/workbook.xml' => '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="گزارش" sheetId="1" r:id="rId1"/></sheets></workbook>',
             'xl/_rels/workbook.xml.rels' => '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1" s="1"><v>42</v></c><c r="C1" s="2"><f>1+1</f><v>73</v></c><c r="D1" s="3"><v>0.125</v></c><c r="E1" s="4"><v>45292</v></c></row></sheetData></worksheet>',
+            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="22" customWidth="1"/></cols><sheetData><row r="1" ht="30" customHeight="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1" s="1"><v>42</v></c><c r="C1" s="2"><f>1+1</f><v>73</v></c><c r="D1" s="3"><v>0.125</v></c><c r="E1" s="4"><v>45292</v></c></row><row r="2"><c r="F2" t="inlineStr"><is><t>ادغام</t></is></c><c r="G2"><v>9</v></c></row></sheetData><mergeCells count="1"><mergeCell ref="F2:G2"/></mergeCells></worksheet>',
             'xl/styles.xml' => '<?xml version="1.0"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.0%"/></numFmts><fonts count="3"><font/><font><b/><color rgb="FF1F4E78"/></font><font><color rgb="url(javascript:alert(1))"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="5"><xf/><xf fontId="1" fillId="1" borderId="0" xfId="0"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="2" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164"/><xf numFmtId="14"/></cellXfs></styleSheet>',
         ];
         foreach ($parts as $name => $contents) {
@@ -345,6 +345,11 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringContainsString('73', $streamedHtml);
         $this->assertStringContainsString('12.5%', $streamedHtml);
         $this->assertStringContainsString('2024-01-01', $streamedHtml);
+        $this->assertStringContainsString('colspan="2"', $streamedHtml);
+        $this->assertStringContainsString('width:159px', $streamedHtml);
+        $this->assertStringContainsString('height:40px', $streamedHtml);
+        $this->assertStringContainsString('ادغام', $streamedHtml);
+        $this->assertStringNotContainsString('>9</td>', $streamedHtml);
         $this->assertStringNotContainsString('javascript:', $streamedHtml);
         $this->assertStringNotContainsString('1+1', $streamedHtml);
         $this->assertStringContainsString('فرمول‌ها اجرا نمی‌شوند', $streamedHtml);
