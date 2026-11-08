@@ -109,7 +109,7 @@
           </article>
         @endforeach
       </div>
-      <div class="farast-reader-shortcuts"><kbd>←</kbd><kbd>→</kbd> جابه‌جایی صفحه <span>·</span> <kbd>+</kbd><kbd>−</kbd> بزرگ‌نمایی <span>·</span> <kbd>F</kbd> تمام‌صفحه</div>
+      <div class="farast-reader-shortcuts"><kbd>←</kbd><kbd>→</kbd> جابه‌جایی صفحه <span>·</span> <kbd>+</kbd><kbd>−</kbd> بزرگ‌نمایی <span>·</span> <kbd>F</kbd> تمام‌صفحه <span>·</span> <kbd>B</kbd> نشانک</div>
     </main>
   </div>
   <div class="farast-reader-security-note"><i class="fa-solid fa-lock"></i><span>شناسهٔ حساب یا IP بازدیدکننده به‌صورت شناور روی محتوای مطالعه نمایش داده می‌شود؛ فایل ذخیره‌شده تغییر نمی‌کند.</span></div>
@@ -141,5 +141,5 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261108secure-reader6"></script>
+<script src="/js/farast-reader.js?v=20261108secure-reader7"></script>
 @endpush
