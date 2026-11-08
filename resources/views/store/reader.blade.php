@@ -8,7 +8,7 @@
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
       <strong>{{ $product->title }}</strong>
-      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} صفحه نمونه</span>
+      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} صفحه</span>
     </div>
     <div class="farast-reader-account"><i class="fa-solid fa-user-shield"></i><span>{{ $readerWatermark }}</span></div>
   </header>
@@ -55,7 +55,7 @@
                 <i class="fa-solid fa-file-pdf"></i><small>PDF</small>
               @elseif(($preview->kind ?? '') === 'docx')
                 <i class="fa-solid fa-file-word"></i><small>Word</small>
-              @elseif(($preview->kind ?? '') === 'xlsx')
+              @elseif(in_array(($preview->kind ?? ''), ['xlsx', 'html'], true))
                 <i class="fa-solid fa-file-excel" style="color:#27834e"></i><small>Excel</small>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
@@ -74,7 +74,7 @@
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
       <div class="farast-reader-pages" id="reader-pages">
         @foreach($previews as $i => $preview)
-          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }} {{ ($preview->kind ?? '') === 'xlsx' ? 'is-server-watermarked' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}">
+          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }} {{ in_array(($preview->kind ?? ''), ['xlsx', 'html'], true) ? 'is-server-watermarked' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}">
             <div class="farast-reader-page-content">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <div class="farast-pdf-document" data-pdf-url="{{ route('store.preview',$preview) }}" aria-label="نمایش سند PDF">
@@ -106,7 +106,7 @@
       <div class="farast-reader-shortcuts"><kbd>←</kbd><kbd>→</kbd> جابه‌جایی صفحه <span>·</span> <kbd>+</kbd><kbd>−</kbd> بزرگ‌نمایی <span>·</span> <kbd>F</kbd> تمام‌صفحه</div>
     </main>
   </div>
-  <div class="farast-reader-security-note"><i class="fa-solid fa-lock"></i><span>این پیش‌نمایش با شناسه حساب شما نشان‌گذاری شده است تا بازنشر بدون مجوز دشوارتر و قابل پیگیری‌تر باشد.</span></div>
+  <div class="farast-reader-security-note"><i class="fa-solid fa-lock"></i><span>شناسهٔ حساب یا IP بازدیدکننده به‌صورت شناور روی محتوای مطالعه نمایش داده می‌شود؛ فایل ذخیره‌شده تغییر نمی‌کند.</span></div>
 </section>
 @endsection
 
