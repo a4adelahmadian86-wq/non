@@ -12,7 +12,7 @@ from piper import PiperVoice
 HOST = os.getenv("PIPER_HOST", "127.0.0.1")
 PORT = int(os.getenv("PIPER_PORT", "7007"))
 MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")) )
-MODEL_PATH = MODEL_DIR / "fa_IR-amir-medium.onnx"
+MODEL_PATH = MODEL_DIR / "fa_IR-mana-medium.onnx"
 MAX_TEXT_LENGTH = 6000
 VOICE_ID = "farast-fa-male-v1"
 PIPER_TOKEN = (os.getenv("FARAST_VOICE_TTS_TOKEN") or os.getenv("FARAST_VOICE_TOKEN") or "").strip()
