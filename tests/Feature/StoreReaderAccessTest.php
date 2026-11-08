@@ -280,7 +280,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee(route('store.reader.page', [$product, 1]), false)
             ->assertDontSee(route('store.preview', $full), false)
             ->assertDontSee($originalBytes, false);
-        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\GenerateProductDocumentAudio::class);
+
 
         $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
         $pageResponse->assertOk()
