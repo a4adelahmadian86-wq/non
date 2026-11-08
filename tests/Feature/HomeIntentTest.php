@@ -40,7 +40,11 @@ class HomeIntentTest extends TestCase
             ->assertSee('شروع یک کار جدید')
             ->assertSee('ورود به فروشگاه')
             ->assertSee('از انتخاب تا انجام کار')
-            ->assertSee('پاسخ چند پرسش کاربردی');
+            ->assertSee('پاسخ چند پرسش کاربردی')
+            ->assertSee('application/ld+json', false)
+            ->assertSee('schema.org/Organization')
+            ->assertSee('og:title', false)
+            ->assertSee('name="description"', false);
     }
 
     public function test_word_processor_project_intents_classify_and_suggest_templates(): void

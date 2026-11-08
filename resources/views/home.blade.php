@@ -1,13 +1,48 @@
 @extends('layouts.app')
 
 @php
-    $title = 'فراست | چه کاری می‌خواهید انجام دهید؟';
+    $title = 'فراست | فروشگاه محصولات دیجیتال و خدمات هوشمند اسناد';
     $isAuthenticated = auth()->check();
 @endphp
 
 @push('head')
-<meta name="description" content="فراست ابتدا هدف شما را می‌فهمد، فقط سؤال‌های لازم را می‌پرسد و سپس پروژه را در محیط کاری مناسب باز می‌کند.">
+<meta name="description" content="در فراست محصولات دیجیتال و دوره‌های آموزشی را بررسی و تهیه کنید؛ یا با ابزارهای تایپ، OCR، تبدیل گفتار به متن و ویرایش اسناد، کارتان را در یک محیط یکپارچه پیش ببرید.">
+<meta name="robots" content="index,follow">
 <link rel="canonical" href="{{ url('/') }}">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:site_name" content="فراست">
+<meta property="og:title" content="فراست | فروشگاه محصولات دیجیتال و خدمات هوشمند اسناد">
+<meta property="og:description" content="محصول دیجیتال انتخاب کنید یا کار با فایل و سند را با ابزارهای فراست آغاز کنید.">
+<meta property="og:url" content="{{ url('/') }}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="فراست | محصولات دیجیتال و خدمات هوشمند">
+<meta name="twitter:description" content="فروشگاه محصولات دیجیتال در کنار ابزارهای تایپ، OCR، گفتار به متن و ویرایش اسناد.">
+<script type="application/ld+json">
+@json([
+    '@context' => 'https://schema.org',
+    '@type' => 'Organization',
+    'name' => 'فراست',
+    'alternateName' => 'FARAST',
+    'url' => url('/'),
+    'logo' => asset('icons/farast-icon.svg'),
+    'description' => 'فروشگاه محصولات دیجیتال و محیط یکپارچه خدمات تایپ، OCR، تبدیل گفتار به متن و ویرایش اسناد.',
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+</script>
+<script type="application/ld+json">
+@json([
+    '@context' => 'https://schema.org',
+    '@type' => 'WebSite',
+    'name' => 'فراست',
+    'url' => url('/'),
+    'inLanguage' => 'fa-IR',
+    'potentialAction' => [
+        '@type' => 'SearchAction',
+        'target' => route('store').'?q={search_term_string}',
+        'query-input' => 'required name=search_term_string',
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+</script>
 @endpush
 
 @section('content')
@@ -79,7 +114,6 @@
     </nav>
     @endif
 
-    @if($homeProducts->isNotEmpty())
     <section class="home-products" aria-labelledby="home-products-title">
         <div class="home-section-heading">
             <div>
@@ -111,6 +145,17 @@
                     </div>
                 </article>
             @endforeach
+        </div>
+    </section>
+    @else
+    <section class="home-products home-products--empty" aria-labelledby="home-products-title">
+        <div class="home-section-heading">
+            <div>
+                <span class="home-kicker">فروشگاه فراست</span>
+                <h2 id="home-products-title">محصولات دیجیتال</h2>
+                <p>در حال حاضر محصول منتشرشده‌ای برای نمایش در ویترین صفحه اصلی وجود ندارد. برای مشاهده آخرین موارد منتشرشده، وارد فروشگاه شوید.</p>
+            </div>
+            <a class="home-section-link" href="{{ route('store') }}">ورود به فروشگاه <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
         </div>
     </section>
     @endif
@@ -263,6 +308,17 @@
             </details>
         </div>
     </section>
+    <script type="application/ld+json">
+    @json([
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => array_map(static fn ($item) => [
+            '@type' => 'Question',
+            'name' => $item[0],
+            'acceptedAnswer' => ['@type' => 'Answer', 'text' => $item[1]],
+        ], \$homeFaqSchema),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+    </script>
 </div>
 @endsection
 

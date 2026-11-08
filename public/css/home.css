@@ -133,3 +133,10 @@
 @media(max-width:720px){.home-hero-actions{margin-top:21px}.home-hero-cta{flex:1 1 100%;min-height:46px}.home-hero-assurance{gap:10px 16px;font-size:.7rem}.home-category-nav{padding:16px 13px;border-radius:17px}.home-category-nav__list{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.home-category-nav__list>a{padding:9px 8px;font-size:.7rem}.home-process,.home-faq{padding:22px 14px;border-radius:20px}.home-process-grid,.home-faq-grid{grid-template-columns:1fr}.home-process-step{padding:15px 13px}.home-faq-item{padding:15px}}
 @media(prefers-reduced-motion:reduce){.home-hero-cta,.home-category-nav__list>a{transition:none}}
 
+
+/* Catalogue fallback keeps the store journey visible before the first publication. */
+.home-products--empty{padding:24px 26px;border:1px dashed #cbd8e9;border-radius:22px;background:linear-gradient(135deg,#fbfdff,#f5f8fd)}
+.home-products--empty .home-section-heading{align-items:center;margin:0}
+.home-products--empty .home-section-heading>div{max-width:720px}
+.home-products--empty .home-section-heading p{line-height:2}
+@media(max-width:720px){.home-products--empty{padding:20px 15px}.home-products--empty .home-section-heading{align-items:flex-start}}
