@@ -119,15 +119,20 @@ def _extract_xlsx(data: bytes) -> str:
     try:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
         parts: list[str] = []
+        char_count = 0
         for sheet in workbook.worksheets[:20]:
-            parts.append(f"برگه: {sheet.title}")
+            heading = f"برگه: {sheet.title}"
+            parts.append(heading)
+            char_count += len(heading)
             for row in sheet.iter_rows(max_row=300, max_col=30, values_only=True):
                 values = [str(value)[:300] for value in row if value is not None]
                 if values:
-                    parts.append(" | ".join(values))
-                if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
+                    line = " | ".join(values)
+                    parts.append(line)
+                    char_count += len(line)
+                if char_count >= MAX_EXTRACTED_CHARS:
                     break
-            if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
+            if char_count >= MAX_EXTRACTED_CHARS:
                 break
         workbook.close()
         return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
@@ -143,20 +148,26 @@ def _extract_pptx(data: bytes) -> str:
     try:
         presentation = Presentation(io.BytesIO(data))
         parts: list[str] = []
-        for slide_number, slide in enumerate(presentation.slides[:100], start=1):
-            parts.append(f"اسلاید {slide_number}")
+        char_count = 0
+        for slide_number, slide in enumerate(presentation.slides, start=1):
+            if slide_number > 100 or char_count >= MAX_EXTRACTED_CHARS:
+                break
+            heading = f"اسلاید {slide_number}"
+            parts.append(heading)
+            char_count += len(heading)
             for shape in slide.shapes:
                 if getattr(shape, "has_text_frame", False):
                     text = "\n".join(paragraph.text for paragraph in shape.text_frame.paragraphs)
                     if text.strip():
                         parts.append(text)
+                        char_count += len(text)
                 if getattr(shape, "has_table", False):
                     for row in shape.table.rows:
-                        parts.append(" | ".join(cell.text for cell in row.cells))
-                if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
+                        line = " | ".join(cell.text for cell in row.cells)
+                        parts.append(line)
+                        char_count += len(line)
+                if char_count >= MAX_EXTRACTED_CHARS:
                     break
-            if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
-                break
         return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
     except Exception:
         raise FileInspectionError("استخراج امن محتوای PowerPoint انجام نشد.") from None
