@@ -320,6 +320,8 @@ class AdminProductFileIngestionController extends Controller
             'preflight_archive_format_not_supported_for_safe_listing' => 'این نوع آرشیو هنوز امکان فهرست‌برداری امن داخلی ندارد.',
             'preflight_nested_archive_requires_review' => 'آرشیو تو‌در‌تو شناسایی شد؛ برای جلوگیری از عبور محتوای بررسی‌نشده، فعلاً آن را جداگانه بارگذاری کنید.',
             'preflight_office_container_invalid' => 'ساختار داخلی فایل Office معتبر نیست یا با پسوند آن تطابق ندارد.',
+            'preflight_pdf_page_limit' => 'تعداد صفحات PDF از سقف پردازش فعلی بیشتر است.',
+            'preflight_image_pixel_limit' => 'ابعاد تصویر از سقف ایمن پردازش بیشتر است.',
             'preflight_archive_empty_or_invalid' => 'آرشیو خالی یا ناقص است و امکان بررسی معتبر آن وجود ندارد.',
             'preflight_tar_signature_invalid' => 'ساختار فایل TAR معتبر نیست.',
             'preflight_legacy_office_not_supported' => 'فرمت‌های قدیمی Office فعلاً پشتیبانی نمی‌شوند؛ فایل را به DOCX، XLSX یا PPTX تبدیل کنید.',
