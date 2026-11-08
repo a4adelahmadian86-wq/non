@@ -29,7 +29,7 @@ services:
     runtime: python
     rootDir: services/document-audio
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && python download_model.py
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 2 --timeout-keep-alive 5
     healthCheckPath: /health
     autoDeployTrigger: "off"
