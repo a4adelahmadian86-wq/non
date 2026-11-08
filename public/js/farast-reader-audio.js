@@ -472,7 +472,7 @@
     const article = element.closest('.farast-reader-page-item');
     const page = Number(element.dataset.page || article?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
     const token = tokens(element.textContent)[0] || '';
-    const scope = article || root;
+    const scope = element.closest('[data-pdf-cont-page]') || article || root;
     const matches = [...scope.querySelectorAll('.reader-document-word')]
       .filter(item => (tokens(item.textContent)[0] || '') === token);
     return findTextRange(element.textContent, page, Math.max(0, matches.indexOf(element)));
