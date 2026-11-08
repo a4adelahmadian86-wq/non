@@ -1,72 +1,72 @@
-# FARAST Store Sample Reader: Security and Support Notes
+# FARAST Store Reader: Security and Support Notes
 
-## Supported preview formats
+## Reader responsibility
 
-- **PDF:** rendered in the authenticated reader with the pinned PDF.js legacy module. Page navigation, zoom, rotation, fit-width, thumbnails, outline navigation, text search, and continuous scrolling are provided where the PDF contains the corresponding data.
-- **Word (.docx):** validated as an OOXML archive, converted server-side to sanitized HTML and then to a neutral paginated PDF. Embedded images, tables, explicit page breaks, and the first section's page size/margins are preserved where PHPWord/Dompdf can represent them. The account watermark is painted into the PDF.js page canvas at read time. External OOXML relationships and active HTML content are rejected.
-- **Excel (.xlsx):** parsed server-side into a read-only HTML workbook. Visible worksheets and cached cell values are shown; formulas are never evaluated. External workbook relationships are rejected.
+The reader is a delivery and display layer only. It must never convert an uploaded source document, generate a new preview file, or persist a visitor-specific copy during a read request.
 
-The original product file is not used as a public preview URL. Preview records are stored on the configured private disk and served through authenticated, throttled routes.
+Prepared artifacts are created once in the administrator upload/preparation flow and stored on the private disk:
+- PDF and image uploads are stored as private preview assets.
+- DOCX uploads are validated and converted to a neutral, paginated PDF before the preview record is created.
+- XLSX uploads are parsed into safe, read-only HTML before the preview record is created. Formulas are not evaluated.
+- The reader serves only these stored artifacts. Legacy raw DOCX/XLSX preview records are rejected (HTTP 409) until re-prepared.
+- Future AI sample-page selection belongs in the upload/preparation pipeline. It should save selected page assets and metadata once; it is not reader functionality.
 
-## Current resource limits
+## Supported preview formats and limits
 
+- **PDF:** PDF.js renders prepared PDFs. Page navigation, zoom, rotation, fit-width, thumbnails, outline navigation, text search, and continuous scrolling are provided where the PDF contains the corresponding data.
+- **Word (.docx):** prepared during upload into a neutral PDF. Embedded images, tables, explicit page breaks, and section page settings are preserved where PHPWord/Dompdf can represent them. External OOXML relationships and unsafe embedded HTML are rejected.
+- **Excel (.xlsx):** prepared during upload into read-only HTML. Visible worksheets and cached cell values are shown; formulas are never evaluated. External workbook relationships are rejected.
+- **Images:** stored privately and displayed as non-selectable preview content.
+
+Current defensive ceilings:
 - Preview upload limit: 20 MiB.
 - DOCX: at most 5,000 ZIP entries and 100 MiB expanded content; relationship XML parts are limited to 2 MiB.
-- XLSX: at most 2,000 ZIP entries and 80 MiB expanded content; at most 10 total worksheets (hidden sheets are skipped), 2,000 rows per sheet, 40 columns, and 80,000 parsed cells. Individual workbook and XML parts have additional size limits in the renderer.
+- XLSX: at most 2,000 ZIP entries and 80 MiB expanded content; at most 10 total worksheets (hidden sheets are skipped), 2,000 rows per sheet, 40 columns, and 80,000 parsed cells.
 
-These are defensive ceilings, not a promise that every Office feature is reproduced. Complex Word layouts, embedded objects, advanced Excel formatting, charts, drawings, and images may not be identical to desktop Office applications.
+These are defensive ceilings, not a promise that every Office feature is reproduced. Complex Word layouts, embedded objects, advanced Excel formatting, charts, drawings, and images may differ from desktop Office applications.
 
-## Access and response protections
+## Visitor identity watermark
 
-- Reader and preview endpoints require an authenticated account; preview requests are rate-limited.
-- Preview responses use private/no-store cache headers, nosniff, same-origin framing/resource policies, no-referrer, and restrictive content security policies.
-- DOCX is converted once per source-content hash into a neutral PDF; XLSX is converted once per source-content hash into escaped HTML. Both neutral conversions are cached for seven days and reused across accounts. The current account identity is applied after conversion (PDF.js canvas for PDF/DOCX and a per-response escaped identity token for XLSX), so cache entries never contain another user's identity. The XLSX renderer does not execute formulas, macros, scripts, or external workbook relationships.
-- The reader suppresses ordinary copy, cut, drag, context-menu, print, and save shortcuts. PDF and DOCX identity watermarks are painted into the rendered page canvas in the browser; the cached DOCX PDF itself is neutral. XLSX HTML receives an escaped per-response identity token.
+- Authenticated visitor: the mobile number on their account.
+- Guest visitor: the request IP address. Production proxy configuration must trust only known reverse proxies so the address cannot be spoofed through arbitrary forwarded headers.
+- PDF identity is painted into the browser-rendered page canvas. Prepared workbook HTML contains a neutral identity token which is replaced with the escaped visitor identity when served. Image previews use the reader's visual overlay.
+- The stored neutral PDF/HTML/image artifact is not rewritten for each visitor. No watermark-specific file is generated or saved.
+- Ordinary selection, copy, cut, drag, context-menu, print, and save shortcuts are suppressed where practical. These browser controls are deterrents, not DRM; screenshots, photography, developer tools, and extraction of delivered network content remain possible.
 
-## Important security boundary
+## Product access policy
 
-A browser-based reader cannot provide absolute DRM. An authenticated user can still inspect network traffic, retrieve content delivered to their browser, take screenshots, or photograph the screen. For original PDF previews, the source PDF response is **not** rewritten with a server-side watermark. For DOCX previews, the cached neutral PDF is also delivered to the browser before the account watermark is painted on the canvas. These watermarks raise attribution friction for ordinary viewing and screenshots but do not prevent an authorized user from extracting the PDF bytes from network traffic.
+Products have a download policy:
+- `signed`: the existing signed-download flow remains available after purchase.
+- `reader_only`: buyers receive access through the reader, but download-link issuance and the final stream endpoint both deny downloads.
 
-Do not describe the reader as impossible to copy or download. Stronger PDF protection requires a separately deployed and tested server-side PDF stamping/rasterization pipeline or a dedicated DRM/document-delivery service, with explicit operational and performance requirements.
+Administrators can upload prepared preview assets with access level `sample` or `full`:
+- Sample assets are available to guests and carry an IP watermark.
+- Full assets are accepted only for `reader_only` products and are served only to authenticated visitors with an active library entitlement for that product.
+- Revoked or absent library entitlements do not unlock full assets.
 
-## Automated verification status
+## Response protections
 
-Latest completed reader verification is [run 42449244268](https://github.com/a4adelahmadian86-wq/non/actions/runs/42449244268), which passed:
+Preview and reader responses use private/no-store cache headers, nosniff, same-origin framing/resource policies, no-referrer, and restrictive content security policies. Preview assets remain on the private disk and are delivered through throttled application routes; no public storage URL is used.
 
-- Laravel suite: **316 tests passed, 1,551 assertions**.
-- Playwright suite: **56 browser tests passed**, including PDF.js rendering, watermark pixels, text search, page controls, zoom/rotation, lazy PDF.js loading for image-only previews, and sandboxed Excel checks.
-- The DOCX feature test verifies a landscape page size, embedded image output, and at least two rendered pages after an explicit page break.
-- PHP migrations, route listing, Blade view cache, syntax checks, and configured voice-stream smoke steps completed successfully. The optional Sherpa workflow job was skipped for this pull-request event., including a PDF.js page render from a generated PDF fixture, account watermark, text search, page controls, zoom, rotation, theme, sidebar, continuous-scroll toolbar availability, and sandboxed Excel iframe checks.
-- PHP migrations, route listing, Blade view cache, JavaScript syntax checks, and the configured voice-stream smoke steps completed successfully. The optional Sherpa workflow job was skipped for this pull-request event.
+The PDF.js legacy build and worker are currently loaded from a version-pinned CDN; they are not self-hosted yet.
 
-These tests establish automated behavior against controlled fixtures. They do **not** replace manual visual QA against representative customer documents and real mobile/desktop browsers; no such manual QA is claimed here.
+## Automated verification and release checks
 
-## Release checklist
+CI should cover:
+1. Laravel feature tests for guest IP watermark, authenticated mobile watermark, prepared-only Office delivery, full-content entitlement, revocation, and reader-only download denial.
+2. Playwright tests for PDF.js rendering and watermark visibility, text search, page controls, zoom/rotation, lazy thumbnail loading, and copy/context-menu suppression.
+3. Migration, route, Blade cache, and JavaScript syntax checks.
 
-1. Run the full Laravel and Playwright CI workflows.
-2. Manually inspect representative PDFs and DOCX files with RTL text, mixed fonts, tables, page breaks, headers/footers, and embedded images on desktop and mobile.
-3. Inspect representative XLSX files with multiple sheets, hidden sheets, dates, shared strings, cached formulas, large sparse ranges, and malformed/external relationships.
-4. Verify production PHP extensions and private-disk permissions; keep preview files outside the public web root.
-5. Confirm the PDF.js version and worker are pinned consistently. The current browser implementation loads the official legacy build from a version-pinned CDN; it is not self-hosted.
-6. Reassess server-side PDF watermarking before making any stronger anti-extraction claims.
-
-
-## Conversion reuse and resource policy
-
-- DOCX and XLSX conversions use a content-addressed cache key (SHA-256 of the private source bytes) with a seven-day TTL. The same neutral conversion is reused across all authenticated readers; a changed source automatically receives a new cache key.
-- User-specific identity is applied after the shared conversion. The cache never stores a user's mobile number or account identifier.
-- Cache storage should be configured as a persistent shared Laravel cache backend (Redis or the file cache on a shared persistent volume). An in-memory/array cache only benefits a single process/request lifecycle and is not suitable for production reuse across workers.
-- PDF.js renders the requested page first. Continuous scrolling and thumbnails should remain opt-in/visible-demand features; avoid eager rendering of every page or prefetching full documents.
-- The conversion cache is bounded by TTL, but operators should still monitor cache disk/Redis memory and configure normal cache eviction/cleanup policies.
+Automated fixtures do not replace manual visual QA against representative customer PDFs, DOCX, and XLSX files on desktop and mobile browsers. Production deployment, migrations, trusted-proxy configuration, private-disk permissions, and actual uploaded sample content must be verified in the target environment.
 
 ## Demo product
 
-An opt-in command generates small, synthetic Persian-language PDF, DOCX, and two-sheet XLSX files on the **private** disk and creates a published, free catalog product with three preview entries:
+The opt-in command creates synthetic source files and their prepared reader artifacts on the private disk, then registers three prepared preview entries:
 
     php artisan farast:seed-reader-demo
 
-Rebuild the files in place with:
+Rebuild the fixture files in place with:
 
     php artisan farast:seed-reader-demo --refresh
 
-The command is intentionally not part of automatic production seeding. Run it only in an environment where you want the public demo catalog item. The product page is `/store/product/farast-reader-demo`; the reader endpoint requires an authenticated account. The generated PDF is marked as the product's primary demo file, but all three preview sources remain on the private disk and are served only through authenticated preview routes.
+This command is a test/demo fixture generator only. It is not called by the reader and is not part of automatic production seeding. The generated PDF, Word-to-PDF, and Excel-to-HTML assets are stored once and then served by the reader.
