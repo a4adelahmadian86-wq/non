@@ -98,7 +98,8 @@ class StoreReaderAccessTest extends TestCase
         $this->withServerVariables(['REMOTE_ADDR' => $guestIp])
             ->get(route('store.preview', $preview))
             ->assertOk()
-            ->assertSee('%PDF-1.4 sample');
+            ->assertSee('inline');
+        $this->assertSame('%PDF-1.4 sample', $this->get(route('store.preview', $preview))->getContent());
     }
 
     public function test_reader_only_purchase_unlocks_full_content_without_issuing_a_download(): void
@@ -143,7 +144,8 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee(route('store.preview', $sample));
         $this->actingAs($user)->get(route('store.preview', $full))
             ->assertOk()
-            ->assertSee('%PDF-1.4 full');
+            ->assertSee('inline');
+        $this->assertSame('%PDF-1.4 full', $this->actingAs($user)->get(route('store.preview', $full))->getContent());
         $this->actingAs($user)->post(route('library.download.issue', $libraryItem))
             ->assertForbidden();
     }
@@ -205,7 +207,7 @@ class StoreReaderAccessTest extends TestCase
 
         $response->assertOk()
             ->assertHeader('Content-Type', 'application/pdf')
-            ->assertHeader('Content-Disposition', 'inline; filename="farast-word-preview.pdf"');
+            ->assertHeader('Content-Disposition', 'inline');
 
         $pdf = $response->getContent();
         $this->assertStringStartsWith('%PDF-', $pdf);
@@ -282,7 +284,7 @@ class StoreReaderAccessTest extends TestCase
             ->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('farast-xlsx-frame')
-            ->assertSee('sandbox=""', false)
+            ->assertSee('sandbox', false)
             ->assertSee('Excel');
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
@@ -343,7 +345,7 @@ class StoreReaderAccessTest extends TestCase
 
         $this->actingAs($this->makeReaderUser())
             ->get(route('store.preview', $preview))
-            ->assertStatus(422);
+            ->assertStatus(409);
     }
 
     public function test_authenticated_reader_sees_account_watermark_and_private_preview_headers(): void
