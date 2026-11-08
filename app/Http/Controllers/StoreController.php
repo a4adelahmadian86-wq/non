@@ -353,6 +353,10 @@ class StoreController extends Controller
         $sourceXPath = new \DOMXPath($source);
         $sourceXPath->registerNamespace('w', $wordNs);
         $sourceParagraphs = $sourceXPath->query('//w:body//w:p');
+        $sectionProperties = $sourceXPath->query('//w:sectPr');
+        $finalSectionProperties = $sectionProperties && $sectionProperties->length > 0
+            ? $sectionProperties->item($sectionProperties->length - 1)
+            : null;
         if (!$sourceParagraphs || $sourceParagraphs->length === 0) {
             return $html;
         }
@@ -391,7 +395,8 @@ class StoreController extends Controller
 
             $pageBreakAfter = $sourceXPath->query('.//w:br[@w:type="page"] | .//w:lastRenderedPageBreak', $sourceParagraph)->length > 0;
             $sectionBreak = $sourceXPath->query('./w:pPr/w:sectPr', $sourceParagraph)->item(0);
-            if ($sectionBreak instanceof \DOMElement) {
+            if ($sectionBreak instanceof \DOMElement
+                && (!$finalSectionProperties instanceof \DOMNode || !$sectionBreak->isSameNode($finalSectionProperties))) {
                 $sectionType = $sourceXPath->query('./w:type', $sectionBreak)->item(0);
                 $sectionValue = $sectionType instanceof \DOMElement
                     ? strtolower($sectionType->getAttributeNS($wordNs, 'val'))
