@@ -86,10 +86,12 @@ class StoreXlsxPreviewRenderer
                 }
 
                 $marks = '';
-                for ($i = 0; $i < 12; $i++) {
-                    $top = 8 + (($i % 4) * 25);
-                    $left = 3 + (intdiv($i, 4) * 32);
-                    $marks .= '<span style="top:'.$top.'%;left:'.$left.'%">'.$safeIdentity.' · پیش‌نمایش فراست</span>';
+                if ($identity !== '') {
+                    for ($i = 0; $i < 12; $i++) {
+                        $top = 8 + (($i % 4) * 25);
+                        $left = 3 + (intdiv($i, 4) * 32);
+                        $marks .= '<span style="top:'.$top.'%;left:'.$left.'%">'.$safeIdentity.' · پیش‌نمایش فراست</span>';
+                    }
                 }
 
                 return '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>پیش‌نمایش Excel</title><style>
