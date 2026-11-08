@@ -343,7 +343,7 @@ class AdminStoreController extends Controller
             } elseif ($extension === 'xlsx') {
                 $preparedBytes = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
                     Storage::disk('private')->get($sourcePath),
-                    'FARAST_READER_IDENTITY_TOKEN'
+                    ''
                 );
                 $preparedPath = 'store/previews/'.$product->id.'/'.Str::random(40).'.html';
                 abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده Excel ممکن نشد.');
