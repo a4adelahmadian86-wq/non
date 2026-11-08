@@ -577,6 +577,7 @@ class GlobalAssistantController extends Controller
             'context' => ['nullable','array','max:10'],
             'context.*.role' => ['required','string','in:user,assistant'],
             'context.*.text' => ['required','string','max:1200'],
+            'product_id' => ['nullable','integer'],
         ]);
         $user = $request->user();
         abort_unless($user, 401, 'برای استفاده از همراه فراست وارد حساب شوید.');
