@@ -16,7 +16,9 @@ class ProductPublicationReadiness
             ->first();
 
         $document = $file?->document;
-        if (! $file || ! $document) {
+        if (! $file || ! $document
+            || (int) $document->product_id !== (int) $product->id
+            || (int) $document->product_file_id !== (int) $file->id) {
             return false;
         }
 
