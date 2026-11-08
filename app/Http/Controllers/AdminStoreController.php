@@ -307,9 +307,10 @@ class AdminStoreController extends Controller
 
         $upload = $request->file('preview');
         $extension = strtolower($upload->getClientOriginalExtension());
-        $path = $upload->store('store/previews/'.$product->id, 'private');
+        $sourcePath = $upload->store('store/quarantine/previews/'.$product->id, 'private');
+        $preparedPath = null;
         try {
-            $inspection = $security->inspect($path, $upload->getMimeType(), 20 * 1024 * 1024, [
+            $inspection = $security->inspect($sourcePath, $upload->getMimeType(), 20 * 1024 * 1024, [
                 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/zip',
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -318,18 +319,46 @@ class AdminStoreController extends Controller
 
             $kind = match ($extension) {
                 'pdf' => 'pdf',
-                'docx' => 'docx',
-                'xlsx' => 'xlsx',
+                'docx' => 'pdf',
+                'xlsx' => 'html',
                 default => 'image',
             };
-            DB::transaction(function () use ($product, $path, $inspection, $request, $kind) {
+            $mime = $kind === 'pdf' ? 'application/pdf' : ($kind === 'html' ? 'text/html' : $inspection['mime']);
+            $finalPath = $sourcePath;
+
+            if ($extension === 'docx') {
+                $preparedBytes = app(StoreController::class)->prepareDocxPreview(Storage::disk('private')->get($sourcePath));
+                $preparedPath = 'store/previews/'.$product->id.'/'.Str::random(40).'.pdf';
+                abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده PDF ممکن نشد.');
+                $finalPath = $preparedPath;
+            } elseif ($extension === 'xlsx') {
+                $preparedBytes = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
+                    Storage::disk('private')->get($sourcePath),
+                    'FARAST_READER_IDENTITY_TOKEN'
+                );
+                $preparedPath = 'store/previews/'.$product->id.'/'.Str::random(40).'.html';
+                abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده Excel ممکن نشد.');
+                $finalPath = $preparedPath;
+            } else {
+                $directory = 'store/previews/'.$product->id;
+                $filename = Str::random(40).'.'.$extension;
+                $preparedPath = $directory.'/'.$filename;
+                Storage::disk('private')->move($sourcePath, $preparedPath);
+                $finalPath = $preparedPath;
+            }
+
+            if ($finalPath !== $sourcePath) {
+                Storage::disk('private')->delete($sourcePath);
+            }
+
+            DB::transaction(function () use ($product, $finalPath, $mime, $request, $kind) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
                 StoreProductPreview::create([
                     'product_id' => $lockedProduct->id,
                     'disk' => 'private',
-                    'path' => $path,
-                    'mime' => $inspection['mime'],
+                    'path' => $finalPath,
+                    'mime' => $mime,
                     'page_number' => $request->input('page_number') ?: $sort,
                     'kind' => $kind,
                     'watermarked' => true,
@@ -337,20 +366,23 @@ class AdminStoreController extends Controller
                     'sort_order' => $sort,
                 ]);
                 $this->audit('store.product.preview_uploaded', $lockedProduct, [
-                    'mime' => $inspection['mime'],
+                    'mime' => $mime,
                     'kind' => $kind,
                     'sort_order' => $sort,
                 ]);
             });
         } catch (Throwable $exception) {
-            Storage::disk('private')->delete($path);
+            Storage::disk('private')->delete($sourcePath);
+            if ($preparedPath) {
+                Storage::disk('private')->delete($preparedPath);
+            }
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
-            abort(503, 'بارگذاری پیش‌نمایش به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
+            abort(503, 'آماده‌سازی پیش‌نمایش به دلیل ناموفق بودن بررسی امنیتی یا تبدیل فایل متوقف شد.');
         }
 
-        return back()->with('status', 'پیش‌نمایش پس از اسکن امنیتی اضافه شد.');
+        return back()->with('status', 'پیش‌نمایش آماده و خصوصی ذخیره شد؛ خوانشگر فقط نسخهٔ آماده را نمایش می‌دهد.');
     }
 
     public function uploadCover(Request $request, StoreProduct $product, UploadSecurityService $security)
