@@ -104,6 +104,9 @@ class ProductFilePreflightScanner
             }
         } elseif ($kind === 'pdf') {
             $details['page_count'] = $this->countPdfPages($absolutePath, $size);
+            if ($details['page_count'] > 300) {
+                throw new RuntimeException('preflight_pdf_page_limit');
+            }
             if ($details['page_count'] === 0) {
                 $warnings[] = 'تعداد صفحات از ساختار PDF قابل تشخیص قطعی نبود.';
             }
@@ -114,6 +117,9 @@ class ProductFilePreflightScanner
             }
             $details['width'] = (int) $image[0];
             $details['height'] = (int) $image[1];
+            if ($details['width'] < 1 || $details['height'] < 1 || $details['width'] * $details['height'] > 50000000) {
+                throw new RuntimeException('preflight_image_pixel_limit');
+            }
             $details['image_mime'] = (string) ($image['mime'] ?? $detectedMime);
         } elseif ($kind === 'text') {
             $details['text_preview'] = $this->textPreview($absolutePath);
