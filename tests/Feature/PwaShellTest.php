@@ -15,10 +15,10 @@ class PwaShellTest extends TestCase
             ->assertOk()
             ->assertSee('rel="manifest" href="/manifest.webmanifest"', false)
             ->assertSee('id="farastInstallApp"', false)
-            ->assertSee('/js/farast-pwa.js', false);
+            ->assertSee('/js/farast-pwa.js', false)\n            ->assertSee('class="farast-mobile-dock"', false)\n            ->assertSee('href="/editor"', false);
     }
 
-    public function test_manifest_has_standalone_display_and_required_icon_sizes(): void
+    public function test_mobile_dock_spacing_is_scoped_to_public_pages(): void\n    {\n        $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));\n        $styles = file_get_contents(public_path('css/farast-mobile-dock.css'));\n\n        $this->assertStringContainsString('has-mobile-dock', $layout);\n        $this->assertStringContainsString('body.has-mobile-dock', $styles);\n        $this->assertStringNotContainsString('body:not(.editor-page-body)', $styles);\n    }\n\n    public function test_manifest_has_standalone_display_and_required_icon_sizes(): void
     {
         $manifest = json_decode(
             file_get_contents(public_path('manifest.webmanifest')),
