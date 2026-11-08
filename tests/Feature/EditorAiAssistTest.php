@@ -62,10 +62,10 @@ class EditorAiAssistTest extends TestCase
             'facts' => [['key' => 'duration', 'value' => '۷ ساعت', 'evidence' => 'مدت فایل ۷ ساعت است.', 'verification_status' => 'evidence_backed']],
             'warnings' => [],
         ];
-        $service = \\Mockery::mock(ProductKnowledgeService::class);
+        $service = \Mockery::mock(ProductKnowledgeService::class);
         $service->shouldReceive('contextForProduct')
             ->once()
-            ->with(\\Mockery::on(fn ($candidate) => $candidate->is($product)), 12000, false)
+            ->with(\Mockery::on(fn ($candidate) => $candidate->is($product)), 12000, false)
             ->andReturn($knowledge);
         $this->app->instance(ProductKnowledgeService::class, $service);
 
