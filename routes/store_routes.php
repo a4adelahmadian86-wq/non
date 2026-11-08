@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminCourseController;
+use App\Http\Controllers\AdminProductSupervisorController;
 use App\Http\Controllers\AdminStoreController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StoreController;
