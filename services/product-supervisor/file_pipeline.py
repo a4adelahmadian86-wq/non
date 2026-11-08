@@ -924,6 +924,7 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
                     "محتوای کپی‌رایت‌دار، محتوای نامرتبط، محتوای خالی یا ناقص و ناسازگاری با عنوان محصول را مشخص کن.",
                     "خروجی را به فارسی و به شکل JSON شامل summary و findings و sample_pages و facts بده.",
                     "sample_pages فقط برای PDF یا PPTX است و باید حداکثر سه شماره یک‌مبنایی از شماره صفحه یا اسلایدی باشد که واقعاً در همین بخش دیده‌ای؛ برای سایر فرمت‌ها آرایه خالی بده.",
+                    "sample_sheets فقط برای XLSX است و باید حداکثر سه نام دقیق برگه از برچسب‌های «برگه:» همین بخش باشد؛ برای سایر فرمت‌ها آرایه خالی بده.",
                     "facts حداکثر ۲۰ گزاره اتمی و دقیق است؛ هر گزاره باید fact_type و fact_key و fact_value و evidence داشته باشد.",
                     "evidence باید نقل‌قول کوتاه و عیناً کپی‌شده از متن همین بخش باشد؛ اگر شاهد دقیق وجود ندارد آن fact را حذف کن.",
                     "برای هر fact فقط به اطلاعاتی اشاره کن که در همین بخش وجود دارد؛ locator را فقط در صورت مشاهده شماره صفحه، برگه، سطر یا اسلاید درج کن.",
@@ -982,6 +983,7 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
     findings: list[dict[str, Any]] = []
     seen_findings: set[str] = set()
     sample_pages: list[int] = []
+    sample_sheets: list[str] = []
     facts: list[dict[str, Any]] = []
     seen_facts: set[str] = set()
     for item in results:
@@ -1026,10 +1028,19 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
                 if isinstance(page, int) and not isinstance(page, bool) and page not in sample_pages:
                     sample_pages.append(page)
 
+        raw_sheets = item.get("sample_sheets", [])
+        if isinstance(raw_sheets, list):
+            for sheet in raw_sheets:
+                if isinstance(sheet, str):
+                    clean_sheet = sheet.strip()[:120]
+                    if clean_sheet and clean_sheet not in sample_sheets:
+                        sample_sheets.append(clean_sheet)
+
     return {
         "summary": " ".join(summaries)[:700],
         "findings": findings[:50],
         "sample_pages": sample_pages[:3],
+        "sample_sheets": sample_sheets[:3],
         "facts": facts[:100],
         "analysis_status": "completed" if len(results) == len(batches) else "partial",
         "analysis_batch_count": len(batches),
