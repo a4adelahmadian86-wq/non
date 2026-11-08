@@ -24,6 +24,7 @@ class EditorAiAssistController extends Controller
         } catch (ValidationException|HttpExceptionInterface $e) { throw $e; }
         catch (\RuntimeException $e) {
             if ($e->getMessage() === 'ai_capability_not_entitled') return response()->json(['ok'=>false,'message'=>'این قابلیت برای پروژه یا حساب شما فعال نیست.'],403);
+            if ($e->getMessage() === 'ai_product_context_forbidden') return response()->json(['ok'=>false,'message'=>'دسترسی به دانش این محصول برای حساب شما مجاز نیست.'],403);
             $code = preg_match('/^ai_[a-z0-9_]+$/',$e->getMessage()) ? $e->getMessage() : 'ai_provider_failure';
             Log::warning('farast.editor.ai_assist_failed',['user_id'=>$request->user()->id,'operation'=>$data['operation'],'error_code'=>$code]);
             return response()->json(['ok'=>false,'error_code'=>$code,'message'=>$code,'user_message'=>$this->safeMessage($code)],502);
