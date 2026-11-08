@@ -35,6 +35,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
                     "product_id": "p-1",
                     "product_title": "عنوان آزمایشی",
                     "product_type": "digital_file",
+                    "primary_scan_status": "clean",
                     "category_name": "آموزشی",
                     "tags_json": '["آموزش"]',
                 },
