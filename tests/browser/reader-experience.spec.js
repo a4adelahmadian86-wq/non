@@ -149,12 +149,26 @@ test.describe('FARAST sample reader interactions', () => {
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
+    await expect(root.locator('.farast-pdf-text-layer .reader-search-hit')).toHaveCount(1);
+    await root.locator('#reader-search-input').fill('');
+    await root.locator('#reader-search').click();
+    await expect(root.locator('#reader-search-count')).toBeEmpty();
+    await expect(root.locator('.farast-pdf-text-layer .reader-search-hit')).toHaveCount(0);
     await root.locator('#reader-zoom-in').click();
     await expect(root.locator('#reader-zoom-label')).toContainText('۱۱۰');
     await root.locator('#reader-scroll-mode').click();
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page canvas')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page')).toHaveAttribute('data-rendered', '1');
+    // Page-number navigation in continuous mode must scroll the matching page into view.
+    const scrollCalls = await root.locator('.farast-pdf-cont-page').evaluate(element => {
+      let calls = 0;
+      element.scrollIntoView = () => { calls++; };
+      return calls;
+    });
+    expect(scrollCalls).toBe(0);
+    await root.locator('#reader-page-number').fill('1');
+    await root.locator('#reader-page-number').dispatchEvent('change');
     // Continuous rendering must not lock the rest of the reading toolbar.
     await expect(root.locator('#reader-zoom-in')).toBeEnabled();
     await root.locator('#reader-zoom-in').click();
