@@ -107,7 +107,7 @@ class ProductDocumentAudioServiceTest extends TestCase
 
     public function test_audio_job_uses_existing_default_queue_and_visibility_exceeds_job_timeout(): void
     {
-        $job = new \\App\\Jobs\\GenerateProductDocumentAudio(123);
+        $job = new GenerateProductDocumentAudio(123);
 
         $this->assertSame('default', $job->queue);
         $this->assertSame(900, $job->timeout);
