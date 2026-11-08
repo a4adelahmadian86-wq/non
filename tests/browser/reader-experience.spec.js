@@ -1532,3 +1532,37 @@ test('reader highlights stay anchored to the selected duplicate phrase', async (
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
   await expect(page.locator('mark.farast-reader-local-highlight').first()).toHaveText(phrase);
 });
+
+test('reader ink exposes keyboard guidance and discards cancelled pointer strokes', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="ink-accessibility-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" style="width:640px;height:420px">
+        <div class="farast-reader-document"><p>متن صفحه</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  const toggle = page.locator('[data-ink-toggle]');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.farast-reader-ink-help')).toContainText('صفحه‌کلید');
+  await toggle.click();
+  const canvas = page.locator('canvas.farast-reader-ink-canvas').first();
+  await expect(canvas).toHaveAttribute('role', 'img');
+  await expect(canvas).toHaveAttribute('aria-describedby', /farast-reader-ink-help/);
+  const bounds = await canvas.boundingBox();
+  await page.dispatchEvent('canvas.farast-reader-ink-canvas', 'pointerdown', {
+    pointerId: 71, pointerType: 'pen', button: 0, clientX: bounds.x + 20, clientY: bounds.y + 20, pressure: 0.7
+  });
+  await page.dispatchEvent('canvas.farast-reader-ink-canvas', 'pointermove', {
+    pointerId: 71, pointerType: 'pen', button: 0, clientX: bounds.x + 80, clientY: bounds.y + 70, pressure: 0.7
+  });
+  await page.dispatchEvent('canvas.farast-reader-ink-canvas', 'pointercancel', {
+    pointerId: 71, pointerType: 'pen', button: 0, clientX: bounds.x + 80, clientY: bounds.y + 70, pressure: 0
+  });
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:ink-accessibility-fixture')));
+  expect(stored.inkStrokes).toHaveLength(0);
+  await toggle.click();
+  await expect(canvas).toHaveCSS('touch-action', 'auto');
+});
