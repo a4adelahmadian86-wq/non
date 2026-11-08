@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
+use App\Models\StoreProductIngestion;
 use App\Models\StoreProductDocumentPage;
 use App\Models\StoreProductImage;
 use App\Models\StoreTag;
@@ -14,6 +16,8 @@ use App\Services\UploadSecurityService;
 use App\Services\ProductKnowledgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
@@ -633,6 +637,94 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $this->assertSame('published', $product->fresh()->status);
         $this->assertSame('reader_only', $product->fresh()->download_policy);
+    }
+
+    public function test_replacing_primary_file_unpublishes_reader_only_product_until_reprocessing_finishes(): void
+    {
+        Storage::fake('private');
+        Queue::fake();
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول مطالعه آنلاین منتشرشده',
+            'slug' => 'published-reader-only',
+            'sku' => 'PUBLISHED-READER-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'download_policy' => 'reader_only',
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/old-primary.pdf',
+            'original_name' => 'old-primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 10,
+            'sha256' => str_repeat('a', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+
+        $newBytes = 'replacement-primary-file';
+        $newHash = hash('sha256', $newBytes);
+        $stagingPath = 'store/quarantine/'.$product->id.'/replacement.pdf';
+        Storage::disk('private')->put($stagingPath, $newBytes);
+        $ingestion = StoreProductIngestion::create([
+            'id' => (string) Str::uuid(),
+            'product_id' => $product->id,
+            'user_id' => $admin->id,
+            'status' => 'inspected',
+            'staging_disk' => 'private',
+            'staging_path' => $stagingPath,
+            'original_name' => 'replacement.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen($newBytes),
+            'sha256' => $newHash,
+            'inspection_json' => ['safe' => true, 'detected_type' => 'pdf'],
+            'is_primary' => true,
+            'expires_at' => now()->addMinutes(30),
+        ]);
+
+        $this->mock(UploadSecurityService::class, function ($mock) use ($stagingPath, $newBytes, $newHash) {
+            $mock->shouldReceive('inspect')->once()->with($stagingPath, 'application/pdf', 50 * 1024 * 1024)->andReturn([
+                'safe' => true,
+                'mime' => 'application/pdf',
+                'size' => strlen($newBytes),
+                'checksum' => $newHash,
+                'scan' => 'test-clean',
+                'detected_type' => 'pdf',
+                'page_count' => 1,
+            ]);
+        });
+
+        $response = $this->actingAs($admin)
+            ->post(route('admin.store.files.confirm', [$product, $ingestion->id]));
+
+        $response->assertOk()
+            ->assertJsonPath('product.status', 'draft')
+            ->assertJsonPath('product.requires_republish', true);
+        $this->assertSame('draft', $product->fresh()->status);
+        $this->assertNull($product->fresh()->published_at);
+        $this->assertDatabaseHas('store_product_files', [
+            'product_id' => $product->id,
+            'sha256' => $newHash,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+        ]);
+        $this->assertDatabaseHas('store_product_ingestions', [
+            'id' => $ingestion->id,
+            'status' => 'uploaded',
+        ]);
+        Queue::assertPushed(ProcessProductDocument::class);
     }
 
 }
