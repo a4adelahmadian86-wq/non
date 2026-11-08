@@ -24,6 +24,7 @@ MAX_BODY_BYTES = 26 * 1024 * 1024
 MAX_FINDINGS = 12
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 
 class ProductSnapshot(BaseModel):
@@ -485,7 +486,7 @@ async def review_product(snapshot: ProductSnapshot):
     if not api_key:
         raise HTTPException(status_code=503, detail="Supervisor provider is not configured")
 
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    model = GEMINI_MODEL
     model = re.sub(r"[^a-zA-Z0-9._-]", "", model)
     if not model:
         raise HTTPException(status_code=503, detail="Supervisor model is not configured")
