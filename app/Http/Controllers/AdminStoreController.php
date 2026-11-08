@@ -277,7 +277,7 @@ class AdminStoreController extends Controller
         $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean']);
 
         $upload = $request->file('file');
-        $originalNameLower = strtolower(str_replace('\\\\', '/', $upload->getClientOriginalName()));
+        $originalNameLower = strtolower(str_replace('\\', '/', $upload->getClientOriginalName()));
         $extension = str_ends_with($originalNameLower, '.tar.gz')
             ? 'tar.gz'
             : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower($upload->getClientOriginalExtension()));
