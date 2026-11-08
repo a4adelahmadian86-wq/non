@@ -110,8 +110,10 @@ class StudyProductDocument implements ShouldQueue
             $profile = (array) ($review['content_profile'] ?? []);
             $status = (string) ($review['content_study_status'] ?? 'no_extractable_content');
             $processingState = $status === 'completed' ? 'studied' : ($status === 'extracted_only' ? 'extracted_only' : 'study_incomplete');
+            $contentVersion = $locked->content_studied_at ? ((int) $locked->content_version + 1) : max(1, (int) $locked->content_version);
             $manifest = [
                 'manifest_version' => 1,
+                'content_version' => $contentVersion,
                 'source_sha256' => $locked->source_sha256,
                 'study_status' => $status,
                 'summary' => mb_substr((string) ($review['summary'] ?? ''), 0, 700),
@@ -131,6 +133,7 @@ class StudyProductDocument implements ShouldQueue
 
             $locked->update([
                 'processing_state' => $processingState,
+                'content_version' => $contentVersion,
                 'page_count' => data_get($inspection, 'page_count', $locked->page_count),
                 'technical_metadata' => array_merge((array) $locked->technical_metadata, ['supervisor_inspection' => $inspection]),
                 'content_manifest' => $manifest,
