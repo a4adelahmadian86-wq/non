@@ -263,13 +263,15 @@ class StoreController extends Controller
             $writer = \PhpOffice\PhpWord\IOFactory::createWriter($document, 'HTML');
             $writer->save($htmlPath);
             $html = file_get_contents($htmlPath) ?: '';
+            $html = $this->applyDocxPagination($html, $sourcePath);
+            $pageLayout = $this->docxPageLayout($sourcePath);
             $body = $this->sanitizeDocxHtml($html);
 
             // Convert the source document once into a neutral PDF. The reader paints
             // the current account identity into each rendered page canvas at view time.
             $marks = '';
             $page = '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><style>
-                @page{size:A4;margin:22mm 18mm 22mm}
+                @page{size:'.$pageLayout['width'].'pt '.$pageLayout['height'].'pt;margin:'.$pageLayout['top'].'pt '.$pageLayout['right'].'pt '.$pageLayout['bottom'].'pt '.$pageLayout['left'].'pt}
                 *{box-sizing:border-box}html,body{margin:0;font-family:"DejaVu Sans",Tahoma,sans-serif;color:#1f2937;background:#fff}
                 body{font-size:10pt;line-height:1.85;overflow-wrap:anywhere}
                 .docx-content{width:100%;direction:rtl}
@@ -295,13 +297,13 @@ class StoreController extends Controller
             $options->set('dpi', 96);
 
             $renderer = new \Dompdf\Dompdf($options);
-            $renderer->setPaper('A4', 'portrait');
+            $renderer->setPaper([0, 0, $pageLayout['width'], $pageLayout['height']]);
             $renderer->loadHtml($page, 'UTF-8');
             $renderer->render();
 
             $canvas = $renderer->getCanvas();
             $font = $renderer->getFontMetrics()->getFont('DejaVu Sans', 'normal');
-            $canvas->page_text(260, 820, '{PAGE_NUM} / {PAGE_COUNT}', $font, 8, [0.38, 0.43, 0.52]);
+            $canvas->page_text(max(12, ($pageLayout['width'] / 2) - 25), max(12, $pageLayout['height'] - 16), '{PAGE_NUM} / {PAGE_COUNT}', $font, 8, [0.38, 0.43, 0.52]);
 
             return $renderer->output();
         } catch (\Throwable $exception) {
@@ -315,6 +317,220 @@ class StoreController extends Controller
                 @unlink($htmlPath);
             }
         }
+    }
+
+    /**
+     * Restore pagination cues that PHPWord's HTML writer does not emit.
+     * Paragraph text is matched in document order so empty page-break paragraphs
+     * do not shift the mapping between DOCX and generated HTML.
+     */
+    private function applyDocxPagination(string $html, string $docxPath): string
+    {
+        $archive = new \ZipArchive();
+        if ($archive->open($docxPath) !== true) {
+            return $html;
+        }
+
+        try {
+            $xmlBytes = $archive->getFromName('word/document.xml');
+        } finally {
+            $archive->close();
+        }
+        if (!is_string($xmlBytes) || $xmlBytes === '') {
+            return $html;
+        }
+
+        $wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+        $source = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $loaded = $source->loadXML($xmlBytes, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        if (!$loaded) {
+            return $html;
+        }
+
+        $sourceXPath = new \DOMXPath($source);
+        $sourceXPath->registerNamespace('w', $wordNs);
+        $sourceParagraphs = $sourceXPath->query('//w:body//w:p');
+        if (!$sourceParagraphs || $sourceParagraphs->length === 0) {
+            return $html;
+        }
+
+        $htmlDocument = new \DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        $htmlLoaded = $htmlDocument->loadHTML('<?xml encoding="UTF-8"><div id="farast-docx-pagination-root">'.$html.'</div>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        if (!$htmlLoaded) {
+            return $html;
+        }
+
+        $htmlXPath = new \DOMXPath($htmlDocument);
+        $htmlParagraphs = $htmlXPath->query('//*[@id="farast-docx-pagination-root"]//p');
+        if (!$htmlParagraphs || $htmlParagraphs->length === 0) {
+            return $html;
+        }
+
+        $styles = [];
+        $htmlCursor = 0;
+        $pendingPageBreak = false;
+        foreach ($sourceParagraphs as $sourceIndex => $sourceParagraph) {
+            $sourceText = '';
+            foreach ($sourceXPath->query('.//w:t', $sourceParagraph) as $textNode) {
+                $sourceText .= $textNode->textContent;
+            }
+            $sourceText = $this->normalizeDocxParagraphText($sourceText);
+
+            $pageBreakBefore = false;
+            $beforeNode = $sourceXPath->query('./w:pPr/w:pageBreakBefore', $sourceParagraph)->item(0);
+            if ($beforeNode instanceof \DOMElement) {
+                $value = strtolower($beforeNode->getAttributeNS($wordNs, 'val'));
+                $pageBreakBefore = !in_array($value, ['0', 'false', 'off', 'none'], true);
+            }
+
+            $pageBreakAfter = $sourceXPath->query('.//w:br[@w:type="page"] | .//w:lastRenderedPageBreak', $sourceParagraph)->length > 0;
+            $sectionBreak = $sourceXPath->query('./w:pPr/w:sectPr', $sourceParagraph)->item(0);
+            if ($sectionBreak instanceof \DOMElement) {
+                $sectionType = $sourceXPath->query('./w:type', $sectionBreak)->item(0);
+                $sectionValue = $sectionType instanceof \DOMElement
+                    ? strtolower($sectionType->getAttributeNS($wordNs, 'val'))
+                    : 'nextpage';
+                $pageBreakAfter = $pageBreakAfter || !in_array($sectionValue, ['continuous'], true);
+            }
+
+            if ($sourceText === '') {
+                $pendingPageBreak = $pendingPageBreak || $pageBreakBefore || $pageBreakAfter;
+                continue;
+            }
+
+            $matchedIndex = null;
+            for ($index = $htmlCursor; $index < $htmlParagraphs->length; $index++) {
+                $htmlText = $this->normalizeDocxParagraphText($htmlParagraphs->item($index)->textContent);
+                if ($htmlText === '') {
+                    continue;
+                }
+                if ($htmlText === $sourceText
+                    || (mb_strlen($sourceText) >= 3 && str_contains($htmlText, $sourceText))
+                    || (mb_strlen($htmlText) >= 3 && str_contains($sourceText, $htmlText))) {
+                    $matchedIndex = $index;
+                    break;
+                }
+            }
+
+            if ($matchedIndex === null) {
+                $matchedIndex = min($sourceIndex, $htmlParagraphs->length - 1);
+            }
+            if ($pendingPageBreak || $pageBreakBefore) {
+                $styles[$matchedIndex]['before'] = true;
+            }
+            if ($pageBreakAfter) {
+                $styles[$matchedIndex]['after'] = true;
+            }
+            $pendingPageBreak = false;
+            $htmlCursor = $matchedIndex + 1;
+        }
+
+        if ($styles === []) {
+            return $html;
+        }
+
+        $paragraphIndex = 0;
+        return preg_replace_callback('/<p\b([^>]*)>/i', function (array $matches) use (&$paragraphIndex, $styles): string {
+            $index = $paragraphIndex++;
+            if (!isset($styles[$index])) {
+                return $matches[0];
+            }
+
+            $attributes = $matches[1];
+            $style = '';
+            if (preg_match('/\sstyle\s*=\s*(["\'])(.*?)\1/is', $attributes, $styleMatch) === 1) {
+                $style = $styleMatch[2];
+                $attributes = preg_replace('/\sstyle\s*=\s*(["\'])(.*?)\1/is', '', $attributes, 1) ?? $attributes;
+            }
+            $declarations = [];
+            if (!empty($styles[$index]['before'])) {
+                $declarations[] = 'page-break-before:always';
+            }
+            if (!empty($styles[$index]['after'])) {
+                $declarations[] = 'page-break-after:always';
+            }
+            $style = trim($style);
+            $style = ($style !== '' ? rtrim($style, ';').';' : '').implode(';', $declarations);
+            $attributes .= ' style="'.htmlspecialchars($style, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'"';
+
+            return '<p'.$attributes.'>';
+        }, $html) ?? $html;
+    }
+
+    private function normalizeDocxParagraphText(string $text): string
+    {
+        $text = str_replace(["\r", "\n", "\t", "\u{00A0}"], ' ', $text);
+        return trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+    }
+
+    /**
+     * Preserve the document's first section page size and margins when converting to PDF.
+     */
+    private function docxPageLayout(string $docxPath): array
+    {
+        $layout = [
+            'width' => 595.28,
+            'height' => 841.89,
+            'top' => 62.36,
+            'right' => 51.02,
+            'bottom' => 62.36,
+            'left' => 51.02,
+        ];
+        $archive = new \ZipArchive();
+        if ($archive->open($docxPath) !== true) {
+            return $layout;
+        }
+        try {
+            $xmlBytes = $archive->getFromName('word/document.xml');
+        } finally {
+            $archive->close();
+        }
+        if (!is_string($xmlBytes) || $xmlBytes === '') {
+            return $layout;
+        }
+
+        $document = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $loaded = $document->loadXML($xmlBytes, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        if (!$loaded) {
+            return $layout;
+        }
+        $xpath = new \DOMXPath($document);
+        $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+        $section = $xpath->query('//w:sectPr')->item(0);
+        if (!$section instanceof \DOMElement) {
+            return $layout;
+        }
+
+        $pageSize = $xpath->query('./w:pgSz', $section)->item(0);
+        if ($pageSize instanceof \DOMElement) {
+            $width = (int) $pageSize->getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w');
+            $height = (int) $pageSize->getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'h');
+            if ($width >= 4000 && $width <= 40000 && $height >= 4000 && $height <= 40000) {
+                $layout['width'] = $width / 20;
+                $layout['height'] = $height / 20;
+            }
+        }
+
+        $margins = $xpath->query('./w:pgMar', $section)->item(0);
+        if ($margins instanceof \DOMElement) {
+            foreach (['top', 'right', 'bottom', 'left'] as $side) {
+                $twips = (int) $margins->getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', $side);
+                if ($twips >= 0 && $twips <= 7200) {
+                    $layout[$side] = $twips / 20;
+                }
+            }
+        }
+
+        return $layout;
     }
 
     /**
