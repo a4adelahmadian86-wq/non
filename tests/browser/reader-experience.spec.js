@@ -1340,6 +1340,17 @@ test('personal reading light, font preferences, highlights and annotations stay 
     selection.removeAllRanges();
     selection.addRange(range);
   });
+  await page.locator('[data-reader-highlight-color]').selectOption('green');
+  await page.locator('[data-reader-highlight]').click();
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText('متن');
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveAttribute('data-highlight-id', /.+/);
+  await page.locator('mark.farast-reader-local-highlight').click();
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(0);
+  await page.evaluate(() => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const range = document.createRange(); range.setStart(text, 4); range.setEnd(text, 8);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+  });
   await page.locator('[data-reader-highlight]').click();
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText('متن');
 
