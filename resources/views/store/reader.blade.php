@@ -42,6 +42,16 @@
     </div>
   </nav>
 
+  @if(!empty($audioTrack))
+    <section class="farast-reader-audio" aria-label="نسخه صوتی همگام با متن">
+      <div class="farast-reader-audio-heading"><i class="fa-solid fa-headphones"></i><div><strong>نسخه صوتی همگام</strong><small>صدای آماده‌شده برای همین نسخه فایل · بدون امکان دریافت فایل صوتی</small></div></div>
+      <audio id="reader-audio-player" controls preload="metadata" controlsList="nodownload noplaybackrate" src="{{ route('store.reader.audio',$product->slug) }}"></audio>
+      <div class="farast-reader-audio-sync"><span id="reader-audio-segment-label">با پخش صوت، متن و صفحه مرتبط نمایش داده می‌شود.</span><small id="reader-audio-time">۰۰:۰۰</small></div>
+      <div class="farast-reader-audio-current" id="reader-audio-current-text" aria-live="polite">برای شروع مطالعه همگام، پخش را انتخاب کنید.</div>
+      <script type="application/json" id="reader-audio-segments">@json($audioSegments, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)</script>
+    </section>
+  @endif
+
   <div class="farast-reader-progress" role="progressbar" aria-label="پیشرفت مطالعه" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="reader-progress"></span></div>
 
   <div class="farast-reader-workspace" id="reader-workspace">
@@ -131,6 +141,9 @@
 @media(max-width:760px){.reader-search-group{order:3;width:100%;justify-content:center}.reader-search-group input{flex:1;max-width:280px}.farast-reader-header{grid-template-columns:auto 1fr;gap:8px}.farast-reader-heading{text-align:right}.farast-reader-account{grid-column:1/-1;justify-content:flex-start;font-size:.68rem}.farast-reader-toolbar{justify-content:center}.reader-tool-wide span{display:none}.farast-reader-workspace{grid-template-columns:1fr}.farast-reader-sidebar{max-height:150px;border-left:0;border-bottom:1px solid var(--reader-line)}.farast-reader-thumbs{display:flex;overflow:auto}.farast-reader-thumb{flex:0 0 112px}.farast-reader-canvas{min-height:60vh;padding:12px 8px 42px}.farast-reader-page-content img,.farast-reader-page-content iframe{min-height:360px;height:70vh}.farast-reader-shortcuts{display:none}.farast-reader-security-note{font-size:.62rem;text-align:center}}
 @media(prefers-reduced-motion:reduce){.farast-reader-progress span{transition:none}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+.farast-reader-audio{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(220px,1.25fr);align-items:center;gap:10px 16px;padding:12px 18px;border-bottom:1px solid var(--reader-line);background:var(--reader-panel)}.farast-reader-audio-heading{display:flex;align-items:center;gap:10px;color:var(--reader-accent)}.farast-reader-audio-heading>i{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:rgba(75,145,235,.13)}.farast-reader-audio-heading>div{display:grid;gap:3px}.farast-reader-audio-heading strong{font-size:.75rem;color:var(--reader-text)}.farast-reader-audio-heading small{font-size:.61rem;color:var(--reader-muted);line-height:1.6}.farast-reader-audio audio{width:100%;height:38px}.farast-reader-audio-sync{grid-column:1/-1;display:flex;justify-content:space-between;gap:12px;font-size:.65rem;color:var(--reader-muted)}.farast-reader-audio-current{grid-column:1/-1;max-height:90px;overflow:auto;padding:9px 12px;border:1px solid var(--reader-line);border-radius:9px;background:var(--reader-bg);font-size:.72rem;line-height:1.9;color:var(--reader-text)}.farast-reader-audio-current.is-active{border-color:var(--reader-accent);box-shadow:inset 3px 0 0 var(--reader-accent)}
+@media(max-width:760px){.farast-reader-audio{grid-template-columns:1fr;padding:10px 12px}.farast-reader-audio-sync,.farast-reader-audio-current{grid-column:auto}}
 </style>
 @endpush
 
