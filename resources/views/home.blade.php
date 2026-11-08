@@ -114,6 +114,7 @@
     </nav>
     @endif
 
+    @if($homeProducts->isNotEmpty())
     <section class="home-products" aria-labelledby="home-products-title">
         <div class="home-section-heading">
             <div>
