@@ -207,7 +207,7 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || 'ذخیره‌سازی فایل انجام نشد.');
       setStep(null, ['received', 'inspect', 'review', 'store']);
-      report.insertAdjacentHTML('beforeend', '<div class="product-ingestion-warning" style="background:#eaf7ef;color:#236b43">فایل با موفقیت ذخیره شد. پردازش محتوایی آن در صف آماده‌سازی قرار گرفت.</div>');
+      report.insertAdjacentHTML('beforeend', '<div class="product-ingestion-warning" style="background:#eaf7ef;color:#236b43">فایل با موفقیت ذخیره شد. اطلاعات بررسی اولیه ثبت شد و فایل آماده مرحله مطالعه محتوایی است.</div>');
       if (state.primaryForCurrent) state.primaryCommitted = true;
       state.busy = false;
       confirmButton.textContent = 'ذخیره شد';
