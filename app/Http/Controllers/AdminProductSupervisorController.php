@@ -3,11 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\StoreProduct;
+use App\Models\StoreProductFile;
+use App\Models\StoreProductImage;
 use App\Services\AuditEventService;
 use App\Services\ProductSupervisorClient;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Throwable;
 
 class AdminProductSupervisorController extends Controller
