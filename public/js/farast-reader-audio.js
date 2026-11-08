@@ -78,6 +78,7 @@
   let wordMarks = [];
   let raf = 0;
   let lastPageRequest = 0;
+  let rangeEnd = null;
 
   const formatTime = seconds => {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -159,11 +160,20 @@
             width: rect.width + 'px',
             height: rect.height + 'px'
           });
-          const jump = () => { audio.currentTime = item.start; if (audio.paused) audio.play().catch(() => {}); };
+          const indexedWord = Array.isArray(item.words) ? item.words[wordIndex] : null;
+          const fallbackStart = item.start + ((item.end - item.start) * (wordIndex / Math.max(1, words.length)));
+          const fallbackEnd = item.start + ((item.end - item.start) * ((wordIndex + 1) / Math.max(1, words.length)));
+          const wordStart = Number.isFinite(Number(indexedWord?.start)) ? Number(indexedWord.start) : fallbackStart;
+          const wordEnd = Number.isFinite(Number(indexedWord?.end)) ? Number(indexedWord.end) : fallbackEnd;
+          mark.dataset.word = word;
+          mark.dataset.page = String(item.page);
+          mark.dataset.start = String(wordStart);
+          mark.dataset.end = String(wordEnd);
+          const jump = () => { rangeEnd = null; audio.currentTime = wordStart; if (audio.paused) audio.play().catch(() => {}); };
           mark.addEventListener('click', jump);
           mark.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); jump(); } });
           layer.append(mark);
-          wordMarks.push({ element: mark, segment: item.index });
+          wordMarks.push({ element: mark, segment: item.index, start: wordStart, end: wordEnd });
         });
       });
     });
@@ -198,8 +208,9 @@
     if (found !== activeSegment) {
       activeSegment = found;
       wordMarks.forEach(mark => {
-        mark.element.classList.toggle('is-current', mark.segment === found);
-        mark.element.classList.toggle('is-read', mark.segment < found);
+        const isCurrent = time >= mark.start && time < mark.end;
+        mark.element.classList.toggle('is-current', isCurrent);
+        mark.element.classList.toggle('is-read', mark.end <= time);
       });
       if (item) {
         caption.textContent = item.text;
