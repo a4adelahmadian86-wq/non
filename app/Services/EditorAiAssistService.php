@@ -28,7 +28,7 @@ class EditorAiAssistService
         if (! empty($context['product_id'])) {
             $product = StoreProduct::query()
                 ->whereKey((int) $context['product_id'])
-                ->where('user_id', $user->id)
+                ->where('seller_id', $user->id)
                 ->with(['category', 'tags'])
                 ->first();
 
