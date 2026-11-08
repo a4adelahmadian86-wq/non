@@ -7,6 +7,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductUploadEvent;
 use App\Models\StoreProductUploadSession;
+use App\Jobs\StudyProductDocument;
 use App\Services\AuditEventService;
 use App\Services\ProductFilePreflightScanner;
 use Illuminate\Http\Request;
