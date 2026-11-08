@@ -37,6 +37,14 @@ class UploadSecurityServiceTest extends TestCase
         app(UploadSecurityService::class)->inspect('quarantine/payload.exe');
     }
 
+    public function test_pdf_with_obvious_active_content_actions_is_rejected(): void
+    {
+        Storage::disk('private')->put('quarantine/active.pdf', "%PDF-1.4\n1 0 obj << /Type /Catalog /OpenAction << /S /JavaScript >> >> endobj");
+
+        $this->expectException(\RuntimeException::class);
+        app(UploadSecurityService::class)->inspect('quarantine/active.pdf', 'application/pdf');
+    }
+
     public function test_pdf_extension_with_non_pdf_signature_is_rejected(): void
     {
         Storage::disk('private')->put('quarantine/fake.pdf', 'plain text pretending to be a PDF');
