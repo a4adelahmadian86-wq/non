@@ -198,9 +198,23 @@ class AdminStoreController extends Controller
                 $data['published_at'] = null;
             }
 
-            // Any product edit invalidates the previous AI review; stale approval must never be reused.
+            // Only changes to reviewed inputs/policy invalidate the report; a status-only publish
+            // transition may retain the exact fresh approval that authorized it.
             $metadata = $data['metadata'] ?? $lockedProduct->metadata ?? [];
-            if (isset($metadata['ai_supervisor']) && is_array($metadata['ai_supervisor'])) {
+            $previousSupervisorSettings = (array) data_get($lockedProduct->metadata, 'ai_supervisor', []);
+            $nextSupervisorSettings = (array) data_get($metadata, 'ai_supervisor', []);
+            $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'seo_title', 'seo_description'];
+            $reviewInputsChanged = collect($reviewFields)->contains(
+                fn ($field) => array_key_exists($field, $data)
+                    && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
+            );
+            $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+            $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
+            $reviewPolicyChanged = collect(['enabled', 'mode', 'checks', 'instructions'])->contains(
+                fn ($key) => ($previousSupervisorSettings[$key] ?? null) !== ($nextSupervisorSettings[$key] ?? null)
+            );
+            if (isset($metadata['ai_supervisor']) && is_array($metadata['ai_supervisor'])
+                && ($reviewInputsChanged || $currentTagIds !== $submittedTagIds || $reviewPolicyChanged)) {
                 unset($metadata['ai_supervisor']['last_review'], $metadata['ai_supervisor']['last_reviewed_at']);
                 $data['metadata'] = $metadata;
             }
