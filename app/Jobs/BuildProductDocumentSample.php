@@ -39,7 +39,7 @@ class BuildProductDocumentSample implements ShouldQueue
     {
         $document = StoreProductDocument::query()->with('product')->findOrFail($this->documentId);
         $existing = StoreProductDocumentSample::query()->where('document_id', $document->id)->first();
-        if ($existing && $existing->state === 'ready') return;
+        if ($existing && $existing->state === 'ready' && (int) $existing->content_version === (int) $document->content_version) return;
 
         $extension = strtolower((string) $document->extension);
         $readerDiskName = $document->reader_asset_disk ?: $document->storage_disk;
@@ -94,6 +94,7 @@ class BuildProductDocumentSample implements ShouldQueue
                         'mime' => 'application/pdf',
                         'selected_pages' => [],
                         'sample_format' => 'pdf',
+                        'content_version' => $document->content_version,
                         'state' => 'awaiting_ai_page_selection',
                     ]
                 );
@@ -126,6 +127,7 @@ class BuildProductDocumentSample implements ShouldQueue
                     'mime' => $readerMime,
                     'selected_pages' => [],
                     'sample_format' => $readerKind,
+                    'content_version' => $document->content_version,
                     'state' => 'awaiting_clip_builder',
                 ]
             );
@@ -140,6 +142,7 @@ class BuildProductDocumentSample implements ShouldQueue
                     'mime' => $readerMime,
                     'selected_pages' => $selectedPages,
                     'sample_format' => $extension,
+                    'content_version' => $document->content_version,
                     'state' => 'awaiting_converter',
                 ]
             );
@@ -168,6 +171,7 @@ class BuildProductDocumentSample implements ShouldQueue
                         'mime' => $sampleMime,
                         'selected_pages' => $selectedPages,
                         'sample_format' => $sampleFormat,
+                        'content_version' => $document->content_version,
                         'state' => 'ready',
                         'generated_at' => now(),
                     ]
