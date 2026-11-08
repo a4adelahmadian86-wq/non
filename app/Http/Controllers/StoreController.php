@@ -251,7 +251,7 @@ class StoreController extends Controller
             ->exists();
         abort_unless($hasEntitlement && ($product->download_policy ?? 'signed') === 'reader_only', 403);
 
-        $track = \\App\\Models\\StoreDocumentAudioTrack::query()
+        $track = \App\Models\StoreDocumentAudioTrack::query()
             ->with('document.file')
             ->where('status', 'ready')
             ->whereHas('document.file', fn ($query) => $query->where('product_id', $product->id)->where('is_primary', true)->where('is_active', true))
