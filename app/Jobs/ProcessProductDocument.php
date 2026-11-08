@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\StoreProductDocument;
+use App\Models\StoreProductPreview;
 use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
 use Illuminate\Bus\Queueable;
@@ -137,7 +138,9 @@ class ProcessProductDocument implements ShouldQueue
                     $samplePath = 'store/products/'.$locked->product_id.'/artifacts/'.$locked->source_sha256.'/sample-v1.pdf';
                     $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
                     $sampleDisk = Storage::disk($existingSample?->disk ?: 'private');
+                    $samplePathForReader = null;
                     if ($existingSample && $sampleDisk->exists($existingSample->path)) {
+                        $samplePathForReader = $existingSample->path;
                         $structure['sample'] = [
                             'artifact_type' => 'sample_pdf',
                             'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
@@ -160,12 +163,29 @@ class ProcessProductDocument implements ShouldQueue
                                 ],
                             ]
                         );
+                        $samplePathForReader = $artifact->path;
                         $structure['sample'] = [
                             'artifact_type' => 'sample_pdf',
                             'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
                             'sha256' => $artifact->sha256,
                             'generated_once' => true,
                         ];
+                    }
+
+                    if ($samplePathForReader) {
+                        StoreProductPreview::query()->updateOrCreate(
+                            ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
+                            [
+                                'disk' => 'private',
+                                'mime' => 'application/pdf',
+                                'page_number' => 1,
+                                'kind' => 'pdf',
+                                'access_level' => 'sample',
+                                'watermarked' => true,
+                                'is_active' => true,
+                                'sort_order' => 0,
+                            ]
+                        );
                     }
                 }
             }
