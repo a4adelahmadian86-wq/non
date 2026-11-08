@@ -322,8 +322,14 @@
     }
     wrapper.dataset.rendered='1';
     }finally{
+      const rerender=wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
+      delete wrapper.dataset.rerenderAfterRender;
       delete wrapper.dataset.rendering;
       if(wrapper.dataset.keepRendered==='0')releaseContinuousPage(wrapper);
+      else if(rerender){
+        wrapper.dataset.rendered='0';
+        requestAnimationFrame(()=>renderContinuousPage(number).catch(showPdfError));
+      }
     }
   };
 
@@ -389,8 +395,19 @@
       const rect=node.getBoundingClientRect();
       return rect.bottom>=stageRect.top-180&&rect.top<=stageRect.bottom+180;
     });
-    nodes.forEach(releaseContinuousPage);
-    for(const node of visible)await renderContinuousPage(Number(node.dataset.pdfContPage));
+    const visibleSet=new Set(visible);
+    nodes.forEach(node=>{
+      if(node.dataset.rendering==='1'){
+        node.dataset.keepRendered=visibleSet.has(node)?'1':'0';
+        if(visibleSet.has(node))node.dataset.rerenderAfterRender='1';
+        else delete node.dataset.rerenderAfterRender;
+      }else{
+        releaseContinuousPage(node);
+      }
+    });
+    for(const node of visible){
+      if(node.dataset.rendering!=='1')await renderContinuousPage(Number(node.dataset.pdfContPage));
+    }
   };
 
   const navigatePdfPage=async(number)=>{
