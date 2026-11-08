@@ -371,7 +371,7 @@ class StoreController extends Controller
                     }
 
                     if ($audioArtifactReady) {
-                        $readerAudioUrl = route('store.reader.audio', [$product, $document, 'version' => (int) $audioArtifact->version]);
+                        $readerAudioUrl = route('store.reader.audio', [$product, $document]).'?version='.(int) $audioArtifact->version;
                         $segments = (array) data_get($audioArtifact->metadata_json, 'segments', []);
                         $chunksByIndex = $document->chunks->keyBy('chunk_index');
                         foreach ($segments as $segment) {
