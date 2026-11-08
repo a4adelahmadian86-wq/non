@@ -110,9 +110,15 @@ class StoreReaderAccessTest extends TestCase
         [$product, $preview] = $this->makePreviewFixture();
 
         $temporary = tempnam(sys_get_temp_dir(), 'farast-docx-test-');
+        $imagePath = tempnam(sys_get_temp_dir(), 'farast-docx-image-');
+        file_put_contents(
+            $imagePath,
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9b8AAAAASUVORK5CYII=', true)
+        );
         $document = new \PhpOffice\PhpWord\PhpWord();
-        $section = $document->addSection();
+        $section = $document->addSection(['orientation' => 'landscape']);
         $section->addText('متن محرمانه نمونه Word');
+        $section->addImage($imagePath, ['width' => 24, 'height' => 24], false, null, 'تصویر نمونه');
         $table = $section->addTable();
         $table->addRow();
         $table->addCell(4500)->addText('عنوان جدول فارسی');
@@ -120,8 +126,15 @@ class StoreReaderAccessTest extends TestCase
         $section->addPageBreak();
         $section->addText('متن صفحه دوم سند Word');
         \PhpOffice\PhpWord\IOFactory::createWriter($document, 'Word2007')->save($temporary);
+
+        $layoutMethod = new \ReflectionMethod(app(\App\Http\Controllers\StoreController::class), 'docxPageLayout');
+        $layoutMethod->setAccessible(true);
+        $layout = $layoutMethod->invoke(app(\App\Http\Controllers\StoreController::class), $temporary);
+        $this->assertGreaterThan($layout['height'], $layout['width']);
+
         Storage::disk('private')->put('store/previews/sample/preview.docx', file_get_contents($temporary));
         @unlink($temporary);
+        @unlink($imagePath);
 
         $preview->update([
             'path' => 'store/previews/sample/preview.docx',
@@ -135,8 +148,11 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'inline; filename="farast-word-preview.pdf"');
 
-        $this->assertStringStartsWith('%PDF-', $response->getContent());
-        $this->assertGreaterThan(1000, strlen($response->getContent()));
+        $pdf = $response->getContent();
+        $this->assertStringStartsWith('%PDF-', $pdf);
+        $this->assertGreaterThan(1000, strlen($pdf));
+        $this->assertStringContainsString('/Subtype /Image', $pdf);
+        $this->assertMatchesRegularExpression('/\\/Count\\s+2\\b/', $pdf);
 
         $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
