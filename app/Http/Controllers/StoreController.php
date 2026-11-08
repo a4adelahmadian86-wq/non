@@ -356,6 +356,7 @@ class StoreController extends Controller
                     $readerMode = 'document';
                     $audioArtifact = $document->artifacts
                         ->where('artifact_type', 'audio_full_wav')
+                        ->sortByDesc('version')
                         ->first();
 
                     if ($audioArtifact && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path)) {
