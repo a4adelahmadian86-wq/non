@@ -31,7 +31,7 @@
   };
 
   const labels = {
-    pdf: 'سند PDF', archive: 'فایل فشرده', office: 'سند آفیس',
+    pdf: 'سند PDF', archive: 'فایل فشرده', zip: 'آرشیو ZIP', tar: 'آرشیو TAR', office: 'سند آفیس',
     image: 'تصویر', audio: 'فایل صوتی', video: 'ویدئو', text: 'فایل متنی',
   };
 
@@ -89,6 +89,7 @@
     state.current = file;
     state.ingestionId = null;
     filename.textContent = file.name;
+    setProgress(0, '', false);
     report.innerHTML = '<p>فایل در قرنطینه خصوصی دریافت شد. بررسی ساختار و نشانه‌های خطر در حال انجام است...</p>';
     confirmButton.disabled = true;
     confirmButton.textContent = 'تأیید و ذخیره فایل';
@@ -103,6 +104,7 @@
     state.current = null;
     state.ingestionId = null;
     state.busy = false;
+    setProgress(0, '', false);
   };
 
   const showError = (message) => {
@@ -114,14 +116,27 @@
   const renderReport = (payload) => {
     const inspection = payload.inspection || {};
     const file = payload.file || {};
+    const pageLabel = inspection.page_count_label || (inspection.detected_type === 'pptx' ? 'تعداد اسلاید' : 'تعداد صفحات');
+    const documentParts = inspection.document_parts || {};
+    const partsLabel = inspection.detected_type === 'office'
+      ? [
+          documentParts.headers ? 'سربرگ: ' + documentParts.headers : '',
+          documentParts.footers ? 'پابرگ: ' + documentParts.footers : '',
+          documentParts.footnotes ? 'پانویس دارد' : '',
+          documentParts.endnotes ? 'یادداشت پایانی دارد' : '',
+        ].filter(Boolean).join(' · ') || 'ساختار پایه سند شناسایی شد'
+      : '—';
     const rows = [
       ['نوع شناسایی‌شده', labels[inspection.detected_type] || inspection.detected_type || 'نامشخص'],
       ['حجم واقعی', formatBytes(file.size_bytes)],
       ['نوع MIME', inspection.mime || file.mime || 'نامشخص'],
-      ['تعداد صفحات PDF', inspection.page_count ?? 'در این فرمت قابل تعیین نیست'],
+      [pageLabel, inspection.page_count ?? 'در این مرحله قابل تعیین نیست'],
+      ['تعداد برگه‌های Excel', inspection.sheet_count ?? '—'],
+      ['ساختار تکمیلی سند', partsLabel],
       ['ابعاد تصویر', inspection.dimensions ? inspection.dimensions.width + ' × ' + inspection.dimensions.height : '—'],
       ['تعداد اعضای آرشیو', inspection.archive_entry_count ?? 0],
       ['حجم بازشده آرشیو', inspection.archive_expanded_bytes ? formatBytes(inspection.archive_expanded_bytes) : '—'],
+      ['سطح ریسک ساختاری', inspection.risk_level || 'نامشخص'],
       ['SHA-256', file.sha256 || '—'],
       ['موتور بررسی', inspection.scan_label || 'بررسی ایستای داخلی فراست'],
     ];
@@ -132,7 +147,7 @@
     const entries = Array.isArray(inspection.archive_entries) ? inspection.archive_entries : [];
     const archive = entries.length
       ? '<h4>محتویات شناسایی‌شده آرشیو</h4><ol class="product-ingestion-archive">' +
-        entries.map((entry) => '<li>' + escapeHtml(entry.name) + ' · ' + formatBytes(entry.size_bytes) + '</li>').join('') +
+        entries.map((entry) => '<li>' + escapeHtml(entry.name) + ' · ' + formatBytes(entry.size_bytes) + (entry.type === 'directory' ? ' · پوشه' : ' · فایل') + '</li>').join('') +
         '</ol>' + (inspection.archive_entry_count > entries.length ? '<p>فقط ' + entries.length + ' مورد نخست از ' + inspection.archive_entry_count + ' مورد نمایش داده شده است.</p>' : '')
       : '';
 
