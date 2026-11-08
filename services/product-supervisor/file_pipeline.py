@@ -816,10 +816,10 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             result.extracted_text, result.content_chunks, result.extraction_truncated = _extract_docx_structured(data)
         elif "[Content_Types].xml" in names and "xl/workbook.xml" in names:
             result.detected_type = "xlsx"
-            result.extracted_text = _extract_xlsx(data)
+            result.extracted_text, result.extraction_truncated = _extract_xlsx(data)
         elif "[Content_Types].xml" in names and "ppt/presentation.xml" in names:
             result.detected_type = "pptx"
-            result.extracted_text = _extract_pptx(data)
+            result.extracted_text, result.extraction_truncated = _extract_pptx(data)
             result.page_count = min(100, result.extracted_text.count("اسلاید "))
         else:
             result.detected_type = "zip"
