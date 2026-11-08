@@ -41,7 +41,7 @@
     .farast-reader[data-reader-font="sans"] .farast-reader-document{font-family:Arial,"Segoe UI",sans-serif}
     .farast-reader[data-reader-font="serif"] .farast-reader-document{font-family:Georgia,"Times New Roman",serif}
     .farast-reader[data-reader-font="mono"] .farast-reader-document{font-family:ui-monospace,"Cascadia Code",monospace}
-    .farast-reader[data-reader-font="dyslexic"] .farast-reader-document{font-family:OpenDyslexic,local("OpenDyslexic"),Arial,sans-serif}
+    .farast-reader[data-reader-font="dyslexic"] .farast-reader-document{font-family:"OpenDyslexic",Arial,sans-serif}
     .farast-reader[data-reader-font="system"] .farast-reader-document{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
     .farast-reader[data-reader-font-size] .farast-reader-document{font-size:var(--reader-personal-font-size,100%)}
     .farast-reader[data-reader-font-size] .farast-reader-document .reader-document-line{font-size:calc(1rem * var(--reader-font-scale,1))}
