@@ -604,3 +604,51 @@ test('renders protected spreadsheet sections as safe responsive tables', async (
   await expect(table.locator('tbody tr').nth(1).locator('td').nth(1)).toHaveText('<img src=x onerror=alert(1)>');
   await expect(page.locator('.farast-reader-sheet-table img')).toHaveCount(0);
 });
+
+test('clicking an HTML document word seeks the single precomputed audio track', async ({ page }) => {
+  await page.addInitScript(() => {
+    const instances = [];
+    class FakeAudio extends EventTarget {
+      constructor() { super(); this.currentTime = 0; this.duration = 2; this.paused = true; this.volume = 1; this.playbackRate = 1; this.readyState = 4; this._src = ''; instances.push(this); }
+      set src(value) { this._src = value; if (value) queueMicrotask(() => this.dispatchEvent(new Event('loadedmetadata'))); }
+      get src() { return this._src; }
+      setAttribute() {}
+      removeAttribute(name) { if (name === 'src') this._src = ''; }
+      load() { queueMicrotask(() => this.dispatchEvent(new Event('loadedmetadata'))); }
+      play() { this.paused = false; return Promise.resolve(); }
+      pause() { this.paused = true; }
+    }
+    window.Audio = FakeAudio;
+    window.__audioInstances = instances;
+  });
+  await page.goto('/');
+  const timings = [
+    { text: 'فصل اول', start: 0, end: 1, page: 1, words: [{ text: 'فصل', start: 0, end: 0.4 }, { text: 'اول', start: 0.4, end: 0.8 }] },
+    { text: 'متن توضیحی', start: 1, end: 2, page: 1, words: [{ text: 'متن', start: 1, end: 1.4 }, { text: 'توضیحی', start: 1.4, end: 2 }] }
+  ];
+  await page.setContent(`
+    <section data-reader-root data-reader-mode="document">
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-word-page" data-audio-url="/reader-audio.wav" data-audio-timing='${JSON.stringify(timings)}'>
+        <div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>
+      </article>
+    </section>
+  `);
+  await page.route('**/protected-word-page', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ page_number: 1, page_kind: 'section', label: 'بخش ۱', content_text: 'فصل اول\\nمتن توضیحی', content_blocks: [
+      { type: 'heading', level: 1, text: 'فصل اول' },
+      { type: 'paragraph', text: 'متن توضیحی' }
+    ], content_sha256: 'precomputed-audio-fixture' })
+  }));
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  await expect(page.locator('.reader-document-word')).toHaveCount(4);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-audio.js') });
+  await expect(page.locator('.farast-audio-dock')).toBeVisible();
+  await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: 0 } })));
+  const word = page.locator('.reader-document-word').filter({ hasText: 'متن' }).first();
+  await expect(word).toHaveAttribute('role', 'button');
+  await word.click();
+  await expect.poll(() => page.evaluate(() => window.__audioInstances[0]?.currentTime)).toBe(1);
+  expect(await page.evaluate(() => window.__audioInstances[0]?.src)).toBe('/reader-audio.wav');
+  await expect(page.locator('[data-reader-root]')).not.toHaveAttribute('data-reader-speech-url');
+});
