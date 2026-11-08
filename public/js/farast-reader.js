@@ -292,7 +292,7 @@
             renderThumbnail(entry.target);
           }
         });
-      },{root:thumbsHost,rootMargin:'160px 0px'});
+      },{root:thumbsHost.closest('.farast-reader-sidebar'),rootMargin:'160px 0px'});
       thumbsHost.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(button=>observer.observe(button));
     }else{
       for(const button of [...thumbsHost.querySelectorAll('.farast-reader-thumb[data-pdf-page]')].slice(0,4)){
