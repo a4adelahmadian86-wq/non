@@ -88,7 +88,7 @@ class ProductDocumentAudioServiceTest extends TestCase
             'services.document_audio.token' => 'test-token',
         ]);
 
-        $pcm = str_repeat("\\0", 1600);
+        $pcm = str_repeat("\0", 1600);
         $format = pack('vvVVvv', 1, 1, 16000, 32000, 2, 16);
         $wav = 'RIFF'.pack('V', 36 + strlen($pcm)).'WAVEfmt '.pack('V', 16).$format.'data'.pack('V', strlen($pcm)).$pcm;
         Http::fake([
