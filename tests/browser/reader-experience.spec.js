@@ -595,6 +595,79 @@ test.describe('FARAST sample reader interactions', () => {
 
 });
 
+
+test('plays the exact repeated paragraph occurrence and supports blank-page mouse and keyboard narration', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 2;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        this.volume = 1;
+        this.src = '';
+        this.currentSrc = '';
+      }
+      setAttribute() {}
+      load() { this.currentSrc = this.src; this.dispatchEvent(new Event('loadedmetadata')); }
+      play() { this.paused = false; this.dispatchEvent(new Event('play')); return Promise.resolve(); }
+      pause() { if (!this.paused) { this.paused = true; this.dispatchEvent(new Event('pause')); } }
+      removeAttribute(name) { if (name === 'src') { this.src = ''; this.currentSrc = ''; } }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [{
+    text: 'سلام جهان سلام جهان',
+    start: 0.1,
+    end: 0.9,
+    page: 1,
+    alignment_quality: 'phoneme',
+    words: [
+      { text: 'سلام', start: 0.1, end: 0.25 },
+      { text: 'جهان', start: 0.25, end: 0.4 },
+      { text: 'سلام', start: 0.5, end: 0.65 },
+      { text: 'جهان', start: 0.65, end: 0.9 }
+    ]
+  }];
+  const encodedTimings = JSON.stringify(timings).replace(/"/g, '&quot;');
+  await page.setContent(
+    '<section class="farast-reader" data-reader-root data-reader-mode="document" ' +
+      'data-reader-audio-url="/reader-full.wav" data-reader-audio-timing="' + encodedTimings + '">' +
+      '<input id="reader-page-number" value="1">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-audio-url="/reader-full.wav">' +
+        '<p class="reader-document-paragraph" tabindex="0" data-reader-speech-text="سلام جهان">سلام جهان</p>' +
+        '<p class="reader-document-paragraph" tabindex="0" data-reader-speech-text="سلام جهان">سلام جهان</p>' +
+        '<div class="farast-pdf-text-layer" style="width:240px;height:120px"></div>' +
+      '</article>' +
+    '</section>'
+  );
+  await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+
+  const paragraphs = page.locator('.reader-document-paragraph');
+  await paragraphs.nth(1).click();
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.5);
+
+  const article = page.locator('.farast-reader-page-item');
+  await expect(article).toHaveAttribute('tabindex', '0');
+  await expect(article).toHaveAttribute('aria-label', 'خواندن صفحه ۱');
+  await page.locator('.farast-pdf-text-layer').click({ position: { x: 220, y: 100 } });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
+
+  await page.evaluate(() => {
+    const audio = window.__fakeReaderAudio;
+    audio.currentTime = 0.9;
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+
+  await article.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
+});
+
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
