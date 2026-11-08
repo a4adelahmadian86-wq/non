@@ -10,6 +10,7 @@ The renderer currently preserves a bounded subset of cell formatting:
 - Solid cell background fills.
 - Thin, medium, thick, dashed, dotted, double and hairline borders.
 - Horizontal and vertical alignment, plus text wrapping.
+- Merged cell ranges, custom column widths and custom row heights within safe rendering limits.
 - Common numeric formats, including grouped decimals, percentages and Excel date/time serials (rendered in ISO-style date/time form).
 
 Only validated formatting values are translated into CSS. Workbook-provided HTML, CSS, formulas, macros, external relationships and scripts are never executed or copied into the preview.
