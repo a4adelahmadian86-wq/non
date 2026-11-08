@@ -54,7 +54,7 @@ class Inspection:
             "detected_type": self.detected_type,
             "upstream_scan_status": self.upstream_scan_status,
             "extracted_characters": len(self.extracted_text),
-            "archive_entries": self.archive_entries or [],
+            "archive_entries": (self.archive_entries or [])[:50],
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
         }
