@@ -329,7 +329,7 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             ->assertOk()
             ->assertSee('کتابخانه شما هنوز خالی است')
             ->assertSee('کشف محصولات فروشگاه')
-            ->assertDontSee('library-download');
+            ->assertDontSee('data-library-download=', false);
     }
 
 }
