@@ -41,6 +41,7 @@ class Inspection:
     detected_type: str
     extracted_text: str = ""
     content_chunks: list[dict[str, Any]] | None = None
+    page_count: int | None = None
     image_bytes: bytes | None = None
     image_mime: str | None = None
     audio_bytes: bytes | None = None
@@ -55,6 +56,7 @@ class Inspection:
             "detected_type": self.detected_type,
             "upstream_scan_status": self.upstream_scan_status,
             "extracted_characters": len(self.extracted_text),
+            "page_count": self.page_count,
             "archive_entries": (self.archive_entries or [])[:50],
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
@@ -373,6 +375,10 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     if data.startswith(b"%PDF-"):
         result.detected_type = "pdf"
         result.content_chunks = _extract_pdf_pages(data)
+        try:
+            result.page_count = len(PdfReader(io.BytesIO(data), strict=True).pages)
+        except Exception:
+            result.page_count = None
         result.extracted_text = "\n".join(chunk["text"] for chunk in result.content_chunks)
         if not result.extracted_text.strip():
             result.warnings.append("متن قابل استخراجی در PDF پیدا نشد؛ احتمالاً فایل اسکن تصویری است.")
