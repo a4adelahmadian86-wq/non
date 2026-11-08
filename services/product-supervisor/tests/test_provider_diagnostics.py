@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import httpx
 
-from file_pipeline import analyze_extracted_content, groq_provider_ready
+from file_pipeline import analyze_extracted_content, analyze_image_with_groq, groq_provider_ready, transcribe_audio_with_groq
 
 
 class _FakeResponse:
@@ -87,6 +87,17 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
             result = await analyze_extracted_content("متن محرمانه", {})
         self.assertEqual(result["analysis_status"], "privacy_not_confirmed")
         self.assertFalse(groq_provider_ready())
+        self.assertEqual(_FakeAsyncClient.calls, [])
+
+    async def test_groq_image_and_audio_are_blocked_until_zdr_is_confirmed(self):
+        _FakeAsyncClient.calls = []
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": ""}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                image_result = await analyze_image_with_groq(b"image-bytes", "image/jpeg")
+                audio_result = await transcribe_audio_with_groq(b"audio-bytes", "sample.wav")
+
+        self.assertEqual(image_result, "")
+        self.assertEqual(audio_result, "")
         self.assertEqual(_FakeAsyncClient.calls, [])
 
     async def test_all_provider_batches_failing_is_not_silent_success(self):
