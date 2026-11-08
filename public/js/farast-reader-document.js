@@ -58,6 +58,56 @@
         empty.className = 'reader-document-empty';
         empty.textContent = 'متن قابل استخراجی برای این بخش موجود نیست. نسخه اصلی فایل در مرورگر ارسال نمی‌شود.';
         layer.appendChild(empty);
+      } else if (payload.page_kind === 'sheet') {
+        const rows = text.split(/\r?\n/).map((line) => line.split('|').map((cell) => cell.trim()));
+        const usableRows = rows.filter((row) => row.some((cell) => cell !== '')).slice(0, 80);
+        const columnCount = Math.min(30, Math.max(0, ...usableRows.map((row) => row.length)));
+        if (usableRows.length && columnCount > 1) {
+          const wrap = document.createElement('div');
+          wrap.className = 'farast-reader-sheet-table-wrap';
+          wrap.setAttribute('role', 'region');
+          wrap.setAttribute('aria-label', 'جدول برگه ' + String(payload.sheet_name || 'Excel'));
+          wrap.tabIndex = 0;
+          const table = document.createElement('table');
+          table.className = 'farast-reader-sheet-table';
+          const caption = document.createElement('caption');
+          caption.textContent = String(payload.sheet_name || payload.label || 'برگه Excel');
+          table.appendChild(caption);
+          const tbody = document.createElement('tbody');
+          usableRows.forEach((cells, rowIndex) => {
+            const tr = document.createElement('tr');
+            const rowHeading = document.createElement('th');
+            rowHeading.scope = 'row';
+            rowHeading.textContent = String(Math.max(1, Number(payload.row_start || 1) + rowIndex));
+            tr.appendChild(rowHeading);
+            for (let column = 0; column < columnCount; column += 1) {
+              const td = document.createElement('td');
+              td.textContent = cells[column] || '';
+              tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          wrap.appendChild(table);
+          layer.appendChild(wrap);
+          if (usableRows.length >= 80 || rows.length > 80) {
+            const note = document.createElement('p');
+            note.className = 'farast-reader-sheet-note';
+            note.textContent = 'برای حفظ سرعت نمایش، حداکثر ۸۰ ردیف از این بخش نمایش داده شده است.';
+            layer.appendChild(note);
+          }
+        } else {
+          const notice = document.createElement('p');
+          notice.className = 'reader-document-empty';
+          notice.textContent = 'ساختار جدولی این برگه به‌طور کامل قابل تشخیص نبود؛ متن استخراج‌شده در ادامه نمایش داده می‌شود.';
+          layer.appendChild(notice);
+          for (const line of text.split(/\r?\n/)) {
+            const span = document.createElement('span');
+            span.className = 'reader-document-line';
+            span.textContent = line || ' ';
+            layer.appendChild(span);
+          }
+        }
       } else {
         for (const line of text.split(/\r?\n/)) {
           const span = document.createElement('span');
