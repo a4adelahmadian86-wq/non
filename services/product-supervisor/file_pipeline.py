@@ -411,6 +411,7 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
     try:
         from docx.text.paragraph import Paragraph
         from docx.table import Table
+        from docx.oxml.ns import qn
 
         doc = Document(io.BytesIO(data))
         text_parts: list[str] = []
@@ -418,6 +419,75 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
         char_count = 0
         table_count = 0
         block_index = 0
+
+        # Resolve Word's numbering definitions instead of guessing every list is
+        # a bullet from its paragraph style name. Numbering may be attached to
+        # the paragraph itself or inherited from its paragraph style.
+        numbering_root = doc.part.numbering_part.element
+        numbering_formats: dict[tuple[str, int], str] = {}
+        abstract_formats: dict[tuple[str, int], str] = {}
+        abstract_by_num_id: dict[str, str] = {}
+        for num in numbering_root.findall(qn("w:num")):
+            num_id_node = num.find(qn("w:numId"))
+            abstract_id_node = num.find(qn("w:abstractNumId"))
+            if num_id_node is None or abstract_id_node is None:
+                continue
+            num_id = str(num_id_node.get(qn("w:val"), ""))
+            abstract_id = str(abstract_id_node.get(qn("w:val"), ""))
+            abstract_by_num_id[num_id] = abstract_id
+            for override in num.findall(qn("w:lvlOverride")):
+                level_index = int(override.get(qn("w:ilvl"), "0"))
+                level_node = override.find(qn("w:lvl"))
+                format_node = level_node.find(qn("w:numFmt")) if level_node is not None else None
+                if format_node is not None:
+                    numbering_formats[(num_id, level_index)] = str(format_node.get(qn("w:val"), ""))
+        for abstract in numbering_root.findall(qn("w:abstractNum")):
+            abstract_id_node = abstract.find(qn("w:abstractNumId"))
+            if abstract_id_node is None:
+                continue
+            abstract_id = str(abstract_id_node.get(qn("w:val"), ""))
+            for level_node in abstract.findall(qn("w:lvl")):
+                level_index = int(level_node.get(qn("w:ilvl"), "0"))
+                format_node = level_node.find(qn("w:numFmt"))
+                if format_node is not None:
+                    abstract_formats[(abstract_id, level_index)] = str(format_node.get(qn("w:val"), ""))
+
+        def paragraph_list_metadata(paragraph: Paragraph) -> tuple[str, int] | None:
+            paragraph_properties = getattr(paragraph._p, "pPr", None)
+            numbering_properties = getattr(paragraph_properties, "numPr", None)
+            style = paragraph.style
+            style_name = str(getattr(style, "name", "") or "").strip().lower()
+            style_properties = getattr(getattr(style, "element", None), "pPr", None)
+            style_numbering = getattr(style_properties, "numPr", None)
+            if numbering_properties is None:
+                numbering_properties = style_numbering
+
+            level_index = 0
+            num_id = ""
+            if numbering_properties is not None:
+                level_node = getattr(numbering_properties, "ilvl", None)
+                num_node = getattr(numbering_properties, "numId", None)
+                if level_node is not None:
+                    try:
+                        level_index = max(0, min(4, int(level_node.val)))
+                    except (TypeError, ValueError):
+                        level_index = 0
+                if num_node is not None:
+                    num_id = str(num_node.val)
+
+            number_format = numbering_formats.get((num_id, level_index), "")
+            if not number_format and num_id:
+                abstract_id = abstract_by_num_id.get(num_id, "")
+                number_format = abstract_formats.get((abstract_id, level_index), "")
+            if number_format:
+                return ("bullet" if number_format == "bullet" else "number", level_index + 1)
+
+            if "list" in style_name or "bullet" in style_name or "number" in style_name or "ordered" in style_name:
+                list_kind = "number" if any(token in style_name for token in ("number", "ordered")) else "bullet"
+                return (list_kind, level_index + 1)
+            if numbering_properties is not None and (num_id or getattr(numbering_properties, "ilvl", None) is not None):
+                return ("bullet", level_index + 1)
+            return None
 
         def add_block(kind: str, value: str, locator: dict[str, Any]) -> None:
             nonlocal char_count, block_index
@@ -448,9 +518,9 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
                     add_block("docx_heading", value, {"heading_level": level, "style": "heading"})
                 elif style_name.strip().lower() in {"title", "subtitle"}:
                     add_block("docx_heading", value, {"heading_level": 1 if style_name.lower() == "title" else 2, "style": style_name.lower()})
-                elif "list" in style_name.lower() or getattr(paragraph._p, "pPr", None) is not None and paragraph._p.pPr.numPr is not None:
-                    list_kind = "number" if "number" in style_name.lower() else "bullet"
-                    add_block("docx_list_item", value, {"list_kind": list_kind, "list_level": 1})
+                elif (list_metadata := paragraph_list_metadata(paragraph)) is not None:
+                    list_kind, list_level = list_metadata
+                    add_block("docx_list_item", value, {"list_kind": list_kind, "list_level": list_level})
                 else:
                     add_block("docx_paragraph", value, {})
             elif isinstance(element, Table):
