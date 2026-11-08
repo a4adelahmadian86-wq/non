@@ -1567,3 +1567,36 @@ test('reader ink exposes keyboard guidance and discards cancelled pointer stroke
   await toggle.click();
   await expect(canvas).toHaveCSS('touch-action', 'auto');
 });
+
+test('reader notes preserve the exact selected occurrence offset', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="anchored-note-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>یادداشت روی عبارت و سپس عبارت برای یادداشت</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await page.evaluate(() => { window.prompt = () => 'یادداشت آزمایشی'; });
+  const phrase = 'عبارت';
+  await page.evaluate(phrase => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const start = text.nodeValue.lastIndexOf(phrase);
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + phrase.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, phrase);
+  await page.locator('[data-reader-note]').click();
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:anchored-note-fixture')));
+  const expected = await page.locator('.farast-reader-document p').evaluate(node => node.textContent.lastIndexOf('عبارت'));
+  expect(stored.notes).toHaveLength(1);
+  expect(stored.notes[0].quote).toBe(phrase);
+  expect(stored.notes[0].startOffset).toBe(expected);
+  expect(stored.notes[0].endOffset).toBe(expected + phrase.length);
+  await expect(page.locator('[data-reader-notes]')).toHaveAttribute('aria-expanded', 'true');
+});
