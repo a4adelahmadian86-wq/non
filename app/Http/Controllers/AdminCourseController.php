@@ -141,6 +141,16 @@ class AdminCourseController extends Controller
                 ->whereHas('section', fn ($query) => $query->where('course_id', $lockedCourse->id))
                 ->lockForUpdate()
                 ->firstOrFail();
+            $wasPublishable = $lockedLesson->is_published && $this->lessonHasPublishableContent($lockedLesson->toArray(), $lockedLesson);
+            $willBePublishable = (bool) ($data['is_published'] ?? false) && $this->lessonHasPublishableContent($data, $lockedLesson);
+            if ($lockedProduct->status === 'published' && $wasPublishable && ! $willBePublishable) {
+                $hasReplacement = $lockedProduct->course()
+                    ->whereHas('sections.lessons', fn ($query) => $query->publishable()->where('id', '!=', $lockedLesson->id))
+                    ->exists();
+                if (! $hasReplacement) {
+                    throw ValidationException::withMessages(['is_published' => 'این تغییر آخرین جلسه معتبر دوره منتشرشده را از دسترس خارج می‌کند؛ ابتدا دوره را از انتشار خارج یا جلسه جایگزین اضافه کنید.']);
+                }
+            }
             $lockedLesson->update($data);
             $this->audit('store.course.lesson_updated', $lockedProduct, ['lesson_id' => $lockedLesson->id, 'is_published' => $lockedLesson->is_published]);
         });
