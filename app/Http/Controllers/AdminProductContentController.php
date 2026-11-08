@@ -7,6 +7,7 @@ use App\Services\ProductContentGenerationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Throwable;
 
 class AdminProductContentController extends Controller
 {
@@ -27,8 +28,9 @@ class AdminProductContentController extends Controller
             ])->header('Cache-Control', 'no-store, private');
         } catch (ValidationException $exception) {
             throw $exception;
-        } catch (RuntimeException $exception) {
-            $code = preg_match('/^ai_[a-z0-9_]+$/', $exception->getMessage())
+        } catch (Throwable $exception) {
+            report($exception);
+            $code = $exception instanceof RuntimeException && preg_match('/^ai_[a-z0-9_]+$/', $exception->getMessage())
                 ? $exception->getMessage()
                 : 'ai_product_content_failed';
 
@@ -40,7 +42,7 @@ class AdminProductContentController extends Controller
                     default => 'تولید محتوا انجام نشد. وضعیت سرویس هوش مصنوعی و سهمیه را بررسی کن.',
                 },
                 'error_code' => $code,
-            ], 422)->header('Cache-Control', 'no-store, private');
+            ], $code === 'ai_product_content_failed' ? 503 : 422)->header('Cache-Control', 'no-store, private');
         }
     }
 }
