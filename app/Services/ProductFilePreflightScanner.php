@@ -71,7 +71,7 @@ class ProductFilePreflightScanner
                 throw new RuntimeException('preflight_archive_suspicious:'.implode(',', $archive['suspicious']));
             }
             if ($archive['nested_archives'] > 0) {
-                $warnings[] = 'این آرشیو شامل آرشیو تو‌در‌تو است؛ محتوای داخلی آن در مرحله جداگانه بررسی می‌شود.';
+                throw new RuntimeException('preflight_nested_archive_requires_review');
             }
             if ($kind === 'office' && $archive['contains_macros']) {
                 throw new RuntimeException('preflight_office_macros_not_allowed');
@@ -153,7 +153,10 @@ class ProductFilePreflightScanner
             }
             return $extension === 'tgz' ? 'tar' : 'gzip';
         }
-        if (in_array($extension, ['tar'], true)) {
+        if ($extension === 'tar') {
+            if (substr($prefix, 257, 5) !== 'ustar') {
+                throw new RuntimeException('preflight_tar_signature_invalid');
+            }
             return 'tar';
         }
         if (in_array($extension, ['doc', 'xls', 'ppt'], true) && str_starts_with($prefix, "\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")) {
@@ -233,8 +236,7 @@ class ProductFilePreflightScanner
                 $suspicious[] = 'encrypted_entry';
             }
             $expanded += (int) $header['uncompressed'];
-            if ($header['uncompressed'] > 0 && $header['compressed'] > 0
-                && $header['uncompressed'] / $header['compressed'] > 200) {
+            if ($header['uncompressed'] > 0 && ($header['compressed'] === 0 || $header['uncompressed'] / $header['compressed'] > 200)) {
                 $suspicious[] = 'extreme_compression_ratio';
             }
             if (count($entries) < 250 && ! $isDirectory) {
@@ -278,6 +280,13 @@ class ProductFilePreflightScanner
                 if (! is_string($header) || strlen($header) < 512 || trim($header, "\0") === '') {
                     break;
                 }
+                $storedChecksum = trim(substr($header, 148, 8), "\0 ");
+                $checksumHeader = substr_replace($header, str_repeat(' ', 8), 148, 8);
+                $calculatedChecksum = array_sum(array_values(unpack('C*', $checksumHeader)));
+                if ($storedChecksum === '' || ! preg_match('/^[0-7]+$/', $storedChecksum) || octdec($storedChecksum) !== $calculatedChecksum) {
+                    $suspicious[] = 'tar_header_checksum_invalid';
+                    break;
+                }
                 $name = rtrim(substr($header, 0, 100), "\0");
                 $prefix = rtrim(substr($header, 345, 155), "\0");
                 if ($prefix !== '') $name = $prefix.'/'.$name;
@@ -304,9 +313,16 @@ class ProductFilePreflightScanner
                 }
                 $skip = (int) (ceil($entrySize / 512) * 512);
                 if ($skip > 0) {
-                    $discarded = $extension === 'tar' ? fseek($handle, $skip, SEEK_CUR) : gzread($handle, $skip);
-                    if ($extension === 'tar' && $discarded !== 0) break;
-                    if ($extension !== 'tar' && (! is_string($discarded) || strlen($discarded) !== $skip)) break;
+                    if ($extension === 'tar') {
+                        if (fseek($handle, $skip, SEEK_CUR) !== 0) break;
+                    } else {
+                        $remaining = $skip;
+                        while ($remaining > 0) {
+                            $chunk = gzread($handle, min(65536, $remaining));
+                            if (! is_string($chunk) || $chunk === '') break 2;
+                            $remaining -= strlen($chunk);
+                        }
+                    }
                 }
                 $count++;
             }
