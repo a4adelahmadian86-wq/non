@@ -214,7 +214,7 @@ class StoreReaderAccessTest extends TestCase
 
         $this->actingAs($this->makeReaderUser())
             ->get(route('store.preview', $preview))
-            ->assertStatus(422);
+            ->assertStatus(409);
     }
 
     public function test_xlsx_preview_is_served_as_sandboxable_read_only_html_with_watermark(): void
