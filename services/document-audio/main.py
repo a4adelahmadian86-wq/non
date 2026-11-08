@@ -16,7 +16,7 @@ from piper import PiperVoice
 
 APP_VERSION = "1.0.0"
 VOICE_ID = "farast-document-fa-male-37-v1"
-MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/opt/render/project/src/models"))
+MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")) )
 MODEL_PATH = MODEL_DIR / "fa_IR-amir-medium.onnx"
 CONFIG_PATH = MODEL_DIR / "fa_IR-amir-medium.onnx.json"
 API_TOKEN = os.getenv("DOCUMENT_AUDIO_API_TOKEN", "").strip()
