@@ -38,7 +38,16 @@ class StoreReaderStateController extends Controller
             'bookmarks.*.page' => ['required', 'integer', 'min:1', 'max:10000'],
         ]);
 
-        $sectionCount = $product->previews()->where('is_active', true)->count();
+        $activePreviews = $product->previews()->where('is_active', true)->get(['id', 'access_level']);
+        $samplePreviews = $activePreviews->where('access_level', '!=', 'full');
+        $hasEntitlement = ($product->download_policy ?? 'signed') === 'reader_only'
+            && \\App\\Models\\StoreLibraryItem::query()
+                ->where('user_id', $request->user()->id)
+                ->where('product_id', $product->id)
+                ->whereNull('revoked_at')
+                ->exists();
+        $fullPreviews = $hasEntitlement ? $activePreviews->where('access_level', 'full') : collect();
+        $sectionCount = ($fullPreviews->isNotEmpty() ? $fullPreviews : $samplePreviews)->count();
         $progress = $data['progress'] ?? null;
         if ($progress && $progress['section'] >= $sectionCount) {
             abort(422, 'موقعیت مطالعه معتبر نیست.');
