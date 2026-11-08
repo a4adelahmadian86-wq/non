@@ -101,22 +101,22 @@
             <article class="home-service-card">
                 <span><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i></span>
                 <h3>تبدیل فایل به متن</h3>
-                <p>فایل PDF، تصویر یا اسکن را وارد کنید و مسیر استخراج متن را آغاز کنید.</p>
+                <p>فایل PDF، تصویر یا اسکن را وارد کنید و مسیر استخراج متن را آغاز کنید.</p>\n                <a class="home-service-card__action" href="{{ route('editor') }}">ورود به محیط کار <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
             </article>
             <article class="home-service-card">
                 <span><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></span>
                 <h3>تایپ با گفتار</h3>
-                <p>به‌جای تایپ همه متن، گفتار خود را به متن قابل ویرایش تبدیل کنید.</p>
+                <p>به‌جای تایپ همه متن، گفتار خود را به متن قابل ویرایش تبدیل کنید.</p>\n                <a class="home-service-card__action" href="{{ route('editor') }}">ورود به محیط کار <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
             </article>
             <article class="home-service-card">
                 <span><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span>
                 <h3>ویرایش حرفه‌ای سند</h3>
-                <p>متن را در محیط ویرایشگر بازبینی و قالب‌بندی کنید و ادامه دهید.</p>
+                <p>متن را در محیط ویرایشگر بازبینی و قالب‌بندی کنید و ادامه دهید.</p>\n                <a class="home-service-card__action" href="{{ route('editor') }}">ورود به محیط کار <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
             </article>
             <article class="home-service-card">
                 <span><i class="fa-solid fa-file-export" aria-hidden="true"></i></span>
                 <h3>خروجی Word و PDF</h3>
-                <p>پس از تکمیل سند و طی فرایند سفارش، خروجی موردنیازتان را دریافت کنید.</p>
+                <p>پس از تکمیل سند و طی فرایند سفارش، خروجی موردنیازتان را دریافت کنید.</p>\n                <a class="home-service-card__action" href="{{ route('editor') }}">ورود به محیط کار <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
             </article>
         </div>
         <div class="home-service-note">

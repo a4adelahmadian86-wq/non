@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="theme-color" content="#0b1734"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-title" content="فراست"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icons/farast-icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/farast-192.png"><link rel="stylesheet" href="/css/farast-pwa.css?v=20261108pwa1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="theme-color" content="#0b1734"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-title" content="فراست"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icons/farast-icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/farast-192.png"><link rel="stylesheet" href="/css/farast-pwa.css?v=20261108pwa1"><link rel="stylesheet" href="/css/farast-mobile-dock.css?v=20261108dock1">
 <title>{{ $title ?? 'فراست' }}</title>
 @stack('head')
 @php
@@ -64,7 +64,29 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @yield('content')
 @if($isDashboard && !$isAdmin && auth()->check())</div>@endif
 </main>
-@if(!$isEditor&&!$isAdmin&&!$isDashboard)<aside class="farast-cart-drawer" id="farastCartDrawer" aria-hidden="true"><div class="farast-cart-head"><strong>سبد خرید</strong><button type="button" data-cart-close aria-label="بستن"><i class="fa-solid fa-xmark"></i></button></div><div class="farast-cart-body" id="farastCartBody"></div><div class="farast-cart-foot"><span>جمع</span><strong id="farastCartTotal">۰ تومان</strong><button type="button" id="farastCartCheckout" disabled>ادامه پرداخت</button></div></aside><div class="farast-cart-backdrop" id="farastCartBackdrop" hidden></div><div class="farast-connectivity" id="farastConnectivity" aria-live="polite" hidden><div class="farast-connectivity-card"><div class="farast-connectivity-copy"><strong id="farastConnectivityTitle">اتصال اینترنت در دسترس نیست</strong><span id="farastConnectivityMessage">بخش‌های ذخیره‌شده در دسترس می‌مانند.</span></div><button type="button" id="farastConnectivityRetry" aria-label="تلاش دوباره"><i class="fa-solid fa-rotate-right"></i></button></div></div><button type="button" id="farastSoundToggle" class="farast-sound-toggle" aria-label="فعال یا غیرفعال کردن صدای رابط" aria-pressed="false"><i class="fa-solid fa-volume-high"></i></button>@endif
+@if(!$isEditor && !$isAdmin && !$isDashboard && !$isAuthPage)
+<nav class="farast-mobile-dock" aria-label="ناوبری سریع فراست">
+  <a href="{{ route('home') }}" @if(request()->routeIs('home')) aria-current="page" @endif>
+    <i class="fa-solid fa-house" aria-hidden="true"></i><span>خانه</span>
+  </a>
+  <a href="{{ route('store') }}" @if(request()->routeIs('store*')) aria-current="page" @endif>
+    <i class="fa-solid fa-store" aria-hidden="true"></i><span>فروشگاه</span>
+  </a>
+  <a class="farast-mobile-dock__primary" href="{{ route('editor') }}" @if(request()->routeIs('editor')) aria-current="page" @endif>
+    <i class="fa-solid fa-pen-ruler" aria-hidden="true"></i><span>شروع کار</span>
+  </a>
+  @auth
+    <a href="{{ route('dashboard') }}" @if(request()->routeIs('dashboard')) aria-current="page" @endif>
+      <i class="fa-solid fa-grid-2" aria-hidden="true"></i><span>فضای من</span>
+    </a>
+  @else
+    <a href="{{ route('login') }}">
+      <i class="fa-solid fa-user" aria-hidden="true"></i><span>ورود</span>
+    </a>
+  @endauth
+</nav>
+@endif
+\n@if(!$isEditor&&!$isAdmin&&!$isDashboard)<aside class="farast-cart-drawer" id="farastCartDrawer" aria-hidden="true"><div class="farast-cart-head"><strong>سبد خرید</strong><button type="button" data-cart-close aria-label="بستن"><i class="fa-solid fa-xmark"></i></button></div><div class="farast-cart-body" id="farastCartBody"></div><div class="farast-cart-foot"><span>جمع</span><strong id="farastCartTotal">۰ تومان</strong><button type="button" id="farastCartCheckout" disabled>ادامه پرداخت</button></div></aside><div class="farast-cart-backdrop" id="farastCartBackdrop" hidden></div><div class="farast-connectivity" id="farastConnectivity" aria-live="polite" hidden><div class="farast-connectivity-card"><div class="farast-connectivity-copy"><strong id="farastConnectivityTitle">اتصال اینترنت در دسترس نیست</strong><span id="farastConnectivityMessage">بخش‌های ذخیره‌شده در دسترس می‌مانند.</span></div><button type="button" id="farastConnectivityRetry" aria-label="تلاش دوباره"><i class="fa-solid fa-rotate-right"></i></button></div></div><button type="button" id="farastSoundToggle" class="farast-sound-toggle" aria-label="فعال یا غیرفعال کردن صدای رابط" aria-pressed="false"><i class="fa-solid fa-volume-high"></i></button>@endif
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)<footer class="site-footer" dir="rtl">
   <div class="footer-glow" aria-hidden="true"></div>
   <div class="footer-top">
