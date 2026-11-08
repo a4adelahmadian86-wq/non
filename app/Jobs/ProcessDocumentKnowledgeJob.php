@@ -190,6 +190,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             fn ($page) => $page > 0
         ))) : [];
         if (! in_array((string) $document->detected_type, ['pdf', 'docx'], true) || $pages === []) {
+            $document->update(['metadata' => array_merge((array) $document->metadata, ['sample_status' => 'not_selected_or_unsupported'])]);
             return;
         }
 
@@ -209,7 +210,15 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
         }
 
         try {
-            $sample = $supervisor->createPdfSample($stream, $file->original_name ?: basename($file->path), $pages);
+            try {
+                $sample = $supervisor->createPdfSample($stream, $file->original_name ?: basename($file->path), $pages);
+            } catch (Throwable $exception) {
+                $document->update(['metadata' => array_merge((array) $document->metadata, [
+                    'sample_status' => 'generation_failed',
+                    'sample_error' => class_basename($exception),
+                ])]);
+                return;
+            }
         } finally {
             fclose($stream);
         }
@@ -218,6 +227,8 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
         if (! Storage::disk('private')->put($samplePath, $sample['bytes'])) {
             throw new \\RuntimeException('document_sample_storage_failed');
         }
+
+        $document->update(['metadata' => array_merge((array) $document->metadata, ['sample_status' => 'ready', 'sample_pages' => $pages])]);
 
         StoreDocumentSample::query()->updateOrCreate(
             ['document_id' => $document->id, 'source_sha256' => $document->source_sha256],
