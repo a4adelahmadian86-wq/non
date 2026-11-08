@@ -44,6 +44,7 @@
     .farast-reader[data-reader-font="dyslexic"] .farast-reader-document{font-family:OpenDyslexic,local("OpenDyslexic"),Arial,sans-serif}
     .farast-reader[data-reader-font="system"] .farast-reader-document{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
     .farast-reader[data-reader-font-size] .farast-reader-document{font-size:var(--reader-personal-font-size,100%)}
+    .farast-reader[data-reader-font-size] .farast-reader-document .reader-document-line{font-size:calc(1rem * var(--reader-font-scale,1))}
     .farast-reader-local-notes{width:100%;max-height:230px;overflow:auto;padding:9px 12px;border-top:1px solid var(--reader-line);background:var(--reader-panel);color:var(--reader-text)}
     .farast-reader-local-notes[hidden]{display:none}
     .farast-reader-note{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--reader-line);font-size:.75rem}
@@ -60,6 +61,7 @@
     root.classList.toggle('is-reading-light', !!state.light);
     root.dataset.readerFont = state.font;
     root.style.setProperty('--reader-personal-font-size', state.size + '%');
+    root.style.setProperty('--reader-font-scale', String(state.size / 100));
     lightButton.setAttribute('aria-pressed', String(!!state.light));
     fontSelect.value = state.font;
     sizeInput.value = String(state.size);
@@ -141,6 +143,8 @@
     renderNotes();
   });
   root.addEventListener('farast:reader-section-change', () => { window.setTimeout(renderHighlights, 100); });
+  root.addEventListener('farast:reader-page-loaded', () => { window.setTimeout(renderHighlights, 80); });
+  root.addEventListener('farast:reader-page-change', () => { window.setTimeout(renderHighlights, 120); });
   renderNotes();
   renderHighlights();
 })();
