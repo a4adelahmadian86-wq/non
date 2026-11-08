@@ -391,7 +391,7 @@
     const sentence = event.target.closest('.reader-document-sentence');
     const paragraph = event.target.closest('.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
     const target = sentence || paragraph;
-    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
+    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
     const pdfLayer = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
     if (pdfLayer) {
       const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
@@ -425,7 +425,7 @@
     const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
     if (!target) return;
     const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(target.textContent, page);
+    const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page);
     if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); }
   });
   root.addEventListener('pointerup', () => {
