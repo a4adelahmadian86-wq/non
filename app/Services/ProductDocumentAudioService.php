@@ -9,7 +9,7 @@ class ProductDocumentAudioService
 {
     public function configured(): bool
     {
-        return filled(config('services.voice_tts.url')) && filled(config('services.voice_tts.token'));
+        return filled(config('services.document_audio.url')) && filled(config('services.document_audio.token'));
     }
 
     /**
@@ -28,7 +28,7 @@ class ProductDocumentAudioService
         }
 
         $token = (string) config('services.voice_tts.token');
-        $voiceId = (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1');
+        $voiceId = (string) config('services.document_audio.voice_id', 'farast-document-fa-male-37-v1');
         $pcm = '';
         $format = null;
         $segments = [];
