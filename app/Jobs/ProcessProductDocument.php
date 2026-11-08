@@ -154,7 +154,13 @@ class ProcessProductDocument implements ShouldQueue
         $sample = null;
         $selectedSamplePages = array_values(array_filter((array) ($payload['sample_page_numbers'] ?? []), static fn ($page) => is_int($page) || (is_string($page) && ctype_digit($page))));
         if ($file->is_primary && is_string($sampleSourcePdf) && $sampleSourcePdf !== '' && $selectedSamplePages !== []) {
-            $sample = $sampleBuilder->build($sampleSourcePdf, $selectedSamplePages, 3, 8 * 1024 * 1024);
+            try {
+                $sample = $sampleBuilder->build($sampleSourcePdf, $selectedSamplePages, 3, 8 * 1024 * 1024);
+            } catch (Throwable) {
+                $payload['warnings'] = array_values(array_merge((array) ($payload['warnings'] ?? []), [
+                    'ساخت نسخه نمونه در سایت انجام نشد؛ فایل اصلی و نتیجه مطالعه بدون تغییر نگهداری شدند.',
+                ]));
+            }
         }
 
         $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 120) : [];
@@ -324,7 +330,9 @@ class ProcessProductDocument implements ShouldQueue
                 $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
                 $sampleDisk = Storage::disk($existingSample?->disk ?: 'private');
                 $samplePathForReader = null;
-                if ($existingSample && $sampleDisk->exists($existingSample->path)) {
+                if ($existingSample
+                    && data_get($existingSample->metadata_json, 'generator') === 'laravel_fpdi'
+                    && $sampleDisk->exists($existingSample->path)) {
                     $samplePathForReader = $existingSample->path;
                     $structure['sample'] = [
                         'artifact_type' => 'sample_pdf',
