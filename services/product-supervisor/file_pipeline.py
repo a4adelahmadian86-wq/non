@@ -566,33 +566,6 @@ def _inspect_image(data: bytes) -> tuple[bytes, str]:
         raise FileInspectionError("فایل تصویر خراب یا نامعتبر است.") from None
 
 
-def _clamav_scan(data: bytes) -> str:
-    scanner = shutil.which("clamscan") or shutil.which("clamdscan")
-    if not scanner:
-        return "not_configured"
-    import tempfile
-    try:
-        with tempfile.NamedTemporaryFile(prefix="supervisor-", suffix=".bin") as handle:
-            handle.write(data)
-            handle.flush()
-            result = subprocess.run(
-                [scanner, "--no-summary", handle.name],
-                capture_output=True,
-                text=True,
-                timeout=12,
-                check=False,
-            )
-        output = (result.stdout + result.stderr).lower()
-        if "found" in output or result.returncode == 1:
-            return "infected"
-        if result.returncode == 0:
-            return "clean"
-        return "unavailable"
-    except (OSError, subprocess.TimeoutExpired):
-        return "unavailable"
-
-
-
 def _extract_video_tracks(data: bytes) -> tuple[bytes | None, bytes | None]:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
