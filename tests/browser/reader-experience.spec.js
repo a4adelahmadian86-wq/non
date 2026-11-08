@@ -1439,3 +1439,42 @@ test('personal highlights span inline formatting and restore after a page rerend
   });
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
 });
+
+
+test('local reader ink supports drawing, erasing mode, undo and browser persistence', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="local-ink-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" style="width:640px;height:420px">
+        <div class="farast-reader-document"><p>متن صفحه برای ترسیم</p></div>
+      </article>
+      <article class="farast-reader-page-item" data-index="1" data-reader-page="2" style="width:640px;height:420px">
+        <div class="farast-reader-document"><p>صفحه دوم</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await page.locator('[data-ink-toggle]').click();
+  await expect(page.locator('[data-ink-toggle]')).toHaveAttribute('aria-pressed', 'true');
+  const canvas = page.locator('.farast-reader-page-item').first().locator('canvas.farast-reader-ink-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.move(bounds.x + 30, bounds.y + 35);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 100, bounds.y + 90, { steps: 5 });
+  await page.mouse.up();
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:local-ink-fixture')));
+  expect(stored.inkStrokes).toHaveLength(1);
+  expect(stored.inkStrokes[0].page).toBe(1);
+  expect(stored.inkStrokes[0].points.length).toBeGreaterThan(1);
+  expect(stored.inkStrokes[0].points.every(point => point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1)).toBe(true);
+
+  await page.locator('[data-ink-eraser]').click();
+  await expect(page.locator('[data-ink-eraser]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-ink-undo]').click();
+  const afterUndo = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:local-ink-fixture')));
+  expect(afterUndo.inkStrokes).toHaveLength(0);
+  await page.locator('[data-ink-toggle]').click();
+  await expect(canvas).toHaveCSS('pointer-events', 'none');
+});
