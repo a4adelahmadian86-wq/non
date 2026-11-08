@@ -95,6 +95,44 @@
         </div>
         <div class="product-ai-supervisor-body">
           <div class="product-ai-notice"><i class="fa-solid fa-circle-info"></i><span><b>پیکربندی مستقل از موتور هوش فعلی</b><small>در این مرحله فقط سیاست‌ها و محدوده نظارت ذخیره می‌شوند؛ اجرای تحلیل به اتصال ناظر اختصاصی در مرحله بعد وابسته است.</small></span></div>
+          @if($isEdit)
+            @php($lastSupervisorReview = data_get($product->metadata, 'ai_supervisor.last_review'))
+            <div class="product-ai-runtime">
+              <div class="product-ai-runtime-head">
+                <div><span>موتور ناظر مستقل</span><strong>بررسی کیفیت محصول</strong><small>این عملیات فقط یک گزارش پیشنهاد می‌دهد و هیچ‌گاه محصول را خودکار منتشر یا ویرایش نمی‌کند.</small></div>
+                <form method="post" action="{{ route('admin.store.ai-supervisor.review', $product) }}">
+                  @csrf
+                  <button type="submit" class="store-primary-btn" @disabled(!data_get($product->metadata, 'ai_supervisor.enabled', false))>اجرای بررسی هوشمند</button>
+                </form>
+              </div>
+              @if($lastSupervisorReview)
+                <div class="product-ai-result">
+                  <div class="product-ai-result-top">
+                    <strong class="verdict-{{ $lastSupervisorReview['verdict'] ?? 'needs_changes' }}">{{ ['approved'=>'بدون ایراد مهم','needs_changes'=>'نیازمند اصلاح','blocked'=>'دارای مانع جدی'][$lastSupervisorReview['verdict'] ?? 'needs_changes'] ?? 'نیازمند بازبینی' }}</strong>
+                    <span>امتیاز کیفیت: {{ (int) ($lastSupervisorReview['score'] ?? 0) }} از ۱۰۰</span>
+                  </div>
+                  <p>{{ $lastSupervisorReview['summary'] ?? 'گزارش ناظر ثبت شد.' }}</p>
+                  @if(!empty($lastSupervisorReview['findings']))
+                    <div class="product-ai-findings">
+                      @foreach($lastSupervisorReview['findings'] as $finding)
+                        <article class="severity-{{ $finding['severity'] ?? 'info' }}">
+                          <div><b>{{ $finding['title'] ?? 'نکته بررسی' }}</b><span>{{ ['critical'=>'بحرانی','warning'=>'هشدار','info'=>'اطلاع'][$finding['severity'] ?? 'info'] ?? 'اطلاع' }}</span></div>
+                          <p>{{ $finding['detail'] ?? '' }}</p>
+                          <small>اقدام پیشنهادی: {{ $finding['recommendation'] ?? 'بازبینی توسط مدیر' }}</small>
+                        </article>
+                      @endforeach
+                    </div>
+                  @endif
+                  <small class="product-ai-result-meta">مدل: {{ $lastSupervisorReview['model'] ?? '—' }} · شناسه بررسی: {{ $lastSupervisorReview['review_id'] ?? '—' }} · زمان: {{ $lastSupervisorReview['generated_at'] ?? '—' }}</small>
+                  <small class="product-ai-result-meta">نتیجه ناظر جایگزین تصمیم مدیر نیست و انتشار محصول همچنان از کنترل‌های سمت سرور عبور می‌کند.</small>
+                </div>
+              @else
+                <p class="product-ai-no-result">هنوز گزارشی برای این محصول ثبت نشده است. ابتدا ناظر را فعال و سپس بررسی را اجرا کنید.</p>
+              @endif
+            </div>
+          @else
+            <div class="product-ai-runtime"><p class="product-ai-no-result">پس از ایجاد پیش‌نویس، موتور ناظر مستقل از صفحه ویرایش محصول قابل اجرا خواهد بود.</p></div>
+          @endif
           <div class="product-editor-grid">
             <label class="product-field">رفتار ناظر
               <select name="ai_supervisor[mode]">
@@ -239,6 +277,34 @@
 .product-ai-checks label{display:flex;align-items:center;gap:8px;padding:11px;border:1px solid #e3eaf3;border-radius:10px;background:#fff;color:#4b607c;font-size:.7rem;cursor:pointer}
 .product-ai-checks input{width:16px;height:16px;flex:0 0 16px;accent-color:#2868c8}
 .product-ai-footer{display:flex;align-items:center;gap:8px;color:#788ba3;font-size:.65rem}
+.product-ai-runtime{display:grid;gap:12px;padding:14px;border:1px solid #d9e6f5;border-radius:13px;background:#fff}
+.product-ai-runtime-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.product-ai-runtime-head>div{display:grid;gap:4px}
+.product-ai-runtime-head>div>span{font-size:.64rem;color:#3474c7;font-weight:900}
+.product-ai-runtime-head>div>strong{font-size:.82rem;color:#29435f}
+.product-ai-runtime-head>div>small,.product-ai-result-meta{font-size:.64rem;line-height:1.8;color:#7b8ba0}
+.product-ai-runtime-head form{margin:0;flex:0 0 auto}
+.product-ai-runtime-head button{white-space:nowrap}
+.product-ai-no-result{margin:0;color:#71839b;font-size:.69rem;line-height:1.9}
+.product-ai-result{display:grid;gap:10px;padding-top:12px;border-top:1px solid #e7edf5}
+.product-ai-result-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.product-ai-result-top strong{font-size:.72rem;padding:6px 10px;border-radius:8px;background:#f2f6fb}
+.product-ai-result-top .verdict-approved{color:#18764a;background:#eaf7ef}
+.product-ai-result-top .verdict-needs_changes{color:#9a5b0b;background:#fff4e7}
+.product-ai-result-top .verdict-blocked{color:#a52d2d;background:#fff0f0}
+.product-ai-result-top span{font-size:.68rem;color:#506782;font-weight:800}
+.product-ai-result>p{margin:0;color:#405875;font-size:.72rem;line-height:1.9}
+.product-ai-findings{display:grid;gap:8px}
+.product-ai-findings article{padding:10px;border:1px solid #e5ebf3;border-radius:10px;background:#fcfdff}
+.product-ai-findings article>div{display:flex;justify-content:space-between;gap:8px}
+.product-ai-findings b{font-size:.7rem;color:#334b68}
+.product-ai-findings article>div span{font-size:.62rem;color:#71839b}
+.product-ai-findings p{margin:6px 0;color:#5b6f88;font-size:.67rem;line-height:1.8}
+.product-ai-findings small{font-size:.65rem;color:#3474a6;line-height:1.8}
+.product-ai-findings .severity-critical{border-color:#f0caca;background:#fffafa}
+.product-ai-findings .severity-warning{border-color:#f0dfc2;background:#fffdf8}
+@media(max-width:600px){.product-ai-runtime-head{align-items:stretch;flex-direction:column}.product-ai-runtime-head button{width:100%}.product-ai-result-top{align-items:flex-start;flex-direction:column}}
+
 .product-ai-footer i{color:#4a83c9}
 @media(max-width:760px){.product-ai-supervisor-head{align-items:flex-start;flex-wrap:wrap}.product-ai-switch{width:100%;padding-inline-start:57px}.product-ai-checks{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.product-ai-checks{grid-template-columns:1fr}.product-ai-supervisor-head,.product-ai-supervisor-body{padding:13px}}
