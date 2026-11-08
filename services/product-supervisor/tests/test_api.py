@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import io
 import os
 import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from docx import Document
+from pypdf import PdfWriter
 
 from main import app, validate_evidence_facts
 
@@ -80,6 +83,48 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(body["provider_status"]["gemini"], "not_configured")
         self.assertEqual(body["analysis_batch_count"], 0)
         self.assertEqual(body["failed_analysis_batches"], 0)
+
+    def test_docx_reader_source_keeps_semantic_blocks_while_pdf_remains_visual_artifact(self):
+        document = Document()
+        document.add_heading("فصل ساختاریافته", level=1)
+        document.add_paragraph("متن توضیحی")
+        table = document.add_table(rows=1, cols=2)
+        table.cell(0, 0).text = "عنوان"
+        table.cell(0, 1).text = "مقدار"
+        docx_stream = io.BytesIO()
+        document.save(docx_stream)
+
+        writer = PdfWriter()
+        writer.add_blank_page(width=200, height=300)
+        pdf_stream = io.BytesIO()
+        writer.write(pdf_stream)
+
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "GROQ_API_KEY": ""}):
+            response = self.client.post(
+                "/v1/reviews/files",
+                headers={"Authorization": "Bearer test-token"},
+                data={
+                    "product_id": "p-docx",
+                    "product_title": "سند Word",
+                    "product_type": "digital_file",
+                    "primary_scan_status": "structural_checks_passed",
+                },
+                files={
+                    "file": ("lesson.pdf", pdf_stream.getvalue(), "application/pdf"),
+                    "reader_source_file": ("lesson.docx", docx_stream.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["inspection"]["detected_type"], "docx")
+        self.assertEqual(body["inspection"]["page_count"], 1)
+        self.assertEqual(
+            [chunk["chunk_type"] for chunk in body["content_chunks"]],
+            ["docx_heading", "docx_paragraph", "docx_table_row"],
+        )
+        self.assertEqual(body["content_chunks"][0]["locator"]["heading_level"], 1)
+        self.assertEqual(body["content_chunks"][2]["locator"]["cells"], ["عنوان", "مقدار"])
 
     def test_health_does_not_disclose_secret(self):
         response = self.client.get("/health")
