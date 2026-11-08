@@ -15,6 +15,7 @@ Route::get('/store/product/{product}/lessons/{lesson}/preview',[StoreController:
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/my-courses/{product}', [StoreCourseLearningController::class, 'show'])->name('store.course.learn');
+    Route::get('/my-library/document-audio/{audio}', [\\App\\Http\\Controllers\\StoreProductDocumentAudioController::class, 'stream'])->middleware('throttle:30,10')->name('store.document.audio');
     Route::get('/my-courses/{product}/lessons/{lesson}', [StoreCourseLearningController::class, 'lesson'])->name('store.course.lesson');
     Route::post('/my-courses/{product}/lessons/{lesson}/progress', [StoreCourseLearningController::class, 'progress'])->middleware('throttle:60,10')->name('store.course.progress');
     Route::get('/my-courses/{product}/lessons/{lesson}/resources/{file}', [StoreCourseLearningController::class, 'resource'])->middleware('throttle:60,10')->name('store.course.resource');
