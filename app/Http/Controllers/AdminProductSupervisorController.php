@@ -70,6 +70,7 @@ class AdminProductSupervisorController extends Controller
     public function reviewFile(StoreProduct $product, StoreProductFile $file, ProductSupervisorClient $supervisor)
     {
         abort_unless((int) $file->product_id === (int) $product->id && $file->purpose === 'product_download' && $file->is_active, 404);
+        abort_unless($file->scan_status === 'clean', 409, 'فایل باید ابتدا از اسکنر اصلی فروشگاه وضعیت سالم دریافت کند.');
 
         return $this->reviewStoredAsset(
             $product,
