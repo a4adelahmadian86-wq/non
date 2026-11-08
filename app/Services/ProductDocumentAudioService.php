@@ -53,7 +53,7 @@ class ProductDocumentAudioService
                     ->asJson()
                     ->connectTimeout(75) // Free Render instances can need about a minute to wake from idle.
                     ->timeout(180)
-                    ->retry(3, [1000, 3000, 8000], static fn ($exception) =>
+                    ->retry(3, 3000, static fn ($exception) =>
                         $exception instanceof ConnectionException
                         || ($exception instanceof RequestException
                             && in_array($exception->response->status(), [502, 503, 504], true))
