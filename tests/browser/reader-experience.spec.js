@@ -670,6 +670,56 @@ test('plays the exact repeated paragraph occurrence and supports blank-page mous
 });
 
 
+test('scopes repeated phrase matching to the selected continuous PDF page', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 2;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        this.volume = 1;
+        this.src = '';
+        this.currentSrc = '';
+        window.__fakeReaderAudio = this;
+      }
+      setAttribute() {}
+      load() { this.currentSrc = this.src; this.dispatchEvent(new Event('loadedmetadata')); }
+      play() { this.paused = false; this.dispatchEvent(new Event('play')); return Promise.resolve(); }
+      pause() { if (!this.paused) { this.paused = true; this.dispatchEvent(new Event('pause')); } }
+      removeAttribute(name) { if (name === 'src') { this.src = ''; this.currentSrc = ''; } }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [
+    { text: 'سلام جهان', start: 0.1, end: 0.4, page: 1, words: [
+      { text: 'سلام', start: 0.1, end: 0.25 }, { text: 'جهان', start: 0.25, end: 0.4 }
+    ] },
+    { text: 'سلام جهان', start: 0.6, end: 0.9, page: 2, words: [
+      { text: 'سلام', start: 0.6, end: 0.75 }, { text: 'جهان', start: 0.75, end: 0.9 }
+    ] }
+  ];
+  const encodedTimings = JSON.stringify(timings).replace(/"/g, '&quot;');
+  await page.setContent(
+    '<section class="farast-reader" data-reader-root data-reader-mode="document" ' +
+      'data-reader-audio-url="/reader-full.wav" data-reader-audio-timing="' + encodedTimings + '">' +
+      '<input id="reader-page-number" value="1">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-audio-url="/reader-full.wav">' +
+        '<div class="farast-pdf-cont-page" data-pdf-cont-page="1"><p class="reader-document-sentence" data-reader-speech-text="سلام جهان">سلام جهان</p></div>' +
+        '<div class="farast-pdf-cont-page" data-pdf-cont-page="2"><p class="reader-document-sentence" data-reader-speech-text="سلام جهان">سلام جهان</p></div>' +
+      '</article>' +
+    '</section>'
+  );
+  await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+
+  await page.locator('[data-pdf-cont-page="2"] .reader-document-sentence').click();
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.6);
+});
+
+
 test('shows pending narration state and checks the protected audio artifact without exposing storage paths', async ({ page }) => {
   let polls = 0;
   await page.route('**/store/product/1/reader/audio/2*', async route => {
