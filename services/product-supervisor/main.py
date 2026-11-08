@@ -352,7 +352,7 @@ async def review_product_file(
     # The model recommends source page numbers only. Laravel validates and
     # creates the immutable sample derivative locally with FPDI.
     sample_page_numbers: list[int] = []
-    if allow_sample_generation and inspection.detected_type in {"pdf", "pptx"} and provider_status.get("gemini") == "completed":
+    if allow_sample_generation and inspection.detected_type in {"pdf", "pptx", "image"} and provider_status.get("gemini") == "completed":
         raw_sample_pages = model_review.get("sample_pages", [])
         available_sample_pages: set[int] = set()
         for chunk in (inspection.content_chunks or []):
@@ -368,6 +368,8 @@ async def review_product_file(
                     value for value in page_values
                     if isinstance(value, int) and not isinstance(value, bool)
                 )
+        if inspection.detected_type == "image" and inspection.page_count == 1:
+            available_sample_pages.add(1)
         if isinstance(raw_sample_pages, list):
             for candidate in raw_sample_pages[:3]:
                 if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate in available_sample_pages and inspection.page_count and 1 <= candidate <= inspection.page_count:
@@ -375,6 +377,25 @@ async def review_product_file(
                         sample_page_numbers.append(candidate)
         if raw_sample_pages and not sample_page_numbers:
             warnings.append("شماره صفحه نمونه با صفحات واقعی فایل تطبیق نداشت؛ فایل اصلی بدون تغییر باقی ماند.")
+
+    sample_sheet_names: list[str] = []
+    if allow_sample_generation and inspection.detected_type == "xlsx" and provider_status.get("gemini") == "completed":
+        raw_sample_sheets = model_review.get("sample_sheets", [])
+        available_sample_sheets = {
+            str(chunk.get("locator", {}).get("sheet")).strip()
+            for chunk in (inspection.content_chunks or [])
+            if isinstance(chunk, dict)
+            and isinstance(chunk.get("locator"), dict)
+            and isinstance(chunk.get("locator", {}).get("sheet"), str)
+        }
+        if isinstance(raw_sample_sheets, list):
+            for candidate in raw_sample_sheets[:3]:
+                if isinstance(candidate, str):
+                    sheet_name = candidate.strip()[:120]
+                    if sheet_name in available_sample_sheets and sheet_name not in sample_sheet_names:
+                        sample_sheet_names.append(sheet_name)
+        if raw_sample_sheets and not sample_sheet_names:
+            warnings.append("نام برگه نمونه با برگه‌های واقعی فایل Excel تطبیق نداشت؛ فایل اصلی بدون تغییر باقی ماند.")
 
     raw_chunks = list(inspection.content_chunks or [])
     for visual_item in visual_reports:
@@ -420,6 +441,7 @@ async def review_product_file(
         "failed_analysis_batches": int(model_review.get("failed_analysis_batches", 0)) if model_review else 0,
         "analysis_failure_categories": model_review.get("analysis_failure_categories", {}) if model_review else {},
         "sample_page_numbers": sample_page_numbers,
+        "sample_sheet_names": sample_sheet_names,
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
