@@ -277,8 +277,11 @@ class AdminStoreController extends Controller
         $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean']);
 
         $upload = $request->file('file');
-        $extension = strtolower($upload->getClientOriginalExtension());
-        $allowedExtensions = ['pdf','zip','jpg','jpeg','png','webp','gif','docx','xlsx','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov'];
+        $originalNameLower = strtolower(str_replace('\\\\', '/', $upload->getClientOriginalName()));
+        $extension = str_ends_with($originalNameLower, '.tar.gz')
+            ? 'tar.gz'
+            : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower($upload->getClientOriginalExtension()));
+        $allowedExtensions = ['pdf','zip','tar','tar.gz','tar.bz2','jpg','jpeg','png','webp','gif','docx','xlsx','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov'];
         abort_unless(in_array($extension, $allowedExtensions, true), 422, 'این پسوند در فهرست فرمت‌های مجاز فراست نیست.');
 
         // Remove expired staging records opportunistically; no cron or Redis dependency is required.
@@ -363,7 +366,11 @@ class AdminStoreController extends Controller
         $inspection = $security->inspect($ingestion->staging_path, $ingestion->mime, 50 * 1024 * 1024);
         abort_unless(hash_equals((string) $ingestion->sha256, (string) $inspection['checksum']), 409, 'فایل پس از بررسی اولیه تغییر کرده است؛ دوباره آن را بارگذاری کنید.');
 
-        $finalPath = 'store/products/'.$product->id.'/'.Str::uuid().'.'.strtolower(pathinfo($ingestion->original_name, PATHINFO_EXTENSION));
+        $originalNameLower = strtolower($ingestion->original_name);
+        $finalExtension = str_ends_with($originalNameLower, '.tar.gz')
+            ? 'tar.gz'
+            : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower(pathinfo($ingestion->original_name, PATHINFO_EXTENSION)));
+        $finalPath = 'store/products/'.$product->id.'/'.Str::uuid().'.'.$finalExtension;
         if (! $disk->move($ingestion->staging_path, $finalPath)) {
             throw new \RuntimeException('product_file_storage_move_failed');
         }
