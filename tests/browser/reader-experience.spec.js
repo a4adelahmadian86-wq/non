@@ -296,17 +296,38 @@ test.describe('FARAST sample reader interactions', () => {
 
     const results = await page.evaluate(() => {
       const target = document.querySelector('[data-reader-root]');
+      const input = document.querySelector('#reader-search');
       const copy = new ClipboardEvent('copy', { bubbles: true, cancelable: true });
       const cut = new ClipboardEvent('cut', { bubbles: true, cancelable: true });
+      const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+      const select = new Event('selectstart', { bubbles: true, cancelable: true });
       const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
       const drag = new DragEvent('dragstart', { bubbles: true, cancelable: true });
+      const print = new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true });
+      const save = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true });
       target.dispatchEvent(copy);
       target.dispatchEvent(cut);
+      target.dispatchEvent(paste);
+      target.dispatchEvent(select);
       target.dispatchEvent(menu);
       target.dispatchEvent(drag);
-      return { copy: copy.defaultPrevented, cut: cut.defaultPrevented, menu: menu.defaultPrevented, drag: drag.defaultPrevented };
+      input.dispatchEvent(print);
+      input.dispatchEvent(save);
+      return {
+        copy: copy.defaultPrevented, cut: cut.defaultPrevented, paste: paste.defaultPrevented,
+        select: select.defaultPrevented, menu: menu.defaultPrevented, drag: drag.defaultPrevented,
+        print: print.defaultPrevented, save: save.defaultPrevented,
+      };
     });
-    expect(results).toEqual({ copy: true, cut: true, menu: true, drag: true });
+    expect(results).toEqual({ copy: true, cut: true, paste: true, select: true, menu: true, drag: true, print: true, save: true });
+  });
+
+  test('print media hides reader content and displays the online-only notice', async ({ page }) => {
+    await mountReader(page);
+    const root = page.locator('[data-reader-root]');
+    await page.emulateMedia({ media: 'print' });
+    await expect(root.locator('.farast-reader-print-block')).toBeVisible();
+    await expect(root.locator('.farast-reader-workspace')).not.toBeVisible();
   });
   test('plays a prerecorded track and maps timestamped Persian words onto the PDF text layer', async ({ page }) => {
     const sampleRate = 8000;
