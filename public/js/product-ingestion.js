@@ -28,7 +28,7 @@
   };
   const openModal = () => { modal.hidden = false; modal.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; };
   const closeModal = () => { modal.hidden = true; modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; };
-  const renderTimeline = current => {
+  const renderTimeline = (current, pendingLast) => {
     const steps = [
       ['preflight','بررسی اولیه سایت','fa-magnifying-glass'],
       ['security_scan','کنترل امنیتی داخلی','fa-shield-halved'],
@@ -37,8 +37,10 @@
     ];
     timeline.innerHTML = steps.map((step,index) => {
       const done = current > index;
-      const running = current === index;
-      return '<div class="product-ingestion-step '+(done?'is-done':running?'is-running':'')+'"><i class="fa-solid '+step[2]+'"></i><span>'+step[1]+'</span></div>';
+      const running = current === index && !(pendingLast && index === 3);
+      const pending = pendingLast && index === 3;
+      const label = pending ? 'مطالعه محتوای فایل · در انتظار' : step[1];
+      return '<div class="product-ingestion-step '+(done?'is-done':running?'is-running':pending?'is-pending':'')+'"><i class="fa-solid '+step[2]+'"></i><span>'+label+'</span></div>';
     }).join('');
   };
   const showInspection = (file, inspection) => {
@@ -64,14 +66,26 @@
     warnings.textContent = warningList.join(' · ');
     confirmButton.disabled = false;
   };
-  const postFile = async file => {
+  const postFile = file => new Promise((resolve,reject) => {
     const data = new FormData();
     data.append('file',file,file.name);
-    const response = await fetch(form.action,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','X-Requested-With':'XMLHttpRequest'},body:data,credentials:'same-origin'});
-    const payload = await response.json().catch(()=>({message:'پاسخ سرور قابل خواندن نیست.'}));
-    if (!response.ok || !payload.ok) throw new Error(payload.message || 'بررسی اولیه فایل ناموفق بود.');
-    return payload;
-  };
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST',form.action,true);
+    xhr.setRequestHeader('X-CSRF-TOKEN',csrf);
+    xhr.setRequestHeader('Accept','application/json');
+    xhr.setRequestHeader('X-Requested-With','XMLHttpRequest');
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable) status.textContent = 'ارسال امن به سایت · '+Math.round(event.loaded/event.total*100)+'٪';
+    };
+    xhr.onload = () => {
+      let payload={};
+      try { payload=JSON.parse(xhr.responseText); } catch (_) { payload={message:'پاسخ سرور قابل خواندن نیست.'}; }
+      if (xhr.status < 200 || xhr.status >= 300 || !payload.ok) reject(new Error(payload.message || 'بررسی اولیه فایل ناموفق بود.'));
+      else resolve(payload);
+    };
+    xhr.onerror = () => reject(new Error('ارتباط با سایت هنگام ارسال فایل قطع شد.'));
+    xhr.send(data);
+  });
   const confirmUpload = async () => {
     if (!active || busy) return;
     busy = true; confirmButton.disabled = true; cancelButton.disabled = true;
@@ -82,8 +96,8 @@
       const response = await fetch(url,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','X-Requested-With':'XMLHttpRequest','Content-Type':'application/json'},body:JSON.stringify({is_primary:isPrimary}),credentials:'same-origin'});
       const result = await response.json().catch(()=>({message:'پاسخ سرور قابل خواندن نیست.'}));
       if (!response.ok || !result.ok) throw new Error(result.message || 'ذخیره فایل انجام نشد.');
-      status.textContent = 'ذخیره شد'; status.style.background='#dcfce7'; status.style.color='#166534';
-      renderTimeline(4); accepted++;
+      status.textContent = 'ذخیره شد · مطالعه محتوا در انتظار'; status.style.background='#dcfce7'; status.style.color='#166534';
+      renderTimeline(3,true); accepted++;
       confirmButton.textContent = 'ثبت شد';
       setTimeout(async () => { closeModal(); active=null; await processNext(); },650);
     } catch(error) {
