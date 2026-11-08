@@ -1,8 +1,8 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use Illuminate\\Http\\UploadedFile;
+use Illuminate\Http\UploadedFile;
 use RuntimeException;
 use ZipArchive;
 
@@ -26,7 +26,7 @@ class LocalFileInspector
 
         $originalName = trim(str_replace(["\0", "\r", "\n"], '', (string) $upload->getClientOriginalName()));
         $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        $mime = strtolower((string) (new \\finfo(FILEINFO_MIME_TYPE))->file($path));
+        $mime = strtolower((string) (new \finfo(FILEINFO_MIME_TYPE))->file($path));
         $sha256 = hash_file('sha256', $path);
         if (! is_string($sha256)) {
             throw new RuntimeException('intake_checksum_failed');
