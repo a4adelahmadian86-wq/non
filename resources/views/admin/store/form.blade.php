@@ -307,7 +307,7 @@
   document.querySelectorAll('[data-inline-create]').forEach(inlineForm => {
     inlineForm.addEventListener('submit', async event => {
       event.preventDefault();
-      const button = inlineForm.querySelector('button[type="submit]');
+      const button = inlineForm.querySelector('button[type="submit"]');
       const feedback = inlineForm.closest('.product-category-panel')?.querySelector('[data-inline-feedback]');
       if (button?.disabled) return;
       if (button) { button.disabled = true; button.dataset.originalText = button.textContent; button.textContent = 'در حال ثبت…'; }
