@@ -70,7 +70,49 @@ class ProcessProductDocument implements ShouldQueue
 
             $document->update(['processing_status' => 'processing', 'failure_code' => null]);
             $product->loadMissing(['category', 'tags']);
-            $payload = $supervisor->reviewFile($stream, $file->original_name, [
+            $reviewStream = $stream;
+            $reviewFilename = $file->original_name;
+            $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
+            if ($sourceExtension === 'docx') {
+                $docxBytes = stream_get_contents($stream);
+                if (! is_string($docxBytes) || $docxBytes === '') {
+                    throw new \\RuntimeException('product_docx_source_read_failed');
+                }
+                $pdfBytes = app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
+                if (! is_string($pdfBytes) || ! str_starts_with($pdfBytes, '%PDF-') || strlen($pdfBytes) > 25 * 1024 * 1024) {
+                    throw new \\RuntimeException('product_docx_conversion_invalid');
+                }
+                $readerPdfPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/reader-v1.pdf';
+                if (! Storage::disk('private')->put($readerPdfPath, $pdfBytes)) {
+                    throw new \\RuntimeException('product_docx_conversion_storage_failed');
+                }
+                $document->artifacts()->updateOrCreate(
+                    ['artifact_type' => 'reader_pdf', 'version' => 1],
+                    [
+                        'disk' => 'private',
+                        'path' => $readerPdfPath,
+                        'mime' => 'application/pdf',
+                        'size_bytes' => strlen($pdfBytes),
+                        'sha256' => hash('sha256', $pdfBytes),
+                        'metadata_json' => [
+                            'source_sha256' => $document->source_sha256,
+                            'conversion_engine' => 'phpword_dompdf',
+                            'generated_once' => true,
+                        ],
+                    ]
+                );
+                $reviewStream = fopen('php://temp', 'w+b');
+                if (! is_resource($reviewStream)) {
+                    throw new \\RuntimeException('product_docx_review_stream_failed');
+                }
+                fwrite($reviewStream, $pdfBytes);
+                rewind($reviewStream);
+                $reviewFilename = pathinfo($file->original_name, PATHINFO_FILENAME).'.pdf';
+            } else {
+                rewind($stream);
+            }
+
+            $payload = $supervisor->reviewFile($reviewStream, $reviewFilename, [
                 'product_id' => (string) $product->id,
                 'product_title' => (string) $product->title,
                 'product_type' => (string) $product->type,
@@ -86,6 +128,9 @@ class ProcessProductDocument implements ShouldQueue
             ]);
             throw $exception;
         } finally {
+            if (isset($reviewStream) && is_resource($reviewStream) && $reviewStream !== $stream) {
+                fclose($reviewStream);
+            }
             fclose($stream);
         }
 
@@ -120,6 +165,7 @@ class ProcessProductDocument implements ShouldQueue
             $inspection = is_array($payload['inspection'] ?? null) ? $payload['inspection'] : [];
             $structure = (array) ($locked->structure_json ?? []);
             $structure['inspection'] = $inspection;
+            $structure['analysis_representation'] = $sourceExtension === 'docx' ? 'converted_pdf' : ($inspection['detected_type'] ?? 'unknown');
             $structure['ai_review'] = [
                 'review_id' => $payload['review_id'] ?? null,
                 'summary' => $payload['summary'] ?? null,
@@ -199,7 +245,7 @@ class ProcessProductDocument implements ShouldQueue
 
             $locked->update([
                 'processing_status' => $status,
-                'detected_type' => $inspection['detected_type'] ?? $locked->detected_type,
+                'detected_type' => strtolower(pathinfo($locked->file?->original_name ?? '', PATHINFO_EXTENSION)) === 'docx' ? 'docx' : ($inspection['detected_type'] ?? $locked->detected_type),
                 'page_count' => isset($inspection['page_count']) ? (int) $inspection['page_count'] : $locked->page_count,
                 'character_count' => $totalCharacters,
                 'word_count' => $totalWords,
