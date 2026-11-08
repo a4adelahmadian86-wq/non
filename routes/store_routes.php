@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminCourseController;
+use App\Http\Controllers\AdminProductSupervisorController;
 use App\Http\Controllers\AdminStoreController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StoreController;
@@ -8,7 +9,7 @@ use App\Http\Controllers\StoreCourseLearningController;
 use App\Http\Controllers\StoreWishlistController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->middleware(['throttle:60,10'])->name('store.reader');
+Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');
 Route::get('/store/product/{product}/lessons/{lesson}/preview',[StoreController::class,'coursePreview'])->name('store.course.preview');
 
 Route::middleware(['auth'])->group(function () {
@@ -33,6 +34,9 @@ Route::get('/wallet/top-up/zarinpal/callback',[\App\Http\Controllers\WalletContr
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::post('/store/{product}/ai-supervisor/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'review'])->middleware('throttle:5,10')->name('store.ai-supervisor.review');
+    Route::post('/store/{product}/ai-supervisor/files/{file}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewFile'])->middleware('throttle:5,10')->name('store.ai-supervisor.files.review');
+    Route::post('/store/{product}/ai-supervisor/images/{image}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewImage'])->middleware('throttle:5,10')->name('store.ai-supervisor.images.review');
+    Route::post('/store/{product}/ai-supervisor/cover/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewCover'])->middleware('throttle:5,10')->name('store.ai-supervisor.cover.review');
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
@@ -57,6 +61,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::delete('/store/{product}/course/lessons/{lesson}',[AdminCourseController::class,'deleteLesson'])->name('store.course.lessons.delete');
     Route::post('/store/{product}/course/lessons/{lesson}/resources',[AdminCourseController::class,'uploadResource'])->middleware('throttle:10,10')->name('store.course.resources.upload');
     Route::delete('/store/{product}/course/lessons/{lesson}/resources/{file}',[AdminCourseController::class,'deleteResource'])->name('store.course.resources.delete');
+    Route::post('/store/{product}/course/lessons/{lesson}/resources/{file}/review',[AdminProductSupervisorController::class,'reviewCourseResource'])->middleware('throttle:5,10')->name('store.course.resources.review');
 
     Route::post('/store/categories',[AdminStoreController::class,'storeCategory'])->name('store.categories.store');
     Route::post('/store/tags',[AdminStoreController::class,'storeTag'])->name('store.tags.store');

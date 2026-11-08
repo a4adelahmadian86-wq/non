@@ -5,9 +5,9 @@ services:
     rootDir: services/product-supervisor
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --limit-concurrency 2 --timeout-keep-alive 5
     healthCheckPath: /health
-    autoDeploy: false
+    autoDeployTrigger: "off"
     envVars:
       - key: SUPERVISOR_API_TOKEN
         generateValue: true
@@ -15,3 +15,9 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_VISION_MODEL
+        value: qwen/qwen3.8-27b
+      - key: GROQ_AUDIO_MODEL
+        value: whisper-large-v3-turbo

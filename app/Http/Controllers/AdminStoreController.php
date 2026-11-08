@@ -221,13 +221,21 @@ class AdminStoreController extends Controller
             );
             if (isset($metadata['ai_supervisor']) && is_array($metadata['ai_supervisor'])) {
                 if ($reviewInputsChanged || $currentTagIds !== $submittedTagIds || $reviewPolicyChanged) {
-                    unset($metadata['ai_supervisor']['last_review'], $metadata['ai_supervisor']['last_reviewed_at']);
+                    unset(
+                        $metadata['ai_supervisor']['last_review'],
+                        $metadata['ai_supervisor']['last_reviewed_at'],
+                        $metadata['ai_supervisor']['asset_reviews']
+                    );
                 } else {
                     $previousReview = data_get($lockedProduct->metadata, 'ai_supervisor.last_review');
                     $previousReviewedAt = data_get($lockedProduct->metadata, 'ai_supervisor.last_reviewed_at');
+                    $previousAssetReviews = data_get($lockedProduct->metadata, 'ai_supervisor.asset_reviews', []);
                     if (is_array($previousReview)) {
                         $metadata['ai_supervisor']['last_review'] = $previousReview;
                         $metadata['ai_supervisor']['last_reviewed_at'] = $previousReviewedAt;
+                    }
+                    if (is_array($previousAssetReviews) && $previousAssetReviews !== []) {
+                        $metadata['ai_supervisor']['asset_reviews'] = $previousAssetReviews;
                     }
                 }
                 $data['metadata'] = $metadata;
@@ -482,7 +490,17 @@ class AdminStoreController extends Controller
             $oldPath = DB::transaction(function () use ($product, $publicPath, $inspection) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $oldPath = (string) $lockedProduct->cover_path;
-                $lockedProduct->update(['cover_path' => $publicPath]);
+                $metadata = $lockedProduct->metadata ?? [];
+                $supervisorMeta = (array) data_get($metadata, 'ai_supervisor', []);
+                $assetReviews = (array) data_get($supervisorMeta, 'asset_reviews', []);
+                unset($assetReviews['cover']);
+                if ($assetReviews === []) {
+                    unset($supervisorMeta['asset_reviews']);
+                } else {
+                    $supervisorMeta['asset_reviews'] = $assetReviews;
+                }
+                $metadata['ai_supervisor'] = $supervisorMeta;
+                $lockedProduct->update(['cover_path' => $publicPath, 'metadata' => $metadata]);
                 $this->audit('store.product.cover_updated', $lockedProduct, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum']]);
 
                 return $oldPath;

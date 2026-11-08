@@ -1,27 +1,47 @@
 # FARAST Product Supervisor
 
-A separate, stateless review service for the product creation workflow.
+An isolated, stateless product-quality review service. It is separate from the existing voice/AI gateway and never publishes a product.
 
-## Isolation guarantees
+## Provider routing
 
-- This service is independent of the existing voice/AI gateway and does not call or modify it.
-- It uses its own Render service, bearer token, Gemini API key, model setting, health endpoint, and deployment lifecycle.
-- The service receives a minimized product snapshot only; it does not receive uploaded files, customer data, payment data, or Laravel credentials.
-- It never publishes, edits, or deletes a product. It returns a review result for Laravel to store and present for human action.
-- API keys are read only from environment variables and are never returned by health checks.
+| Task | Provider | Data sent |
+|---|---|---|
+| Product copy, extracted PDF/DOCX/XLSX/PPTX/TXT content, SEO and content quality | Gemini | Minimized metadata and locally extracted, redacted text only |
+| Product image understanding | Groq Vision | Resized JPEG derivative, not the original image bytes |
+| Audio transcription | Groq Whisper | Uploaded audio bytes |
+| Optional audio provider | Gladia | Disabled; no Gladia request is made |
+
+The original PDF, DOCX, XLSX, PPTX, TXT or ZIP is never uploaded to Gemini. Legacy binary Office formats (.doc/.xls/.ppt), encrypted documents and unsupported file types are rejected. ZIP files are inspected as archives; their entries are not extracted or executed. MP4/MOV, WebM and AVI video containers are recognized. When bundled FFmpeg can decode them, only a short audio track and one resized frame are extracted locally; the original video is never sent to a provider. Scanned PDFs without an extractable text layer receive a warning rather than a fabricated review.
+
+## File safety and privacy
+
+- Uploads are handled as request-scoped temporary data and are not persisted by this service. The ASGI upload spool and the optional ClamAV temporary file are closed/removed after processing.
+- Maximum upload size is 25 MiB. Request bodies are bounded. File type is determined from content signatures, not just the supplied extension or MIME type.
+- Executables and scripts are rejected. ZIP archives have entry-count, expanded-size, compression-ratio, encryption and path-traversal checks. DOCX, XLSX and PPTX are parsed only after archive checks; spreadsheet and slide extraction are capped. PDF page count and extracted text are bounded. Images are decoded, dimension-checked and resized before provider submission.
+- Common private keys, bearer tokens, API keys, email addresses and phone-like values are redacted from extracted text before Gemini. Redaction is best-effort and is not a guarantee that all personal or confidential information is removed.
+- Laravel invokes this endpoint only after its primary upload scanner has marked the asset clean. If the optional secondary ClamAV scanner in this service is unavailable, the response says `upstream_scan_verified` and separately reports `antivirus_status: not_configured`; it does not pretend a second scan ran. An infected result from the secondary scanner is rejected.
+- A successful AI review is advisory only. The endpoint always returns `publication_authorized: false` and `automated_publication: false`.
+- AI providers may process data according to the user's account tier and provider settings. For confidential content, use a Gemini API tier whose terms exclude training on submitted data, and enable Groq Zero Data Retention (ZDR) in the Groq console before adding its key. Never assume that a free tier is confidential.
+- Gladia remains disabled because its free tier/data-retention terms are not appropriate as a default path for sensitive product uploads.
 
 ## Deploy
 
-The repository root `render.yaml` defines a separate free web service named `farast-product-supervisor`. Create the service from this Blueprint after connecting the Render account. Set `GEMINI_API_KEY` in the Render environment settings. Render generates `SUPERVISOR_API_TOKEN`.
+The repository root `render.yaml` defines a separate Render web service named `farast-product-supervisor`. Render generates `SUPERVISOR_API_TOKEN`. Configure these secrets only in the Render service's Environment page:
 
-Free instances may sleep when idle and have usage/availability limits. The admin workflow must treat timeouts and unavailable service as a non-review state, never as approval.
+- `GEMINI_API_KEY` — required for text review.
+- `GROQ_API_KEY` — optional; enables image review and audio transcription. Enable ZDR in Groq first.
+
+Non-secret model settings are `GEMINI_MODEL`, `GROQ_VISION_MODEL` and `GROQ_AUDIO_MODEL`. Do not commit keys, put them in frontend code, or send them through chat.
+
+Free Render instances may sleep when idle and have usage/availability limits. A timeout or provider outage is a failed/incomplete review, never an approval.
 
 ## API
 
 - `GET /health`: public liveness/configuration status; does not disclose secrets.
-- `POST /v1/reviews/products`: authenticated product review. Requires `Authorization: Bearer <SUPERVISOR_API_TOKEN>`.
+- `POST /v1/reviews/products`: authenticated product metadata review.
+- `POST /v1/reviews/files`: authenticated multipart file inspection. Fields: `file`, `product_id`, `product_title`, `product_type` (`digital_file` or `course`), `primary_scan_status=clean` (asserted by the authenticated Laravel caller after its upload scanner succeeds), optional `category_name`, `tags_json`, and `description`.
 
-The request schema is strict and bounded. Responses contain a verdict, score, concise Persian summary, structured findings, model identifier, timestamp, and `automated_publication: false`.
+Both review endpoints require `Authorization: Bearer <SUPERVISOR_API_TOKEN>`. File review returns detected type, extraction counts, provider status, warnings, antivirus status, and structured findings. It never authorizes publication.
 
 ## Local run
 
@@ -31,5 +51,8 @@ python -m venv .venv
 pip install -r requirements.txt
 export SUPERVISOR_API_TOKEN='local-only-secret'
 export GEMINI_API_KEY='your-own-key'
+export GROQ_API_KEY='your-own-key'
 uvicorn main:app --reload --port 8091
 ```
+
+Run unit tests with `python -m unittest discover -s tests`.

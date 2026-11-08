@@ -4,12 +4,26 @@ on:
   pull_request:
     paths:
       - "services/product-supervisor/**"
+      - "app/Http/Controllers/AdminProductSupervisorController.php"
+      - "app/Http/Controllers/AdminStoreController.php"
+      - "app/Http/Controllers/AdminCourseController.php"
+      - "app/Services/ProductSupervisorClient.php"
+      - "config/services.php"
+      - "routes/store_routes.php"
+      - "resources/views/admin/store/form.blade.php"
+      - "resources/views/admin/store/course.blade.php"
       - "render.yaml"
       - ".github/workflows/product-supervisor.yml"
   push:
     branches: [main]
     paths:
       - "services/product-supervisor/**"
+      - "app/Http/Controllers/AdminProductSupervisorController.php"
+      - "app/Http/Controllers/AdminStoreController.php"
+      - "app/Services/ProductSupervisorClient.php"
+      - "config/services.php"
+      - "routes/store_routes.php"
+      - "resources/views/admin/store/form.blade.php"
       - "render.yaml"
       - ".github/workflows/product-supervisor.yml"
 
@@ -40,5 +54,9 @@ jobs:
       - name: Check Laravel integration syntax
         run: |
           php -l ../../app/Http/Controllers/AdminProductSupervisorController.php
+          php -l ../../app/Http/Controllers/AdminStoreController.php
+          php -l ../../app/Http/Controllers/AdminCourseController.php
           php -l ../../app/Services/ProductSupervisorClient.php
           php -l ../../app/Services/ProductSupervisorSnapshotBuilder.php
+          php -l ../../routes/store_routes.php
+          php -l ../../config/services.php
