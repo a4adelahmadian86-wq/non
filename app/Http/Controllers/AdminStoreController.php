@@ -402,7 +402,7 @@ class AdminStoreController extends Controller
                         'scanned_at' => now(),
                     ]);
 
-                    DB::table('store_document_records')->insert([
+                    $document = \\App\\Models\\StoreDocumentRecord::create([
                         'product_id' => $lockedProduct->id,
                         'file_id' => $file->id,
                         'source_sha256' => $file->sha256,
@@ -411,15 +411,13 @@ class AdminStoreController extends Controller
                         'status' => 'queued',
                         'content_version' => 1,
                         'knowledge_version' => 0,
-                        'metadata' => json_encode([
+                        'metadata' => [
                             'intake_id' => $intake->id,
                             'local_inspection' => json_decode((string) $intake->inspection_json, true),
                             'static_scan_engine' => $scan['scan_engine'] ?? 'farast-static-policy-v1',
                             'static_scan_findings' => $scan['scan_findings'] ?? [],
                             'static_scan_disclaimer' => $scan['scan_disclaimer'] ?? null,
-                        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-                        'created_at' => now(),
-                        'updated_at' => now(),
+                        ],
                     ]);
 
                     DB::table('store_file_intakes')->where('id', $intake->id)->update([
@@ -427,7 +425,7 @@ class AdminStoreController extends Controller
                         'confirmed_file_id' => $file->id,
                         'updated_at' => now(),
                     ]);
-                    $created[] = ['id' => $file->id, 'name' => $file->original_name, 'status' => 'queued'];
+                    $created[] = ['id' => $file->id, 'document_id' => $document->id, 'name' => $file->original_name, 'status' => 'queued'];
                     $this->audit('store.product.file_uploaded', $lockedProduct, [
                         'file_id' => $file->id,
                         'mime' => $file->mime,
@@ -443,6 +441,10 @@ class AdminStoreController extends Controller
                 Storage::disk('private')->delete($finalPath);
             }
             throw $exception;
+        }
+
+        foreach ($saved as $item) {
+            \\App\\Jobs\\ProcessDocumentKnowledgeJob::dispatch((int) $item['document_id'])->onQueue('document-analysis');
         }
 
         return response()->json([
