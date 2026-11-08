@@ -12,7 +12,8 @@ Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->with
 // The worker exits when idle and is protected from overlapping scheduler launches.
 Schedule::command('queue:work --queue=documents,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')
     ->everyMinute()
-    ->withoutOverlapping(20);
+    ->withoutOverlapping(20)
+    ->when(fn () => (bool) config('queue.scheduled_worker', true));
 
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')
