@@ -400,6 +400,7 @@
         cursor = found + 1;
       });
     });
+    updateHighlight(audio.currentTime || 0);
   };
   const findTextRange = (value, page = null, occurrence = 0) => {
     const wanted = tokens(value);
