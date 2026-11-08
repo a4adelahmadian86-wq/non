@@ -35,6 +35,10 @@ Do not add a second cron-driven `queue:work` command when using the scheduler-ma
 - AI review is advisory and evidence-backed. It never authorizes publication. A missing, incomplete or failed AI review must not be represented as a successful security scan.
 - Keep the original upload, extracted text, page records and derived artifacts private. Reader and audio delivery must verify product ownership/entitlement, immutable source hash and document readiness before returning content.
 
+## Reader readiness and AI review
+
+Reader readiness depends on complete extraction, persisted source chunks and successfully built reader pages—not on semantic AI review. When those deterministic stages succeed but optional AI review is unavailable or incomplete, the document remains `extracted`; an entitled buyer can still read it and receive the one-time stored narration. Truncated extraction, missing chunks or missing reader pages remain `partial` and must not unlock full reader/audio access. Knowledge summaries and AI findings remain marked incomplete until their separate review batches finish.
+
 ## One-time document narration and granular reader playback
 
 The reader audio is generated only by the background `GenerateProductDocumentAudio` job after extraction and source locators are stored. It uses the isolated `farast-document-audio` Piper service, never the live assistant/voice gateway.
