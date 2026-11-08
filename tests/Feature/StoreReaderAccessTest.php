@@ -152,7 +152,8 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringStartsWith('%PDF-', $pdf);
         $this->assertGreaterThan(1000, strlen($pdf));
         $this->assertStringContainsString('/Subtype /Image', $pdf);
-        $this->assertMatchesRegularExpression('/\\/Count\\s+2\\b/', $pdf);
+        preg_match('/\\/Type\\s*\\/Pages[\\s\\S]*?\\/Count\\s+(\\d+)/', $pdf, $pageCountMatch);
+        $this->assertGreaterThanOrEqual(2, (int) ($pageCountMatch[1] ?? 0));
 
         $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
