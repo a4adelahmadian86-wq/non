@@ -20,9 +20,16 @@
   const outlineSection=root.querySelector('#reader-outline');
   const outlineHost=root.querySelector('#reader-outline-list');
 
-  const pdfjsReady=window.pdfjsLib
-    ? Promise.resolve(window.pdfjsLib)
-    : import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.mjs').then(module=>{window.pdfjsLib=module;return module;});
+  let pdfjsPromise=null;
+  const getPdfjs=()=>{
+    if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
+    if(!pdfjsPromise){
+      pdfjsPromise=import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.mjs')
+        .then(module=>{window.pdfjsLib=module;return module;})
+        .catch(error=>{pdfjsPromise=null;throw error;});
+    }
+    return pdfjsPromise;
+  };
 
   let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null,continuousMode=false,continuousObserver=null,activePdfUrl=null;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
@@ -332,7 +339,7 @@
 
     try{
       if(!pdfDoc){
-        const pdfjs=await pdfjsReady;
+        const pdfjs=await getPdfjs();
         pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.worker.mjs';
         pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
       }
