@@ -29,8 +29,8 @@ These are defensive ceilings, not a promise that every Office feature is reprodu
 
 - Authenticated visitor: the mobile number on their account.
 - Guest visitor: the request IP address. Production proxy configuration must trust only known reverse proxies so the address cannot be spoofed through arbitrary forwarded headers.
-- PDF identity is painted into the browser-rendered page canvas. Prepared workbook HTML contains a neutral identity token which is replaced with the escaped visitor identity when served. Image previews use the reader's visual overlay.
-- The stored neutral PDF/HTML/image artifact is not rewritten for each visitor. No watermark-specific file is generated or saved.
+- PDF identity is painted into the browser-rendered page canvas. Prepared workbook HTML and image assets are streamed unchanged; the visitor identity is drawn as a visual overlay in the reader. No visitor identity is inserted into or persisted with the prepared workbook.
+- The stored neutral PDF/HTML/image artifact is not rewritten for each visitor. The reader does not generate a watermark-specific file or mutate the delivered HTML artifact.
 - Ordinary selection, copy, cut, drag, context-menu, print, and save shortcuts are suppressed where practical. These browser controls are deterrents, not DRM; screenshots, photography, developer tools, and extraction of delivered network content remain possible.
 
 ## Product access policy
