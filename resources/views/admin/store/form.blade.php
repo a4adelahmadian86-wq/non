@@ -218,8 +218,31 @@
           <form method="post" action="{{ route('admin.store.ai-supervisor.files.review',[$product,$file]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>بررسی محتوای فایل</button></form>
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
-        <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
-        <small class="product-help">حداکثر بارگذاری ۵۰ مگابایت؛ بررسی هوشمند هر فایل تا ۲۵ مگابایت. اسکن اصلی فروشگاه همچنان شرط انتشار است.</small>
+        <form id="productFileIngestionForm" method="post" action="{{ route('admin.store.files.preflight',$product) }}" enctype="multipart/form-data" class="product-ingestion-form" data-confirm-url="{{ route('admin.store.files.confirm',['product'=>$product,'token'=>'__TOKEN__']) }}" data-cancel-url="{{ route('admin.store.files.cancel',['product'=>$product,'token'=>'__TOKEN__']) }}">@csrf
+          <input id="productIngestionInput" type="file" name="files[]" multiple required hidden accept=".pdf,.zip,.tar,.gz,.tgz,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov">
+          <div id="productFileDropzone" class="product-file-dropzone" role="button" tabindex="0" aria-controls="productIngestionInput">
+            <span class="product-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+            <strong>فایل‌ها را اینجا رها کنید</strong>
+            <small>یا برای انتخاب یک یا چند فایل کلیک کنید</small>
+            <span class="product-drop-formats">PDF · Word · Excel · PowerPoint · تصویر · صوت · ویدئو · ZIP و TAR</span>
+          </div>
+          <div class="product-ingestion-options"><label><input type="checkbox" name="is_primary" value="1" checked> اولین فایل تأییدشده، فایل اصلی محصول باشد</label><small id="productIngestionSelection">هنوز فایلی انتخاب نشده است.</small></div>
+          <button type="button" id="productIngestionStart" class="store-primary-btn" disabled>بررسی فایل‌های انتخاب‌شده</button>
+        </form>
+        <small class="product-help">ابتدا سایت بدون هوش مصنوعی فایل را بررسی می‌کند. هیچ فایلی پیش از نمایش گزارش و تأیید شما وارد مخزن اصلی نمی‌شود. سقف فعلی هر فایل ۵۰ مگابایت است.</small>
+        <div id="productIngestionModal" class="product-ingestion-modal" hidden aria-hidden="true">
+          <div class="product-ingestion-backdrop" data-ingestion-close></div>
+          <section class="product-ingestion-dialog" role="dialog" aria-modal="true" aria-labelledby="productIngestionTitle">
+            <header><div><span class="eyebrow">FARAST · SECURE INGESTION</span><h3 id="productIngestionTitle">گزارش بررسی فایل</h3></div><button type="button" class="product-ingestion-close" data-ingestion-close aria-label="بستن">×</button></header>
+            <div class="product-ingestion-file-head"><span class="product-ingestion-file-icon"><i class="fa-solid fa-file-shield"></i></span><div><strong id="productIngestionFileName">—</strong><small id="productIngestionFileMeta">—</small></div><span id="productIngestionStatus" class="product-ingestion-status">در انتظار</span></div>
+            <div id="productIngestionTimeline" class="product-ingestion-timeline" aria-live="polite"></div>
+            <div id="productIngestionFacts" class="product-ingestion-facts"></div>
+            <div id="productIngestionEntries" class="product-ingestion-entries" hidden></div>
+            <div id="productIngestionWarnings" class="product-ingestion-warnings" hidden></div>
+            <p class="product-ingestion-security-note"><i class="fa-solid fa-shield-halved"></i> این بررسی با موتور داخلی فراست انجام می‌شود و فایل به سرویس اسکن ثالث ارسال نمی‌شود. کنترل ساختاری جایگزین تضمین کشف تمام بدافزارها نیست.</p>
+            <footer><button type="button" class="store-outline-btn" id="productIngestionCancel">رد کردن این فایل</button><button type="button" class="store-primary-btn" id="productIngestionConfirm" disabled>تأیید و ذخیره فایل</button></footer>
+          </section>
+        </div>
       </div>
       <div class="store-panel product-files-panel">
         <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
@@ -234,6 +257,7 @@
 </section>
 @endsection
 @push('styles')
+<link rel="stylesheet" href="/css/product-ingestion.css?v=1">
 <link rel="stylesheet" href="/css/store.css?v=20261107product1">
 <style>
 
@@ -341,6 +365,7 @@
 @endpush
 
 @push('scripts')
+<script src="/js/product-ingestion.js?v=1" defer></script>
 <script>
 (() => {
   const form = document.getElementById('productEditorForm');
