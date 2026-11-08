@@ -15,7 +15,7 @@ The original PDF, DOCX, XLSX, PPTX, TXT or ZIP is never uploaded to Gemini. Lega
 
 ## File safety and privacy
 
-- Uploads are processed in memory and are not persisted by this service. A temporary file is used only when a local ClamAV binary is available; it is removed when scanning completes.
+- Uploads are handled as request-scoped temporary data and are not persisted by this service. The ASGI upload spool and the optional ClamAV temporary file are closed/removed after processing.
 - Maximum upload size is 25 MiB. Request bodies are bounded. File type is determined from content signatures, not just the supplied extension or MIME type.
 - Executables and scripts are rejected. ZIP archives have entry-count, expanded-size, compression-ratio, encryption and path-traversal checks. DOCX, XLSX and PPTX are parsed only after archive checks; spreadsheet and slide extraction are capped. PDF page count and extracted text are bounded. Images are decoded, dimension-checked and resized before provider submission.
 - Common private keys, bearer tokens, API keys, email addresses and phone-like values are redacted from extracted text before Gemini. Redaction is best-effort and is not a guarantee that all personal or confidential information is removed.
@@ -39,7 +39,7 @@ Free Render instances may sleep when idle and have usage/availability limits. A 
 
 - `GET /health`: public liveness/configuration status; does not disclose secrets.
 - `POST /v1/reviews/products`: authenticated product metadata review.
-- `POST /v1/reviews/files`: authenticated multipart file inspection. Fields: `file`, `product_id`, `product_title`, `product_type` (`digital_file` or `course`), optional `category_name`, `tags_json`, and `description`.
+- `POST /v1/reviews/files`: authenticated multipart file inspection. Fields: `file`, `product_id`, `product_title`, `product_type` (`digital_file` or `course`), `primary_scan_status=clean` (asserted by the authenticated Laravel caller after its upload scanner succeeds), optional `category_name`, `tags_json`, and `description`.
 
 Both review endpoints require `Authorization: Bearer <SUPERVISOR_API_TOKEN>`. File review returns detected type, extraction counts, provider status, warnings, antivirus status, and structured findings. It never authorizes publication.
 
