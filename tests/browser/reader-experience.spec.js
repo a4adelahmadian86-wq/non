@@ -585,6 +585,43 @@ test.describe('FARAST sample reader interactions', () => {
     expect(requests[2].text).toContain('جهان');
   });
 
+
+test('headings paragraphs spreadsheet cells and rows are keyboard-addressable speech targets', async ({ page }) => {
+  const requests = [];
+  await page.goto('/');
+  await page.setContent(`
+    <meta name="csrf-token" content="reader-test-token">
+    <section data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+      <div data-audio-status aria-live="polite"></div>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="5">
+        <h2 class="reader-document-heading" tabindex="0" data-reader-speech-text="عنوان فصل">عنوان فصل</h2>
+        <p class="reader-document-paragraph" tabindex="0" data-reader-speech-text="متن پاراگراف">متن پاراگراف</p>
+        <table><tbody><tr class="reader-document-row" tabindex="0" data-reader-speech-text="ردیف اول">
+          <td class="reader-document-cell" tabindex="0" data-reader-speech-text="سلول عددی">سلول عددی</td>
+        </tr></tbody></table>
+      </article>
+    </section>
+  `);
+  await page.route('**/store/product/1/reader/speech', async route => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+  });
+  await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+  for (const [selector, expected] of [
+    ['.reader-document-heading', 'عنوان فصل'],
+    ['.reader-document-paragraph', 'متن پاراگراف'],
+    ['.reader-document-cell', 'سلول عددی'],
+    ['.reader-document-row', 'ردیف اول']
+  ]) {
+    await page.locator(selector).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    await expect.poll(() => requests[requests.length - 1]?.text).toBe(expected);
+  }
+  expect(requests).toHaveLength(4);
+  expect(requests.map(request => request.page)).toEqual([5, 5, 5, 5]);
+});
+
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
