@@ -505,6 +505,34 @@ test.describe('FARAST sample reader interactions', () => {
     await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBeGreaterThanOrEqual(0.7);
   });
 
+
+  test('clicking a protected page without a prebuilt track synthesizes its extracted text in bounded snippets', async ({ page }) => {
+    const requests = [];
+    await page.goto('/');
+    await page.route('**/protected-reader-page', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ page_number: 3, content_text: 'سلام جهان. این یک صفحه است.' })
+    }));
+    await page.route('**/store/product/1/reader/speech', async route => {
+      requests.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+    });
+    await page.setContent(`
+      <meta name="csrf-token" content="reader-test-token">
+      <section data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+        <div data-audio-status aria-live="polite"></div>
+        <article class="farast-reader-page-item" data-index="2" data-reader-page="3" data-reader-page-url="/protected-reader-page" tabindex="0">
+          <div class="farast-reader-page-content">فضای خالی صفحه</div>
+        </article>
+      </section>
+    `);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+    await page.locator('.farast-reader-page-item').click();
+    await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0]).toEqual({ text: 'سلام جهان. این یک صفحه است.', page: 3 });
+  });
+
   test('granular speech sends the exact clicked word and selected phrase with page locators', async ({ page }) => {
     const requests = [];
     await page.goto('/');
