@@ -351,6 +351,8 @@ class ProcessProductDocument implements ShouldQueue
                 'source_hash_verified' => true,
                 'status' => $status,
             ];
+            $structure['reader']['ready'] = $status === 'completed' && (int) ($pageBuild['page_count'] ?? 0) > 0;
+            $structure['reader']['status'] = $status;
 
             $locked->update([
                 'processing_status' => $status,
