@@ -224,13 +224,13 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
                         );
 
                         StoreProductPreview::query()
-                            ->where('document_id', $document->id)
+                            ->where('store_document_record_id', $document->id)
                             ->where('access_level', 'sample')
                             ->where('source_sha256', '!=', $document->source_sha256)
                             ->update(['is_active' => false]);
 
                         StoreProductPreview::query()->updateOrCreate(
-                            ['document_id' => $document->id, 'access_level' => 'sample', 'source_sha256' => $document->source_sha256],
+                            ['store_document_record_id' => $document->id, 'access_level' => 'sample', 'source_sha256' => $document->source_sha256],
                             ['product_id' => $document->product_id, 'disk' => 'private', 'path' => $samplePath, 'mime' => 'application/pdf', 'page_number' => $pages[0], 'kind' => 'pdf', 'watermarked' => true, 'is_active' => true, 'sort_order' => 0]
                         );
                     } catch (Throwable $exception) {
@@ -263,13 +263,13 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             }
 
             StoreProductPreview::query()
-                ->where('document_id', $document->id)
+                ->where('store_document_record_id', $document->id)
                 ->where('access_level', 'full')
                 ->where('source_sha256', '!=', $document->source_sha256)
                 ->update(['is_active' => false]);
 
             StoreProductPreview::query()->updateOrCreate(
-                ['document_id' => $document->id, 'access_level' => 'full', 'source_sha256' => $document->source_sha256],
+                ['store_document_record_id' => $document->id, 'access_level' => 'full', 'source_sha256' => $document->source_sha256],
                 ['product_id' => $document->product_id, 'disk' => $fullDisk, 'path' => $fullPath, 'mime' => 'application/pdf', 'page_number' => null, 'kind' => 'pdf', 'watermarked' => true, 'is_active' => true, 'sort_order' => 0]
             );
             $document->update(['metadata' => array_merge((array) $document->metadata, ['full_reader_status' => 'ready'])]);
