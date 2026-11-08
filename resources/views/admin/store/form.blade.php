@@ -234,7 +234,7 @@
           data-confirm-url-template="{{ route('admin.store.files.confirm',[$product,'__INGESTION__']) }}"
           data-cancel-url-template="{{ route('admin.store.files.cancel',[$product,'__INGESTION__']) }}">
           <input type="hidden" data-ingestion-csrf value="{{ csrf_token() }}">
-          <input type="file" data-ingestion-input multiple hidden accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
+          <input type="file" data-ingestion-input multiple hidden accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
           <div class="product-ingestion-dropzone" data-ingestion-pick tabindex="0" role="button" aria-label="انتخاب یا رها کردن فایل محصول">
             <span class="product-ingestion-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
             <strong>فایل را اینجا رها کنید یا برای انتخاب کلیک کنید</strong>
