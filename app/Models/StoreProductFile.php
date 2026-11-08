@@ -16,5 +16,5 @@ class StoreProductFile extends Model
     ];
 
     public function product(): BelongsTo { return $this->belongsTo(StoreProduct::class, 'product_id'); }
-    public function lesson(): BelongsTo { return $this->belongsTo(StoreCourseLesson::class, 'course_lesson_id'); }
+    public function lesson(): BelongsTo { return $this->belongsTo(StoreCourseLesson::class, 'course_lesson_id'); }\n    public function document(): HasOne { return $this->hasOne(StoreProductDocument::class, 'product_file_id'); }
 }
