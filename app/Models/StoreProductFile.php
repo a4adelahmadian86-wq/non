@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class StoreProductFile extends Model
 {
@@ -17,4 +18,5 @@ class StoreProductFile extends Model
 
     public function product(): BelongsTo { return $this->belongsTo(StoreProduct::class, 'product_id'); }
     public function lesson(): BelongsTo { return $this->belongsTo(StoreCourseLesson::class, 'course_lesson_id'); }
+    public function documentRecord(): HasOne { return $this->hasOne(StoreDocumentRecord::class, 'file_id'); }
 }
