@@ -12,7 +12,7 @@ class UploadSecurityServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_upload_is_not_marked_safe_when_malware_scanner_is_not_configured(): void
+    public function test_internal_static_inspection_can_pass_without_a_third_party_scanner(): void
     {
         Storage::fake('private');
         $file = UploadedFile::fake()->image('unscanned.png', 2, 2);
@@ -29,9 +29,13 @@ class UploadSecurityServiceTest extends TestCase
 
             $result = app(UploadSecurityService::class)->inspect($path, 'image/png', 1024);
 
-            $this->assertFalse($result['safe']);
-            $this->assertSame('not_configured', $result['scan']);
+            $this->assertTrue($result['safe']);
+            $this->assertSame('farast_static_v1', $result['scan']);
+            $this->assertSame('image', $result['detected_type']);
+            $this->assertSame(2, $result['dimensions']['width']);
+            $this->assertSame(2, $result['dimensions']['height']);
             $this->assertTrue($result['sandbox_required']);
+            $this->assertStringContainsString('تضمین', $result['security_notice']);
         } finally {
             if ($previousEnv === false) {
                 putenv('FARAST_CLAMSCAN_BINARY');
