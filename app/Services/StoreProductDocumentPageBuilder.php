@@ -1,19 +1,26 @@
 <?php
 
-namespace App\Services;
+namespace App\\Services;
+
+use InvalidArgumentException;
 
 class StoreProductDocumentPageBuilder
 {
     /**
      * Build reader-ready HTML once during ingestion. The original document is never
      * needed by the browser for this representation.
+     *
+     * We deliberately do not truncate the incoming chunk collection or individual
+     * text blocks: silent truncation makes the reader and product knowledge disagree.
+     * A defensive page ceiling remains configurable and fails loudly instead of
+     * producing an apparently complete but incomplete reader.
      */
     public function build(array $chunks, array $inspection = []): array
     {
         $groups = [];
         $fallbackIndex = 0;
 
-        foreach (array_slice($chunks, 0, 300) as $chunkIndex => $chunk) {
+        foreach ($chunks as $chunkIndex => $chunk) {
             if (! is_array($chunk)) {
                 continue;
             }
@@ -68,13 +75,21 @@ class StoreProductDocumentPageBuilder
                 'chunk_index' => (int) $chunkIndex,
                 'chunk_type' => (string) ($chunk['chunk_type'] ?? 'text'),
                 'locator' => $locator,
-                'content_text' => mb_substr((string) ($chunk['content_text'] ?? ''), 0, 1800),
+                'content_text' => (string) ($chunk['content_text'] ?? ''),
             ];
             $fallbackIndex++;
         }
 
         $detectedType = strtolower((string) ($inspection['detected_type'] ?? ''));
-        $declaredPages = max(0, min(300, (int) ($inspection['page_count'] ?? 0)));
+        $declaredPages = max(0, (int) ($inspection['page_count'] ?? 0));
+        $maxReaderPages = max(1, (int) ($inspection['max_reader_pages'] ?? 10000));
+
+        if ($declaredPages > $maxReaderPages) {
+            throw new InvalidArgumentException(
+                'Document page count exceeds the configured reader limit of '.$maxReaderPages.'.'
+            );
+        }
+
         if ($detectedType === 'pdf' && $declaredPages > 0) {
             for ($page = 1; $page <= $declaredPages; $page++) {
                 $key = 'page:'.$page;
@@ -112,9 +127,9 @@ class StoreProductDocumentPageBuilder
                 $chunkLocators[$chunk['chunk_index']] = $locator;
             }
 
-            $contentText = implode("\n\n", $textParts);
+            $contentText = implode("\\n\\n", $textParts);
             $htmlLines = [];
-            foreach (preg_split('/\R/u', $contentText) ?: [] as $line) {
+            foreach (preg_split('/\\R/u', $contentText) ?: [] as $line) {
                 $safeLine = htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
                 $htmlLines[] = '<span class="reader-document-line" style="position:relative;display:block;color:#1f2937;white-space:pre-wrap;line-height:1.95;unicode-bidi:plaintext;">'.($safeLine === '' ? '&nbsp;' : $safeLine).'</span>';
             }
@@ -127,7 +142,7 @@ class StoreProductDocumentPageBuilder
             $contentHtml = '<section class="farast-document-html-page" dir="auto">'
                 .'<div class="farast-document-html-heading">'.$safeLabel.'</div>'
                 .'<div class="farast-pdf-text-layer" style="position:relative;display:block;inset:auto;overflow:visible;opacity:1;line-height:1.95;user-select:text;-webkit-user-select:text;">'
-                .implode("\n", $htmlLines)
+                .implode("\\n", $htmlLines)
                 .'</div></section>';
 
             $pages[] = [
