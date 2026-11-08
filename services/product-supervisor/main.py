@@ -175,6 +175,7 @@ async def review_product_file(
         redact_sensitive_content,
         transcribe_audio_with_groq,
         groq_provider_ready,
+        MAX_EXTRACTED_CHARS,
     )
 
     data = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -253,6 +254,10 @@ async def review_product_file(
                     inspection.audio_bytes,
                     inspection.audio_filename or "upload.audio",
                 )
+                if len(transcription) > MAX_EXTRACTED_CHARS:
+                    inspection.extraction_truncated = True
+                    warnings.append("متن پیاده‌سازی‌شده صوت از سقف پردازش عبور کرد؛ بخشی از آن بررسی نشده است.")
+                    transcription = transcription[:MAX_EXTRACTED_CHARS]
                 provider_status["groq_transcription"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
                 provider_status["groq_transcription"] = "unavailable"
