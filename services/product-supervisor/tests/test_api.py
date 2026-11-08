@@ -96,6 +96,8 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
                 "source_file_id": 4, "source_sha256": "a" * 64,
                 "summary": "گزارش بررسی‌شده",
                 "chunks": [{"content": "متن کامل محرمانه فایل"}],
+                "sample_pages": ["متن خام صفحه و محتوای کامل محرمانه"],
+                "sample_sheets": [{"rows": [["متن خام شیت محرمانه"]]}],
                 "findings": [{"area": "content", "severity": "warning", "title": "نقص", "detail": "گزارش کوتاه", "recommendation": "اصلاح شود"}],
                 "facts": [{"type": "feature", "key": "ویژگی", "value": "مقدار", "evidence": "شاهد کوتاه از سند", "locator": {"page": 3}, "verification_status": "evidence_backed"},
                           {"type": "feature", "key": "ساختگی", "value": "نباید وارد شود", "evidence": "بدون تأیید", "locator": {}, "verification_status": "unverified"}],
@@ -103,7 +105,11 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         }, lambda value: (value, 0))
         source = report["sources"][0]
         self.assertNotIn("chunks", source)
+        self.assertNotIn("sample_pages", source)
+        self.assertNotIn("sample_sheets", source)
         self.assertNotIn("متن کامل محرمانه فایل", str(report))
+        self.assertNotIn("متن خام صفحه", str(report))
+        self.assertNotIn("متن خام شیت", str(report))
         self.assertEqual(len(source["facts"]), 1)
         self.assertEqual(source["facts"][0]["verification_status"], "evidence_backed")
         self.assertEqual(source["facts"][0]["locator"]["page"], 3)

@@ -537,8 +537,6 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
                 "findings": findings,
                 "facts": facts,
                 "fact_count": len(facts),
-                "sample_pages": source.get("sample_pages", [])[:10] if isinstance(source.get("sample_pages"), list) else [],
-                "sample_sheets": source.get("sample_sheets", [])[:10] if isinstance(source.get("sample_sheets"), list) else [],
             })
 
     return {
