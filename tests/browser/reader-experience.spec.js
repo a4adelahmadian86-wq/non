@@ -1330,6 +1330,8 @@ test('personal reading light, font preferences, highlights and annotations stay 
   await page.locator('[data-reader-font]').selectOption('serif');
   await page.locator('[data-reader-font-size]').fill('125');
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font', 'serif');
+  await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font-size', '125');
+  await expect(page.locator('.farast-reader-document')).toHaveCSS('font-family', /Georgia/);
 
   await page.evaluate(() => {
     const text = document.querySelector('.farast-reader-document p').firstChild;
