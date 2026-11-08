@@ -514,6 +514,25 @@ class AdminStoreProductWorkflowTest extends TestCase
     }
 
 
+    public function test_product_supervisor_snapshot_includes_the_delivery_policy(): void
+    {
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول فقط‌خواندنی',
+            'slug' => 'snapshot-reader-only',
+            'sku' => 'SNAPSHOT-READER-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'download_policy' => 'reader_only',
+            'status' => 'draft',
+        ]);
+
+        $snapshot = app(\App\Services\ProductSupervisorSnapshotBuilder::class)->build($product, []);
+
+        $this->assertSame('reader_only', $snapshot['download_policy']);
+    }
+
     public function test_delivery_policy_is_exposed_and_reader_only_publication_requires_a_ready_reader(): void
     {
         Storage::fake('private');
