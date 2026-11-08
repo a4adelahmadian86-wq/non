@@ -227,12 +227,40 @@ async def review_product_file(
                 "recommendation": str(item.get("recommendation") or "")[:500],
             })
 
+    raw_chunks = list(inspection.content_chunks or [])
+    if visual_report.strip():
+        raw_chunks.append({"chunk_type": "visual_analysis", "locator": {"media": "image"}, "content_text": visual_report})
+    if transcription.strip():
+        raw_chunks.append({"chunk_type": "audio_transcript", "locator": {"media": "audio", "time_start_seconds": 0}, "content_text": transcription})
+
+    safe_chunks = []
+    chunk_character_count = 0
+    for chunk in raw_chunks[:120]:
+        if not isinstance(chunk, dict):
+            continue
+        chunk_text, chunk_redactions = redact_sensitive_content(str(chunk.get("content_text") or ""))
+        chunk_text = chunk_text[:1800]
+        if not chunk_text.strip():
+            continue
+        safe_chunks.append({
+            "chunk_index": len(safe_chunks),
+            "chunk_type": str(chunk.get("chunk_type") or "text")[:32],
+            "locator": chunk.get("locator") if isinstance(chunk.get("locator"), dict) else {},
+            "content_text": chunk_text,
+            "content_sha256": __import__("hashlib").sha256(chunk_text.encode("utf-8")).hexdigest(),
+            "redacted_sensitive_items": chunk_redactions,
+        })
+        chunk_character_count += len(chunk_text)
+        if chunk_character_count >= 24_000:
+            break
+
     # File inspection is advisory. A missing antivirus engine is never reported as clean.
     return {
         "review_id": str(uuid.uuid4()),
         "product_id": product_id,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
+        "content_chunks": safe_chunks,
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
