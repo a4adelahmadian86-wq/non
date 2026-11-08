@@ -138,6 +138,7 @@
     updateProgress(current,total);
     saveReaderProgress();
     refreshBookmarkButton();
+    root.dispatchEvent(new CustomEvent('farast:reader-page-change', { detail: { page: Number(current) || 1 } }));
     root.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(thumb=>{
       const active=Number(thumb.dataset.pdfPage)===Number(current);
       thumb.classList.toggle('is-active',active);
@@ -467,6 +468,7 @@
     const nextIndex=clamp(Number(index)||0,0,articles.length-1);
     if(nextIndex!==itemIndex){searchRequest++;pdfMatches=[];matchIndex=-1;}
     itemIndex=nextIndex;
+    root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: itemIndex } }));
     articles.forEach((article,i)=>article.classList.toggle('is-active',i===itemIndex));
     if(!isPdf()&&continuousMode){
       continuousMode=false;continuousObserver?.disconnect();continuousObserver=null;
