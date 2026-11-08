@@ -12,12 +12,16 @@ async function mountReader(page, includeExcel = false) {
           <div class="farast-reader-page-item" data-index="2"><div class="farast-reader-page-content"><iframe class="farast-xlsx-frame" sandbox="" srcdoc="&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;Excel&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/body&gt;&lt;/html&gt;"></iframe></div></div>
         ` : '';
   await page.setContent(`
-    <section class="farast-reader" data-reader-root data-theme="dark">
+    <section class="farast-reader" data-reader-root data-theme="dark" data-product-id="reader-fixture">
       <header><div class="farast-reader-account"><span>09123456789</span></div></header>
       <nav>
         <button id="reader-prev" type="button">قبلی</button>
         <label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ ${total}</span></label>
         <button id="reader-next" type="button">بعدی</button>
+        <button id="reader-resume" type="button" hidden><span>ادامه مطالعه</span></button>
+        <button id="reader-bookmark-toggle" type="button" aria-pressed="false"><i class="fa-regular fa-bookmark"></i><span>نشانک</span></button>
+        <button id="reader-bookmarks-open" type="button" aria-expanded="false">نشانک‌ها</button>
+        <div id="reader-bookmarks-panel" class="reader-bookmarks-panel" hidden></div>
         <button id="reader-zoom-out" type="button">کوچک</button>
         <output id="reader-zoom-label"></output>
         <button id="reader-zoom-in" type="button">بزرگ</button>
@@ -122,6 +126,33 @@ async function mountPdfReader(page) {
 }
 
 test.describe('FARAST sample reader interactions', () => {
+  test('saves reading progress and resumes the last section on this device', async ({ page }) => {
+    await mountReader(page);
+    await page.locator('#reader-next').click();
+    await expect(page.locator('#reader-page-number')).toHaveValue('2');
+
+    await mountReader(page);
+    const resume = page.locator('#reader-resume');
+    await expect(resume).toBeVisible();
+    await resume.click();
+    await expect(page.locator('#reader-page-number')).toHaveValue('2');
+    await expect(resume).toBeHidden();
+  });
+
+  test('keeps page bookmarks across reader reloads and allows removing them', async ({ page }) => {
+    await mountReader(page);
+    const bookmark = page.locator('#reader-bookmark-toggle');
+    await bookmark.click();
+    await expect(bookmark).toHaveAttribute('aria-pressed', 'true');
+
+    await mountReader(page);
+    await page.locator('#reader-bookmarks-open').click();
+    const saved = page.locator('#reader-bookmarks-panel button').filter({ hasText: 'بخش ۱' }).first();
+    await expect(saved).toBeVisible();
+    await page.locator('#reader-bookmark-toggle').click();
+    await expect(page.locator('#reader-bookmark-toggle')).toHaveAttribute('aria-pressed', 'false');
+  });
+
   test('loads a real PDF page with same-origin PDF.js, account watermark and text search', async ({ page }) => {
     const pdfjsRequests = [];
     const externalPdfjsRequests = [];
