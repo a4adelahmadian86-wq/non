@@ -458,6 +458,39 @@
     );
     return Math.max(0, matches.indexOf(target));
   };
+  const playSelection = selection => {
+    if (!selection || selection.isCollapsed) return false;
+    const selectedText = selection.toString().trim();
+    if (!selectedText || !selection.rangeCount) return false;
+    const selectionRange = selection.getRangeAt(0);
+    const startNode = selectionRange.startContainer;
+    const endNode = selectionRange.endContainer;
+    const startElement = startNode.nodeType === Node.ELEMENT_NODE ? startNode : startNode.parentElement;
+    const endElement = endNode.nodeType === Node.ELEMENT_NODE ? endNode : endNode.parentElement;
+    if (!startElement || !endElement || !root.contains(startElement) || !root.contains(endElement)) return false;
+    const startPage = startElement.closest('[data-pdf-cont-page],.farast-reader-page-item');
+    const endPage = endElement.closest('[data-pdf-cont-page],.farast-reader-page-item');
+    const samePage = Boolean(startPage && startPage === endPage);
+    const pageScope = samePage ? startPage : root;
+    const page = samePage
+      ? Number(startPage.dataset.pdfContPage || startPage.dataset.readerPage || (Number(startPage.dataset.index) + 1) || root.querySelector('#reader-page-number')?.value || 1)
+      : null;
+    let prefixText = '';
+    try {
+      const prefixRange = document.createRange();
+      prefixRange.selectNodeContents(pageScope);
+      prefixRange.setEnd(startNode, selectionRange.startOffset);
+      prefixText = prefixRange.toString();
+    } catch (_) { prefixText = ''; }
+    const occurrence = sequenceOccurrenceBefore(prefixText, selectedText);
+    const range = findTextRange(selectedText, page, occurrence);
+    if (!range) return false;
+    suppressNextClick = true;
+    window.clearTimeout(selectionSuppressTimer);
+    selectionSuppressTimer = window.setTimeout(() => { suppressNextClick = false; }, 500);
+    playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
+    return true;
+  };
   const playPage = article => {
     if (!article) return false;
     const section = Math.max(0, Number(article.dataset.index) || 0);
@@ -550,6 +583,7 @@
   }, true);
   root.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (playSelection(window.getSelection())) { event.preventDefault(); return; }
     const word = event.target.closest('.reader-document-word');
     if (word) {
       const range = rangeForDocumentWord(word);
@@ -571,27 +605,7 @@
     if (pageArticle && event.target === pageArticle) { event.preventDefault(); playPage(pageArticle); }
   });
   root.addEventListener('pointerup', () => {
-    const selection = window.getSelection(); if (!selection || selection.isCollapsed) return;
-    const anchor = selection.anchorNode?.parentElement; if (!anchor || !root.contains(anchor)) return;
-    const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const selectedText = selection.toString();
-    const selectionRange = selection.getRangeAt(0);
-    const pageScope = anchor.closest('[data-pdf-cont-page]') || anchor.closest('.farast-reader-page-item') || root;
-    let prefixText = '';
-    try {
-      const prefixRange = document.createRange();
-      prefixRange.selectNodeContents(pageScope);
-      prefixRange.setEnd(selectionRange.startContainer, selectionRange.startOffset);
-      prefixText = prefixRange.toString();
-    } catch (_) { prefixText = ''; }
-    const occurrence = sequenceOccurrenceBefore(prefixText, selectedText);
-    const range = findTextRange(selectedText, page, occurrence);
-    if (range) {
-      suppressNextClick = true;
-      window.clearTimeout(selectionSuppressTimer);
-      selectionSuppressTimer = window.setTimeout(() => { suppressNextClick = false; }, 500);
-      playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
-    }
+    playSelection(window.getSelection());
   });
   function startFrameLoop() {
     cancelAnimationFrame(raf);
