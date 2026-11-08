@@ -51,6 +51,10 @@ return new class extends Migration
             $table->unsignedBigInteger('size_bytes')->default(0);
             $table->string('storage_disk', 50)->default('private');
             $table->string('storage_path', 1024);
+            $table->string('reader_asset_disk', 50)->nullable();
+            $table->string('reader_asset_path', 1024)->nullable();
+            $table->string('reader_asset_mime', 160)->nullable();
+            $table->string('reader_asset_kind', 24)->nullable();
             $table->string('processing_state', 32)->default('uploaded')->index();
             $table->unsignedInteger('page_count')->nullable();
             $table->unsignedInteger('duration_seconds')->nullable();
