@@ -124,6 +124,7 @@ class ProcessProductDocument implements ShouldQueue
                 'product_title' => (string) $product->title,
                 'product_type' => (string) $product->type,
                 'primary_scan_status' => 'structural_checks_passed',
+                'allow_sample_generation' => (bool) $file->is_primary,
                 'category_name' => $product->category?->name,
                 'tags_json' => json_encode($product->tags->pluck('name')->take(30)->values()->all(), JSON_UNESCAPED_UNICODE),
                 'description' => mb_substr((string) $product->description, 0, 8000),
@@ -145,7 +146,7 @@ class ProcessProductDocument implements ShouldQueue
         $totalCharacters = 0;
         $totalWords = 0;
 
-        DB::transaction(function () use ($document, $payload, $chunks, &$totalCharacters, &$totalWords) {
+        DB::transaction(function () use ($document, $file, $product, $payload, $chunks, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
 
@@ -187,7 +188,7 @@ class ProcessProductDocument implements ShouldQueue
             ];
 
             $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
-            if (is_string($sampleBase64) && $sampleBase64 !== '') {
+            if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
                 $sampleBytes = base64_decode($sampleBase64, true);
                 if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
                     $sampleHash = hash('sha256', $sampleBytes);
@@ -243,6 +244,38 @@ class ProcessProductDocument implements ShouldQueue
                             ]
                         );
                     }
+                }
+            }
+
+            if ($file->is_primary && ($product->download_policy ?? 'signed') === 'reader_only') {
+                $fullReaderPath = null;
+                $fullReaderDisk = 'private';
+                $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
+                if ($sourceExtension === 'pdf') {
+                    $fullReaderPath = $file->path;
+                    $fullReaderDisk = $file->disk ?: 'private';
+                } elseif ($sourceExtension === 'docx') {
+                    $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
+                    if ($readerPdf) {
+                        $fullReaderPath = $readerPdf->path;
+                        $fullReaderDisk = $readerPdf->disk ?: 'private';
+                    }
+                }
+
+                if ($fullReaderPath && Storage::disk($fullReaderDisk)->exists($fullReaderPath)) {
+                    StoreProductPreview::query()->updateOrCreate(
+                        ['product_id' => $locked->product_id, 'path' => $fullReaderPath],
+                        [
+                            'disk' => $fullReaderDisk,
+                            'mime' => 'application/pdf',
+                            'page_number' => 1,
+                            'kind' => 'pdf',
+                            'access_level' => 'full',
+                            'watermarked' => true,
+                            'is_active' => true,
+                            'sort_order' => 1,
+                        ]
+                    );
                 }
             }
 
