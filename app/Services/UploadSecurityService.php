@@ -129,7 +129,7 @@ class UploadSecurityService
                 throw new RuntimeException('upload_pdf_active_content_rejected');
             }
             $inspection['page_count'] = $this->countPdfPages($absolutePath);
-            $inspection['page_count_method'] = 'static_pdf_object_scan';
+            $inspection['page_count_method'] = 'fpdi_document_tree';
         } elseif ($inspection['detected_type'] === 'image') {
             $inspection['dimensions'] = $this->inspectImage($absolutePath);
         } elseif ($inspection['detected_type'] === 'office') {
@@ -205,7 +205,7 @@ class UploadSecurityService
                 $chunk = fread($handle, 1024 * 1024);
                 if (! is_string($chunk) || $chunk === '') break;
                 $window = $carry.$chunk;
-                if (preg_match('/\\/(?:JavaScript|JS|Launch|EmbeddedFile|OpenAction|AA)\\b/i', $window) === 1) {
+                if (preg_match('/\\/(?:JavaScript|JS|Launch|EmbeddedFile|EmbeddedFiles|OpenAction|AA|RichMedia|SubmitForm|ImportData|GoToR|Sound|Movie|3D|XFA)\\b/i', $window) === 1) {
                     return true;
                 }
                 $carry = substr($window, -64);
