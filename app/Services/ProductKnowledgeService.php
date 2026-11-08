@@ -19,7 +19,7 @@ class ProductKnowledgeService
             : StoreProduct::query()->findOrFail($product);
 
         $maxCharacters = max(1000, min(120000, $maxCharacters));
-        $product->loadMissing('files.document.chunks', 'files.document.artifacts');
+        $product->loadMissing(['files.document.chunks', 'files.document.artifacts']);
 
         $sources = [];
         $remaining = $maxCharacters;
