@@ -38,7 +38,10 @@ class UploadSecurityService
 
         $absolutePath = $disk->path($path);
         $originalName = basename(str_replace('\\', '/', $path));
-        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $lowerName = strtolower($originalName);
+        $extension = str_ends_with($lowerName, '.tar.gz')
+            ? 'tar.gz'
+            : (str_ends_with($lowerName, '.tar.bz2') ? 'tar.bz2' : strtolower(pathinfo($originalName, PATHINFO_EXTENSION)));
         if (in_array($extension, $this->blockedExtensions, true) || ! in_array($extension, $this->allowedExtensions, true)) {
             throw new RuntimeException('upload_extension_rejected');
         }
