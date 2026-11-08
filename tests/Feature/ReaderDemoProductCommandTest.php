@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\StoreProduct;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\Artisan;
-use Illuminate\\Support\\Facades\\Storage;
-use Tests\\TestCase;
+use App\Models\StoreProduct;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
 class ReaderDemoProductCommandTest extends TestCase
 {
