@@ -201,7 +201,9 @@ async def review_product_file(
                     "page_count": inspection.page_count,
                 },
             )
-            provider_status["gemini"] = "completed"
+            provider_status["gemini"] = "completed" if model_review.get("analysis_status") == "completed" else "partial"
+            if provider_status["gemini"] == "partial":
+                warnings.append("بخشی از دسته‌های تحلیل Gemini ناموفق بود؛ وضعیت مطالعه ناقص ثبت شد.")
         except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
             provider_status["gemini"] = "unavailable"
             warnings.append("تحلیل محتوای استخراج‌شده توسط Gemini انجام نشد.")
