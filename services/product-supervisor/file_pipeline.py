@@ -86,7 +86,7 @@ def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]
         slide_number = 0
         element_number = 0
         for line in text.splitlines():
-            match = re.match(r"^اسلاید (\\d+)$", line.strip())
+            match = re.match(r"^اسلاید (\d+)$", line.strip())
             if match:
                 slide_number = int(match.group(1))
                 element_number = 0
