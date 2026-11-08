@@ -47,13 +47,13 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_zip_manifest_is_listed_without_extracting_archive_members(): void
     {
-        if (! class_exists(\\ZipArchive::class)) {
+        if (! class_exists(\ZipArchive::class)) {
             $this->markTestSkipped('PHP zip extension is unavailable.');
         }
 
         $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-');
-        $archive = new \\ZipArchive();
-        $this->assertSame(true, $archive->open($temporary, \\ZipArchive::CREATE));
+        $archive = new \ZipArchive();
+        $this->assertSame(true, $archive->open($temporary, \ZipArchive::CREATE));
         $archive->addFromString('chapters/intro.txt', 'مقدمه کتاب');
         $archive->close();
 
@@ -70,13 +70,13 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_zip_path_traversal_is_rejected_without_extraction(): void
     {
-        if (! class_exists(\\ZipArchive::class)) {
+        if (! class_exists(\ZipArchive::class)) {
             $this->markTestSkipped('PHP zip extension is unavailable.');
         }
 
         $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-');
-        $archive = new \\ZipArchive();
-        $this->assertSame(true, $archive->open($temporary, \\ZipArchive::CREATE));
+        $archive = new \ZipArchive();
+        $this->assertSame(true, $archive->open($temporary, \ZipArchive::CREATE));
         $archive->addFromString('../outside.txt', 'unsafe');
         $archive->close();
 
