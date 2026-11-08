@@ -3,7 +3,7 @@
 @php
   $readerWatermark = trim((string) ($readerIdentity ?? ('کاربر #'.auth()->id())));
 @endphp
-<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" data-reader-mode="{{ $readerMode ?? 'sample' }}" data-reader-audio-url="{{ $readerAudioUrl ?? '' }}" @auth data-reader-speech-url="{{ route('store.reader.speech', $product) }}" @endauth @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
+<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" data-reader-mode="{{ $readerMode ?? 'sample' }}" data-reader-audio-url="{{ $readerAudioUrl ?? '' }}" @if(($readerMode ?? 'sample') === 'full') @auth data-reader-speech-url="{{ route('store.reader.speech', $product) }}" @endauth @endif @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
   <header class="farast-reader-header">
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
