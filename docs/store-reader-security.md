@@ -11,6 +11,10 @@ Prepared artifacts are created once in the administrator upload/preparation flow
 - The reader serves only these stored artifacts. Legacy raw DOCX/XLSX preview records are rejected (HTTP 409) until re-prepared. The one-time `farast:prepare-reader-previews` command migrates existing records to stored PDF/HTML artifacts; run it with `--dry-run` first.
 - Future AI sample-page selection belongs in the upload/preparation pipeline. It should save selected page assets and metadata once; it is not reader functionality.
 
+## Reading progress and bookmarks
+
+The reader stores only a product-scoped section/page position and up to 100 page bookmarks in the visitor's browser `localStorage`. It does not store document text, file bytes, account identity, or watermark data. This is a device-local convenience feature: it is not synchronized between browsers or devices and may be cleared by the visitor's browser settings. If browser storage is unavailable or full, reading continues normally without persistence.
+
 ## Supported preview formats and limits
 
 - **PDF:** PDF.js renders prepared PDFs. Page navigation, zoom, rotation, fit-width, thumbnails, outline navigation, text search, and continuous scrolling are provided where the PDF contains the corresponding data.

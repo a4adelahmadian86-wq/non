@@ -36,6 +36,95 @@
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
   const faNumber=n=>Number(n).toLocaleString('fa-IR');
+  const productKey=String(root.dataset.productId||location.pathname);
+  const storageKey='farast-reader:v1:'+productKey;
+  const resumeButton=root.querySelector('#reader-resume');
+  const bookmarkButton=root.querySelector('#reader-bookmark-toggle');
+  const bookmarksOpenButton=root.querySelector('#reader-bookmarks-open');
+  const bookmarksPanel=root.querySelector('#reader-bookmarks-panel');
+  let restoringInitial=true;
+  let readerState={progress:null,bookmarks:[]};
+  try{
+    const stored=JSON.parse(localStorage.getItem(storageKey)||'null');
+    if(stored&&typeof stored==='object'){
+      const saved=stored.progress;
+      const bookmarks=Array.isArray(stored.bookmarks)?stored.bookmarks:[];
+      readerState={
+        progress:saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null,
+        bookmarks:bookmarks.filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100)
+      };
+    }
+  }catch(_){readerState={progress:null,bookmarks:[]};}
+
+  const currentPosition=()=>({section:itemIndex,page:isPdf()?pdfPage:1});
+  const samePosition=(a,b)=>Boolean(a&&b&&a.section===b.section&&a.page===b.page);
+  const persistReaderState=()=>{
+    try{localStorage.setItem(storageKey,JSON.stringify(readerState));}catch(_){}
+  };
+  const refreshResumeButton=()=>{
+    if(!resumeButton)return;
+    const saved=readerState.progress;
+    const current=currentPosition();
+    const available=saved&&!samePosition(saved,current);
+    resumeButton.hidden=!available;
+    if(available){
+      const label='ادامه از بخش '+faNumber(saved.section+1)+(saved.page>1?' · صفحه '+faNumber(saved.page):'');
+      resumeButton.title=label;
+      resumeButton.querySelector('span')?.replaceChildren(document.createTextNode(label));
+    }
+  };
+  const saveReaderProgress=()=>{
+    if(restoringInitial)return;
+    readerState.progress=currentPosition();
+    persistReaderState();
+    refreshResumeButton();
+  };
+  const isCurrentBookmarked=()=>readerState.bookmarks.some(item=>samePosition(item,currentPosition()));
+  const refreshBookmarkButton=()=>{
+    if(!bookmarkButton)return;
+    const active=isCurrentBookmarked();
+    bookmarkButton.setAttribute('aria-pressed',String(active));
+    bookmarkButton.title=active?'حذف نشانک این صفحه':'ثبت نشانک این صفحه';
+    const icon=bookmarkButton.querySelector('i');
+    if(icon){icon.classList.toggle('fa-solid',active);icon.classList.toggle('fa-regular',!active);}
+  };
+  const renderBookmarks=()=>{
+    if(!bookmarksPanel)return;
+    bookmarksPanel.replaceChildren();
+    if(!readerState.bookmarks.length){
+      const empty=document.createElement('span');
+      empty.className='farast-reader-bookmarks-empty';
+      empty.textContent='هنوز نشانکی ذخیره نشده است.';
+      bookmarksPanel.append(empty);
+      return;
+    }
+    readerState.bookmarks.forEach((bookmark,index)=>{
+      const item=document.createElement('div');
+      item.className='farast-reader-bookmark-item';
+      const go=document.createElement('button');
+      go.type='button';
+      go.textContent='بخش '+faNumber(bookmark.section+1)+(bookmark.page>1?' · صفحه '+faNumber(bookmark.page):'');
+      go.addEventListener('click',async()=>{
+        try{
+          await showItem(bookmark.section);
+          if(isPdf()&&pdfDoc)await navigatePdfPage(bookmark.page);
+          bookmarksPanel.hidden=true;
+          bookmarksOpenButton?.setAttribute('aria-expanded','false');
+        }catch(error){showPdfError(error);}
+      });
+      const remove=document.createElement('button');
+      remove.type='button';
+      remove.className='farast-reader-bookmark-remove';
+      remove.setAttribute('aria-label','حذف نشانک '+(index+1));
+      remove.textContent='×';
+      remove.addEventListener('click',()=>{
+        readerState.bookmarks.splice(index,1);
+        persistReaderState();renderBookmarks();refreshBookmarkButton();
+      });
+      item.append(go,remove);
+      bookmarksPanel.append(item);
+    });
+  };
 
   const updateProgress=(current,total)=>{
     const percent=Math.round((current/Math.max(total,1))*100);
@@ -47,6 +136,8 @@
     if(pageInput){pageInput.max=String(total);pageInput.value=String(current);}
     if(pageTotal)pageTotal.textContent='/ '+faNumber(total);
     updateProgress(current,total);
+    saveReaderProgress();
+    refreshBookmarkButton();
     root.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(thumb=>{
       const active=Number(thumb.dataset.pdfPage)===Number(current);
       thumb.classList.toggle('is-active',active);
@@ -503,6 +594,28 @@
     await navigatePdfPage(pdfMatches[matchIndex].page);
     if(searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه';
   };
+  bookmarkButton?.addEventListener('click',()=>{
+    const current=currentPosition();
+    const index=readerState.bookmarks.findIndex(item=>samePosition(item,current));
+    if(index>=0)readerState.bookmarks.splice(index,1);
+    else readerState.bookmarks.unshift(current);
+    readerState.bookmarks=readerState.bookmarks.slice(0,100);
+    persistReaderState();renderBookmarks();refreshBookmarkButton();
+  });
+  bookmarksOpenButton?.addEventListener('click',()=>{
+    const open=bookmarksPanel?.hidden!==false;
+    if(bookmarksPanel){bookmarksPanel.hidden=!open;if(open)renderBookmarks();}
+    bookmarksOpenButton.setAttribute('aria-expanded',String(open));
+  });
+  resumeButton?.addEventListener('click',async()=>{
+    const saved=readerState.progress;
+    if(!saved)return;
+    try{
+      await showItem(saved.section);
+      if(isPdf()&&pdfDoc&&saved.page>1)await navigatePdfPage(saved.page);
+      refreshResumeButton();
+    }catch(error){showPdfError(error);}
+  });
   root.querySelector('#reader-search')?.addEventListener('click',()=>searchPdf().catch(showPdfError));
   root.querySelector('#reader-search-prev')?.addEventListener('click',()=>moveSearchMatch(-1).catch(showPdfError));
   root.querySelector('#reader-search-next')?.addEventListener('click',()=>moveSearchMatch(1).catch(showPdfError));
@@ -517,6 +630,7 @@
     if(e.key==='+'||e.key==='='){e.preventDefault();root.querySelector('#reader-zoom-in')?.click();}
     if(e.key==='-'){e.preventDefault();root.querySelector('#reader-zoom-out')?.click();}
     if(e.key.toLowerCase()==='f'){e.preventDefault();root.querySelector('#reader-fs')?.click();}
+    if(e.key.toLowerCase()==='b'){e.preventDefault();bookmarkButton?.click();}
     if((e.ctrlKey||e.metaKey)&&['p','s','c','x'].includes(e.key.toLowerCase()))e.preventDefault();
   });
   root.addEventListener('contextmenu',e=>e.preventDefault());
@@ -525,5 +639,11 @@
   root.addEventListener('dragstart',e=>e.preventDefault());
   window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom===0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
   setZoomLabel();
-  showItem(0).catch(showPdfError);
+  renderBookmarks();
+  refreshBookmarkButton();
+  showItem(0).then(()=>{
+    restoringInitial=false;
+    refreshResumeButton();
+    refreshBookmarkButton();
+  }).catch(showPdfError);
 })();
