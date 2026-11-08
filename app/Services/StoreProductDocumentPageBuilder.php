@@ -24,7 +24,12 @@ class StoreProductDocumentPageBuilder
             $label = 'بخش '.(int) floor($fallbackIndex / 4 + 1);
             $originalNumber = null;
 
-            if (isset($locator['archive_entry']) && is_string($locator['archive_entry'])) {
+            if (isset($locator['archive_entry']) && is_string($locator['archive_entry']) && isset($locator['page']) && is_numeric($locator['page']) && (int) $locator['page'] > 0) {
+                $kind = 'archive_entry';
+                $originalNumber = (int) $locator['page'];
+                $key = 'archive:'.$locator['archive_entry'].':page:'.$originalNumber;
+                $label = $locator['archive_entry'].' · صفحه '.$originalNumber;
+            } elseif (isset($locator['archive_entry']) && is_string($locator['archive_entry'])) {
                 $kind = 'archive_entry';
                 $key = 'archive:'.$locator['archive_entry'];
                 $label = $locator['archive_entry'];
@@ -128,7 +133,9 @@ class StoreProductDocumentPageBuilder
             $pages[] = [
                 'page_number' => $pageNumber,
                 'page_kind' => $group['kind'],
-                'locator_key' => $group['key'],
+                'locator_key' => mb_strlen($group['key']) > 190
+                    ? mb_substr($group['key'], 0, 165).'#'.substr(hash('sha256', $group['key']), 0, 16)
+                    : $group['key'],
                 'locator_json' => array_merge((array) $group['locator'], ['reader_page' => $pageNumber]),
                 'content_text' => $contentText,
                 'content_html' => $contentHtml,
