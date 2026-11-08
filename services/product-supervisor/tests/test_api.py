@@ -77,11 +77,31 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(body["security_gate"], "upstream_scan_verified")
         self.assertEqual(body["inspection"]["upstream_scan_status"], "clean")
         self.assertEqual(body["provider_status"]["gladia"], "disabled")
+        self.assertEqual(body["provider_status"]["gemini"], "not_configured")
+        self.assertEqual(body["analysis_batch_count"], 0)
+        self.assertEqual(body["failed_analysis_batches"], 0)
 
     def test_health_does_not_disclose_secret(self):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("test-token", response.text)
+        self.assertEqual(response.json()["providers"]["gemini"]["configured"], bool(os.getenv("GEMINI_API_KEY", "").strip()))
+        self.assertEqual(response.json()["providers"]["groq"]["configured"], bool(os.getenv("GROQ_API_KEY", "").strip()))
+
+
+    def test_authenticated_readiness_verifies_shared_token_without_provider_call(self):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "GROQ_API_KEY": ""}):
+            response = self.client.get(
+                "/v1/ready",
+                headers={"Authorization": "Bearer test-token"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["authenticated"])
+        self.assertFalse(response.json()["providers"]["gemini"]["ready_for_text_review"])
+
+    def test_authenticated_readiness_rejects_missing_token(self):
+        response = self.client.get("/v1/ready")
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":

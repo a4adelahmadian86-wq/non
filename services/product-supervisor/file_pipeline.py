@@ -776,9 +776,15 @@ def redact_sensitive_content(value: str) -> tuple[str, int]:
 
 async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict[str, Any]:
     key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not key or not text.strip():
-        return {}
+    if not key:
+        return {"analysis_status": "not_configured"}
+    if not text.strip():
+        return {"analysis_status": "no_content"}
+
     model = re.sub(r"[^a-zA-Z0-9._-]", "", os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip())
+    if not model:
+        model = "gemini-2.5-flash"
+
     source_content = text
     if metadata.get("detected_file_type") == "pdf":
         page_segments = text.split("\f")
@@ -790,9 +796,16 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
 
     batch_size = 24_000
     batches = [source_content[offset:offset + batch_size] for offset in range(0, len(source_content), batch_size)]
+    if not batches:
+        return {"analysis_status": "no_content", "analysis_batch_count": 0}
+
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     results: list[dict[str, Any]] = []
     analyzed_characters = 0
+    failure_categories: dict[str, int] = {}
+
+    def record_failure(category: str) -> None:
+        failure_categories[category] = failure_categories.get(category, 0) + 1
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(35, connect=8)) as client:
         for batch_index, batch_text in enumerate(batches, start=1):
@@ -824,16 +837,43 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
             try:
                 response = await client.post(url, headers={"x-goog-api-key": key}, json=payload)
                 response.raise_for_status()
-                raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-                parsed = json.loads(raw)
-                if isinstance(parsed, dict):
-                    results.append(parsed)
-                    analyzed_characters += len(batch_text)
-            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+            except httpx.HTTPStatusError as exc:
+                status_code = exc.response.status_code
+                if status_code in {401, 403}:
+                    record_failure("provider_auth_error")
+                elif status_code == 429:
+                    record_failure("provider_rate_limited")
+                elif status_code >= 500:
+                    record_failure("provider_unavailable")
+                else:
+                    record_failure("provider_request_rejected")
+                continue
+            except httpx.HTTPError:
+                record_failure("provider_network_error")
                 continue
 
+            try:
+                envelope = response.json()
+                raw = envelope["candidates"][0]["content"]["parts"][0]["text"]
+                parsed = json.loads(raw)
+                if not isinstance(parsed, dict):
+                    raise ValueError("Provider response is not a JSON object")
+            except (KeyError, IndexError, ValueError, TypeError):
+                record_failure("invalid_provider_response")
+                continue
+
+            results.append(parsed)
+            analyzed_characters += len(batch_text)
+
     if not results:
-        return {}
+        return {
+            "analysis_status": "failed",
+            "analysis_batch_count": len(batches),
+            "successful_analysis_batches": 0,
+            "failed_analysis_batches": len(batches),
+            "analyzed_characters": 0,
+            "analysis_failure_categories": failure_categories,
+        }
 
     summaries = [str(item.get("summary", "")).strip() for item in results if str(item.get("summary", "")).strip()]
     findings: list[dict[str, Any]] = []
@@ -891,5 +931,7 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
         "analysis_status": "completed" if len(results) == len(batches) else "partial",
         "analysis_batch_count": len(batches),
         "successful_analysis_batches": len(results),
+        "failed_analysis_batches": len(batches) - len(results),
+        "analysis_failure_categories": failure_categories,
         "analyzed_characters": analyzed_characters,
     }

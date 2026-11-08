@@ -35,6 +35,40 @@ Non-secret model settings are `GEMINI_MODEL`, `GROQ_VISION_MODEL` and `GROQ_AUDI
 
 Free Render instances may sleep when idle and have usage/availability limits. A timeout or provider outage is a failed/incomplete review, never an approval.
 
+## Activate the dedicated Render service
+
+This service is intentionally separate from the site's existing AI and voice gateway.
+
+1. Open the [dedicated Render service](https://dashboard.render.com/web/srv-dbo0dgbrjlhs73a2vong) and select **Environment**.
+2. Create a dedicated key in [Google AI Studio API Keys](https://aistudio.google.com/app/apikey) and add it as `GEMINI_API_KEY`. Use a current Gemini authorization/auth key (not an unrestricted legacy Standard key); this is required for product text and document review.
+3. Optionally add `GROQ_API_KEY` to enable image understanding and audio transcription. It is not required for text/document review.
+4. Keep the generated `SUPERVISOR_API_TOKEN` value; do not replace it with the site's voice token or another AI key.
+5. Save the environment changes and manually deploy the service. Automatic deploys are disabled for this service.
+6. Confirm `/health` reports `providers.gemini.configured: true`. Then use the authenticated `/v1/ready` endpoint to verify the service token.
+
+### Connect Laravel to this exact service
+
+Set these values in the Laravel application's hosting environment (not in frontend JavaScript and not in Git):
+
+```dotenv
+FARAST_PRODUCT_SUPERVISOR_URL=https://farast-product-supervisor-dhp5.onrender.com
+FARAST_PRODUCT_SUPERVISOR_TOKEN=<the exact SUPERVISOR_API_TOKEN from this Render service>
+FARAST_PRODUCT_SUPERVISOR_TIMEOUT=40
+```
+
+The Laravel token must match the generated Render token exactly. Do not use `FARAST_VOICE_TOKEN`, `FARAST_AI_GATEWAY_URL`, `GEMINI_API_KEY`, or any secret from the existing AI/voice service for this connection. After changing Laravel environment values, clear/rebuild the Laravel configuration cache using the hosting provider's supported terminal/deploy workflow.
+
+The authenticated readiness probe can be checked without sending a product file:
+
+```bash
+curl -i https://farast-product-supervisor-dhp5.onrender.com/v1/ready \
+  -H "Authorization: Bearer <SUPERVISOR_API_TOKEN>"
+```
+
+A successful response confirms the Render token is accepted and reports whether Gemini and Groq are configured. It does not make a paid provider request.
+
+Never paste API keys or the supervisor token into this chat. Enter them only in the corresponding hosting Environment pages.
+
 ## API
 
 - `GET /health`: public liveness/configuration status; does not disclose secrets.
