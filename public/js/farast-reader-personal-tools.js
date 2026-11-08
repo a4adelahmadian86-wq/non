@@ -12,7 +12,12 @@
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
     if (saved && typeof saved === 'object') state = { ...defaults, ...saved };
   } catch (_) {}
-  state.light = !!state.light;\n  state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';\n  state.size = Math.min(160, Math.max(80, Number(state.size) || 100));\n  state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];\n  state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];\n  const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
+  state.light = !!state.light;
+  state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';
+  state.size = Math.min(160, Math.max(80, Number(state.size) || 100));
+  state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
+  state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
+  const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
   const announce = message => { status.textContent = message; };
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
@@ -50,7 +55,8 @@
     .farast-reader-note{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--reader-line);font-size:.75rem}
     .farast-reader-note blockquote{margin:4px 0;color:var(--reader-muted);border-right:2px solid #60a5fa;padding-right:8px}
     .farast-reader-note button{align-self:start;border:1px solid var(--reader-line);border-radius:6px;background:transparent;color:var(--reader-text);padding:4px 7px;cursor:pointer}
-    .farast-reader-local-highlight{color:inherit;border-radius:2px;cursor:pointer}\n    .farast-reader-personal-tools [data-reader-import-file]{display:none}
+    .farast-reader-local-highlight{color:inherit;border-radius:2px;cursor:pointer}
+    .farast-reader-personal-tools [data-reader-import-file]{display:none}
     @media(max-width:760px){.farast-reader-personal-tools{justify-content:center}.reader-personal-label{font-size:.65rem}}
   `;
   document.head.append(css);
@@ -61,17 +67,21 @@
   const highlightColors = { yellow: 'rgba(250,204,21,.55)', green: 'rgba(74,222,128,.38)', blue: 'rgba(96,165,250,.42)', pink: 'rgba(244,114,182,.4)' };
   const applyPrefs = () => {
     root.classList.toggle('is-reading-light', !!state.light);
-    root.dataset.readerFont = state.font;\n    root.dataset.readerFontSize = String(state.size);
+    root.dataset.readerFont = state.font;
+    root.dataset.readerFontSize = String(state.size);
     root.style.setProperty('--reader-personal-font-size', state.size + '%');
     root.style.setProperty('--reader-font-scale', String(state.size / 100));
     lightButton.setAttribute('aria-pressed', String(!!state.light));
     fontSelect.value = state.font;
-    sizeInput.value = String(state.size);\n    state.highlightColor = highlightColors[state.highlightColor] ? state.highlightColor : 'yellow';\n    highlightColorSelect.value = state.highlightColor;
+    sizeInput.value = String(state.size);
+    state.highlightColor = highlightColors[state.highlightColor] ? state.highlightColor : 'yellow';
+    highlightColorSelect.value = state.highlightColor;
   };
   applyPrefs();
   lightButton.addEventListener('click', () => { state.light = !state.light; applyPrefs(); persist(); announce(state.light ? 'نور مطالعه روشن شد.' : 'نور مطالعه خاموش شد.'); });
   fontSelect.addEventListener('change', () => { state.font = fontSelect.value; applyPrefs(); persist(); announce('قلم مطالعه تغییر کرد. قلم‌های نصب‌شدهٔ سیستم قابل استفاده‌اند.'); });
-  sizeInput.addEventListener('input', () => { state.size = Number(sizeInput.value); applyPrefs(); persist(); });\n  highlightColorSelect.addEventListener('change', () => { state.highlightColor = highlightColorSelect.value; persist(); announce('رنگ هایلایت تغییر کرد.'); });
+  sizeInput.addEventListener('input', () => { state.size = Number(sizeInput.value); applyPrefs(); persist(); });
+  highlightColorSelect.addEventListener('change', () => { state.highlightColor = highlightColorSelect.value; persist(); announce('رنگ هایلایت تغییر کرد.'); });
   const getContext = () => {
     const selection = window.getSelection();
     const text = selection ? selection.toString().trim() : '';
@@ -149,7 +159,14 @@
       });
     });
   };
-  root.addEventListener('click', event => {\n    const mark = event.target.closest('mark[data-highlight-id]');\n    if (!mark) return;\n    const id = mark.dataset.highlightId;\n    state.highlights = state.highlights.filter(item => item.id !== id);\n    persist(); renderHighlights(); announce('هایلایت حذف شد.');\n  });\n  const renderNotes = () => {
+  root.addEventListener('click', event => {
+    const mark = event.target.closest('mark[data-highlight-id]');
+    if (!mark) return;
+    const id = mark.dataset.highlightId;
+    state.highlights = state.highlights.filter(item => item.id !== id);
+    persist(); renderHighlights(); announce('هایلایت حذف شد.');
+  });
+  const renderNotes = () => {
     notesPanel.replaceChildren();
     if (!state.notes.length) { const empty = document.createElement('p'); empty.textContent = 'هنوز یادداشتی ثبت نشده است.'; notesPanel.append(empty); return; }
     state.notes.forEach(item => {
