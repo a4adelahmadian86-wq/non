@@ -30,7 +30,7 @@
                             <small>{{ $item->product?->type === 'course' ? 'دوره آموزشی' : ($item->product?->category?->name ?? 'فایل دیجیتال') }}</small>
                             <h2>{{ $item->product?->title ?? 'محصول حذف‌شده' }}</h2>
                             <p>نسخه {{ $item->product?->version ?: 'اصلی' }} · دسترسی از {{ optional($item->granted_at)->format('Y/m/d') }}</p>
-                            @if($item->product?->type === 'course')<a class="store-primary-btn" href="{{ route('store.course.learn',$item->product) }}"><i class="fa-solid fa-graduation-cap"></i> ورود به دوره</a>@else<button type="button" class="store-primary-btn library-download" data-library-download="{{ $item->id }}"><i class="fa-solid fa-download"></i> دریافت امن</button>@endif
+                            @if($item->product?->type === 'course')<a class="store-primary-btn" href="{{ route('store.course.learn',$item->product) }}"><i class="fa-solid fa-graduation-cap"></i> ورود به دوره</a>@elseif(($item->product?->download_policy ?? 'signed') === 'reader_only')<a class="store-primary-btn" href="{{ route('store.reader',$item->product->slug) }}"><i class="fa-solid fa-book-open"></i> مطالعه در خوانشگر</a>@else<button type="button" class="store-primary-btn library-download" data-library-download="{{ $item->id }}"><i class="fa-solid fa-download"></i> دریافت امن</button>@endif
                         </div>
                     </article>
                 @endforeach
