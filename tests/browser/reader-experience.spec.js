@@ -289,4 +289,60 @@ test.describe('FARAST sample reader interactions', () => {
     });
     expect(results).toEqual({ copy: true, cut: true, menu: true, drag: true });
   });
+  test('plays a prerecorded track and maps timestamped Persian words onto the PDF text layer', async ({ page }) => {
+    const sampleRate = 8000;
+    const sampleCount = sampleRate * 2;
+    const dataSize = sampleCount * 2;
+    const wav = Buffer.alloc(44 + dataSize);
+    wav.write('RIFF', 0);
+    wav.writeUInt32LE(36 + dataSize, 4);
+    wav.write('WAVE', 8);
+    wav.write('fmt ', 12);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * 2, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36);
+    wav.writeUInt32LE(dataSize, 40);
+
+    await page.goto('/');
+    await page.route('**/reader-audio.wav', route => route.fulfill({
+      status: 200,
+      contentType: 'audio/wav',
+      body: wav,
+    }));
+    const timings = [
+      { text: 'سلام', start: 0, end: 0.7, page: 1 },
+      { text: 'دنیا', start: 0.7, end: 1.4, page: 1 },
+    ];
+    await page.setContent(`
+      <section class="farast-reader" data-reader-root data-product-id="audio-fixture">
+        <nav><label class="reader-page-input"><input id="reader-page-number" value="1"></label></nav>
+        <div id="reader-stage">
+          <article class="farast-reader-page-item is-active" data-index="0"
+            data-audio-url="/reader-audio.wav"
+            data-audio-timing='${JSON.stringify(timings)}'>
+            <div class="farast-pdf-document">
+              <div class="farast-pdf-text-layer" style="position:relative;width:500px;height:120px">
+                <span style="position:relative;display:inline-block;font-size:24px;direction:rtl">سلام دنیا</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    `);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+    await expect(page.locator('.farast-audio-dock')).toBeVisible();
+    await expect.poll(() => page.locator('[data-audio-duration]').textContent()).not.toBe('00:00');
+
+    await page.evaluate(() => window.FarastAudioReader.setPage(1));
+    const marks = page.locator('.farast-pdf-text-layer .reader-audio-word');
+    await expect(marks).toHaveCount(2);
+    await expect(marks.nth(0)).toHaveClass(/is-current/);
+    await expect(page.locator('[data-audio-caption]')).toContainText('سلام');
+  });
+
 });
