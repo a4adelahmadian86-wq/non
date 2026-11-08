@@ -8,6 +8,7 @@ import re
 import shutil
 import stat
 import subprocess
+import tarfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
@@ -255,20 +256,23 @@ def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
     return archive, names[:MAX_ARCHIVE_ENTRIES]
 
 
-def _extract_archive_documents(archive: zipfile.ZipFile) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], bool]:
-    """Read only bounded, supported document members in memory; never extract to disk or execute members."""
+def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], bool]:
+    """Read bounded supported document members in memory; never extract to disk or execute members."""
     chunks: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
     warnings: list[str] = []
     total_read = 0
     truncated = False
     supported = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".csv"}
+    members = archive.infolist() if isinstance(archive, zipfile.ZipFile) else archive.getmembers()
 
-    for info in archive.infolist():
+    for info in members:
         if info.is_dir():
             continue
-        name = info.filename.replace("\\", "/")
+        name = info.filename if isinstance(archive, zipfile.ZipFile) else info.name
+        name = name.replace("\\", "/")
         suffix = PurePosixPath(name).suffix.lower()
+        size = int(info.file_size if isinstance(archive, zipfile.ZipFile) else info.size)
         if suffix in {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"}:
             warnings.append("آرشیو تو در تو فقط فهرست شده است و برای جلوگیری از استخراج بازگشتی پردازش نشد.")
             truncated = True
@@ -278,9 +282,9 @@ def _extract_archive_documents(archive: zipfile.ZipFile) -> tuple[list[dict[str,
                 warnings.append("رسانه داخل آرشیو شناسایی شد؛ در این مرحله فقط اسناد متنی داخلی استخراج شدند.")
                 truncated = True
             continue
-        if info.file_size < 1:
+        if size < 1:
             continue
-        if info.file_size > MAX_ARCHIVE_MEMBER_BYTES or total_read + info.file_size > MAX_ARCHIVE_DOCUMENT_BYTES:
+        if size > MAX_ARCHIVE_MEMBER_BYTES or total_read + size > MAX_ARCHIVE_DOCUMENT_BYTES:
             warnings.append("بعضی اسناد داخل آرشیو به دلیل سقف حجم استخراج داخلی، فقط در فهرست محتویات ثبت شدند.")
             truncated = True
             continue
@@ -290,14 +294,21 @@ def _extract_archive_documents(archive: zipfile.ZipFile) -> tuple[list[dict[str,
             break
 
         try:
-            with archive.open(info, "r") as member:
-                member_bytes = member.read(MAX_ARCHIVE_MEMBER_BYTES + 1)
-        except (OSError, RuntimeError, zipfile.BadZipFile):
+            if isinstance(archive, zipfile.ZipFile):
+                with archive.open(info, "r") as member:
+                    member_bytes = member.read(MAX_ARCHIVE_MEMBER_BYTES + 1)
+            else:
+                member = archive.extractfile(info)
+                if member is None:
+                    raise OSError("tar member stream missing")
+                with member:
+                    member_bytes = member.read(MAX_ARCHIVE_MEMBER_BYTES + 1)
+        except (OSError, RuntimeError, zipfile.BadZipFile, tarfile.TarError):
             warnings.append("خواندن یکی از اعضای آرشیو ناموفق بود؛ محتوای آن قابل تأیید نیست.")
             truncated = True
             continue
 
-        if len(member_bytes) > MAX_ARCHIVE_MEMBER_BYTES or len(member_bytes) != info.file_size:
+        if len(member_bytes) > MAX_ARCHIVE_MEMBER_BYTES or len(member_bytes) != size:
             warnings.append("اندازه واقعی یکی از اعضای آرشیو با اطلاعات فهرست آن تطابق نداشت.")
             truncated = True
             continue
@@ -309,7 +320,7 @@ def _extract_archive_documents(archive: zipfile.ZipFile) -> tuple[list[dict[str,
             truncated = True
             continue
 
-        if child.detected_type in {"zip", "archive"}:
+        if child.detected_type in {"zip", "tar", "archive"}:
             warnings.append("آرشیو تو در تو فقط فهرست شد و محتوای آن باز نشد.")
             truncated = True
             continue
@@ -339,6 +350,51 @@ def _extract_archive_documents(archive: zipfile.ZipFile) -> tuple[list[dict[str,
         warnings.append("آرشیو فقط شامل فایل‌هایی بود که خوانشگر محتوایی فعلاً پشتیبانی نمی‌کند.")
         truncated = True
     return chunks, summaries, warnings, truncated
+
+
+def _validate_tar_archive(data: bytes) -> tuple[tarfile.TarFile, list[str]]:
+    try:
+        archive = tarfile.open(fileobj=io.BytesIO(data), mode="r:*")
+        members = archive.getmembers()
+    except (tarfile.TarError, OSError, EOFError):
+        raise FileInspectionError("ساختار TAR معتبر نیست.") from None
+
+    if len(members) > MAX_ARCHIVE_ENTRIES:
+        archive.close()
+        raise FileInspectionError("تعداد فایل‌های داخل آرشیو بیش از حد مجاز است.")
+
+    total = 0
+    names: list[str] = []
+    for item in members:
+        name = item.name.replace("\\", "/")
+        path = PurePosixPath(name)
+        if path.is_absolute() or ".." in path.parts or "\0" in name or re.match(r"^[A-Za-z]:", name):
+            archive.close()
+            raise FileInspectionError("آرشیو شامل مسیر ناامن است.")
+        if item.issym() or item.islnk() or item.isdev() or item.isfifo():
+            archive.close()
+            raise FileInspectionError("پیوند یا ورودی ویژه در آرشیو TAR مجاز نیست.")
+        if not item.isdir() and not item.isfile():
+            archive.close()
+            raise FileInspectionError("نوع ورودی آرشیو TAR پشتیبانی نمی‌شود.")
+        if path.suffix.lower() in EXECUTABLE_EXTENSIONS:
+            archive.close()
+            raise FileInspectionError("آرشیو شامل فایل اجرایی یا اسکریپت غیرمجاز است.")
+        if item.size < 0 or item.size > 100 * 1024 * 1024:
+            archive.close()
+            raise FileInspectionError("اندازه یکی از فایل‌های داخل آرشیو بیش از حد مجاز است.")
+        total += item.size
+        if total > MAX_ARCHIVE_UNPACKED:
+            archive.close()
+            raise FileInspectionError("حجم بازشده آرشیو از حد مجاز بیشتر است.")
+        if not item.isdir():
+            names.append(name[:240])
+
+    if total and total / max(1, len(data)) > 100:
+        archive.close()
+        raise FileInspectionError("نسبت فشرده‌سازی آرشیو مشکوک است.")
+
+    return archive, names[:MAX_ARCHIVE_ENTRIES]
 
 
 def _extract_docx(data: bytes) -> str:
@@ -590,6 +646,25 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.page_count = len(PdfReader(io.BytesIO(data), strict=True).pages)
         if not result.extracted_text.strip():
             result.warnings.append("متن قابل استخراجی در PDF پیدا نشد؛ احتمالاً فایل اسکن تصویری است.")
+    elif filename.lower().endswith((".tar", ".tar.gz", ".tar.bz2")):
+        archive, entries = _validate_tar_archive(data)
+        result.detected_type = "tar"
+        result.archive_entries = entries
+        try:
+            archive_chunks, embedded, archive_warnings, archive_truncated = _extract_archive_documents(archive)
+        finally:
+            archive.close()
+        result.content_chunks = archive_chunks
+        result.embedded_documents = embedded
+        result.warnings.extend(archive_warnings)
+        result.extraction_truncated = archive_truncated
+        if archive_chunks:
+            result.extracted_text = "\n".join(
+                f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
+                for chunk in archive_chunks
+            )[:MAX_EXTRACTED_CHARS]
+            if sum(len(str(chunk.get("content_text") or "")) for chunk in archive_chunks) > MAX_EXTRACTED_CHARS:
+                result.extraction_truncated = True
     elif data.startswith(b"PK\x03\x04"):
         archive, entries = _validate_archive(data)
         result.archive_entries = entries
