@@ -206,6 +206,25 @@ async def review_product_file(
     else:
         warnings.append("از فایل محتوای متنی قابل تحلیل استخراج نشد.")
 
+    # Normalize model-controlled output before returning it to the Laravel application.
+    safe_findings = []
+    raw_findings = model_review.get("findings", [])
+    if isinstance(raw_findings, list):
+        allowed_areas = {"content", "pricing", "seo", "media", "policy", "course", "general"}
+        allowed_severities = {"info", "warning", "critical"}
+        for item in raw_findings[:12]:
+            if not isinstance(item, dict):
+                continue
+            area = item.get("area") if item.get("area") in allowed_areas else "general"
+            severity = item.get("severity") if item.get("severity") in allowed_severities else "warning"
+            safe_findings.append({
+                "area": area,
+                "severity": severity,
+                "title": str(item.get("title") or "نکته قابل بررسی")[:140],
+                "detail": str(item.get("detail") or "")[:700],
+                "recommendation": str(item.get("recommendation") or "")[:500],
+            })
+
     # File inspection is advisory. A missing antivirus engine is never reported as clean.
     return {
         "review_id": str(uuid.uuid4()),
@@ -214,8 +233,8 @@ async def review_product_file(
         "inspection": inspection.public_dict(),
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
-        "findings": model_review.get("findings", [])[:12] if isinstance(model_review.get("findings", []), list) else [],
-        "warnings": warnings[:20],
+        "findings": safe_findings,
+        "warnings": [str(item)[:400] for item in warnings[:20]],
         "redacted_sensitive_items": redaction_count,
         "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("structural_checks_passed" if inspection.antivirus_status == "clean" else ("upstream_scan_verified" if inspection.upstream_scan_status == "clean" else "manual_scan_required")),
         "publication_authorized": False,
