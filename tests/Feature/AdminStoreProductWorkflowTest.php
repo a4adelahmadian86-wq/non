@@ -425,6 +425,7 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $this->assertCount(2, $full['sources'][0]['facts']);
         $this->assertSame('available', $full['knowledge_status']);
+        $this->assertTrue($full['sources'][0]['semantic_review_complete']);
         $this->assertCount(1, $sample['sources'][0]['facts']);
         $this->assertSame('تعداد فصل‌ها', $sample['sources'][0]['facts'][0]['key']);
         $this->assertSame('public_sample_only', $sample['access_scope']);
