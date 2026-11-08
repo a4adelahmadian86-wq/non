@@ -477,6 +477,52 @@ class AdminStoreController extends Controller
         ]);
     }
 
+    public function fileProcessingStatus(StoreProduct $product, StoreProductFile $file)
+    {
+        abort_unless(
+            (int) $file->product_id === (int) $product->id
+                && $file->purpose === 'product_download'
+                && $file->is_active,
+            404
+        );
+
+        $document = $file->document;
+        if (! $document) {
+            return response()->json([
+                'file_id' => (int) $file->id,
+                'processing_status' => 'pending',
+                'sample_status' => 'pending',
+                'audio_status' => 'pending',
+            ])->header('Cache-Control', 'private, no-store');
+        }
+
+        $structure = (array) ($document->structure_json ?? []);
+        $sample = (array) data_get($structure, 'sample', []);
+        $audio = (array) data_get($structure, 'audio', []);
+        $completeness = (array) data_get($structure, 'completeness', []);
+
+        return response()->json([
+            'file_id' => (int) $file->id,
+            'processing_status' => (string) $document->processing_status,
+            'failure_code' => $document->failure_code,
+            'page_count' => $document->page_count,
+            'word_count' => $document->word_count,
+            'character_count' => $document->character_count,
+            'completeness' => [
+                'extraction_complete' => (bool) ($completeness['extraction_complete'] ?? false),
+                'analysis_batches_complete' => (bool) ($completeness['analysis_batches_complete'] ?? false),
+                'analysis_batch_count' => (int) ($completeness['analysis_batch_count'] ?? 0),
+                'successful_analysis_batches' => (int) ($completeness['successful_analysis_batches'] ?? 0),
+            ],
+            'sample_status' => ! empty($sample['generated_once']) ? 'completed' : ($document->processing_status === 'completed' ? 'not_available' : 'pending'),
+            'sample_pages' => array_values(array_filter((array) ($sample['selected_pages'] ?? []), 'is_int')),
+            'audio_status' => (string) ($audio['status'] ?? ($document->processing_status === 'completed' ? 'pending' : 'not_started')),
+            'audio_duration_ms' => (int) ($audio['duration_ms'] ?? 0),
+            'audio_segment_count' => (int) ($audio['segment_count'] ?? 0),
+            'updated_at' => $document->updated_at?->toISOString(),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
     public function cancelFilePreflight(Request $request, StoreProduct $product, string $ingestionId)
     {
         $ingestion = StoreProductIngestion::query()
