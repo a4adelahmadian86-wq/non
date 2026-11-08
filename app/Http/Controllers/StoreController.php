@@ -617,9 +617,6 @@ class StoreController extends Controller
         }
 
         $length = max(0, $end - $start + 1);
-        $stream = $disk->readStream($artifact->path);
-        abort_unless(is_resource($stream), 404);
-
         $headers = [
             'Content-Type' => $artifact->mime ?: 'audio/wav',
             'Content-Length' => (string) $length,
@@ -632,6 +629,14 @@ class StoreController extends Controller
             'Cross-Origin-Resource-Policy' => 'same-origin',
         ];
         if ($status === 206) $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+
+        // Readiness polling uses HEAD: return the same protected metadata without opening the WAV.
+        if (request()->isMethod('HEAD')) {
+            return response('', $status, $headers);
+        }
+
+        $stream = $disk->readStream($artifact->path);
+        abort_unless(is_resource($stream), 404);
 
         return response()->stream(function () use ($stream, $start, $length) {
             if ($start > 0) fseek($stream, $start);
