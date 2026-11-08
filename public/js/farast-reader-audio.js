@@ -169,7 +169,7 @@
           mark.dataset.page = String(item.page);
           mark.dataset.start = String(wordStart);
           mark.dataset.end = String(wordEnd);
-          const jump = () => { rangeEnd = null; audio.currentTime = wordStart; if (audio.paused) audio.play().catch(() => {}); };
+          const jump = () => { rangeEnd = wordEnd; audio.currentTime = wordStart; if (audio.paused) audio.play().catch(() => {}); };
           mark.addEventListener('click', jump);
           mark.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); jump(); } });
           layer.append(mark);
