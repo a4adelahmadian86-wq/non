@@ -217,16 +217,28 @@ class StoreController extends Controller
         $end = $size - 1;
         $status = 200;
         $range = request()->header('Range');
-        if (is_string($range) && preg_match('/bytes=(\\d*)-(\\d*)/', $range, $matches)) {
-            if ($matches[1] === '' && $matches[2] !== '') {
-                $suffix = min($size, (int) $matches[2]);
-                $start = $size - $suffix;
-            } else {
-                $start = (int) ($matches[1] !== '' ? $matches[1] : 0);
-                $end = $matches[2] !== '' ? min($size - 1, (int) $matches[2]) : $end;
+        if (is_string($range) && preg_match('/^bytes=/i', $range)) {
+            if (preg_match('/\\Abytes=(\\d*)-(\\d*)\\z/i', trim($range), $matches)) {
+                if ($matches[1] === '' && $matches[2] !== '') {
+                    $suffixLength = (int) $matches[2];
+                    if ($suffixLength <= 0) {
+                        return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                    }
+                    $suffix = min($size, $suffixLength);
+                    $start = $size - $suffix;
+                } elseif ($matches[1] !== '') {
+                    $start = (int) $matches[1];
+                    $end = $matches[2] !== '' ? min($size - 1, (int) $matches[2]) : $end;
+                } else {
+                    return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                }
+
+                if ($start > $end || $start >= $size) {
+                    return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                }
+                $status = 206;
             }
-            abort_if($start > $end || $start >= $size, 416, 'محدوده صوت معتبر نیست.');
-            $status = 206;
+            // Malformed or multi-range requests are ignored and served as a full response.
         }
 
         $length = $end - $start + 1;
