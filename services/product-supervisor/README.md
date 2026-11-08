@@ -11,7 +11,7 @@ An isolated, stateless product-quality review service. It is separate from the e
 | Audio transcription | Groq Whisper | Uploaded audio bytes |
 | Optional audio provider | Gladia | Disabled; no Gladia request is made |
 
-The original PDF, DOCX, TXT or ZIP is never uploaded to Gemini. ZIP files are inspected as archives; their entries are not extracted or executed. Video files are not currently accepted for automated analysis. Scanned PDFs without an extractable text layer receive a warning rather than a fabricated review.
+The original PDF, DOCX, TXT or ZIP is never uploaded to Gemini. ZIP files are inspected as archives; their entries are not extracted or executed. MP4/MOV, WebM and AVI video containers are recognized. When bundled FFmpeg can decode them, only a short audio track and one resized frame are extracted locally; the original video is never sent to a provider. Scanned PDFs without an extractable text layer receive a warning rather than a fabricated review.
 
 ## File safety and privacy
 
