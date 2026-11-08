@@ -488,7 +488,6 @@ test('supports PageUp PageDown Home and End shortcuts without hijacking form con
 test('renders Word headings lists and tables as safe semantic document blocks', async ({ page }) => {
   let protectedWordPageRequests = 0;
   const wordPageErrors = [];
-  page.on('pageerror', error => wordPageErrors.push(error.message));
   await page.goto('/');
   await page.setContent(`
     <section data-reader-root data-reader-mode="document">
@@ -522,6 +521,7 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
     })
     });
   });
+  page.on('pageerror', error => wordPageErrors.push(error.message));
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
   await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 0 } })));
   await expect.poll(() => protectedWordPageRequests).toBe(1);
