@@ -48,6 +48,12 @@
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
+      @if($isEdit)
+        <input type="hidden" name="ai_content_source_fingerprints" data-ai-content-provenance>
+        <input type="hidden" name="ai_content_signature" data-ai-content-signature>
+        <input type="hidden" name="ai_content_request_id" data-ai-content-request>
+        <input type="hidden" name="ai_content_model" data-ai-content-model>
+      @endif
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
@@ -77,6 +83,66 @@
         <label class="product-field product-field-check"><input type="checkbox" name="featured" value="1" @checked(old('featured',$product->featured))> نمایش به‌عنوان محصول ویژه</label>
       </div>
       <div class="product-editor-subhead" id="product-content"><span>گام سوم</span><strong>محتوا و معرفی محصول</strong><small>به مشتری کمک کنید پیش از خرید ارزش محصول را دقیق بشناسد.</small></div>
+      @if($isEdit)
+        <section class="product-ai-content" data-product-ai-content
+          data-generate-url="{{ route('admin.store.ai-content.generate', $product) }}"
+          data-tag-url="{{ route('admin.store.tags.store') }}"
+          data-knowledge-status="{{ $aiContentReadiness['status'] }}"
+          aria-labelledby="product-ai-content-title">
+          <div class="product-ai-content-head">
+            <div><span>تکمیل محتوای محصول از دانش تاییدشده</span><h3 id="product-ai-content-title">تولید هوشمند عنوان، توضیحات و سئو</h3>
+              <p>مدل فقط گزارش و واقعیت‌های ثبت‌شده در پایگاه دانش را می‌بیند؛ فایل خام و مسیر ذخیره‌سازی ارسال نمی‌شود.</p>
+            </div>
+            <button type="button" class="store-primary-btn" data-ai-content-generate @disabled($aiContentReadiness['status'] !== 'available')>
+              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> تکمیل خودکار با هوش مصنوعی
+            </button>
+          </div>
+          <div class="product-ai-content-status {{ $aiContentReadiness['status'] === 'available' ? 'is-ready' : 'is-pending' }}" data-ai-content-status role="status">
+            @if($aiContentReadiness['stored_content_stale'])
+              محتوای هوشمند قبلی با نسخه فعلی فایل یا درس‌ها هم‌خوان نیست؛ پیشنهاد تازه تولید کن.
+            @elseif($aiContentReadiness['status'] === 'available')
+              گزارش دانش کامل است · {{ number_format($aiContentReadiness['source_count']) }} منبع · {{ number_format($aiContentReadiness['facts_included']) }} واقعیت دارای شاهد
+            @else
+              {{ collect($aiContentReadiness['reasons'])->pluck('message')->filter()->unique()->implode(' ') ?: 'برای فعال شدن این قابلیت، ابتدا فایل یا محتوای دوره باید کامل پردازش شود.' }}
+            @endif
+          </div>
+          <div class="product-ai-content-options">
+            <label class="product-field">لحن محتوا
+              <select data-ai-content-tone><option value="professional">حرفه‌ای و قابل اعتماد</option><option value="friendly">صمیمی و روان</option><option value="technical">تخصصی و فنی</option></select>
+            </label>
+            <label class="product-field">کلیدواژه کانونی (اختیاری)
+              <input data-ai-content-focus-keyword maxlength="120" placeholder="عبارت اصلی مورد نظر برای سئو">
+            </label>
+            <label class="product-field product-field-wide">راهنمای تکمیلی (اختیاری)
+              <textarea data-ai-content-instructions rows="2" maxlength="500" placeholder="مثلاً مخاطب هدف یا نکته‌ای که باید در متن برجسته شود؛ مدل همچنان اجازه ساختن اطلاعات بدون شاهد را ندارد."></textarea>
+            </label>
+          </div>
+          <small class="product-ai-content-foot">پیشنهادها ابتدا در پیش‌نمایش نمایش داده می‌شوند؛ هیچ فیلدی تا زمان تأیید تو تغییر نمی‌کند و ذخیره نهایی هم با دکمه ذخیره محصول انجام می‌شود.</small>
+        </section>
+        <div class="product-ai-content-modal" data-ai-content-modal hidden>
+          <div class="product-ai-content-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-content-dialog-title">
+            <div class="product-ai-content-dialog-head"><div><span>پیش‌نمایش پیشنهادها</span><h3 id="ai-content-dialog-title">محتوای پیشنهادی محصول</h3></div><button type="button" data-ai-content-close aria-label="بستن">×</button></div>
+            <p class="product-ai-content-evidence" data-ai-content-evidence></p>
+            <div class="product-ai-content-preview-grid">
+              <label class="product-field">عنوان محصول<textarea rows="2" data-ai-content-field="title"></textarea></label>
+              <label class="product-field">معرفی کوتاه<textarea rows="3" data-ai-content-field="short_description"></textarea></label>
+              <label class="product-field product-field-wide">توضیحات کامل<textarea rows="10" data-ai-content-field="description"></textarea></label>
+              <label class="product-field">عنوان سئو<textarea rows="2" data-ai-content-field="seo_title"></textarea></label>
+              <label class="product-field">توضیحات سئو<textarea rows="3" data-ai-content-field="seo_description"></textarea></label>
+              <label class="product-field">کلیدواژه کانونی<input data-ai-content-field="focus_keyword"></label>
+              <label class="product-field">کلیدواژه‌های فرعی<textarea rows="2" data-ai-content-field="secondary_keywords"></textarea></label>
+            </div>
+            <div class="product-ai-content-suggestions">
+              <div><strong>برچسب‌های پیشنهادی</strong><div data-ai-content-tags></div></div>
+              <div><strong>دسته‌بندی پیشنهادی</strong><p data-ai-content-category>—</p></div>
+              <div><strong>نکات برجسته</strong><ul data-ai-content-points></ul></div>
+              <div><strong>مواردی که منبع کافی ندارند</strong><ul data-ai-content-unknowns></ul></div>
+            </div>
+            <label class="product-ai-content-overwrite"><input type="checkbox" data-ai-content-only-empty> فقط فیلدهای خالی را پر کن و مقادیر فعلی را حفظ کن</label>
+            <div class="product-ai-content-actions"><button type="button" class="store-primary-btn" data-ai-content-apply>اعمال پیشنهادها در فرم</button><button type="button" class="store-outline-btn" data-ai-content-close>بازگشت و ویرایش دستی</button></div>
+          </div>
+        </div>
+      @endif
       <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" data-product-short-description rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
       <label class="product-field product-field-wide">توضیحات کامل<textarea name="description" rows="6" maxlength="20000" placeholder="شرح کامل محتوا، کاربردها، پیش‌نیازها و آنچه خریدار دریافت می‌کند.">{{ old('description',$product->description) }}</textarea></label>
 
@@ -84,6 +150,8 @@
       <div class="product-editor-subhead" id="product-discovery"><span>گام {{ $isEdit ? "پنجم" : "چهارم" }}</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
       <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" data-seo-title value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
       <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" data-seo-description rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
+      <label class="product-field">کلیدواژه کانونی سئو<input name="seo_focus_keyword" value="{{ old('seo_focus_keyword', data_get($product->metadata, 'seo.focus_keyword', '')) }}" maxlength="120" placeholder="عبارت اصلی جست‌وجو"></label>
+      <label class="product-field">کلیدواژه‌های فرعی سئو<input name="seo_secondary_keywords" value="{{ old('seo_secondary_keywords', implode('، ', (array) data_get($product->metadata, 'seo.secondary_keywords', []))) }}" maxlength="1000" placeholder="عبارت‌ها را با ویرگول جدا کن"></label>
       <section class="product-search-preview" aria-label="پیش‌نمایش نتیجه جست‌وجو">
         <span>پیش‌نمایش زنده نتیجه جست‌وجو</span>
         <strong data-seo-preview-title>{{ old('seo_title', $product->seo_title ?: $product->title ?: 'عنوان محصول شما') }}</strong>
@@ -451,6 +519,19 @@
 .product-gallery-panel{margin-top:16px}.product-file-row{flex-wrap:wrap}.product-asset-review{grid-column:1/-1;flex-basis:100%;padding:9px;border-radius:9px;background:#f5f8fc;border:1px solid #e2eaf4}.product-asset-review b{font-size:.68rem}.product-asset-review p{font-size:.68rem;line-height:1.8;margin:5px 0}.product-asset-review small{font-size:.62rem;color:var(--st-muted)}.product-asset-review-list,.product-asset-review-warnings{margin:7px 0 0;padding-right:18px;font-size:.65rem;line-height:1.7}.product-asset-review-list li{margin:4px 0}.product-asset-review-list span,.product-asset-review-list small{display:block}.product-asset-review-warnings{color:#9b5b17}
 
 .product-discovery-links{padding-top:4px}.product-discovery-links select{min-height:118px}.product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
+.product-ai-content{display:grid;gap:12px;padding:16px;margin:4px 0 16px;border:1px solid #d9e6f7;border-radius:16px;background:linear-gradient(135deg,#f7faff,#fff)}
+.product-ai-content-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.product-ai-content-head>div{min-width:0}.product-ai-content-head span{font-size:.65rem;color:#2868c8;font-weight:900}.product-ai-content-head h3{font-size:.9rem;margin:4px 0}.product-ai-content-head p,.product-ai-content-foot{font-size:.68rem;color:var(--st-muted);line-height:1.8;margin:0}
+.product-ai-content-head button{flex:0 0 auto;min-height:42px}.product-ai-content-status{padding:10px 12px;border-radius:10px;font-size:.68rem;line-height:1.8}.product-ai-content-status.is-ready{background:#edf8f1;color:#17633f}.product-ai-content-status.is-pending{background:#fff6e9;color:#89510e}
+.product-ai-content-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.product-ai-content-options .product-field-wide{grid-column:1/-1}
+.product-ai-content-modal{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;background:rgba(12,24,42,.62);backdrop-filter:blur(5px)}.product-ai-content-modal[hidden]{display:none}
+.product-ai-content-dialog{width:min(920px,100%);max-height:92vh;overflow:auto;padding:20px;border-radius:18px;background:#fff;box-shadow:0 24px 80px rgba(0,0,0,.28);direction:rtl}
+.product-ai-content-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.product-ai-content-dialog-head span{font-size:.65rem;color:#2868c8;font-weight:900}.product-ai-content-dialog-head h3{margin:4px 0 12px;font-size:1rem}.product-ai-content-dialog-head button{border:0;background:#f1f4f8;border-radius:9px;width:34px;height:34px;font-size:1.2rem;cursor:pointer}
+.product-ai-content-evidence{padding:10px 12px;border-radius:10px;background:#f3f7fc;color:#44566d;font-size:.68rem;line-height:1.8}
+.product-ai-content-preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.product-ai-content-preview-grid .product-field-wide{grid-column:1/-1}
+.product-ai-content-suggestions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}.product-ai-content-suggestions strong{font-size:.72rem}.product-ai-content-suggestions p,.product-ai-content-suggestions li{font-size:.68rem;line-height:1.8;color:var(--st-muted)}.product-ai-content-suggestions ul{padding-right:18px;margin:5px 0}
+.product-ai-content-tags{display:flex;flex-wrap:wrap;gap:6px}.product-ai-content-tag{padding:5px 9px;border:1px solid #d8e3f1;border-radius:999px;background:#f6f9fd;font-size:.65rem}
+.product-ai-content-overwrite{display:flex;align-items:center;gap:8px;font-size:.7rem;color:var(--st-ink)}.product-ai-content-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.product-ai-content-actions button{min-height:42px}
+@media(max-width:700px){.product-ai-content-head{flex-direction:column}.product-ai-content-head button{width:100%}.product-ai-content-options,.product-ai-content-preview-grid,.product-ai-content-suggestions{grid-template-columns:1fr}.product-ai-content-options .product-field-wide,.product-ai-content-preview-grid .product-field-wide{grid-column:auto}.product-ai-content-dialog{padding:14px;max-height:95vh}}
 </style>
 @endpush
 
