@@ -612,7 +612,10 @@ def _extract_chart_text(data: bytes, prefix: str, label: str, limit: int = 20) -
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             names = sorted(name for name in archive.namelist() if name.startswith(prefix) and name.lower().endswith(".xml"))
             for chart_name in names[:limit]:
-                root = ET.fromstring(archive.read(chart_name))
+                info = archive.getinfo(chart_name)
+                if info.file_size <= 0 or info.file_size > 2 * 1024 * 1024:
+                    continue
+                root = ET.fromstring(archive.read(info))
                 values = []
                 for node in root.iter():
                     if node.tag.endswith("}v") or node.tag.endswith("}t"):
