@@ -128,6 +128,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertNotIn("test-token", response.text)
         self.assertEqual(response.json()["providers"]["gemini"]["configured"], bool(os.getenv("GEMINI_API_KEY", "").strip()) and not os.getenv("GEMINI_API_KEY", "").strip().lower().startswith("gemini-"))
         self.assertEqual(response.json()["providers"]["groq"]["configured"], bool(os.getenv("GROQ_API_KEY", "").strip()))
+        self.assertIn("privacy_gate_confirmed", response.json()["providers"]["groq"])
 
 
     def test_authenticated_readiness_verifies_shared_token_without_provider_call(self):
@@ -139,6 +140,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["authenticated"])
         self.assertFalse(response.json()["providers"]["gemini"]["ready_for_product_review"])
+        self.assertFalse(response.json()["providers"]["groq"]["ready_for_file_review"])
 
     def test_authenticated_readiness_rejects_missing_token(self):
         response = self.client.get("/v1/ready")
