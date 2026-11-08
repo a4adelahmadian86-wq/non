@@ -33,6 +33,7 @@
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
       <a href="#product-discovery"><span>۴</span><b>نمایش</b><small>سئو و رسانه</small></a>
+      <a href="#product-ai-supervisor"><span>۵</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
@@ -60,6 +61,38 @@
       <div class="product-editor-subhead" id="product-content"><span>گام سوم</span><strong>محتوا و معرفی محصول</strong><small>به مشتری کمک کنید پیش از خرید ارزش محصول را دقیق بشناسد.</small></div>
       <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
       <label class="product-field product-field-wide">توضیحات کامل<textarea name="description" rows="6" maxlength="20000" placeholder="شرح کامل محتوا، کاربردها، پیش‌نیازها و آنچه خریدار دریافت می‌کند.">{{ old('description',$product->description) }}</textarea></label>
+      <section class="product-ai-supervisor" id="product-ai-supervisor" aria-labelledby="product-ai-supervisor-title">
+        <div class="product-ai-supervisor-head">
+          <div class="product-ai-mark"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></div>
+          <div><span>گام پنجم · کنترل کیفیت هوشمند</span><h2 id="product-ai-supervisor-title">هوش مصنوعی ناظر محصول</h2><p>برای هر محصول، سیاست نظارت مستقل تعریف کنید؛ تنظیمات در کنار خود محصول ذخیره می‌شوند.</p></div>
+          <label class="product-ai-switch"><input type="checkbox" name="ai_supervisor[enabled]" value="1" @checked(old('ai_supervisor.enabled', data_get($product->metadata, 'ai_supervisor.enabled', false)))><span></span><b>فعال‌سازی ناظر</b></label>
+        </div>
+        <div class="product-ai-supervisor-body">
+          <div class="product-ai-notice"><i class="fa-solid fa-circle-info"></i><span><b>پیکربندی مستقل از موتور هوش فعلی</b><small>در این مرحله فقط سیاست‌ها و محدوده نظارت ذخیره می‌شوند؛ اجرای تحلیل به اتصال ناظر اختصاصی در مرحله بعد وابسته است.</small></span></div>
+          <div class="product-editor-grid">
+            <label class="product-field">رفتار ناظر
+              <select name="ai_supervisor[mode]">
+                <option value="suggest" @selected(old('ai_supervisor.mode', data_get($product->metadata, 'ai_supervisor.mode', 'suggest')) === 'suggest')>پیشنهاد و هشدار؛ تصمیم با مدیر</option>
+                <option value="review_gate" @selected(old('ai_supervisor.mode', data_get($product->metadata, 'ai_supervisor.mode', 'suggest')) === 'review_gate')>نیازمند تأیید ناظر پیش از انتشار</option>
+              </select>
+              <small>در حالت تأییدمحور، انتشار باید پس از پیاده‌سازی سرویس ناظر و دریافت تأیید معتبر انجام شود؛ این تنظیم به‌تنهایی انتشار را مسدود نمی‌کند.</small>
+            </label>
+            <label class="product-field product-field-wide">دستورالعمل اختصاصی ناظر
+              <textarea name="ai_supervisor[instructions]" rows="3" maxlength="4000" placeholder="مثلاً ادعاهای آموزشی را با محتوای واقعی دوره تطبیق بده و از وعده‌های قطعی درآمد خودداری کن.">{{ old('ai_supervisor.instructions', data_get($product->metadata, 'ai_supervisor.instructions', '')) }}</textarea>
+              <small>قواعد اختصاصی این محصول؛ دستورالعمل عمومی سامانه را جایگزین نمی‌کند.</small>
+            </label>
+          </div>
+          <div class="product-ai-checks-title"><strong>دامنه بررسی ناظر</strong><small>مواردی را که باید در ارزیابی این محصول بررسی شوند انتخاب کنید.</small></div>
+          <div class="product-ai-checks">
+            @php($aiChecks = ['content'=>'کیفیت محتوا و کامل‌بودن معرفی','pricing'=>'منطق قیمت‌گذاری و تخفیف','seo'=>'عنوان، توضیحات و سئوی محصول','media'=>'کاور، تصاویر و پیش‌نمایش‌ها','policy'=>'حقوق استفاده، ادعاها و سیاست‌ها','course'=>'ساختار آموزشی و جلسات دوره'])
+            @foreach($aiChecks as $key => $label)
+              <label><input type="checkbox" name="ai_supervisor[checks][{{ $key }}]" value="1" @checked(old('ai_supervisor.checks.'.$key, data_get($product->metadata, 'ai_supervisor.checks.'.$key, true)))><span>{{ $label }}</span></label>
+            @endforeach
+          </div>
+          <div class="product-ai-footer"><i class="fa-solid fa-lock"></i><span>تنظیمات ناظر در metadata همین محصول نگهداری می‌شود و به سایر محصولات نشت نمی‌کند.</span></div>
+        </div>
+      </section>
+
       <div class="product-editor-subhead" id="product-discovery"><span>گام چهارم</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
       <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
       <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
@@ -176,6 +209,30 @@
 @media(max-width:420px){.product-workflow a{grid-template-columns:29px 1fr;gap:2px 7px}.product-workflow a>span{width:29px;height:29px}}
 
 
+.product-ai-supervisor{overflow:hidden;border:1px solid #d8e5f5;border-radius:17px;background:linear-gradient(145deg,#f8fbff,#fff);box-shadow:0 8px 24px rgba(25,64,118,.055)}
+.product-ai-supervisor-head{display:flex;align-items:center;gap:13px;padding:18px;border-bottom:1px solid #e5edf7;background:linear-gradient(110deg,#edf5ff,#fbfdff)}
+.product-ai-mark{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:14px;background:#e0edff;color:#2868c8;font-size:1.1rem}
+.product-ai-supervisor-head>div:nth-child(2){flex:1;min-width:0}
+.product-ai-supervisor-head>div:nth-child(2)>span{color:#3474c7;font-size:.66rem;font-weight:900}
+.product-ai-supervisor-head h2{margin:3px 0;font-size:1rem;color:#213b5d}
+.product-ai-supervisor-head p{margin:0;color:#71839b;font-size:.7rem;line-height:1.8}
+.product-ai-switch{display:flex;align-items:center;gap:8px;white-space:nowrap;color:#38516f;font-size:.7rem;cursor:pointer}
+.product-ai-switch input{width:18px;height:18px;accent-color:#2868c8}
+.product-ai-supervisor-body{display:grid;gap:17px;padding:18px}
+.product-ai-notice{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid #dce8f8;border-radius:12px;background:#f5f9ff;color:#3775c5}
+.product-ai-notice>span{display:grid;gap:3px}
+.product-ai-notice b{color:#355477;font-size:.72rem}
+.product-ai-notice small{color:#7589a3;font-size:.66rem;line-height:1.8}
+.product-ai-checks-title{display:grid;gap:4px}
+.product-ai-checks-title strong{font-size:.78rem;color:#344c69}
+.product-ai-checks-title small{font-size:.66rem;color:#8291a5}
+.product-ai-checks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.product-ai-checks label{display:flex;align-items:center;gap:8px;padding:11px;border:1px solid #e3eaf3;border-radius:10px;background:#fff;color:#4b607c;font-size:.7rem;cursor:pointer}
+.product-ai-checks input{width:16px;height:16px;flex:0 0 16px;accent-color:#2868c8}
+.product-ai-footer{display:flex;align-items:center;gap:8px;color:#788ba3;font-size:.65rem}
+.product-ai-footer i{color:#4a83c9}
+@media(max-width:760px){.product-ai-supervisor-head{align-items:flex-start;flex-wrap:wrap}.product-ai-switch{width:100%;padding-inline-start:57px}.product-ai-checks{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.product-ai-checks{grid-template-columns:1fr}.product-ai-supervisor-head,.product-ai-supervisor-body{padding:13px}}
 .product-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px;margin:14px 0}
 .product-gallery-item{overflow:hidden;border:1px solid var(--st-line);border-radius:12px;background:#fff}
 .product-gallery-item img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#f4f6fa}
