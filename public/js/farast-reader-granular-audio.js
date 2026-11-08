@@ -180,6 +180,25 @@
 
   root.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    const pageTarget = event.target.closest('.farast-reader-page-item');
+    if (pageTarget && event.target === pageTarget) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const page = pageFor(pageTarget);
+      stop();
+      window.FarastAudioReader?.pause();
+      if (window.FarastDocumentAudioReader?.playPage(page)) return;
+      let timings = [];
+      try { timings = JSON.parse(pageTarget.dataset.audioTiming || '[]'); } catch (_) {}
+      const pageTimings = timings.filter(item => Number(item.page || page) === page && Number(item.end) > Number(item.start));
+      if (pageTimings.length && window.FarastAudioReader?.playRange) {
+        const first = pageTimings.reduce((a, b) => Number(a.start) <= Number(b.start) ? a : b);
+        const last = pageTimings.reduce((a, b) => Number(a.end) >= Number(b.end) ? a : b);
+        window.FarastAudioReader.selectSection(Number(pageTarget.dataset.index || 0));
+        window.FarastAudioReader.playRange(Number(first.start), Number(last.end), 'در حال خواندن صفحهٔ انتخاب‌شده');
+      }
+      return;
+    }
     const target = event.target.closest(speechTarget);
     if (!target) return;
     event.preventDefault();
