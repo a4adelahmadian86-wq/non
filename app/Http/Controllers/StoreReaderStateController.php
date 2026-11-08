@@ -41,7 +41,7 @@ class StoreReaderStateController extends Controller
         $activePreviews = $product->previews()->where('is_active', true)->get(['id', 'access_level']);
         $samplePreviews = $activePreviews->where('access_level', '!=', 'full');
         $hasEntitlement = ($product->download_policy ?? 'signed') === 'reader_only'
-            && \\App\\Models\\StoreLibraryItem::query()
+            && \App\Models\StoreLibraryItem::query()
                 ->where('user_id', $request->user()->id)
                 ->where('product_id', $product->id)
                 ->whereNull('revoked_at')
