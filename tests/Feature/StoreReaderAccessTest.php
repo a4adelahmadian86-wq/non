@@ -85,6 +85,50 @@ class StoreReaderAccessTest extends TestCase
         ]);
     }
 
+    public function test_authenticated_reader_progress_and_bookmarks_sync_across_sessions(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $user = $this->makeReaderUser();
+
+        $this->actingAs($user)
+            ->putJson(route('store.reader.state.update', $product), [
+                'progress' => ['section' => 0, 'page' => 4],
+                'bookmarks' => [
+                    ['section' => 0, 'page' => 2],
+                    ['section' => 0, 'page' => 4],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('saved', true)
+            ->assertJsonPath('progress.page', 4)
+            ->assertJsonCount(2, 'bookmarks');
+
+        $this->actingAs($user)
+            ->getJson(route('store.reader.state.show', $product))
+            ->assertOk()
+            ->assertJsonPath('progress.section', 0)
+            ->assertJsonPath('progress.page', 4)
+            ->assertJsonCount(2, 'bookmarks');
+
+        $this->actingAs($user)
+            ->putJson(route('store.reader.state.update', $product), [
+                'progress' => ['section' => 5, 'page' => 1],
+                'bookmarks' => [],
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_guest_cannot_access_account_reader_state_endpoints(): void
+    {
+        [$product] = $this->makePreviewFixture();
+
+        $this->getJson(route('store.reader.state.show', $product))->assertUnauthorized();
+        $this->putJson(route('store.reader.state.update', $product), [
+            'progress' => ['section' => 0, 'page' => 1],
+            'bookmarks' => [],
+        ])->assertUnauthorized();
+    }
+
     public function test_guest_can_read_public_samples_with_ip_watermark(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
