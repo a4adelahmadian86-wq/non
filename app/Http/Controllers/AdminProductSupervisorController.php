@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StoreCourse;
+use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductImage;
@@ -79,6 +81,36 @@ class AdminProductSupervisorController extends Controller
             $file->path,
             $file->original_name ?: basename($file->path),
             'file:'.$file->id,
+            $file->sha256
+        );
+    }
+
+
+    public function reviewCourseResource(
+        StoreProduct $product,
+        StoreCourseLesson $lesson,
+        StoreProductFile $file,
+        ProductSupervisorClient $supervisor
+    ) {
+        abort_unless($product->type === 'course', 404);
+        $course = StoreCourse::query()->where('product_id', $product->id)->firstOrFail();
+        abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
+        abort_unless(
+            (int) $file->product_id === (int) $product->id
+            && (int) $file->course_lesson_id === (int) $lesson->id
+            && $file->purpose === 'lesson_resource'
+            && $file->is_active
+            && $file->scan_status === 'clean',
+            404
+        );
+
+        return $this->reviewStoredAsset(
+            $product,
+            $supervisor,
+            $file->disk ?: 'private',
+            $file->path,
+            $file->original_name ?: basename($file->path),
+            'lesson-resource:'.$file->id,
             $file->sha256
         );
     }
