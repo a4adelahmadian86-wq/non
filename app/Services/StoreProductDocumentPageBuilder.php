@@ -125,7 +125,7 @@ class StoreProductDocumentPageBuilder
                     }
                 }
                 if ($sentenceHtml !== []) {
-                    $htmlParagraphs[] = '<p class="reader-document-paragraph" tabindex="0" role="button">'.implode(' ', $sentenceHtml).'</p>';
+                    $htmlParagraphs[] = '<p class="reader-document-paragraph" tabindex="0" role="group" aria-label="پخش پاراگراف">'.implode(' ', $sentenceHtml).'</p>';
                 }
             }
             if ($htmlParagraphs === []) {
