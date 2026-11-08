@@ -1,17 +1,17 @@
 <?php
 
-namespace App\\Jobs;
+namespace App\Jobs;
 
-use App\\Models\\StoreDocumentRecord;
-use App\\Models\\StoreDocumentSample;
-use App\\Models\\StoreProductPreview;
-use App\\Services\\ProductSupervisorClient;
-use Illuminate\\Bus\\Queueable;
-use Illuminate\\Contracts\\Queue\\ShouldQueue;
-use Illuminate\\Foundation\\Bus\\Dispatchable;
-use Illuminate\\Queue\\InteractsWithQueue;
-use Illuminate\\Queue\\SerializesModels;
-use Illuminate\\Support\\Facades\\Storage;
+use App\Models\StoreDocumentRecord;
+use App\Models\StoreDocumentSample;
+use App\Models\StoreProductPreview;
+use App\Services\ProductSupervisorClient;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ProcessDocumentKnowledgeJob implements ShouldQueue
@@ -53,7 +53,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
         $stream = $disk->readStream($file->path);
         if (! is_resource($stream)) {
             $document->update(['status' => 'retrying', 'last_error_code' => 'document_stream_unavailable']);
-            throw new \\RuntimeException('document_stream_unavailable');
+            throw new \RuntimeException('document_stream_unavailable');
         }
 
         $reviewStream = $stream;
@@ -74,12 +74,12 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             if ($sourceType === 'docx') {
                 $docxBytes = stream_get_contents($stream);
                 if (! is_string($docxBytes) || $docxBytes === '') {
-                    throw new \\RuntimeException('document_docx_read_failed');
+                    throw new \RuntimeException('document_docx_read_failed');
                 }
-                $normalizedPdfBytes = app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
+                $normalizedPdfBytes = app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview($docxBytes);
                 $reviewStream = fopen('php://temp', 'w+b');
                 if (! is_resource($reviewStream) || fwrite($reviewStream, $normalizedPdfBytes) === false) {
-                    throw new \\RuntimeException('document_docx_pdf_stage_failed');
+                    throw new \RuntimeException('document_docx_pdf_stage_failed');
                 }
                 rewind($reviewStream);
                 $reviewFilename = pathinfo($reviewFilename, PATHINFO_FILENAME).'.pdf';
@@ -215,7 +215,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
                         $sample = $supervisor->createPdfSample($stream, $file->original_name ?: basename($file->path), $pages);
                         $samplePath = 'store/previews/'.$document->product_id.'/document-'.$file->id.'-'.$document->source_sha256.'-sample.pdf';
                         if (! Storage::disk('private')->put($samplePath, $sample['bytes'])) {
-                            throw new \\RuntimeException('document_sample_storage_failed');
+                            throw new \RuntimeException('document_sample_storage_failed');
                         }
 
                         StoreDocumentSample::query()->updateOrCreate(
@@ -257,7 +257,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
                 }
                 $fullPath = 'store/document-renders/'.$document->product_id.'/document-'.$file->id.'-'.$document->source_sha256.'.pdf';
                 if (! Storage::disk('private')->put($fullPath, $normalizedPdfBytes)) {
-                    throw new \\RuntimeException('document_full_reader_render_storage_failed');
+                    throw new \RuntimeException('document_full_reader_render_storage_failed');
                 }
                 $fullDisk = 'private';
             }
