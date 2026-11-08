@@ -106,7 +106,8 @@ class AdminStoreController extends Controller
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
             && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
         $hasFullReaderAsset = $product->previews->contains(fn ($preview) => $preview->is_active && $preview->access_level === 'full');
-        $hasReadyReaderDocument = $publicationReadiness->hasReadyPrimaryReader($product);
+        $hasReadyReaderDocument = ($product->download_policy ?? 'signed') === 'reader_only'
+            && $publicationReadiness->hasReadyPrimaryReader($product);
         $contentReady = $product->type === 'course'
             ? ($product->course?->sections()->whereHas('lessons', fn ($query) => $query->publishable())->exists() ?? false)
             : ($hasSafePrimaryFile && (($product->download_policy ?? 'signed') !== 'reader_only' || ($hasFullReaderAsset && $hasReadyReaderDocument)));
@@ -146,7 +147,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $snapshotBuilder) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $snapshotBuilder, $publicationReadiness) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($data['type'] !== $lockedProduct->type) {
                 throw ValidationException::withMessages([
