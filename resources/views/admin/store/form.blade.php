@@ -101,7 +101,7 @@
             @if($aiContentReadiness['stored_content_stale'])
               محتوای هوشمند قبلی با نسخه فعلی فایل یا درس‌ها هم‌خوان نیست؛ پیشنهاد تازه تولید کن.
             @elseif($aiContentReadiness['status'] === 'available')
-              گزارش دانش کامل است · {{ number_format($aiContentReadiness['source_count']) }} منبع · {{ number_format($aiContentReadiness['facts_included']) }} واقعیت دارای شاهد
+              گزارش دانش کامل است · {{ number_format($aiContentReadiness['source_count']) }} فایل · {{ number_format($aiContentReadiness['lesson_count']) }} درس · {{ number_format($aiContentReadiness['facts_included']) }} واقعیت دارای شاهد
             @else
               {{ collect($aiContentReadiness['reasons'])->pluck('message')->filter()->unique()->implode(' ') ?: 'برای فعال شدن این قابلیت، ابتدا فایل یا محتوای دوره باید کامل پردازش شود.' }}
             @endif
