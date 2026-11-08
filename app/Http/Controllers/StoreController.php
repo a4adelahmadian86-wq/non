@@ -173,6 +173,7 @@ class StoreController extends Controller
         $kind = strtolower((string) $preview->kind);
         if ($kind === 'html' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'html') {
             $headers['Content-Type'] = 'text/html; charset=UTF-8';
+            $headers['Content-Disposition'] = 'inline; filename="farast-workbook-preview.html"';
             $headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
             return $disk->response($preview->path, null, $headers);
         }
