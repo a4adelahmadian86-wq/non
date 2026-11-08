@@ -120,18 +120,25 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 ];
             })->filter()->values()->all();
 
-            $fullReaderPreview = StoreProductPreview::query()
+            $fullReaderPreviews = StoreProductPreview::query()
                 ->where('product_id', $document->product_id)
                 ->where('access_level', 'full')
                 ->where('is_active', true)
-                ->first();
+                ->get();
 
-            if ($fullReaderPreview && $readerTimings !== []) {
+            foreach ($fullReaderPreviews as $fullReaderPreview) {
+                $timingsForPreview = $fullReaderPreview->kind === 'reader_document'
+                    ? array_values(array_filter(
+                        $readerTimings,
+                        static fn (array $timing) => (int) ($timing['page'] ?? 0) === (int) $fullReaderPreview->page_number
+                    ))
+                    : $readerTimings;
+
                 $fullReaderPreview->update([
                     'audio_disk' => 'private',
                     'audio_path' => $path,
                     'audio_mime' => 'audio/wav',
-                    'audio_timing' => $readerTimings,
+                    'audio_timing' => $timingsForPreview,
                 ]);
             }
 
