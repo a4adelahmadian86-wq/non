@@ -49,7 +49,8 @@
     requestId++;
     if (activeAudio) {
       activeAudio.pause();
-      activeAudio.src = '';
+      activeAudio.removeAttribute('src');
+      activeAudio.load();
       activeAudio = null;
     }
     if (activeUrl) {
