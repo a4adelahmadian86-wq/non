@@ -294,7 +294,7 @@ class StoreXlsxPreviewRenderer
         }
         $xml = $this->parseXml($contents);
         $xpath = new DOMXPath($xml);
-        foreach (['fonts' => 1024, 'fills' => 1024, 'borders' => 1024, 'cellXfs' => self::MAX_STYLES] as $collection => $limit) {
+        foreach (['numFmts' => 1024, 'fonts' => 1024, 'fills' => 1024, 'borders' => 1024, 'cellXfs' => self::MAX_STYLES] as $collection => $limit) {
             $nodes = $xpath->query('//*[local-name()="'.$collection.'"]/*');
             if ($nodes && $nodes->length > $limit) {
                 throw new RuntimeException('Workbook style collection exceeds the supported limit.');
