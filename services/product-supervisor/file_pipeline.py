@@ -394,7 +394,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
 
     result = Inspection(detected_type="unknown", warnings=[])
     result.antivirus_status = _clamav_scan(data)
-    result.upstream_scan_status = "clean" if primary_scan_status == "clean" else "not_provided"
+    result.upstream_scan_status = primary_scan_status if primary_scan_status in {"clean", "structural_checks_passed"} else "not_provided"
     if result.antivirus_status == "infected":
         raise FileInspectionError("اسکنر امنیتی محتوای آلوده را شناسایی کرد؛ فایل قرنطینه شد.")
 
@@ -455,7 +455,9 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
 
     if result.antivirus_status != "clean":
         if result.upstream_scan_status == "clean":
-            result.warnings.append("اسکن ثانویه ناظر در دسترس نیست؛ فایل از اسکنر اصلی فروشگاه وضعیت سالم دارد.")
+            result.warnings.append("اسکنر اصلی فروشگاه فایل را تأیید کرده است؛ اسکن آنتی‌ویروس ثانویه در این محیط در دسترس نیست.")
+        elif result.upstream_scan_status == "structural_checks_passed":
+            result.warnings.append("فقط بررسی ایستای ساختار در فروشگاه انجام شده است؛ این نتیجه معادل اسکن آنتی‌ویروس نیست.")
         else:
             result.warnings.append("اسکن آنتی‌ویروس در این محیط تأیید نشده است؛ فایل را سالم فرض نکنید.")
 
