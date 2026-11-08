@@ -22,7 +22,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         response = self.client.post(
             "/v1/reviews/files",
             data={"product_id": "p-1", "product_title": "عنوان آزمایشی", "product_type": "digital_file"},
-            files={"file": ("description.txt", b"متن محصول", "text/plain")},
+            files={"file": ("description.txt", "متن محصول".encode(), "text/plain")},
         )
         self.assertEqual(response.status_code, 401)
 
