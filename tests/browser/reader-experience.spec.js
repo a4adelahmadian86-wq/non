@@ -1481,3 +1481,41 @@ test('local reader ink supports drawing, erasing mode, undo and browser persiste
   await page.locator('[data-ink-toggle]').click();
   await expect(canvas).toHaveCSS('pointer-events', 'none');
 });
+
+test('reader highlights stay anchored to the selected duplicate phrase', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="duplicate-highlight-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>عبارت تکراری میان متن و عبارت تکراری در پایان</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  const phrase = 'عبارت تکراری';
+  await page.evaluate(phrase => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const start = text.nodeValue.lastIndexOf(phrase);
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + phrase.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, phrase);
+  await page.locator('[data-reader-highlight]').click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:duplicate-highlight-fixture')));
+  const expectedOffset = await page.locator('.farast-reader-document p').evaluate(node => node.textContent.lastIndexOf('عبارت تکراری'));
+  expect(saved.highlights[0].startOffset).toBe(expectedOffset);
+  expect(saved.highlights[0].endOffset).toBe(expectedOffset + phrase.length);
+  await page.evaluate(() => document.querySelector('[data-reader-root]').dispatchEvent(new CustomEvent('farast:reader-page-loaded')));
+  const markedOffset = await page.locator('mark.farast-reader-local-highlight').evaluate(mark => {
+    const range = document.createRange();
+    range.selectNodeContents(mark.parentElement);
+    range.setEndBefore(mark);
+    return range.toString().length;
+  });
+  expect(markedOffset).toBe(expectedOffset);
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText(phrase);
+});
