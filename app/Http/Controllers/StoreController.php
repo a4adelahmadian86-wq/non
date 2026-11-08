@@ -339,6 +339,8 @@ class StoreController extends Controller
         $readerDocument = null;
         $readerAudioUrl = null;
         $readerAudioTiming = [];
+        $readerAudioPollUrl = null;
+        $readerAudioStatus = '';
         $previews = $samplePreviews;
 
         if ($hasReaderEntitlement && $product->type === 'digital_file') {
@@ -367,10 +369,16 @@ class StoreController extends Controller
                     $audioArtifactReady = (bool) $audioArtifact;
 
                     $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
-                    if ($audioNeedsUpgrade
-                        && filled(config('services.document_audio.url'))
-                        && filled(config('services.document_audio.token'))) {
+                    $documentAudioConfigured = filled(config('services.document_audio.url'))
+                        && filled(config('services.document_audio.token'));
+                    if ($audioNeedsUpgrade && $documentAudioConfigured) {
                         GenerateProductDocumentAudio::dispatch((int) $document->id)->afterResponse();
+                        $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
+                        $readerAudioStatus = $audioArtifactReady ? 'upgrading' : 'pending';
+                    } elseif (! $audioArtifactReady) {
+                        $readerAudioStatus = 'unavailable';
+                    } else {
+                        $readerAudioStatus = 'ready';
                     }
 
                     if ($audioArtifactReady) {
@@ -437,7 +445,9 @@ class StoreController extends Controller
                 'readerMode',
                 'readerDocument',
                 'readerAudioUrl',
-                'readerAudioTiming'
+                'readerAudioTiming',
+                'readerAudioPollUrl',
+                'readerAudioStatus'
             ))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
