@@ -299,6 +299,9 @@ class AdminStoreController extends Controller
             (string) Str::uuid().'.'.$extension,
             'private'
         );
+        if (! $path) {
+            return response()->json(['message' => 'ذخیره موقت فایل در قرنطینه ممکن نشد.'], 503);
+        }
 
         try {
             $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024);
