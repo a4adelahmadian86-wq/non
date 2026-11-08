@@ -14,6 +14,11 @@ Route::get('/store/preview/{preview}/audio', [StoreController::class, 'previewAu
 Route::get('/store/product/{product}/lessons/{lesson}/preview',[StoreController::class,'coursePreview'])->name('store.course.preview');
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('/store/{product}/reader-state', [\\App\\Http\\Controllers\\StoreReaderStateController::class, 'show'])->middleware('throttle:120,10')->name('store.reader.state.show');
+    Route::put('/store/{product}/reader-state', [\\App\\Http\\Controllers\\StoreReaderStateController::class, 'update'])->middleware('throttle:60,10')->name('store.reader.state.update');
+});
+
+Route::middleware(['auth'])->group(function () {
     Route::get('/my-courses/{product}', [StoreCourseLearningController::class, 'show'])->name('store.course.learn');
     Route::get('/my-courses/{product}/lessons/{lesson}', [StoreCourseLearningController::class, 'lesson'])->name('store.course.lesson');
     Route::post('/my-courses/{product}/lessons/{lesson}/progress', [StoreCourseLearningController::class, 'progress'])->middleware('throttle:60,10')->name('store.course.progress');
