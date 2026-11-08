@@ -43,6 +43,7 @@ class ProductSnapshot(BaseModel):
     category_name: str | None = Field(default=None, max_length=160)
     tags: list[str] = Field(default_factory=list, max_length=30)
     document_knowledge: dict[str, Any] | None = None
+    document_knowledge_fingerprint: str | None = Field(default=None, max_length=64)
     has_cover: bool = False
     media_fingerprint: str = Field(default='', max_length=64)
     course_fingerprint: str | None = Field(default=None, max_length=64)
