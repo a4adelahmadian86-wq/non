@@ -7,31 +7,41 @@
   if (!articles.some(article => article.dataset.audioUrl)) return;
 
   const fa = value => Number(value || 0).toLocaleString('fa-IR');
+  const parseTimingJson = raw => {
+    try {
+      const value = JSON.parse(raw || '[]');
+      return Array.isArray(value) ? value : [];
+    } catch (_) {
+      return [];
+    }
+  };
+  const normalizeTimings = timings => timings.filter(item => item && typeof item.text === 'string'
+    && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
+    && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
+    .map((item, index) => ({
+      ...item,
+      start: Number(item.start),
+      end: Number(item.end),
+      page: Math.max(1, Number(item.page) || 1),
+      words: Array.isArray(item.words) ? item.words.filter(word => word && typeof word.text === 'string'
+        && Number.isFinite(Number(word.start)) && Number.isFinite(Number(word.end))
+        && Number(word.start) >= 0 && Number(word.end) > Number(word.start))
+        .map(word => ({ ...word, start: Number(word.start), end: Number(word.end) })) : [],
+      index
+    }))
+    .sort((a, b) => a.start - b.start);
+  const sharedDocumentTimings = normalizeTimings(parseTimingJson(root.dataset.readerAudioTiming));
+  const useSharedDocumentTimeline = root.dataset.readerMode === 'document' && sharedDocumentTimings.length > 0;
   const parseTracks = () => articles.map((article, section) => {
-    let timings = [];
-    try { timings = JSON.parse(article.dataset.audioTiming || '[]'); } catch (_) {}
-    if (!Array.isArray(timings)) timings = [];
-    const validTimings = timings.filter(item => item && typeof item.text === 'string'
-      && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
-      && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
-      .map((item, index) => ({
-        ...item,
-        start: Number(item.start),
-        end: Number(item.end),
-        page: Math.max(1, Number(item.page) || 1),
-        words: Array.isArray(item.words) ? item.words.filter(word => word && typeof word.text === 'string'
-          && Number.isFinite(Number(word.start)) && Number.isFinite(Number(word.end))
-          && Number(word.start) >= 0 && Number(word.end) > Number(word.start))
-          .map(word => ({ ...word, start: Number(word.start), end: Number(word.end) })) : [],
-        index
-      }))
-      .sort((a, b) => a.start - b.start);
+    const timings = useSharedDocumentTimeline
+      ? sharedDocumentTimings
+      : normalizeTimings(parseTimingJson(article.dataset.audioTiming));
     return {
       section,
       url: article.dataset.audioUrl || '',
-      timings: validTimings,
-      granularity: validTimings.some(item => item.words.length > 0) ? 'word' : 'segment',
-      alignmentQuality: validTimings.length > 0 && validTimings.every(item => item.words.length > 0 && item.alignment_quality === 'phoneme') ? 'phoneme' : 'estimated'
+      timings,
+      granularity: timings.some(item => item.words.length > 0) ? 'word' : 'segment',
+      alignmentQuality: timings.length > 0 && timings.every(item => item.words.length > 0 && item.alignment_quality === 'phoneme') ? 'phoneme' : 'estimated'
     };
   });
   const tracks = parseTracks();
