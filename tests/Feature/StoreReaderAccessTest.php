@@ -119,7 +119,7 @@ class StoreReaderAccessTest extends TestCase
         ]);
         $product->update(['download_policy' => 'reader_only']);
 
-        $this->get(route('store.reader', $product->slug))->assertOk()->assertSee('preview.pdf')->assertDontSee('full.pdf');
+        $this->get(route('store.reader', $product->slug))->assertOk()->assertSee(route('store.preview', $sample))->assertDontSee(route('store.preview', $full));
         $this->get(route('store.preview', $full))->assertForbidden();
 
         $user = $this->makeReaderUser();
@@ -139,8 +139,8 @@ class StoreReaderAccessTest extends TestCase
 
         $this->actingAs($user)->get(route('store.reader', $product->slug))
             ->assertOk()
-            ->assertSee('full.pdf')
-            ->assertDontSee('preview.pdf');
+            ->assertSee(route('store.preview', $full))
+            ->assertDontSee(route('store.preview', $sample));
         $this->actingAs($user)->get(route('store.preview', $full))
             ->assertOk()
             ->assertSee('%PDF-1.4 full');
