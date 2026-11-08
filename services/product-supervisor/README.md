@@ -36,7 +36,7 @@ The repository root `render.yaml` defines a separate Render web service named `f
 - `GEMINI_API_KEY` — required only for product metadata and persisted database-report verification; never used to analyze uploaded file contents.
 - `GLADIA_API_KEY` — currently ignored; Gladia is not integrated or called.
 
-Non-secret model settings are `GEMINI_MODEL`, `GROQ_TEXT_MODEL` (default `openai/gpt-oss-20b`), `GROQ_VISION_MODEL` and `GROQ_AUDIO_MODEL`. Do not commit keys, put them in frontend code, or send them through chat.
+Gemini uses the code-pinned default model `gemini-2.5-flash`; no `GEMINI_MODEL` environment variable is needed. Other optional model settings are `GROQ_TEXT_MODEL` (default `openai/gpt-oss-20b`), `GROQ_VISION_MODEL` and `GROQ_AUDIO_MODEL`. Do not commit keys, put them in frontend code, or send them through chat.
 
 Free Render instances may sleep when idle and have usage/availability limits. A timeout or provider outage is a failed/incomplete review, never an approval.
 
@@ -46,10 +46,10 @@ This service is intentionally separate from the site's existing AI and voice gat
 
 1. Open the [dedicated Render service](https://dashboard.render.com/web/srv-dbo0dgbrjlhs73a2vong) and select **Environment**.
 2. Create a dedicated key in [Google AI Studio API Keys](https://aistudio.google.com/app/apikey) and add it as `GEMINI_API_KEY`. This key is only used for product metadata and persisted database-report verification, never for file content review.
-3. Add `GROQ_API_KEY` for file text review, image understanding and audio transcription. Enable Zero Data Retention in the Groq console, then set `GROQ_ZDR_CONFIRMED=true`. Without this explicit confirmation, the service sends no file text, images or audio to Groq. Set optional `GROQ_TEXT_MODEL=openai/gpt-oss-20b` or keep the code default.
+3. Add `GROQ_API_KEY` for file text review, image understanding and audio transcription. Enable Zero Data Retention in the Groq console, then set `GROQ_ZDR_CONFIRMED=true`. Without this explicit confirmation, the service sends no file text, images or audio to Groq. Set optional `GROQ_TEXT_MODEL=openai/gpt-oss-20b` or keep the code default. Gemini model selection is pinned in code; only `GEMINI_API_KEY` is required.
 4. Keep the generated `SUPERVISOR_API_TOKEN` value; do not replace it with the site's voice token or another AI key.
 5. Save the environment changes and manually deploy the service. Automatic deploys are disabled for this service.
-6. Confirm `/health` reports `providers.groq.text_review: true` and, when the Gemini key is valid, `providers.gemini.configured: true`. Use authenticated `/v1/ready` to verify the service token and provider configuration. If the Gemini key field accidentally contains the model identifier (for example `gemini-2.5-flash`) instead of an API key, readiness reports Gemini as not configured.
+6. Confirm `/health` reports `providers.groq.text_review: true` and, when the Gemini key is valid, `providers.gemini.configured: true`. Use authenticated `/v1/ready` to verify the service token and provider configuration. The service uses its built-in Gemini model selection; only the real Google AI Studio API key belongs in `GEMINI_API_KEY`.
 
 ### Connect Laravel to this exact service
 
