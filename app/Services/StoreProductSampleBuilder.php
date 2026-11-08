@@ -52,6 +52,7 @@ class StoreProductSampleBuilder
         }
 
         $output = new Fpdi();
+        $output->setSourceFile(StreamReader::createByString($sourcePdf));
         foreach ($selected as $pageNumber) {
             $template = $output->importPage($pageNumber);
             $size = $output->getTemplateSize($template);
