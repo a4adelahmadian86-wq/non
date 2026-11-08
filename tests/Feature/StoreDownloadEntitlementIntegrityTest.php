@@ -332,4 +332,20 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             ->assertDontSee('data-library-download=', false);
     }
 
+
+    public function test_reader_only_purchase_opens_reader_instead_of_download(): void
+    {
+        $user = $this->makeUser('09123456783');
+        [$product, $file] = $this->makeProduct('reader-only-library');
+        $product->update(['download_policy' => 'reader_only']);
+        $this->makeDownload($user, $product, $file);
+
+        $this->actingAs($user)
+            ->get(route('library'))
+            ->assertOk()
+            ->assertSee('مطالعه در خوانشگر')
+            ->assertSee(route('store.reader', $product->slug), false)
+            ->assertDontSee('data-library-download=', false);
+    }
+
 }
