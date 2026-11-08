@@ -175,14 +175,14 @@ class AdminProductFileIngestionController extends Controller
                         'size_bytes' => $lockedSession->size_bytes,
                         'storage_disk' => 'private',
                         'storage_path' => $finalPath,
-                        'processing_state' => 'queued_for_study',
+                        'processing_state' => 'pending_study',
                         'page_count' => data_get($inspection, 'page_count'),
                         'duration_seconds' => data_get($inspection, 'duration_seconds'),
                         'technical_metadata' => $inspection,
                         'content_manifest' => [
                             'source_sha256' => $actualHash,
                             'manifest_version' => 1,
-                            'study_status' => 'not_started',
+                            'study_status' => 'pending',
                             'sample_status' => 'not_generated',
                             'audio_status' => 'not_generated',
                         ],
@@ -196,7 +196,7 @@ class AdminProductFileIngestionController extends Controller
                     ]);
 
                     $this->event($lockedSession, 'storage_upload', 'completed', 'فایل اصلی در مخزن خصوصی ثبت شد', 'نسخه اصلی با شناسه و هش یکتا ذخیره شد.');
-                    $this->event($lockedSession, 'content_study', 'queued', 'آماده مطالعه محتوایی', 'پرونده محتوایی ساخته شد؛ مرحله مطالعه هوشمند در صف پردازش قرار می‌گیرد.', [
+                    $this->event($lockedSession, 'content_study', 'pending', 'پرونده محتوایی ساخته شد', 'مرحله مطالعه هوشمند پس از اتصال پردازشگر محتوایی آغاز می‌شود.', [
                         'document_id' => $document->id,
                     ]);
 
