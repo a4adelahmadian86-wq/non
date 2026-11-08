@@ -309,7 +309,7 @@ class AdminStoreController extends Controller
                 ]);
                 $intakes[] = ['id' => $id, 'inspection' => $details];
             }
-        } catch (\\Throwable $exception) {
+        } catch (Throwable $exception) {
             foreach ($createdPaths as $stagedPath) {
                 Storage::disk('private')->delete($stagedPath);
             }
@@ -438,7 +438,7 @@ class AdminStoreController extends Controller
 
                 return $created;
             });
-        } catch (\\Throwable $exception) {
+        } catch (Throwable $exception) {
             foreach ($moved as $finalPath) {
                 Storage::disk('private')->delete($finalPath);
             }
