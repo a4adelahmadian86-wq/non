@@ -58,7 +58,7 @@ class UploadSecurityService
                 $process->run();
             } catch (ProcessTimedOutException $exception) {
                 throw new RuntimeException('upload_malware_scan_timeout', 0, $exception);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 throw new RuntimeException('upload_malware_scanner_unavailable', 0, $exception);
             }
 
