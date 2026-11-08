@@ -8,6 +8,12 @@ Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
 Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->withoutOverlapping();
 
+// Process document ingestion and the default queue on cron-only/shared hosting.
+// The worker exits when idle and is protected from overlapping scheduler launches.
+Schedule::command('queue:work --queue=documents,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')
+    ->everyMinute()
+    ->withoutOverlapping(20);
+
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')
     ->everyFifteenMinutes()
