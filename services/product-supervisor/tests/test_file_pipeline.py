@@ -5,6 +5,9 @@ import unittest
 import zipfile
 
 from docx import Document
+from openpyxl import Workbook
+from pptx import Presentation
+from pptx.util import Inches
 from PIL import Image
 
 from file_pipeline import FileInspectionError, inspect_file, redact_sensitive_content
@@ -61,6 +64,29 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "image")
         self.assertEqual(result.image_mime, "image/jpeg")
         self.assertTrue(result.image_bytes)
+
+
+    def test_xlsx_content_is_extracted(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet["A1"] = "عنوان دوره"
+        sheet["B1"] = "مبانی فروش"
+        stream = io.BytesIO()
+        workbook.save(stream)
+        result = inspect_file(stream.getvalue(), "outline.xlsx")
+        self.assertEqual(result.detected_type, "xlsx")
+        self.assertIn("مبانی فروش", result.extracted_text)
+
+    def test_pptx_content_is_extracted(self):
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        shape = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1))
+        shape.text = "جلسه اول دوره"
+        stream = io.BytesIO()
+        presentation.save(stream)
+        result = inspect_file(stream.getvalue(), "course.pptx")
+        self.assertEqual(result.detected_type, "pptx")
+        self.assertIn("جلسه اول دوره", result.extracted_text)
 
     def test_wav_is_not_misclassified_as_image(self):
         wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + b"0" * 16 + b"data" + b"0" * 4
