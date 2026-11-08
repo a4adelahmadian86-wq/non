@@ -61,6 +61,33 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "docx")
         self.assertIn("متن آزمایشی دوره", result.extracted_text)
 
+    def test_docx_preserves_heading_list_and_table_structure_in_reader_chunks(self):
+        document = Document()
+        document.add_heading("فصل اول", level=1)
+        document.add_paragraph("مقدمه ساختاریافته")
+        document.add_paragraph("گزینه نخست", style="List Bullet")
+        table = document.add_table(rows=2, cols=2)
+        table.cell(0, 0).text = "عنوان"
+        table.cell(0, 1).text = "مقدار"
+        table.cell(1, 0).text = "کتاب"
+        table.cell(1, 1).text = "<img src=x onerror=alert(1)>"
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "structured.docx")
+
+        self.assertEqual(result.detected_type, "docx")
+        self.assertIn("فصل اول", result.extracted_text)
+        self.assertIn("کتاب", result.extracted_text)
+        self.assertEqual(
+            [chunk["chunk_type"] for chunk in result.content_chunks],
+            ["docx_heading", "docx_paragraph", "docx_list_item", "docx_table_row", "docx_table_row"],
+        )
+        self.assertEqual(result.content_chunks[0]["locator"]["heading_level"], 1)
+        self.assertEqual(result.content_chunks[2]["locator"]["list_kind"], "bullet")
+        self.assertEqual(result.content_chunks[3]["locator"]["cells"], ["عنوان", "مقدار"])
+        self.assertEqual(result.content_chunks[4]["locator"]["cells"][1], "<img src=x onerror=alert(1)>")
+
     def test_zip_path_traversal_is_rejected(self):
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, "w") as archive:
