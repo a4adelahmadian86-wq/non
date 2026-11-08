@@ -48,12 +48,13 @@
     </div>
   </nav>
 
-  @if($documentAudio)
-    <section class="farast-reader-audio" aria-label="نسخه صوتی هماهنگ سند">
-      <div><strong><i class="fa-solid fa-headphones"></i> نسخه صوتی مطالعه</strong><span id="reader-audio-pointer" aria-live="polite">آماده پخش · همگام با متن و صفحه</span></div>
-      <audio id="reader-document-audio" controls preload="metadata" controlslist="nodownload noplaybackrate" src="{{ route('store.document.audio',$documentAudio) }}" data-segments='@json($audioSegments)'></audio>
+  @foreach($documentAudios as $documentAudio)
+    @php($audioSegments = $documentAudio->segments->map(fn($segment) => ['sequence'=>$segment->sequence,'start_ms'=>$segment->start_ms,'end_ms'=>$segment->end_ms,'page_number'=>data_get($segment->visual_locator,'page_number'),'block_id'=>$segment->document_block_id,'section'=>data_get($segment->visual_locator,'section_path')])->values())
+    <section class="farast-reader-audio" aria-label="نسخه صوتی هماهنگ سند" data-document-id="{{ $documentAudio->document_id }}">
+      <div><strong><i class="fa-solid fa-headphones"></i> نسخه صوتی · سند {{ $loop->iteration }}</strong><span class="reader-audio-pointer" aria-live="polite">آماده پخش · همگام با متن و صفحه</span></div>
+      <audio class="reader-document-audio" controls preload="metadata" controlslist="nodownload noplaybackrate" src="{{ route('store.document.audio',$documentAudio) }}" data-document-id="{{ $documentAudio->document_id }}" data-segments='@json($audioSegments)'></audio>
     </section>
-  @endif
+  @endforeach
 
   <div class="farast-reader-progress" role="progressbar" aria-label="پیشرفت مطالعه" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="reader-progress"></span></div>
 
@@ -87,7 +88,7 @@
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
       <div class="farast-reader-pages" id="reader-pages">
         @foreach($previews as $i => $preview)
-          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}">
+          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-document-id="{{ $preview->document_id ?? '' }}" data-watermark="{{ $readerWatermark }}">
             <div class="farast-reader-page-content">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <div class="farast-pdf-document" data-pdf-url="{{ route('store.preview',$preview) }}" aria-label="نمایش سند PDF">
