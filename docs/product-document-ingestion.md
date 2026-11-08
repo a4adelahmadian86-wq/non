@@ -23,6 +23,13 @@ cd /home/ACCOUNT/public_html && /usr/local/bin/php artisan queue:work database -
 
 Do not keep a long-running worker alive on a host that terminates background processes. The stop-when-empty worker exits after the available batch and can be safely invoked again by cron.
 
+Also register Laravel's scheduler every minute so expired quarantine files are removed hourly:
+
+```sh
+* * * * * cd /home/ACCOUNT/public_html && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
+```
+
+
 ## Current processing boundaries
 
 - The first-party PHP gate performs bounded static checks and never executes an uploaded file. It is not a full antivirus engine and does not promise detection of every unknown malware family.
