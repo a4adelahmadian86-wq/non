@@ -49,13 +49,18 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             return;
         }
 
+        $sourceType = (string) $document->detected_type;
         $stream = $disk->readStream($file->path);
         if (! is_resource($stream)) {
             $document->update(['status' => 'retrying', 'last_error_code' => 'document_stream_unavailable']);
             throw new \\RuntimeException('document_stream_unavailable');
         }
 
+        $reviewStream = $stream;
+        $normalizedPdfBytes = null;
+        $reviewFilename = $file->original_name ?: basename($file->path);
         $document->update(['status' => 'processing', 'last_error_code' => null]);
+
         try {
             $hashContext = hash_init('sha256');
             hash_update_stream($hashContext, $stream);
@@ -66,8 +71,22 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
                 return;
             }
 
+            if ($sourceType === 'docx') {
+                $docxBytes = stream_get_contents($stream);
+                if (! is_string($docxBytes) || $docxBytes === '') {
+                    throw new \\RuntimeException('document_docx_read_failed');
+                }
+                $normalizedPdfBytes = app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
+                $reviewStream = fopen('php://temp', 'w+b');
+                if (! is_resource($reviewStream) || fwrite($reviewStream, $normalizedPdfBytes) === false) {
+                    throw new \\RuntimeException('document_docx_pdf_stage_failed');
+                }
+                rewind($reviewStream);
+                $reviewFilename = pathinfo($reviewFilename, PATHINFO_FILENAME).'.pdf';
+            }
+
             $product = $document->product;
-            $response = $supervisor->reviewFile($stream, $file->original_name ?: basename($file->path), [
+            $response = $supervisor->reviewFile($reviewStream, $reviewFilename, [
                 'product_id' => (string) $product->id,
                 'product_title' => (string) $product->title,
                 'product_type' => (string) $product->type,
@@ -80,7 +99,12 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             $document->update(['status' => 'retrying', 'last_error_code' => class_basename($exception)]);
             throw $exception;
         } finally {
-            fclose($stream);
+            if (is_resource($reviewStream) && $reviewStream !== $stream) {
+                fclose($reviewStream);
+            }
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
 
         $inspection = (array) ($response['inspection'] ?? []);
@@ -132,7 +156,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
         $geminiStatus = (string) ($providerStatus['gemini'] ?? 'not_requested');
         $document->update([
             'detected_mime' => $file->mime,
-            'detected_type' => (string) ($inspection['detected_type'] ?? $document->detected_type ?? 'unknown'),
+            'detected_type' => $sourceType,
             'page_count' => isset($inspection['page_count']) ? max(0, (int) $inspection['page_count']) : $document->page_count,
             'word_count' => $wordCount,
             'extracted_characters' => $totalCharacters,
@@ -146,30 +170,40 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
                 'security_gate' => $response['security_gate'] ?? 'manual_scan_required',
                 'redacted_sensitive_items' => (int) ($response['redacted_sensitive_items'] ?? 0),
                 'inspection' => $inspection,
+                'sample_pages' => is_array($response['sample_pages'] ?? null) ? $response['sample_pages'] : [],
             ],
             'last_error_code' => null,
             'processed_at' => now(),
         ]);
 
-        $this->preparePdfSample($document->fresh(), $file, $response, $supervisor);
+        $this->preparePdfSample($document->fresh(), $file, $response, $supervisor, $normalizedPdfBytes);
 
         if ($chunks !== []) {
             GenerateDocumentAudioTrackJob::dispatch($document->id)->onQueue('document-audio');
         }
     }
 
-    private function preparePdfSample(StoreDocumentRecord $document, $file, array $response, ProductSupervisorClient $supervisor): void
+    private function preparePdfSample(StoreDocumentRecord $document, $file, array $response, ProductSupervisorClient $supervisor, ?string $normalizedPdfBytes = null): void
     {
         $pages = is_array($response['sample_pages'] ?? null) ? array_values(array_unique(array_filter(
             array_map('intval', $response['sample_pages']),
             fn ($page) => $page > 0
         ))) : [];
-        if (($document->detected_type ?? '') !== 'pdf' || $pages === []) {
+        if (! in_array((string) $document->detected_type, ['pdf', 'docx'], true) || $pages === []) {
             return;
         }
 
-        $sourceDisk = Storage::disk($file->disk ?: 'private');
-        $stream = $sourceDisk->readStream($file->path);
+        $stream = null;
+        if (is_string($normalizedPdfBytes) && $normalizedPdfBytes !== '') {
+            $stream = fopen('php://temp', 'w+b');
+            if (is_resource($stream)) {
+                fwrite($stream, $normalizedPdfBytes);
+                rewind($stream);
+            }
+        } else {
+            $sourceDisk = Storage::disk($file->disk ?: 'private');
+            $stream = $sourceDisk->readStream($file->path);
+        }
         if (! is_resource($stream)) {
             throw new \\RuntimeException('document_sample_source_unavailable');
         }
@@ -187,14 +221,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
 
         StoreDocumentSample::query()->updateOrCreate(
             ['document_id' => $document->id, 'source_sha256' => $document->source_sha256],
-            [
-                'disk' => 'private',
-                'path' => $samplePath,
-                'mime' => 'application/pdf',
-                'kind' => 'pdf',
-                'selected_pages' => $pages,
-                'status' => 'ready',
-            ]
+            ['disk' => 'private', 'path' => $samplePath, 'mime' => 'application/pdf', 'kind' => 'pdf', 'selected_pages' => $pages, 'status' => 'ready']
         );
 
         StoreProductPreview::query()
@@ -205,20 +232,20 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
 
         StoreProductPreview::query()->updateOrCreate(
             ['document_id' => $document->id, 'access_level' => 'sample', 'source_sha256' => $document->source_sha256],
-            [
-                'product_id' => $document->product_id,
-                'disk' => 'private',
-                'path' => $samplePath,
-                'mime' => 'application/pdf',
-                'page_number' => $pages[0],
-                'kind' => 'pdf',
-                'watermarked' => true,
-                'is_active' => true,
-                'sort_order' => 0,
-            ]
+            ['product_id' => $document->product_id, 'disk' => 'private', 'path' => $samplePath, 'mime' => 'application/pdf', 'page_number' => $pages[0], 'kind' => 'pdf', 'watermarked' => true, 'is_active' => true, 'sort_order' => 0]
         );
 
         if (($document->product?->download_policy ?? 'signed') === 'reader_only') {
+            $fullDisk = $file->disk ?: 'private';
+            $fullPath = $file->path;
+            if ($document->detected_type === 'docx') {
+                $fullPath = 'store/document-renders/'.$document->product_id.'/document-'.$file->id.'-'.$document->source_sha256.'.pdf';
+                if (! Storage::disk('private')->put($fullPath, (string) $normalizedPdfBytes)) {
+                    throw new \\RuntimeException('document_full_reader_render_storage_failed');
+                }
+                $fullDisk = 'private';
+            }
+
             StoreProductPreview::query()
                 ->where('document_id', $document->id)
                 ->where('access_level', 'full')
@@ -227,17 +254,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
 
             StoreProductPreview::query()->updateOrCreate(
                 ['document_id' => $document->id, 'access_level' => 'full', 'source_sha256' => $document->source_sha256],
-                [
-                    'product_id' => $document->product_id,
-                    'disk' => $file->disk ?: 'private',
-                    'path' => $file->path,
-                    'mime' => 'application/pdf',
-                    'page_number' => null,
-                    'kind' => 'pdf',
-                    'watermarked' => true,
-                    'is_active' => true,
-                    'sort_order' => 0,
-                ]
+                ['product_id' => $document->product_id, 'disk' => $fullDisk, 'path' => $fullPath, 'mime' => 'application/pdf', 'page_number' => null, 'kind' => 'pdf', 'watermarked' => true, 'is_active' => true, 'sort_order' => 0]
             );
         }
     }
