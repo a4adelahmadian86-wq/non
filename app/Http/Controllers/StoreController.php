@@ -359,9 +359,8 @@ class StoreController extends Controller
                         ->where('artifact_type', 'audio_full_wav')
                         ->where('version', '>=', 2)
                         ->sortByDesc('version')
-                        ->first();
-                    $audioArtifactReady = $audioArtifact
-                        && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path);
+                        ->first(static fn ($artifact) => Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
+                    $audioArtifactReady = (bool) $audioArtifact;
 
                     $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
                     if ($audioNeedsUpgrade
@@ -567,10 +566,15 @@ class StoreController extends Controller
         );
 
         abort_unless((bool) data_get($document->structure_json, 'reader.ready', false), 409);
-        $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', '>=', 2)->orderByDesc('version')->firstOrFail();
+        $artifact = $document->artifacts()
+            ->where('artifact_type', 'audio_full_wav')
+            ->where('version', '>=', 2)
+            ->orderByDesc('version')
+            ->get()
+            ->first(static fn ($candidate) => Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
+        abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
         $disk = Storage::disk($artifact->disk ?: 'private');
-        abort_unless($disk->exists($artifact->path), 404);
         $size = (int) $disk->size($artifact->path);
         $start = 0;
         $end = max(0, $size - 1);
