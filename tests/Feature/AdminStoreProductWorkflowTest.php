@@ -326,7 +326,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             'preview_pages' => 2,
         ]);
 
-        $source = new \\FPDF();
+        $source = new \FPDF();
         $source->SetFont('Arial', '', 14);
         for ($page = 1; $page <= 4; $page++) {
             $source->AddPage();
@@ -356,11 +356,11 @@ class AdminStoreProductWorkflowTest extends TestCase
             ])
             ->assertRedirect(route('admin.store.edit', $product));
 
-        $preview = \\App\\Models\\StoreProductPreview::query()->where('product_id', $product->id)->firstOrFail();
+        $preview = \App\Models\StoreProductPreview::query()->where('product_id', $product->id)->firstOrFail();
         $this->assertSame(4, $preview->source_page_count);
         $this->assertSame(2, $preview->included_page_count);
         Storage::disk('private')->assertExists($preview->path);
-        $this->assertSame(2, (new \\setasign\\Fpdi\\Fpdi())->setSourceFile(Storage::disk('private')->path($preview->path)));
+        $this->assertSame(2, (new \setasign\Fpdi\Fpdi())->setSourceFile(Storage::disk('private')->path($preview->path)));
     }
 
 
