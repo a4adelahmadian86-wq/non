@@ -173,7 +173,7 @@ class AdminProductSupervisorController extends Controller
             rewind($stream);
 
             if ($expectedSha256 && ! hash_equals(strtolower($expectedSha256), strtolower($sha256))) {
-                throw new \\RuntimeException('product_asset_checksum_mismatch');
+                throw new \RuntimeException('product_asset_checksum_mismatch');
             }
 
             $product->loadMissing(['category', 'tags']);
