@@ -102,7 +102,7 @@
                 <div><span>موتور ناظر مستقل</span><strong>بررسی کیفیت محصول</strong><small>این عملیات فقط یک گزارش پیشنهاد می‌دهد و هیچ‌گاه محصول را خودکار منتشر یا ویرایش نمی‌کند.</small></div>
                 <button type="submit" form="productSupervisorReviewForm" class="store-primary-btn" @disabled(!data_get($product->metadata, 'ai_supervisor.enabled', false))>اجرای بررسی هوشمند</button>
               </div>
-              @if($lastSupervisorReview)
+              @if($lastSupervisorReview && $supervisorReviewFresh)
                 <div class="product-ai-result">
                   <div class="product-ai-result-top">
                     <strong class="verdict-{{ $lastSupervisorReview['verdict'] ?? 'needs_changes' }}">{{ ['approved'=>'بدون ایراد مهم','needs_changes'=>'نیازمند اصلاح','blocked'=>'دارای مانع جدی'][$lastSupervisorReview['verdict'] ?? 'needs_changes'] ?? 'نیازمند بازبینی' }}</strong>
@@ -123,6 +123,8 @@
                   <small class="product-ai-result-meta">مدل: {{ $lastSupervisorReview['model'] ?? '—' }} · شناسه بررسی: {{ $lastSupervisorReview['review_id'] ?? '—' }} · زمان: {{ $lastSupervisorReview['generated_at'] ?? '—' }}</small>
                   <small class="product-ai-result-meta">نتیجه ناظر جایگزین تصمیم مدیر نیست و انتشار محصول همچنان از کنترل‌های سمت سرور عبور می‌کند.</small>
                 </div>
+              @elseif($lastSupervisorReview)
+                <p class="product-ai-no-result">گزارش قبلی به دلیل تغییر مشخصات، رسانه یا محتوای دوره دیگر معتبر نیست. برای تصمیم‌گیری، بررسی تازه اجرا کنید.</p>
               @else
                 <p class="product-ai-no-result">هنوز گزارشی برای این محصول ثبت نشده است. ابتدا ناظر را فعال و سپس بررسی را اجرا کنید.</p>
               @endif
