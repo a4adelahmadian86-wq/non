@@ -210,17 +210,72 @@ class StoreController extends Controller
 
         $disk = Storage::disk($preview->audio_disk ?: 'private');
         abort_unless($disk->exists($preview->audio_path), 404);
+        $size = (int) $disk->size($preview->audio_path);
+        abort_unless($size > 0, 404);
 
-        return $disk->response($preview->audio_path, null, [
+        $start = 0;
+        $end = $size - 1;
+        $status = 200;
+        $range = request()->header('Range');
+        if (is_string($range) && preg_match('/bytes=(\\d*)-(\\d*)/', $range, $matches)) {
+            if ($matches[1] === '' && $matches[2] !== '') {
+                $suffix = min($size, (int) $matches[2]);
+                $start = $size - $suffix;
+            } else {
+                $start = (int) ($matches[1] !== '' ? $matches[1] : 0);
+                $end = $matches[2] !== '' ? min($size - 1, (int) $matches[2]) : $end;
+            }
+            abort_if($start > $end || $start >= $size, 416, 'محدوده صوت معتبر نیست.');
+            $status = 206;
+        }
+
+        $length = $end - $start + 1;
+        $headers = [
             'Content-Type' => $preview->audio_mime ?: 'audio/mpeg',
             'Content-Disposition' => 'inline; filename="farast-reader-audio"',
+            'Content-Length' => (string) $length,
+            'Accept-Ranges' => 'bytes',
             'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
             'Cross-Origin-Resource-Policy' => 'same-origin',
             'Referrer-Policy' => 'no-referrer',
-        ]);
+        ];
+        if ($status === 206) {
+            $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+        }
+
+        return response()->stream(function () use ($disk, $preview, $start, $length) {
+            $stream = $disk->readStream($preview->audio_path);
+            if (! is_resource($stream)) {
+                return;
+            }
+            try {
+                $remainingSkip = $start;
+                while ($remainingSkip > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(8192, $remainingSkip));
+                    if ($chunk === false || $chunk === '') {
+                        break;
+                    }
+                    $remainingSkip -= strlen($chunk);
+                }
+                $remaining = $length;
+                while ($remaining > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(8192, $remaining));
+                    if ($chunk === false || $chunk === '') {
+                        break;
+                    }
+                    echo $chunk;
+                    $remaining -= strlen($chunk);
+                    if (connection_aborted()) {
+                        break;
+                    }
+                }
+            } finally {
+                fclose($stream);
+            }
+        }, $status, $headers);
     }
 
     public function reader(string $slug)
