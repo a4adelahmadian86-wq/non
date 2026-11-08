@@ -148,6 +148,10 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             'last_error_code' => null,
             'processed_at' => now(),
         ]);
+
+        if ($chunks !== []) {
+            GenerateDocumentAudioTrackJob::dispatch($document->id)->onQueue('document-audio');
+        }
     }
 
     public function failed(Throwable $exception): void
