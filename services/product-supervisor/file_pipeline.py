@@ -389,7 +389,7 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> str:
     if not key:
         return ""
     model = os.getenv("GROQ_AUDIO_MODEL", "whisper-large-v3-turbo").strip()
-    async with httpx.AsyncClient(timeout=httpx.Timeout(90, connect=10)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as client:
         response = await client.post(
             "https://api.groq.com/openai/v1/audio/transcriptions",
             headers={"Authorization": f"Bearer {key}"},
