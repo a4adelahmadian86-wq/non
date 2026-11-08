@@ -27,7 +27,7 @@
     let stopped = false;
     let pollTimer = 0;
     const pollAudioReadiness = async () => {
-      if (stopped || inFlight || attempts >= 120) return;
+      if (stopped || inFlight || attempts >= 40) return;
       if (document.visibilityState === 'hidden') {
         pollTimer = window.setTimeout(pollAudioReadiness, 15000);
         return;
@@ -57,7 +57,7 @@
       } finally {
         inFlight = false;
       }
-      if (attempts >= 120) {
+      if (attempts >= 40) {
         pendingStatus.textContent = 'آماده‌سازی صوت بیش از حد طول کشید؛ برای بررسی وضعیت، صفحه را دوباره بارگذاری کنید.';
         return;
       }
