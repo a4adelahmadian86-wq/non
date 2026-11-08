@@ -20,11 +20,12 @@ def test_health_does_not_expose_secrets(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "private-api-key")
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "service": "product-supervisor",
-        "provider_configured": True,
-    }
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "product-supervisor"
+    assert body["providers"]["gemini"]["configured"] is True
+    assert body["providers"]["groq"]["configured"] is bool(__import__("os").getenv("GROQ_API_KEY", "").strip())
+    assert body["providers"]["gladia"]["enabled"] is False
     assert "private-api-key" not in response.text
 
 
