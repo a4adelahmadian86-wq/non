@@ -164,7 +164,11 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
   });
 
-  test('navigates between sample pages and synchronizes the page indicator and progress', async ({ page }) => {
+  test('navigates between sample pages without loading PDF.js for image-only previews', async ({ page }) => {
+    const pdfRequests = [];
+    page.on('request', request => {
+      if (request.url().includes('pdfjs-dist')) pdfRequests.push(request.url());
+    });
     await mountReader(page);
     const root = page.locator('[data-reader-root]');
     await expect(root.locator('.farast-reader-page-item.is-active')).toHaveAttribute('data-index', '0');
@@ -175,6 +179,7 @@ test.describe('FARAST sample reader interactions', () => {
     await root.locator('#reader-prev').click();
     await expect(root.locator('.farast-reader-page-item.is-active')).toHaveAttribute('data-index', '0');
     await expect(root.locator('.farast-reader-thumb[data-goto="0"]')).toHaveAttribute('aria-current', 'page');
+    expect(pdfRequests).toHaveLength(0);
   });
 
   test('supports zoom, fit-width reset, rotation, theme and sidebar controls', async ({ page }) => {
