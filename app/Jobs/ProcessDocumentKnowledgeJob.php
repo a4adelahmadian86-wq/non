@@ -154,13 +154,14 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
         }
 
         $geminiStatus = (string) ($providerStatus['gemini'] ?? 'not_requested');
+        $extractionTruncated = (bool) ($inspection['extraction_truncated'] ?? false);
         $document->update([
             'detected_mime' => $file->mime,
             'detected_type' => $sourceType,
             'page_count' => isset($inspection['page_count']) ? max(0, (int) $inspection['page_count']) : $document->page_count,
             'word_count' => $wordCount,
             'extracted_characters' => $totalCharacters,
-            'status' => $geminiStatus === 'completed' && $chunks !== [] ? 'ready' : ($chunks !== [] ? 'extracted' : 'needs_review'),
+            'status' => $extractionTruncated ? 'partial' : ($geminiStatus === 'completed' && $chunks !== [] ? 'ready' : ($chunks !== [] ? 'extracted' : 'needs_review')),
             'knowledge_version' => $document->knowledge_version + 1,
             'metadata' => [
                 'summary' => $summary,
