@@ -8,6 +8,7 @@ on:
     branches: [main, farast-restoration-2026-09, feat/self-hosted-sherpa-streaming, feature/reader-audio-synchronization]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
 jobs:
   laravel:
     runs-on: ubuntu-latest
