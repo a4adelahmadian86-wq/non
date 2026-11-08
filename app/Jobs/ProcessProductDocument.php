@@ -74,7 +74,7 @@ class ProcessProductDocument implements ShouldQueue
                 'product_id' => (string) $product->id,
                 'product_title' => (string) $product->title,
                 'product_type' => (string) $product->type,
-                'primary_scan_status' => 'clean',
+                'primary_scan_status' => 'structural_checks_passed',
                 'category_name' => $product->category?->name,
                 'tags_json' => json_encode($product->tags->pluck('name')->take(30)->values()->all(), JSON_UNESCAPED_UNICODE),
                 'description' => mb_substr((string) $product->description, 0, 8000),
