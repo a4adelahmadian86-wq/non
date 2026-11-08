@@ -10,7 +10,7 @@ use App\Http\Controllers\StoreWishlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');
-Route::post('/store/product/{product}/reader/speech', [\\App\\Http\\Controllers\\StoreReaderSpeechController::class, 'speak'])->middleware(['auth', 'throttle:120,10'])->name('store.reader.speech');
+Route::post('/store/product/{product}/reader/speech', [\App\Http\Controllers\\StoreReaderSpeechController::class, 'speak'])->middleware(['auth', 'throttle:120,10'])->name('store.reader.speech');
 Route::middleware(['auth'])->group(function () {
     Route::get('/store/product/{product}/reader/pages/{page}', [StoreController::class, 'readerPage'])->whereNumber('page')->middleware('throttle:300,10')->name('store.reader.page');
     Route::get('/store/product/{product}/reader/audio/{document}', [StoreController::class, 'readerAudio'])->middleware('throttle:300,10')->name('store.reader.audio');
