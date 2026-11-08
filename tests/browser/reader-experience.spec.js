@@ -137,12 +137,12 @@ test.describe('FARAST sample reader interactions', () => {
       for (let y = Math.floor(height * 0.45); y < height; y += 3) {
         for (let x = 0; x < width; x += 3) {
           const offset = (y * width + x) * 4;
-          if (data[offset] < 220 && data[offset + 1] < 220 && data[offset + 2] < 220) darkPixels++;
+          if (data[offset] < 245 && data[offset + 1] < 245 && data[offset + 2] < 245) darkPixels++;
         }
       }
       return darkPixels;
     });
-    expect(watermarkPixels).toBeGreaterThan(10);
+    expect(watermarkPixels).toBeGreaterThan(50);
     const textSpan = root.locator('.farast-pdf-text-layer span').first();
     await expect(textSpan).toBeVisible();
     await expect(textSpan).toHaveCSS('user-select', 'none');
