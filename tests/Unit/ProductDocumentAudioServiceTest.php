@@ -69,7 +69,7 @@ class ProductDocumentAudioServiceTest extends TestCase
             'services.document_audio.voice_id' => 'farast-document-fa-male-37-v1',
         ]);
 
-        $pcm = str_repeat("\\0", 800);
+        $pcm = str_repeat("\0", 800);
         $format = pack('vvVVvv', 1, 1, 16000, 32000, 2, 16);
         $wav = 'RIFF'.pack('V', 36 + strlen($pcm)).'WAVEfmt '.pack('V', 16).$format.'data'.pack('V', strlen($pcm)).$pcm;
         Http::fake(['document-audio.example.test/*' => Http::response($wav, 200, ['Content-Type' => 'audio/wav'])]);
@@ -87,7 +87,7 @@ class ProductDocumentAudioServiceTest extends TestCase
     public function test_exact_text_snippets_reject_oversized_or_unconfigured_requests(): void
     {
         config(['services.document_audio.url' => '', 'services.document_audio.token' => '']);
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         app(ProductDocumentAudioService::class)->synthesizeSnippet('متن');
     }
 
