@@ -96,7 +96,7 @@ class AdminStoreController extends Controller
         return redirect()->route('admin.store.edit', $product)->with('status', 'محصول ایجاد شد؛ فایل اصلی را بارگذاری کنید.');
     }
 
-    public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder)
+    public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness)
     {
         $product->load(['files.document', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
@@ -105,10 +105,11 @@ class AdminStoreController extends Controller
 
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
             && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
-        $hasFullReaderAsset = $product->previews->contains(fn ($preview) => $preview->is_active && $preview->access_level === 'full');
+        $hasReadyReaderDocument = ($product->download_policy ?? 'signed') === 'reader_only'
+            && $publicationReadiness->hasReadyPrimaryReader($product);
         $contentReady = $product->type === 'course'
             ? ($product->course?->sections()->whereHas('lessons', fn ($query) => $query->publishable())->exists() ?? false)
-            : ($hasSafePrimaryFile && (($product->download_policy ?? 'signed') !== 'reader_only' || $hasFullReaderAsset));
+            : ($hasSafePrimaryFile && (($product->download_policy ?? 'signed') !== 'reader_only' || $hasReadyReaderDocument));
 
         $supervisorSettings = (array) data_get($product->metadata, 'ai_supervisor', []);
         $supervisorEnabled = (bool) data_get($supervisorSettings, 'enabled', false);
@@ -135,7 +136,7 @@ class AdminStoreController extends Controller
         return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh'));
     }
 
-    public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder)
+    public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness)
     {
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
@@ -145,7 +146,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $snapshotBuilder) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $snapshotBuilder, $publicationReadiness) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($data['type'] !== $lockedProduct->type) {
                 throw ValidationException::withMessages([
@@ -162,7 +163,7 @@ class AdminStoreController extends Controller
                     $snapshotMatches = is_array($lastReview)
                         && filled($lastReview['snapshot_hash'] ?? null)
                         && hash_equals((string) $lastReview['snapshot_hash'], $snapshotBuilder->fingerprint($snapshot));
-                    $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'seo_title', 'seo_description'];
+                    $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'download_policy', 'seo_title', 'seo_description'];
                     $reviewInputsChanged = collect($reviewFields)->contains(
                         fn ($field) => array_key_exists($field, $data)
                             && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
@@ -196,8 +197,10 @@ class AdminStoreController extends Controller
                         throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
                     }
                     $downloadPolicy = $data['download_policy'] ?? $lockedProduct->download_policy;
-                    if ($downloadPolicy === 'reader_only' && ! $lockedProduct->previews()->where('is_active', true)->where('access_level', 'full')->exists()) {
-                        throw ValidationException::withMessages(['status' => 'برای انتشار محصول فقط‌خواندنی، ابتدا محتوای کامل را در بخش خوانشگر بارگذاری کنید.']);
+                    if ($downloadPolicy === 'reader_only' && ! $publicationReadiness->hasReadyPrimaryReader($lockedProduct)) {
+                        throw ValidationException::withMessages([
+                            'status' => 'برای انتشار محصول فقط‌خواندنی، فایل اصلی باید استخراج کامل شده و صفحات کامل خوانشگر آن آماده باشند.',
+                        ]);
                     }
                 }
                 if (! $lockedProduct->published_at && empty($data['published_at'])) {
@@ -212,7 +215,7 @@ class AdminStoreController extends Controller
             $metadata = $data['metadata'] ?? $lockedProduct->metadata ?? [];
             $previousSupervisorSettings = (array) data_get($lockedProduct->metadata, 'ai_supervisor', []);
             $nextSupervisorSettings = (array) data_get($metadata, 'ai_supervisor', []);
-            $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'seo_title', 'seo_description'];
+            $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'download_policy', 'seo_title', 'seo_description'];
             $reviewInputsChanged = collect($reviewFields)->contains(
                 fn ($field) => array_key_exists($field, $data)
                     && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
@@ -376,12 +379,32 @@ class AdminStoreController extends Controller
         }
 
         try {
-            $fileRecord = DB::transaction(function () use ($product, $ingestion, $inspection, $finalPath) {
+            [$fileRecord, $productRequiresRepublish] = DB::transaction(function () use ($product, $ingestion, $inspection, $finalPath) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $lockedIngestion = StoreProductIngestion::query()->whereKey($ingestion->id)->lockForUpdate()->firstOrFail();
                 abort_unless($lockedIngestion->status === 'inspected' && $lockedIngestion->expires_at?->isFuture(), 409, 'این مرحله قبلاً تأیید یا منقضی شده است.');
 
+                $productRequiresRepublish = false;
                 if ($lockedIngestion->is_primary) {
+                    $supervisorSettings = (array) data_get($lockedProduct->metadata, 'ai_supervisor', []);
+                    $reviewGateEnabled = (bool) ($supervisorSettings['enabled'] ?? false)
+                        && ($supervisorSettings['mode'] ?? 'suggest') === 'review_gate';
+
+                    $metadata = (array) ($lockedProduct->metadata ?? []);
+                    if (isset($metadata['ai_supervisor']) && is_array($metadata['ai_supervisor'])) {
+                        unset($metadata['ai_supervisor']['last_review'], $metadata['ai_supervisor']['last_reviewed_at']);
+                        $lockedProduct->metadata = $metadata;
+                    }
+
+                    $productRequiresRepublish = $lockedProduct->status === 'published'
+                        && (($lockedProduct->download_policy ?? 'signed') === 'reader_only' || $reviewGateEnabled);
+                    if ($productRequiresRepublish) {
+                        $lockedProduct->status = 'draft';
+                        $lockedProduct->published_at = null;
+                    }
+                    if ($productRequiresRepublish || isset($metadata['ai_supervisor'])) {
+                        $lockedProduct->save();
+                    }
                     $lockedProduct->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
                     StoreProductPreview::query()
                         ->where('product_id', $lockedProduct->id)
@@ -433,8 +456,16 @@ class AdminStoreController extends Controller
                     'sha256' => $record->sha256,
                     'security_engine' => 'farast_static_v1',
                 ]);
+                if ($productRequiresRepublish) {
+                    $this->audit('store.product.unpublished_for_primary_file_replacement', $lockedProduct, [
+                        'reason' => ($lockedProduct->download_policy ?? 'signed') === 'reader_only'
+                            ? 'reader_rebuild_required'
+                            : 'supervisor_review_required',
+                        'file_id' => $record->id,
+                    ]);
+                }
 
-                return $record;
+                return [$record, $productRequiresRepublish];
             });
         } catch (Throwable $exception) {
             $disk->delete($finalPath);
@@ -473,7 +504,13 @@ class AdminStoreController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'فایل پس از تأیید شما در فضای خصوصی فروشگاه ذخیره شد.',
+            'message' => $productRequiresRepublish
+                ? 'فایل ذخیره شد؛ محصول برای آماده‌سازی دوباره خوانشگر یا بررسی ناظر به پیش‌نویس برگشت.'
+                : 'فایل پس از تأیید شما در فضای خصوصی فروشگاه ذخیره شد.',
+            'product' => [
+                'status' => $product->fresh()->status,
+                'requires_republish' => $productRequiresRepublish,
+            ],
             'file' => [
                 'id' => $fileRecord->id,
                 'name' => $fileRecord->original_name,

@@ -31,7 +31,7 @@
             @php($thumb = $p->cover_path ?: $p->images->where('is_active', true)->first()?->path)
             @if($thumb)<img src="{{ asset($thumb) }}" alt="" loading="lazy">@else<span class="product-index-placeholder"><i class="fa-solid fa-box"></i></span>@endif
             <span><strong>{{ $p->title }}</strong>
-              <small>{{ $p->type === 'course' ? 'دوره آموزشی' : 'فایل دانلودی' }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
+              <small>{{ $p->type === 'course' ? 'دوره آموزشی' : ((($p->download_policy ?? 'signed') === 'reader_only') ? 'فایل · فقط مطالعه آنلاین' : 'فایل دانلودی') }} · {{ $p->sku }} · {{ $p->category?->name }} · {{ $p->status }} · {{ number_format($p->price_rials/10) }} تومان · {{ $p->files->where('purpose','product_download')->count() }} فایل</small>
               @if($p->tags->isNotEmpty())<small class="product-index-tags">{{ $p->tags->pluck('name')->take(4)->implode('، ') }}</small>@endif
             </span>
           </div>
