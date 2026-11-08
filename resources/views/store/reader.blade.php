@@ -141,6 +141,6 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261108secure-reader7"></script>
+<script src="/js/farast-reader.js?v=20261108audio2"></script>
 <script src="/js/farast-reader-audio.js?v=20261108audio1" defer></script>
 @endpush
