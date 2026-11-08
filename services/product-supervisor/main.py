@@ -154,7 +154,7 @@ async def review_product_file(
     groq_failures = 0
 
     if inspection.image_bytes:
-        if os.getenv("GROQ_API_KEY"):
+        if os.getenv("GROQ_API_KEY") and os.getenv("GROQ_ZDR_CONFIRMED", "").strip().lower() in {"1", "true", "yes"}:
             try:
                 visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg", {"title": redact_sensitive_content(product_title)[0], "category": redact_sensitive_content(category_name or "")[0], "tags": [redact_sensitive_content(tag)[0] for tag in tags]})
                 provider_status["groq_vision"] = "completed"
@@ -163,10 +163,10 @@ async def review_product_file(
                 warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ نتیجه‌ای درباره تصویر فرض نشده است.")
         else:
             provider_status["groq_vision"] = "not_configured"
-            warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصویر انجام نشد.")
+            warnings.append("تحلیل تصویر تا زمان تأیید فعال‌بودن Zero Data Retention برای حساب Groq غیرفعال است.")
 
     if inspection.audio_bytes:
-        if os.getenv("GROQ_API_KEY"):
+        if os.getenv("GROQ_API_KEY") and os.getenv("GROQ_ZDR_CONFIRMED", "").strip().lower() in {"1", "true", "yes"}:
             try:
                 transcription = await transcribe_audio_with_groq(inspection.audio_bytes, inspection.audio_filename or "upload.audio")
                 provider_status["groq_transcription"] = "completed"
@@ -175,7 +175,7 @@ async def review_product_file(
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی نشده است.")
         else:
             provider_status["groq_transcription"] = "not_configured"
-            warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
+            warnings.append("تبدیل صوت تا زمان تأیید فعال‌بودن Zero Data Retention برای حساب Groq غیرفعال است.")
 
     groq_statuses = [provider_status["groq_vision"], provider_status["groq_transcription"]]
     if "completed" in groq_statuses:
