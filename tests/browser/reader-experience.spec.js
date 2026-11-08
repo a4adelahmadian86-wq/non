@@ -534,6 +534,64 @@ test.describe('FARAST sample reader interactions', () => {
     expect(await page.evaluate(() => window.__snippetRequests)).toBe(0);
   });
 
+
+  test('keeps one full-document audio source and timeline continuous when the reader changes pages', async ({ page }) => {
+    await page.addInitScript(() => {
+      class FakeAudio extends EventTarget {
+        constructor() {
+          super();
+          this.currentTime = 0;
+          this.duration = 2;
+          this.paused = true;
+          this.seeking = false;
+          this.playbackRate = 1;
+          this.volume = 1;
+          this.src = '';
+          this.loadCount = 0;
+          window.__fakeReaderAudio = this;
+        }
+        setAttribute() {}
+        load() { this.loadCount += 1; this.dispatchEvent(new Event('loadedmetadata')); }
+        play() { this.paused = false; this.dispatchEvent(new Event('play')); return Promise.resolve(); }
+        pause() { if (!this.paused) { this.paused = true; this.dispatchEvent(new Event('pause')); } }
+      }
+      window.Audio = FakeAudio;
+    });
+    await page.goto('/');
+    const timings = [
+      { text: 'صفحه اول', start: 0.1, end: 0.4, page: 1, alignment_quality: 'phoneme', words: [
+        { text: 'صفحه', start: 0.1, end: 0.2 }, { text: 'اول', start: 0.2, end: 0.4 }
+      ] },
+      { text: 'صفحه دوم', start: 0.5, end: 0.9, page: 2, alignment_quality: 'phoneme', words: [
+        { text: 'صفحه', start: 0.5, end: 0.65 }, { text: 'دوم', start: 0.65, end: 0.9 }
+      ] }
+    ];
+    const encodedTimings = JSON.stringify(timings).replace(/"/g, '&quot;');
+    await page.setContent(
+      '<section class="farast-reader" data-reader-root data-reader-mode="document" ' +
+        'data-reader-audio-url="/reader-full.wav" data-reader-audio-timing="' + encodedTimings + '">' +
+        '<input id="reader-page-number" value="1">' +
+        '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-audio-url="/reader-full.wav"></article>' +
+        '<article class="farast-reader-page-item" data-index="1" data-reader-page="2" data-audio-url="/reader-full.wav"></article>' +
+      '</section>'
+    );
+    await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+
+    const before = await page.evaluate(() => {
+      const audio = window.__fakeReaderAudio;
+      audio.currentTime = 0.6;
+      audio.play();
+      audio.dispatchEvent(new Event('timeupdate'));
+      document.querySelector('[data-reader-root]').dispatchEvent(
+        new CustomEvent('farast:reader-section-change', { detail: { section: 1 } })
+      );
+      return { currentTime: audio.currentTime, paused: audio.paused, loads: audio.loadCount };
+    });
+    expect(before.currentTime).toBe(0.6);
+    expect(before.paused).toBe(false);
+    expect(before.loads).toBe(1);
+  });
+
 });
 
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
