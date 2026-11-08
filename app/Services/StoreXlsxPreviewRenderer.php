@@ -76,11 +76,11 @@ class StoreXlsxPreviewRenderer
 
                     $sheetPath = $this->normalizeWorksheetPath($target);
                     $xml = $this->loadXml($zip, $sheetPath, 20 * 1024 * 1024);
-                    $rows = $this->readWorksheet($xml, $sharedStrings, $styles, $cellCount);
+                    $sheetData = $this->readWorksheet($xml, $sharedStrings, $styles, $cellCount);
                     $name = $this->escape($sheet->getAttribute('name') ?: 'Sheet '.($sheetIndex + 1));
                     $sheetId = 'sheet-'.($sheetIndex + 1);
                     $tabs[] = '<a href="#'.$sheetId.'">'.$name.'</a>';
-                    $tables[] = '<section class="sheet" id="'.$sheetId.'"><h2>'.($sheetIndex + 1).'. '.$name.'</h2>'.$this->table($rows).'</section>';
+                    $tables[] = '<section class="sheet" id="'.$sheetId.'"><h2>'.($sheetIndex + 1).'. '.$name.'</h2>'.$this->table($sheetData).'</section>';
                 }
 
                 if ($tables === []) {
@@ -395,7 +395,39 @@ class StoreXlsxPreviewRenderer
     private function readWorksheet(DOMDocument $xml, array $sharedStrings, array $styles, int &$cellCount): array
     {
         $rows = [];
+        $widths = [];
+        $heights = [];
+        $merges = [];
+        $covered = [];
         $xpath = new DOMXPath($xml);
+
+        foreach ($xpath->query('//*[local-name()="cols"]/*[local-name()="col"]') as $columnNode) {
+            if (!$columnNode instanceof DOMElement) continue;
+            $min = filter_var($columnNode->getAttribute('min'), FILTER_VALIDATE_INT);
+            $max = filter_var($columnNode->getAttribute('max'), FILTER_VALIDATE_INT);
+            $width = is_numeric($columnNode->getAttribute('width')) ? (float) $columnNode->getAttribute('width') : 0;
+            if ($min === false || $max === false || $min < 1 || $max < $min || $max > self::MAX_COLUMNS || $width <= 0) continue;
+            $pixels = (int) max(30, min(420, round($width * 7 + 5)));
+            for ($column = $min; $column <= $max; $column++) $widths[$column] = $pixels;
+        }
+
+        foreach ($xpath->query('//*[local-name()="mergeCells"]/*[local-name()="mergeCell"]') as $mergeNode) {
+            if (!$mergeNode instanceof DOMElement || !preg_match('/^([A-Z]{1,3})([1-9][0-9]*):([A-Z]{1,3})([1-9][0-9]*)$/i', $mergeNode->getAttribute('ref'), $match)) continue;
+            $startColumn = $this->columnIndex(strtoupper($match[1]));
+            $startRow = (int) $match[2];
+            $endColumn = $this->columnIndex(strtoupper($match[3]));
+            $endRow = (int) $match[4];
+            if ($startColumn < 1 || $startRow < 1 || $endColumn < $startColumn || $endRow < $startRow
+                || $endColumn > self::MAX_COLUMNS || $endRow > self::MAX_ROWS) continue;
+            $key = $startRow.':'.$startColumn;
+            $merges[$key] = ['colspan' => $endColumn - $startColumn + 1, 'rowspan' => $endRow - $startRow + 1];
+            for ($rowNumber = $startRow; $rowNumber <= $endRow; $rowNumber++) {
+                for ($column = $startColumn; $column <= $endColumn; $column++) {
+                    if ($rowNumber !== $startRow || $column !== $startColumn) $covered[$rowNumber.':'.$column] = true;
+                }
+            }
+        }
+
         $rowNodes = $xpath->query('//*[local-name()="sheetData"]/*[local-name()="row"]');
         if (!$rowNodes || $rowNodes->length > self::MAX_ROWS) {
             throw new RuntimeException('Worksheet row count exceeds the limit.');
@@ -409,6 +441,8 @@ class StoreXlsxPreviewRenderer
             if ($rowNumber < 1 || $rowNumber > self::MAX_ROWS) {
                 continue;
             }
+            $height = is_numeric($rowNode->getAttribute('ht')) ? (float) $rowNode->getAttribute('ht') : 0;
+            if ($height > 0 && $rowNode->getAttribute('customHeight') === '1') $heights[$rowNumber] = (int) max(16, min(300, round($height * 1.333)));
             $row = [];
             foreach ($xpath->query('./*[local-name()="c"]', $rowNode) as $cell) {
                 if (!$cell instanceof DOMElement) {
@@ -421,7 +455,8 @@ class StoreXlsxPreviewRenderer
                     continue;
                 }
                 $column = $this->columnIndex($match[1]);
-                if ($column < 1 || $column > self::MAX_COLUMNS || (int) $match[2] > self::MAX_ROWS) {
+                $cellRow = (int) $match[2];
+                if ($column < 1 || $column > self::MAX_COLUMNS || $cellRow > self::MAX_ROWS || isset($covered[$cellRow.':'.$column])) {
                     continue;
                 }
 
@@ -457,7 +492,7 @@ class StoreXlsxPreviewRenderer
 
         ksort($rows);
 
-        return $rows;
+        return ['rows' => $rows, 'widths' => $widths, 'heights' => $heights, 'merges' => $merges, 'covered' => $covered];
     }
 
     /**
@@ -529,27 +564,39 @@ class StoreXlsxPreviewRenderer
         return $index;
     }
 
-    private function table(array $rows): string
+    private function table(array $sheetData): string
     {
+        $rows = $sheetData['rows'] ?? [];
         if ($rows === []) {
             return '<p class="notice">این برگه داده قابل‌نمایشی ندارد.</p>';
         }
 
-        $maxColumn = 1;
-        foreach ($rows as $row) {
-            $maxColumn = max($maxColumn, max(array_keys($row)));
+        $widths = $sheetData['widths'] ?? [];
+        $heights = $sheetData['heights'] ?? [];
+        $merges = $sheetData['merges'] ?? [];
+        $covered = $sheetData['covered'] ?? [];
+        $maxColumn = max(1, max(array_map(fn ($row) => max(array_keys($row)), $rows)));
+        foreach ($merges as $merge) $maxColumn = max($maxColumn, 1 + (int) ($merge['colspan'] ?? 1));
+        $html = '<div class="table-wrap"><table><colgroup><col style="width:42px">';
+        for ($column = 1; $column <= $maxColumn; $column++) {
+            $html .= '<col'.(isset($widths[$column]) ? ' style="width:'.(int) $widths[$column].'px"' : '').'>';
         }
-        $html = '<div class="table-wrap"><table><thead><tr><th>ردیف</th>';
+        $html .= '</colgroup><thead><tr><th>ردیف</th>';
         for ($column = 1; $column <= $maxColumn; $column++) {
             $html .= '<th>'.$this->columnLabel($column).'</th>';
         }
         $html .= '</tr></thead><tbody>';
         foreach ($rows as $number => $row) {
-            $html .= '<tr><td class="rownum">'.$number.'</td>';
+            $html .= '<tr'.(isset($heights[$number]) ? ' style="height:'.(int) $heights[$number].'px"' : '').'><td class="rownum">'.$number.'</td>';
             for ($column = 1; $column <= $maxColumn; $column++) {
+                if (isset($covered[$number.':'.$column])) continue;
                 $cell = $row[$column] ?? ['value' => '', 'style' => ''];
                 $style = (string) ($cell['style'] ?? '');
-                $html .= '<td'.($style !== '' ? ' style="'.$style.'"' : '').'>'.$this->escape((string) ($cell['value'] ?? '')).'</td>';
+                $merge = $merges[$number.':'.$column] ?? [];
+                $span = '';
+                if (($merge['colspan'] ?? 1) > 1) $span .= ' colspan="'.(int) $merge['colspan'].'"';
+                if (($merge['rowspan'] ?? 1) > 1) $span .= ' rowspan="'.(int) $merge['rowspan'].'"';
+                $html .= '<td'.$span.($style !== '' ? ' style="'.$style.'"' : '').'>'.$this->escape((string) ($cell['value'] ?? '')).'</td>';
             }
             $html .= '</tr>';
         }
