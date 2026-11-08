@@ -3,7 +3,7 @@
 @php
   $readerWatermark = trim((string) ($readerIdentity ?? ('کاربر #'.auth()->id())));
 @endphp
-<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
+<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" data-reader-mode="{{ $readerMode ?? 'sample' }}" data-reader-audio-url="{{ $readerAudioUrl ?? '' }}" @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
   <header class="farast-reader-header">
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
@@ -59,6 +59,8 @@
             <span class="farast-reader-thumb-preview">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <i class="fa-solid fa-file-pdf"></i><small>PDF</small>
+              @elseif(($preview->kind ?? '') === 'reader_document')
+                <i class="fa-solid fa-file-lines" style="color:#4c8dff"></i><small>{{ $preview->page_label ?? 'متن' }}</small>
               @elseif(($preview->kind ?? '') === 'docx')
                 <i class="fa-solid fa-file-word"></i><small>Word</small>
               @elseif(in_array(($preview->kind ?? ''), ['xlsx', 'html'], true))
@@ -67,7 +69,7 @@
                 <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
               @endif
             </span>
-            <span>بخش {{ $preview->page_number ?: $i+1 }}</span>
+            <span>{{ ($preview->kind ?? '') === 'reader_document' ? ($preview->page_label ?? ('بخش '.($i+1))) : 'بخش '.($preview->page_number ?: $i+1) }}</span>
           </button>
         @endforeach
       </div>
@@ -80,9 +82,14 @@
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
       <div class="farast-reader-pages" id="reader-pages">
         @foreach($previews as $i => $preview)
-          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}" @if($preview->audio_path) data-audio-url="{{ route('store.preview.audio',$preview) }}" data-audio-timing="{{ json_encode($preview->audio_timing ?? [], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP) }}" @endif>
+          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}" @if(($preview->kind ?? '') === 'reader_document') data-reader-page="{{ $preview->page_number }}" data-reader-page-url="{{ $preview->reader_page_url }}" @endif @if(!empty($preview->audio_path)) data-audio-url="{{ route('store.preview.audio',$preview) }}" data-audio-timing="{{ json_encode($preview->audio_timing ?? [], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP) }}" @endif>
             <div class="farast-reader-page-content">
-              @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
+              @if(($preview->kind ?? '') === 'reader_document')
+                <div class="farast-pdf-document farast-reader-document" data-reader-document-page aria-label="محتوای متنی صفحه">
+                  <div class="farast-pdf-loading" role="status">در حال دریافت محتوای مجاز این صفحه…</div>
+                  <div class="farast-pdf-text-layer" data-reader-text-layer></div>
+                </div>
+              @elseif(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <div class="farast-pdf-document" data-pdf-url="{{ route('store.preview',$preview) }}" aria-label="نمایش سند PDF">
                   <canvas class="farast-pdf-canvas"></canvas>
                   <div class="farast-pdf-text-layer"></div>
@@ -139,10 +146,14 @@
 @media(prefers-reduced-motion:reduce){.farast-reader-progress span{transition:none}}
 @media print{body *{visibility:hidden!important}.farast-reader-print-block{display:block!important;visibility:visible!important;position:fixed;inset:0;padding:48px 28px;background:#fff;color:#111;text-align:center;font-size:20px;line-height:2}.farast-reader-print-block *{visibility:visible!important}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.farast-reader-document{width:min(100%,900px);min-height:70vh;padding:clamp(22px,5vw,64px);display:block;overflow:visible;border-radius:5px;background:#fff;color:#1f2937;box-shadow:0 18px 60px rgba(0,0,0,.32)}.farast-reader-document .farast-pdf-loading{position:static;min-height:280px}.farast-reader-document .farast-pdf-text-layer{pointer-events:auto;opacity:1}.farast-reader-document .reader-document-line{font-family:inherit;font-size:clamp(14px,1.2vw,17px);margin:0 0 7px;text-align:justify}.farast-reader-document .reader-document-line.is-audio-active{background:rgba(255,216,80,.34);border-radius:3px}.farast-reader-document .reader-document-empty{color:#64748b;font-size:.9rem}.farast-document-html-heading{font-weight:800;color:#64748b;font-size:.78rem;margin-bottom:18px;border-bottom:1px solid #e2e8f0;padding-bottom:8px}.farast-reader-audio{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--reader-panel);border-bottom:1px solid var(--reader-line);color:var(--reader-text);font-size:.72rem}.farast-reader-audio[hidden]{display:none}.farast-reader-audio button{width:36px;height:36px;border:0;border-radius:50%;background:#3478d0;color:#fff;cursor:pointer}.farast-reader-audio input[type=range]{flex:1;min-width:70px;accent-color:#3478d0}.farast-reader-audio select{border:1px solid var(--reader-line);border-radius:8px;background:transparent;color:var(--reader-text);padding:6px}.farast-reader-audio-status{color:var(--reader-muted);white-space:nowrap}.farast-reader-audio [data-audio-current],.farast-reader-audio [data-audio-duration]{font-variant-numeric:tabular-nums;min-width:42px;text-align:center}
+
 </style>
 @endpush
 
 @push('scripts')
 <script src="/js/farast-reader.js?v=20261108audio3"></script>
 <script src="/js/farast-reader-audio.js?v=20261108audio3" defer></script>
+<script src="/js/farast-reader-document.js?v=20261108reader-pages1" defer></script>
+<script src="/js/farast-reader-document-audio.js?v=20261108reader-audio1" defer></script>
 @endpush

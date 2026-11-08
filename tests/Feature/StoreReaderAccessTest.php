@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
+use App\Models\StoreProductFile;
+use App\Models\StoreProductDocument;
 use App\Models\StoreLibraryItem;
 use App\Models\Order;
 use App\Models\User;
@@ -145,10 +147,9 @@ class StoreReaderAccessTest extends TestCase
         $this->assertSame('%PDF-1.4 sample', $previewResponse->streamedContent());
     }
 
-    public function test_reader_only_purchase_unlocks_full_content_without_issuing_a_download(): void
+    public function test_reader_only_purchase_unlocks_page_text_but_never_the_original_file_or_download(): void
     {
         [$product, $sample] = $this->makePreviewFixture();
-        Storage::disk('private')->put('store/previews/sample/full.pdf', '%PDF-1.4 full');
         $full = StoreProductPreview::create([
             'product_id' => $product->id,
             'disk' => 'private',
@@ -182,15 +183,63 @@ class StoreReaderAccessTest extends TestCase
             'granted_at' => now(),
         ]);
 
-        $this->actingAs($user)->get(route('store.reader', $product->slug))
-            ->assertOk()
-            ->assertSee(route('store.preview', $full))
-            ->assertDontSee(route('store.preview', $sample));
-        $fullResponse = $this->actingAs($user)->get(route('store.preview', $full));
-        $fullResponse->assertOk();
-        $this->assertSame('%PDF-1.4 full', $fullResponse->streamedContent());
-        $this->actingAs($user)->post(route('library.download.issue', $libraryItem))
-            ->assertForbidden();
+        $originalBytes = '%PDF-1.4 original private file';
+        Storage::disk('private')->put('store/products/'.$product->id.'/full.pdf', $originalBytes);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/full.pdf',
+            'original_name' => 'full.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen($originalBytes),
+            'sha256' => hash('sha256', $originalBytes),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $file->sha256,
+            'processing_status' => 'completed',
+            'detected_type' => 'pdf',
+            'page_count' => 1,
+            'structure_json' => [
+                'reader' => ['ready' => true, 'page_count' => 1],
+                'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
+            ],
+        ]);
+        $document->pages()->create([
+            'page_number' => 1,
+            'page_kind' => 'pdf_page',
+            'locator_key' => 'page:1',
+            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'content_text' => 'متن مجاز صفحه اول کتاب',
+            'content_html' => '<section><p>متن مجاز صفحه اول کتاب</p></section>',
+            'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
+            'has_extracted_text' => true,
+        ]);
+
+        $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
+        $readerResponse->assertOk()
+            ->assertSee('data-reader-mode="document"', false)
+            ->assertSee(route('store.reader.page', [$product, 1]), false)
+            ->assertDontSee(route('store.preview', $full), false)
+            ->assertDontSee($originalBytes, false);
+
+        $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
+        $pageResponse->assertOk()
+            ->assertJsonPath('page_number', 1)
+            ->assertJsonPath('content_text', 'متن مجاز صفحه اول کتاب')
+            ->assertJsonMissingPath('path')
+            ->assertJsonMissingPath('disk');
+
+        $this->actingAs($user)->get(route('store.preview', $full))->assertNotFound();
+        $this->actingAs($user)->post(route('library.download.issue', $libraryItem))->assertForbidden();
     }
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void
