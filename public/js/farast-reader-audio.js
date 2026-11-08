@@ -183,10 +183,13 @@
     }
     const item = found >= 0 ? timings[found] : null;
     if (item && item.page !== activePage) {
-      activePage = item.page;
       const now = performance.now();
+      // Keep the rendered page as the source of truth while throttled. If we
+      // assign activePage before the request is sent, a fast page transition
+      // can be swallowed permanently by this throttle.
       if (now - lastPageRequest > 350) {
         lastPageRequest = now;
+        activePage = item.page;
         const input = root.querySelector('#reader-page-number');
         if (input) { input.value = String(activePage); input.dispatchEvent(new Event('change', { bubbles: true })); }
       }
