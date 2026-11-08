@@ -1,0 +1,23 @@
+/* FARAST unified interaction layer — additive and page-agnostic. */
+:root{--farast-focus-ring:0 0 0 3px rgba(37,105,232,.22)}
+html{scroll-behavior:smooth;scroll-padding-top:92px}
+body{overscroll-behavior-y:contain}
+a,button,input,textarea,select,[role="button"]{-webkit-tap-highlight-color:transparent}
+:where(a,button,input,textarea,select,[role="button"],summary):focus-visible{outline:3px solid rgba(37,105,232,.32);outline-offset:3px}
+.main-nav>a[aria-current="page"]{background:#edf4ff!important;color:#1d61c9!important}
+.main-nav>a[aria-current="page"]{font-weight:800}
+.main-nav>a[aria-current="page"] i{color:#246ce2}
+.header-icon-button:focus-visible,.mobile-nav-toggle:focus-visible,.header-cta:focus-visible{outline:3px solid rgba(37,105,232,.28);outline-offset:3px}
+:where(.home-pathway,.home-product-card,.home-service-card,.store-product-card,.farast-product-card,.user-dashboard__panel){min-width:0}
+.home-pathway,.home-product-card,.home-service-card,.store-product-card,.farast-product-card{overflow-wrap:anywhere}
+:where(.home-pathway,.home-product-card,.home-service-card,.store-product-card,.farast-product-card) :where(a,button){touch-action:manipulation}
+:where(.store-search input,.header-search input,.store-filter-select):focus-visible{outline:none;box-shadow:0 0 0 3px rgba(37,105,232,.14)}
+:where(.store-search,.store-toolbar,.home-discovery,.home-products,.home-service-showcase){scroll-margin-top:100px}
+@media(max-width:760px){
+  html{scroll-padding-top:76px}
+  .premium-header{position:sticky}
+  .home-pathway,.home-product-card,.home-service-card,.store-product-card{scroll-margin-bottom:90px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+}
