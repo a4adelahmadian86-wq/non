@@ -82,12 +82,21 @@ class StoreReaderAccessTest extends TestCase
         ]);
     }
 
-    public function test_guest_cannot_open_reader_or_fetch_a_preview_asset(): void
+    public function test_guest_can_read_public_samples_with_ip_watermark(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
+        $guestIp = '203.0.113.45';
 
-        $this->get(route('store.reader', $product->slug))->assertRedirect(route('login'));
-        $this->get(route('store.preview', $preview))->assertRedirect(route('login'));
+        $this->withServerVariables(['REMOTE_ADDR' => $guestIp])
+            ->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee($guestIp)
+            ->assertSee('farast-reader-watermark');
+
+        $this->withServerVariables(['REMOTE_ADDR' => $guestIp])
+            ->get(route('store.preview', $preview))
+            ->assertOk()
+            ->assertSee('%PDF-1.4 sample');
     }
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void
@@ -132,14 +141,15 @@ class StoreReaderAccessTest extends TestCase
         $layout = $layoutMethod->invoke(app(\App\Http\Controllers\StoreController::class), $temporary);
         $this->assertGreaterThan($layout['height'], $layout['width']);
 
-        Storage::disk('private')->put('store/previews/sample/preview.docx', file_get_contents($temporary));
+        $preparedPdf = app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview(file_get_contents($temporary));
+        Storage::disk('private')->put('store/previews/sample/prepared-word.pdf', $preparedPdf);
         @unlink($temporary);
         @unlink($imagePath);
 
         $preview->update([
-            'path' => 'store/previews/sample/preview.docx',
-            'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'kind' => 'docx',
+            'path' => 'store/previews/sample/prepared-word.pdf',
+            'mime' => 'application/pdf',
+            'kind' => 'pdf',
         ]);
 
         $response = $this->actingAs($this->makeReaderUser())->get(route('store.preview', $preview));
@@ -210,11 +220,12 @@ class StoreReaderAccessTest extends TestCase
     public function test_xlsx_preview_is_served_as_sandboxable_read_only_html_with_watermark(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
-        Storage::disk('private')->put('store/previews/sample/workbook.xlsx', $this->makeXlsxBytes());
+        $preparedHtml = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($this->makeXlsxBytes(), 'FARAST_READER_IDENTITY_TOKEN');
+        Storage::disk('private')->put('store/previews/sample/workbook.html', $preparedHtml);
         $preview->update([
-            'path' => 'store/previews/sample/workbook.xlsx',
-            'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'kind' => 'xlsx',
+            'path' => 'store/previews/sample/workbook.html',
+            'mime' => 'text/html',
+            'kind' => 'html',
         ]);
         $user = $this->makeReaderUser();
 
@@ -228,7 +239,7 @@ class StoreReaderAccessTest extends TestCase
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
         $response->assertOk()
             ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->assertHeader('Content-Disposition', 'inline; filename="farast-excel-preview.html"')
+            ->assertHeader('Content-Disposition', 'inline; filename="farast-workbook-preview.html"')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
 
         $response->assertSee('09123456789')
