@@ -637,6 +637,9 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
           <div data-reader-text-layer></div>
         </div>
       </article>
+      <article class="farast-reader-page-item" data-index="1" data-reader-page="2" data-reader-page-url="/protected-word-page-2">
+        <div data-reader-document-page><div class="farast-pdf-loading" role="status">loading</div><div data-reader-text-layer></div></div>
+      </article>
     </section>
   `);
   await page.route('**/protected-word-page', route => route.fulfill({
@@ -657,6 +660,18 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
       content_sha256: 'word-fixture-hash'
     })
   }));
+  await page.route('**/protected-word-page-2', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      page_number: 2,
+      page_kind: 'section',
+      label: 'بخش ۲',
+      content_text: 'صفحه دوم',
+      content_blocks: [{ type: 'paragraph', text: 'متن صفحه دوم' }],
+      content_sha256: 'word-fixture-page-two'
+    })
+  }));
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
   await expect(page.locator('[data-reader-text-layer] h1')).toHaveText('فصل اول');
   await expect(page.locator('[data-reader-text-layer] p')).toHaveText('متن توضیحی');
@@ -668,6 +683,8 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
   await expect(table.locator('tbody tr').nth(1)).toHaveClass(/reader-document-line/);
   await expect(table.locator('tbody tr').nth(1)).toHaveAttribute('data-reader-speech-text', 'محتوا | <img src=x onerror=alert(1)>');
   await expect(page.locator('.reader-document-word').first()).toBeVisible();
+  await page.locator('[data-reader-root]').dispatchEvent('farast:reader-section-change', { detail: { section: 1 } });
+  await expect(page.locator('.farast-reader-page-item[data-index="1"] .reader-document-paragraph')).toHaveText('متن صفحه دوم');
   await expect(table.locator('img')).toHaveCount(0);
 });
 
