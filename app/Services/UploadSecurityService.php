@@ -19,7 +19,7 @@ class UploadSecurityService
     ];
 
     private array $allowedExtensions = [
-        'pdf','zip','docx','xlsx','pptx','txt','csv','md',
+        'pdf','zip','tar','tar.gz','tar.bz2','docx','xlsx','pptx','txt','csv','md',
         'jpg','jpeg','png','webp','gif','mp3','wav','ogg','flac','m4a','mp4','webm','mov',
     ];
 
@@ -59,7 +59,7 @@ class UploadSecurityService
         if (! is_resource($handle)) {
             throw new RuntimeException('upload_read_failed');
         }
-        $header = fread($handle, 32) ?: '';
+        $header = fread($handle, 512) ?: '';
         fclose($handle);
 
         $inspection = [
@@ -85,36 +85,40 @@ class UploadSecurityService
         }
 
         if ($inspection['detected_type'] === 'archive') {
-            $archive = $this->inspectZip($absolutePath);
-            $members = array_column($archive['archive_entries'], 'name');
-            $requiredOfficeMembers = [
-                'docx' => ['[Content_Types].xml', 'word/document.xml'],
-                'xlsx' => ['[Content_Types].xml', 'xl/workbook.xml'],
-                'pptx' => ['[Content_Types].xml', 'ppt/presentation.xml'],
-            ];
-            if (isset($requiredOfficeMembers[$extension])) {
-                foreach ($requiredOfficeMembers[$extension] as $requiredMember) {
-                    if (! in_array($requiredMember, $members, true)) {
-                        throw new RuntimeException('upload_office_container_invalid');
+            if (in_array($extension, ['zip','docx','xlsx','pptx'], true)) {
+                $archive = $this->inspectZip($absolutePath);
+                $members = array_column($archive['archive_entries'], 'name');
+                $requiredOfficeMembers = [
+                    'docx' => ['[Content_Types].xml', 'word/document.xml'],
+                    'xlsx' => ['[Content_Types].xml', 'xl/workbook.xml'],
+                    'pptx' => ['[Content_Types].xml', 'ppt/presentation.xml'],
+                ];
+                if (isset($requiredOfficeMembers[$extension])) {
+                    foreach ($requiredOfficeMembers[$extension] as $requiredMember) {
+                        if (! in_array($requiredMember, $members, true)) {
+                            throw new RuntimeException('upload_office_container_invalid');
+                        }
+                    }
+                    if (in_array('word/vbaProject.bin', $members, true) || in_array('xl/vbaProject.bin', $members, true) || in_array('ppt/vbaProject.bin', $members, true)) {
+                        throw new RuntimeException('upload_office_macro_rejected');
+                    }
+                    $inspection['detected_type'] = 'office';
+                    if ($extension === 'xlsx') {
+                        $inspection['sheet_count'] = count(array_filter($members, static fn ($name) => preg_match('~^xl/worksheets/sheet[0-9]+\\.xml$~i', $name) === 1));
+                    } elseif ($extension === 'pptx') {
+                        $inspection['page_count'] = count(array_filter($members, static fn ($name) => preg_match('~^ppt/slides/slide[0-9]+\\.xml$~i', $name) === 1));
+                        $inspection['page_count_label'] = 'تعداد اسلاید';
+                    } elseif ($extension === 'docx') {
+                        $inspection['document_parts'] = [
+                            'headers' => count(array_filter($members, static fn ($name) => str_starts_with($name, 'word/header') && str_ends_with($name, '.xml'))),
+                            'footers' => count(array_filter($members, static fn ($name) => str_starts_with($name, 'word/footer') && str_ends_with($name, '.xml'))),
+                            'footnotes' => in_array('word/footnotes.xml', $members, true),
+                            'endnotes' => in_array('word/endnotes.xml', $members, true),
+                        ];
                     }
                 }
-                if (in_array('word/vbaProject.bin', $members, true) || in_array('xl/vbaProject.bin', $members, true) || in_array('ppt/vbaProject.bin', $members, true)) {
-                    throw new RuntimeException('upload_office_macro_rejected');
-                }
-                $inspection['detected_type'] = 'office';
-                if ($extension === 'xlsx') {
-                    $inspection['sheet_count'] = count(array_filter($members, static fn ($name) => preg_match('~^xl/worksheets/sheet[0-9]+\\.xml$~i', $name) === 1));
-                } elseif ($extension === 'pptx') {
-                    $inspection['page_count'] = count(array_filter($members, static fn ($name) => preg_match('~^ppt/slides/slide[0-9]+\\.xml$~i', $name) === 1));
-                    $inspection['page_count_label'] = 'تعداد اسلاید';
-                } elseif ($extension === 'docx') {
-                    $inspection['document_parts'] = [
-                        'headers' => count(array_filter($members, static fn ($name) => str_starts_with($name, 'word/header') && str_ends_with($name, '.xml'))),
-                        'footers' => count(array_filter($members, static fn ($name) => str_starts_with($name, 'word/footer') && str_ends_with($name, '.xml'))),
-                        'footnotes' => in_array('word/footnotes.xml', $members, true),
-                        'endnotes' => in_array('word/endnotes.xml', $members, true),
-                    ];
-                }
+            } else {
+                $archive = $this->inspectTar($absolutePath, $extension);
             }
             $inspection = array_merge($inspection, $archive);
         } elseif ($inspection['detected_type'] === 'pdf') {
@@ -141,6 +145,9 @@ class UploadSecurityService
         $groups = [
             'pdf' => ['application/pdf'],
             'zip' => ['application/zip','application/x-zip','application/x-zip-compressed','application/octet-stream'],
+            'tar' => ['application/x-tar','application/tar','application/octet-stream'],
+            'tar.gz' => ['application/gzip','application/x-gzip','application/octet-stream'],
+            'tar.bz2' => ['application/x-bzip2','application/bzip2','application/octet-stream'],
             'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/zip','application/octet-stream'],
             'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip','application/octet-stream'],
             'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation','application/zip','application/octet-stream'],
@@ -167,10 +174,13 @@ class UploadSecurityService
     private function detectType(string $extension, string $header): string
     {
         if ($extension === 'pdf' && str_starts_with($header, '%PDF-')) return 'pdf';
-        if (in_array($extension, ['zip','docx','xlsx','pptx'], true) && str_starts_with($header, "PK\x03\x04")) return 'archive';
-        if (in_array($extension, ['doc','xls','ppt'], true) && str_starts_with($header, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")) return 'office';
-        if (in_array($extension, ['jpg','jpeg'], true) && str_starts_with($header, "\xFF\xD8\xFF")) return 'image';
-        if ($extension === 'png' && str_starts_with($header, "\x89PNG\r\n\x1A\n")) return 'image';
+        if (in_array($extension, ['zip','docx','xlsx','pptx'], true) && str_starts_with($header, "PK\\x03\\x04")) return 'archive';
+        if ($extension === 'tar' && substr($header, 257, 5) === 'ustar') return 'archive';
+        if ($extension === 'tar.gz' && str_starts_with($header, "\\x1F\\x8B")) return 'archive';
+        if ($extension === 'tar.bz2' && str_starts_with($header, 'BZh')) return 'archive';
+        if (in_array($extension, ['doc','xls','ppt'], true) && str_starts_with($header, "\\xD0\\xCF\\x11\\xE0\\xA1\\xB1\\x1A\\xE1")) return 'office';
+        if (in_array($extension, ['jpg','jpeg'], true) && str_starts_with($header, "\\xFF\\xD8\\xFF")) return 'image';
+        if ($extension === 'png' && str_starts_with($header, "\\x89PNG\\r\\n\\x1A\\n")) return 'image';
         if ($extension === 'gif' && (str_starts_with($header, 'GIF87a') || str_starts_with($header, 'GIF89a'))) return 'image';
         if ($extension === 'webp' && substr($header, 0, 4) === 'RIFF' && substr($header, 8, 4) === 'WEBP') return 'image';
         if (in_array($extension, ['mp3','wav','ogg','flac','m4a'], true)) return 'audio';
@@ -239,6 +249,131 @@ class UploadSecurityService
             throw new RuntimeException('upload_image_dimensions_too_large');
         }
         return ['width' => (int) $info[0], 'height' => (int) $info[1], 'pixels' => $pixels];
+    }
+
+    private function inspectTar(string $path, string $extension): array
+    {
+        $sourceSize = (int) filesize($path);
+        if ($extension === 'tar') {
+            $stream = fopen($path, 'rb');
+            $read = static fn (int $length) => fread($stream, $length);
+            $close = static fn () => fclose($stream);
+        } elseif ($extension === 'tar.gz') {
+            $stream = @gzopen($path, 'rb');
+            if (! is_resource($stream)) throw new RuntimeException('upload_tar_compression_unsupported');
+            $read = static fn (int $length) => gzread($stream, $length);
+            $close = static fn () => gzclose($stream);
+        } elseif ($extension === 'tar.bz2') {
+            if (! function_exists('bzopen')) throw new RuntimeException('upload_tar_compression_unsupported');
+            $stream = @bzopen($path, 'r');
+            if (! is_resource($stream)) throw new RuntimeException('upload_tar_compression_unsupported');
+            $read = static fn (int $length) => bzread($stream, $length);
+            $close = static fn () => bzclose($stream);
+        } else {
+            throw new RuntimeException('upload_archive_format_unsupported');
+        }
+
+        if (! is_resource($stream)) throw new RuntimeException('upload_archive_read_failed');
+        $readExact = static function (int $length) use ($read): string {
+            $buffer = '';
+            while (strlen($buffer) < $length) {
+                $part = $read($length - strlen($buffer));
+                if (! is_string($part) || $part === '') break;
+                $buffer .= $part;
+            }
+            return $buffer;
+        };
+
+        $entries = [];
+        $totalExpanded = 0;
+        $risk = 'low';
+        $findings = [];
+        try {
+            $finished = false;
+            for ($index = 0; $index < self::MAX_ARCHIVE_ENTRIES; $index++) {
+                $header = $readExact(512);
+                if ($header === '') {
+                    $finished = true;
+                    break;
+                }
+                if (strlen($header) !== 512) throw new RuntimeException('upload_tar_header_invalid');
+                if ($header === str_repeat("\\0", 512)) {
+                    $finished = true;
+                    break;
+                }
+
+                $checksumText = trim(substr($header, 148, 8), "\\0 ");
+                if ($checksumText === '' || preg_match('/^[0-7]+$/', $checksumText) !== 1) {
+                    throw new RuntimeException('upload_tar_checksum_invalid');
+                }
+                $checksumHeader = substr_replace($header, str_repeat(' ', 8), 148, 8);
+                $checksum = array_sum(unpack('C*', $checksumHeader));
+                if ($checksum !== octdec($checksumText)) throw new RuntimeException('upload_tar_checksum_invalid');
+
+                $name = trim(substr($header, 0, 100), "\\0");
+                $prefix = trim(substr($header, 345, 155), "\\0");
+                $name = $prefix !== '' ? $prefix.'/'.$name : $name;
+                $sizeText = trim(substr($header, 124, 12), "\\0 ");
+                if ($sizeText !== '' && preg_match('/^[0-7]+$/', $sizeText) !== 1) {
+                    throw new RuntimeException('upload_tar_size_invalid');
+                }
+                $entrySize = $sizeText === '' ? 0 : octdec($sizeText);
+                $type = substr($header, 156, 1);
+                $normalized = str_replace('\\\\', '/', $name);
+                $parts = explode('/', $normalized);
+                $entryExtension = strtolower(pathinfo($normalized, PATHINFO_EXTENSION));
+
+                if ($normalized === '' || str_starts_with($normalized, '/') || preg_match('/^[A-Za-z]:/', $normalized) || in_array('..', $parts, true) || str_contains($normalized, "\\0")) {
+                    throw new RuntimeException('upload_archive_path_or_link_rejected');
+                }
+                if (in_array($type, ['1','2','3','4','6','7','x','g','L','K'], true)) {
+                    throw new RuntimeException('upload_tar_link_or_special_entry_rejected');
+                }
+                if (! in_array($type, ["\\0", '0', '5'], true)) {
+                    throw new RuntimeException('upload_tar_entry_type_unsupported');
+                }
+                if (in_array($entryExtension, $this->blockedExtensions, true)) {
+                    throw new RuntimeException('upload_archive_executable_rejected');
+                }
+
+                $totalExpanded += $entrySize;
+                if ($totalExpanded > self::MAX_ARCHIVE_EXPANDED_BYTES || $entrySize > 100 * 1024 * 1024) {
+                    throw new RuntimeException('upload_archive_expansion_limit');
+                }
+                if ($entryExtension !== '' && in_array($entryExtension, ['zip','rar','7z','tar','gz','bz2','xz'], true)) {
+                    $risk = 'warning';
+                    $findings[] = 'آرشیو تو در تو شناسایی شد؛ محتوای داخلی آن باز یا اجرا نمی‌شود.';
+                }
+
+                $entries[] = [
+                    'name' => mb_substr($normalized, 0, 240),
+                    'size_bytes' => (int) $entrySize,
+                    'compressed_bytes' => null,
+                    'type' => $type === '5' ? 'directory' : 'file',
+                ];
+
+                $padding = (int) (ceil($entrySize / 512) * 512);
+                if ($padding > 0 && strlen($readExact($padding)) !== $padding) {
+                    throw new RuntimeException('upload_tar_entry_truncated');
+                }
+            }
+            if (! $finished) throw new RuntimeException('upload_archive_limits_exceeded');
+        } finally {
+            $close();
+        }
+
+        if (in_array($extension, ['tar.gz', 'tar.bz2'], true) && $totalExpanded > 0
+            && $totalExpanded / max(1, $sourceSize) > self::MAX_ARCHIVE_RATIO) {
+            throw new RuntimeException('upload_archive_ratio_suspicious');
+        }
+
+        return [
+            'archive_entries' => $entries,
+            'archive_entry_count' => count($entries),
+            'archive_expanded_bytes' => $totalExpanded,
+            'risk_level' => $risk,
+            'findings' => array_values(array_unique($findings)),
+        ];
     }
 
     private function inspectZip(string $path): array
