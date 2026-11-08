@@ -269,7 +269,7 @@ class StoreReaderAccessTest extends TestCase
     public function test_xlsx_preview_is_served_as_sandboxable_read_only_html_with_watermark(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
-        $preparedHtml = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($this->makeXlsxBytes(), 'FARAST_READER_IDENTITY_TOKEN');
+        $preparedHtml = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($this->makeXlsxBytes(), '');
         Storage::disk('private')->put('store/previews/sample/workbook.html', $preparedHtml);
         $preview->update([
             'path' => 'store/previews/sample/workbook.html',
@@ -282,6 +282,7 @@ class StoreReaderAccessTest extends TestCase
             ->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('farast-xlsx-frame')
+            ->assertSee('09123456789')
             ->assertSee('sandbox', false)
             ->assertSee('Excel');
 
@@ -291,7 +292,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Disposition', 'inline; filename="farast-workbook-preview.html"')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
 
-        $response->assertSee('09123456789')
+        $response->assertDontSee('09123456789')
             ->assertSee('گزارش')
             ->assertSee('42')
             ->assertSee('73')
@@ -300,6 +301,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee('<script', false);
 
         $this->assertStringContainsString("style-src 'unsafe-inline'", (string) $response->headers->get('Content-Security-Policy'));
+        $this->assertSame($preparedHtml, $response->getContent());
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 
