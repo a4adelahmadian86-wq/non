@@ -279,12 +279,31 @@
   };
   const tokens = value => String(value || '').toLocaleLowerCase().replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\u064B-\u065F\u0670]/g, '').replace(/[\u200c\u200f\u202a-\u202e]/g, '').match(/[\p{L}\p{N}]+/gu) || [];
   const findTextRange = value => {
-    const wanted = tokens(value); if (!wanted.length || !activeTrack) return null;
+    const wanted = tokens(value);
+    if (!wanted.length || !activeTrack) return null;
+    const indexedWords = [];
     for (const item of activeTrack.timings) {
-      const words = Array.isArray(item.words) && item.words.length ? item.words : String(item.text).trim().split(/\s+/u).map((text, index, all) => ({ text, start: item.start + (item.end-item.start)*index/all.length, end: item.start + (item.end-item.start)*(index+1)/all.length }));
-      const actual = words.map(word => tokens(word.text)[0] || '');
-      for (let i = 0; i <= actual.length - wanted.length; i++) {
-        if (wanted.every((word, offset) => actual[i + offset] === word)) return { start: Number(words[i].start), end: Number(words[i + wanted.length - 1].end), page: item.page };
+      const words = Array.isArray(item.words) && item.words.length
+        ? item.words
+        : String(item.text).trim().split(/\s+/u).map((text, index, all) => ({
+            text,
+            start: item.start + (item.end - item.start) * index / all.length,
+            end: item.start + (item.end - item.start) * (index + 1) / all.length
+          }));
+      words.forEach(word => indexedWords.push({
+        token: tokens(word.text)[0] || '',
+        start: Number(word.start),
+        end: Number(word.end),
+        page: item.page
+      }));
+    }
+    for (let i = 0; i <= indexedWords.length - wanted.length; i++) {
+      if (wanted.every((word, offset) => indexedWords[i + offset].token === word)) {
+        return {
+          start: indexedWords[i].start,
+          end: indexedWords[i + wanted.length - 1].end,
+          page: indexedWords[i].page
+        };
       }
     }
     return null;
@@ -313,7 +332,7 @@
     }
     const article = event.target.closest('.farast-reader-page-item');
     if (article && !event.target.closest('button,input,select,a,.farast-pdf-text-layer,.farast-pdf-cont-text,.farast-audio-dock')) {
-      const page = Number(event.target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || root.querySelector('#reader-page-number')?.value || article.dataset.index || 1);
+      const page = Number(event.target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || article.dataset.readerPage || root.querySelector('#reader-page-number')?.value || article.dataset.index || 1);
       const pageItems = activeTrack?.timings.filter(item => Number(item.page) === page) || [];
       if (pageItems.length) playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ انتخاب‌شده');
     }
