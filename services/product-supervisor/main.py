@@ -112,6 +112,7 @@ async def review_product_file(
     product_id: str = Form(..., min_length=1, max_length=80),
     product_title: str = Form(..., min_length=2, max_length=220),
     product_type: Literal["digital_file", "course"] = Form(...),
+    primary_scan_status: Literal["clean"] = Form(...),
     category_name: str | None = Form(default=None, max_length=160),
     tags_json: str = Form(default="[]", max_length=5000),
     description: str | None = Form(default=None, max_length=8000),
@@ -137,7 +138,7 @@ async def review_product_file(
         raise HTTPException(status_code=422, detail="Invalid tags_json") from None
 
     try:
-        inspection = inspect_file(data, file.filename or "upload.bin", file.content_type)
+        inspection = inspect_file(data, file.filename or "upload.bin", file.content_type, primary_scan_status)
     except FileInspectionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
@@ -216,7 +217,7 @@ async def review_product_file(
         "findings": model_review.get("findings", [])[:12] if isinstance(model_review.get("findings", []), list) else [],
         "warnings": warnings[:20],
         "redacted_sensitive_items": redaction_count,
-        "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("manual_scan_required" if inspection.antivirus_status != "clean" else "structural_checks_passed"),
+        "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("structural_checks_passed" if inspection.antivirus_status == "clean" else ("upstream_scan_verified" if inspection.upstream_scan_status == "clean" else "manual_scan_required")),
         "publication_authorized": False,
         "automated_publication": False,
     }
