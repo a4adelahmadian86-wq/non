@@ -88,6 +88,60 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.content_chunks[3]["locator"]["cells"], ["عنوان", "مقدار"])
         self.assertEqual(result.content_chunks[4]["locator"]["cells"][1], "<img src=x onerror=alert(1)>")
 
+    def test_docx_preserves_numbered_and_nested_list_metadata(self):
+        document = Document()
+        numbered = document.add_paragraph("مرحله نخست", style="List Number")
+        numbered._p.get_or_add_pPr().get_or_add_numPr().get_or_add_ilvl().val = 1
+        bulleted = document.add_paragraph("زیرگزینه", style="List Bullet")
+        bulleted._p.get_or_add_pPr().get_or_add_numPr().get_or_add_ilvl().val = 2
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "numbered-lists.docx")
+
+        self.assertEqual(
+            [chunk["chunk_type"] for chunk in result.content_chunks],
+            ["docx_list_item", "docx_list_item"],
+        )
+        self.assertEqual(result.content_chunks[0]["locator"]["list_kind"], "number")
+        self.assertEqual(result.content_chunks[0]["locator"]["list_level"], 2)
+        self.assertEqual(result.content_chunks[1]["locator"]["list_kind"], "bullet")
+        self.assertEqual(result.content_chunks[1]["locator"]["list_level"], 3)
+
+    def test_docx_uses_numbering_part_format_for_custom_paragraph_styles(self):
+        from docx.oxml.ns import qn
+
+        document = Document()
+        numbering = document.part.numbering_part.element
+        abstract_formats = {}
+        for abstract in numbering.findall(qn("w:abstractNum")):
+            abstract_id = abstract.get(qn("w:abstractNumId"))
+            first_level = abstract.find(qn("w:lvl"))
+            number_format = first_level.find(qn("w:numFmt")) if first_level is not None else None
+            if abstract_id is not None and number_format is not None:
+                abstract_formats[str(abstract_id)] = str(number_format.get(qn("w:val"), ""))
+
+        decimal_num_id = None
+        for num in numbering.findall(qn("w:num")):
+            abstract = num.find(qn("w:abstractNumId"))
+            if abstract is not None and abstract_formats.get(str(abstract.get(qn("w:val")))) == "decimal":
+                decimal_num_id = int(num.get(qn("w:numId")))
+                break
+        self.assertIsNotNone(decimal_num_id, "the DOCX template should expose a decimal numbering definition")
+
+        paragraph = document.add_paragraph("شماره‌گذاری سفارشی", style="Normal")
+        num_properties = paragraph._p.get_or_add_pPr().get_or_add_numPr()
+        num_properties.get_or_add_numId().val = decimal_num_id
+        num_properties.get_or_add_ilvl().val = 0
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "custom-numbering.docx")
+
+        self.assertEqual(result.content_chunks[0]["chunk_type"], "docx_list_item")
+        self.assertEqual(result.content_chunks[0]["locator"]["list_kind"], "number")
+        self.assertEqual(result.content_chunks[0]["locator"]["list_level"], 1)
+
     def test_zip_path_traversal_is_rejected(self):
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, "w") as archive:
@@ -133,6 +187,39 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "tar")
         self.assertIn("Compressed TAR content", result.extracted_text)
 
+
+    def test_archive_handles_valid_docx_without_text_or_content_chunks(self):
+        document = Document()
+        docx_stream = io.BytesIO()
+        document.save(docx_stream)
+
+        archive_stream = io.BytesIO()
+        with zipfile.ZipFile(archive_stream, "w") as archive:
+            archive.writestr("empty.docx", docx_stream.getvalue())
+
+        result = inspect_file(archive_stream.getvalue(), "empty-document.zip")
+
+        self.assertEqual(result.detected_type, "zip")
+        self.assertEqual(result.embedded_documents[0]["name"], "empty.docx")
+        self.assertEqual(result.content_chunks, [])
+
+    def test_archive_propagates_child_truncation_and_chunk_cap(self):
+        document = Document()
+        for index in range(301):
+            document.add_paragraph(f"پاراگراف {index}")
+        docx_stream = io.BytesIO()
+        document.save(docx_stream)
+
+        archive_stream = io.BytesIO()
+        with zipfile.ZipFile(archive_stream, "w") as archive:
+            archive.writestr("long.docx", docx_stream.getvalue())
+
+        result = inspect_file(archive_stream.getvalue(), "long-document.zip")
+
+        self.assertTrue(result.extraction_truncated)
+        self.assertLessEqual(len(result.content_chunks), 60)
+        self.assertTrue(any("سقف" in warning for warning in result.warnings))
+
     def test_nested_archives_are_listed_but_not_recursively_extracted(self):
         nested = io.BytesIO()
         with zipfile.ZipFile(nested, "w") as inner:
@@ -153,6 +240,48 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.image_mime, "image/jpeg")
         self.assertTrue(result.image_bytes)
 
+
+    def test_docx_marks_the_reader_block_limit_as_truncated(self):
+        document = Document()
+        for index in range(301):
+            document.add_paragraph(f"پاراگراف {index}")
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "long-document.docx")
+
+        self.assertTrue(result.extraction_truncated)
+        self.assertEqual(len(result.content_chunks), 300)
+        self.assertIn("پاراگراف 299", result.extracted_text)
+        self.assertNotIn("پاراگراف 300", result.extracted_text)
+
+    def test_xlsx_marks_sheet_row_and_column_safety_limits_as_truncated(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        for row in range(1, 302):
+            sheet.cell(row=row, column=1, value=f"ردیف {row}")
+        stream = io.BytesIO()
+        workbook.save(stream)
+
+        result = inspect_file(stream.getvalue(), "long-sheet.xlsx")
+
+        self.assertTrue(result.extraction_truncated)
+        self.assertIn("ردیف 300", result.extracted_text)
+        self.assertNotIn("ردیف 301", result.extracted_text)
+
+    def test_pptx_marks_slide_limit_as_truncated(self):
+        presentation = Presentation()
+        for _ in range(101):
+            presentation.slides.add_slide(presentation.slide_layouts[5])
+        stream = io.BytesIO()
+        presentation.save(stream)
+
+        result = inspect_file(stream.getvalue(), "long-presentation.pptx")
+
+        self.assertTrue(result.extraction_truncated)
+        self.assertEqual(result.page_count, 100)
+        self.assertIn("اسلاید 100", result.extracted_text)
+        self.assertNotIn("اسلاید 101", result.extracted_text)
 
     def test_xlsx_content_is_extracted(self):
         workbook = Workbook()

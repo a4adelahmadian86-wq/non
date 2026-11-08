@@ -486,6 +486,8 @@ test('supports PageUp PageDown Home and End shortcuts without hijacking form con
 });
 
 test('renders Word headings lists and tables as safe semantic document blocks', async ({ page }) => {
+  let protectedWordPageRequests = 0;
+  const wordPageErrors = [];
   await page.goto('/');
   await page.setContent(`
     <section data-reader-root data-reader-mode="document">
@@ -495,9 +497,17 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
           <div data-reader-text-layer></div>
         </div>
       </article>
+      <article class="farast-reader-page-item" data-index="1" data-reader-page="2" data-reader-page-url="/protected-word-page-2">
+        <div data-reader-document-page>
+          <div class="farast-pdf-loading" role="status">loading</div>
+          <div data-reader-text-layer></div>
+        </div>
+      </article>
     </section>
   `);
-  await page.route('**/protected-word-page', route => route.fulfill({
+  await page.route('**/protected-word-page', route => {
+    protectedWordPageRequests += 1;
+    return route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
@@ -509,16 +519,40 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
         { type: 'heading', level: 1, text: 'فصل اول' },
         { type: 'paragraph', text: 'متن توضیحی' },
         { type: 'list_item', list_kind: 'bullet', list_level: 1, text: 'گزینه نخست' },
+        { type: 'list_item', list_kind: 'number', list_level: 2, text: 'زیرگزینه شماره‌دار' },
         { type: 'table_row', table_index: 1, row_index: 1, cells: ['عنوان', 'مقدار'], text: 'عنوان | مقدار' },
         { type: 'table_row', table_index: 1, row_index: 2, cells: ['محتوا', '<img src=x onerror=alert(1)>'], text: 'محتوا | <img src=x onerror=alert(1)>' }
       ],
       content_sha256: 'word-fixture-hash'
     })
-  }));
+    });
+  });
+  let protectedWordPage2Requests = 0;
+  await page.route('**/protected-word-page-2', route => {
+    protectedWordPage2Requests += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        page_number: 2,
+        page_kind: 'section',
+        label: 'بخش ۲',
+        content_text: 'صفحه دوم',
+        content_blocks: [{ type: 'paragraph', text: 'صفحه دوم' }],
+        content_sha256: 'word-fixture-hash-2'
+      })
+    });
+  });
+  page.on('pageerror', error => wordPageErrors.push(error.message));
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: 0 } })));
+  await expect.poll(() => protectedWordPageRequests).toBe(1);
+  await expect(page.locator('.farast-reader-page-item[data-index="0"]')).toHaveAttribute('data-reader-loaded', '1');
+  expect(wordPageErrors).toEqual([]);
   await expect(page.locator('[data-reader-text-layer] h1')).toHaveText('فصل اول');
   await expect(page.locator('[data-reader-text-layer] p')).toHaveText('متن توضیحی');
-  await expect(page.locator('[data-reader-text-layer] ul li')).toHaveText('گزینه نخست');
+  await expect(page.locator('[data-reader-text-layer] ul > li').first()).toContainText('گزینه نخست');
+  await expect(page.locator('[data-reader-text-layer] ul > li > ol > li')).toHaveText('زیرگزینه شماره‌دار');
   const table = page.locator('.farast-reader-docx-table');
   await expect(table).toBeVisible();
   await expect(table.locator('tbody tr')).toHaveCount(2);
@@ -526,6 +560,13 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
   await expect(table.locator('tbody tr').nth(1)).toHaveClass(/reader-document-line/);
   await expect(table.locator('tbody tr').nth(1)).toHaveAttribute('data-reader-audio-text', 'محتوا | <img src=x onerror=alert(1)>');
   await expect(table.locator('img')).toHaveCount(0);
+
+  // The production reader emits detail.section; verify navigation to a later protected section.
+  await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: 1 } })));
+  await expect.poll(() => protectedWordPage2Requests).toBe(1);
+  await expect(page.locator('.farast-reader-page-item').nth(1)).toHaveAttribute('data-reader-loaded', '1');
+  await expect(page.locator('.farast-reader-page-item').nth(1).locator('[data-reader-text-layer] p')).toHaveText('صفحه دوم');
+  expect(wordPageErrors).toEqual([]);
 });
 
 test('renders protected spreadsheet sections as safe responsive tables', async ({ page }) => {
