@@ -16,7 +16,7 @@ The schema uses ordinary indexed InnoDB-compatible relations and JSON/LONGTEXT c
 
 The upload-confirm action writes a document row and dispatches `ProcessProductDocument` to the `documents` queue. After extraction and source-locator persistence, `GenerateProductDocumentAudio` is dispatched to the `default` queue. The database queue driver must be enabled and the standard `jobs` and `failed_jobs` tables must be migrated.
 
-The application scheduler now starts a bounded queue worker every minute for `documents,default`. It exits when the queues are empty, uses a 900-second worker/job timeout, and prevents overlapping scheduler launches for 20 minutes. The database connection's `retry_after` is 960 seconds, so a reserved job is not made visible to another worker before the maximum job timeout expires.
+The application scheduler starts a bounded queue worker every minute for `documents,default` by default. It exits when the queues are empty, uses a 900-second worker/job timeout, and prevents overlapping scheduler launches for 20 minutes. The database connection's `retry_after` is 960 seconds, so a reserved job is not made visible to another worker before the maximum job timeout expires. Set `QUEUE_SCHEDULED_WORKER=false` when a persistent queue supervisor already consumes the queues; then use that supervisor as the only worker.
 
 For cPanel or another cron-only host, the required cron entry is the Laravel scheduler (adjust the project path and PHP binary):
 
@@ -24,7 +24,7 @@ For cPanel or another cron-only host, the required cron entry is the Laravel sch
 * * * * * cd /home/ACCOUNT/public_html && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Do not add a second cron-driven `queue:work` command when using the scheduler-managed worker. If a persistent queue supervisor is already configured, avoid running a second independent worker schedule on the same host.
+Do not add a second cron-driven `queue:work` command when using the scheduler-managed worker. If a persistent queue supervisor is already configured, set `QUEUE_SCHEDULED_WORKER=false` before deploying so the scheduler does not launch another worker.
 
 ## Current processing and privacy boundaries
 
