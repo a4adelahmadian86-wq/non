@@ -3,7 +3,7 @@
 ## Supported preview formats
 
 - **PDF:** rendered in the authenticated reader with the pinned PDF.js legacy module. Page navigation, zoom, rotation, fit-width, thumbnails, outline navigation, text search, and continuous scrolling are provided where the PDF contains the corresponding data.
-- **Word (.docx):** validated as an OOXML archive, converted server-side to a sanitized HTML representation and then to a watermarked PDF for paginated reading. External OOXML relationships and active HTML content are rejected.
+- **Word (.docx):** validated as an OOXML archive, converted server-side to sanitized HTML and then to a neutral paginated PDF. Embedded images, tables, explicit page breaks, and the first section's page size/margins are preserved where PHPWord/Dompdf can represent them. The account watermark is painted into the PDF.js page canvas at read time. External OOXML relationships and active HTML content are rejected.
 - **Excel (.xlsx):** parsed server-side into a read-only HTML workbook. Visible worksheets and cached cell values are shown; formulas are never evaluated. External workbook relationships are rejected.
 
 The original product file is not used as a public preview URL. Preview records are stored on the configured private disk and served through authenticated, throttled routes.
@@ -20,21 +20,21 @@ These are defensive ceilings, not a promise that every Office feature is reprodu
 
 - Reader and preview endpoints require an authenticated account; preview requests are rate-limited.
 - Preview responses use private/no-store cache headers, nosniff, same-origin framing/resource policies, no-referrer, and restrictive content security policies.
-- DOCX is converted once per source-content hash into a neutral PDF; XLSX is converted once per source-content hash into escaped HTML. Both neutral conversions are cached for seven days and reused across accounts. The current account identity is painted at read time (PDF canvas for PDF/DOCX and a per-response escaped identity token for XLSX), so cache entries never contain another user's identity. The XLSX renderer does not execute formulas, macros, scripts, or external workbook relationships.
-- The reader suppresses ordinary copy, cut, drag, context-menu, print, and save shortcuts and paints the account identity into PDF page canvases. Word PDFs and Excel HTML include server-generated identity watermarks.
+- DOCX is converted once per source-content hash into a neutral PDF; XLSX is converted once per source-content hash into escaped HTML. Both neutral conversions are cached for seven days and reused across accounts. The current account identity is applied after conversion (PDF.js canvas for PDF/DOCX and a per-response escaped identity token for XLSX), so cache entries never contain another user's identity. The XLSX renderer does not execute formulas, macros, scripts, or external workbook relationships.
+- The reader suppresses ordinary copy, cut, drag, context-menu, print, and save shortcuts. PDF and DOCX identity watermarks are painted into the rendered page canvas in the browser; the cached DOCX PDF itself is neutral. XLSX HTML receives an escaped per-response identity token.
 
 ## Important security boundary
 
-A browser-based reader cannot provide absolute DRM. An authenticated user can still inspect network traffic, retrieve content delivered to their browser, take screenshots, or photograph the screen. For PDF, the account watermark is painted into the rendered page canvas in the browser; the original PDF response is **not** rewritten with a server-side watermark. The watermark therefore raises attribution friction for ordinary viewing and screenshots but does not prevent extraction of the original PDF bytes by a user who can access the authenticated endpoint.
+A browser-based reader cannot provide absolute DRM. An authenticated user can still inspect network traffic, retrieve content delivered to their browser, take screenshots, or photograph the screen. For original PDF previews, the source PDF response is **not** rewritten with a server-side watermark. For DOCX previews, the cached neutral PDF is also delivered to the browser before the account watermark is painted on the canvas. These watermarks raise attribution friction for ordinary viewing and screenshots but do not prevent an authorized user from extracting the PDF bytes from network traffic.
 
 Do not describe the reader as impossible to copy or download. Stronger PDF protection requires a separately deployed and tested server-side PDF stamping/rasterization pipeline or a dedicated DRM/document-delivery service, with explicit operational and performance requirements.
 
 ## Automated verification status
 
-Latest completed CI for the reader branch (commit `ce387de2a35c25071a27b57cb2af75c9dcebd7ab`, run [42407030093](https://github.com/a4adelahmadian86-wq/non/actions/runs/42407030093)) passed:
+Latest completed CI for the reader branch is recorded in the PR. The latest DOCX pagination update is being verified in [run 42449244268](https://github.com/a4adelahmadian86-wq/non/actions/runs/42449244268); do not treat that run as successful until it completes.
 
-- Laravel suite: **313 tests passed, 1,526 assertions**.
-- Playwright suite: **56 browser tests passed**, including a PDF.js page render from a generated PDF fixture, account watermark, text search, page controls, zoom, rotation, theme, sidebar, continuous-scroll toolbar availability, and sandboxed Excel iframe checks.
+- Previous confirmed reader run: **316 PHP tests, 1,547 assertions, and 56 browser tests passed** in [run 42448620155](https://github.com/a4adelahmadian86-wq/non/actions/runs/42448620155).
+- The new DOCX page-break, embedded-image, and page-layout checks are included in the pending run., including a PDF.js page render from a generated PDF fixture, account watermark, text search, page controls, zoom, rotation, theme, sidebar, continuous-scroll toolbar availability, and sandboxed Excel iframe checks.
 - PHP migrations, route listing, Blade view cache, JavaScript syntax checks, and the configured voice-stream smoke steps completed successfully. The optional Sherpa workflow job was skipped for this pull-request event.
 
 These tests establish automated behavior against controlled fixtures. They do **not** replace manual visual QA against representative customer documents and real mobile/desktop browsers; no such manual QA is claimed here.
