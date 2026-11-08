@@ -185,73 +185,77 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
 
     private function preparePdfSample(StoreDocumentRecord $document, $file, array $response, ProductSupervisorClient $supervisor, ?string $normalizedPdfBytes = null): void
     {
+        if (! in_array((string) $document->detected_type, ['pdf', 'docx'], true)) {
+            $document->update(['metadata' => array_merge((array) $document->metadata, ['sample_status' => 'unsupported_source_type'])]);
+            return;
+        }
+
         $pages = is_array($response['sample_pages'] ?? null) ? array_values(array_unique(array_filter(
             array_map('intval', $response['sample_pages']),
             fn ($page) => $page > 0
         ))) : [];
-        if (! in_array((string) $document->detected_type, ['pdf', 'docx'], true) || $pages === []) {
-            $document->update(['metadata' => array_merge((array) $document->metadata, ['sample_status' => 'not_selected_or_unsupported'])]);
-            return;
-        }
+        $samplePath = null;
 
-        $stream = null;
-        if (is_string($normalizedPdfBytes) && $normalizedPdfBytes !== '') {
-            $stream = fopen('php://temp', 'w+b');
+        if ($pages !== []) {
+            $stream = null;
+            if (is_string($normalizedPdfBytes) && $normalizedPdfBytes !== '') {
+                $stream = fopen('php://temp', 'w+b');
+                if (is_resource($stream)) {
+                    fwrite($stream, $normalizedPdfBytes);
+                    rewind($stream);
+                }
+            } else {
+                $stream = Storage::disk($file->disk ?: 'private')->readStream($file->path);
+            }
+
             if (is_resource($stream)) {
-                fwrite($stream, $normalizedPdfBytes);
-                rewind($stream);
+                try {
+                    try {
+                        $sample = $supervisor->createPdfSample($stream, $file->original_name ?: basename($file->path), $pages);
+                        $samplePath = 'store/previews/'.$document->product_id.'/document-'.$file->id.'-'.$document->source_sha256.'-sample.pdf';
+                        if (! Storage::disk('private')->put($samplePath, $sample['bytes'])) {
+                            throw new \\RuntimeException('document_sample_storage_failed');
+                        }
+
+                        StoreDocumentSample::query()->updateOrCreate(
+                            ['document_id' => $document->id, 'source_sha256' => $document->source_sha256],
+                            ['disk' => 'private', 'path' => $samplePath, 'mime' => 'application/pdf', 'kind' => 'pdf', 'selected_pages' => $pages, 'status' => 'ready']
+                        );
+
+                        StoreProductPreview::query()
+                            ->where('document_id', $document->id)
+                            ->where('access_level', 'sample')
+                            ->where('source_sha256', '!=', $document->source_sha256)
+                            ->update(['is_active' => false]);
+
+                        StoreProductPreview::query()->updateOrCreate(
+                            ['document_id' => $document->id, 'access_level' => 'sample', 'source_sha256' => $document->source_sha256],
+                            ['product_id' => $document->product_id, 'disk' => 'private', 'path' => $samplePath, 'mime' => 'application/pdf', 'page_number' => $pages[0], 'kind' => 'pdf', 'watermarked' => true, 'is_active' => true, 'sort_order' => 0]
+                        );
+                    } catch (Throwable $exception) {
+                        $document->update(['metadata' => array_merge((array) $document->metadata, [
+                            'sample_status' => 'generation_failed',
+                            'sample_error' => class_basename($exception),
+                        ])]);
+                    }
+                } finally {
+                    fclose($stream);
+                }
             }
         } else {
-            $sourceDisk = Storage::disk($file->disk ?: 'private');
-            $stream = $sourceDisk->readStream($file->path);
+            $document->update(['metadata' => array_merge((array) $document->metadata, ['sample_status' => 'not_selected'])]);
         }
-        if (! is_resource($stream)) {
-            throw new \\RuntimeException('document_sample_source_unavailable');
-        }
-
-        try {
-            try {
-                $sample = $supervisor->createPdfSample($stream, $file->original_name ?: basename($file->path), $pages);
-            } catch (Throwable $exception) {
-                $document->update(['metadata' => array_merge((array) $document->metadata, [
-                    'sample_status' => 'generation_failed',
-                    'sample_error' => class_basename($exception),
-                ])]);
-                return;
-            }
-        } finally {
-            fclose($stream);
-        }
-
-        $samplePath = 'store/previews/'.$document->product_id.'/document-'.$file->id.'-'.$document->source_sha256.'-sample.pdf';
-        if (! Storage::disk('private')->put($samplePath, $sample['bytes'])) {
-            throw new \\RuntimeException('document_sample_storage_failed');
-        }
-
-        $document->update(['metadata' => array_merge((array) $document->metadata, ['sample_status' => 'ready', 'sample_pages' => $pages])]);
-
-        StoreDocumentSample::query()->updateOrCreate(
-            ['document_id' => $document->id, 'source_sha256' => $document->source_sha256],
-            ['disk' => 'private', 'path' => $samplePath, 'mime' => 'application/pdf', 'kind' => 'pdf', 'selected_pages' => $pages, 'status' => 'ready']
-        );
-
-        StoreProductPreview::query()
-            ->where('document_id', $document->id)
-            ->where('access_level', 'sample')
-            ->where('source_sha256', '!=', $document->source_sha256)
-            ->update(['is_active' => false]);
-
-        StoreProductPreview::query()->updateOrCreate(
-            ['document_id' => $document->id, 'access_level' => 'sample', 'source_sha256' => $document->source_sha256],
-            ['product_id' => $document->product_id, 'disk' => 'private', 'path' => $samplePath, 'mime' => 'application/pdf', 'page_number' => $pages[0], 'kind' => 'pdf', 'watermarked' => true, 'is_active' => true, 'sort_order' => 0]
-        );
 
         if (($document->product?->download_policy ?? 'signed') === 'reader_only') {
             $fullDisk = $file->disk ?: 'private';
             $fullPath = $file->path;
             if ($document->detected_type === 'docx') {
+                if (! is_string($normalizedPdfBytes) || $normalizedPdfBytes === '') {
+                    $document->update(['metadata' => array_merge((array) $document->metadata, ['full_reader_status' => 'conversion_unavailable'])]);
+                    return;
+                }
                 $fullPath = 'store/document-renders/'.$document->product_id.'/document-'.$file->id.'-'.$document->source_sha256.'.pdf';
-                if (! Storage::disk('private')->put($fullPath, (string) $normalizedPdfBytes)) {
+                if (! Storage::disk('private')->put($fullPath, $normalizedPdfBytes)) {
                     throw new \\RuntimeException('document_full_reader_render_storage_failed');
                 }
                 $fullDisk = 'private';
@@ -267,6 +271,7 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
                 ['document_id' => $document->id, 'access_level' => 'full', 'source_sha256' => $document->source_sha256],
                 ['product_id' => $document->product_id, 'disk' => $fullDisk, 'path' => $fullPath, 'mime' => 'application/pdf', 'page_number' => null, 'kind' => 'pdf', 'watermarked' => true, 'is_active' => true, 'sort_order' => 0]
             );
+            $document->update(['metadata' => array_merge((array) $document->metadata, ['full_reader_status' => 'ready'])]);
         }
     }
 
