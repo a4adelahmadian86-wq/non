@@ -26,7 +26,7 @@ Use one entry per spoken word. Times are seconds from the beginning of the uploa
 ]
 ```
 
-Entries must be ordered by start time; each end must be greater than its start. A segment may contain multiple words, but each word in that segment will share its time interval. For the best karaoke-style precision, provide one entry per word.
+Entries must be ordered by start time; each end must be greater than its start. A segment may contain multiple words, but each word in that segment will share its time interval. The player detects this and switches its status, progress label and accessible word controls to phrase/segment wording instead of falsely claiming word-level precision. For the best karaoke-style precision, provide one entry per word.
 
 ## Alignment quality
 
@@ -35,7 +35,8 @@ The reader uses the browser's audio clock and the supplied timestamps. It does n
 ## Behavior
 
 - Play, pause, seek, speed and volume controls.
-- Current word highlight, read-word styling and automatic scroll.
+- Current word highlight, read-word styling and automatic scroll when word timings are supplied.
+- Sentence/phrase fallback: a multiword timing entry highlights its mapped words together and is labeled as a segment, without implying word-level timing.
 - Clicking a mapped word seeks narration to its start.
 - Page changes follow the timing manifest.
 - If a document has no audio track, the existing reader behaves exactly as before.
