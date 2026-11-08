@@ -30,6 +30,8 @@ class StoreProductDocumentPageBuilderTest extends TestCase
         $this->assertSame('page:1', $result['pages'][0]['locator_key']);
         $this->assertStringContainsString('متن صفحه اول', $result['pages'][0]['content_text']);
         $this->assertStringContainsString('&lt;script&gt;', $result['pages'][0]['content_html']);
+        $this->assertStringContainsString('reader-document-paragraph', $result['pages'][0]['content_html']);
+        $this->assertStringContainsString('reader-document-sentence', $result['pages'][0]['content_html']);
         $this->assertStringNotContainsString('<script>', $result['pages'][0]['content_html']);
         $this->assertSame(2, $result['chunk_locators'][0]['reader_page']);
         $this->assertSame(1, $result['chunk_locators'][1]['reader_page']);
