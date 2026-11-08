@@ -87,6 +87,24 @@ class StoreReaderAccessTest extends TestCase
         ]);
     }
 
+    public function test_word_page_builder_preserves_semantic_block_types_and_bounds_cells(): void
+    {
+        $built = app(\App\Services\StoreProductDocumentPageBuilder::class)->build([
+            ['chunk_type' => 'docx_heading', 'locator' => ['heading_level' => 1], 'content_text' => 'فصل اول'],
+            ['chunk_type' => 'docx_paragraph', 'locator' => [], 'content_text' => 'مقدمه'],
+            ['chunk_type' => 'docx_list_item', 'locator' => ['list_kind' => 'number', 'list_level' => 2], 'content_text' => 'گزینه'],
+            ['chunk_type' => 'docx_table_row', 'locator' => ['table_index' => 1, 'row_index' => 1, 'cells' => ['عنوان', 'مقدار']], 'content_text' => 'عنوان | مقدار'],
+        ], ['detected_type' => 'docx']);
+
+        $this->assertCount(1, $built['pages']);
+        $blocks = $built['pages'][0]['locator_json']['content_blocks'];
+        $this->assertSame(['heading', 'paragraph', 'list_item', 'table_row'], array_column($blocks, 'type'));
+        $this->assertSame(1, $blocks[0]['level']);
+        $this->assertSame('number', $blocks[2]['list_kind']);
+        $this->assertSame(['عنوان', 'مقدار'], $blocks[3]['cells']);
+        $this->assertSame('مقدمه', $blocks[1]['text']);
+    }
+
     public function test_authenticated_reader_progress_and_bookmarks_sync_across_sessions(): void
     {
         [$product] = $this->makePreviewFixture();
@@ -217,7 +235,16 @@ class StoreReaderAccessTest extends TestCase
             'page_number' => 1,
             'page_kind' => 'pdf_page',
             'locator_key' => 'page:1',
-            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'locator_json' => [
+                'page' => 1,
+                'reader_page' => 1,
+                'content_blocks' => [
+                    ['type' => 'heading', 'level' => 1, 'text' => 'فصل اول'],
+                    ['type' => 'paragraph', 'text' => 'متن توضیحی'],
+                    ['type' => 'list_item', 'list_kind' => 'bullet', 'list_level' => 1, 'text' => 'گزینه نخست'],
+                    ['type' => 'table_row', 'table_index' => 1, 'row_index' => 1, 'cells' => ['عنوان', 'مقدار'], 'text' => 'عنوان | مقدار'],
+                ],
+            ],
             'content_text' => 'متن مجاز صفحه اول کتاب',
             'content_html' => '<section><p>متن مجاز صفحه اول کتاب</p></section>',
             'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
@@ -246,6 +273,10 @@ class StoreReaderAccessTest extends TestCase
         $pageResponse->assertOk()
             ->assertJsonPath('page_number', 1)
             ->assertJsonPath('content_text', 'متن مجاز صفحه اول کتاب')
+            ->assertJsonPath('content_blocks.0.type', 'heading')
+            ->assertJsonPath('content_blocks.0.level', 1)
+            ->assertJsonPath('content_blocks.2.list_kind', 'bullet')
+            ->assertJsonPath('content_blocks.3.cells.1', 'مقدار')
             ->assertJsonMissingPath('path')
             ->assertJsonMissingPath('disk');
 

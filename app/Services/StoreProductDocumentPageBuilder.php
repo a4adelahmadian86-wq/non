@@ -113,6 +113,43 @@ class StoreProductDocumentPageBuilder
             }
 
             $contentText = implode("\n\n", $textParts);
+            $contentBlocks = [];
+            foreach ($group['chunks'] as $chunk) {
+                $chunkType = (string) ($chunk['chunk_type'] ?? '');
+                $locator = is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [];
+                $text = trim((string) ($chunk['content_text'] ?? ''));
+                if ($text === '') {
+                    continue;
+                }
+
+                $blockType = match ($chunkType) {
+                    'docx_heading' => 'heading',
+                    'docx_list_item' => 'list_item',
+                    'docx_table_row' => 'table_row',
+                    'docx_paragraph' => 'paragraph',
+                    default => null,
+                };
+                if ($blockType === null) {
+                    continue;
+                }
+
+                $block = ['type' => $blockType, 'text' => mb_substr($text, 0, 1800)];
+                if ($blockType === 'heading') {
+                    $block['level'] = max(1, min(6, (int) ($locator['heading_level'] ?? 2)));
+                } elseif ($blockType === 'list_item') {
+                    $block['list_kind'] = ($locator['list_kind'] ?? '') === 'number' ? 'number' : 'bullet';
+                    $block['list_level'] = max(1, min(5, (int) ($locator['list_level'] ?? 1)));
+                } elseif ($blockType === 'table_row') {
+                    $cells = is_array($locator['cells'] ?? null) ? $locator['cells'] : [];
+                    $block['cells'] = array_slice(array_map(
+                        fn ($cell) => mb_substr((string) $cell, 0, 500),
+                        $cells
+                    ), 0, 50);
+                    $block['table_index'] = max(1, min(100, (int) ($locator['table_index'] ?? 1)));
+                    $block['row_index'] = max(1, min(1000, (int) ($locator['row_index'] ?? 1)));
+                }
+                $contentBlocks[] = $block;
+            }
             $htmlLines = [];
             foreach (preg_split('/\R/u', $contentText) ?: [] as $line) {
                 $safeLine = htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -136,7 +173,11 @@ class StoreProductDocumentPageBuilder
                 'locator_key' => mb_strlen($group['key']) > 190
                     ? mb_substr($group['key'], 0, 165).'#'.substr(hash('sha256', $group['key']), 0, 16)
                     : $group['key'],
-                'locator_json' => array_merge((array) $group['locator'], ['reader_page' => $pageNumber]),
+                'locator_json' => array_merge(
+                    (array) $group['locator'],
+                    ['reader_page' => $pageNumber],
+                    $contentBlocks !== [] ? ['content_blocks' => array_slice($contentBlocks, 0, 120)] : []
+                ),
                 'content_text' => $contentText,
                 'content_html' => $contentHtml,
                 'content_sha256' => hash('sha256', $contentText),

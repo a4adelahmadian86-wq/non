@@ -81,7 +81,7 @@
 
     const lines = Array.from(layer.querySelectorAll('.reader-document-line'));
     const matching = lines.filter(line => {
-      const lineText = normalize(line.textContent);
+      const lineText = normalize(line.dataset.readerAudioText || line.textContent);
       return lineText && (segmentText.includes(lineText) || lineText.includes(segmentText.slice(0, 90)));
     });
     matching.forEach(line => line.classList.add('is-audio-active'));

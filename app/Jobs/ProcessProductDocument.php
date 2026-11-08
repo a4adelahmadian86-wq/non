@@ -72,6 +72,8 @@ class ProcessProductDocument implements ShouldQueue
             $product->loadMissing(['category', 'tags']);
             $reviewStream = $stream;
             $reviewFilename = $file->original_name;
+            $readerSourceStream = null;
+            $readerSourceFilename = null;
             $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
             if ($sourceExtension === 'docx') {
                 $docxBytes = stream_get_contents($stream);
@@ -115,6 +117,12 @@ class ProcessProductDocument implements ShouldQueue
                 fwrite($reviewStream, $pdfBytes);
                 rewind($reviewStream);
                 $reviewFilename = pathinfo($file->original_name, PATHINFO_FILENAME).'.pdf';
+                $readerSourceStream = fopen('php://temp', 'w+b');
+                if (! is_resource($readerSourceStream) || fwrite($readerSourceStream, $docxBytes) === false) {
+                    throw new \RuntimeException('product_docx_source_stream_failed');
+                }
+                rewind($readerSourceStream);
+                $readerSourceFilename = $file->original_name;
             } else {
                 rewind($stream);
             }
@@ -128,7 +136,7 @@ class ProcessProductDocument implements ShouldQueue
                 'category_name' => $product->category?->name,
                 'tags_json' => json_encode($product->tags->pluck('name')->take(30)->values()->all(), JSON_UNESCAPED_UNICODE),
                 'description' => mb_substr((string) $product->description, 0, 8000),
-            ]);
+            ], $readerSourceStream, $readerSourceFilename);
         } catch (Throwable $exception) {
             Log::warning('Product document processing failed', [
                 'document_id' => $this->documentId,
@@ -136,13 +144,16 @@ class ProcessProductDocument implements ShouldQueue
             ]);
             throw $exception;
         } finally {
+            if (isset($readerSourceStream) && is_resource($readerSourceStream)) {
+                fclose($readerSourceStream);
+            }
             if (isset($reviewStream) && is_resource($reviewStream) && $reviewStream !== $stream) {
                 fclose($reviewStream);
             }
             fclose($stream);
         }
 
-        $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 120) : [];
+        $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 300) : [];
         $totalCharacters = 0;
         $totalWords = 0;
 
@@ -225,7 +236,9 @@ class ProcessProductDocument implements ShouldQueue
                 'representation' => 'server_generated_html',
                 'source_sha256' => $locked->source_sha256,
             ];
-            $structure['analysis_representation'] = $sourceExtension === 'docx' ? 'converted_pdf' : ($inspection['detected_type'] ?? 'unknown');
+            $structure['analysis_representation'] = $sourceExtension === 'docx'
+                ? 'docx_structured_with_converted_pdf'
+                : ($inspection['detected_type'] ?? 'unknown');
             $structure['fact_count'] = $storedFactCount;
             $structure['ai_review'] = [
                 'review_id' => $payload['review_id'] ?? null,

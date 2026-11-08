@@ -452,6 +452,49 @@ test.describe('FARAST sample reader interactions', () => {
 
 });
 
+test('renders Word headings lists and tables as safe semantic document blocks', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section data-reader-root data-reader-mode="document">
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-word-page">
+        <div data-reader-document-page>
+          <div class="farast-pdf-loading" role="status">loading</div>
+          <div data-reader-text-layer></div>
+        </div>
+      </article>
+    </section>
+  `);
+  await page.route('**/protected-word-page', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      page_number: 1,
+      page_kind: 'section',
+      label: 'بخش ۱',
+      content_text: 'فصل اول\\nمتن توضیحی\\nگزینه نخست\\nعنوان | مقدار',
+      content_blocks: [
+        { type: 'heading', level: 1, text: 'فصل اول' },
+        { type: 'paragraph', text: 'متن توضیحی' },
+        { type: 'list_item', list_kind: 'bullet', list_level: 1, text: 'گزینه نخست' },
+        { type: 'table_row', table_index: 1, row_index: 1, cells: ['عنوان', 'مقدار'], text: 'عنوان | مقدار' },
+        { type: 'table_row', table_index: 1, row_index: 2, cells: ['محتوا', '<img src=x onerror=alert(1)>'], text: 'محتوا | <img src=x onerror=alert(1)>' }
+      ],
+      content_sha256: 'word-fixture-hash'
+    })
+  }));
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  await expect(page.locator('[data-reader-text-layer] h1')).toHaveText('فصل اول');
+  await expect(page.locator('[data-reader-text-layer] p')).toHaveText('متن توضیحی');
+  await expect(page.locator('[data-reader-text-layer] ul li')).toHaveText('گزینه نخست');
+  const table = page.locator('.farast-reader-docx-table');
+  await expect(table).toBeVisible();
+  await expect(table.locator('tbody tr')).toHaveCount(2);
+  await expect(table.locator('tbody tr').nth(1).locator('td').nth(1)).toHaveText('<img src=x onerror=alert(1)>');
+  await expect(table.locator('tbody tr').nth(1)).toHaveClass(/reader-document-line/);
+  await expect(table.locator('tbody tr').nth(1)).toHaveAttribute('data-reader-audio-text', 'محتوا | <img src=x onerror=alert(1)>');
+  await expect(table.locator('img')).toHaveCount(0);
+});
+
 test('renders protected spreadsheet sections as safe responsive tables', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
