@@ -45,6 +45,13 @@ return [
         'remote_batch_enabled' => filter_var(env('FARAST_VOICE_REMOTE_BATCH_ENABLED', $remoteBatchDefault), FILTER_VALIDATE_BOOLEAN),
     ],
 
+    // Isolated narration for stored product documents; never routes through the live assistant.
+    'document_audio' => [
+        'url' => env('FARAST_DOCUMENT_AUDIO_URL', ''),
+        'token' => env('FARAST_DOCUMENT_AUDIO_TOKEN', ''),
+        'voice_id' => 'farast-document-fa-male-37-v1',
+    ],
+
     'voice_asr' => [
         'url' => env('FARAST_VOICE_ASR_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? '' : 'https://voice-typing-r5r7.onrender.com/v1/transcribe'),
         'token' => env('FARAST_VOICE_ASR_TOKEN', env('FARAST_VOICE_TOKEN')),
