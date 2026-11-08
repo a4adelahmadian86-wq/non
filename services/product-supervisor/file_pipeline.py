@@ -237,7 +237,7 @@ def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
         normalized_name = item.filename.replace("\\", "/")
         path = PurePosixPath(normalized_name)
         unix_mode = (item.external_attr >> 16) & 0o170000
-        if path.is_absolute() or ".." in path.parts or "\\x00" in normalized_name or re.match(r"^[A-Za-z]:", normalized_name) or stat.S_ISLNK(unix_mode):
+        if path.is_absolute() or ".." in path.parts or "\x00" in normalized_name or re.match(r"^[A-Za-z]:", normalized_name) or stat.S_ISLNK(unix_mode):
             raise FileInspectionError("آرشیو شامل مسیر، پیوند یا نام ناامن است.")
         if item.flag_bits & 0x1:
             raise FileInspectionError("آرشیو رمزگذاری‌شده پشتیبانی نمی‌شود.")
@@ -267,7 +267,8 @@ def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tu
     members = archive.infolist() if isinstance(archive, zipfile.ZipFile) else archive.getmembers()
 
     for info in members:
-        if info.is_dir():
+        is_directory = info.is_dir() if isinstance(archive, zipfile.ZipFile) else info.isdir()
+        if is_directory:
             continue
         name = info.filename if isinstance(archive, zipfile.ZipFile) else info.name
         name = name.replace("\\", "/")
