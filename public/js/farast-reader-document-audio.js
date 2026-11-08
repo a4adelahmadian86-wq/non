@@ -297,6 +297,7 @@
     if (!range) return false;
     event?.preventDefault();
     const label = isWord ? 'واژه' : target.matches('.reader-document-sentence') ? 'جمله'
+      : target.matches('.reader-document-paragraph') ? 'پاراگراف'
       : target.matches('.reader-document-heading') ? 'عنوان'
       : target.matches('.reader-document-cell') ? 'سلول'
       : target.matches('.reader-document-row') ? 'ردیف' : 'بخش';
