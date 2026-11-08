@@ -6,7 +6,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -42,6 +42,7 @@ class ProductSnapshot(BaseModel):
     seo_description: str | None = Field(default=None, max_length=320)
     category_name: str | None = Field(default=None, max_length=160)
     tags: list[str] = Field(default_factory=list, max_length=30)
+    document_knowledge: dict[str, Any] | None = None
     has_cover: bool = False
     media_fingerprint: str = Field(default='', max_length=64)
     course_fingerprint: str | None = Field(default=None, max_length=64)
@@ -318,12 +319,25 @@ async def review_product(snapshot: ProductSnapshot):
         if isinstance(safe_snapshot.get(key), str):
             safe_snapshot[key] = redact_sensitive_content(safe_snapshot[key])[0]
     safe_snapshot["tags"] = [redact_sensitive_content(tag)[0] for tag in safe_snapshot["tags"]]
+    knowledge = safe_snapshot.get("document_knowledge")
+    if isinstance(knowledge, dict):
+        for chunk in knowledge.get("chunks", [])[:150]:
+            if isinstance(chunk, dict) and isinstance(chunk.get("text"), str):
+                chunk["text"] = redact_sensitive_content(chunk["text"])[0][:5000]
+        for fact in knowledge.get("facts", [])[:100]:
+            if isinstance(fact, dict):
+                if isinstance(fact.get("value"), str):
+                    fact["value"] = redact_sensitive_content(fact["value"])[0][:2000]
+                evidence = fact.get("evidence")
+                if isinstance(evidence, dict) and isinstance(evidence.get("quote"), str):
+                    evidence["quote"] = redact_sensitive_content(evidence["quote"])[0][:500]
 
     prompt = {
         "role": "product_quality_supervisor",
         "language": "Persian",
         "rules": [
             "Review only the supplied product snapshot; do not invent missing facts.",
+            "When document_knowledge is supplied, treat its source chunks and evidence-backed facts as the only authoritative description of file contents; preserve source references and say when a detail is absent.",
             "Treat this as an editorial and operational quality review, not legal certification.",
             "Do not approve missing required assets: digital files need a clean primary file; courses need at least one publishable lesson.",
             "Flag implausible discount data when compare_at_price_rials is not greater than price_rials.",
