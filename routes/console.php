@@ -10,7 +10,7 @@ Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->with
 
 // Process document ingestion and the default queue on cron-only/shared hosting.
 // The worker exits when idle and is protected from overlapping scheduler launches.
-Schedule::command('queue:work --queue=documents,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')
+Schedule::command('queue:work --queue=documents,documents-audio,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')
     ->everyMinute()
     ->withoutOverlapping(20)
     ->when(fn () => (bool) config('queue.scheduled_worker', true));
