@@ -218,7 +218,6 @@ async def health():
         "status": "ok",
         "service": "product-supervisor",
         "provider_configured": bool(os.getenv("GEMINI_API_KEY")),
-        "file_review_configured": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY")),
     }
 
 
