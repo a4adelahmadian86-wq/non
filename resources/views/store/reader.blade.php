@@ -8,7 +8,7 @@
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
       <strong>{{ $product->title }}</strong>
-      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} صفحه</span>
+      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} بخش</span>
     </div>
     <div class="farast-reader-account"><i class="fa-solid fa-user-shield"></i><span>{{ $readerWatermark }}</span></div>
   </header>
@@ -46,10 +46,10 @@
 
   <div class="farast-reader-workspace" id="reader-workspace">
     <aside class="farast-reader-sidebar" id="reader-sidebar" aria-label="فهرست صفحات">
-      <div class="farast-reader-sidebar-head"><strong>فهرست اسناد</strong><span>{{ $previews->count() }} مورد</span></div>
+      <div class="farast-reader-sidebar-head"><strong>فهرست اسناد</strong><span>{{ $previews->count() }} بخش</span></div>
       <div class="farast-reader-thumbs">
         @foreach($previews as $i => $preview)
-          <button type="button" class="farast-reader-thumb {{ $i===0 ? 'is-active' : '' }}" data-goto="{{ $i }}" aria-label="رفتن به صفحه {{ $i+1 }}" aria-current="{{ $i===0 ? 'page' : 'false' }}">
+          <button type="button" class="farast-reader-thumb {{ $i===0 ? 'is-active' : '' }}" data-goto="{{ $i }}" aria-label="رفتن به بخش {{ $i+1 }}" aria-current="{{ $i===0 ? 'page' : 'false' }}">
             <span class="farast-reader-thumb-preview">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <i class="fa-solid fa-file-pdf"></i><small>PDF</small>
@@ -61,7 +61,7 @@
                 <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
               @endif
             </span>
-            <span>صفحه {{ $preview->page_number ?: $i+1 }}</span>
+            <span>بخش {{ $preview->page_number ?: $i+1 }}</span>
           </button>
         @endforeach
       </div>
