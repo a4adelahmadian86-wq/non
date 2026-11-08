@@ -174,13 +174,13 @@ class UploadSecurityService
     private function detectType(string $extension, string $header): string
     {
         if ($extension === 'pdf' && str_starts_with($header, '%PDF-')) return 'pdf';
-        if (in_array($extension, ['zip','docx','xlsx','pptx'], true) && str_starts_with($header, "PK\\x03\\x04")) return 'archive';
+        if (in_array($extension, ['zip','docx','xlsx','pptx'], true) && str_starts_with($header, "PK\x03\x04")) return 'archive';
         if ($extension === 'tar' && substr($header, 257, 5) === 'ustar') return 'archive';
-        if ($extension === 'tar.gz' && str_starts_with($header, "\\x1F\\x8B")) return 'archive';
+        if ($extension === 'tar.gz' && str_starts_with($header, "\x1F\x8B")) return 'archive';
         if ($extension === 'tar.bz2' && str_starts_with($header, 'BZh')) return 'archive';
-        if (in_array($extension, ['doc','xls','ppt'], true) && str_starts_with($header, "\\xD0\\xCF\\x11\\xE0\\xA1\\xB1\\x1A\\xE1")) return 'office';
-        if (in_array($extension, ['jpg','jpeg'], true) && str_starts_with($header, "\\xFF\\xD8\\xFF")) return 'image';
-        if ($extension === 'png' && str_starts_with($header, "\\x89PNG\\r\\n\\x1A\\n")) return 'image';
+        if (in_array($extension, ['doc','xls','ppt'], true) && str_starts_with($header, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")) return 'office';
+        if (in_array($extension, ['jpg','jpeg'], true) && str_starts_with($header, "\xFF\xD8\xFF")) return 'image';
+        if ($extension === 'png' && str_starts_with($header, "\x89PNG\r\n\x1A\n")) return 'image';
         if ($extension === 'gif' && (str_starts_with($header, 'GIF87a') || str_starts_with($header, 'GIF89a'))) return 'image';
         if ($extension === 'webp' && substr($header, 0, 4) === 'RIFF' && substr($header, 8, 4) === 'WEBP') return 'image';
         if (in_array($extension, ['mp3','wav','ogg','flac','m4a'], true)) return 'audio';
@@ -220,7 +220,7 @@ class UploadSecurityService
             throw new RuntimeException('upload_pdf_signature_invalid');
         }
 
-        if (! class_exists(\\setasign\\Fpdi\\Fpdi::class)) {
+        if (! class_exists(\setasign\Fpdi\Fpdi::class)) {
             throw new RuntimeException('upload_pdf_inspector_unavailable');
         }
 
@@ -297,12 +297,12 @@ class UploadSecurityService
                     break;
                 }
                 if (strlen($header) !== 512) throw new RuntimeException('upload_tar_header_invalid');
-                if ($header === str_repeat("\\0", 512)) {
+                if ($header === str_repeat("\0", 512)) {
                     $finished = true;
                     break;
                 }
 
-                $checksumText = trim(substr($header, 148, 8), "\\0 ");
+                $checksumText = trim(substr($header, 148, 8), "\0 ");
                 if ($checksumText === '' || preg_match('/^[0-7]+$/', $checksumText) !== 1) {
                     throw new RuntimeException('upload_tar_checksum_invalid');
                 }
@@ -310,26 +310,26 @@ class UploadSecurityService
                 $checksum = array_sum(unpack('C*', $checksumHeader));
                 if ($checksum !== octdec($checksumText)) throw new RuntimeException('upload_tar_checksum_invalid');
 
-                $name = trim(substr($header, 0, 100), "\\0");
-                $prefix = trim(substr($header, 345, 155), "\\0");
+                $name = trim(substr($header, 0, 100), "\0");
+                $prefix = trim(substr($header, 345, 155), "\0");
                 $name = $prefix !== '' ? $prefix.'/'.$name : $name;
-                $sizeText = trim(substr($header, 124, 12), "\\0 ");
+                $sizeText = trim(substr($header, 124, 12), "\0 ");
                 if ($sizeText !== '' && preg_match('/^[0-7]+$/', $sizeText) !== 1) {
                     throw new RuntimeException('upload_tar_size_invalid');
                 }
                 $entrySize = $sizeText === '' ? 0 : octdec($sizeText);
                 $type = substr($header, 156, 1);
-                $normalized = str_replace('\\\\', '/', $name);
+                $normalized = str_replace('\\', '/', $name);
                 $parts = explode('/', $normalized);
                 $entryExtension = strtolower(pathinfo($normalized, PATHINFO_EXTENSION));
 
-                if ($normalized === '' || str_starts_with($normalized, '/') || preg_match('/^[A-Za-z]:/', $normalized) || in_array('..', $parts, true) || str_contains($normalized, "\\0")) {
+                if ($normalized === '' || str_starts_with($normalized, '/') || preg_match('/^[A-Za-z]:/', $normalized) || in_array('..', $parts, true) || str_contains($normalized, "\0")) {
                     throw new RuntimeException('upload_archive_path_or_link_rejected');
                 }
                 if (in_array($type, ['1','2','3','4','6','7','x','g','L','K'], true)) {
                     throw new RuntimeException('upload_tar_link_or_special_entry_rejected');
                 }
-                if (! in_array($type, ["\\0", '0', '5'], true)) {
+                if (! in_array($type, ["\0", '0', '5'], true)) {
                     throw new RuntimeException('upload_tar_entry_type_unsupported');
                 }
                 if (in_array($entryExtension, $this->blockedExtensions, true)) {
