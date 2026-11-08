@@ -36,6 +36,21 @@ class StoreCourseLearningController extends Controller
         abort(403, 'مدت دسترسی این دوره به پایان رسیده است.');
     }
 
+    private function lessonHasPublishableContent(StoreCourseLesson $lesson): bool
+    {
+        $lesson->loadMissing('resources');
+        $resources = $lesson->resources->where('is_active', true)->where('scan_status', 'clean');
+
+        return match ($lesson->lesson_type) {
+            'article' => filled($lesson->content),
+            'video' => filled($lesson->video_url) || $resources->contains(fn ($file) => str_starts_with((string) $file->mime, 'video/')),
+            'audio' => filled($lesson->video_url) || $resources->contains(fn ($file) => str_starts_with((string) $file->mime, 'audio/')),
+            'file' => $resources->isNotEmpty(),
+            'live' => filled($lesson->video_url) || filled($lesson->content),
+            default => false,
+        };
+    }
+
     private function lessonAvailable(StoreCourseEnrollment $enrollment, StoreCourseLesson $lesson): bool
     {
         if (! $enrollment->course?->drip_enabled || $lesson->drip_after_days === null) {
@@ -50,7 +65,7 @@ class StoreCourseLearningController extends Controller
         $enrollment = $this->enrollment($request, $product);
         $enrollment->load(['course.sections.lessons.resources', 'progress']);
         $sections = $enrollment->course->sections->map(function ($section) use ($enrollment) {
-            $section->setRelation('lessons', $section->lessons->filter(fn ($lesson) => $lesson->is_published && $this->lessonAvailable($enrollment, $lesson))->values());
+            $section->setRelation('lessons', $section->lessons->filter(fn ($lesson) => $lesson->is_published && $this->lessonHasPublishableContent($lesson) && $this->lessonAvailable($enrollment, $lesson))->values());
             return $section;
         })->filter(fn ($section) => $section->lessons->isNotEmpty())->values();
 
@@ -68,7 +83,7 @@ class StoreCourseLearningController extends Controller
     public function lesson(Request $request, StoreProduct $product, StoreCourseLesson $lesson)
     {
         $enrollment = $this->enrollment($request, $product);
-        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
+        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published && $this->lessonHasPublishableContent($lesson), 404);
         abort_unless($this->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
         $lesson->load(['resources' => fn ($query) => $query->where('is_active', true)->where('scan_status', 'clean')]);
         $progress = StoreCourseLessonProgress::firstOrNew([
@@ -82,7 +97,7 @@ class StoreCourseLearningController extends Controller
     public function progress(Request $request, StoreProduct $product, StoreCourseLesson $lesson)
     {
         $enrollment = $this->enrollment($request, $product);
-        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
+        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published && $this->lessonHasPublishableContent($lesson), 404);
         abort_unless($this->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
 
         $data = $request->validate([
@@ -117,7 +132,7 @@ class StoreCourseLearningController extends Controller
 
         if (array_key_exists('completed', $data)) {
             $publishedLessonIds = StoreCourseLesson::query()
-                ->where('is_published', true)
+                ->publishable()
                 ->whereHas('section', fn ($query) => $query->where('course_id', $enrollment->course_id))
                 ->pluck('id');
             $total = $publishedLessonIds->count();
@@ -137,7 +152,7 @@ class StoreCourseLearningController extends Controller
     public function resource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
     {
         $enrollment = $this->enrollment($request, $product);
-        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
+        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published && $this->lessonHasPublishableContent($lesson), 404);
         abort_unless($this->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
         abort_unless(
             $file->product_id === $product->id

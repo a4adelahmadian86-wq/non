@@ -281,7 +281,7 @@
   form.querySelector('[name="compare_at_price_rials"]')?.addEventListener('input', updatePrice);
   updatePrice();
 
-  form.querySelectorAll('input[type="file"]').forEach(input => {
+  document.querySelectorAll('input[type="file"]').forEach(input => {
     input.addEventListener('change', () => {
       const output = input.closest('form')?.querySelector('[data-file-name]');
       if (!output) return;
