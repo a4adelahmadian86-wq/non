@@ -140,6 +140,16 @@
     </nav>
     @endif
 
+    <section class="home-store-search" aria-label="جستجو در محصولات فروشگاه">
+        <form action="{{ route('store') }}" method="get" role="search">
+            <label for="homeStoreSearch"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> دنبال محصول یا موضوع مشخصی هستید؟</label>
+            <div class="home-store-search__control">
+                <input id="homeStoreSearch" type="search" name="q" maxlength="120" placeholder="نام محصول، موضوع یا کلمه کلیدی..." autocomplete="off">
+                <button type="submit">جستجو در فروشگاه <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></button>
+            </div>
+        </form>
+    </section>
+
     @if($homeProducts->isNotEmpty())
     <section class="home-products" aria-labelledby="home-products-title">
         <div class="home-section-heading">

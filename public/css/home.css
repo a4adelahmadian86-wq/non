@@ -140,3 +140,15 @@
 .home-products--empty .home-section-heading>div{max-width:720px}
 .home-products--empty .home-section-heading p{line-height:2}
 @media(max-width:720px){.home-products--empty{padding:20px 15px}.home-products--empty .home-section-heading{align-items:flex-start}}
+
+/* Direct catalogue search uses the store's existing query contract. */
+.home-store-search{margin:0 0 30px;padding:18px 20px;border:1px solid #e1e9f4;border-radius:19px;background:#fff}
+.home-store-search form{display:grid;gap:11px}
+.home-store-search label{display:flex;align-items:center;gap:9px;color:#314a6d;font-size:.82rem;font-weight:850}
+.home-store-search label i{color:#3972ca}
+.home-store-search__control{display:flex;gap:9px}
+.home-store-search__control input{flex:1;min-width:0;min-height:47px;padding:0 14px;border:1px solid #dce5f0;border-radius:12px;background:#fbfcfe;color:#1d3352;font:inherit;font-size:.82rem;outline:none}
+.home-store-search__control input:focus{border-color:#82a8e4;box-shadow:0 0 0 3px rgba(49,105,197,.1)}
+.home-store-search__control button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:47px;padding:0 17px;border:0;border-radius:12px;background:#245fc4;color:#fff;font:inherit;font-size:.78rem;font-weight:850;cursor:pointer}
+.home-store-search__control button:hover{background:#194fa9}
+@media(max-width:560px){.home-store-search{padding:15px 12px}.home-store-search__control{flex-direction:column}.home-store-search__control button{width:100%}}
