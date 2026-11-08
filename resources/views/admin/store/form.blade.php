@@ -75,7 +75,7 @@
                 <option value="suggest" @selected(old('ai_supervisor.mode', data_get($product->metadata, 'ai_supervisor.mode', 'suggest')) === 'suggest')>پیشنهاد و هشدار؛ تصمیم با مدیر</option>
                 <option value="review_gate" @selected(old('ai_supervisor.mode', data_get($product->metadata, 'ai_supervisor.mode', 'suggest')) === 'review_gate')>نیازمند تأیید ناظر پیش از انتشار</option>
               </select>
-              <small>در حالت تأییدمحور، انتشار باید پس از پیاده‌سازی سرویس ناظر و دریافت تأیید معتبر انجام شود؛ این تنظیم به‌تنهایی انتشار را مسدود نمی‌کند.</small>
+              <small>این انتخاب، سیاست مورد انتظار را ذخیره می‌کند؛ تا زمان اتصال سرویس ناظر اختصاصی، هیچ تصمیم خودکاری درباره انتشار اعمال نمی‌شود.</small>
             </label>
             <label class="product-field product-field-wide">دستورالعمل اختصاصی ناظر
               <textarea name="ai_supervisor[instructions]" rows="3" maxlength="4000" placeholder="مثلاً ادعاهای آموزشی را با محتوای واقعی دوره تطبیق بده و از وعده‌های قطعی درآمد خودداری کن.">{{ old('ai_supervisor.instructions', data_get($product->metadata, 'ai_supervisor.instructions', '')) }}</textarea>
@@ -188,7 +188,7 @@
 .product-readiness>p{margin:12px 0 0;color:var(--st-muted);font-size:.65rem}
 @media(max-width:760px){.product-readiness-list{grid-template-columns:repeat(2,minmax(0,1fr))}.product-readiness{padding:14px}}
 
-.product-workflow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}
 .product-workflow a{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;align-items:center;gap:2px 10px;padding:13px;border:1px solid var(--st-line);border-radius:14px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,box-shadow .18s}
 .product-workflow a:hover,.product-workflow a:focus-visible{border-color:#9bb9e7;box-shadow:0 5px 18px rgba(35,91,170,.08);outline:none}
 .product-workflow a>span{grid-row:span 2;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#edf4ff;color:#2868c8;font-weight:900}
