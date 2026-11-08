@@ -79,7 +79,7 @@ class ProductSupervisorClient
             || ! isset($payload['review_id'], $payload['product_id'], $payload['inspection'], $payload['security_gate'])
             || (string) $payload['product_id'] !== (string) ($metadata['product_id'] ?? '')
             || ! is_array($payload['inspection'])
-            || ! in_array($payload['security_gate'], ['blocked', 'manual_scan_required', 'structural_checks_passed'], true)) {
+            || ! in_array($payload['security_gate'], ['blocked', 'manual_scan_required', 'structural_checks_passed', 'upstream_scan_verified'], true)) {
             throw new RuntimeException('product_supervisor_invalid_file_response');
         }
 
