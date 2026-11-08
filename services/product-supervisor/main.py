@@ -87,9 +87,13 @@ async def authenticate(authorization: str | None = Header(default=None)) -> None
 
 @app.middleware("http")
 async def enforce_body_limit(request: Request, call_next):
-    content_length = request.headers.get("content-length")
-    if content_length and content_length.isdigit() and int(content_length) > MAX_BODY_BYTES:
-        return await _json_error(413, "Request body too large")
+    if request.method in {"POST", "PUT", "PATCH"}:
+        content_length = request.headers.get("content-length")
+        # Reject chunked/unknown-length writes so the body limit cannot be bypassed.
+        if not content_length or not content_length.isdigit():
+            return await _json_error(411, "Content-Length is required")
+        if int(content_length) > MAX_BODY_BYTES:
+            return await _json_error(413, "Request body too large")
     response = await call_next(request)
     return response
 
