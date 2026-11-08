@@ -5,6 +5,14 @@
 
   const articles = [...root.querySelectorAll('.farast-reader-page-item')];
   if (!articles.some(article => article.dataset.audioUrl)) return;
+  articles.forEach((article, index) => {
+    if (!article.hasAttribute('tabindex')) article.tabIndex = 0;
+    if (!article.hasAttribute('aria-label')) {
+      const page = Number(article.dataset.readerPage || index + 1);
+      article.setAttribute('aria-label', 'خواندن صفحه ' + fa(page));
+    }
+    article.dataset.readerAudioPageTarget = '1';
+  });
 
   const fa = value => Number(value || 0).toLocaleString('fa-IR');
   const parseTimingJson = raw => {
@@ -360,7 +368,7 @@
     let matchedOccurrences = 0;
     for (let i = 0; i <= indexedWords.length - wanted.length; i++) {
       if (wanted.every((word, offset) => indexedWords[i + offset].token === word)) {
-        if (wanted.length === 1 && matchedOccurrences++ < Math.max(0, Number(occurrence) || 0)) continue;
+        if (matchedOccurrences++ < Math.max(0, Number(occurrence) || 0)) continue;
         return {
           start: indexedWords[i].start,
           end: indexedWords[i + wanted.length - 1].end,
@@ -369,6 +377,34 @@
       }
     }
     return null;
+  };
+
+  const sequenceOccurrenceBefore = (prefixText, selectedText) => {
+    const prefix = tokens(prefixText);
+    const wanted = tokens(selectedText);
+    if (!wanted.length || prefix.length < wanted.length) return 0;
+    let occurrences = 0;
+    for (let index = 0; index <= prefix.length - wanted.length; index += 1) {
+      if (wanted.every((word, offset) => prefix[index + offset] === word)) occurrences += 1;
+    }
+    return occurrences;
+  };
+  const targetOccurrence = (target, selector, value) => {
+    const scope = target.closest('.farast-reader-page-item') || root;
+    const wanted = tokens(value).join(' ');
+    const matches = [...scope.querySelectorAll(selector)].filter(item =>
+      tokens(item.dataset.readerSpeechText || item.textContent).join(' ') === wanted
+    );
+    return Math.max(0, matches.indexOf(target));
+  };
+  const playPage = article => {
+    if (!article) return false;
+    const section = Math.max(0, Number(article.dataset.index) || 0);
+    selectSection(section);
+    const page = Number(article.dataset.readerPage || article.dataset.index && Number(article.dataset.index) + 1 || activePage || 1);
+    const pageItems = activeTrack?.timings.filter(item => Number(item.page) === page) || [];
+    if (!pageItems.length) return false;
+    return playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ ' + fa(page));
   };
 
   const rangeForDocumentWord = element => {
@@ -392,7 +428,14 @@
     const sentence = event.target.closest('.reader-document-sentence');
     const paragraph = event.target.closest('.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
     const target = sentence || paragraph;
-    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
+    if (target) {
+      const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+      const text = target.dataset.readerSpeechText || target.textContent;
+      const selector = sentence ? '.reader-document-sentence' : '.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row';
+      const occurrence = targetOccurrence(target, selector, text);
+      const range = findTextRange(text, page, occurrence);
+      if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن محدودهٔ انتخاب‌شده'); return; }
+    }
     const pdfLayer = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
     if (pdfLayer) {
       const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
@@ -410,10 +453,18 @@
       }
     }
     const article = event.target.closest('.farast-reader-page-item');
-    if (article && !event.target.closest('button,input,select,a,.farast-pdf-text-layer,.farast-pdf-cont-text,.farast-audio-dock')) {
-      const page = Number(event.target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || article.dataset.readerPage || root.querySelector('#reader-page-number')?.value || article.dataset.index || 1);
-      const pageItems = activeTrack?.timings.filter(item => Number(item.page) === page) || [];
-      if (pageItems.length) playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ انتخاب‌شده');
+    if (article && !event.target.closest('button,input,select,a,.farast-audio-dock')) {
+      const page = event.target.closest('[data-pdf-cont-page]');
+      if (page) {
+        const pageNumber = Number(page.dataset.pdfContPage || 0);
+        const pageArticle = page.closest('.farast-reader-page-item') || article;
+        if (pageNumber > 0) {
+          const pageItems = activeTrack?.timings.filter(item => Number(item.page) === pageNumber) || [];
+          if (pageItems.length) { event.preventDefault(); playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ ' + fa(pageNumber)); return; }
+        }
+      }
+      if (!event.target.closest('.farast-pdf-cont-text')) playPage(article);
+      else if (!event.target.closest('.farast-pdf-cont-text [data-pdf-cont-page]')) playPage(article);
     }
   }, true);
   root.addEventListener('keydown', event => {
@@ -424,16 +475,32 @@
       if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); return; }
     }
     const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
-    if (!target) return;
-    const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page);
-    if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); }
+    if (target) {
+      const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+      const text = target.dataset.readerSpeechText || target.textContent;
+      const selector = target.matches('.reader-document-sentence') ? '.reader-document-sentence' : '.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row';
+      const range = findTextRange(text, page, targetOccurrence(target, selector, text));
+      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); return; }
+    }
+    const pageArticle = event.target.closest('.farast-reader-page-item[data-reader-audio-page-target="1"]');
+    if (pageArticle && event.target === pageArticle) { event.preventDefault(); playPage(pageArticle); }
   });
   root.addEventListener('pointerup', () => {
     const selection = window.getSelection(); if (!selection || selection.isCollapsed) return;
     const anchor = selection.anchorNode?.parentElement; if (!anchor || !root.contains(anchor)) return;
     const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(selection.toString(), page);
+    const selectedText = selection.toString();
+    const selectionRange = selection.getRangeAt(0);
+    const pageScope = anchor.closest('.farast-reader-page-item') || root;
+    let prefixText = '';
+    try {
+      const prefixRange = document.createRange();
+      prefixRange.selectNodeContents(pageScope);
+      prefixRange.setEnd(selectionRange.startContainer, selectionRange.startOffset);
+      prefixText = prefixRange.toString();
+    } catch (_) { prefixText = ''; }
+    const occurrence = sequenceOccurrenceBefore(prefixText, selectedText);
+    const range = findTextRange(selectedText, page, occurrence);
     if (range) {
       suppressNextClick = true;
       window.clearTimeout(selectionSuppressTimer);
