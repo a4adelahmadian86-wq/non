@@ -100,10 +100,7 @@
             <div class="product-ai-runtime">
               <div class="product-ai-runtime-head">
                 <div><span>موتور ناظر مستقل</span><strong>بررسی کیفیت محصول</strong><small>این عملیات فقط یک گزارش پیشنهاد می‌دهد و هیچ‌گاه محصول را خودکار منتشر یا ویرایش نمی‌کند.</small></div>
-                <form method="post" action="{{ route('admin.store.ai-supervisor.review', $product) }}">
-                  @csrf
-                  <button type="submit" class="store-primary-btn" @disabled(!data_get($product->metadata, 'ai_supervisor.enabled', false))>اجرای بررسی هوشمند</button>
-                </form>
+                <button type="submit" form="productSupervisorReviewForm" class="store-primary-btn" @disabled(!data_get($product->metadata, 'ai_supervisor.enabled', false))>اجرای بررسی هوشمند</button>
               </div>
               @if($lastSupervisorReview)
                 <div class="product-ai-result">
@@ -159,6 +156,9 @@
 
       <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ایجاد پیش‌نویس و ادامه تکمیل' }}</button><span>اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.</span></div>
     </form>
+    @if($isEdit)
+      <form id="productSupervisorReviewForm" method="post" action="{{ route('admin.store.ai-supervisor.review', $product) }}">@csrf</form>
+    @endif
 
     @if($isEdit)
       <div class="store-panel product-files-panel" id="product-media">
