@@ -217,7 +217,16 @@ class StoreReaderAccessTest extends TestCase
             'page_number' => 1,
             'page_kind' => 'pdf_page',
             'locator_key' => 'page:1',
-            'locator_json' => ['page' => 1, 'reader_page' => 1],
+            'locator_json' => [
+                'page' => 1,
+                'reader_page' => 1,
+                'content_blocks' => [
+                    ['type' => 'heading', 'level' => 1, 'text' => 'فصل اول'],
+                    ['type' => 'paragraph', 'text' => 'متن توضیحی'],
+                    ['type' => 'list_item', 'list_kind' => 'bullet', 'list_level' => 1, 'text' => 'گزینه نخست'],
+                    ['type' => 'table_row', 'table_index' => 1, 'row_index' => 1, 'cells' => ['عنوان', 'مقدار'], 'text' => 'عنوان | مقدار'],
+                ],
+            ],
             'content_text' => 'متن مجاز صفحه اول کتاب',
             'content_html' => '<section><p>متن مجاز صفحه اول کتاب</p></section>',
             'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
@@ -246,6 +255,10 @@ class StoreReaderAccessTest extends TestCase
         $pageResponse->assertOk()
             ->assertJsonPath('page_number', 1)
             ->assertJsonPath('content_text', 'متن مجاز صفحه اول کتاب')
+            ->assertJsonPath('content_blocks.0.type', 'heading')
+            ->assertJsonPath('content_blocks.0.level', 1)
+            ->assertJsonPath('content_blocks.2.list_kind', 'bullet')
+            ->assertJsonPath('content_blocks.3.cells.1', 'مقدار')
             ->assertJsonMissingPath('path')
             ->assertJsonMissingPath('disk');
 
