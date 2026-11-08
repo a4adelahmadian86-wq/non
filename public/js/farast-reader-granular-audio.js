@@ -119,9 +119,10 @@
     const pdfText = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
     if (pdfText) {
       const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
-      const node = caret?.startContainer;
+      const position = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+      const node = caret?.startContainer || position?.offsetNode;
       if (node?.nodeType === Node.TEXT_NODE) {
-        const raw = node.nodeValue || '', offset = Number(caret.startOffset || 0);
+        const raw = node.nodeValue || '', offset = Number(caret?.startOffset ?? position?.offset ?? 0);
         const before = raw.slice(0, offset), after = raw.slice(offset);
         const left = before.search(/[^.!؟۔؛]*$/u);
         const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
