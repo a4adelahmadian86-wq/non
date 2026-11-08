@@ -126,6 +126,7 @@ async def review_product_file(
     )
 
     data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File exceeds 25 MB")
     try:
@@ -217,6 +218,7 @@ async def health():
         "status": "ok",
         "service": "product-supervisor",
         "provider_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "file_review_configured": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY")),
     }
 
 
@@ -254,7 +256,7 @@ async def review_product(snapshot: ProductSnapshot):
             "Never request or infer personal customer data, secrets, credentials, or payment details.",
         ],
         "selected_checks": snapshot.checks,
-        "additional_instructions": snapshot.instructions or "",
+        "additional_instructions": redact_sensitive_content(snapshot.instructions or "")[0],
         "product": safe_snapshot,
         "required_output": {
             "verdict": "approved | needs_changes | blocked",
