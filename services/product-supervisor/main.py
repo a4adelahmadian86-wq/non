@@ -21,7 +21,7 @@ app = FastAPI(
     openapi_url=None,
 )
 
-MAX_BODY_BYTES = 26 * 1024 * 1024
+MAX_BODY_BYTES = 52 * 1024 * 1024
 MAX_FINDINGS = 12
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -160,6 +160,7 @@ async def review_product_file(
     product_type: Literal["digital_file", "course"] = Form(...),
     primary_scan_status: Literal["clean", "structural_checks_passed"] = Form(...),
     allow_sample_generation: bool = Form(default=True),
+    reader_source_file: UploadFile | None = File(default=None),
     category_name: str | None = Form(default=None, max_length=160),
     tags_json: str = Form(default="[]", max_length=5000),
     description: str | None = Form(default=None, max_length=8000),
@@ -187,11 +188,31 @@ async def review_product_file(
         raise HTTPException(status_code=422, detail="Invalid tags_json") from None
 
     try:
-        inspection = inspect_file(data, file.filename or "upload.bin", file.content_type, primary_scan_status)
+        pdf_inspection = inspect_file(data, file.filename or "upload.bin", file.content_type, primary_scan_status)
+        inspection = pdf_inspection
+        if reader_source_file is not None:
+            source_data = await reader_source_file.read(MAX_UPLOAD_BYTES + 1)
+            await reader_source_file.close()
+            if len(source_data) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Reader source file exceeds 25 MB")
+            source_inspection = inspect_file(
+                source_data,
+                reader_source_file.filename or "reader-source.bin",
+                reader_source_file.content_type,
+                primary_scan_status,
+            )
+            if source_inspection.detected_type != "docx":
+                raise HTTPException(status_code=422, detail="Reader source must be a valid DOCX document")
+            # The converted PDF remains the visual/sample artifact; original DOCX
+            # supplies the semantic blocks used by the protected text reader.
+            source_inspection.page_count = pdf_inspection.page_count
+            inspection = source_inspection
     except FileInspectionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
     warnings = list(inspection.warnings or [])
+    if reader_source_file is not None:
+        warnings.extend(pdf_inspection.warnings or [])
     visual_report = ""
     transcription = ""
     provider_status = {
@@ -321,10 +342,10 @@ async def review_product_file(
 
     sample_page_numbers: list[int] = []
     sample_pdf_base64 = None
-    if allow_sample_generation and inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
+    if allow_sample_generation and pdf_inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
         raw_sample_pages = model_review.get("sample_pages", [])
         available_pdf_pages: set[int] = set()
-        for chunk in (inspection.content_chunks or []):
+        for chunk in (pdf_inspection.content_chunks or []):
             locator = chunk.get("locator", {}) if isinstance(chunk, dict) else {}
             if not isinstance(locator, dict):
                 continue
@@ -339,9 +360,11 @@ async def review_product_file(
                 )
         if isinstance(raw_sample_pages, list):
             for candidate in raw_sample_pages[:3]:
-                if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate in available_pdf_pages and inspection.page_count and 1 <= candidate <= inspection.page_count:
+                if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate in available_pdf_pages and pdf_inspection.page_count and 1 <= candidate <= pdf_inspection.page_count:
                     if candidate not in sample_page_numbers:
                         sample_page_numbers.append(candidate)
+        if reader_source_file is not None and not sample_page_numbers:
+            sample_page_numbers = sorted(available_pdf_pages)[:3]
         generated_sample = build_pdf_sample(data, sample_page_numbers)
         if generated_sample:
             sample_bytes, sample_page_numbers = generated_sample
