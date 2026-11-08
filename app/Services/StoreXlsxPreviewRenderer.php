@@ -301,6 +301,16 @@ class StoreXlsxPreviewRenderer
             }
         }
 
+        $numberFormats = [];
+        foreach ($xpath->query('//*[local-name()="numFmts"]/*[local-name()="numFmt"]') as $format) {
+            if (!$format instanceof DOMElement) continue;
+            $id = filter_var($format->getAttribute('numFmtId'), FILTER_VALIDATE_INT);
+            $code = $format->getAttribute('formatCode');
+            if ($id !== false && $id >= 164 && strlen($code) <= 128) {
+                $numberFormats[$id] = $code;
+            }
+        }
+
         $fonts = [];
         foreach ($xpath->query('//*[local-name()="fonts"]/*[local-name()="font"]') as $font) {
             $css = [];
@@ -361,7 +371,12 @@ class StoreXlsxPreviewRenderer
                 if (in_array($vertical, ['top','center','bottom'], true)) $css[] = 'vertical-align:'.($vertical === 'center' ? 'middle' : $vertical);
                 if ($alignment->getAttribute('wrapText') === '1') $css[] = 'white-space:normal';
             }
-            $formats[] = implode(';', array_unique($css));
+            $numFmtId = filter_var($xf->getAttribute('numFmtId'), FILTER_VALIDATE_INT);
+            $formats[] = [
+                'css' => implode(';', array_unique($css)),
+                'numFmtId' => $numFmtId !== false ? $numFmtId : 0,
+                'formatCode' => $numberFormats[$numFmtId] ?? null,
+            ];
         }
 
         return $formats;
@@ -429,9 +444,10 @@ class StoreXlsxPreviewRenderer
 
                 // Formula nodes are intentionally never evaluated. Only cached <v> is shown.
                 $styleIndex = filter_var($cell->getAttribute('s'), FILTER_VALIDATE_INT);
+                $style = $styleIndex !== false && $styleIndex >= 0 ? ($styles[$styleIndex] ?? []) : [];
                 $row[$column] = [
-                    'value' => (string) $value,
-                    'style' => $styleIndex !== false && $styleIndex >= 0 ? ($styles[$styleIndex] ?? '') : '',
+                    'value' => $this->formatCellValue((string) $value, $style),
+                    'style' => (string) ($style['css'] ?? ''),
                 ];
             }
             if ($row !== []) {
@@ -442,6 +458,65 @@ class StoreXlsxPreviewRenderer
         ksort($rows);
 
         return $rows;
+    }
+
+    /**
+     * Format a safe subset of Excel's built-in and custom numeric formats.
+     * Unknown formats deliberately fall back to the cached raw value.
+     */
+    private function formatCellValue(string $value, array $style): string
+    {
+        if ($value === '' || !is_numeric($value)) {
+            return $value;
+        }
+
+        $number = (float) $value;
+        $formatId = (int) ($style['numFmtId'] ?? 0);
+        $formatCode = is_string($style['formatCode'] ?? null) ? $style['formatCode'] : '';
+        $builtIn = [
+            9 => '0%', 10 => '0.00%', 14 => 'yyyy-mm-dd',
+            15 => 'd-mmm-yy', 16 => 'd-mmm', 17 => 'mmm-yy',
+            18 => 'h:mm AM/PM', 19 => 'h:mm:ss AM/PM',
+            20 => 'h:mm', 21 => 'h:mm:ss', 22 => 'yyyy-mm-dd h:mm',
+        ];
+        $code = $formatCode !== '' ? $formatCode : ($builtIn[$formatId] ?? '');
+        if ($code === '') {
+            return $value;
+        }
+
+        $section = explode(';', $code, 2)[0];
+        $unquoted = preg_replace('/"[^"]*"|\\\\./', '', $section) ?? $section;
+        if (preg_match('/[ymdhs]/i', $unquoted)) {
+            $days = (int) floor($number);
+            $seconds = (int) round(($number - $days) * 86400);
+            if ($seconds >= 86400) { $days++; $seconds -= 86400; }
+            try {
+                $date = (new \\DateTimeImmutable('1899-12-30 00:00:00', new \\DateTimeZone('UTC')))
+                    ->modify(($days >= 0 ? '+' : '').$days.' days')
+                    ->modify(($seconds >= 0 ? '+' : '').$seconds.' seconds');
+                if (preg_match('/[hms]/i', $unquoted)) {
+                    return $date->format(preg_match('/s/i', $unquoted) ? 'Y-m-d H:i:s' : 'Y-m-d H:i');
+                }
+                return $date->format('Y-m-d');
+            } catch (\\Throwable) {
+                return $value;
+            }
+        }
+
+        if (str_contains($section, '%')) {
+            preg_match('/\\.([0#?]+)/', $section, $decimalMatch);
+            $precision = isset($decimalMatch[1]) ? min(6, strlen($decimalMatch[1])) : 0;
+            return number_format($number * 100, $precision, '.', ',').'%';
+        }
+
+        if (preg_match('/^[^;]*[0#?][^;]*$/', $section)) {
+            preg_match('/\\.([0#?]+)/', $section, $decimalMatch);
+            $precision = isset($decimalMatch[1]) ? min(6, strlen($decimalMatch[1])) : 0;
+            $thousands = str_contains($section, ',');
+            return number_format($number, $precision, '.', $thousands ? ',' : '');
+        }
+
+        return $value;
     }
 
     private function columnIndex(string $letters): int
