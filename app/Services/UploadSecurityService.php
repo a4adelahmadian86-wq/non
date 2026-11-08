@@ -102,6 +102,19 @@ class UploadSecurityService
                     throw new RuntimeException('upload_office_macro_rejected');
                 }
                 $inspection['detected_type'] = 'office';
+                if ($extension === 'xlsx') {
+                    $inspection['sheet_count'] = count(array_filter($members, static fn ($name) => preg_match('~^xl/worksheets/sheet[0-9]+\\.xml$~i', $name) === 1));
+                } elseif ($extension === 'pptx') {
+                    $inspection['page_count'] = count(array_filter($members, static fn ($name) => preg_match('~^ppt/slides/slide[0-9]+\\.xml$~i', $name) === 1));
+                    $inspection['page_count_label'] = 'تعداد اسلاید';
+                } elseif ($extension === 'docx') {
+                    $inspection['document_parts'] = [
+                        'headers' => count(array_filter($members, static fn ($name) => str_starts_with($name, 'word/header') && str_ends_with($name, '.xml'))),
+                        'footers' => count(array_filter($members, static fn ($name) => str_starts_with($name, 'word/footer') && str_ends_with($name, '.xml'))),
+                        'footnotes' => in_array('word/footnotes.xml', $members, true),
+                        'endnotes' => in_array('word/endnotes.xml', $members, true),
+                    ];
+                }
             }
             $inspection = array_merge($inspection, $archive);
         } elseif ($inspection['detected_type'] === 'pdf') {
@@ -193,13 +206,26 @@ class UploadSecurityService
 
     private function countPdfPages(string $path): ?int
     {
-        $content = file_get_contents($path, false, null, 0, min(filesize($path), 32 * 1024 * 1024));
-        if (! is_string($content) || ! str_starts_with($content, '%PDF-')) {
+        if (! is_file($path) || ! str_starts_with((string) file_get_contents($path, false, null, 0, 8), '%PDF-')) {
             throw new RuntimeException('upload_pdf_signature_invalid');
         }
-        preg_match_all('/\\/Type\\s*\\/Page(?!s)\\b/', $content, $matches);
-        $count = count($matches[0]);
-        return $count > 0 ? min($count, 100000) : null;
+
+        if (! class_exists(\\setasign\\Fpdi\\Fpdi::class)) {
+            throw new RuntimeException('upload_pdf_inspector_unavailable');
+        }
+
+        try {
+            $reader = new \\setasign\\Fpdi\\Fpdi();
+            $count = (int) $reader->setSourceFile($path);
+        } catch (\\Throwable) {
+            throw new RuntimeException('upload_pdf_structure_unreadable');
+        }
+
+        if ($count < 1 || $count > 5000) {
+            throw new RuntimeException('upload_pdf_page_limit_exceeded');
+        }
+
+        return $count;
     }
 
     private function inspectImage(string $path): array
