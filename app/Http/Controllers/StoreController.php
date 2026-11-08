@@ -183,7 +183,7 @@ class StoreController extends Controller
         return $disk->response($preview->path, null, $headers);
     }
 
-    public function reader(string $slug)
+    public function reader(string $slug, \App\Services\ProductKnowledgeService $knowledgeService)
     {
         $product = StoreProduct::with(['previews' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')])
             ->published()
@@ -201,12 +201,36 @@ class StoreController extends Controller
         $previews = $fullPreviews->isNotEmpty() ? $fullPreviews : $samplePreviews;
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
 
+        $documentKnowledge = $hasReaderEntitlement
+            ? $knowledgeService->forAssistant($product, 120000, 500)
+            : ['product_id' => (string) $product->id, 'knowledge_available' => false, 'documents' => []];
+
+        $documentAudio = $hasReaderEntitlement
+            ? StoreProductDocumentAudio::query()
+                ->with('segments')
+                ->where('state', 'ready')
+                ->whereHas('document', fn ($query) => $query
+                    ->where('product_id', $product->id)
+                    ->whereColumn('store_product_documents.content_version', 'store_product_document_audio.content_version'))
+                ->orderByDesc('generated_at')
+                ->first()
+            : null;
+        $audioSegments = $documentAudio
+            ? $documentAudio->segments->map(fn ($segment) => [
+                'start_ms' => $segment->start_ms,
+                'end_ms' => $segment->end_ms,
+                'page_number' => data_get($segment->visual_locator, 'page_number'),
+                'block_id' => $segment->document_block_id,
+                'section' => data_get($segment->visual_locator, 'section_path'),
+            ])->values()
+            : collect();
+
         $readerIdentity = $user
             ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
             : (string) request()->ip();
 
         return response()
-            ->view('store.reader', compact('product', 'previews', 'readerIdentity'))
+            ->view('store.reader', compact('product', 'previews', 'readerIdentity', 'documentKnowledge', 'documentAudio', 'audioSegments'))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('X-Content-Type-Options', 'nosniff')
