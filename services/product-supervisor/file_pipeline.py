@@ -50,6 +50,7 @@ class Inspection:
     upstream_scan_status: str = "not_provided"
     content_chunks: list[dict[str, Any]] = field(default_factory=list)
     page_count: int | None = None
+    extraction_truncated: bool = False
 
     def public_dict(self) -> dict[str, Any]:
         return {
@@ -57,6 +58,7 @@ class Inspection:
             "upstream_scan_status": self.upstream_scan_status,
             "extracted_characters": len(self.extracted_text),
             "page_count": self.page_count,
+            "extraction_truncated": self.extraction_truncated,
             "archive_entries": (self.archive_entries or [])[:50],
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
@@ -541,7 +543,10 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         raise FileInspectionError("نوع فایل پشتیبانی نمی‌شود یا امضای واقعی فایل با پسوند آن تطابق ندارد.")
 
     if result.extracted_text:
-        result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
+        if len(result.extracted_text) >= MAX_EXTRACTED_CHARS:
+        result.extraction_truncated = True
+        result.warnings.append("استخراج متن به سقف پردازش فعلی رسید؛ ممکن است بخشی از سند هنوز تحلیل نشده باشد.")
+    result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
 
     if result.antivirus_status != "clean":
         if result.upstream_scan_status == "clean":
