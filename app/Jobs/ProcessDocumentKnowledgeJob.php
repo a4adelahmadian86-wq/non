@@ -100,7 +100,8 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             if ($text === '') continue;
             $text = mb_substr($text, 0, 5000);
             $totalCharacters += mb_strlen($text);
-            $wordCount += str_word_count($text);
+            preg_match_all('/[\\p{L}\\p{N}]+/u', $text, $wordMatches);
+            $wordCount += count($wordMatches[0] ?? []);
             $document->chunks()->create([
                 'chunk_index' => $index,
                 'content_type' => preg_replace('/[^a-z0-9_]/i', '', (string) ($chunk['content_type'] ?? 'text')) ?: 'text',
