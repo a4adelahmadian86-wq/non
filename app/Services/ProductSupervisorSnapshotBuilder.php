@@ -75,6 +75,8 @@ class ProductSupervisorSnapshotBuilder
             'download_policy' => $product->download_policy ?? 'signed',
             'seo_title' => $product->seo_title,
             'seo_description' => $product->seo_description,
+            'seo_focus_keyword' => data_get($product->metadata, 'seo.focus_keyword'),
+            'seo_secondary_keywords' => data_get($product->metadata, 'seo.secondary_keywords', []),
             'category_name' => $product->category?->name,
             'tags' => $product->tags->pluck('name')->take(30)->values()->all(),
             'has_cover' => filled($product->cover_path),
