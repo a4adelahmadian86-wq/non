@@ -219,8 +219,9 @@ class StoreController extends Controller
             ? StoreProductDocumentAudio::query()
                 ->with('segments')
                 ->where('state', 'ready')
-                ->whereIn('document_id', $fullDocumentIds)
-                ->whereColumn('store_product_document_audio.content_version', 'store_product_document_audio.content_version')
+                ->whereHas('document', fn ($query) => $query
+                    ->whereIn('id', $fullDocumentIds)
+                    ->whereColumn('store_product_documents.content_version', 'store_product_document_audio.content_version'))
                 ->orderBy('document_id')
                 ->get()
             : collect();
