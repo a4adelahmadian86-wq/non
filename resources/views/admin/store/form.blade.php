@@ -210,7 +210,12 @@
         <p>فایل‌ها در فضای خصوصی نگهداری می‌شوند. فقط فایل اصلیِ اسکن‌شده و فعال پس از خرید قابل دریافت خواهد بود.</p>
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
           @php($fileReview = $assetReviews['file:'.$file->id] ?? null)
-          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'اسکن سالم':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small>
+          @php($documentState = $file->document?->processing_status ?? 'pending')
+          @php($documentStateLabels = ['pending'=>'در انتظار مطالعه','processing'=>'در حال مطالعه','awaiting_provider'=>'در انتظار اتصال موتور مطالعه','extracted'=>'استخراج انجام شد؛ تحلیل معنایی ناقص','completed'=>'مطالعه و تحلیل تکمیل شد','partial'=>'پردازش ناقص','failed'=>'خطا در مطالعه','stale'=>'نسخه فایل تغییر کرده است'])
+          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'بررسی داخلی گذرانده':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small><small>مطالعه محتوا: {{ $documentStateLabels[$documentState] ?? 'وضعیت نامشخص' }}</small>
+            @if(data_get($file->document?->structure_json, 'ai_review.summary'))
+              <small class="product-asset-review-inline">{{ data_get($file->document?->structure_json, 'ai_review.summary') }}</small>
+            @endif
           </span>
           @if($fileReview && hash_equals((string) ($fileReview['sha256'] ?? ''), (string) $file->sha256))
             @include('admin.store.partials.asset-review', ['assetReview' => $fileReview, 'label' => 'گزارش ناظر فایل'])
