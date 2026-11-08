@@ -677,7 +677,7 @@ test('document word sentence and page controls seek within the one stored full n
       '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" style="height:220px">' +
         '<div data-reader-text-layer>' +
           '<p class="reader-document-line reader-document-paragraph" data-reader-speech-text="سلام جهان" data-page="1">' +
-            '<span class="reader-document-sentence" data-reader-speech-text="سلام جهان" data-page="1" tabindex="0">' +
+            '<span class="reader-document-sentence" data-reader-speech-text="سلام جهان" data-page="1" tabindex="0" style="display:block;width:500px;height:40px">' +
               '<span class="reader-document-word" data-word="سلام" data-page="1" data-reader-word-index="0" role="button" tabindex="0">سلام</span>' +
               '<span> </span>' +
               '<span class="reader-document-word" data-word="جهان" data-page="1" data-reader-word-index="1" role="button" tabindex="0">جهان</span>' +
@@ -701,10 +701,10 @@ test('document word sentence and page controls seek within the one stored full n
   expect(stoppedWord.paused).toBe(true);
   expect(stoppedWord.time).toBe(0.3);
 
-  await page.locator('.reader-document-sentence').click();
+  await page.locator('.reader-document-sentence').click({ position: { x: 400, y: 20 } });
   await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBe(0.1);
   const stoppedSentence = await page.evaluate(() => {
-    const audio = window.__farastAudio;
+    const audio = window.FarastDocumentAudioReader.audio;
     audio.currentTime = 0.7;
     audio.dispatchEvent(new Event('timeupdate'));
     return { paused: audio.paused, time: audio.currentTime };
