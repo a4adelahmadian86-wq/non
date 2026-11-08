@@ -58,6 +58,8 @@
         }
         element.dataset.readerSpeechText = source;
         element.dataset.page = String(speechPage);
+        const elementWordStart = speechWordIndex;
+        element.dataset.readerWordStartIndex = String(elementWordStart);
         const scopeLabel = element.classList.contains('reader-document-paragraph') ? 'پاراگراف'
           : element.classList.contains('reader-document-heading') ? 'عنوان'
           : element.classList.contains('reader-document-cell') ? 'سلول جدول'
@@ -77,6 +79,7 @@
           sentence.setAttribute('aria-label', 'خواندن جمله');
           sentence.dataset.readerSpeechText = sentenceText.trim();
           sentence.dataset.page = String(speechPage);
+          sentence.dataset.readerWordStartIndex = String(speechWordIndex);
           const parts = sentenceText.match(/\s+|[^\s]+/gu) || [sentenceText];
           parts.forEach(part => {
             if (/\p{L}|\p{N}/u.test(part)) {
@@ -94,8 +97,10 @@
               sentence.appendChild(document.createTextNode(part));
             }
           });
+          sentence.dataset.readerWordEndIndex = String(speechWordIndex);
           element.appendChild(sentence);
         });
+        element.dataset.readerWordEndIndex = String(speechWordIndex);
       };
 
       const heading = document.createElement('div');
@@ -130,6 +135,8 @@
             tr.className = 'reader-document-row';
             tr.tabIndex = 0;
             tr.dataset.readerSpeechText = cells.join('، ');
+            tr.dataset.page = String(speechPage);
+            tr.dataset.readerWordStartIndex = String(speechWordIndex);
             const rowHeading = document.createElement('th');
             rowHeading.scope = 'row';
             rowHeading.textContent = String(Math.max(1, Number(payload.row_start || 1) + rowIndex)).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
@@ -142,6 +149,7 @@
               appendSpeechText(td, cells[column] || '');
               tr.appendChild(td);
             }
+            tr.dataset.readerWordEndIndex = String(speechWordIndex);
             tbody.appendChild(tr);
           });
           table.appendChild(tbody);
@@ -238,6 +246,8 @@
             row.tabIndex = 0;
             row.dataset.readerSpeechText = value || cells.map(cell => String(cell ?? '')).join(' | ');
             row.dataset.readerAudioText = row.dataset.readerSpeechText;
+            row.dataset.page = String(speechPage);
+            row.dataset.readerWordStartIndex = String(speechWordIndex);
             cells.forEach((cellValue, cellIndex) => {
               const cell = document.createElement('td');
               cell.className = 'reader-document-cell';
@@ -263,6 +273,7 @@
                 row.appendChild(cell);
               }
             });
+            row.dataset.readerWordEndIndex = String(speechWordIndex);
             activeTableBody.appendChild(row);
             continue;
           }
