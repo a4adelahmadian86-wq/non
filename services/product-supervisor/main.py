@@ -417,6 +417,21 @@ async def health():
     }
 
 
+@app.get("/v1/ready", dependencies=[Depends(authenticate)])
+async def authenticated_readiness():
+    gemini_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
+    groq_configured = bool(os.getenv("GROQ_API_KEY", "").strip())
+    return {
+        "status": "ok",
+        "service": "product-supervisor",
+        "authenticated": True,
+        "providers": {
+            "gemini": {"configured": gemini_configured, "ready_for_text_review": gemini_configured},
+            "groq": {"configured": groq_configured, "ready_for_media_review": groq_configured},
+        },
+    }
+
+
 @app.post("/v1/reviews/products", response_model=ReviewResponse, dependencies=[Depends(authenticate)])
 async def review_product(snapshot: ProductSnapshot):
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
