@@ -727,8 +727,18 @@
     // Print/save must stay blocked even while focus is inside the search or page controls.
     if(modifier&&['p','s'].includes(key)){e.preventDefault();e.stopPropagation();return;}
     if(isEditableTarget(e.target))return;
-    if(e.key==='ArrowLeft'||e.key==='ArrowDown'){e.preventDefault();root.querySelector('#reader-next')?.click();}
-    if(e.key==='ArrowRight'||e.key==='ArrowUp'){e.preventDefault();root.querySelector('#reader-prev')?.click();}
+    if(e.key==='ArrowLeft'||e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();root.querySelector('#reader-next')?.click();}
+    if(e.key==='ArrowRight'||e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();root.querySelector('#reader-prev')?.click();}
+    if(e.key==='Home'){
+      e.preventDefault();
+      if(isPdf()){if(pdfDoc)navigatePdfPage(1).catch(showPdfError);}
+      else showItem(0).catch(showPdfError);
+    }
+    if(e.key==='End'){
+      e.preventDefault();
+      if(isPdf()){if(pdfDoc)navigatePdfPage(pdfDoc.numPages).catch(showPdfError);}
+      else showItem(articles.length-1).catch(showPdfError);
+    }
     if(e.key==='+'||e.key==='='){e.preventDefault();root.querySelector('#reader-zoom-in')?.click();}
     if(e.key==='-'){e.preventDefault();root.querySelector('#reader-zoom-out')?.click();}
     if(key==='f'){e.preventDefault();root.querySelector('#reader-fs')?.click();}
