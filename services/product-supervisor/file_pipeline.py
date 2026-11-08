@@ -79,31 +79,17 @@ def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]
             })
 
     if detected_type == "pdf":
-        buffer: list[str] = []
-        page_numbers: list[int] = []
-        length = 0
         for page_number, segment in enumerate(text.split("\f"), start=1):
             value = segment.strip()
-            if not value:
-                continue
-            if buffer and length + len(value) > 1800:
+            for offset in range(0, len(value), 1800):
                 add_chunk("page_text", {
-                    "page": page_numbers[0],
-                    "page_start": page_numbers[0],
-                    "page_end": page_numbers[-1],
-                    "pages": page_numbers[:],
-                }, "\n\n".join(buffer))
-                buffer, page_numbers, length = [], [], 0
-            buffer.append(value)
-            page_numbers.append(page_number)
-            length += len(value)
-        if buffer:
-            add_chunk("page_text", {
-                "page": page_numbers[0],
-                "page_start": page_numbers[0],
-                "page_end": page_numbers[-1],
-                "pages": page_numbers[:],
-            }, "\n\n".join(buffer))
+                    "page": page_number,
+                    "page_start": page_number,
+                    "page_end": page_number,
+                    "pages": [page_number],
+                    "character_start": offset,
+                    "character_end": min(offset + 1800, len(value)),
+                }, value[offset:offset + 1800])
 
     elif detected_type == "xlsx":
         current_sheet = "نامشخص"
@@ -216,7 +202,7 @@ def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]
 
     bounded: list[dict[str, Any]] = []
     remaining = MAX_EXTRACTED_CHARS
-    for chunk in chunks[:120]:
+    for chunk in chunks[:300]:
         value = str(chunk.get("content_text") or "")[:min(1800, remaining)]
         if value:
             bounded.append({**chunk, "content_text": value})
