@@ -44,8 +44,44 @@
       layer.style.overflow = 'visible';
       layer.style.opacity = '1';
       layer.style.pointerEvents = 'auto';
-      layer.style.userSelect = 'none';
-      layer.style.webkitUserSelect = 'none';
+      layer.style.userSelect = 'text';
+      layer.style.webkitUserSelect = 'text';
+
+      const speechPage = Math.max(1, Number(payload.page_number || article.dataset.readerPage || 1));
+      const appendSpeechText = (element, value) => {
+        const source = String(value || '');
+        element.dataset.readerSpeechText = source;
+        element.dataset.page = String(speechPage);
+        const sentences = source.match(/[^.!؟۔؛]+[.!؟۔؛]?/gu) || [source];
+        sentences.forEach(sentenceText => {
+          if (!sentenceText) return;
+          const sentence = document.createElement('span');
+          sentence.className = 'reader-document-sentence';
+          sentence.tabIndex = 0;
+          sentence.setAttribute('role', 'group');
+          sentence.setAttribute('aria-label', 'خواندن جمله');
+          sentence.dataset.readerSpeechText = sentenceText.trim();
+          sentence.dataset.page = String(speechPage);
+          const parts = sentenceText.match(/[\p{L}\p{N}\p{M}]+(?:[\u200c][\p{L}\p{N}\p{M}]+)*|[^\p{L}\p{N}]+/gu) || [sentenceText];
+          parts.forEach(part => {
+            if (/^[\p{L}\p{N}\p{M}]/u.test(part)) {
+              const word = document.createElement('span');
+              word.className = 'reader-document-word';
+              word.textContent = part;
+              word.dataset.word = part;
+              word.dataset.page = String(speechPage);
+              word.tabIndex = 0;
+              word.setAttribute('role', 'button');
+              word.setAttribute('aria-label', 'خواندن واژه ' + part);
+              word.style.cursor = 'pointer';
+              sentence.appendChild(word);
+            } else {
+              sentence.appendChild(document.createTextNode(part));
+            }
+          });
+          element.appendChild(sentence);
+        });
+      };
 
       const heading = document.createElement('div');
       heading.className = 'farast-document-html-heading';
@@ -76,13 +112,18 @@
           const tbody = document.createElement('tbody');
           usableRows.forEach((cells, rowIndex) => {
             const tr = document.createElement('tr');
+            tr.className = 'reader-document-row';
+            tr.tabIndex = 0;
+            tr.dataset.readerSpeechText = cells.join('، ');
             const rowHeading = document.createElement('th');
             rowHeading.scope = 'row';
             rowHeading.textContent = String(Math.max(1, Number(payload.row_start || 1) + rowIndex)).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
             tr.appendChild(rowHeading);
             for (let column = 0; column < columnCount; column += 1) {
               const td = document.createElement('td');
-              td.textContent = cells[column] || '';
+              td.className = 'reader-document-cell';
+              td.tabIndex = 0;
+              appendSpeechText(td, cells[column] || '');
               tr.appendChild(td);
             }
             tbody.appendChild(tr);
@@ -103,8 +144,8 @@
           layer.appendChild(notice);
           for (const line of text.split(/\r?\n/)) {
             const span = document.createElement('span');
-            span.className = 'reader-document-line';
-            span.textContent = line || ' ';
+            span.className = 'reader-document-line reader-document-paragraph';
+            appendSpeechText(span, line || ' ');
             layer.appendChild(span);
           }
         }
@@ -155,21 +196,26 @@
             }
             const cells = Array.isArray(rawBlock.cells) ? rawBlock.cells.slice(0, 50) : value.split('|').slice(0, 50);
             const row = document.createElement('tr');
-            row.className = 'reader-document-line';
-            row.dataset.readerAudioText = value || cells.map(cell => String(cell ?? '')).join(' | ');
+            row.className = 'reader-document-line reader-document-row';
+            row.tabIndex = 0;
+            row.dataset.readerSpeechText = value || cells.map(cell => String(cell ?? '')).join(' | ');
             cells.forEach((cellValue, cellIndex) => {
               const cell = document.createElement('td');
-              cell.textContent = String(cellValue ?? '');
+              cell.className = 'reader-document-cell';
+              cell.tabIndex = 0;
               if (Number(rawBlock.row_index) === 1) {
                 const headerCell = document.createElement('th');
                 headerCell.scope = 'col';
-                headerCell.textContent = String(cellValue ?? '');
+                headerCell.className = 'reader-document-cell';
+                headerCell.tabIndex = 0;
+                appendSpeechText(headerCell, String(cellValue ?? ''));
                 headerCell.style.background = '#eef2f7';
                 headerCell.style.fontWeight = '700';
                 headerCell.style.border = '1px solid #d7dee8';
                 headerCell.style.padding = '0.6rem';
                 row.appendChild(headerCell);
               } else {
+                appendSpeechText(cell, String(cellValue ?? ''));
                 cell.style.border = '1px solid #d7dee8';
                 cell.style.padding = '0.6rem';
                 cell.style.verticalAlign = 'top';
@@ -194,8 +240,9 @@
               activeListKind = listKind;
             }
             const item = document.createElement('li');
-            item.className = 'reader-document-line';
-            item.textContent = value;
+            item.className = 'reader-document-line reader-document-paragraph';
+            item.tabIndex = 0;
+            appendSpeechText(item, value);
             item.style.marginInlineStart = Math.max(0, Math.min(5, Number(rawBlock.list_level) || 1) - 1) + 'em';
             activeList.appendChild(item);
             continue;
@@ -205,8 +252,9 @@
           const element = type === 'heading'
             ? document.createElement('h' + Math.max(1, Math.min(6, Number(rawBlock.level) || 2)))
             : document.createElement('p');
-          element.className = 'reader-document-line ' + (type === 'heading' ? 'farast-reader-docx-heading' : 'farast-reader-docx-paragraph');
-          element.textContent = value;
+          element.className = 'reader-document-line ' + (type === 'heading' ? 'farast-reader-docx-heading reader-document-heading' : 'farast-reader-docx-paragraph reader-document-paragraph');
+          element.tabIndex = 0;
+          appendSpeechText(element, value);
           element.dir = 'auto';
           if (type === 'heading') {
             element.style.fontWeight = '800';
@@ -223,8 +271,8 @@
       } else {
         for (const line of text.split(/\r?\n/)) {
           const span = document.createElement('span');
-          span.className = 'reader-document-line';
-          span.textContent = line || ' ';
+          span.className = 'reader-document-line reader-document-paragraph';
+          appendSpeechText(span, line || ' ');
           span.style.position = 'relative';
           span.style.display = 'block';
           span.style.color = '#1f2937';
