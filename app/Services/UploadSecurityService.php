@@ -105,6 +105,9 @@ class UploadSecurityService
             }
             $inspection = array_merge($inspection, $archive);
         } elseif ($inspection['detected_type'] === 'pdf') {
+            if ($this->pdfContainsActiveContent($absolutePath)) {
+                throw new RuntimeException('upload_pdf_active_content_rejected');
+            }
             $inspection['page_count'] = $this->countPdfPages($absolutePath);
             $inspection['page_count_method'] = 'static_pdf_object_scan';
         } elseif ($inspection['detected_type'] === 'image') {
@@ -161,6 +164,31 @@ class UploadSecurityService
         if (in_array($extension, ['mp4','webm','mov'], true)) return 'video';
         if (in_array($extension, ['txt','csv','md'], true)) return 'text';
         throw new RuntimeException('upload_signature_mismatch');
+    }
+
+    private function pdfContainsActiveContent(string $path): bool
+    {
+        $handle = fopen($path, 'rb');
+        if (! is_resource($handle)) {
+            throw new RuntimeException('upload_pdf_unreadable');
+        }
+
+        $carry = '';
+        try {
+            while (! feof($handle)) {
+                $chunk = fread($handle, 1024 * 1024);
+                if (! is_string($chunk) || $chunk === '') break;
+                $window = $carry.$chunk;
+                if (preg_match('/\\/(?:JavaScript|JS|Launch|EmbeddedFile|OpenAction|AA)\\b/i', $window) === 1) {
+                    return true;
+                }
+                $carry = substr($window, -64);
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return false;
     }
 
     private function countPdfPages(string $path): ?int
