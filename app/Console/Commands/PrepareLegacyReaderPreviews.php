@@ -57,7 +57,7 @@ class PrepareLegacyReaderPreviews extends Command
                 $extension = $preview->kind === 'docx' ? 'pdf' : 'html';
                 $newKind = $preview->kind === 'docx' ? 'pdf' : 'html';
                 $newMime = $preview->kind === 'docx' ? 'application/pdf' : 'text/html';
-                $newPath = 'store/previews/prepared/'.$preview->product_id.'/'.$hash.'.'.$extension;
+                $newPath = 'store/previews/prepared/shared/'.$hash.'.'.$extension;
 
                 if (! isset($preparedByHash[$cacheKey])) {
                     if (! $disk->exists($newPath)) {
