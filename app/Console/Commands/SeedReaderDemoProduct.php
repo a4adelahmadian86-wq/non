@@ -8,7 +8,6 @@ use App\Models\StoreProductFile;
 use App\Models\StoreProductPreview;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use ZipArchive;
@@ -142,10 +141,12 @@ class SeedReaderDemoProduct extends Command
     {
         $tmp = tempnam(sys_get_temp_dir(), 'farast-demo-xlsx-');
         $zip = new ZipArchive();
+        $opened = false;
         try {
             if ($zip->open($tmp, ZipArchive::OVERWRITE) !== true) {
                 throw new \RuntimeException('Unable to create demo workbook.');
             }
+            $opened = true;
             $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
             $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
             $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="گزارش" sheetId="1" r:id="rId1"/><sheet name="داده‌ها" sheetId="2" r:id="rId2"/></sheets></workbook>');
@@ -153,9 +154,10 @@ class SeedReaderDemoProduct extends Command
             $zip->addFromString('xl/worksheets/sheet1.xml', '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1" t="inlineStr"><is><t>مقدار</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>تعداد نمونه</t></is></c><c r="B2"><v>3</v></c></row><row r="3"><c r="A3" t="inlineStr"><is><t>وضعیت</t></is></c><c r="B3" t="inlineStr"><is><t>آماده</t></is></c></row></sheetData></worksheet>');
             $zip->addFromString('xl/worksheets/sheet2.xml', '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>ماه</t></is></c><c r="B1" t="inlineStr"><is><t>بازدید</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>مهر</t></is></c><c r="B2"><v>120</v></c></row><row r="3"><c r="A3" t="inlineStr"><is><t>آبان</t></is></c><c r="B3"><v>185</v></c></row></sheetData></worksheet>');
             $zip->close();
+            $opened = false;
             return (string) file_get_contents($tmp);
         } finally {
-            if ($zip->status === ZipArchive::ER_OK) {
+            if ($opened) {
                 $zip->close();
             }
             @unlink($tmp);
