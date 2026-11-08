@@ -442,10 +442,10 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
                 if format_node is not None:
                     numbering_formats[(num_id, level_index)] = str(format_node.get(qn("w:val"), ""))
         for abstract in numbering_root.findall(qn("w:abstractNum")):
-            abstract_id_node = abstract.find(qn("w:abstractNumId"))
-            if abstract_id_node is None:
+            # w:abstractNumId is likewise an attribute, not a child element.
+            abstract_id = str(abstract.get(qn("w:abstractNumId"), ""))
+            if not abstract_id:
                 continue
-            abstract_id = str(abstract_id_node.get(qn("w:val"), ""))
             for level_node in abstract.findall(qn("w:lvl")):
                 level_index = int(level_node.get(qn("w:ilvl"), "0"))
                 format_node = level_node.find(qn("w:numFmt"))
