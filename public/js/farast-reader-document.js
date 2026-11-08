@@ -133,10 +133,19 @@
               wrap.setAttribute('role', 'region');
               wrap.setAttribute('aria-label', 'جدول سند Word');
               wrap.tabIndex = 0;
+              wrap.style.maxWidth = '100%';
+              wrap.style.overflowX = 'auto';
+              wrap.style.margin = '1.25rem 0';
               activeTable = document.createElement('table');
               activeTable.className = 'farast-reader-docx-table';
+              activeTable.style.width = '100%';
+              activeTable.style.borderCollapse = 'collapse';
+              activeTable.style.minWidth = 'min(100%, 34rem)';
               const caption = document.createElement('caption');
               caption.textContent = 'جدول ' + String(tableIndex);
+              caption.style.fontWeight = '700';
+              caption.style.textAlign = 'start';
+              caption.style.padding = '0.5rem';
               activeTable.appendChild(caption);
               activeTableBody = document.createElement('tbody');
               activeTable.appendChild(activeTableBody);
@@ -153,8 +162,15 @@
                 const headerCell = document.createElement('th');
                 headerCell.scope = 'col';
                 headerCell.textContent = String(cellValue ?? '');
+                headerCell.style.background = '#eef2f7';
+                headerCell.style.fontWeight = '700';
+                headerCell.style.border = '1px solid #d7dee8';
+                headerCell.style.padding = '0.6rem';
                 row.appendChild(headerCell);
               } else {
+                cell.style.border = '1px solid #d7dee8';
+                cell.style.padding = '0.6rem';
+                cell.style.verticalAlign = 'top';
                 row.appendChild(cell);
               }
             });
@@ -169,6 +185,9 @@
               closeList();
               activeList = document.createElement(listKind === 'number' ? 'ol' : 'ul');
               activeList.className = 'farast-reader-docx-list';
+              activeList.style.paddingInlineStart = '1.5rem';
+              activeList.style.lineHeight = '1.9';
+              activeList.style.margin = '0.5rem 0 1rem';
               layer.appendChild(activeList);
               activeListKind = listKind;
             }
@@ -186,6 +205,16 @@
           element.className = type === 'heading' ? 'farast-reader-docx-heading' : 'farast-reader-docx-paragraph';
           element.textContent = value;
           element.dir = 'auto';
+          if (type === 'heading') {
+            element.style.fontWeight = '800';
+            element.style.fontSize = Math.max(1.05, 1.65 - (Number(rawBlock.level) || 2) * 0.09) + 'rem';
+            element.style.lineHeight = '1.6';
+            element.style.margin = '1.4rem 0 0.65rem';
+          } else {
+            element.style.lineHeight = '1.95';
+            element.style.margin = '0.55rem 0';
+            element.style.whiteSpace = 'pre-wrap';
+          }
           layer.appendChild(element);
         }
       } else {
