@@ -86,9 +86,27 @@ class UploadSecurityService
 
         if ($inspection['detected_type'] === 'archive') {
             $archive = $this->inspectZip($absolutePath);
+            $members = array_column($archive['archive_entries'], 'name');
+            $requiredOfficeMembers = [
+                'docx' => ['[Content_Types].xml', 'word/document.xml'],
+                'xlsx' => ['[Content_Types].xml', 'xl/workbook.xml'],
+                'pptx' => ['[Content_Types].xml', 'ppt/presentation.xml'],
+            ];
+            if (isset($requiredOfficeMembers[$extension])) {
+                foreach ($requiredOfficeMembers[$extension] as $requiredMember) {
+                    if (! in_array($requiredMember, $members, true)) {
+                        throw new RuntimeException('upload_office_container_invalid');
+                    }
+                }
+                if (in_array('word/vbaProject.bin', $members, true) || in_array('xl/vbaProject.bin', $members, true) || in_array('ppt/vbaProject.bin', $members, true)) {
+                    throw new RuntimeException('upload_office_macro_rejected');
+                }
+                $inspection['detected_type'] = 'office';
+            }
             $inspection = array_merge($inspection, $archive);
         } elseif ($inspection['detected_type'] === 'pdf') {
             $inspection['page_count'] = $this->countPdfPages($absolutePath);
+            $inspection['page_count_method'] = 'static_pdf_object_scan';
         } elseif ($inspection['detected_type'] === 'image') {
             $inspection['dimensions'] = $this->inspectImage($absolutePath);
         } elseif ($inspection['detected_type'] === 'office') {
@@ -255,7 +273,7 @@ class UploadSecurityService
         fclose($handle);
 
         return [
-            'archive_entries' => array_slice($entries, 0, 100),
+            'archive_entries' => $entries,
             'archive_entry_count' => count($entries),
             'archive_expanded_bytes' => $totalExpanded,
             'risk_level' => $risk,
