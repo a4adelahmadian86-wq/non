@@ -2,7 +2,24 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ serviceWorkers: 'block' });
 
-async function mountReader(page, includeExcel = false) {
+test('syncs authenticated reading progress to the account endpoint', async ({ page }) => {
+  let savedState = null;
+  await page.route('**/store/1/reader-state', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ progress: null, bookmarks: [], updated_at: null }) });
+      return;
+    }
+    savedState = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ saved: true }) });
+  });
+
+  await mountReader(page, false, '/store/1/reader-state');
+  await page.locator('#reader-next').click();
+  await expect.poll(() => savedState?.progress?.section).toBe(1);
+  expect(savedState.bookmarks).toEqual([]);
+});
+
+async function mountReader(page, includeExcel = false, readerStateUrl = '') {
   await page.goto('/');
   const total = includeExcel ? 3 : 2;
   const excelMarkup = includeExcel ? `
@@ -12,7 +29,7 @@ async function mountReader(page, includeExcel = false) {
           <div class="farast-reader-page-item" data-index="2"><div class="farast-reader-page-content"><iframe class="farast-xlsx-frame" sandbox="" srcdoc="&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;Excel&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/body&gt;&lt;/html&gt;"></iframe></div></div>
         ` : '';
   await page.setContent(`
-    <section class="farast-reader" data-reader-root data-theme="dark" data-product-id="reader-fixture">
+    <meta name="csrf-token" content="reader-test-token"><section class="farast-reader" data-reader-root data-theme="dark" data-product-id="reader-fixture" data-reader-state-url="${readerStateUrl}">
       <header><div class="farast-reader-account"><span>09123456789</span></div></header>
       <nav>
         <button id="reader-prev" type="button">قبلی</button>
