@@ -8,7 +8,7 @@ import re
 import shutil
 import subprocess
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -48,6 +48,7 @@ class Inspection:
     warnings: list[str] | None = None
     antivirus_status: str = "not_configured"
     upstream_scan_status: str = "not_provided"
+    content_chunks: list[dict[str, Any]] = field(default_factory=list)
 
     def public_dict(self) -> dict[str, Any]:
         return {
@@ -58,6 +59,65 @@ class Inspection:
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
         }
+
+
+def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]:
+    if not text.strip():
+        return []
+    chunks: list[dict[str, Any]] = []
+    if detected_type == "pdf":
+        for page_number, segment in enumerate(text.split("\\f"), start=1):
+            value = segment.strip()
+            if value:
+                chunks.append({"chunk_type": "page_text", "locator": {"page": page_number}, "content_text": value[:1800]})
+    elif detected_type == "xlsx":
+        current_sheet = "نامشخص"
+        row_number = 0
+        for line in text.splitlines():
+            if line.startswith("برگه: "):
+                current_sheet = line[6:].strip()[:120]
+                row_number = 0
+            elif line.strip():
+                row_number += 1
+                chunks.append({"chunk_type": "spreadsheet_row", "locator": {"sheet": current_sheet, "row": row_number}, "content_text": line[:1800]})
+    elif detected_type == "pptx":
+        slide_number = 0
+        element_number = 0
+        for line in text.splitlines():
+            match = re.match(r"^اسلاید (\\d+)$", line.strip())
+            if match:
+                slide_number = int(match.group(1))
+                element_number = 0
+            elif line.strip():
+                element_number += 1
+                chunks.append({"chunk_type": "slide_element", "locator": {"slide": slide_number or None, "element": element_number}, "content_text": line[:1800]})
+    else:
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if line.strip():
+                chunks.append({
+                    "chunk_type": "text_line" if detected_type == "text" else "document_block",
+                    "locator": {"line": line_number},
+                    "content_text": line.strip()[:1800],
+                })
+
+    if not chunks:
+        for offset in range(0, min(len(text), MAX_EXTRACTED_CHARS), 1600):
+            chunks.append({
+                "chunk_type": "text_segment",
+                "locator": {"character_start": offset, "character_end": min(offset + 1600, len(text))},
+                "content_text": text[offset:offset + 1600],
+            })
+
+    bounded: list[dict[str, Any]] = []
+    remaining = MAX_EXTRACTED_CHARS
+    for chunk in chunks[:120]:
+        value = str(chunk.get("content_text") or "")[:min(1800, remaining)]
+        if value:
+            bounded.append({**chunk, "content_text": value})
+            remaining -= len(value)
+        if remaining <= 0:
+            break
+    return bounded
 
 
 def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
@@ -206,7 +266,7 @@ def _extract_pdf(data: bytes) -> str:
             parts.append(page.extract_text() or "")
             if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
                 break
-        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+        return "\f".join(parts)[:MAX_EXTRACTED_CHARS]
     except FileInspectionError:
         raise
     except Exception:
@@ -355,6 +415,9 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             raise FileInspectionError("فایل متنی باید با UTF-8 ذخیره شده باشد.") from None
     else:
         raise FileInspectionError("نوع فایل پشتیبانی نمی‌شود یا امضای واقعی فایل با پسوند آن تطابق ندارد.")
+
+    if result.extracted_text:
+        result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
 
     if result.antivirus_status != "clean":
         if result.upstream_scan_status == "clean":
