@@ -487,6 +487,8 @@ test('supports PageUp PageDown Home and End shortcuts without hijacking form con
 
 test('renders Word headings lists and tables as safe semantic document blocks', async ({ page }) => {
   let protectedWordPageRequests = 0;
+  const wordPageErrors = [];
+  page.on('pageerror', error => wordPageErrors.push(error.message));
   await page.goto('/');
   await page.setContent(`
     <section data-reader-root data-reader-mode="document">
@@ -523,6 +525,8 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
   await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 0 } })));
   await expect.poll(() => protectedWordPageRequests).toBe(1);
+  await expect(page.locator('.farast-reader-page-item')).toHaveAttribute('data-reader-loaded', '1');
+  expect(wordPageErrors).toEqual([]);
   await expect(page.locator('[data-reader-text-layer] h1')).toHaveText('فصل اول');
   await expect(page.locator('[data-reader-text-layer] p')).toHaveText('متن توضیحی');
   await expect(page.locator('[data-reader-text-layer] ul > li').first()).toContainText('گزینه نخست');
