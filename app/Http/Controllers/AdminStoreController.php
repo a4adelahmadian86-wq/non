@@ -7,6 +7,7 @@ use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductPreview;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
@@ -376,6 +377,10 @@ class AdminStoreController extends Controller
 
                 if ($lockedIngestion->is_primary) {
                     $lockedProduct->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
+                    StoreProductPreview::query()
+                        ->where('product_id', $lockedProduct->id)
+                        ->where('access_level', 'full')
+                        ->update(['is_active' => false]);
                 }
 
                 $record = StoreProductFile::create([
