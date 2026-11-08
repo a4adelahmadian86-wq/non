@@ -258,23 +258,32 @@
       dock.hidden = true;
       return;
     }
-    if (activeSection === section && audio.src) return;
-    audio.pause();
+    const article = articles[section];
+    const page = Math.max(1, Number(article?.dataset.readerPage || track.timings[0]?.page || 1));
+    const resolvedUrl = new URL(track.url, document.baseURI).href;
+    const currentUrl = audio.currentSrc || audio.src || '';
+    const sameSource = currentUrl === resolvedUrl || currentUrl === track.url;
+    if (activeSection === section && sameSource) return;
+
     activeSection = section;
     activeTrack = track;
-    activePage = 1;
+    activePage = page;
     rangeEnd = null;
     clearMarks();
-    audio.src = track.url;
-    audio.load();
+
+    if (!sameSource) {
+      audio.pause();
+      audio.src = track.url;
+      audio.load();
+      caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
+      seek.value = '0';
+    }
     buildMarks(activePage);
     dock.hidden = false;
     status.textContent = activeTrack.alignmentQuality === 'phoneme'
       ? 'صوت از پیش آماده · هم‌ترازی واجی واژه‌ها'
       : 'صوت از پیش آماده · زمان‌بندی تقریبی واژه‌ها';
-    caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
     progressLabel.textContent = fa(track.timings.length) + (track.granularity === 'segment' ? ' بخش زمانی' : ' نشانگر کلمه‌ای');
-    seek.value = '0';
   };
 
   playButton.addEventListener('click', () => {
