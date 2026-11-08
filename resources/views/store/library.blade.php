@@ -79,7 +79,7 @@
 @endsection
 
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261107-library">
+<link rel="stylesheet" href="/css/store.css?v=20261108-library2">
 @endpush
 @push('scripts')
 <script>
