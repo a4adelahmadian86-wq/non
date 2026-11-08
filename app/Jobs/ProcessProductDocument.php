@@ -128,6 +128,40 @@ class ProcessProductDocument implements ShouldQueue
                 'publication_authorized' => false,
             ];
 
+            $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
+            if (is_string($sampleBase64) && $sampleBase64 !== '') {
+                $sampleBytes = base64_decode($sampleBase64, true);
+                if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
+                    $sampleHash = hash('sha256', $sampleBytes);
+                    $samplePath = 'store/products/'.$locked->product_id.'/artifacts/'.$locked->source_sha256.'/sample-v1.pdf';
+                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                    if (! $existingSample || ! hash_equals((string) $existingSample->sha256, $sampleHash) || ! Storage::disk('private')->exists($existingSample->path)) {
+                        if (Storage::disk('private')->put($samplePath, $sampleBytes)) {
+                            $locked->artifacts()->updateOrCreate(
+                                ['artifact_type' => 'sample_pdf', 'version' => 1],
+                                [
+                                    'disk' => 'private',
+                                    'path' => $samplePath,
+                                    'mime' => 'application/pdf',
+                                    'size_bytes' => strlen($sampleBytes),
+                                    'sha256' => $sampleHash,
+                                    'metadata_json' => [
+                                        'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                                        'source_sha256' => $locked->source_sha256,
+                                        'generated_once' => true,
+                                    ],
+                                ]
+                            );
+                        }
+                    }
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                        'sha256' => $sampleHash,
+                    ];
+                }
+            }
+
             $providers = (array) ($payload['provider_status'] ?? []);
             $hasChunks = $locked->chunks()->exists();
             $hasSemanticReview = ($providers['gemini'] ?? null) === 'completed';
