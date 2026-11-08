@@ -2,7 +2,7 @@
   <div class="product-asset-review">
     <b>{{ $label ?? 'گزارش ناظر فایل' }}</b>
     <p>{{ $assetReview['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p>
-    <small>وضعیت امنیتی: {{ $assetReview['security_gate'] ?? 'نامشخص' }} · {{ $assetReview['reviewed_at'] ?? '' }}</small>
+    <small>اسکن اصلی: {{ data_get($assetReview, 'inspection.upstream_scan_status') === 'clean' ? 'تأیید شد' : 'نامشخص' }} · اسکن ثانویه: {{ data_get($assetReview, 'inspection.antivirus_status') === 'clean' ? 'فعال و سالم' : 'در این سرویس فعال نیست' }} · نتیجه: {{ $assetReview['security_gate'] ?? 'نامشخص' }} · {{ $assetReview['reviewed_at'] ?? '' }}</small>
     @if(!empty($assetReview['findings']) && is_array($assetReview['findings']))
       <ul class="product-asset-review-list">
         @foreach(array_slice($assetReview['findings'], 0, 4) as $finding)
