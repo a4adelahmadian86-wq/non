@@ -357,13 +357,14 @@ class StoreController extends Controller
                     $readerMode = 'document';
                     $audioArtifact = $document->artifacts
                         ->where('artifact_type', 'audio_full_wav')
-                        ->where('version', '>=', 3)
+                        ->where('version', '>=', 2)
                         ->sortByDesc('version')
                         ->first();
                     $audioArtifactReady = $audioArtifact
                         && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path);
 
-                    if (! $audioArtifactReady
+                    $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
+                    if ($audioNeedsUpgrade
                         && filled(config('services.document_audio.url'))
                         && filled(config('services.document_audio.token'))) {
                         GenerateProductDocumentAudio::dispatch((int) $document->id)->afterResponse();
