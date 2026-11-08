@@ -272,7 +272,7 @@ async def review_product_file(
 
     safe_chunks = []
     chunk_character_count = 0
-    for chunk in raw_chunks[:120]:
+    for chunk in raw_chunks[:300]:
         if not isinstance(chunk, dict):
             continue
         chunk_text, chunk_redactions = redact_sensitive_content(str(chunk.get("content_text") or ""))
