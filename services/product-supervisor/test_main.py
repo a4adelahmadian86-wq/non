@@ -24,6 +24,10 @@ def test_health_does_not_expose_secrets(monkeypatch):
         "status": "ok",
         "service": "product-supervisor",
         "provider_configured": True,
+        "providers": {
+            "gemini": {"configured": True},
+            "groq": {"configured": bool(__import__("os").getenv("GROQ_API_KEY", "").strip())},
+        },
     }
     assert "private-api-key" not in response.text
 
