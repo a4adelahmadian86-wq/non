@@ -40,7 +40,7 @@ Free Render instances may sleep when idle and have usage/availability limits. A 
 This service is intentionally separate from the site's existing AI and voice gateway.
 
 1. Open the [dedicated Render service](https://dashboard.render.com/web/srv-dbo0dgbrjlhs73a2vong) and select **Environment**.
-2. Add `GEMINI_API_KEY` with the key created for this supervisor service. This is required for product text and document review.
+2. Create a dedicated key in [Google AI Studio API Keys](https://aistudio.google.com/app/apikey) and add it as `GEMINI_API_KEY`. Use a current Gemini authorization/auth key (not an unrestricted legacy Standard key); this is required for product text and document review.
 3. Optionally add `GROQ_API_KEY` to enable image understanding and audio transcription. It is not required for text/document review.
 4. Keep the generated `SUPERVISOR_API_TOKEN` value; do not replace it with the site's voice token or another AI key.
 5. Save the environment changes and manually deploy the service. Automatic deploys are disabled for this service.
