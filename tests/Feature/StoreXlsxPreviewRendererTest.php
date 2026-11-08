@@ -56,6 +56,21 @@ class StoreXlsxPreviewRendererTest extends TestCase
         $this->assertStringContainsString('>2</td>', $html);
     }
 
+    public function test_renders_shared_strings_and_combines_rich_text_runs(): void
+    {
+        $parts = $this->baseParts();
+        $parts['xl/sharedStrings.xml'] = '<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2" uniqueCount="2"><si><t>نام </t><r><rPr/><t>محصول</t></r></si><si><t>مقدار</t></si></sst>';
+        $parts['xl/worksheets/sheet1.xml'] = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row></sheetData></worksheet>';
+
+        $html = app(StoreXlsxPreviewRenderer::class)->render(
+            $this->workbook($parts),
+            '09123456789'
+        );
+
+        $this->assertStringContainsString('نام محصول', $html);
+        $this->assertStringContainsString('مقدار', $html);
+    }
+
     public function test_rejects_external_workbook_relationships(): void
     {
         $relationship = '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="https://example.invalid/sheet.xml" TargetMode="External"/>';
