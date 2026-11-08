@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('mime', 180);
             $table->unsignedBigInteger('size_bytes');
             $table->char('sha256', 64);
-            $table->json('inspection_json');
+            $table->longText('inspection_json');
             $table->boolean('is_primary')->default(false);
             $table->timestamp('expires_at');
             $table->timestamp('confirmed_at')->nullable();
@@ -40,7 +40,7 @@ return new class extends Migration
             $table->unsignedBigInteger('character_count')->default(0);
             $table->string('language', 16)->nullable();
             $table->unsignedInteger('extraction_version')->default(1);
-            $table->json('structure_json')->nullable();
+            $table->longText('structure_json')->nullable();
             $table->string('failure_code', 100)->nullable();
             $table->timestamp('processed_at')->nullable();
             $table->timestamps();
@@ -53,10 +53,10 @@ return new class extends Migration
             $table->foreignId('document_id')->constrained('store_product_documents')->cascadeOnDelete();
             $table->unsignedInteger('chunk_index');
             $table->string('chunk_type', 32)->default('text');
-            $table->json('locator_json')->nullable();
+            $table->longText('locator_json')->nullable();
             $table->longText('content_text');
             $table->char('content_sha256', 64);
-            $table->json('metadata_json')->nullable();
+            $table->longText('metadata_json')->nullable();
             $table->timestamps();
             $table->unique(['document_id', 'chunk_index'], 'store_document_chunks_order_unique');
             $table->index(['document_id', 'chunk_type'], 'store_document_chunks_type_idx');
