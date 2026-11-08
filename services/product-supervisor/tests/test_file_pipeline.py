@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import io
 import unittest
 import zipfile
 
