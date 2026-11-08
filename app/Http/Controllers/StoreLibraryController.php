@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StoreDownload;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProductFile;
+use App\Models\StoreProduct;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +31,7 @@ class StoreLibraryController extends Controller
         abort_unless($libraryItem->user_id === $request->user()->id && $libraryItem->revoked_at === null, 404);
         $libraryItem->load(['file', 'product']);
         abort_unless($libraryItem->product && $libraryItem->product->type !== 'course', 422, 'برای ورود به دوره از کتابخانه آموزشی استفاده کنید.');
+        abort_if(($libraryItem->product->download_policy ?? 'signed') === 'reader_only', 403, 'این محصول فقط از طریق خوانشگر قابل مطالعه است و دانلود ندارد.');
         abort_unless(
             $libraryItem->file
                 && $libraryItem->file->is_active
@@ -88,6 +90,7 @@ class StoreLibraryController extends Controller
                 $libraryItem
                     && (int) $libraryItem->user_id === (int) $request->user()->id
                     && $libraryItem->revoked_at === null
+                    && StoreProduct::query()->whereKey($libraryItem->product_id)->value('download_policy') !== 'reader_only'
                     && (int) $libraryItem->product_file_id === (int) $lockedDownload->product_file_id,
                 403
             );
