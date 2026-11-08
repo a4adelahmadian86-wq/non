@@ -39,10 +39,10 @@ class ProductDocumentAudioServiceTest extends TestCase
 
     public function test_document_pipeline_classes_are_autoloadable(): void
     {
-        $this->assertTrue(class_exists(\\App\\Jobs\\ProcessProductDocument::class));
-        $this->assertTrue(class_exists(\\App\\Jobs\\GenerateProductDocumentAudio::class));
-        $this->assertTrue(class_exists(\\App\\Services\\ProductKnowledgeService::class));
-        $this->assertTrue(class_exists(\\App\\Console\\Commands\\PruneProductIngestions::class));
+        $this->assertTrue(class_exists(\App\Jobs\ProcessProductDocument::class));
+        $this->assertTrue(class_exists(\App\Jobs\GenerateProductDocumentAudio::class));
+        $this->assertTrue(class_exists(\App\Services\ProductKnowledgeService::class));
+        $this->assertTrue(class_exists(\App\Console\Commands\PruneProductIngestions::class));
     }
 
     public function test_audio_generation_requires_configured_tts_endpoint(): void
