@@ -7,6 +7,11 @@ use App\Services\WorkflowEngine;
 Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
 
+// Shared-hosting fallback: drain bounded database-queue batches once per minute.
+Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')
     ->everyFifteenMinutes()
