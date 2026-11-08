@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import threading
@@ -74,7 +75,36 @@ try:
         if len(audio) < 1024 or audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
             raise SystemExit("piper_tts_invalid_wav")
 
-    print(f"Piper Persian TTS authenticated HTTP smoke passed: {len(audio)} WAV bytes")
+    batch_request = urllib.request.Request(
+        f"{base}/v1/synthesize/segments",
+        data=json.dumps({
+            "language": "fa-IR",
+            "voice_id": "farast-fa-male-v1",
+            "segments": [
+                {"text": "این بخش نخست سند است."},
+                {"text": "این بخش دوم سند است."},
+            ],
+        }).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {PIPER_TOKEN}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(batch_request, timeout=90) as response:
+        batch_audio = response.read()
+        encoded_timings = response.headers.get("X-Farast-Segment-Timings")
+        if response.status != 200 or response.headers.get_content_type() != "audio/wav":
+            raise SystemExit("piper_tts_segment_http_contract_failed")
+        if response.headers.get("X-Farast-TTS-Provider") != "piper-mana-local":
+            raise SystemExit("piper_tts_segment_provider_header_missing")
+        if not encoded_timings or len(batch_audio) < 1024 or batch_audio[:4] != b"RIFF" or batch_audio[8:12] != b"WAVE":
+            raise SystemExit("piper_tts_segment_audio_invalid")
+        timings = json.loads(base64.urlsafe_b64decode(encoded_timings.encode("ascii")))
+        if len(timings) != 2 or timings[0]["start_ms"] != 0 or timings[1]["start_ms"] <= timings[0]["end_ms"]:
+            raise SystemExit("piper_tts_segment_timing_invalid")
+
+    print(f"Piper Persian TTS authenticated HTTP smoke passed: {len(audio)} WAV bytes; aligned batch {len(batch_audio)} bytes")
 finally:
     server.shutdown()
     server.server_close()
