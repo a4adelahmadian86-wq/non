@@ -169,7 +169,7 @@ async def review_product_file(
             provider_status["groq"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
 
-    extracted = "\\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
+    extracted, redaction_count = redact_sensitive_content("\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip()))
     model_review = {}
     if extracted.strip() and os.getenv("GEMINI_API_KEY"):
         try:
