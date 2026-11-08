@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from main import app
+from main import aggregate_groq_status, app
 
 
 class ProductSupervisorFileApiTests(unittest.TestCase):
@@ -17,6 +17,12 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
 
     def tearDown(self):
         self.env.stop()
+
+    def test_groq_status_keeps_vision_and_transcription_outcomes_distinct(self):
+        self.assertEqual(aggregate_groq_status("completed", "unavailable"), "partial")
+        self.assertEqual(aggregate_groq_status("completed", "not_requested"), "completed")
+        self.assertEqual(aggregate_groq_status("not_configured", "not_requested"), "not_configured")
+        self.assertEqual(aggregate_groq_status("not_requested", "not_requested"), "not_requested")
 
     def test_file_review_requires_bearer_token(self):
         response = self.client.post(
