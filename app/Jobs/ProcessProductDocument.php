@@ -236,7 +236,9 @@ class ProcessProductDocument implements ShouldQueue
                 'representation' => 'server_generated_html',
                 'source_sha256' => $locked->source_sha256,
             ];
-            $structure['analysis_representation'] = $sourceExtension === 'docx' ? 'converted_pdf' : ($inspection['detected_type'] ?? 'unknown');
+            $structure['analysis_representation'] = $sourceExtension === 'docx'
+                ? 'docx_structured_with_converted_pdf'
+                : ($inspection['detected_type'] ?? 'unknown');
             $structure['fact_count'] = $storedFactCount;
             $structure['ai_review'] = [
                 'review_id' => $payload['review_id'] ?? null,
