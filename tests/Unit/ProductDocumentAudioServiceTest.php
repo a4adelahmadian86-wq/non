@@ -105,6 +105,15 @@ class ProductDocumentAudioServiceTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_audio_job_uses_existing_default_queue_and_visibility_exceeds_job_timeout(): void
+    {
+        $job = new \\App\\Jobs\\GenerateProductDocumentAudio(123);
+
+        $this->assertSame('default', $job->queue);
+        $this->assertSame(900, $job->timeout);
+        $this->assertGreaterThan($job->timeout, config('queue.connections.database.retry_after'));
+    }
+
     public function test_document_pipeline_classes_are_autoloadable(): void
     {
         $this->assertTrue(class_exists(\App\Jobs\ProcessProductDocument::class));
