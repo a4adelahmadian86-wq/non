@@ -4,7 +4,7 @@
   $readerWatermark = trim((string) ($readerIdentity ?? ('کاربر #'.auth()->id())));
   $readerAudioSource = $previews->first(fn ($item) => filled($item->audio_path));
 @endphp
-<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
+<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" @auth data-reader-speech-url="{{ route('store.reader.speech', $product) }}" @endauth @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
   <header class="farast-reader-header">
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
@@ -154,5 +154,6 @@
 
 @push('scripts')
 <script src="/js/farast-reader.js?v=20261108audio3"></script>
-<script src="/js/farast-reader-audio.js?v=20261108audio3" defer></script>
+<script src="/js/farast-reader-audio.js?v=20261108granular1" defer></script>
+<script src="/js/farast-reader-granular-audio.js?v=20261108granular1" defer></script>
 @endpush
