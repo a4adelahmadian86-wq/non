@@ -61,7 +61,7 @@ class StoreController extends Controller
 
     public function product(Request $request, string $slug)
     {
-        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related', 'course.sections.lessons'])
+        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related', 'course.sections.lessons' => fn ($query) => $query->publishable()])
             ->published()
             ->where('slug', $slug)
             ->firstOrFail();
@@ -128,8 +128,8 @@ class StoreController extends Controller
                 && $product->published_at?->lte(now())
                 && $product->course
                 && $lesson->section()->where('course_id', $product->course->id)->exists()
-                && $lesson->is_published
-                && $lesson->is_preview,
+                && $lesson->is_preview
+                && StoreCourseLesson::query()->publishable()->whereKey($lesson->id)->exists(),
             404
         );
 
