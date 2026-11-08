@@ -45,3 +45,6 @@ uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 2 -
 Set `DOCUMENT_AUDIO_API_TOKEN` to a long random secret. Set Laravel's `FARAST_DOCUMENT_AUDIO_URL` to this service's `/v1/synthesize` endpoint and `FARAST_DOCUMENT_AUDIO_TOKEN` to the same secret. Do not reuse the existing voice-assistant token.
 
 This service has no database, queue, user accounts, document storage, or access to source files. It receives only the text chunk needed for synthesis. It does not call Gemini, Groq, Gladia, or the existing assistant gateway.
+
+
+The `FARA` RIFF chunk is a private transport envelope between the isolated synthesis service and Laravel. Laravel validates and extracts the word intervals while assembling the single full-document WAV; the final reader receives only the one stored WAV URL plus page-filtered timing metadata. Word, phrase, sentence, paragraph, and page activation never invokes synthesis on demand.
