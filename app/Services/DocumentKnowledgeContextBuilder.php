@@ -9,7 +9,8 @@ class DocumentKnowledgeContextBuilder
 {
     public function forProduct(int $productId, int $maxCharacters = 12000): array
     {
-        $remaining = max(1000, min(30000, $maxCharacters));
+        $limit = max(1000, min(30000, $maxCharacters));
+        $remaining = $limit;
         $documents = StoreDocumentRecord::query()
             ->with(['file:id,product_id,original_name,sha256,is_active', 'chunks:id,document_id,chunk_index,content_type,page_number,heading,content,source_anchor,content_hash', 'facts:id,document_id,fact_key,fact_value,confidence,evidence,model'])
             ->where('product_id', $productId)
@@ -37,7 +38,7 @@ class DocumentKnowledgeContextBuilder
             ];
 
             foreach ($document->chunks as $chunk) {
-                if ($remaining <= 0) break 2;
+                if ($remaining <= 0) break;
                 $content = mb_substr((string) $chunk->content, 0, $remaining);
                 if ($content === '') continue;
                 $chunks[] = [
@@ -75,7 +76,7 @@ class DocumentKnowledgeContextBuilder
             'chunks' => $chunks,
             'facts' => $facts,
             'truncated' => $remaining <= 0,
-            'content_characters' => max(0, $maxCharacters - $remaining),
+            'content_characters' => $limit - $remaining,
             'instruction' => 'Use only supplied source facts. Every factual claim must retain its file and page/source reference. If a fact is absent, say it is not present in the indexed source.',
         ];
     }
@@ -100,7 +101,8 @@ class DocumentKnowledgeContextBuilder
             return ['schema_version' => 1, 'product_id' => $productId, 'query' => $term, 'sources' => [], 'chunks' => [], 'facts' => [], 'truncated' => false];
         }
 
-        $remaining = max(1000, min(30000, $maxCharacters));
+        $limit = max(1000, min(30000, $maxCharacters));
+        $remaining = $limit;
         $matchedChunks = \\App\\Models\\StoreDocumentChunk::query()
             ->whereIn('document_id', $documentIds)
             ->where('content', 'like', '%'.$term.'%')
@@ -165,18 +167,53 @@ class DocumentKnowledgeContextBuilder
             'chunks' => $chunks,
             'facts' => $facts,
             'truncated' => $remaining <= 0,
-            'content_characters' => max(0, min($maxCharacters, max(1000, $maxCharacters)) - $remaining),
+            'content_characters' => $limit - $remaining,
             'instruction' => 'Use only returned source evidence. Preserve filename, page and source anchors. If no matching source is returned, state that the indexed files do not contain a verified answer.',
         ];
     }
 
     public function forFile(int $fileId, int $maxCharacters = 12000): array
     {
-        $document = StoreDocumentRecord::query()->where('file_id', $fileId)->first();
-        if (! $document) {
+        $document = StoreDocumentRecord::query()
+            ->with(['file:id,product_id,original_name,sha256,is_active', 'chunks:id,document_id,chunk_index,content_type,page_number,heading,content,source_anchor,content_hash', 'facts:id,document_id,fact_key,fact_value,confidence,evidence,model'])
+            ->where('file_id', $fileId)
+            ->first();
+
+        if (! $document || ! $document->file || ! $document->file->is_active
+            || ! hash_equals(strtolower((string) $document->source_sha256), strtolower((string) $document->file->sha256))) {
             return ['schema_version' => 1, 'file_id' => $fileId, 'sources' => [], 'chunks' => [], 'facts' => [], 'truncated' => false];
         }
 
-        return $this->forProduct((int) $document->product_id, $maxCharacters);
+        $limit = max(1000, min(30000, $maxCharacters));
+        $remaining = $limit;
+        $chunks = [];
+        foreach ($document->chunks as $chunk) {
+            if ($remaining <= 0) break;
+            $content = mb_substr((string) $chunk->content, 0, $remaining);
+            if ($content === '') continue;
+            $chunks[] = [
+                'document_id' => $document->id,
+                'file_id' => $document->file->id,
+                'filename' => $document->file->original_name,
+                'chunk_index' => $chunk->chunk_index,
+                'content_type' => $chunk->content_type,
+                'page_number' => $chunk->page_number,
+                'heading' => $chunk->heading,
+                'text' => $content,
+                'source_anchor' => $chunk->source_anchor ?? [],
+                'content_hash' => $chunk->content_hash,
+            ];
+            $remaining -= mb_strlen($content);
+        }
+
+        return [
+            'schema_version' => 1,
+            'file_id' => $fileId,
+            'sources' => [['document_id' => $document->id, 'file_id' => $document->file->id, 'filename' => $document->file->original_name, 'sha256' => $document->source_sha256, 'status' => $document->status, 'page_count' => $document->page_count]],
+            'chunks' => $chunks,
+            'facts' => $document->facts->map(fn ($fact) => ['document_id' => $document->id, 'key' => $fact->fact_key, 'value' => $fact->fact_value, 'confidence' => (float) $fact->confidence, 'evidence' => $fact->evidence ?? [], 'model' => $fact->model])->all(),
+            'truncated' => $remaining <= 0,
+            'content_characters' => $limit - $remaining,
+        ];
     }
 }
