@@ -104,6 +104,27 @@ class ProductDocumentAudioService
         ];
     }
 
+    public function synthesizeSnippet(string $text): string
+    {
+        $text = trim($text);
+        if (! $this->configured() || $text === '' || mb_strlen($text, 'UTF-8') > 2000) {
+            throw new RuntimeException('product_audio_snippet_invalid');
+        }
+        $url = (string) config('services.document_audio.url');
+        if (! str_starts_with($url, 'https://') && ! str_starts_with($url, 'http://127.0.0.1:')) {
+            throw new RuntimeException('product_audio_requires_trusted_endpoint');
+        }
+        $response = Http::accept('audio/wav')->withToken((string) config('services.document_audio.token'))
+            ->asJson()->connectTimeout(8)->timeout(45)->post($url, [
+                'text' => $text,
+                'language' => 'fa-IR',
+                'voice_id' => (string) config('services.document_audio.voice_id', 'farast-document-fa-male-37-v1'),
+            ]);
+        if (! $response->successful()) throw new RuntimeException('product_audio_provider_failed');
+        $parsed = $this->parseWav($response->body());
+        return $this->buildWav($parsed['pcm'], $parsed['format']);
+    }
+
     /**
      * Split at paragraph/sentence boundaries and never silently truncate source text.
      * The returned pieces are kept in reading order for line-level reader timing.
