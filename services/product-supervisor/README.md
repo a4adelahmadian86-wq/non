@@ -6,18 +6,18 @@ An isolated, stateless product-quality review service. It is separate from the e
 
 | Task | Provider | Data sent |
 |---|---|---|
-| Product copy, extracted PDF/DOCX/TXT content, SEO and content quality | Gemini | Minimized metadata and locally extracted, redacted text only |
+| Product copy, extracted PDF/DOCX/XLSX/PPTX/TXT content, SEO and content quality | Gemini | Minimized metadata and locally extracted, redacted text only |
 | Product image understanding | Groq Vision | Resized JPEG derivative, not the original image bytes |
 | Audio transcription | Groq Whisper | Uploaded audio bytes |
 | Optional audio provider | Gladia | Disabled; no Gladia request is made |
 
-The original PDF, DOCX, TXT or ZIP is never uploaded to Gemini. ZIP files are inspected as archives; their entries are not extracted or executed. MP4/MOV, WebM and AVI video containers are recognized. When bundled FFmpeg can decode them, only a short audio track and one resized frame are extracted locally; the original video is never sent to a provider. Scanned PDFs without an extractable text layer receive a warning rather than a fabricated review.
+The original PDF, DOCX, XLSX, PPTX, TXT or ZIP is never uploaded to Gemini. Legacy binary Office formats (.doc/.xls/.ppt), encrypted documents and unsupported file types are rejected. ZIP files are inspected as archives; their entries are not extracted or executed. MP4/MOV, WebM and AVI video containers are recognized. When bundled FFmpeg can decode them, only a short audio track and one resized frame are extracted locally; the original video is never sent to a provider. Scanned PDFs without an extractable text layer receive a warning rather than a fabricated review.
 
 ## File safety and privacy
 
 - Uploads are processed in memory and are not persisted by this service. A temporary file is used only when a local ClamAV binary is available; it is removed when scanning completes.
 - Maximum upload size is 25 MiB. Request bodies are bounded. File type is determined from content signatures, not just the supplied extension or MIME type.
-- Executables and scripts are rejected. ZIP archives have entry-count, expanded-size, compression-ratio, encryption and path-traversal checks. DOCX is parsed only after archive checks. PDF page count and extracted text are bounded. Images are decoded, dimension-checked and resized before provider submission.
+- Executables and scripts are rejected. ZIP archives have entry-count, expanded-size, compression-ratio, encryption and path-traversal checks. DOCX, XLSX and PPTX are parsed only after archive checks; spreadsheet and slide extraction are capped. PDF page count and extracted text are bounded. Images are decoded, dimension-checked and resized before provider submission.
 - Common private keys, bearer tokens, API keys, email addresses and phone-like values are redacted from extracted text before Gemini. Redaction is best-effort and is not a guarantee that all personal or confidential information is removed.
 - If ClamAV is not installed or available, the response says `manual_scan_required`; the file is never described as malware-clean. Configure a maintained scanner in the runtime before treating file uploads as security-cleared.
 - A successful AI review is advisory only. The endpoint always returns `publication_authorized: false` and `automated_publication: false`.
