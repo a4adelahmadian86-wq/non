@@ -145,6 +145,8 @@ class AdminCourseController extends Controller
 
         $upload = $request->file('file');
         $path = $upload->store('store/products/'.$product->id.'/lessons/'.$lesson->id, 'private');
+        $shouldDispatchDocument = false;
+        $documentId = null;
         try {
             $allowed = [
                 'application/pdf', 'application/zip', 'image/jpeg', 'image/png', 'image/webp',
@@ -188,7 +190,7 @@ class AdminCourseController extends Controller
                 'updated_at' => now(),
             ]);
             if ($resource->size_bytes <= 25 * 1024 * 1024) {
-                ProcessProductDocument::dispatch($documentId)->onQueue('documents');
+                $shouldDispatchDocument = true;
             } else {
                 DB::table('store_product_documents')->where('id', $documentId)->update([
                     'processing_status' => 'awaiting_provider',
@@ -202,6 +204,19 @@ class AdminCourseController extends Controller
                 throw $exception;
             }
             abort(503, 'بارگذاری به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
+        }
+
+        if ($shouldDispatchDocument && $documentId) {
+            try {
+                ProcessProductDocument::dispatch($documentId)->onQueue('documents');
+            } catch (Throwable $exception) {
+                DB::table('store_product_documents')->where('id', $documentId)->update([
+                    'processing_status' => 'failed',
+                    'failure_code' => 'document_queue_unavailable',
+                    'updated_at' => now(),
+                ]);
+                report($exception);
+            }
         }
 
         return back()->with('status', 'منبع آموزشی امن ذخیره شد و برای ساخت دانش محصول در صف پردازش قرار گرفت؛ تولید محتوای هوشمند پس از تحلیل کامل فعال می‌شود.');
