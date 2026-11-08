@@ -209,6 +209,7 @@ class DocumentKnowledgeContextBuilder
         return [
             'schema_version' => 1,
             'file_id' => $fileId,
+            'product_id' => (int) $document->product_id,
             'sources' => [['document_id' => $document->id, 'file_id' => $document->file->id, 'filename' => $document->file->original_name, 'sha256' => $document->source_sha256, 'status' => $document->status, 'page_count' => $document->page_count]],
             'chunks' => $chunks,
             'facts' => $document->facts->map(fn ($fact) => ['document_id' => $document->id, 'key' => $fact->fact_key, 'value' => $fact->fact_value, 'confidence' => (float) $fact->confidence, 'evidence' => $fact->evidence ?? [], 'model' => $fact->model])->all(),
