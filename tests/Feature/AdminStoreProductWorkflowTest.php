@@ -433,6 +433,28 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('draft', $product->fresh()->status);
     }
 
+    public function test_product_catalog_displays_each_products_ai_supervisor_state(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول با ناظر',
+            'slug' => 'supervised-product',
+            'sku' => 'SUPERVISED-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+            'metadata' => ['ai_supervisor' => ['enabled' => true, 'mode' => 'review_gate']],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.index'))
+            ->assertOk()
+            ->assertSee('ناظر هوشمند فعال')
+            ->assertSee('سیاست تأییدمحور');
+    }
+
     public function test_product_editor_renders_live_seo_preview_and_contextual_media_step(): void
     {
         $admin = $this->admin();
