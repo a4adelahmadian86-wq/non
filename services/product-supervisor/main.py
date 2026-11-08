@@ -106,6 +106,17 @@ async def _json_error(status: int, message: str):
 
 
 
+def aggregate_groq_status(vision_status: str, transcription_status: str) -> str:
+    statuses = [vision_status, transcription_status]
+    if "completed" in statuses:
+        return "partial" if any(status not in {"completed", "not_requested"} for status in statuses) else "completed"
+    if "unavailable" in statuses:
+        return "unavailable"
+    if "not_configured" in statuses:
+        return "not_configured"
+    return "not_requested"
+
+
 @app.post("/v1/reviews/files", dependencies=[Depends(authenticate)])
 async def review_product_file(
     file: UploadFile = File(...),
@@ -170,13 +181,7 @@ async def review_product_file(
             provider_status["groq_transcription"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
 
-    groq_results = [provider_status["groq_vision"], provider_status["groq_transcription"]]
-    if "completed" in groq_results:
-        provider_status["groq"] = "partial" if any(status not in {"completed", "not_requested"} for status in groq_results) else "completed"
-    elif "unavailable" in groq_results:
-        provider_status["groq"] = "unavailable"
-    elif "not_configured" in groq_results:
-        provider_status["groq"] = "not_configured"
+    provider_status["groq"] = aggregate_groq_status(provider_status["groq_vision"], provider_status["groq_transcription"])
 
     extracted, redaction_count = redact_sensitive_content("\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip()))
     model_review = {}
