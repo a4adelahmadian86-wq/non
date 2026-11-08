@@ -146,7 +146,7 @@ class ProcessProductDocument implements ShouldQueue
         $totalCharacters = 0;
         $totalWords = 0;
 
-        DB::transaction(function () use ($document, $file, $product, $payload, $chunks, &$totalCharacters, &$totalWords) {
+        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
 
