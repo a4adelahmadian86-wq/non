@@ -218,6 +218,7 @@ class StoreController extends Controller
             : null;
         $audioSegments = $documentAudio
             ? $documentAudio->segments->map(fn ($segment) => [
+                'sequence' => $segment->sequence,
                 'start_ms' => $segment->start_ms,
                 'end_ms' => $segment->end_ms,
                 'page_number' => data_get($segment->visual_locator, 'page_number'),
