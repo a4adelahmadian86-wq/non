@@ -80,7 +80,7 @@
                 <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
               @endif
             </span>
-            <span>{{ ($preview->kind ?? '') === 'reader_document' ? ($preview->page_label ?? 'بخش '.$i+1) : 'بخش '.($preview->page_number ?: $i+1) }}</span>
+            <span>{{ ($preview->kind ?? '') === 'reader_document' ? ($preview->page_label ?? ('بخش '.($i+1))) : 'بخش '.($preview->page_number ?: $i+1) }}</span>
           </button>
         @endforeach
       </div>
