@@ -62,7 +62,6 @@
   const audio = new Audio();
   audio.preload = 'metadata';
   audio.setAttribute('playsinline', '');
-  audio.crossOrigin = 'same-origin';
   const $ = selector => dock.querySelector(selector);
   const playButton = $('[data-audio-play]');
   const seek = $('[data-audio-seek]');
@@ -135,7 +134,6 @@
           const mapped = normalizedWithOffsets(raw);
           const from = cursors.get(spanIndex) || 0;
           let at = mapped.normalized.indexOf(target, from);
-          if (at < 0 && from > 0) at = mapped.normalized.indexOf(target);
           if (at < 0) continue;
           const start = mapped.offsets[at];
           const end = (mapped.offsets[at + target.length - 1] ?? start) + 1;
