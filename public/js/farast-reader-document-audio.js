@@ -7,6 +7,70 @@
   const dock = root.querySelector('[data-reader-audio]');
   const url = root.dataset.readerAudioUrl || '';
   const timingNode = root.querySelector('#reader-audio-timing');
+  const pendingStatus = root.querySelector('[data-reader-audio-pending]');
+  const pollUrl = root.dataset.readerAudioPollUrl || '';
+  const audioStatus = root.dataset.readerAudioStatus || '';
+
+  if (pendingStatus && audioStatus === 'unavailable' && !url) {
+    pendingStatus.hidden = false;
+    pendingStatus.textContent = 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
+  }
+
+  if (pendingStatus && pollUrl && ['pending', 'upgrading'].includes(audioStatus)) {
+    pendingStatus.hidden = false;
+    pendingStatus.textContent = audioStatus === 'upgrading'
+      ? 'نسخهٔ دقیق‌تر صوت در حال آماده‌سازی است؛ نسخهٔ فعلی همچنان قابل پخش است.'
+      : 'صدای کامل سند در حال آماده‌سازی است؛ پس از تکمیل، خوانشگر خودکار به‌روزرسانی می‌شود.';
+
+    let attempts = 0;
+    let inFlight = false;
+    let stopped = false;
+    let pollTimer = 0;
+    const pollAudioReadiness = async () => {
+      if (stopped || inFlight || attempts >= 40) return;
+      if (document.visibilityState === 'hidden') {
+        pollTimer = window.setTimeout(pollAudioReadiness, 15000);
+        return;
+      }
+      inFlight = true;
+      attempts += 1;
+      try {
+        const response = await fetch(pollUrl, {
+          method: 'HEAD',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: { Accept: 'audio/wav' }
+        });
+        if (response.ok) {
+          stopped = true;
+          pendingStatus.textContent = 'صوت آماده شد؛ در حال بارگذاری زمان‌بندی دقیق…';
+          window.location.reload();
+          return;
+        }
+        if ([401, 403, 410].includes(response.status)) {
+          stopped = true;
+          pendingStatus.textContent = 'دسترسی صوت تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.';
+          return;
+        }
+      } catch (_) {
+        // Temporary network failures are retried with the same authenticated endpoint.
+      } finally {
+        inFlight = false;
+      }
+      if (attempts >= 40) {
+        pendingStatus.textContent = 'آماده‌سازی صوت بیش از حد طول کشید؛ برای بررسی وضعیت، صفحه را دوباره بارگذاری کنید.';
+        return;
+      }
+      pollTimer = window.setTimeout(pollAudioReadiness, attempts <= 6 ? 5000 : 15000);
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !stopped && !inFlight) {
+        window.clearTimeout(pollTimer);
+        pollAudioReadiness();
+      }
+    });
+    pollAudioReadiness();
+  }
   const playButton = dock?.querySelector('[data-audio-play]');
   const seek = dock?.querySelector('[data-audio-seek]');
   const currentLabel = dock?.querySelector('[data-audio-current]');
