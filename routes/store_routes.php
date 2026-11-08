@@ -10,6 +10,7 @@ use App\Http\Controllers\StoreWishlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');
+Route::get('/store/product/{slug}/reader/audio',[StoreController::class,'readerAudio'])->middleware(['auth','throttle:30,1'])->name('store.reader.audio');
 Route::get('/internal/store/products/{product}/document-knowledge', [\\App\\Http\\Controllers\\InternalDocumentKnowledgeController::class, 'show'])->middleware('throttle:60,1')->name('internal.store.document-knowledge');
 Route::get('/store/product/{product}/lessons/{lesson}/preview',[StoreController::class,'coursePreview'])->name('store.course.preview');
 
