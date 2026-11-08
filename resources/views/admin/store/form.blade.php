@@ -28,12 +28,13 @@
       </section>
     @endif
 
-    <div class="product-workflow" aria-label="مراحل آماده‌سازی محصول">
+    <div class="product-workflow {{ $isEdit ? 'has-media' : '' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
-      <a href="#product-discovery"><span>۴</span><b>نمایش</b><small>سئو و رسانه</small></a>
-      <a href="#product-ai-supervisor"><span>۵</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
+      @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه و فایل</b><small>کاور و دارایی‌ها</small></a>@endif
+      <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۴' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
+      <a href="#product-ai-supervisor"><span>{{ $isEdit ? '۶' : '۵' }}</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
@@ -63,7 +64,7 @@
       <label class="product-field product-field-wide">توضیحات کامل<textarea name="description" rows="6" maxlength="20000" placeholder="شرح کامل محتوا، کاربردها، پیش‌نیازها و آنچه خریدار دریافت می‌کند.">{{ old('description',$product->description) }}</textarea></label>
 
 
-      <div class="product-editor-subhead" id="product-discovery"><span>گام چهارم</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
+      <div class="product-editor-subhead" id="product-discovery"><span>گام {{ $isEdit ? "پنجم" : "چهارم" }}</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
       <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" data-seo-title value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
       <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" data-seo-description rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
       <section class="product-search-preview" aria-label="پیش‌نمایش نتیجه جست‌وجو">
@@ -89,7 +90,7 @@
       <section class="product-ai-supervisor" id="product-ai-supervisor" aria-labelledby="product-ai-supervisor-title">
         <div class="product-ai-supervisor-head">
           <div class="product-ai-mark"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></div>
-          <div><span>گام پنجم · کنترل کیفیت هوشمند</span><h2 id="product-ai-supervisor-title">هوش مصنوعی ناظر محصول</h2><p>برای هر محصول، سیاست نظارت مستقل تعریف کنید؛ تنظیمات در کنار خود محصول ذخیره می‌شوند.</p></div>
+          <div><span>گام {{ $isEdit ? "ششم" : "پنجم" }} · کنترل کیفیت هوشمند</span><h2 id="product-ai-supervisor-title">هوش مصنوعی ناظر محصول</h2><p>برای هر محصول، سیاست نظارت مستقل تعریف کنید؛ تنظیمات در کنار خود محصول ذخیره می‌شوند.</p></div>
           <label class="product-ai-switch"><input type="checkbox" name="ai_supervisor[enabled]" value="1" @checked(old('ai_supervisor.enabled', data_get($product->metadata, 'ai_supervisor.enabled', false)))><span></span><b>فعال‌سازی ناظر</b></label>
         </div>
         <div class="product-ai-supervisor-body">
@@ -196,7 +197,7 @@
 .product-readiness>p{margin:12px 0 0;color:var(--st-muted);font-size:.65rem}
 @media(max-width:760px){.product-readiness-list{grid-template-columns:repeat(2,minmax(0,1fr))}.product-readiness{padding:14px}}
 
-.product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}.product-workflow.has-media{grid-template-columns:repeat(6,minmax(0,1fr))}
 .product-workflow a{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;align-items:center;gap:2px 10px;padding:13px;border:1px solid var(--st-line);border-radius:14px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,box-shadow .18s}
 .product-workflow a:hover,.product-workflow a:focus-visible{border-color:#9bb9e7;box-shadow:0 5px 18px rgba(35,91,170,.08);outline:none}
 .product-workflow a>span{grid-row:span 2;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#edf4ff;color:#2868c8;font-weight:900}
@@ -213,7 +214,7 @@
 .product-editor-form [aria-invalid=true]{border-color:#c84b4b!important;background:#fffafa!important}
 .product-editor-actions{position:sticky;bottom:12px;z-index:5;padding:12px;border:1px solid #dfe8f4;border-radius:14px;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);box-shadow:0 8px 28px rgba(15,35,70,.1)}
 .product-editor-actions button{min-height:44px}
-@media(max-width:760px){.product-workflow{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.product-workflow a{padding:10px}.product-editor-actions{bottom:6px}.product-editor-actions button{width:100%}}
+@media(max-width:760px){.product-workflow,.product-workflow.has-media{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.product-workflow a{padding:10px}.product-editor-actions{bottom:6px}.product-editor-actions button{width:100%}}
 @media(max-width:420px){.product-workflow a{grid-template-columns:29px 1fr;gap:2px 7px}.product-workflow a>span{width:29px;height:29px}}
 
 
@@ -266,9 +267,18 @@
     if (!pricePreview || !price) return;
     const raw = Number(price.value || 0);
     const toman = Math.floor(raw / 10);
-    pricePreview.textContent = 'معادل ' + new Intl.NumberFormat('fa-IR').format(toman) + ' تومان';
+    const formatter = new Intl.NumberFormat('fa-IR');
+    let label = 'معادل ' + formatter.format(toman) + ' تومان';
+    const compare = Number(form.querySelector('[name="compare_at_price_rials"]')?.value || 0);
+    if (compare > raw && raw >= 0) {
+      const saving = Math.floor((compare - raw) / 10);
+      const percent = Math.round(((compare - raw) / compare) * 100);
+      label += ' · ' + formatter.format(percent) + '٪ تخفیف · ' + formatter.format(saving) + ' تومان صرفه‌جویی';
+    }
+    pricePreview.textContent = label;
   };
   price?.addEventListener('input', updatePrice);
+  form.querySelector('[name="compare_at_price_rials"]')?.addEventListener('input', updatePrice);
   updatePrice();
 
   form.querySelectorAll('input[type="file"]').forEach(input => {
