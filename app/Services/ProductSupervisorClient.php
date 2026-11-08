@@ -49,6 +49,38 @@ class ProductSupervisorClient
         return $payload;
     }
 
+    public function createPdfSample($stream, string $filename, array $pages): string
+    {
+        if (! $this->configured() || ! is_resource($stream)) {
+            throw new RuntimeException('product_supervisor_sample_service_unavailable');
+        }
+        $selected = array_values(array_unique(array_filter($pages, fn ($page) => is_int($page) && $page > 0)));
+        if ($selected === [] || count($selected) > 12) {
+            throw new RuntimeException('product_sample_page_selection_invalid');
+        }
+
+        $baseUrl = rtrim((string) config('services.product_supervisor.url'), '/');
+        if (! str_starts_with($baseUrl, 'https://')) {
+            throw new RuntimeException('product_supervisor_requires_https');
+        }
+
+        $response = Http::accept('application/pdf')
+            ->withToken((string) config('services.product_supervisor.token'))
+            ->connectTimeout(8)
+            ->timeout(max(180, (int) config('services.product_supervisor.timeout', 40)))
+            ->attach('file', $stream, basename($filename))
+            ->post($baseUrl.'/v1/tools/pdf-sample', [
+                'pages' => json_encode($selected, JSON_THROW_ON_ERROR),
+            ]);
+
+        $bytes = $response->body();
+        if (! $response->successful() || ! is_string($bytes) || ! str_starts_with($bytes, '%PDF-')) {
+            throw new RuntimeException('product_sample_pdf_build_failed');
+        }
+
+        return $bytes;
+    }
+
     public function reviewFile($stream, string $filename, array $metadata): array
     {
         if (! $this->configured()) {
