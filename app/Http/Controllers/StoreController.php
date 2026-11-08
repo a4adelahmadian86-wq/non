@@ -568,7 +568,7 @@ class StoreController extends Controller
 
         abort_unless((bool) data_get($document->structure_json, 'reader.ready', false)
             && data_get($document->structure_json, 'audio.status') === 'completed', 409);
-        $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', '>=', 3)->orderByDesc('version')->firstOrFail();
+        $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', '>=', 2)->orderByDesc('version')->firstOrFail();
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
         $disk = Storage::disk($artifact->disk ?: 'private');
         abort_unless($disk->exists($artifact->path), 404);
