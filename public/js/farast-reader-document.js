@@ -132,6 +132,11 @@
           list.style.margin = '0.5rem 0 1rem';
           return list;
         };
+        const closeTable = () => {
+          activeTable = null;
+          activeTableBody = null;
+          activeTableIndex = 0;
+        };
 
         for (const rawBlock of payload.content_blocks.slice(0, 120)) {
           if (!rawBlock || typeof rawBlock !== 'object') continue;
