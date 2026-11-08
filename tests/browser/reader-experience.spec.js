@@ -1033,6 +1033,78 @@ test('explicit sentence and paragraph controls play their own exact ranges', asy
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
 });
 
+
+test('heading cell and spreadsheet row controls are independently keyboard reachable', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 3;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        this.volume = 1;
+        this.src = '';
+        this.currentSrc = '';
+        window.__fakeReaderAudio = this;
+      }
+      setAttribute() {}
+      load() { this.currentSrc = this.src; this.dispatchEvent(new Event('loadedmetadata')); }
+      play() { this.paused = false; this.dispatchEvent(new Event('play')); return Promise.resolve(); }
+      pause() { if (!this.paused) { this.paused = true; this.dispatchEvent(new Event('pause')); } }
+      removeAttribute(name) { if (name === 'src') { this.src = ''; this.currentSrc = ''; } }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [
+    { text: 'عنوان گزارش', start: 0.1, end: 0.3, page: 1, words: [
+      { text: 'عنوان', start: 0.1, end: 0.2 }, { text: 'گزارش', start: 0.2, end: 0.3 }
+    ] },
+    { text: 'فروش', start: 0.5, end: 0.7, page: 1, words: [
+      { text: 'فروش', start: 0.5, end: 0.7 }
+    ] },
+    { text: 'فروش هزینه سود', start: 0.9, end: 1.4, page: 1, words: [
+      { text: 'فروش', start: 0.9, end: 1.05 }, { text: 'هزینه', start: 1.05, end: 1.2 }, { text: 'سود', start: 1.2, end: 1.4 }
+    ] }
+  ];
+  const encodedTimings = JSON.stringify(timings).replace(/"/g, '&quot;');
+  await page.setContent(
+    '<section class="farast-reader" data-reader-root data-reader-mode="document" ' +
+      'data-reader-audio-url="/reader-full.wav" data-reader-audio-timing="' + encodedTimings + '">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-audio-url="/reader-full.wav">' +
+        '<h2 class="reader-document-heading" data-reader-speech-text="عنوان گزارش">عنوان گزارش</h2>' +
+        '<table><tbody><tr class="reader-document-row" data-reader-speech-text="فروش هزینه سود">' +
+          '<td class="reader-document-cell" data-reader-speech-text="فروش">فروش</td>' +
+          '<td class="reader-document-cell">هزینه</td><td class="reader-document-cell">سود</td>' +
+        '</tr></tbody></table>' +
+      '</article></section>'
+  );
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-audio.js') });
+
+  const heading = page.locator('[data-reader-speech-control="heading"]');
+  await expect(heading).toHaveAttribute('aria-label', 'خواندن عنوان');
+  await heading.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
+  await page.evaluate(() => { const audio = window.__fakeReaderAudio; audio.currentTime = 0.3; audio.dispatchEvent(new Event('timeupdate')); });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+
+  const cell = page.locator('[data-reader-speech-control="cell"]').first();
+  await cell.click();
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.5);
+  await page.evaluate(() => { const audio = window.__fakeReaderAudio; audio.currentTime = 0.7; audio.dispatchEvent(new Event('timeupdate')); });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+
+  const row = page.locator('[data-reader-speech-control="row"]');
+  await expect(row).toHaveAttribute('aria-label', 'خواندن ردیف');
+  await row.click();
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.9);
+  await page.evaluate(() => { const audio = window.__fakeReaderAudio; audio.currentTime = 1.4; audio.dispatchEvent(new Event('timeupdate')); });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+});
+
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
