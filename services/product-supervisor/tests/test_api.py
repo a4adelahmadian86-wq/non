@@ -21,7 +21,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
     def test_file_review_requires_bearer_token(self):
         response = self.client.post(
             "/v1/reviews/files",
-            data={"product_id": "p-1", "product_title": "عنوان آزمایشی", "product_type": "digital_file"},
+            data={"product_id": "p-1", "product_title": "عنوان آزمایشی", "product_type": "digital_file", "primary_scan_status": "clean"},
             files={"file": ("description.txt", "متن محصول".encode(), "text/plain")},
         )
         self.assertEqual(response.status_code, 401)
