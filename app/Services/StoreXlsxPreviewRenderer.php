@@ -44,6 +44,7 @@ class StoreXlsxPreviewRenderer
                 $relationships = $this->loadXml($zip, 'xl/_rels/workbook.xml.rels', 2 * 1024 * 1024);
                 $targets = $this->relationshipTargets($relationships);
                 $sharedStrings = $this->readSharedStrings($zip);
+                $styles = $this->readStyles($zip);
                 $sheets = (new DOMXPath($workbook))->query('//*[local-name()="sheets"]/*[local-name()="sheet"]');
 
                 if (!$sheets || $sheets->length < 1 || $sheets->length > self::MAX_SHEETS) {
@@ -74,7 +75,7 @@ class StoreXlsxPreviewRenderer
 
                     $sheetPath = $this->normalizeWorksheetPath($target);
                     $xml = $this->loadXml($zip, $sheetPath, 20 * 1024 * 1024);
-                    $rows = $this->readWorksheet($xml, $sharedStrings, $cellCount);
+                    $rows = $this->readWorksheet($xml, $sharedStrings, $styles, $cellCount);
                     $name = $this->escape($sheet->getAttribute('name') ?: 'Sheet '.($sheetIndex + 1));
                     $sheetId = 'sheet-'.($sheetIndex + 1);
                     $tabs[] = '<a href="#'.$sheetId.'">'.$name.'</a>';
@@ -276,7 +277,96 @@ class StoreXlsxPreviewRenderer
         return $strings;
     }
 
-    private function readWorksheet(DOMDocument $xml, array $sharedStrings, int &$cellCount): array
+    /**
+     * Read a deliberately small, safe subset of Excel cell formatting.
+     * No workbook-provided CSS or markup is ever copied into the preview.
+     */
+    private function readStyles(ZipArchive $zip): array
+    {
+        $index = $zip->locateName('xl/styles.xml');
+        if ($index === false) {
+            return [];
+        }
+        $contents = $zip->getFromIndex($index);
+        if (!is_string($contents) || strlen($contents) > 4 * 1024 * 1024) {
+            throw new RuntimeException('Workbook styles part is too large.');
+        }
+        $xml = $this->parseXml($contents);
+        $xpath = new DOMXPath($xml);
+
+        $fonts = [];
+        foreach ($xpath->query('//*[local-name()="fonts"]/*[local-name()="font"]') as $font) {
+            $css = [];
+            if ($xpath->query('./*[local-name()="b"]', $font)->length > 0) $css[] = 'font-weight:700';
+            if ($xpath->query('./*[local-name()="i"]', $font)->length > 0) $css[] = 'font-style:italic';
+            $size = $xpath->query('./*[local-name()="sz"]', $font)->item(0)?->getAttribute('val');
+            if (is_numeric($size) && (float) $size >= 6 && (float) $size <= 36) $css[] = 'font-size:'.rtrim(rtrim((string) $size, '0'), '.').'pt';
+            $color = $xpath->query('./*[local-name()="color"]', $font)->item(0);
+            $hex = $this->xlsxColor($color instanceof DOMElement ? $color->getAttribute('rgb') : '');
+            if ($hex !== null) $css[] = 'color:'.$hex;
+            $fonts[] = $css;
+        }
+
+        $fills = [];
+        foreach ($xpath->query('//*[local-name()="fills"]/*[local-name()="fill"]') as $fill) {
+            $pattern = $xpath->query('./*[local-name()="patternFill"]', $fill)->item(0);
+            $type = $pattern instanceof DOMElement ? $pattern->getAttribute('patternType') : '';
+            $color = $xpath->query('./*[local-name()="fgColor"]', $pattern)->item(0);
+            $hex = $this->xlsxColor($color instanceof DOMElement ? $color->getAttribute('rgb') : '');
+            $fills[] = $type === 'solid' && $hex !== null ? ['background-color:'.$hex] : [];
+        }
+
+        $borders = [];
+        foreach ($xpath->query('//*[local-name()="borders"]/*[local-name()="border"]') as $border) {
+            $css = [];
+            foreach (['left','right','top','bottom'] as $edge) {
+                $node = $xpath->query('./*[local-name()="'.$edge.'"]', $border)->item(0);
+                if (!$node instanceof DOMElement) continue;
+                $line = $node->getAttribute('style');
+                $allowed = ['thin'=>'1px solid','medium'=>'2px solid','thick'=>'3px solid','dashed'=>'1px dashed','dotted'=>'1px dotted','double'=>'3px double','hair'=>'1px solid'];
+                if (!isset($allowed[$line])) continue;
+                $colorNode = $xpath->query('./*[local-name()="color"]', $node)->item(0);
+                $hex = $this->xlsxColor($colorNode instanceof DOMElement ? $colorNode->getAttribute('rgb') : '');
+                $css[] = 'border-'.$edge.':'.$allowed[$line].' '.($hex ?? '#cbd5e1');
+            }
+            $borders[] = $css;
+        }
+
+        $formats = [];
+        foreach ($xpath->query('//*[local-name()="cellXfs"]/*[local-name()="xf"]') as $xf) {
+            if (!$xf instanceof DOMElement) { $formats[] = ''; continue; }
+            $css = [];
+            $fontId = (int) $xf->getAttribute('fontId');
+            $fillId = (int) $xf->getAttribute('fillId');
+            $borderId = (int) $xf->getAttribute('borderId');
+            foreach ($fonts[$fontId] ?? [] as $declaration) $css[] = $declaration;
+            foreach ($fills[$fillId] ?? [] as $declaration) $css[] = $declaration;
+            foreach ($borders[$borderId] ?? [] as $declaration) $css[] = $declaration;
+            $alignment = $xpath->query('./*[local-name()="alignment"]', $xf)->item(0);
+            if ($alignment instanceof DOMElement) {
+                $horizontal = $alignment->getAttribute('horizontal');
+                if (in_array($horizontal, ['left','center','right','justify'], true)) $css[] = 'text-align:'.$horizontal;
+                $vertical = $alignment->getAttribute('vertical');
+                if (in_array($vertical, ['top','center','bottom'], true)) $css[] = 'vertical-align:'.($vertical === 'center' ? 'middle' : $vertical);
+                if ($alignment->getAttribute('wrapText') === '1') $css[] = 'white-space:normal';
+            }
+            $formats[] = implode(';', array_unique($css));
+        }
+
+        return $formats;
+    }
+
+    private function xlsxColor(string $value): ?string
+    {
+        $value = strtoupper(trim($value));
+        if (preg_match('/^(?:[0-9A-F]{2})?([0-9A-F]{6})$/', $value, $match)) {
+            return '#'.$match[1];
+        }
+
+        return null;
+    }
+
+    private function readWorksheet(DOMDocument $xml, array $sharedStrings, array $styles, int &$cellCount): array
     {
         $rows = [];
         $xpath = new DOMXPath($xml);
@@ -327,7 +417,11 @@ class StoreXlsxPreviewRenderer
                 }
 
                 // Formula nodes are intentionally never evaluated. Only cached <v> is shown.
-                $row[$column] = (string) $value;
+                $styleIndex = filter_var($cell->getAttribute('s'), FILTER_VALIDATE_INT);
+                $row[$column] = [
+                    'value' => (string) $value,
+                    'style' => $styleIndex !== false && $styleIndex >= 0 ? ($styles[$styleIndex] ?? '') : '',
+                ];
             }
             if ($row !== []) {
                 $rows[$rowNumber] = $row;
@@ -367,7 +461,9 @@ class StoreXlsxPreviewRenderer
         foreach ($rows as $number => $row) {
             $html .= '<tr><td class="rownum">'.$number.'</td>';
             for ($column = 1; $column <= $maxColumn; $column++) {
-                $html .= '<td>'.$this->escape((string) ($row[$column] ?? '')).'</td>';
+                $cell = $row[$column] ?? ['value' => '', 'style' => ''];
+                $style = (string) ($cell['style'] ?? '');
+                $html .= '<td'.($style !== '' ? ' style="'.$style.'"' : '').'>'.$this->escape((string) ($cell['value'] ?? '')).'</td>';
             }
             $html .= '</tr>';
         }
