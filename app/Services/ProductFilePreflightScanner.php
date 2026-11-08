@@ -325,7 +325,7 @@ class ProductFilePreflightScanner
                 if (in_array($extensionName, self::DANGEROUS_EXTENSIONS, true)) {
                     $suspicious[] = 'executable_or_script_entry';
                 }
-                if (! in_array($typeFlag, ['', "\\0", '0', '5'], true)) {
+                if (! in_array($typeFlag, ['', "\0", '0', '5'], true)) {
                     $suspicious[] = 'unsupported_special_entry';
                 }
                 if (in_array($extensionName, ['zip', 'gz', 'tgz', 'tar', 'rar', '7z'], true)) {
