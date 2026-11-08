@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import zipfile
 from dataclasses import dataclass, field
@@ -232,9 +233,11 @@ def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
     total = 0
     names: list[str] = []
     for item in infos:
-        path = PurePosixPath(item.filename.replace("\\", "/"))
-        if path.is_absolute() or ".." in path.parts:
-            raise FileInspectionError("آرشیو شامل مسیر ناامن است.")
+        normalized_name = item.filename.replace("\\", "/")
+        path = PurePosixPath(normalized_name)
+        unix_mode = (item.external_attr >> 16) & 0o170000
+        if path.is_absolute() or ".." in path.parts or "\\x00" in normalized_name or re.match(r"^[A-Za-z]:", normalized_name) or stat.S_ISLNK(unix_mode):
+            raise FileInspectionError("آرشیو شامل مسیر، پیوند یا نام ناامن است.")
         if item.flag_bits & 0x1:
             raise FileInspectionError("آرشیو رمزگذاری‌شده پشتیبانی نمی‌شود.")
         if path.suffix.lower() in EXECUTABLE_EXTENSIONS:
@@ -242,7 +245,7 @@ def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
         total += item.file_size
         if total > MAX_ARCHIVE_UNPACKED:
             raise FileInspectionError("حجم بازشده آرشیو از حد مجاز بیشتر است.")
-        if item.file_size > 1024 * 1024 and item.compress_size == 0:
+        if item.file_size > 0 and item.compress_size == 0:
             raise FileInspectionError("نسبت فشرده‌سازی آرشیو غیرعادی است.")
         if item.compress_size and item.file_size / item.compress_size > 100:
             raise FileInspectionError("آرشیو دارای نسبت فشرده‌سازی مشکوک است.")
@@ -609,9 +612,12 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             result.warnings.extend(archive_warnings)
             result.extraction_truncated = archive_truncated
             if archive_chunks:
-                result.extracted_text = "\\n".join(
-                    f"فایل داخل آرشیو: {item['name']}\\n" for item in embedded
+                result.extracted_text = "\n".join(
+                    f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
+                    for chunk in archive_chunks
                 )[:MAX_EXTRACTED_CHARS]
+                if sum(len(str(chunk.get("content_text") or "")) for chunk in archive_chunks) > MAX_EXTRACTED_CHARS:
+                    result.extraction_truncated = True
     elif data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a")) or suffix in {".webp", ".png", ".jpg", ".jpeg", ".gif"}:
         image_bytes, mime = _inspect_image(data)
         result.detected_type = "image"
