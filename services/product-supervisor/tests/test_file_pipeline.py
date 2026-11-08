@@ -67,13 +67,29 @@ class FilePipelineTests(unittest.TestCase):
         with self.assertRaises(FileInspectionError):
             inspect_file(stream.getvalue(), "package.zip")
 
-    def test_generic_zip_is_not_extracted_or_executed(self):
+    def test_generic_zip_reads_bounded_supported_documents_without_extracting_to_disk(self):
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, "w") as archive:
-            archive.writestr("readme.txt", "hello")
+            archive.writestr("chapters/readme.txt", "متن فصل اول")
+            archive.writestr("ignored.bin", b"\\x00\\x01")
         result = inspect_file(stream.getvalue(), "package.zip")
         self.assertEqual(result.detected_type, "zip")
-        self.assertEqual(result.archive_entries, ["readme.txt"])
+        self.assertEqual(result.archive_entries, ["chapters/readme.txt", "ignored.bin"])
+        self.assertIn("متن فصل اول", result.extracted_text)
+        self.assertEqual(result.embedded_documents[0]["name"], "chapters/readme.txt")
+        self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "chapters/readme.txt")
+
+    def test_nested_archives_are_listed_but_not_recursively_extracted(self):
+        nested = io.BytesIO()
+        with zipfile.ZipFile(nested, "w") as inner:
+            inner.writestr("secret.txt", "nested content")
+        outer = io.BytesIO()
+        with zipfile.ZipFile(outer, "w") as archive:
+            archive.writestr("nested.zip", nested.getvalue())
+        result = inspect_file(outer.getvalue(), "outer.zip")
+        self.assertTrue(result.extraction_truncated)
+        self.assertNotIn("nested content", result.extracted_text)
+        self.assertTrue(any("تو در تو" in warning for warning in result.warnings))
 
     def test_image_is_decoded_and_resized(self):
         stream = io.BytesIO()
