@@ -63,7 +63,7 @@ class PrepareLegacyReaderPreviews extends Command
                     if (! $disk->exists($newPath)) {
                         $prepared = $preview->kind === 'docx'
                             ? app(StoreController::class)->prepareDocxPreview($bytes)
-                            : app(StoreXlsxPreviewRenderer::class)->render($bytes, 'FARAST_READER_IDENTITY_TOKEN');
+                            : app(StoreXlsxPreviewRenderer::class)->render($bytes, '');
                         if (! $disk->put($newPath, $prepared)) {
                             throw new \RuntimeException('Unable to persist prepared preview.');
                         }
