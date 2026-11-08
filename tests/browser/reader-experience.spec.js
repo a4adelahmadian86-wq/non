@@ -365,11 +365,28 @@ test.describe('FARAST sample reader interactions', () => {
   });
 
   test('uses phrase-level labels when only sentence timestamps are supplied', async ({ page }) => {
+    const sampleRate = 8000;
+    const sampleCount = sampleRate * 2;
+    const dataSize = sampleCount * 2;
+    const wav = Buffer.alloc(44 + dataSize);
+    wav.write('RIFF', 0);
+    wav.writeUInt32LE(36 + dataSize, 4);
+    wav.write('WAVE', 8);
+    wav.write('fmt ', 12);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * 2, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36);
+    wav.writeUInt32LE(dataSize, 40);
     await page.goto('/');
     await page.route('**/reader-audio.wav', route => route.fulfill({
       status: 200,
       contentType: 'audio/wav',
-      body: Buffer.alloc(44),
+      body: wav,
     }));
     const timings = [{ text: 'سلام به همه', start: 0, end: 1.2, page: 1 }];
     await page.setContent(`
