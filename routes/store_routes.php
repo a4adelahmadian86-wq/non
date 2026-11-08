@@ -10,6 +10,8 @@ use App\Http\Controllers\StoreWishlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');
+Route::get('/store/product/{slug}/reader/audio',[StoreController::class,'readerAudio'])->middleware(['auth','throttle:30,1'])->name('store.reader.audio');
+Route::get('/internal/store/products/{product}/document-knowledge', [\App\Http\Controllers\InternalDocumentKnowledgeController::class, 'show'])->middleware('throttle:60,1')->name('internal.store.document-knowledge');
 Route::get('/store/product/{product}/lessons/{lesson}/preview',[StoreController::class,'coursePreview'])->name('store.course.preview');
 
 Route::middleware(['auth'])->group(function () {
@@ -46,7 +48,9 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/cover',[AdminStoreController::class,'uploadCover'])->middleware('throttle:10,10')->name('store.cover.upload');
     Route::post('/store/{product}/images',[AdminStoreController::class,'uploadImage'])->middleware('throttle:20,10')->name('store.images.upload');
     Route::delete('/store/{product}/images/{image}',[AdminStoreController::class,'deleteImage'])->name('store.images.delete');
-    Route::post('/store/{product}/files',[AdminStoreController::class,'uploadFile'])->middleware('throttle:10,10')->name('store.files.upload');
+    Route::post('/store/{product}/files/inspect',[AdminStoreController::class,'inspectFiles'])->middleware('throttle:10,10')->name('store.files.inspect');
+    Route::post('/store/{product}/files/confirm',[AdminStoreController::class,'confirmFiles'])->middleware('throttle:10,10')->name('store.files.confirm');
+    Route::post('/store/{product}/files/cancel',[AdminStoreController::class,'cancelFileIntakes'])->middleware('throttle:20,10')->name('store.files.cancel');
     Route::delete('/store/{product}/files/{file}',[AdminStoreController::class,'deleteFile'])->name('store.files.delete');
     Route::post('/store/{product}/previews',[AdminStoreController::class,'uploadPreview'])->middleware('throttle:10,10')->name('store.previews.upload');
     Route::delete('/store/{product}/previews/{preview}',[AdminStoreController::class,'deletePreview'])->name('store.previews.delete');

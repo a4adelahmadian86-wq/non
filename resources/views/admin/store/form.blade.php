@@ -210,7 +210,11 @@
         <p>فایل‌ها در فضای خصوصی نگهداری می‌شوند. فقط فایل اصلیِ اسکن‌شده و فعال پس از خرید قابل دریافت خواهد بود.</p>
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
           @php($fileReview = $assetReviews['file:'.$file->id] ?? null)
-          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'اسکن سالم':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small>
+          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'بررسی ایستای داخلی موفق':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small>
+          @if($file->documentRecord)
+            @php($knowledgeStatus = $file->documentRecord->status)
+            <small class="farast-knowledge-status" data-knowledge-status="{{ $knowledgeStatus }}">شناخت محتوا: {{ ['queued'=>'در صف پردازش','processing'=>'در حال مطالعه','ready'=>'مطالعه و ثبت دانش کامل','extracted'=>'متن استخراج شد؛ تحلیل معنایی ناقص','waiting_provider'=>'در انتظار اتصال هوش مصنوعی','needs_review'=>'نیازمند بررسی دستی','failed'=>'پردازش ناموفق','blocked'=>'متوقف‌شده'][$knowledgeStatus] ?? $knowledgeStatus }} @if($file->documentRecord->page_count) · {{ number_format($file->documentRecord->page_count) }} صفحه @endif @if($file->documentRecord->extracted_characters) · {{ number_format($file->documentRecord->extracted_characters) }} نویسه استخراج‌شده @endif</small>
+          @endif
           </span>
           @if($fileReview && hash_equals((string) ($fileReview['sha256'] ?? ''), (string) $file->sha256))
             @include('admin.store.partials.asset-review', ['assetReview' => $fileReview, 'label' => 'گزارش ناظر فایل'])
@@ -218,8 +222,33 @@
           <form method="post" action="{{ route('admin.store.ai-supervisor.files.review',[$product,$file]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>بررسی محتوای فایل</button></form>
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
-        <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
-        <small class="product-help">حداکثر بارگذاری ۵۰ مگابایت؛ بررسی هوشمند هر فایل تا ۲۵ مگابایت. اسکن اصلی فروشگاه همچنان شرط انتشار است.</small>
+        <form method="post" action="{{ route('admin.store.files.inspect',$product) }}" enctype="multipart/form-data" class="product-file-upload farast-file-intake-form" data-file-intake-form data-confirm-url="{{ route('admin.store.files.confirm',$product) }}" data-cancel-url="{{ route('admin.store.files.cancel',$product) }}">
+          @csrf
+          <label class="farast-file-dropzone" data-file-dropzone>
+            <input type="file" name="files[]" required multiple accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.md,.csv,.mp3,.wav,.mp4,.webm,.m4a">
+            <span class="farast-file-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+            <strong>فایل‌ها را انتخاب کنید یا همین‌جا رها کنید</strong>
+            <small>می‌توانید چند فایل را هم‌زمان انتخاب کنید؛ PDF، Office، تصویر، صوت، ویدئو، ZIP و متن</small>
+            <small class="product-selected-file" data-file-name>هنوز فایلی انتخاب نشده است · حداکثر ۵۰ مگابایت برای هر فایل</small>
+          </label>
+          <label class="farast-file-primary"><input type="checkbox" name="is_primary" value="1" checked> اولین فایل، فایل اصلی محصول باشد</label>
+          <button type="submit" class="store-primary-btn" data-intake-submit>بررسی فایل‌ها قبل از ذخیره</button>
+        </form>
+        <div class="farast-intake-drop-overlay" data-intake-drop-overlay hidden><div><i class="fa-solid fa-cloud-arrow-up"></i><strong>فایل‌ها را در هر جای صفحه رها کنید</strong><small>بررسی اولیه روی خود سایت انجام می‌شود.</small></div></div>
+        <div class="farast-intake-modal" data-intake-modal hidden role="dialog" aria-modal="true" aria-labelledby="farast-intake-title">
+          <div class="farast-intake-dialog">
+            <header><div><span>بررسی پیش از ذخیره</span><h3 id="farast-intake-title">گزارش شناسایی فایل‌ها</h3><p data-intake-status>در حال آماده‌سازی گزارش…</p></div><button type="button" data-intake-close aria-label="بستن پنجره"><i class="fa-solid fa-xmark"></i></button></header>
+            <ol class="farast-intake-timeline" data-intake-timeline>
+              <li class="is-active" data-intake-step="inspect"><i class="fa-solid fa-magnifying-glass"></i><span>بررسی محلی</span></li>
+              <li data-intake-step="review"><i class="fa-solid fa-eye"></i><span>بازبینی شما</span></li>
+              <li data-intake-step="security"><i class="fa-solid fa-shield-halved"></i><span>اسکن داخلی</span></li>
+              <li data-intake-step="storage"><i class="fa-solid fa-database"></i><span>ذخیره امن</span></li>
+            </ol>
+            <div class="farast-intake-results" data-intake-results></div>
+            <footer><button type="button" class="store-outline-btn" data-intake-cancel>انصراف و پاک‌کردن فایل موقت</button><button type="button" class="store-primary-btn" data-intake-confirm disabled>تأیید فایل‌ها و ادامه</button></footer>
+          </div>
+        </div>
+        <small class="product-help">ابتدا فقط مشخصات و ساختار فایل در سایت بررسی می‌شود. تا تأیید شما هیچ فایل نهایی ذخیره یا برای هوش مصنوعی ارسال نمی‌شود.</small>
       </div>
       <div class="store-panel product-files-panel">
         <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
@@ -337,6 +366,9 @@
 .product-gallery-panel{margin-top:16px}.product-file-row{flex-wrap:wrap}.product-asset-review{grid-column:1/-1;flex-basis:100%;padding:9px;border-radius:9px;background:#f5f8fc;border:1px solid #e2eaf4}.product-asset-review b{font-size:.68rem}.product-asset-review p{font-size:.68rem;line-height:1.8;margin:5px 0}.product-asset-review small{font-size:.62rem;color:var(--st-muted)}.product-asset-review-list,.product-asset-review-warnings{margin:7px 0 0;padding-right:18px;font-size:.65rem;line-height:1.7}.product-asset-review-list li{margin:4px 0}.product-asset-review-list span,.product-asset-review-list small{display:block}.product-asset-review-warnings{color:#9b5b17}
 
 .product-discovery-links{padding-top:4px}.product-discovery-links select{min-height:118px}.product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
+
+/* Farast staged file intake */
+.farast-file-intake-form{display:grid;gap:12px}.farast-file-dropzone{position:relative;display:grid;justify-items:center;gap:8px;padding:26px 18px;border:1.5px dashed #8ba9d1;border-radius:16px;background:linear-gradient(145deg,#f7faff,#eef5ff);text-align:center;cursor:pointer;transition:border-color .2s,background .2s,transform .2s}.farast-file-dropzone:hover,.farast-file-dropzone.is-dragging{border-color:#3474c7;background:#eaf3ff;transform:translateY(-1px)}.farast-file-dropzone input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.farast-file-drop-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#e0edff;color:#2768bd;font-size:1.35rem}.farast-file-dropzone strong{font-size:.82rem;color:#274768}.farast-file-dropzone small{font-size:.67rem;color:#73859c;line-height:1.8}.farast-file-primary{display:flex;align-items:center;gap:8px;font-size:.72rem;color:#4d6079}.farast-intake-drop-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:rgba(14,35,65,.58);backdrop-filter:blur(5px);pointer-events:none}.farast-intake-drop-overlay[hidden],.farast-intake-modal[hidden]{display:none}.farast-intake-drop-overlay>div{display:grid;justify-items:center;gap:12px;padding:38px 52px;border:2px dashed #fff;border-radius:22px;color:#fff;background:rgba(255,255,255,.12);text-align:center}.farast-intake-drop-overlay i{font-size:2.4rem}.farast-intake-drop-overlay strong{font-size:1.1rem}.farast-intake-drop-overlay small{font-size:.78rem;opacity:.85}.farast-intake-modal{position:fixed;inset:0;z-index:10001;display:grid;place-items:center;padding:18px;background:rgba(12,25,44,.62);backdrop-filter:blur(7px)}.farast-intake-dialog{width:min(900px,100%);max-height:min(88vh,900px);overflow:auto;border:1px solid #dce6f2;border-radius:20px;background:#fff;box-shadow:0 24px 80px rgba(10,25,50,.28);direction:rtl}.farast-intake-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid #e9eef5}.farast-intake-dialog>header span{font-size:.65rem;font-weight:900;color:#3474c7}.farast-intake-dialog>header h3{margin:4px 0;font-size:1.05rem;color:#243b58}.farast-intake-dialog>header p{margin:0;font-size:.72rem;color:#71839b}.farast-intake-dialog>header button{width:36px;height:36px;border:0;border-radius:10px;background:#f1f5fa;color:#536981;cursor:pointer}.farast-intake-timeline{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;padding:18px 22px;list-style:none;border-bottom:1px solid #edf1f6}.farast-intake-timeline li{display:flex;align-items:center;gap:8px;min-width:0;color:#9aa8b8;font-size:.68rem}.farast-intake-timeline li i{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:#f0f3f7}.farast-intake-timeline li.is-active{color:#2466b9;font-weight:800}.farast-intake-timeline li.is-active i{background:#e5f0ff;animation:farast-intake-pulse 1.4s infinite}.farast-intake-timeline li.is-done{color:#168153}.farast-intake-timeline li.is-done i{background:#e7f7ef}@keyframes farast-intake-pulse{50%{box-shadow:0 0 0 6px rgba(52,116,199,.10)}}.farast-intake-results{display:grid;gap:12px;padding:18px 22px;max-height:52vh;overflow:auto}.farast-intake-file{overflow:hidden;border:1px solid #e2eaf3;border-radius:14px;background:#fff}.farast-intake-file>header{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f8fafd}.farast-intake-file>header i{color:#3474c7;font-size:1.1rem}.farast-intake-file>header strong{min-width:0;overflow-wrap:anywhere;font-size:.76rem;color:#304964}.farast-intake-file>header small{margin-inline-start:auto;white-space:nowrap;color:#78899d;font-size:.65rem}.farast-intake-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px 14px}.farast-intake-meta>div{display:grid;gap:3px;padding:8px;border-radius:9px;background:#f7f9fc}.farast-intake-meta small{font-size:.61rem;color:#8392a5}.farast-intake-meta b{font-size:.7rem;color:#344e6c;overflow-wrap:anywhere}.farast-intake-archive{padding:0 14px 12px}.farast-intake-archive summary{font-size:.7rem;font-weight:800;color:#355675;cursor:pointer}.farast-intake-archive ul{max-height:150px;overflow:auto;margin:8px 0 0;padding:8px 25px 8px 8px;border-radius:8px;background:#f7f9fc;font-size:.65rem;color:#536a83}.farast-intake-archive li{padding:3px 0;overflow-wrap:anywhere}.farast-intake-warning{margin:0 14px 12px;padding:8px 10px;border-radius:8px;background:#fff8e9;color:#8a5b13;font-size:.66rem;line-height:1.8}.farast-intake-dialog>footer{display:flex;justify-content:space-between;gap:10px;padding:14px 22px;border-top:1px solid #e9eef5;background:#fbfcfe}.farast-intake-dialog button:disabled{opacity:.5;cursor:not-allowed}@media(max-width:600px){.farast-intake-modal{padding:8px}.farast-intake-dialog{max-height:94vh;border-radius:15px}.farast-intake-dialog>header,.farast-intake-results{padding:14px}.farast-intake-timeline{padding:12px;gap:3px}.farast-intake-timeline li{display:grid;justify-items:center;gap:4px;font-size:.58rem}.farast-intake-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.farast-intake-dialog>footer{padding:12px;flex-direction:column}.farast-intake-dialog>footer button{width:100%}}
 </style>
 @endpush
 
@@ -428,6 +460,171 @@
       finally { if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'ثبت'; } }
     });
   });
+  const intakeForm = document.querySelector('[data-file-intake-form]');
+  if (intakeForm) {
+    const input = intakeForm.querySelector('input[type="file"]');
+    const zone = intakeForm.querySelector('[data-file-dropzone]');
+    const modal = document.querySelector('[data-intake-modal]');
+    const results = modal?.querySelector('[data-intake-results]');
+    const status = modal?.querySelector('[data-intake-status]');
+    const confirmButton = modal?.querySelector('[data-intake-confirm]');
+    const cancelButton = modal?.querySelector('[data-intake-cancel]');
+    const submitButton = intakeForm.querySelector('[data-intake-submit]');
+    const overlay = document.querySelector('[data-intake-drop-overlay]');
+    let staged = [];
+    const csrf = intakeForm.querySelector('input[name="_token"]')?.value || '';
+    const formatSize = bytes => bytes >= 1048576 ? (bytes / 1048576).toFixed(2) + ' MB' : (bytes / 1024).toFixed(1) + ' KB';
+    const setStep = (step, state) => {
+      const item = modal?.querySelector('[data-intake-step="' + step + '"]');
+      if (!item) return;
+      item.classList.remove('is-active','is-done');
+      if (state) item.classList.add(state);
+    };
+    const resetTimeline = () => {
+      ['inspect','review','security','storage'].forEach((step,index) => setStep(step,index===0?'is-active':''));
+    };
+    const renderResults = items => {
+      if (!results) return;
+      results.replaceChildren();
+      items.forEach(item => {
+        const d = item.inspection || {};
+        const card = document.createElement('article');
+        card.className = 'farast-intake-file';
+        const head = document.createElement('header');
+        const ico = document.createElement('i');
+        ico.className = 'fa-solid fa-file-lines';
+        const name = document.createElement('strong');
+        name.textContent = d.original_name || 'فایل';
+        const size = document.createElement('small');
+        size.textContent = d.size_human || formatSize(d.size_bytes || 0);
+        head.append(ico,name,size);
+        const meta = document.createElement('div');
+        meta.className = 'farast-intake-meta';
+        const rows = [
+          ['نوع شناسایی‌شده',d.detected_type || 'نامشخص'],
+          ['نوع MIME',d.mime || 'نامشخص'],
+          ['حجم',d.size_human || formatSize(d.size_bytes || 0)],
+          ['تعداد صفحات',d.page_count ?? 'قابل تعیین نیست'],
+          ['شناسه محتوا',String(d.sha256 || '').slice(0,16) + '…'],
+          ['ساختار',d.archive ? ((d.archive.entry_count || 0) + ' مورد داخل آرشیو') : (d.document?.paragraphs != null ? (d.document.paragraphs + ' پاراگراف') : 'بررسی اولیه انجام شد')]
+        ];
+        rows.forEach(([label,value]) => {
+          const cell = document.createElement('div');
+          const small = document.createElement('small'); small.textContent = label;
+          const bold = document.createElement('b'); bold.textContent = String(value);
+          cell.append(small,bold); meta.append(cell);
+        });
+        card.append(head,meta);
+        if (d.archive?.entries?.length) {
+          const details = document.createElement('details'); details.className = 'farast-intake-archive';
+          const summary = document.createElement('summary'); summary.textContent = 'مشاهده محتویات آرشیو (' + d.archive.entry_count + ')';
+          const list = document.createElement('ul');
+          d.archive.entries.forEach(entry => {
+            const li = document.createElement('li');
+            li.textContent = entry.name + (entry.is_directory ? ' · پوشه' : ' · ' + formatSize(entry.size_bytes || 0));
+            list.append(li);
+          });
+          details.append(summary,list); card.append(details);
+        }
+        (d.warnings || []).forEach(warning => {
+          const note = document.createElement('p'); note.className = 'farast-intake-warning'; note.textContent = warning; card.append(note);
+        });
+        results.append(card);
+      });
+    };
+    const showModal = () => { if (modal) { modal.hidden = false; document.body.style.overflow = 'hidden'; } };
+    const closeModal = () => { if (modal) { modal.hidden = true; document.body.style.overflow = ''; } };
+    const request = async (url, data) => {
+      const response = await fetch(url,{method:'POST',body:data,headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'عملیات انجام نشد.');
+      return payload;
+    };
+    input?.addEventListener('change', () => {
+      const files = Array.from(input.files || []);
+      const output = intakeForm.querySelector('[data-file-name]');
+      if (output) output.textContent = files.length ? files.map(file => file.name + ' · ' + formatSize(file.size)).join('، ') : 'هنوز فایلی انتخاب نشده است.';
+    });
+    intakeForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!input?.files?.length || submitButton?.disabled) return;
+      submitButton.disabled = true; submitButton.textContent = 'در حال بررسی محلی…';
+      if (status) status.textContent = 'سایت در حال شناسایی نوع، حجم، صفحات و ساختار فایل‌هاست؛ هنوز هیچ AI فراخوانی نشده است.';
+      if (results) results.textContent = 'در حال بررسی فایل‌ها…';
+      staged = []; resetTimeline(); showModal();
+      try {
+        const payload = await request(intakeForm.action,new FormData(intakeForm));
+        staged = payload.intakes || [];
+        renderResults(staged);
+        setStep('inspect','is-done'); setStep('review','is-active');
+        if (status) status.textContent = 'بررسی اولیه محلی کامل شد. محتویات قابل شناسایی را بازبینی و سپس تأیید کنید.';
+        if (confirmButton) confirmButton.disabled = staged.length === 0;
+      } catch (error) {
+        if (results) results.textContent = error.message || 'بررسی فایل انجام نشد.';
+        if (status) status.textContent = error.message || 'بررسی فایل انجام نشد.';
+        if (confirmButton) confirmButton.disabled = true;
+      } finally {
+        submitButton.disabled = false; submitButton.textContent = 'بررسی فایل‌ها قبل از ذخیره';
+      }
+    });
+    confirmButton?.addEventListener('click', async () => {
+      if (!staged.length || confirmButton.disabled) return;
+      confirmButton.disabled = true; cancelButton.disabled = true; confirmButton.textContent = 'در حال اسکن و ذخیره…';
+      setStep('review','is-done'); setStep('security','is-active');
+      if (status) status.textContent = 'اسکن ایستای داخلی فراست در حال اجراست؛ فایل‌ها استخراج یا اجرا نمی‌شوند.';
+      const data = new FormData();
+      staged.forEach(item => data.append('intake_ids[]',item.id));
+      data.append('_token',csrf);
+      data.append('is_primary',intakeForm.querySelector('[name="is_primary"]')?.checked ? '1' : '0');
+      try {
+        const payload = await request(intakeForm.dataset.confirmUrl,data);
+        setStep('security','is-done'); setStep('storage','is-done');
+        if (status) status.textContent = payload.message || 'فایل‌ها با موفقیت ذخیره شدند.';
+        confirmButton.textContent = 'تکمیل شد';
+        if (results) {
+          const done = document.createElement('p'); done.className = 'farast-intake-warning'; done.textContent = (payload.files || []).map(file => file.name + ' · در صف شناخت محتوا').join(' | '); results.append(done);
+        }
+        setTimeout(() => window.location.reload(),900);
+      } catch (error) {
+        if (status) status.textContent = error.message || 'اسکن یا ذخیره فایل ناموفق بود.';
+        confirmButton.disabled = false; cancelButton.disabled = false; confirmButton.textContent = 'تلاش دوباره';
+      }
+    });
+    const cancelIntakes = async () => {
+      if (staged.length) {
+        const data = new FormData(); staged.forEach(item => data.append('intake_ids[]',item.id)); data.append('_token',csrf);
+        try { await request(intakeForm.dataset.cancelUrl,data); } catch (_) {}
+      }
+      staged = []; closeModal();
+    };
+    cancelButton?.addEventListener('click',cancelIntakes);
+    modal?.querySelector('[data-intake-close]')?.addEventListener('click',cancelIntakes);
+    modal?.addEventListener('click',event => { if (event.target === modal) cancelIntakes(); });
+    let dragDepth = 0;
+    document.addEventListener('dragenter',event => {
+      if (!Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault(); dragDepth++; if (overlay) overlay.hidden = false; zone?.classList.add('is-dragging');
+    });
+    document.addEventListener('dragover',event => {
+      if (Array.from(event.dataTransfer?.types || []).includes('Files')) event.preventDefault();
+    });
+    document.addEventListener('dragleave',event => {
+      if (!Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      dragDepth = Math.max(0,dragDepth-1);
+      if (dragDepth===0 && overlay) overlay.hidden = true;
+      if (dragDepth===0) zone?.classList.remove('is-dragging');
+    });
+    document.addEventListener('drop',event => {
+      if (!event.dataTransfer?.files?.length) return;
+      event.preventDefault(); dragDepth=0; if (overlay) overlay.hidden=true; zone?.classList.remove('is-dragging');
+      const transfer = new DataTransfer();
+      Array.from(event.dataTransfer.files).slice(0,10).forEach(file => transfer.items.add(file));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change',{bubbles:true}));
+      intakeForm.requestSubmit();
+    });
+  }
+
   form.addEventListener('submit', event => {
     const button = document.getElementById('productSaveButton');
     if (button?.dataset.submitting === '1') {

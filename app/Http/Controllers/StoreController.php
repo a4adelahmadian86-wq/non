@@ -191,22 +191,45 @@ class StoreController extends Controller
             ->firstOrFail();
 
         $user = request()->user();
+        $libraryItem = $user
+            ? StoreLibraryItem::query()->where('user_id', $user->id)->where('product_id', $product->id)->whereNull('revoked_at')->first()
+            : null;
         $samplePreviews = $product->previews->where('access_level', '!=', 'full')->values();
-        $hasReaderEntitlement = $user
-            && ($product->download_policy ?? 'signed') === 'reader_only'
-            && StoreLibraryItem::query()->where('user_id', $user->id)->where('product_id', $product->id)->whereNull('revoked_at')->exists();
+        $hasReaderEntitlement = $libraryItem && ($product->download_policy ?? 'signed') === 'reader_only';
         $fullPreviews = $hasReaderEntitlement
             ? $product->previews->where('access_level', 'full')->values()
             : collect();
         $previews = $fullPreviews->isNotEmpty() ? $fullPreviews : $samplePreviews;
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
 
+        $audioTrack = null;
+        $audioSegments = [];
+        if ($hasReaderEntitlement) {
+            $primaryFile = $product->files()
+                ->where('purpose', 'product_download')
+                ->where('is_primary', true)
+                ->where('is_active', true)
+                ->first();
+            $document = $primaryFile?->documentRecord;
+            $candidateTrack = $document?->audioTrack;
+            if ($candidateTrack && $candidateTrack->status === 'ready'
+                && hash_equals(strtolower((string) $document->source_sha256), strtolower((string) $primaryFile->sha256))) {
+                $audioTrack = $candidateTrack;
+                $audioSegments = $candidateTrack->segments->map(fn ($segment) => [
+                    'start_ms' => (int) $segment->start_ms,
+                    'end_ms' => (int) $segment->end_ms,
+                    'text' => (string) $segment->text,
+                    'source_anchor' => $segment->source_anchor ?? [],
+                ])->values()->all();
+            }
+        }
+
         $readerIdentity = $user
             ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
             : (string) request()->ip();
 
         return response()
-            ->view('store.reader', compact('product', 'previews', 'readerIdentity'))
+            ->view('store.reader', compact('product', 'previews', 'readerIdentity', 'audioTrack', 'audioSegments'))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('X-Content-Type-Options', 'nosniff')
@@ -215,6 +238,45 @@ class StoreController extends Controller
             ->header('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:")
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
+
+    public function readerAudio(string $slug)
+    {
+        $product = StoreProduct::query()->published()->where('slug', $slug)->firstOrFail();
+        $user = request()->user();
+        abort_unless($user, 401);
+        $hasEntitlement = StoreLibraryItem::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->whereNull('revoked_at')
+            ->exists();
+        abort_unless($hasEntitlement && ($product->download_policy ?? 'signed') === 'reader_only', 403);
+
+        $track = \App\Models\StoreDocumentAudioTrack::query()
+            ->with('document.file')
+            ->where('status', 'ready')
+            ->whereHas('document.file', fn ($query) => $query->where('product_id', $product->id)->where('is_primary', true)->where('is_active', true))
+            ->orderByDesc('id')
+            ->firstOrFail();
+        abort_unless(
+            $track->document?->file
+                && $track->document->file->is_active
+                && hash_equals(strtolower((string) $track->source_sha256), strtolower((string) $track->document->file->sha256)),
+            404
+        );
+
+        $disk = Storage::disk($track->disk ?: 'private');
+        abort_unless($disk->exists($track->path), 404);
+
+        return $disk->response($track->path, null, [
+            'Content-Type' => 'audio/wav',
+            'Content-Disposition' => 'inline; filename="farast-reader-audio.wav"',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+        ]);
+    }
+
     /**
      * Convert an uploaded DOCX preview to a read-only, sanitized HTML document.
      * The source document is never exposed through a public storage URL.

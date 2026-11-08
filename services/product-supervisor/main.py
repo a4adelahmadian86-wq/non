@@ -6,10 +6,13 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import Response
+from pypdf import PdfReader, PdfWriter
+import io
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 app = FastAPI(
@@ -42,6 +45,7 @@ class ProductSnapshot(BaseModel):
     seo_description: str | None = Field(default=None, max_length=320)
     category_name: str | None = Field(default=None, max_length=160)
     tags: list[str] = Field(default_factory=list, max_length=30)
+    document_knowledge: dict[str, Any] | None = None
     has_cover: bool = False
     media_fingerprint: str = Field(default='', max_length=64)
     course_fingerprint: str | None = Field(default=None, max_length=64)
@@ -145,41 +149,41 @@ async def review_product_file(
     warnings = list(inspection.warnings or [])
     visual_report = ""
     transcription = ""
-    provider_status = {"gemini": "not_requested", "groq": "not_requested", "gladia": "disabled"}
+    provider_status = {"gemini": "not_requested", "groq": "not_requested", "groq_vision": "not_requested", "groq_transcription": "not_requested", "gladia": "disabled"}
     groq_successes = 0
     groq_failures = 0
 
     if inspection.image_bytes:
-        if os.getenv("GROQ_API_KEY"):
+        if os.getenv("GROQ_API_KEY") and os.getenv("GROQ_ZDR_CONFIRMED", "").strip().lower() in {"1", "true", "yes"}:
             try:
                 visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg", {"title": redact_sensitive_content(product_title)[0], "category": redact_sensitive_content(category_name or "")[0], "tags": [redact_sensitive_content(tag)[0] for tag in tags]})
-                groq_successes += 1
+                provider_status["groq_vision"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
-                groq_failures += 1
+                provider_status["groq_vision"] = "unavailable"
                 warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ نتیجه‌ای درباره تصویر فرض نشده است.")
         else:
-            warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصویر انجام نشد.")
+            provider_status["groq_vision"] = "not_configured"
+            warnings.append("تحلیل تصویر تا زمان تأیید فعال‌بودن Zero Data Retention برای حساب Groq غیرفعال است.")
 
     if inspection.audio_bytes:
-        if os.getenv("GROQ_API_KEY"):
+        if os.getenv("GROQ_API_KEY") and os.getenv("GROQ_ZDR_CONFIRMED", "").strip().lower() in {"1", "true", "yes"}:
             try:
                 transcription = await transcribe_audio_with_groq(inspection.audio_bytes, inspection.audio_filename or "upload.audio")
-                groq_successes += 1
+                provider_status["groq_transcription"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
-                groq_failures += 1
+                provider_status["groq_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی نشده است.")
         else:
-            warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
+            provider_status["groq_transcription"] = "not_configured"
+            warnings.append("تبدیل صوت تا زمان تأیید فعال‌بودن Zero Data Retention برای حساب Groq غیرفعال است.")
 
-    if inspection.image_bytes or inspection.audio_bytes:
-        if not os.getenv("GROQ_API_KEY"):
-            provider_status["groq"] = "not_configured"
-        elif groq_successes and groq_failures:
-            provider_status["groq"] = "partial"
-        elif groq_successes:
-            provider_status["groq"] = "completed"
-        else:
-            provider_status["groq"] = "unavailable"
+    groq_statuses = [provider_status["groq_vision"], provider_status["groq_transcription"]]
+    if "completed" in groq_statuses:
+        provider_status["groq"] = "partial" if any(value not in {"completed", "not_requested"} for value in groq_statuses) else "completed"
+    elif "unavailable" in groq_statuses:
+        provider_status["groq"] = "unavailable"
+    elif "not_configured" in groq_statuses:
+        provider_status["groq"] = "not_configured"
 
     extracted, redaction_count = redact_sensitive_content("\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip()))
     model_review = {}
@@ -194,6 +198,7 @@ async def review_product_file(
                     "tags": [redact_sensitive_content(tag)[0] for tag in tags],
                     "description": redact_sensitive_content(description or "")[0],
                     "detected_file_type": inspection.detected_type,
+                    "available_pages": sorted({chunk["page_number"] for chunk in (inspection.content_chunks or []) if isinstance(chunk.get("page_number"), int)}),
                 },
             )
             provider_status["gemini"] = "completed"
@@ -227,12 +232,70 @@ async def review_product_file(
                 "recommendation": str(item.get("recommendation") or "")[:500],
             })
 
+    content_chunks = []
+    for chunk in inspection.content_chunks or []:
+        if not isinstance(chunk, dict):
+            continue
+        safe_text, _ = redact_sensitive_content(str(chunk.get("text") or ""))
+        if safe_text.strip():
+            content_chunks.append({
+                "chunk_index": len(content_chunks),
+                "content_type": str(chunk.get("content_type") or "text")[:32],
+                "page_number": chunk.get("page_number") if isinstance(chunk.get("page_number"), int) else None,
+                "heading": str(chunk.get("heading") or "")[:500] or None,
+                "text": safe_text[:5000],
+                "source_anchor": chunk.get("source_anchor") if isinstance(chunk.get("source_anchor"), dict) else {},
+            })
+    if visual_report.strip():
+        content_chunks.append({"chunk_index": len(content_chunks), "content_type": "image_analysis", "page_number": None, "heading": "تحلیل تصویر", "text": redact_sensitive_content(visual_report)[0][:5000], "source_anchor": {"asset": "image"}})
+    if transcription.strip():
+        content_chunks.append({"chunk_index": len(content_chunks), "content_type": "audio_transcript", "page_number": None, "heading": "متن صوت استخراج‌شده", "text": redact_sensitive_content(transcription)[0][:5000], "source_anchor": {"asset": "audio"}})
+
+    available_pages = {chunk["page_number"] for chunk in (inspection.content_chunks or []) if isinstance(chunk.get("page_number"), int)}
+    requested_sample_pages = model_review.get("sample_pages", []) if isinstance(model_review, dict) else []
+    sample_pages = []
+    if isinstance(requested_sample_pages, list):
+        for value in requested_sample_pages:
+            if isinstance(value, int) and not isinstance(value, bool) and value in available_pages and value not in sample_pages:
+                sample_pages.append(value)
+            if len(sample_pages) >= 3:
+                break
+
+    raw_facts = model_review.get("facts", []) if isinstance(model_review, dict) else []
+    safe_facts = []
+    if isinstance(raw_facts, list):
+        for fact in raw_facts[:100]:
+            if not isinstance(fact, dict):
+                continue
+            value = str(fact.get("value") or "").strip()
+            key = str(fact.get("key") or "").strip()
+            if not key or not value:
+                continue
+            evidence = fact.get("evidence") if isinstance(fact.get("evidence"), dict) else {}
+            try:
+                confidence = max(0.0, min(1.0, float(fact.get("confidence", 0.0) or 0.0)))
+            except (TypeError, ValueError):
+                confidence = 0.0
+            safe_facts.append({
+                "key": key[:180],
+                "value": redact_sensitive_content(value)[0][:2000],
+                "confidence": confidence,
+                "evidence": {
+                    "page": evidence.get("page") if isinstance(evidence.get("page"), int) else None,
+                    "quote": redact_sensitive_content(str(evidence.get("quote") or ""))[0][:500],
+                },
+            })
+
     # File inspection is advisory. A missing antivirus engine is never reported as clean.
     return {
         "review_id": str(uuid.uuid4()),
         "product_id": product_id,
+        "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash") if provider_status.get("gemini") == "completed" else None,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
+        "content_chunks": content_chunks[:150],
+        "facts": safe_facts,
+        "sample_pages": sample_pages,
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
@@ -242,6 +305,56 @@ async def review_product_file(
         "publication_authorized": False,
         "automated_publication": False,
     }
+
+
+@app.post("/v1/documents/samples/pdf", dependencies=[Depends(authenticate)])
+async def create_pdf_sample(
+    file: UploadFile = File(...),
+    selected_pages_json: str = Form(..., max_length=2000),
+):
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds 25 MB")
+    try:
+        selected_pages = json.loads(selected_pages_json)
+        if not isinstance(selected_pages, list) or not 1 <= len(selected_pages) <= 10:
+            raise ValueError
+        pages = []
+        for value in selected_pages:
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError
+            if value not in pages:
+                pages.append(value)
+        if not pages:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid selected pages") from None
+
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        if reader.is_encrypted or len(reader.pages) > 1000 or any(page > len(reader.pages) for page in pages):
+            raise ValueError
+        writer = PdfWriter()
+        for page_number in pages:
+            writer.add_page(reader.pages[page_number - 1])
+        output = io.BytesIO()
+        writer.write(output)
+        sample = output.getvalue()
+        if not sample.startswith(b"%PDF-") or len(sample) < 100:
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=422, detail="PDF sample generation failed") from None
+
+    return Response(
+        content=sample,
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "X-Farast-Sample-Pages": ",".join(str(page) for page in pages),
+        },
+    )
 
 
 @app.get("/health")
@@ -271,12 +384,25 @@ async def review_product(snapshot: ProductSnapshot):
         if isinstance(safe_snapshot.get(key), str):
             safe_snapshot[key] = redact_sensitive_content(safe_snapshot[key])[0]
     safe_snapshot["tags"] = [redact_sensitive_content(tag)[0] for tag in safe_snapshot["tags"]]
+    knowledge = safe_snapshot.get("document_knowledge")
+    if isinstance(knowledge, dict):
+        for chunk in knowledge.get("chunks", [])[:150]:
+            if isinstance(chunk, dict) and isinstance(chunk.get("text"), str):
+                chunk["text"] = redact_sensitive_content(chunk["text"])[0][:5000]
+        for fact in knowledge.get("facts", [])[:100]:
+            if isinstance(fact, dict):
+                if isinstance(fact.get("value"), str):
+                    fact["value"] = redact_sensitive_content(fact["value"])[0][:2000]
+                evidence = fact.get("evidence")
+                if isinstance(evidence, dict) and isinstance(evidence.get("quote"), str):
+                    evidence["quote"] = redact_sensitive_content(evidence["quote"])[0][:500]
 
     prompt = {
         "role": "product_quality_supervisor",
         "language": "Persian",
         "rules": [
             "Review only the supplied product snapshot; do not invent missing facts.",
+            "When document_knowledge is supplied, treat its source chunks and evidence-backed facts as the only authoritative description of file contents; preserve source references and say when a detail is absent.",
             "Treat this as an editorial and operational quality review, not legal certification.",
             "Do not approve missing required assets: digital files need a clean primary file; courses need at least one publishable lesson.",
             "Flag implausible discount data when compare_at_price_rials is not greater than price_rials.",
