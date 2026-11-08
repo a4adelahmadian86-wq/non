@@ -663,19 +663,26 @@
   root.querySelector('#reader-thumbs-toggle')?.addEventListener('click',e=>{const hidden=root.classList.toggle('is-sidebar-hidden');e.currentTarget.setAttribute('aria-expanded',String(!hidden));});
   root.querySelector('#reader-theme')?.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='light'?'dark':'light';});
   root.querySelector('#reader-fs')?.addEventListener('click',async()=>{try{if(!document.fullscreenElement)await root.requestFullscreen?.();else await document.exitFullscreen?.();}catch(_){root.classList.toggle('is-fullscreen-fallback');}});
+  const isEditableTarget=target=>target instanceof Element&&Boolean(target.closest('input,textarea,select,[contenteditable="true"]'));
   document.addEventListener('keydown',e=>{
-    if(e.target&&['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+    const key=e.key.toLowerCase();
+    const modifier=e.ctrlKey||e.metaKey;
+    // Print/save must stay blocked even while focus is inside the search or page controls.
+    if(modifier&&['p','s'].includes(key)){e.preventDefault();e.stopPropagation();return;}
+    if(isEditableTarget(e.target))return;
     if(e.key==='ArrowLeft'||e.key==='ArrowDown'){e.preventDefault();root.querySelector('#reader-next')?.click();}
     if(e.key==='ArrowRight'||e.key==='ArrowUp'){e.preventDefault();root.querySelector('#reader-prev')?.click();}
     if(e.key==='+'||e.key==='='){e.preventDefault();root.querySelector('#reader-zoom-in')?.click();}
     if(e.key==='-'){e.preventDefault();root.querySelector('#reader-zoom-out')?.click();}
-    if(e.key.toLowerCase()==='f'){e.preventDefault();root.querySelector('#reader-fs')?.click();}
-    if(e.key.toLowerCase()==='b'){e.preventDefault();bookmarkButton?.click();}
-    if((e.ctrlKey||e.metaKey)&&['p','s','c','x'].includes(e.key.toLowerCase()))e.preventDefault();
+    if(key==='f'){e.preventDefault();root.querySelector('#reader-fs')?.click();}
+    if(key==='b'){e.preventDefault();bookmarkButton?.click();}
+    if(modifier&&['c','x'].includes(key))e.preventDefault();
   });
   root.addEventListener('contextmenu',e=>e.preventDefault());
   root.addEventListener('copy',e=>e.preventDefault());
   root.addEventListener('cut',e=>e.preventDefault());
+  root.addEventListener('paste',e=>{if(!isEditableTarget(e.target))e.preventDefault();});
+  root.addEventListener('selectstart',e=>{if(!isEditableTarget(e.target))e.preventDefault();});
   root.addEventListener('dragstart',e=>e.preventDefault());
   window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom===0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
   setZoomLabel();
