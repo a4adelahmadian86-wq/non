@@ -1,0 +1,35 @@
+name: Product Supervisor Service
+
+on:
+  pull_request:
+    paths:
+      - "services/product-supervisor/**"
+      - "render.yaml"
+      - ".github/workflows/product-supervisor.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/product-supervisor/**"
+      - "render.yaml"
+      - ".github/workflows/product-supervisor.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/product-supervisor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/product-supervisor/requirements*.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run service tests
+        run: pytest -q
