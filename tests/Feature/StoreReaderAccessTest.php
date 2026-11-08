@@ -408,6 +408,16 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Range', 'bytes 2-5/10')
             ->assertHeader('Content-Length', '4');
         $this->assertSame('2345', $response->streamedContent());
+
+        $this->withHeader('Range', 'bytes=20-30')
+            ->get(route('store.preview.audio', $preview))
+            ->assertStatus(416)
+            ->assertHeader('Content-Range', 'bytes */10');
+
+        $this->withHeader('Range', 'bytes=0-1,4-5')
+            ->get(route('store.preview.audio', $preview))
+            ->assertOk()
+            ->assertHeader('Content-Length', '10');
     }
 
     public function test_full_reader_audio_requires_the_same_reader_entitlement_as_the_document(): void
