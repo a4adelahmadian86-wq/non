@@ -88,7 +88,7 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         })]
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
-                result = await analyze_extracted_content("برگه: گزارش فروش\\nفروردین | 10", {"detected_file_type": "xlsx"})
+                result = await analyze_extracted_content("برگه: گزارش فروش\nفروردین | 10", {"detected_file_type": "xlsx"})
 
         self.assertEqual(result["sample_sheets"], ["گزارش فروش"])
 
