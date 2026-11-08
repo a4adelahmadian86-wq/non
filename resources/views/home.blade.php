@@ -312,11 +312,12 @@
     @json([
         '@context' => 'https://schema.org',
         '@type' => 'FAQPage',
-        'mainEntity' => array_map(static fn ($item) => [
-            '@type' => 'Question',
-            'name' => $item[0],
-            'acceptedAnswer' => ['@type' => 'Answer', 'text' => $item[1]],
-        ], \$homeFaqSchema),
+        'mainEntity' => [
+            ['@type' => 'Question', 'name' => 'فراست فروشگاه است یا ابزار انجام کار؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'هر دو مسیر را در یک سایت ارائه می‌کند: می‌توانید محصولات دیجیتال منتشرشده را بررسی کنید یا برای کار با فایل و سند وارد محیط خدمات شوید.']],
+            ['@type' => 'Question', 'name' => 'برای شروع کار با فایل چه مراحلی دارم؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'نوع محتوای فایل را مشخص می‌کنید، فایل را بارگذاری می‌کنید و پس از آماده‌شدن برآورد، جزئیات را پیش از تأیید بررسی می‌کنید.']],
+            ['@type' => 'Question', 'name' => 'هزینه خدمات چگونه مشخص می‌شود؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'برای فرایندهای مشمول برآورد، اطلاعات فایل بررسی می‌شود و مبلغ قابل پرداخت پیش از تأیید به شما نمایش داده می‌شود. جزئیات روش محاسبه در صفحه قیمت‌گذاری آمده است.']],
+            ['@type' => 'Question', 'name' => 'چطور به کار نیمه‌تمامم برگردم؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'پس از ورود به حساب، از فضای کاربری یا بخش پروژه‌های اخیر می‌توانید کارهای ذخیره‌شده خود را ادامه دهید.']],
+        ],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
     </script>
 </div>
