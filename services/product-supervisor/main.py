@@ -41,6 +41,8 @@ class ProductSnapshot(BaseModel):
     category_name: str | None = Field(default=None, max_length=160)
     tags: list[str] = Field(default_factory=list, max_length=30)
     has_cover: bool = False
+    media_fingerprint: str = Field(default='', max_length=64)
+    course_fingerprint: str | None = Field(default=None, max_length=64)
     active_image_count: int = Field(default=0, ge=0, le=100)
     has_clean_primary_file: bool = False
     publishable_lesson_count: int = Field(default=0, ge=0, le=500)
