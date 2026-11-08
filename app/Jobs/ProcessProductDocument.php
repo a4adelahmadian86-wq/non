@@ -119,7 +119,7 @@ class ProcessProductDocument implements ShouldQueue
                 $reviewFilename = pathinfo($file->original_name, PATHINFO_FILENAME).'.pdf';
                 $readerSourceStream = fopen('php://temp', 'w+b');
                 if (! is_resource($readerSourceStream) || fwrite($readerSourceStream, $docxBytes) === false) {
-                    throw new \\RuntimeException('product_docx_source_stream_failed');
+                    throw new \x5cRuntimeException('product_docx_source_stream_failed');
                 }
                 rewind($readerSourceStream);
                 $readerSourceFilename = $file->original_name;
