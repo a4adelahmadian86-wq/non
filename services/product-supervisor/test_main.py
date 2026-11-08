@@ -1,5 +1,3 @@
-import os
-
 from fastapi.testclient import TestClient
 
 import main
@@ -59,12 +57,13 @@ def test_review_rejects_unexpected_fields(monkeypatch):
     assert response.status_code == 422
 
 
-def test_review_payload_limits_long_product_text():
+def test_review_payload_limits_long_product_text(monkeypatch):
+    monkeypatch.setenv("SUPERVISOR_API_TOKEN", "dedicated-secret")
     payload = valid_payload()
     payload["description"] = "x" * 12001
     response = client.post(
         "/v1/reviews/products",
         json=payload,
-        headers={"Authorization": "Bearer not-configured"},
+        headers={"Authorization": "Bearer dedicated-secret"},
     )
     assert response.status_code == 422
