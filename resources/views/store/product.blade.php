@@ -8,7 +8,7 @@
 @endpush
 
 @section('content')
-<section class="store-page" dir="rtl">
+<section class="store-page" dir="rtl" data-product-id="{{ $product->id }}">
   <div class="store-container">
     <div class="store-breadcrumb">
       <a href="{{ route('store') }}">فروشگاه</a><span>›</span>

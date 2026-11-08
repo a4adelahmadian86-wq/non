@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from main import app
+from main import app, validate_evidence_facts
 
 
 class ProductSupervisorFileApiTests(unittest.TestCase):
@@ -17,6 +17,34 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
 
     def tearDown(self):
         self.env.stop()
+
+    def test_document_facts_require_exact_source_evidence_and_use_server_locator(self):
+        source_chunks = [{
+            "locator": {"page": 7, "reader_page": 7},
+            "content_text": "این کتاب شامل هشت فصل آموزشی است.",
+        }]
+        facts = [
+            {
+                "fact_type": "quantity",
+                "fact_key": "تعداد فصل‌ها",
+                "fact_value": "هشت فصل",
+                "evidence": "این کتاب شامل هشت فصل آموزشی است.",
+                "locator": {"page": 999},
+            },
+            {
+                "fact_type": "quantity",
+                "fact_key": "تعداد صفحات",
+                "fact_value": "۹۹۹ صفحه",
+                "evidence": "این کتاب ۹۹۹ صفحه دارد.",
+            },
+        ]
+
+        accepted = validate_evidence_facts(facts, source_chunks)
+
+        self.assertEqual(len(accepted), 1)
+        self.assertEqual(accepted[0]["verification_status"], "evidence_backed")
+        self.assertEqual(accepted[0]["locator"]["page"], 7)
+        self.assertNotEqual(accepted[0]["locator"]["page"], 999)
 
     def test_file_review_requires_bearer_token(self):
         response = self.client.post(

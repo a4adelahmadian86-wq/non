@@ -6,6 +6,7 @@ use App\Services\WorkflowEngine;
 
 Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
+Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->withoutOverlapping();
 
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')

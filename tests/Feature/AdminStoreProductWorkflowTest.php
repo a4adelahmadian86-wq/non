@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductDocument;
 use App\Models\StoreProductImage;
 use App\Models\StoreTag;
 use App\Models\User;
 use App\Services\UploadSecurityService;
+use App\Services\ProductKnowledgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
@@ -280,6 +282,152 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('store_product_files', ['id' => $file->id]);
         Storage::disk('private')->assertExists($path);
+    }
+
+    public function test_admin_can_poll_document_study_sample_and_audio_status_without_receiving_source_content(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'سند وضعیت پردازش',
+            'slug' => 'document-processing-status',
+            'sku' => 'DOCUMENT-STATUS-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/status.pdf',
+            'original_name' => 'status.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 1024,
+            'sha256' => str_repeat('a', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => str_repeat('a', 64),
+            'processing_status' => 'completed',
+            'detected_type' => 'pdf',
+            'page_count' => 12,
+            'word_count' => 2400,
+            'character_count' => 15000,
+            'structure_json' => [
+                'completeness' => [
+                    'extraction_complete' => true,
+                    'analysis_batches_complete' => true,
+                    'analysis_batch_count' => 1,
+                    'successful_analysis_batches' => 1,
+                ],
+                'sample' => ['generated_once' => true, 'selected_pages' => [2, 5, 9]],
+                'audio' => ['status' => 'completed', 'duration_ms' => 240000, 'segment_count' => 18],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.store.files.processing', [$product, $file]))
+            ->assertOk()
+            ->assertJsonPath('processing_status', 'completed')
+            ->assertJsonPath('page_count', 12)
+            ->assertJsonPath('sample_status', 'completed')
+            ->assertJsonPath('sample_pages', [2, 5, 9])
+            ->assertJsonPath('audio_status', 'completed')
+            ->assertJsonPath('audio_duration_ms', 240000)
+            ->assertJsonMissingPath('content_chunks')
+            ->assertHeader('Cache-Control', 'no-store, private');
+    }
+
+    public function test_product_knowledge_uses_only_hash_matched_evidence_backed_facts_and_respects_sample_pages(): void
+    {
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'کتاب دانش‌محور',
+            'slug' => 'knowledge-book',
+            'sku' => 'KNOWLEDGE-BOOK-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $hash = str_repeat('b', 64);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/knowledge.pdf',
+            'original_name' => 'knowledge.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 2048,
+            'sha256' => $hash,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $hash,
+            'processing_status' => 'completed',
+            'detected_type' => 'pdf',
+            'page_count' => 10,
+            'structure_json' => [
+                'sample' => ['selected_pages' => [2]],
+                'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
+                'ai_review' => ['provider_status' => ['gemini' => 'completed']],
+            ],
+        ]);
+        $document->facts()->createMany([
+            [
+                'source_sha256' => $hash,
+                'fact_type' => 'quantity',
+                'fact_key' => 'تعداد فصل‌ها',
+                'fact_value' => '۸ فصل',
+                'evidence_text' => 'این کتاب شامل ۸ فصل است.',
+                'locator_json' => ['page' => 2],
+                'verification_status' => 'evidence_backed',
+            ],
+            [
+                'source_sha256' => $hash,
+                'fact_type' => 'date',
+                'fact_key' => 'تاریخ انتشار',
+                'fact_value' => '۱۴۰۴',
+                'evidence_text' => 'تاریخ انتشار: ۱۴۰۴',
+                'locator_json' => ['page' => 3],
+                'verification_status' => 'evidence_backed',
+            ],
+            [
+                'source_sha256' => str_repeat('c', 64),
+                'fact_type' => 'quantity',
+                'fact_key' => 'اطلاعات قدیمی',
+                'fact_value' => '۱۰۰',
+                'evidence_text' => 'این مقدار از نسخه قبلی است.',
+                'locator_json' => ['page' => 2],
+                'verification_status' => 'evidence_backed',
+            ],
+        ]);
+
+        $service = app(ProductKnowledgeService::class);
+        $full = $service->contextForProduct($product);
+        $sample = $service->contextForProduct($product, 12000, true);
+
+        $this->assertCount(2, $full['sources'][0]['facts']);
+        $this->assertSame('available', $full['knowledge_status']);
+        $this->assertCount(1, $sample['sources'][0]['facts']);
+        $this->assertSame('تعداد فصل‌ها', $sample['sources'][0]['facts'][0]['key']);
+        $this->assertSame('public_sample_only', $sample['access_scope']);
     }
 
     public function test_published_file_product_requires_an_active_clean_primary_file_on_every_update(): void
