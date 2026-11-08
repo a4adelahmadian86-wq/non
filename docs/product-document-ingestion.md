@@ -16,7 +16,7 @@ The schema uses ordinary indexed InnoDB-compatible relations and JSON/LONGTEXT c
 
 The upload-confirm action writes a document row and dispatches `ProcessProductDocument` to the `documents` queue. After extraction and source-locator persistence, `GenerateProductDocumentAudio` is dispatched to the `default` queue. The database queue driver must be enabled and the standard `jobs` and `failed_jobs` tables must be migrated.
 
-The application scheduler starts a bounded queue worker every minute for `documents,default` by default. It exits when the queues are empty, uses a 900-second worker/job timeout, and prevents overlapping scheduler launches for 20 minutes. The database connection's `retry_after` is 960 seconds, so a reserved job is not made visible to another worker before the maximum job timeout expires. Set `QUEUE_SCHEDULED_WORKER=false` when a persistent queue supervisor already consumes the queues; then use that supervisor as the only worker.
+The application scheduler starts a bounded queue worker every minute for `documents,documents-audio,default` by default. It exits when the queues are empty, uses a 900-second worker/job timeout, and prevents overlapping scheduler launches for 20 minutes. The database connection's `retry_after` is 960 seconds, so a reserved job is not made visible to another worker before the maximum job timeout expires. Set `QUEUE_SCHEDULED_WORKER=false` when a persistent queue supervisor already consumes the queues; then use that supervisor as the only worker.
 
 For cPanel or another cron-only host, the required cron entry is the Laravel scheduler (adjust the project path and PHP binary):
 
