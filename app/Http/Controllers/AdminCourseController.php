@@ -141,6 +141,7 @@ class AdminCourseController extends Controller
                 ->whereHas('section', fn ($query) => $query->where('course_id', $lockedCourse->id))
                 ->lockForUpdate()
                 ->firstOrFail();
+            $this->assertLessonCanBePublished($data, $lockedLesson);
             $wasPublishable = $lockedLesson->is_published && $this->lessonHasPublishableContent($lockedLesson->toArray(), $lockedLesson);
             $willBePublishable = (bool) ($data['is_published'] ?? false) && $this->lessonHasPublishableContent($data, $lockedLesson);
             if ($lockedProduct->status === 'published' && $wasPublishable && ! $willBePublishable) {
