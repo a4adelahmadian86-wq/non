@@ -1552,6 +1552,7 @@ test('reader ink exposes keyboard guidance and discards cancelled pointer stroke
   await expect(canvas).toHaveAttribute('role', 'img');
   await expect(canvas).toHaveAttribute('aria-describedby', /farast-reader-ink-help/);
   const bounds = await canvas.boundingBox();
+  await page.evaluate(() => { HTMLCanvasElement.prototype.setPointerCapture = () => {}; });
   await page.dispatchEvent('canvas.farast-reader-ink-canvas', 'pointerdown', {
     pointerId: 71, pointerType: 'pen', button: 0, clientX: bounds.x + 20, clientY: bounds.y + 20, pressure: 0.7
   });
