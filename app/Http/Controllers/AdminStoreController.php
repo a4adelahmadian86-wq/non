@@ -344,6 +344,7 @@ class AdminStoreController extends Controller
         $request->validate(['cover' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192']);
         $upload = $request->file('cover');
         $temporaryPath = $upload->store('store/quarantine/covers/'.$product->id, 'private');
+        $storagePath = null;
 
         try {
             $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
@@ -361,14 +362,22 @@ class AdminStoreController extends Controller
                 throw new \RuntimeException('cover_public_storage_failed');
             }
 
-            $oldPath = (string) $product->cover_path;
-            $product->update(['cover_path' => $publicPath]);
-            $this->audit('store.product.cover_updated', $product, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum']]);
+            $oldPath = DB::transaction(function () use ($product, $publicPath, $inspection) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $oldPath = (string) $lockedProduct->cover_path;
+                $lockedProduct->update(['cover_path' => $publicPath]);
+                $this->audit('store.product.cover_updated', $lockedProduct, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum']]);
+
+                return $oldPath;
+            });
             if ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
                 Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
             }
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($temporaryPath);
+            if ($storagePath) {
+                Storage::disk('public')->delete($storagePath);
+            }
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
