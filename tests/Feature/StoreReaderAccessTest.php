@@ -111,7 +111,14 @@ class StoreReaderAccessTest extends TestCase
 
         $temporary = tempnam(sys_get_temp_dir(), 'farast-docx-test-');
         $document = new \PhpOffice\PhpWord\PhpWord();
-        $document->addSection()->addText('متن محرمانه نمونه Word');
+        $section = $document->addSection();
+        $section->addText('متن محرمانه نمونه Word');
+        $table = $section->addTable();
+        $table->addRow();
+        $table->addCell(4500)->addText('عنوان جدول فارسی');
+        $table->addCell(4500)->addText('مقدار نمونه');
+        $section->addPageBreak();
+        $section->addText('متن صفحه دوم سند Word');
         \PhpOffice\PhpWord\IOFactory::createWriter($document, 'Word2007')->save($temporary);
         Storage::disk('private')->put('store/previews/sample/preview.docx', file_get_contents($temporary));
         @unlink($temporary);
