@@ -90,7 +90,7 @@
                   <div class="farast-pdf-continuous-pages" hidden></div>
                   <div class="farast-pdf-loading" role="status">در حال آماده‌سازی سند Word…</div>
                 </div>
-              @elseif(($preview->kind ?? '') === 'xlsx')
+              @elseif(in_array(($preview->kind ?? ''), ['xlsx', 'html'], true))
                 <iframe class="farast-xlsx-frame" src="{{ route('store.preview',$preview) }}" title="پیش‌نمایش فایل Excel" sandbox="" loading="lazy" referrerpolicy="no-referrer"></iframe>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="صفحه نمونه {{ $i+1 }}" draggable="false" loading="{{ $i===0 ? 'eager' : 'lazy' }}">
