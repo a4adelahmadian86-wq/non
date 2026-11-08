@@ -193,24 +193,31 @@ class AdminCourseController extends Controller
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
             DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
-                $resource = StoreProductFile::create([
-                'product_id' => $product->id,
-                'course_lesson_id' => $lesson->id,
-                'purpose' => 'lesson_resource',
-                'version' => $product->version,
-                'disk' => 'private',
-                'path' => $path,
-                'original_name' => $upload->getClientOriginalName(),
-                'mime' => $inspection['mime'],
-                'size_bytes' => $inspection['size'],
-                'sha256' => $inspection['checksum'],
-                'is_primary' => false,
-                'is_active' => true,
-                'scan_status' => 'clean',
-                'scan_engine' => $inspection['scan'],
-                'scanned_at' => now(),
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $course = $this->assertCourse($lockedProduct);
+                $lockedLesson = StoreCourseLesson::query()
+                    ->whereKey($lesson->id)
+                    ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $resource = $lockedLesson->resources()->create([
+                    'product_id' => $lockedProduct->id,
+                    'course_lesson_id' => $lockedLesson->id,
+                    'purpose' => 'lesson_resource',
+                    'version' => $lockedProduct->version,
+                    'disk' => 'private',
+                    'path' => $path,
+                    'original_name' => $upload->getClientOriginalName(),
+                    'mime' => $inspection['mime'],
+                    'size_bytes' => $inspection['size'],
+                    'sha256' => $inspection['checksum'],
+                    'is_primary' => false,
+                    'is_active' => true,
+                    'scan_status' => 'clean',
+                    'scan_engine' => $inspection['scan'],
+                    'scanned_at' => now(),
                 ]);
-                $this->audit('store.course.resource_uploaded', $product, ['lesson_id' => $lesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
+                $this->audit('store.course.resource_uploaded', $lockedProduct, ['lesson_id' => $lockedLesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
