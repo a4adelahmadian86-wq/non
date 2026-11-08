@@ -218,8 +218,37 @@
           <form method="post" action="{{ route('admin.store.ai-supervisor.files.review',[$product,$file]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>بررسی محتوای فایل</button></form>
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
-        <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
-        <small class="product-help">حداکثر بارگذاری ۵۰ مگابایت؛ بررسی هوشمند هر فایل تا ۲۵ مگابایت. اسکن اصلی فروشگاه همچنان شرط انتشار است.</small>
+        <section class="product-ingestion" data-product-ingestion
+          data-preflight-url="{{ route('admin.store.files.preflight',$product) }}"
+          data-confirm-url-template="{{ route('admin.store.files.confirm',[$product,'__INGESTION__']) }}"
+          data-cancel-url-template="{{ route('admin.store.files.cancel',[$product,'__INGESTION__']) }}">
+          <input type="hidden" data-ingestion-csrf value="{{ csrf_token() }}">
+          <input type="file" data-ingestion-input multiple hidden accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
+          <div class="product-ingestion-dropzone" data-ingestion-pick tabindex="0" role="button" aria-label="انتخاب یا رها کردن فایل محصول">
+            <span class="product-ingestion-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+            <strong>فایل را اینجا رها کنید یا برای انتخاب کلیک کنید</strong>
+            <span>می‌توانید فایل را روی هر قسمت از همین صفحه بکشید و رها کنید.</span>
+            <small>PDF، Word، Excel، PowerPoint، تصویر، صوت، ویدئو، ZIP و متن · حداکثر ۵۰ مگابایت برای هر فایل</small>
+          </div>
+          <label class="product-ingestion-primary"><input type="checkbox" data-ingestion-primary checked> اولین فایل، فایل اصلی محصول باشد</label>
+          <div class="product-ingestion-queue" data-ingestion-queue aria-live="polite"></div>
+          <div class="product-ingestion-global-drop" data-ingestion-global hidden><span><i class="fa-solid fa-cloud-arrow-down"></i></span><b>فایل را رها کنید تا بررسی اولیه آغاز شود</b><small>هنوز چیزی ذخیره یا منتشر نمی‌شود.</small></div>
+          <div class="product-ingestion-modal" data-ingestion-modal hidden role="dialog" aria-modal="true" aria-labelledby="ingestion-modal-title">
+            <div class="product-ingestion-dialog">
+              <div class="product-ingestion-modal-head"><span class="product-ingestion-icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>بررسی داخلی فراست</small><h3 id="ingestion-modal-title">گزارش بررسی فایل</h3><p data-ingestion-filename></p></div><button type="button" data-ingestion-close aria-label="بستن پنجره">×</button></div>
+              <div class="product-ingestion-timeline" data-ingestion-timeline>
+                <div data-step="received" class="is-done"><i>✓</i><span>دریافت موقت فایل</span></div>
+                <div data-step="inspect"><i>2</i><span>بررسی ساختار و امنیت</span></div>
+                <div data-step="review"><i>3</i><span>نمایش گزارش برای تأیید شما</span></div>
+                <div data-step="store"><i>4</i><span>ذخیره‌سازی نهایی</span></div>
+              </div>
+              <div class="product-ingestion-report" data-ingestion-report><p>در حال بررسی فایل در محیط سایت...</p></div>
+              <p class="product-ingestion-security-note">این اسکنر داخلی فایل را اجرا نمی‌کند و سرویس ضدبدافزار ثالثی به کار نمی‌گیرد. نتیجه، بررسی ایستای ساختار و نشانه‌های خطر است و تضمین کشف همه بدافزارهای ناشناخته نیست.</p>
+              <div class="product-ingestion-actions"><button type="button" class="store-outline-btn" data-ingestion-cancel>رد فایل</button><button type="button" class="store-primary-btn" data-ingestion-confirm disabled>تأیید و ذخیره فایل</button></div>
+            </div>
+          </div>
+        </section>
+        <small class="product-help">فایل ابتدا در قرنطینه خصوصی بررسی می‌شود. فقط پس از مشاهده گزارش و تأیید شما به فهرست فایل‌های محصول منتقل خواهد شد.</small>
       </div>
       <div class="store-panel product-files-panel">
         <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
@@ -233,7 +262,34 @@
   </div>
 </section>
 @endsection
+<script src="{{ asset('js/product-ingestion.js') }}" defer></script>
 @push('styles')
+
+.product-ingestion{display:grid;gap:10px;margin-top:14px}
+.product-ingestion-dropzone{min-height:178px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;border:2px dashed #9db7d8;border-radius:18px;background:linear-gradient(145deg,#f7faff,#fff);text-align:center;cursor:pointer;transition:border-color .2s,background .2s,transform .2s}
+.product-ingestion-dropzone:hover,.product-ingestion-dropzone:focus-visible{border-color:#3476cf;background:#f0f6ff;outline:none}
+.product-ingestion-dropzone.is-dragging{border-color:#2868c8;background:#eaf3ff;transform:scale(.995)}
+.product-ingestion-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:#e8f1ff;color:#2868c8;font-size:1.25rem}
+.product-ingestion-dropzone strong{font-size:.86rem;color:var(--st-ink)}
+.product-ingestion-dropzone>span:not(.product-ingestion-icon){font-size:.72rem;color:var(--st-muted)}
+.product-ingestion-dropzone small,.product-ingestion-primary{font-size:.66rem;color:var(--st-muted)}
+.product-ingestion-primary{display:flex;align-items:center;gap:7px}
+.product-ingestion-global-drop{position:fixed;inset:14px;z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border:3px dashed #3476cf;border-radius:24px;background:rgba(237,245,255,.96);color:#245da7;box-shadow:0 20px 80px rgba(17,48,91,.22);pointer-events:none;animation:ingestionFadeIn .16s ease-out}
+.product-ingestion-global-drop[hidden],.product-ingestion-modal[hidden]{display:none}
+.product-ingestion-global-drop>span{font-size:3rem}.product-ingestion-global-drop b{font-size:1.1rem}.product-ingestion-global-drop small{font-size:.78rem}
+.product-ingestion-modal{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:18px;background:rgba(12,24,42,.58);backdrop-filter:blur(8px);animation:ingestionFadeIn .18s ease-out}
+.product-ingestion-dialog{width:min(760px,100%);max-height:min(88vh,900px);overflow:auto;padding:22px;border:1px solid #dce7f4;border-radius:22px;background:#fff;box-shadow:0 28px 90px rgba(0,0,0,.25);animation:ingestionDialogIn .22s cubic-bezier(.2,.8,.2,1)}
+.product-ingestion-modal-head{display:flex;align-items:center;gap:13px}.product-ingestion-modal-head>div{flex:1;min-width:0}.product-ingestion-modal-head small{color:#3474c7;font-size:.66rem;font-weight:900}.product-ingestion-modal-head h3{margin:3px 0;font-size:1rem}.product-ingestion-modal-head p{margin:0;color:var(--st-muted);font-size:.72rem;overflow-wrap:anywhere}.product-ingestion-modal-head>button{border:0;background:#f1f4f8;border-radius:10px;width:34px;height:34px;font-size:1.35rem;cursor:pointer}
+.product-ingestion-timeline{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:22px 0 16px}
+.product-ingestion-timeline>div{display:flex;align-items:center;gap:7px;padding:10px 8px;border:1px solid #e5ebf2;border-radius:12px;color:#8995a4;font-size:.65rem;line-height:1.5}
+.product-ingestion-timeline i{width:24px;height:24px;flex:0 0 24px;display:grid;place-items:center;border-radius:50%;background:#edf1f5;font-style:normal;font-weight:900}
+.product-ingestion-timeline .is-active{border-color:#8eb2e7;background:#f3f8ff;color:#245da7}.product-ingestion-timeline .is-active i{background:#dceaff;color:#245da7;animation:ingestionPulse 1s infinite}
+.product-ingestion-timeline .is-done{border-color:#cde8d8;color:#287449}.product-ingestion-timeline .is-done i{background:#e5f6eb;color:#287449}
+.product-ingestion-report{padding:15px;border:1px solid #e5ebf2;border-radius:14px;background:#fbfcfe;font-size:.76rem;line-height:1.9}.product-ingestion-report h4{margin:0 0 10px;font-size:.8rem}.product-ingestion-report p{margin:5px 0}.product-ingestion-report-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.product-ingestion-report-grid>div{padding:9px;border-radius:10px;background:#fff;border:1px solid #e8edf3}.product-ingestion-report-grid small{display:block;color:var(--st-muted);font-size:.62rem}.product-ingestion-report-grid b{font-size:.76rem;overflow-wrap:anywhere}.product-ingestion-archive{max-height:170px;overflow:auto;margin:10px 0 0;padding:9px 28px 9px 9px;border:1px solid #e8edf3;border-radius:10px;background:#fff}.product-ingestion-archive li{font-size:.68rem;overflow-wrap:anywhere}.product-ingestion-warning{padding:9px 11px;margin-top:9px;border-radius:10px;background:#fff6e8;color:#8b5b16;font-size:.68rem}
+.product-ingestion-security-note{margin:12px 0;color:var(--st-muted);font-size:.64rem;line-height:1.9}.product-ingestion-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:12px;border-top:1px solid #edf0f4}.product-ingestion-actions button{min-height:42px}.product-ingestion-queue{display:grid;gap:7px}.product-ingestion-queue:empty{display:none}.product-ingestion-queue>div{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid var(--st-line);border-radius:10px;font-size:.68rem}
+@keyframes ingestionFadeIn{from{opacity:0}to{opacity:1}}@keyframes ingestionDialogIn{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes ingestionPulse{50%{box-shadow:0 0 0 5px rgba(52,116,199,.12)}}
+@media(max-width:680px){.product-ingestion-dialog{padding:15px;border-radius:17px}.product-ingestion-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}.product-ingestion-report-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.product-ingestion-actions{flex-direction:column-reverse}.product-ingestion-actions button{width:100%}}
+
 <link rel="stylesheet" href="/css/store.css?v=20261107product1">
 <style>
 
