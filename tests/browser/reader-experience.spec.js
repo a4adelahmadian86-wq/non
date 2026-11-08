@@ -622,6 +622,49 @@ test('headings paragraphs spreadsheet cells and rows are keyboard-addressable sp
   expect(requests.map(request => request.page)).toEqual([5, 5, 5, 5]);
 });
 
+
+test('long paragraph and phrase speech is split into bounded chunks without truncation', async ({ page }) => {
+  const requests = [];
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor(src) { super(); this.src = src; this.paused = true; this.currentTime = 0; this.duration = 1; this.playbackRate = 1; this.volume = 1; }
+      async play() {
+        this.paused = false;
+        this.dispatchEvent(new Event('play'));
+        setTimeout(() => { this.paused = true; this.dispatchEvent(new Event('ended')); }, 0);
+      }
+      pause() { this.paused = true; this.dispatchEvent(new Event('pause')); }
+      removeAttribute(name) { if (name === 'src') this.src = ''; }
+      load() {}
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const longText = 'واژه '.repeat(500);
+  await page.setContent(`
+    <meta name="csrf-token" content="reader-test-token">
+    <section data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+      <div data-audio-status aria-live="polite"></div>
+      <article class="farast-reader-page-item" data-index="5" data-reader-page="6">
+        <p class="reader-document-paragraph" tabindex="0"></p>
+      </article>
+    </section>
+  `);
+  await page.locator('.reader-document-paragraph').evaluate((element, value) => {
+    element.dataset.readerSpeechText = value;
+    element.textContent = value;
+  }, longText);
+  await page.route('**/store/product/1/reader/speech', async route => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+  });
+  await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+  await page.locator('.reader-document-paragraph').click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests.every(request => request.page === 6 && request.text.length <= 2000)).toBe(true);
+  expect(requests.map(request => request.text).join('')).toContain('واژه');
+});
+
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
