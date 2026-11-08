@@ -27,11 +27,12 @@ class _FakeResponse:
 
 class _FakeAsyncClient:
     responses: list[_FakeResponse] = []
+    calls: list[dict] = []
     call_count = 0
 
     def __init__(self, *args, **kwargs):
-        self.responses = type(self).responses
         type(self).call_count = 0
+        type(self).calls = []
 
     async def __aenter__(self):
         return self
@@ -39,8 +40,9 @@ class _FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, traceback):
         return False
 
-    async def post(self, *args, **kwargs):
-        response = self.responses[type(self).call_count]
+    async def post(self, url, **kwargs):
+        type(self).calls.append({"url": url, **kwargs})
+        response = type(self).responses[type(self).call_count]
         type(self).call_count += 1
         return response
 
@@ -50,22 +52,37 @@ def _success_response():
         "summary": "تحلیل انجام شد",
         "findings": [],
         "sample_pages": [],
+        "sample_sheets": [],
         "facts": [],
     }, ensure_ascii=False)
-    return _FakeResponse(200, {
-        "candidates": [{"content": {"parts": [{"text": model_json}]}}],
-    })
+    return _FakeResponse(200, {"choices": [{"message": {"content": model_json}}]})
 
 
 class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
-    async def test_missing_key_is_reported_as_not_configured(self):
-        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
+    async def test_missing_groq_key_is_reported_as_not_configured(self):
+        with patch.dict(os.environ, {"GROQ_API_KEY": ""}, clear=False):
             result = await analyze_extracted_content("متن محصول", {})
         self.assertEqual(result["analysis_status"], "not_configured")
 
+    async def test_file_analyzer_uses_groq_not_gemini(self):
+        _FakeAsyncClient.responses = [_success_response()]
+        with patch.dict(os.environ, {
+            "GROQ_API_KEY": "groq-test-key",
+            "GROQ_TEXT_MODEL": "openai/gpt-oss-20b",
+            "GEMINI_API_KEY": "must-not-be-used",
+        }, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                result = await analyze_extracted_content("متن محرمانه آزمایشی", {"detected_file_type": "txt"})
+
+        self.assertEqual(result["analysis_status"], "completed")
+        call = _FakeAsyncClient.calls[0]
+        self.assertEqual(call["url"], "https://api.groq.com/openai/v1/chat/completions")
+        self.assertEqual(call["headers"]["Authorization"], "Bearer groq-test-key")
+        self.assertEqual(call["json"]["model"], "openai/gpt-oss-20b")
+
     async def test_all_provider_batches_failing_is_not_silent_success(self):
         _FakeAsyncClient.responses = [_FakeResponse(429), _FakeResponse(503)]
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
                 result = await analyze_extracted_content("x" * 24_001, {})
 
@@ -73,6 +90,18 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(result["successful_analysis_batches"], 0)
         self.assertEqual(result["failed_analysis_batches"], 2)
         self.assertEqual(result["analysis_failure_categories"]["provider_rate_limited"], 1)
+        self.assertEqual(result["analysis_failure_categories"]["provider_unavailable"], 1)
+
+    async def test_partial_provider_failure_is_reported_with_batch_counts(self):
+        _FakeAsyncClient.responses = [_success_response(), _FakeResponse(503)]
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                result = await analyze_extracted_content("x" * 24_001, {})
+
+        self.assertEqual(result["analysis_status"], "partial")
+        self.assertEqual(result["analysis_batch_count"], 2)
+        self.assertEqual(result["successful_analysis_batches"], 1)
+        self.assertEqual(result["failed_analysis_batches"], 1)
         self.assertEqual(result["analysis_failure_categories"]["provider_unavailable"], 1)
 
     async def test_xlsx_sample_sheet_recommendations_are_returned_as_names(self):
@@ -83,26 +112,12 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
             "sample_sheets": ["گزارش فروش"],
             "facts": [],
         }, ensure_ascii=False)
-        _FakeAsyncClient.responses = [_FakeResponse(200, {
-            "candidates": [{"content": {"parts": [{"text": model_json}]}}],
-        })]
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
+        _FakeAsyncClient.responses = [_FakeResponse(200, {"choices": [{"message": {"content": model_json}}]})]
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
                 result = await analyze_extracted_content("برگه: گزارش فروش\nفروردین | 10", {"detected_file_type": "xlsx"})
 
         self.assertEqual(result["sample_sheets"], ["گزارش فروش"])
-
-    async def test_partial_provider_failure_is_reported_with_batch_counts(self):
-        _FakeAsyncClient.responses = [_success_response(), _FakeResponse(503)]
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
-            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
-                result = await analyze_extracted_content("x" * 24_001, {})
-
-        self.assertEqual(result["analysis_status"], "partial")
-        self.assertEqual(result["analysis_batch_count"], 2)
-        self.assertEqual(result["successful_analysis_batches"], 1)
-        self.assertEqual(result["failed_analysis_batches"], 1)
-        self.assertEqual(result["analysis_failure_categories"]["provider_unavailable"], 1)
 
 
 if __name__ == "__main__":
