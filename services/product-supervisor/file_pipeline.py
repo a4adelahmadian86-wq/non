@@ -238,7 +238,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.detected_type = "image"
         result.image_bytes = image_bytes
         result.image_mime = mime
-    elif (len(data) >= 12 and data[4:8] == b"ftyp") or data.startswith(b"\x1a\x45\xdf\xa3") or (data.startswith(b"RIFF") and data[8:12] == b"AVI "):
+    elif (len(data) >= 12 and data[4:8] == b"ftyp" and suffix not in {".m4a", ".m4b", ".m4p"}) or data.startswith(b"\x1a\x45\xdf\xa3") or (data.startswith(b"RIFF") and data[8:12] == b"AVI "):
         result.detected_type = "video"
         video_audio, video_frame = _extract_video_tracks(data)
         if video_audio:
