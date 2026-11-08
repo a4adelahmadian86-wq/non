@@ -282,6 +282,69 @@ class AdminStoreProductWorkflowTest extends TestCase
         Storage::disk('private')->assertExists($path);
     }
 
+    public function test_admin_can_poll_document_study_sample_and_audio_status_without_receiving_source_content(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'سند وضعیت پردازش',
+            'slug' => 'document-processing-status',
+            'sku' => 'DOCUMENT-STATUS-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/status.pdf',
+            'original_name' => 'status.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 1024,
+            'sha256' => str_repeat('a', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => str_repeat('a', 64),
+            'processing_status' => 'completed',
+            'detected_type' => 'pdf',
+            'page_count' => 12,
+            'word_count' => 2400,
+            'character_count' => 15000,
+            'structure_json' => [
+                'completeness' => [
+                    'extraction_complete' => true,
+                    'analysis_batches_complete' => true,
+                    'analysis_batch_count' => 1,
+                    'successful_analysis_batches' => 1,
+                ],
+                'sample' => ['generated_once' => true, 'selected_pages' => [2, 5, 9]],
+                'audio' => ['status' => 'completed', 'duration_ms' => 240000, 'segment_count' => 18],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.store.files.processing', [$product, $file]))
+            ->assertOk()
+            ->assertJsonPath('processing_status', 'completed')
+            ->assertJsonPath('page_count', 12)
+            ->assertJsonPath('sample_status', 'completed')
+            ->assertJsonPath('sample_pages', [2, 5, 9])
+            ->assertJsonPath('audio_status', 'completed')
+            ->assertJsonPath('audio_duration_ms', 240000)
+            ->assertJsonMissingPath('content_chunks')
+            ->assertHeader('Cache-Control', 'private, no-store');
+    }
+
     public function test_published_file_product_requires_an_active_clean_primary_file_on_every_update(): void
     {
         $admin = $this->admin();
