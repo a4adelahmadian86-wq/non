@@ -100,7 +100,7 @@ class AdminStoreController extends Controller
         $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
         $contentReady = $product->type === 'course'
-            ? $product->course?->sections->contains(fn ($section) => $section->lessons->contains(fn ($lesson) => $lesson->is_published)) ?? false
+            ? ($product->course?->sections()->whereHas('lessons', fn ($query) => $query->publishable())->exists() ?? false)
             : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
                 && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
 
@@ -142,11 +142,11 @@ class AdminStoreController extends Controller
                     throw ValidationException::withMessages(['category_id' => 'برای انتشار محصول، دسته‌بندی آن باید فعال باشد.']);
                 }
                 if ($data['type'] === 'course') {
-                    $hasPublishedLesson = $lockedProduct->course()
-                        ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
+                    $hasPublishableLesson = $lockedProduct->course()
+                        ->whereHas('sections.lessons', fn ($query) => $query->publishable())
                         ->exists();
-                    if (! $hasPublishedLesson) {
-                        throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده در برنامه آموزشی لازم است.']);
+                    if (! $hasPublishableLesson) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده با محتوای معتبر یا منبع سالم لازم است.']);
                     }
                 } else {
                     $hasSafePrimaryFile = $lockedProduct->files()
