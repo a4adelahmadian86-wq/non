@@ -22,7 +22,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 <link rel="stylesheet" href="/css/farast-assistant.css?v=20261106micStates2">
 @stack('styles')
 </head>
-<body data-assistant-auth="{{ auth()->check() ? '1' : '0' }}" class="{{ $isEditor?'editor-page-body':'' }} {{ $isAuthPage?'auth-page':'' }}">
+<body data-assistant-auth="{{ auth()->check() ? '1' : '0' }}" class="{{ $isEditor?'editor-page-body':'' }} {{ $isAuthPage?'auth-page':'' }} {{ !$isEditor && !$isAdmin && !$isDashboard && !$isAuthPage ? 'has-mobile-dock' : '' }}">
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)
 <header class="top premium-header" data-app-header>
   <div class="header-inner">

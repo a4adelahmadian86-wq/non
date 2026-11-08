@@ -1,6 +1,6 @@
 .farast-mobile-dock{display:none}
 @media(max-width:760px){
-  body:not(.editor-page-body){padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+  body.has-mobile-dock{padding-bottom:calc(70px + env(safe-area-inset-bottom))}
   .farast-mobile-dock{position:fixed;z-index:5800;right:0;bottom:0;left:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:1px solid rgba(211,222,238,.9);background:rgba(255,255,255,.94);backdrop-filter:blur(20px) saturate(155%);box-shadow:0 -9px 30px rgba(12,34,68,.08)}
   .farast-mobile-dock a{position:relative;min-width:0;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:12px;color:#74839a;text-decoration:none;font:700 10px/1.35 Vazirmatn,Tahoma,sans-serif;transition:background .16s,color .16s}
   .farast-mobile-dock a i{font-size:16px}
