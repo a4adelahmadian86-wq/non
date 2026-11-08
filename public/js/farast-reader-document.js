@@ -78,7 +78,7 @@
             const tr = document.createElement('tr');
             const rowHeading = document.createElement('th');
             rowHeading.scope = 'row';
-            rowHeading.textContent = String(Math.max(1, Number(payload.row_start || 1) + rowIndex));
+            rowHeading.textContent = String(Math.max(1, Number(payload.row_start || 1) + rowIndex)).replace(/\\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
             tr.appendChild(rowHeading);
             for (let column = 0; column < columnCount; column += 1) {
               const td = document.createElement('td');
