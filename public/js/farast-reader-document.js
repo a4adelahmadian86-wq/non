@@ -83,10 +83,8 @@
       };
 
       const heading = document.createElement('div');
-      heading.className = 'farast-document-html-heading reader-document-heading';
-      heading.tabIndex = 0;
-      heading.setAttribute('role', 'group');
-      appendSpeechText(heading, payload.label || ('بخش ' + (payload.page_number || '')));
+      heading.className = 'farast-document-html-heading';
+      heading.textContent = payload.label || ('بخش ' + (payload.page_number || ''));
       container.insertBefore(heading, layer);
 
       const text = String(payload.content_text || '');
