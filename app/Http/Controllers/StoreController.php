@@ -230,7 +230,9 @@ class StoreController extends Controller
     public function prepareDocxPreview(string $docxBytes): string
     {
         return $this->renderDocxPreview($docxBytes);
-    }\n\n    private function renderDocxPreview(string $docxBytes): string
+    }
+
+    private function renderDocxPreview(string $docxBytes): string
     {
         abort_unless(
             class_exists(\PhpOffice\PhpWord\IOFactory::class)
