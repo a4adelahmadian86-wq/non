@@ -210,7 +210,7 @@ test.describe('FARAST sample reader interactions', () => {
     expect(watermarkPixels).toBeGreaterThan(50);
     const textSpan = root.locator('.farast-pdf-text-layer span').first();
     await expect(textSpan).toBeVisible();
-    await expect(textSpan).toHaveCSS('user-select', 'none');
+    await expect(textSpan).toHaveCSS('user-select', 'text');
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
@@ -450,6 +450,219 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(page.locator('.reader-audio-word').first()).toHaveAttribute('aria-label', 'رفتن به بخش سلام');
   });
 
+});
+
+  test('clicking a document page plays only that page range from the full narration track', async ({ page }) => {
+    const sampleRate = 8000;
+    const sampleCount = sampleRate * 2;
+    const dataSize = sampleCount * 2;
+    const wav = Buffer.alloc(44 + dataSize);
+    wav.write('RIFF', 0);
+    wav.writeUInt32LE(36 + dataSize, 4);
+    wav.write('WAVE', 8);
+    wav.write('fmt ', 12);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * 2, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36);
+    wav.writeUInt32LE(dataSize, 40);
+    await page.goto('/');
+    await page.route('**/reader-full.wav', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: wav }));
+    await page.setContent(`
+      <meta name="csrf-token" content="reader-test-token">
+      <section data-reader-root data-reader-speech-url="/mock-speech" data-reader-audio-url="/reader-full.wav">
+        <section class="farast-reader-audio" data-reader-audio hidden>
+          <button data-audio-play aria-label="play"></button>
+          <input type="range" data-audio-seek>
+          <span data-audio-current>00:00</span><span data-audio-duration>00:00</span>
+          <select data-audio-speed><option value="1" selected>1x</option></select>
+          <span data-audio-status aria-live="polite"></span>
+        </section>
+        <script type="application/json" id="reader-audio-timing">[
+          {"text":"صفحه اول","start":0,"end":0.6,"page":1},
+          {"text":"صفحه دوم","start":0.7,"end":1.4,"page":2}
+        ]</script>
+        <article class="farast-reader-page-item is-active" data-index="1" data-reader-page="2" tabindex="0">
+          <div class="farast-reader-page-content"><div class="reader-page-background">فضای خالی صفحه دوم</div></div>
+        </article>
+      </section>
+    `);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-document-audio.js', page.url()).href });
+    await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+    await expect(page.locator('[data-reader-audio]')).toBeVisible();
+    await expect.poll(() => page.locator('[data-audio-duration]').textContent()).not.toBe('00:00');
+    const pageTarget = page.locator('.farast-reader-page-item');
+    await pageTarget.click();
+    await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBeGreaterThanOrEqual(0.7);
+    await expect(page.locator('[data-audio-status]')).toContainText('صفحه');
+    await page.evaluate(() => window.FarastDocumentAudioReader.pause());
+    await pageTarget.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBeGreaterThanOrEqual(0.7);
+  });
+
+
+  test('clicking a protected page without a prebuilt track synthesizes its extracted text in bounded snippets', async ({ page }) => {
+    const requests = [];
+    await page.goto('/');
+    await page.route('**/protected-reader-page', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ page_number: 3, content_text: 'سلام جهان. این یک صفحه است.' })
+    }));
+    await page.route('**/store/product/1/reader/speech', async route => {
+      requests.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+    });
+    await page.setContent(`
+      <meta name="csrf-token" content="reader-test-token">
+      <section data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+        <div data-audio-status aria-live="polite"></div>
+        <article class="farast-reader-page-item" data-index="2" data-reader-page="3" data-reader-page-url="/protected-reader-page" tabindex="0">
+          <div class="farast-reader-page-content">فضای خالی صفحه</div>
+        </article>
+      </section>
+    `);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+    await page.locator('.farast-reader-page-item').click();
+    await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0]).toEqual({ text: 'سلام جهان. این یک صفحه است.', page: 3 });
+  });
+
+  test('granular speech sends the exact clicked word and selected phrase with page locators', async ({ page }) => {
+    const requests = [];
+    await page.goto('/');
+    await page.setContent(`
+      <meta name="csrf-token" content="reader-test-token">
+      <section class="farast-reader" data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+        <div data-audio-status aria-live="polite"></div>
+        <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="4">
+          <p class="reader-document-paragraph" tabindex="0">
+            <span class="reader-document-sentence" tabindex="0">
+              <span class="reader-document-word" role="button" tabindex="0" data-word="سلام" data-page="4">سلام</span>
+              <span> </span>
+              <span class="reader-document-word" role="button" tabindex="0" data-word="جهان" data-page="4">جهان</span>
+              <span>.</span>
+            </span>
+          </p>
+        </article>
+      </section>
+    `);
+    await page.route('**/store/product/1/reader/speech', async route => {
+      requests.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+    });
+    await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+    await page.locator('.reader-document-word').first().click();
+    await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0]).toEqual({ text: 'سلام', page: 4 });
+
+    await page.locator('.reader-document-sentence > span').last().click();
+    await expect.poll(() => requests.length).toBe(2);
+    expect(requests[1].page).toBe(4);
+    expect(requests[1].text).toContain('سلام');
+    expect(requests[1].text).toContain('جهان');
+
+    await page.evaluate(() => {
+      const words = document.querySelectorAll('.reader-document-word');
+      const range = document.createRange();
+      range.setStart(words[0].firstChild, 0);
+      range.setEnd(words[1].firstChild, words[1].textContent.length);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const root = document.querySelector('[data-reader-root]');
+      root.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+      root.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    await expect.poll(() => requests.length).toBe(3);
+    expect(requests[2].page).toBe(4);
+    expect(requests[2].text).toContain('سلام');
+    expect(requests[2].text).toContain('جهان');
+  });
+
+
+test('headings paragraphs spreadsheet cells and rows are keyboard-addressable speech targets', async ({ page }) => {
+  const requests = [];
+  await page.goto('/');
+  await page.setContent(`
+    <meta name="csrf-token" content="reader-test-token">
+    <section data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+      <div data-audio-status aria-live="polite"></div>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="5">
+        <h2 class="reader-document-heading" tabindex="0" data-reader-speech-text="عنوان فصل">عنوان فصل</h2>
+        <p class="reader-document-paragraph" tabindex="0" data-reader-speech-text="متن پاراگراف">متن پاراگراف</p>
+        <table><tbody><tr class="reader-document-row" tabindex="0" data-reader-speech-text="ردیف اول">
+          <td class="reader-document-cell" tabindex="0" data-reader-speech-text="سلول عددی">سلول عددی</td>
+        </tr></tbody></table>
+      </article>
+    </section>
+  `);
+  await page.route('**/store/product/1/reader/speech', async route => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+  });
+  await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+  for (const [selector, expected] of [
+    ['.reader-document-heading', 'عنوان فصل'],
+    ['.reader-document-paragraph', 'متن پاراگراف'],
+    ['.reader-document-cell', 'سلول عددی'],
+    ['.reader-document-row', 'ردیف اول']
+  ]) {
+    await page.locator(selector).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    await expect.poll(() => requests[requests.length - 1]?.text).toBe(expected);
+  }
+  expect(requests).toHaveLength(4);
+  expect(requests.map(request => request.page)).toEqual([5, 5, 5, 5]);
+});
+
+
+test('long paragraph and phrase speech is split into bounded chunks without truncation', async ({ page }) => {
+  const requests = [];
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor(src) { super(); this.src = src; this.paused = true; this.currentTime = 0; this.duration = 1; this.playbackRate = 1; this.volume = 1; }
+      async play() {
+        this.paused = false;
+        this.dispatchEvent(new Event('play'));
+        setTimeout(() => { this.paused = true; this.dispatchEvent(new Event('ended')); }, 0);
+      }
+      pause() { this.paused = true; this.dispatchEvent(new Event('pause')); }
+      removeAttribute(name) { if (name === 'src') this.src = ''; }
+      load() {}
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const longText = 'واژه '.repeat(500);
+  await page.setContent(`
+    <meta name="csrf-token" content="reader-test-token">
+    <section data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+      <div data-audio-status aria-live="polite"></div>
+      <article class="farast-reader-page-item" data-index="5" data-reader-page="6">
+        <p class="reader-document-paragraph" tabindex="0"></p>
+      </article>
+    </section>
+  `);
+  await page.locator('.reader-document-paragraph').evaluate((element, value) => {
+    element.dataset.readerSpeechText = value;
+    element.textContent = value;
+  }, longText);
+  await page.route('**/store/product/1/reader/speech', async route => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+  });
+  await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+  await page.locator('.reader-document-paragraph').click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests.every(request => request.page === 6 && request.text.length <= 2000)).toBe(true);
+  expect(requests.map(request => request.text).join(' ').replace(/\s+/g, ' ').trim()).toBe(longText.trim());
 });
 
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {

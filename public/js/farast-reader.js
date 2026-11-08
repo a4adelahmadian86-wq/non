@@ -249,7 +249,7 @@
       await layer.render();
       const query=(searchInput?.value||'').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
-        span.style.userSelect='none';span.style.webkitUserSelect='none';
+        span.style.userSelect='text';span.style.webkitUserSelect='text';
         span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
       });
     }
@@ -316,7 +316,7 @@
       await layer.render();
       const query=(searchInput?.value||'').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
-        span.style.userSelect='none';span.style.webkitUserSelect='none';
+        span.style.userSelect='text';span.style.webkitUserSelect='text';
         span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
       });
     }
@@ -721,6 +721,7 @@
   root.querySelector('#reader-theme')?.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='light'?'dark':'light';});
   root.querySelector('#reader-fs')?.addEventListener('click',async()=>{try{if(!document.fullscreenElement)await root.requestFullscreen?.();else await document.exitFullscreen?.();}catch(_){root.classList.toggle('is-fullscreen-fallback');}});
   const isEditableTarget=target=>target instanceof Element&&Boolean(target.closest('input,textarea,select,[contenteditable="true"]'));
+  const isReaderSpeechTarget=target=>target instanceof Element&&Boolean(target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text,[data-reader-text-layer],.reader-document-word,.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row'));
   document.addEventListener('keydown',e=>{
     const key=e.key.toLowerCase();
     const modifier=e.ctrlKey||e.metaKey;
@@ -749,7 +750,7 @@
   root.addEventListener('copy',e=>e.preventDefault());
   root.addEventListener('cut',e=>e.preventDefault());
   root.addEventListener('paste',e=>{if(!isEditableTarget(e.target))e.preventDefault();});
-  root.addEventListener('selectstart',e=>{if(!isEditableTarget(e.target))e.preventDefault();});
+  root.addEventListener('selectstart',e=>{if(!isEditableTarget(e.target)&&!isReaderSpeechTarget(e.target))e.preventDefault();});
   root.addEventListener('dragstart',e=>e.preventDefault());
   window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom===0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
   setZoomLabel();

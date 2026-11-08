@@ -386,7 +386,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             'structure_json' => [
                 'sample' => ['selected_pages' => [2]],
                 'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
-                'ai_review' => ['provider_status' => ['gemini' => 'completed']],
+                'ai_review' => ['provider_status' => ['groq_text' => 'completed']],
             ],
         ]);
         $document->facts()->createMany([
