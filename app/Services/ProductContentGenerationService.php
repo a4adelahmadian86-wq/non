@@ -59,6 +59,8 @@ class ProductContentGenerationService
         $report = [
             'product' => $knowledge['product_context'],
             'allowed_categories' => $categories,
+            'allowed_source_ids' => $sourceIds,
+            'allowed_fact_ids' => $factIds,
             'knowledge_report' => [
                 'sources' => $knowledge['sources'],
                 'course_lessons' => $knowledge['course_lessons'],
