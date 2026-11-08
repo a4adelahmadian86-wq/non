@@ -474,7 +474,7 @@ test('renders protected spreadsheet sections as safe responsive tables', async (
       sheet_name: 'Sales',
       row_start: 12,
       row_end: 13,
-      content_text: 'نام | توضیح\\nکتاب | <img src=x onerror=alert(1)>',
+      content_text: 'نام | توضیح\nکتاب | <img src=x onerror=alert(1)>',
       content_sha256: 'fixture-hash'
     })
   }));
