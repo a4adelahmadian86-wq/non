@@ -155,7 +155,7 @@ class AdminCourseController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 256 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
-            DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
+            $resourceId = DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
                 $resource = StoreProductFile::create([
                 'product_id' => $product->id,
                 'course_lesson_id' => $lesson->id,
@@ -174,7 +174,26 @@ class AdminCourseController extends Controller
                 'scanned_at' => now(),
                 ]);
                 $this->audit('store.course.resource_uploaded', $product, ['lesson_id' => $lesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
+                return (int) $resource->id;
             });
+            $resource = StoreProductFile::query()->findOrFail($resourceId);
+            $documentId = DB::table('store_product_documents')->insertGetId([
+                'product_file_id' => $resource->id,
+                'source_sha256' => $resource->sha256,
+                'processing_status' => 'queued',
+                'structure_json' => json_encode(['source' => ['file_id' => $resource->id, 'purpose' => 'lesson_resource']], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            if ($resource->size_bytes <= 25 * 1024 * 1024) {
+                ProcessProductDocument::dispatch($documentId)->onQueue('documents');
+            } else {
+                DB::table('store_product_documents')->where('id', $documentId)->update([
+                    'processing_status' => 'awaiting_provider',
+                    'failure_code' => 'ai_processing_size_limit',
+                    'updated_at' => now(),
+                ]);
+            }
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof \Illuminate\Validation\ValidationException) {
@@ -183,7 +202,7 @@ class AdminCourseController extends Controller
             abort(503, 'بارگذاری به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
         }
 
-        return back()->with('status', 'منبع آموزشی پس از اسکن امنیتی ذخیره شد.');
+        return back()->with('status', 'منبع آموزشی امن ذخیره شد و برای ساخت دانش محصول در صف پردازش قرار گرفت؛ تولید محتوای هوشمند پس از تحلیل کامل فعال می‌شود.');
     }
 
     public function deleteResource(StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
