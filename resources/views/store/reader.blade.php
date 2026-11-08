@@ -65,7 +65,7 @@
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <i class="fa-solid fa-file-pdf"></i><small>PDF</small>
               @elseif(($preview->kind ?? '') === 'reader_document')
-                <i class="fa-solid fa-file-lines" style="color:#4c8dff"></i><small>{{ $preview->page_label ?? 'متن' }}
+                <i class="fa-solid fa-file-lines" style="color:#4c8dff"></i><small>{{ $preview->page_label ?? 'متن' }}</small>
               @elseif(($preview->kind ?? '') === 'docx')
                 <i class="fa-solid fa-file-word"></i><small>Word</small>
               @elseif(in_array(($preview->kind ?? ''), ['xlsx', 'html'], true))
