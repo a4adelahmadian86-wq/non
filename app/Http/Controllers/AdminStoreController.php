@@ -166,6 +166,12 @@ class AdminStoreController extends Controller
                 $data['published_at'] = null;
             }
 
+            // Any product edit invalidates the previous AI review; stale approval must never be reused.
+            $metadata = $data['metadata'] ?? $lockedProduct->metadata ?? [];
+            if (isset($metadata['ai_supervisor']) && is_array($metadata['ai_supervisor'])) {
+                unset($metadata['ai_supervisor']['last_review'], $metadata['ai_supervisor']['last_reviewed_at']);
+                $data['metadata'] = $metadata;
+            }
             $lockedProduct->update($data);
             $lockedProduct->tags()->sync($tagIds);
             $lockedProduct->related()->sync($relatedIds);
