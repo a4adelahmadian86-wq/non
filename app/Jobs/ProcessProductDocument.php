@@ -76,21 +76,21 @@ class ProcessProductDocument implements ShouldQueue
             if ($sourceExtension === 'docx') {
                 $docxBytes = stream_get_contents($stream);
                 if (! is_string($docxBytes) || $docxBytes === '') {
-                    throw new \\RuntimeException('product_docx_source_read_failed');
+                    throw new \RuntimeException('product_docx_source_read_failed');
                 }
                 $readerPdfArtifact = $document->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
                 $readerPdfPath = $readerPdfArtifact?->path;
                 $pdfDisk = Storage::disk($readerPdfArtifact?->disk ?: 'private');
                 $pdfBytes = $readerPdfArtifact && $readerPdfPath && $pdfDisk->exists($readerPdfPath)
                     ? $pdfDisk->get($readerPdfPath)
-                    : app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
+                    : app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview($docxBytes);
                 if (! is_string($pdfBytes) || ! str_starts_with($pdfBytes, '%PDF-') || strlen($pdfBytes) > 25 * 1024 * 1024) {
-                    throw new \\RuntimeException('product_docx_conversion_invalid');
+                    throw new \RuntimeException('product_docx_conversion_invalid');
                 }
                 if (! $readerPdfArtifact || ! $readerPdfPath || ! $pdfDisk->exists($readerPdfPath)) {
                     $readerPdfPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/reader-v1.pdf';
                     if (! Storage::disk('private')->put($readerPdfPath, $pdfBytes)) {
-                        throw new \\RuntimeException('product_docx_conversion_storage_failed');
+                        throw new \RuntimeException('product_docx_conversion_storage_failed');
                     }
                     $document->artifacts()->updateOrCreate(
                         ['artifact_type' => 'reader_pdf', 'version' => 1],
@@ -110,7 +110,7 @@ class ProcessProductDocument implements ShouldQueue
                 }
                 $reviewStream = fopen('php://temp', 'w+b');
                 if (! is_resource($reviewStream)) {
-                    throw new \\RuntimeException('product_docx_review_stream_failed');
+                    throw new \RuntimeException('product_docx_review_stream_failed');
                 }
                 fwrite($reviewStream, $pdfBytes);
                 rewind($reviewStream);
