@@ -9,6 +9,7 @@ use App\Models\StoreProductPreview;
 use App\Models\StoreWishlist;
 use App\Services\StoreXlsxPreviewRenderer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class StoreController extends Controller
@@ -173,7 +174,12 @@ class StoreController extends Controller
             }
 
             try {
-                $html = app(StoreXlsxPreviewRenderer::class)->render($disk->get($preview->path), $identity);
+                $bytes = $disk->get($preview->path);
+                $cacheKey = 'farast:reader:xlsx:'.hash('sha256', $bytes);
+                $html = Cache::remember($cacheKey, now()->addDays(7), function () use ($bytes) {
+                    return app(StoreXlsxPreviewRenderer::class)->render($bytes, 'FARAST_READER_IDENTITY_TOKEN');
+                });
+                $html = str_replace('FARAST_READER_IDENTITY_TOKEN', e($identity), $html);
             } catch (\Throwable $exception) {
                 report($exception);
                 abort(422, 'نمایش این فایل Excel ممکن نیست. لطفاً فایل XLSX سالم و ساده‌تری بارگذاری کنید.');
@@ -188,7 +194,18 @@ class StoreController extends Controller
         }
 
         if (($preview->kind ?? '') === 'docx' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'docx') {
-            return $this->renderDocxPreview($disk->get($preview->path), $headers);
+            try {
+                $bytes = $disk->get($preview->path);
+                $cacheKey = 'farast:reader:docx:'.hash('sha256', $bytes);
+                $pdf = Cache::remember($cacheKey, now()->addDays(7), fn () => $this->renderDocxPreview($bytes));
+            } catch (\Throwable $exception) {
+                report($exception);
+                abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
+            }
+            $docxHeaders = $headers;
+            $docxHeaders['Content-Type'] = 'application/pdf';
+            $docxHeaders['Content-Disposition'] = 'inline; filename="farast-word-preview.pdf"';
+            return response($pdf, 200, $docxHeaders);
         }
 
         return $disk->response($preview->path, null, $headers);
@@ -224,7 +241,7 @@ class StoreController extends Controller
      * Convert an uploaded DOCX preview to a read-only, sanitized HTML document.
      * The source document is never exposed through a public storage URL.
      */
-    private function renderDocxPreview(string $docxBytes, array $headers)
+    private function renderDocxPreview(string $docxBytes): string
     {
         abort_unless(
             class_exists(\PhpOffice\PhpWord\IOFactory::class)
@@ -248,21 +265,9 @@ class StoreController extends Controller
             $html = file_get_contents($htmlPath) ?: '';
             $body = $this->sanitizeDocxHtml($html);
 
-            $user = request()->user();
-            $identity = trim((string) ($user->mobile ?? ''));
-            if ($identity === '') {
-                $identity = 'شناسه کاربر #'.$user->id;
-            }
-            $watermark = e($identity);
+            // Convert the source document once into a neutral PDF. The reader paints
+            // the current account identity into each rendered page canvas at view time.
             $marks = '';
-            for ($mark = 0; $mark < 12; $mark++) {
-                $top = 8 + (($mark % 4) * 25);
-                $left = 4 + (intdiv($mark, 4) * 32);
-                $marks .= '<span style="top:'.$top.'%;left:'.$left.'%;">'.$watermark.' · پیش‌نمایش فراست</span>';
-            }
-
-            // Convert Word content to a paginated PDF on the server. The watermark is
-            // part of the generated PDF, not a removable browser overlay.
             $page = '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><style>
                 @page{size:A4;margin:22mm 18mm 22mm}
                 *{box-sizing:border-box}html,body{margin:0;font-family:"DejaVu Sans",Tahoma,sans-serif;color:#1f2937;background:#fff}
