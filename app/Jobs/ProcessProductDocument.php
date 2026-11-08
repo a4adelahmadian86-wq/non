@@ -288,7 +288,7 @@ class ProcessProductDocument implements ShouldQueue
 
             $locked->update([
                 'processing_status' => $status,
-                'detected_type' => strtolower(pathinfo($locked->file?->original_name ?? '', PATHINFO_EXTENSION)) === 'docx' ? 'docx' : ($inspection['detected_type'] ?? $locked->detected_type),
+                'detected_type' => $sourceExtension === 'docx' ? 'docx' : ($inspection['detected_type'] ?? $locked->detected_type),
                 'page_count' => isset($inspection['page_count']) ? (int) $inspection['page_count'] : $locked->page_count,
                 'character_count' => $totalCharacters,
                 'word_count' => $totalWords,
