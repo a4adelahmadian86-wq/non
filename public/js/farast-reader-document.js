@@ -108,6 +108,86 @@
             layer.appendChild(span);
           }
         }
+      } else if (Array.isArray(payload.content_blocks) && payload.content_blocks.length) {
+        let activeList = null;
+        let activeListKind = '';
+        let activeTable = null;
+        let activeTableBody = null;
+        let activeTableIndex = 0;
+        const closeList = () => { activeList = null; activeListKind = ''; };
+        const closeTable = () => { activeTable = null; activeTableBody = null; activeTableIndex = 0; };
+
+        for (const rawBlock of payload.content_blocks.slice(0, 120)) {
+          if (!rawBlock || typeof rawBlock !== 'object') continue;
+          const type = String(rawBlock.type || '');
+          const value = String(rawBlock.text || '');
+          if (!['heading', 'paragraph', 'list_item', 'table_row'].includes(type)) continue;
+
+          if (type === 'table_row') {
+            closeList();
+            const tableIndex = Math.max(1, Math.min(100, Number(rawBlock.table_index) || 1));
+            if (!activeTable || activeTableIndex !== tableIndex) {
+              closeTable();
+              const wrap = document.createElement('div');
+              wrap.className = 'farast-reader-docx-table-wrap';
+              wrap.setAttribute('role', 'region');
+              wrap.setAttribute('aria-label', 'جدول سند Word');
+              wrap.tabIndex = 0;
+              activeTable = document.createElement('table');
+              activeTable.className = 'farast-reader-docx-table';
+              const caption = document.createElement('caption');
+              caption.textContent = 'جدول ' + String(tableIndex);
+              activeTable.appendChild(caption);
+              activeTableBody = document.createElement('tbody');
+              activeTable.appendChild(activeTableBody);
+              wrap.appendChild(activeTable);
+              layer.appendChild(wrap);
+              activeTableIndex = tableIndex;
+            }
+            const cells = Array.isArray(rawBlock.cells) ? rawBlock.cells.slice(0, 50) : value.split('|').slice(0, 50);
+            const row = document.createElement('tr');
+            cells.forEach((cellValue, cellIndex) => {
+              const cell = document.createElement('td');
+              cell.textContent = String(cellValue ?? '');
+              if (Number(rawBlock.row_index) === 1) {
+                const headerCell = document.createElement('th');
+                headerCell.scope = 'col';
+                headerCell.textContent = String(cellValue ?? '');
+                row.appendChild(headerCell);
+              } else {
+                row.appendChild(cell);
+              }
+            });
+            activeTableBody.appendChild(row);
+            continue;
+          }
+
+          closeTable();
+          if (type === 'list_item') {
+            const listKind = rawBlock.list_kind === 'number' ? 'number' : 'bullet';
+            if (!activeList || activeListKind !== listKind) {
+              closeList();
+              activeList = document.createElement(listKind === 'number' ? 'ol' : 'ul');
+              activeList.className = 'farast-reader-docx-list';
+              layer.appendChild(activeList);
+              activeListKind = listKind;
+            }
+            const item = document.createElement('li');
+            item.textContent = value;
+            item.style.marginInlineStart = Math.max(0, Math.min(5, Number(rawBlock.list_level) || 1) - 1) + 'em';
+            activeList.appendChild(item);
+            continue;
+          }
+
+          closeList();
+          const element = type === 'heading'
+            ? document.createElement('h' + Math.max(1, Math.min(6, Number(rawBlock.level) || 2)))
+            : document.createElement('p');
+          element.className = type === 'heading' ? 'farast-reader-docx-heading' : 'farast-reader-docx-paragraph';
+          element.textContent = value;
+          element.dir = 'auto';
+          layer.appendChild(element);
+        }
       } else {
         for (const line of text.split(/\r?\n/)) {
           const span = document.createElement('span');
