@@ -177,10 +177,10 @@ async def review_product_file(
             model_review = await analyze_extracted_content(
                 extracted,
                 {
-                    "product_title": product_title,
+                    "product_title": redact_sensitive_content(product_title)[0],
                     "product_type": product_type,
-                    "category_name": category_name,
-                    "tags": tags,
+                    "category_name": redact_sensitive_content(category_name or "")[0],
+                    "tags": [redact_sensitive_content(tag)[0] for tag in tags],
                     "description": redact_sensitive_content(description or "")[0],
                     "detected_file_type": inspection.detected_type,
                 },
@@ -235,7 +235,7 @@ async def review_product(snapshot: ProductSnapshot):
     from file_pipeline import redact_sensitive_content
 
     safe_snapshot = snapshot.model_dump(exclude={"product_id", "sku"})
-    for key in ("title", "short_description", "description", "seo_title", "seo_description", "instructions"):
+    for key in ("title", "short_description", "description", "seo_title", "seo_description", "category_name", "instructions"):
         if isinstance(safe_snapshot.get(key), str):
             safe_snapshot[key] = redact_sensitive_content(safe_snapshot[key])[0]
     safe_snapshot["tags"] = [redact_sensitive_content(tag)[0] for tag in safe_snapshot["tags"]]
