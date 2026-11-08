@@ -301,6 +301,7 @@ class GlobalAssistantController extends Controller
         $hasEntitlement = DB::table('store_library_items')
             ->where('user_id', $user->id)
             ->where('product_id', $product->id)
+            ->whereNull('revoked_at')
             ->exists();
 
         $knowledge = app(ProductKnowledgeService::class)->contextForProduct(
