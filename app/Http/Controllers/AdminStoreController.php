@@ -534,17 +534,24 @@ class AdminStoreController extends Controller
             'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
             'related_product_ids' => 'sometimes|array|max:12',
             'related_product_ids.*' => 'integer|distinct|exists:store_products,id',
+            'ai_supervisor.enabled' => 'nullable|boolean',
             'ai_supervisor.mode' => 'nullable|in:suggest,review_gate',
+            'ai_supervisor.checks.content' => 'nullable|boolean',
+            'ai_supervisor.checks.pricing' => 'nullable|boolean',
+            'ai_supervisor.checks.seo' => 'nullable|boolean',
+            'ai_supervisor.checks.media' => 'nullable|boolean',
+            'ai_supervisor.checks.policy' => 'nullable|boolean',
+            'ai_supervisor.checks.course' => 'nullable|boolean',
             'ai_supervisor.instructions' => 'nullable|string|max:4000',
         ]);
         $existingMetadata = $product?->metadata ?? [];
         $supervisorChecks = [
-            'content' => $request->boolean('ai_supervisor.checks.content', true),
-            'pricing' => $request->boolean('ai_supervisor.checks.pricing', true),
-            'seo' => $request->boolean('ai_supervisor.checks.seo', true),
-            'media' => $request->boolean('ai_supervisor.checks.media', true),
-            'policy' => $request->boolean('ai_supervisor.checks.policy', true),
-            'course' => $request->boolean('ai_supervisor.checks.course', true),
+            'content' => $request->boolean('ai_supervisor.checks.content'),
+            'pricing' => $request->boolean('ai_supervisor.checks.pricing'),
+            'seo' => $request->boolean('ai_supervisor.checks.seo'),
+            'media' => $request->boolean('ai_supervisor.checks.media'),
+            'policy' => $request->boolean('ai_supervisor.checks.policy'),
+            'course' => $request->boolean('ai_supervisor.checks.course'),
         ];
         $data['metadata'] = array_merge($existingMetadata, [
             'ai_supervisor' => [
