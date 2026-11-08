@@ -45,9 +45,9 @@ class StoreReaderSpeechController extends Controller
             $value = preg_replace('/[\x{064B}-\x{065F}\x{0670}\x{200C}\x{200F}\x{202A}-\x{202E}]/u', '', $value) ?? $value;
             return trim(preg_replace('/[\p{P}\p{Z}\s]+/u', ' ', $value) ?? $value);
         };
-        $needle = $normalize($text);
-        $haystack = $normalize((string) $page->content_text);
-        abort_unless($needle !== '' && str_contains($haystack, $needle), 422, 'متن انتخاب‌شده با محتوای همین صفحه مطابقت ندارد.');
+        $needle = ' '.$normalize($text).' ';
+        $haystack = ' '.$normalize((string) $page->content_text).' ';
+        abort_unless($needle !== '  ' && str_contains($haystack, $needle), 422, 'متن انتخاب‌شده با محتوای همین صفحه مطابقت ندارد.');
         abort_unless($audio->configured(), 503);
 
         $cachePath = 'store/products/'.$product->id.'/reader-snippets/'.$document->source_sha256.'/'.hash('sha256', $text).'.wav';
