@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 app = FastAPI(
@@ -20,8 +20,9 @@ app = FastAPI(
     openapi_url=None,
 )
 
-MAX_BODY_BYTES = 48 * 1024
+MAX_BODY_BYTES = 26 * 1024 * 1024
 MAX_FINDINGS = 12
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
@@ -102,6 +103,111 @@ async def enforce_body_limit(request: Request, call_next):
 async def _json_error(status: int, message: str):
     from starlette.responses import JSONResponse
     return JSONResponse(status_code=status, content={"detail": message})
+
+
+
+@app.post("/v1/reviews/files", dependencies=[Depends(authenticate)])
+async def review_product_file(
+    file: UploadFile = File(...),
+    product_id: str = Form(..., min_length=1, max_length=80),
+    product_title: str = Form(..., min_length=2, max_length=220),
+    product_type: Literal["digital_file", "course"] = Form(...),
+    category_name: str | None = Form(default=None, max_length=160),
+    tags_json: str = Form(default="[]", max_length=5000),
+    description: str | None = Form(default=None, max_length=8000),
+):
+    from file_pipeline import (
+        FileInspectionError,
+        analyze_extracted_content,
+        analyze_image_with_groq,
+        inspect_file,
+        transcribe_audio_with_groq,
+    )
+
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds 25 MB")
+    try:
+        tags = json.loads(tags_json or "[]")
+        if not isinstance(tags, list) or len(tags) > 30 or any(not isinstance(x, str) for x in tags):
+            raise ValueError
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid tags_json") from None
+
+    try:
+        inspection = inspect_file(data, file.filename or "upload.bin", file.content_type)
+    except FileInspectionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    warnings = list(inspection.warnings or [])
+    visual_report = ""
+    transcription = ""
+    provider_status = {"gemini": "not_requested", "groq": "not_requested", "gladia": "disabled"}
+
+    if inspection.image_bytes:
+        if os.getenv("GROQ_API_KEY"):
+            try:
+                visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg")
+                provider_status["groq"] = "completed"
+            except (httpx.HTTPError, KeyError, IndexError, ValueError):
+                provider_status["groq"] = "unavailable"
+                warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ نتیجه‌ای درباره تصویر فرض نشده است.")
+        else:
+            provider_status["groq"] = "not_configured"
+            warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصویر انجام نشد.")
+
+    if inspection.audio_bytes:
+        if os.getenv("GROQ_API_KEY"):
+            try:
+                transcription = await transcribe_audio_with_groq(inspection.audio_bytes, inspection.audio_filename or "upload.audio")
+                provider_status["groq"] = "completed"
+            except (httpx.HTTPError, KeyError, IndexError, ValueError):
+                provider_status["groq"] = "unavailable"
+                warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی نشده است.")
+        else:
+            provider_status["groq"] = "not_configured"
+            warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
+
+    extracted = "\\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
+    model_review = {}
+    if extracted.strip() and os.getenv("GEMINI_API_KEY"):
+        try:
+            model_review = await analyze_extracted_content(
+                extracted,
+                {
+                    "product_id": product_id,
+                    "product_title": product_title,
+                    "product_type": product_type,
+                    "category_name": category_name,
+                    "tags": tags,
+                    "description": description or "",
+                    "detected_file_type": inspection.detected_type,
+                },
+            )
+            provider_status["gemini"] = "completed"
+        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+            provider_status["gemini"] = "unavailable"
+            warnings.append("تحلیل محتوای استخراج‌شده توسط Gemini انجام نشد.")
+    elif extracted.strip():
+        provider_status["gemini"] = "not_configured"
+        warnings.append("کلید Gemini تنظیم نشده است؛ تحلیل معنایی محتوا انجام نشد.")
+    else:
+        warnings.append("از فایل محتوای متنی قابل تحلیل استخراج نشد.")
+
+    # File inspection is advisory. A missing antivirus engine is never reported as clean.
+    return {
+        "review_id": str(uuid.uuid4()),
+        "product_id": product_id,
+        "filename": (file.filename or "upload.bin")[:180],
+        "inspection": inspection.public_dict(),
+        "provider_status": provider_status,
+        "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
+        "findings": model_review.get("findings", [])[:12] if isinstance(model_review.get("findings", []), list) else [],
+        "warnings": warnings[:20],
+        "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("manual_scan_required" if inspection.antivirus_status != "clean" else "structural_checks_passed"),
+        "publication_authorized": False,
+        "automated_publication": False,
+    }
 
 
 @app.get("/health")
