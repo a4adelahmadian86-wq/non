@@ -239,6 +239,11 @@
   inkControls.className = 'farast-reader-ink-tools';
   inkControls.setAttribute('aria-label', 'قلم نوری و ترسیم روی صفحه');
   inkControls.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-ink-toggle aria-pressed="false">قلم نوری</button><button type="button" class="reader-tool" data-ink-pen aria-pressed="true">قلم</button><button type="button" class="reader-tool" data-ink-eraser aria-pressed="false">پاک‌کن</button><label class="reader-personal-label">رنگ قلم <input type="color" data-ink-color value="#e11d48" aria-label="رنگ قلم"></label><label class="reader-personal-label">ضخامت <input type="range" data-ink-width min="1" max="16" value="3" aria-label="ضخامت قلم"></label><button type="button" class="reader-tool" data-ink-undo>واگرد</button><button type="button" class="reader-tool" data-ink-clear>پاک‌کردن صفحه</button>';
+  const inkHelp = document.createElement('p');
+  inkHelp.className = 'farast-reader-ink-help';
+  inkHelp.id = 'farast-reader-ink-help-' + Math.random().toString(36).slice(2);
+  inkHelp.textContent = 'برای ترسیم با ماوس، لمس یا قلم نوری، حالت قلم نوری را فعال کنید. برای کار با صفحه‌کلید از ابزارهای واگرد و پاک‌کردن استفاده کنید؛ ترسیم مستقیم با صفحه‌کلید پشتیبانی نمی‌شود.';
+  inkControls.append(inkHelp);
   group.append(inkControls);
   const inkToggle = inkControls.querySelector('[data-ink-toggle]');
   const inkPen = inkControls.querySelector('[data-ink-pen]');
@@ -259,6 +264,8 @@
       canvas = document.createElement('canvas');
       canvas.className = 'farast-reader-ink-canvas';
       canvas.setAttribute('aria-label', 'لایهٔ ترسیم شخصی صفحه ' + pageNumber(page));
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-describedby', inkHelp.id);
       canvas.width = Math.max(1, Math.round(rect.width * (window.devicePixelRatio || 1)));
       canvas.height = Math.max(1, Math.round(rect.height * (window.devicePixelRatio || 1)));
       Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', zIndex: '8', pointerEvents: inkEnabled ? 'auto' : 'none', touchAction: inkEnabled ? 'none' : 'auto', cursor: inkEnabled ? (inkTool === 'eraser' ? 'cell' : 'crosshair') : 'default' });
@@ -269,17 +276,18 @@
         event.preventDefault();
         canvas.setPointerCapture(event.pointerId);
         const bounds = canvas.getBoundingClientRect();
-        activeStroke = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), page: pageNumber(page), tool: inkTool, color: inkColor.value, width: Number(inkWidth.value), points: [{ x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)), p: event.pressure || 0.5 }] };
+        if (activeStroke) return;
+        activeStroke = { pointerId: event.pointerId, id: Date.now().toString(36) + Math.random().toString(36).slice(2), page: pageNumber(page), tool: inkTool, color: inkColor.value, width: Number(inkWidth.value), points: [{ x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)), p: event.pressure || 0.5 }] };
       });
       canvas.addEventListener('pointermove', event => {
-        if (!activeStroke || activeStroke.page !== pageNumber(page)) return;
+        if (!activeStroke || activeStroke.pointerId !== event.pointerId || activeStroke.page !== pageNumber(page)) return;
         const bounds = canvas.getBoundingClientRect();
         activeStroke.points.push({ x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)), p: event.pressure || 0.5 });
         if (activeStroke.points.length > 1000) activeStroke.points = activeStroke.points.filter((_, index) => index % 2 === 0);
         drawInk(page, canvas);
       });
-      const finish = () => {
-        if (!activeStroke || activeStroke.page !== pageNumber(page)) return;
+      const finish = event => {
+        if (!activeStroke || activeStroke.pointerId !== event.pointerId || activeStroke.page !== pageNumber(page)) return;
         if (activeStroke.points.length === 1) activeStroke.points.push({ ...activeStroke.points[0] });
         state.inkStrokes.push(activeStroke);
         state.inkStrokes = state.inkStrokes.slice(-250);
@@ -291,7 +299,16 @@
         announce('ترسیم در همین مرورگر ذخیره شد.');
       };
       canvas.addEventListener('pointerup', finish);
-      canvas.addEventListener('pointercancel', finish);
+      canvas.addEventListener('pointercancel', event => {
+        if (!activeStroke || activeStroke.pointerId !== event.pointerId) return;
+        activeStroke = null;
+        drawInk(page, canvas);
+      });
+      canvas.addEventListener('lostpointercapture', event => {
+        if (!activeStroke || activeStroke.pointerId !== event.pointerId) return;
+        activeStroke = null;
+        drawInk(page, canvas);
+      });
     }
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(rect.width * dpr));
@@ -354,7 +371,7 @@
   root.addEventListener('farast:reader-page-loaded', refreshInk);
   root.addEventListener('farast:reader-page-change', refreshInk);
   const inkStyle = document.createElement('style');
-  inkStyle.textContent = '.farast-reader-ink-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap;width:100%}.farast-reader-ink-tools [data-ink-color]{width:30px;height:28px;padding:0;border:0;background:transparent}.farast-reader-ink-tools button[aria-pressed="true"]{outline:2px solid var(--reader-accent,#60a5fa);outline-offset:1px}.farast-reader-ink-canvas{max-width:100%}';
+  inkStyle.textContent = '.farast-reader-ink-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap;width:100%}.farast-reader-ink-tools [data-ink-color]{width:30px;height:28px;padding:0;border:0;background:transparent}.farast-reader-ink-tools button[aria-pressed="true"]{outline:2px solid var(--reader-accent,#60a5fa);outline-offset:1px}.farast-reader-ink-canvas{max-width:100%}.farast-reader-ink-help{flex-basis:100%;margin:2px 0;font-size:.875em}';
   document.head.append(inkStyle);
   refreshInk();
 
