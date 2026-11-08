@@ -4,6 +4,8 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 
 class UploadSecurityService
 {
@@ -48,9 +50,19 @@ class UploadSecurityService
         $scanner = trim((string) env('FARAST_CLAMSCAN_BINARY', ''));
         $scan = 'not_configured';
         if ($scanner !== '') {
-            $command = escapeshellcmd($scanner).' --no-summary '.escapeshellarg($absolutePath);
-            exec($command, $output, $exitCode);
-            if ($exitCode !== 0) {
+            $timeout = max(0.1, min(600, (float) config('farast.security.clamscan_timeout', 120)));
+            $process = new Process([$scanner, '--no-summary', $absolutePath]);
+            $process->setTimeout($timeout);
+
+            try {
+                $process->run();
+            } catch (ProcessTimedOutException $exception) {
+                throw new RuntimeException('upload_malware_scan_timeout', 0, $exception);
+            } catch (\\Throwable $exception) {
+                throw new RuntimeException('upload_malware_scanner_unavailable', 0, $exception);
+            }
+
+            if ($process->getExitCode() !== 0) {
                 throw new RuntimeException('upload_malware_scan_failed');
             }
             $scan = 'clean';
