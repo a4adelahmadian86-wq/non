@@ -133,6 +133,7 @@ async def review_product(snapshot: ProductSnapshot):
             "Do not approve missing required assets: digital files need a clean primary file; courses need at least one publishable lesson.",
             "Flag implausible discount data when compare_at_price_rials is not greater than price_rials.",
             "Assess only the selected checks.",
+            "If description_truncated is true, review only the supplied excerpt and do not assume omitted text is absent.",
             "Return concise, actionable Persian findings. Empty findings are allowed when no issue is found.",
             "A verdict of approved means no material issue was found in the supplied snapshot; it never publishes the product.",
             "Never request or infer personal customer data, secrets, credentials, or payment details.",
