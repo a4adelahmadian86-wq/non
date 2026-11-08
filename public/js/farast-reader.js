@@ -61,6 +61,43 @@
   const persistReaderState=()=>{
     try{localStorage.setItem(storageKey,JSON.stringify(readerState));}catch(_){}
   };
+  const remoteStateUrl=root.dataset.readerStateUrl||'';
+  let remoteSyncTimer=null;
+  const queueRemoteSync=()=>{
+    if(!remoteStateUrl)return;
+    if(remoteSyncTimer)clearTimeout(remoteSyncTimer);
+    remoteSyncTimer=setTimeout(async()=>{
+      const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';
+      try{
+        await fetch(remoteStateUrl,{
+          method:'PUT',
+          credentials:'same-origin',
+          headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrf,'X-Requested-With':'XMLHttpRequest'},
+          body:JSON.stringify({progress:readerState.progress,bookmarks:readerState.bookmarks})
+        });
+      }catch(_){}
+    },650);
+  };
+  const loadRemoteReaderState=async()=>{
+    if(!remoteStateUrl)return;
+    try{
+      const response=await fetch(remoteStateUrl,{credentials:'same-origin',headers:{'Accept':'application/json'}});
+      if(!response.ok)return;
+      const remote=await response.json();
+      if(remote.updated_at){
+        const saved=remote.progress;
+        readerState.progress=saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null;
+        readerState.bookmarks=(Array.isArray(remote.bookmarks)?remote.bookmarks:[])
+          .filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100);
+      }else if(readerState.progress||readerState.bookmarks.length){
+        queueRemoteSync();
+      }
+      persistReaderState();
+      renderBookmarks();
+      refreshResumeButton();
+      refreshBookmarkButton();
+    }catch(_){}
+  };
   const refreshResumeButton=()=>{
     if(!resumeButton)return;
     const saved=readerState.progress;
@@ -643,7 +680,7 @@
   setZoomLabel();
   renderBookmarks();
   refreshBookmarkButton();
-  showItem(0).then(()=>{
+  loadRemoteReaderState().finally(()=>showItem(0)).then(()=>{
     restoringInitial=false;
     refreshResumeButton();
     refreshBookmarkButton();
