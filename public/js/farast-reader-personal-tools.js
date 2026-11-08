@@ -12,13 +12,13 @@
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
     if (saved && typeof saved === 'object') state = { ...defaults, ...saved };
   } catch (_) {}
-  const validInkStroke = stroke => stroke && (stroke.tool === 'pen' || stroke.tool === 'eraser') && Number.isFinite(Number(stroke.page)) && Number(stroke.page) > 0 && Number.isFinite(Number(stroke.width)) && stroke.width >= 1 && stroke.width <= 32 && Array.isArray(stroke.points) && stroke.points.length >= 2 && stroke.points.length <= 2000 && stroke.points.every(point => point && Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1);
+  const validInkStroke = stroke => stroke && (stroke.tool === 'pen' || stroke.tool === 'eraser') && Number.isFinite(Number(stroke.page)) && Number(stroke.page) > 0 && Number.isFinite(Number(stroke.width)) && stroke.width >= 1 && stroke.width <= 32 && Array.isArray(stroke.points) && stroke.points.length >= 2 && stroke.points.length <= 1000 && stroke.points.every(point => point && Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1);
   state.light = !!state.light;
   state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';
   state.size = Math.min(160, Math.max(80, Number(state.size) || 100));
   state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
-  state.inkStrokes = Array.isArray(state.inkStrokes) ? state.inkStrokes.filter(validInkStroke).slice(-500) : [];
+  state.inkStrokes = Array.isArray(state.inkStrokes) ? state.inkStrokes.filter(validInkStroke).slice(-250) : [];
   const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
   const announce = message => { status.textContent = message; };
   const group = document.createElement('div');
@@ -113,9 +113,9 @@
       const payload = JSON.parse(await file.text());
       if (payload.format !== 'farast-reader-personal-tools' || payload.version !== 1 || !payload.data || typeof payload.data !== 'object') throw new Error('ساختار فایل پشتیبان معتبر نیست.');
       const incoming = payload.data;
-      if (!Array.isArray(incoming.highlights) || !Array.isArray(incoming.notes) || incoming.highlights.length > 500 || incoming.notes.length > 500 || (incoming.inkStrokes !== undefined && (!Array.isArray(incoming.inkStrokes) || incoming.inkStrokes.length > 500))) throw new Error('محتوای فایل پشتیبان معتبر نیست.');
+      if (!Array.isArray(incoming.highlights) || !Array.isArray(incoming.notes) || incoming.highlights.length > 500 || incoming.notes.length > 500 || (incoming.inkStrokes !== undefined && (!Array.isArray(incoming.inkStrokes) || incoming.inkStrokes.length > 250))) throw new Error('محتوای فایل پشتیبان معتبر نیست.');
       if (!window.confirm('یادداشت‌ها و هایلایت‌های فعلی با نسخهٔ پشتیبان جایگزین شوند؟')) return;
-      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', highlightColor: highlightColors[incoming.highlightColor] ? incoming.highlightColor : 'yellow', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))), inkStrokes: (incoming.inkStrokes || []).filter(validInkStroke).slice(-500) };
+      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', highlightColor: highlightColors[incoming.highlightColor] ? incoming.highlightColor : 'yellow', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))), inkStrokes: (incoming.inkStrokes || []).filter(validInkStroke).slice(-250) };
       persist(); applyPrefs(); renderNotes(); renderHighlights(); announce('نسخهٔ پشتیبان در همین مرورگر بازیابی شد.');
     } catch (error) { announce(error.message || 'بازیابی فایل ناموفق بود.'); }
     finally { importFile.value = ''; }
@@ -249,14 +249,16 @@
         if (!activeStroke || activeStroke.page !== pageNumber(page)) return;
         const bounds = canvas.getBoundingClientRect();
         activeStroke.points.push({ x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)), p: event.pressure || 0.5 });
-        if (activeStroke.points.length > 2000) activeStroke.points = activeStroke.points.filter((_, index) => index % 2 === 0);
+        if (activeStroke.points.length > 1000) activeStroke.points = activeStroke.points.filter((_, index) => index % 2 === 0);
         drawInk(page, canvas);
       });
       const finish = () => {
         if (!activeStroke || activeStroke.page !== pageNumber(page)) return;
         if (activeStroke.points.length === 1) activeStroke.points.push({ ...activeStroke.points[0] });
         state.inkStrokes.push(activeStroke);
-        state.inkStrokes = state.inkStrokes.slice(-500);
+        state.inkStrokes = state.inkStrokes.slice(-250);
+        let storedPointCount = state.inkStrokes.reduce((total, stroke) => total + stroke.points.length, 0);
+        while (storedPointCount > 60000 && state.inkStrokes.length > 1) storedPointCount -= state.inkStrokes.shift().points.length;
         activeStroke = null;
         persist();
         drawInk(page, canvas);
@@ -319,8 +321,9 @@
     state.inkStrokes = state.inkStrokes.filter(stroke => stroke.page !== current);
     persist(); refreshInk(); announce('ترسیم‌های صفحه پاک شدند.');
   });
-  const inkObserver = new ResizeObserver(refreshInk);
-  root.querySelectorAll('.farast-reader-page-item').forEach(page => inkObserver.observe(page));
+  const inkObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refreshInk) : null;
+  root.querySelectorAll('.farast-reader-page-item').forEach(page => { if (inkObserver) inkObserver.observe(page); });
+  if (!inkObserver) window.addEventListener('resize', refreshInk, { passive: true });
   root.addEventListener('farast:reader-section-change', refreshInk);
   root.addEventListener('farast:reader-page-loaded', refreshInk);
   root.addEventListener('farast:reader-page-change', refreshInk);
