@@ -141,7 +141,7 @@ def _inspect_image(data: bytes) -> tuple[bytes, str]:
             return output.getvalue(), "image/jpeg"
     except FileInspectionError:
         raise
-    except (UnidentifiedImageError, OSError, ValueError):
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError):
         raise FileInspectionError("فایل تصویر خراب یا نامعتبر است.") from None
 
 
@@ -175,7 +175,11 @@ def _clamav_scan(data: bytes) -> str:
 def _extract_video_tracks(data: bytes) -> tuple[bytes | None, bytes | None]:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
-        return None, None
+        try:
+            import imageio_ffmpeg
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        except (ImportError, RuntimeError):
+            return None, None
     common = [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "pipe,crypto,data", "-i", "pipe:0", "-t", "180"]
     audio = None
     frame = None
@@ -212,6 +216,8 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
 
     result = Inspection(detected_type="unknown", warnings=[])
     result.antivirus_status = _clamav_scan(data)
+    if result.antivirus_status == "infected":
+        raise FileInspectionError("اسکنر امنیتی محتوای آلوده را شناسایی کرد؛ فایل قرنطینه شد.")
 
     if data.startswith(b"%PDF-"):
         result.detected_type = "pdf"
@@ -243,7 +249,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             result.image_mime = "image/jpeg"
         if not video_audio and not video_frame:
             result.warnings.append("استخراج صوت یا تصویر از ویدئو ممکن نشد؛ ffmpeg نصب نیست یا فایل پشتیبانی نمی‌شود.")
-    elif data.startswith(b"ID3") or data.startswith(b"OggS") or data.startswith(b"fLaC") or data.startswith(b"RIFF") and data[8:12] == b"WAVE" or suffix in {".mp3", ".wav", ".m4a", ".ogg", ".flac"}:
+    elif data.startswith(b"ID3") or data.startswith(b"OggS") or data.startswith(b"fLaC") or (data.startswith(b"RIFF") and data[8:12] == b"WAVE") or (len(data) >= 12 and data[4:8] == b"ftyp" and suffix == ".m4a") or (len(data) >= 2 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0):
         result.detected_type = "audio"
         result.audio_bytes = data
         result.audio_filename = re.sub(r"[^a-zA-Z0-9._-]", "_", filename)[:120] or "upload.audio"
@@ -256,8 +262,6 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     else:
         raise FileInspectionError("نوع فایل پشتیبانی نمی‌شود یا امضای واقعی فایل با پسوند آن تطابق ندارد.")
 
-    if result.antivirus_status == "infected":
-        raise FileInspectionError("اسکنر امنیتی محتوای آلوده را شناسایی کرد؛ فایل قرنطینه شد.")
     if result.antivirus_status != "clean":
         result.warnings.append("اسکن آنتی‌ویروس در این محیط تأیید نشده است؛ فایل را سالم فرض نکنید.")
 
