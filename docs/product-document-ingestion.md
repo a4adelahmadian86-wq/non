@@ -13,12 +13,12 @@ The schema uses ordinary indexed InnoDB-compatible relations and JSON/LONGTEXT c
 
 ## Queue on inexpensive shared hosting
 
-The upload-confirm action writes a document row and dispatches `ProcessProductDocument` to the `documents` queue. Configure Laravel's database queue driver and ensure the standard `jobs` and `failed_jobs` tables are migrated.
+The upload-confirm action writes a document row and dispatches `ProcessProductDocument` to the `documents` queue. After successful semantic study, a separate `GenerateProductDocumentAudio` job creates a single WAV asset and stores per-chunk time offsets and source locators for reader synchronization. Configure Laravel's database queue driver and ensure the standard `jobs` and `failed_jobs` tables are migrated.
 
 For cPanel or another cron-only host, run a short worker every minute (adjust the project path and PHP binary):
 
 ```sh
-cd /home/ACCOUNT/public_html && /usr/local/bin/php artisan queue:work database --queue=documents,default --stop-when-empty --max-time=50 --tries=3
+cd /home/ACCOUNT/public_html && /usr/local/bin/php artisan queue:work database --queue=documents,documents-audio,default --stop-when-empty --max-time=50 --tries=3
 ```
 
 Do not keep a long-running worker alive on a host that terminates background processes. The stop-when-empty worker exits after the available batch and can be safely invoked again by cron.
@@ -29,4 +29,4 @@ Do not keep a long-running worker alive on a host that terminates background pro
 - ZIP members are listed from the central directory; archive contents are not extracted or executed during preflight.
 - The AI service currently accepts up to 25 MiB per source file and caps extracted text/chunks. Files larger than that remain stored with an explicit awaiting-provider state rather than repeatedly submitting a request that cannot succeed.
 - AI review is advisory. It never authorizes publication.
-- Automatic sample selection/rendering, DOCX-to-PDF conversion, TTS production, audio/reader synchronization, multi-pass analysis for long documents, and full-content reader access controls are follow-on stages. The reader must consume stored artifacts and must not create them.
+- AI-selected PDF sample pages are rendered once by pypdf and stored as private versioned artifacts. TTS generation uses the configured FARAST voice TTS endpoint after semantic review; the combined WAV and segment-to-source offsets are stored once. DOCX-to-PDF conversion, audio/reader synchronization UI, multi-pass analysis for long documents, and full-content reader access controls are follow-on stages. The reader must consume stored artifacts and must not create them.
