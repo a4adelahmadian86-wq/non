@@ -417,21 +417,37 @@
     else setZoom(1);
   };
 
+  let searchRequest=0;
   const searchPdf=async()=>{
+    const request=++searchRequest;
     const query=(searchInput?.value||'').trim().toLocaleLowerCase();
-    if(!query){if(searchCount)searchCount.textContent='';return;}
+    if(!query){
+      pdfMatches=[];matchIndex=-1;
+      if(searchCount)searchCount.textContent='';
+      if(isPdf()&&pdfDoc){
+        if(continuousMode)await refreshContinuousVisiblePages();
+        else await renderPdfPage(pdfPage);
+      }
+      return;
+    }
     if(!pdfDoc){if(searchCount)searchCount.textContent='سند هنوز بارگذاری نشده';return;}
     pdfMatches=[];matchIndex=-1;
     for(let n=1;n<=pdfDoc.numPages;n++){
       const page=await pdfDoc.getPage(n);
       const content=await page.getTextContent();
+      if(request!==searchRequest)return;
       const text=content.items.map(item=>item.str||'').join(' ').toLocaleLowerCase();
       const count=text.split(query).length-1;
       if(count>0)pdfMatches.push({page:n,count});
     }
+    if(request!==searchRequest)return;
     const total=pdfMatches.reduce((sum,item)=>sum+item.count,0);
     if(searchCount)searchCount.textContent=total?faNumber(total)+' نتیجه در '+faNumber(pdfMatches.length)+' صفحه':'بدون نتیجه';
-    if(pdfMatches.length){matchIndex=0;await navigatePdfPage(pdfMatches[0].page);if(searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه';}
+    if(pdfMatches.length){matchIndex=0;await navigatePdfPage(pdfMatches[0].page);if(request===searchRequest&&searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه';}
+    else if(isPdf()&&pdfDoc){
+      if(continuousMode)await refreshContinuousVisiblePages();
+      else await renderPdfPage(pdfPage);
+    }
   };
 
   root.querySelector('#reader-prev')?.addEventListener('click',()=>{
@@ -445,7 +461,7 @@
   root.querySelectorAll('.farast-reader-thumb[data-goto]').forEach(t=>t.addEventListener('click',()=>showItem(Number(t.dataset.goto))));
   pageInput?.addEventListener('change',()=>{
     const value=Number(pageInput.value)||1;
-    if(isPdf()&&pdfDoc)renderPdfPage(value).catch(showPdfError);
+    if(isPdf()&&pdfDoc)navigatePdfPage(value).catch(showPdfError);
     else showItem(value-1);
   });
   root.querySelector('#reader-zoom-in')?.addEventListener('click',()=>setZoom(zoom===0?1.1:zoom+.1).catch(showPdfError));
