@@ -200,10 +200,9 @@ class StoreController extends Controller
         $previews = $fullPreviews->isNotEmpty() ? $fullPreviews : $samplePreviews;
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
 
-        $readerIdentity = trim((string) ($user?->mobile ?? ''));
-        if ($readerIdentity === '') {
-            $readerIdentity = (string) request()->ip();
-        }
+        $readerIdentity = $user
+            ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
+            : (string) request()->ip();
 
         return response()
             ->view('store.reader', compact('product', 'previews', 'readerIdentity'))
