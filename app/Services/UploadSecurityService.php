@@ -40,28 +40,21 @@ class UploadSecurityService
         }
 
         $absolutePath = $disk->path($path);
-        $hash = hash_file('sha256', $absolutePath);
-        if (! is_string($hash)) {
+        $scanResult = app(StaticFileSafetyScanner::class)->scan($absolutePath, $mime, $extension);
+        $hash = (string) ($scanResult['sha256'] ?? '');
+        if (! preg_match('/^[a-f0-9]{64}$/', $hash)) {
             throw new RuntimeException('upload_checksum_failed');
         }
 
-        $scanner = trim((string) env('FARAST_CLAMSCAN_BINARY', ''));
-        $scan = 'not_configured';
-        if ($scanner !== '') {
-            $command = escapeshellcmd($scanner).' --no-summary '.escapeshellarg($absolutePath);
-            exec($command, $output, $exitCode);
-            if ($exitCode !== 0) {
-                throw new RuntimeException('upload_malware_scan_failed');
-            }
-            $scan = 'clean';
-        }
-
         return [
-            'safe' => $scan === 'clean',
+            'safe' => (bool) ($scanResult['safe'] ?? false),
             'mime' => $mime,
             'size' => $size,
             'checksum' => $hash,
-            'scan' => $scan,
+            'scan' => (string) ($scanResult['status'] ?? 'review_required'),
+            'scan_engine' => (string) ($scanResult['engine'] ?? 'farast-static-policy-v1'),
+            'scan_findings' => (array) ($scanResult['findings'] ?? []),
+            'scan_disclaimer' => (string) ($scanResult['disclaimer'] ?? ''),
             'sandbox_required' => true,
             'storage' => 'private',
         ];
