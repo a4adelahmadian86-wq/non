@@ -101,7 +101,7 @@
     if (node?.nodeType !== Node.TEXT_NODE) return false;
     const raw = node.nodeValue || '';
     const offset = Number(caret?.startOffset ?? position?.offset ?? 0);
-    const wordPattern = /[\\p{L}\\p{N}]+(?:[\\u200c][\\p{L}\\p{N}]+)*/gu;
+    const wordPattern = /[\p{L}\p{N}]+(?:[\u200c][\p{L}\p{N}]+)*/gu;
     let match;
     while ((match = wordPattern.exec(raw))) {
       if (offset >= match.index && offset <= match.index + match[0].length) {
