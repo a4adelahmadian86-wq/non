@@ -18,7 +18,8 @@
         && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
         && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
         .map((item, index) => ({ ...item, start: Number(item.start), end: Number(item.end), page: Math.max(1, Number(item.page) || 1), index }))
-        .sort((a, b) => a.start - b.start)
+        .sort((a, b) => a.start - b.start),
+      granularity: timings.length > 0 && timings.some(item => typeof item?.text === 'string' && /\\s/u.test(item.text.trim())) ? 'segment' : 'word'
     };
   });
   const tracks = parseTracks();
@@ -150,7 +151,7 @@
           mark.className = 'reader-audio-word';
           mark.dataset.segment = String(item.index);
           mark.setAttribute('role', 'button');
-          mark.setAttribute('aria-label', 'رفتن به '+word);
+          mark.setAttribute('aria-label', (activeTrack.granularity === 'segment' ? 'رفتن به بخش ' : 'رفتن به کلمه ') + word);
           mark.tabIndex = 0;
           Object.assign(mark.style, {
             left: (rect.left - layerRect.left) + 'px',
@@ -202,7 +203,7 @@
       });
       if (item) {
         caption.textContent = item.text;
-        progressLabel.textContent = 'کلمه ' + fa(found + 1) + ' از ' + fa(timings.length);
+        progressLabel.textContent = (activeTrack.granularity === 'segment' ? 'بخش ' : 'کلمه ') + fa(found + 1) + ' از ' + fa(timings.length);
         const current = wordMarks.find(mark => mark.segment === found)?.element;
         if (current && audio.paused === false) {
           const rect = current.getBoundingClientRect();
@@ -234,9 +235,9 @@
     audio.load();
     buildMarks(activePage);
     dock.hidden = false;
-    status.textContent = 'صوت از پیش آماده · همگام‌سازی کلمه‌به‌کلمه';
+    status.textContent = activeTrack.granularity === 'segment' ? 'صوت از پیش آماده · همگام‌سازی جمله‌ای' : 'صوت از پیش آماده · همگام‌سازی کلمه‌به‌کلمه';
     caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
-    progressLabel.textContent = fa(track.timings.length) + ' نشانگر زمانی';
+    progressLabel.textContent = fa(track.timings.length) + (track.granularity === 'segment' ? ' بخش زمانی' : ' نشانگر کلمه‌ای');
     seek.value = '0';
   };
 
