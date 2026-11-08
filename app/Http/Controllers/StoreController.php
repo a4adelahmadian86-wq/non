@@ -172,16 +172,9 @@ class StoreController extends Controller
 
         $kind = strtolower((string) $preview->kind);
         if ($kind === 'html' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'html') {
-            $user = request()->user();
-            $identity = trim((string) ($user?->mobile ?? ''));
-            if ($identity === '') {
-                $identity = (string) request()->ip();
-            }
-            $html = str_replace('FARAST_READER_IDENTITY_TOKEN', e($identity), $disk->get($preview->path));
             $headers['Content-Type'] = 'text/html; charset=UTF-8';
-            $headers['Content-Disposition'] = 'inline; filename="farast-workbook-preview.html"';
             $headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
-            return response($html, 200, $headers);
+            return $disk->response($preview->path, null, $headers);
         }
 
         abort_unless(!in_array($kind, ['docx', 'xlsx'], true), 409, 'این پیش‌نمایش هنوز آماده‌سازی نشده است؛ نسخهٔ آماده را دوباره بارگذاری کنید.');
