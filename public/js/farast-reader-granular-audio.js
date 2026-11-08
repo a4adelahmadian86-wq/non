@@ -46,6 +46,7 @@
     stop();
     const id = ++requestId;
     window.FarastAudioReader?.pause();
+    window.FarastDocumentAudioReader?.pause();
     if (status()) status().textContent = 'در حال آماده‌سازی صدای انتخاب‌شده…';
     try {
       const response = await fetch(speechUrl, {
@@ -160,13 +161,15 @@
     }
 
     const article = event.target.closest('.farast-reader-page-item');
-    if (article && !event.target.closest('button,input,select,a,iframe,.farast-pdf-text-layer,.farast-pdf-cont-text,.farast-audio-dock')) {
+    if (article && !event.target.closest('button,input,select,a,iframe,.farast-audio-dock')) {
       const page = pageFor(event.target);
+      stop();
+      window.FarastAudioReader?.pause();
+      if (window.FarastDocumentAudioReader?.playPage(page)) return;
       let timings = [];
       try { timings = JSON.parse(article.dataset.audioTiming || '[]'); } catch (_) {}
       const pageTimings = timings.filter(item => Number(item.page || page) === page && Number(item.end) > Number(item.start));
       if (pageTimings.length && window.FarastAudioReader?.playRange) {
-        stop();
         const first = pageTimings.reduce((a, b) => Number(a.start) <= Number(b.start) ? a : b);
         const last = pageTimings.reduce((a, b) => Number(a.end) >= Number(b.end) ? a : b);
         window.FarastAudioReader.selectSection(Number(article.dataset.index || 0));
