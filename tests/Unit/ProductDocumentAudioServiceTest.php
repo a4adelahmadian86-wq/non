@@ -11,15 +11,15 @@ class ProductDocumentAudioServiceTest extends TestCase
     public function test_audio_segments_are_joined_and_keep_source_time_offsets(): void
     {
         config([
-            'services.voice_tts.url' => 'https://voice.example.test/v1/synthesize',
-            'services.voice_tts.token' => 'test-token',
-            'services.voice_tts.voice_id' => 'farast-fa-male-v1',
+            'services.document_audio.url' => 'https://document-audio.example/v1/synthesize',
+            'services.document_audio.token' => 'test-token',
+            'services.document_audio.voice_id' => 'farast-document-fa-male-37-v1',
         ]);
 
         $pcm = str_repeat("\0", 1600);
         $format = pack('vvVVvv', 1, 1, 16000, 32000, 2, 16);
         $wav = 'RIFF'.pack('V', 36 + strlen($pcm)).'WAVEfmt '.pack('V', 16).$format.'data'.pack('V', strlen($pcm)).$pcm;
-        Http::fake(['voice.example.test/*' => Http::response($wav, 200, ['Content-Type' => 'audio/wav'])]);
+        Http::fake(['document-audio.example/*' => Http::response($wav, 200, ['Content-Type' => 'audio/wav'])]);
 
         $result = app(ProductDocumentAudioService::class)->generate([
             ['chunk_index' => 0, 'chunk_type' => 'page_text', 'locator' => ['page' => 1], 'content_text' => 'متن صفحه اول'],
@@ -28,6 +28,7 @@ class ProductDocumentAudioServiceTest extends TestCase
 
         $this->assertNotNull($result);
         $this->assertSame('audio/wav', $result['mime']);
+        $this->assertSame('farast-document-fa-male-37-v1', $result['voice_id']);
         $this->assertSame(100, $result['duration_ms']);
         $this->assertSame(2, count($result['segments']));
         $this->assertSame(0, $result['segments'][0]['start_ms']);
@@ -35,6 +36,14 @@ class ProductDocumentAudioServiceTest extends TestCase
         $this->assertSame(['page' => 2], $result['segments'][1]['locator']);
         $this->assertStringStartsWith('RIFF', $result['audio']);
         Http::assertSentCount(2);
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://document-audio.example/v1/synthesize'
+                && $request->hasHeader('Authorization', 'Bearer test-token')
+                && $request['voice_id'] === 'farast-document-fa-male-37-v1';
+        });
+        Http::assertNotSent(function ($request) {
+            return str_contains($request->url(), 'voice-typing-r5r7.onrender.com');
+        });
     }
 
     public function test_document_pipeline_classes_are_autoloadable(): void
@@ -45,9 +54,9 @@ class ProductDocumentAudioServiceTest extends TestCase
         $this->assertTrue(class_exists(\App\Console\Commands\PruneProductIngestions::class));
     }
 
-    public function test_audio_generation_requires_configured_tts_endpoint(): void
+    public function test_audio_generation_requires_configured_document_audio_endpoint(): void
     {
-        config(['services.voice_tts.url' => '', 'services.voice_tts.token' => '']);
+        config(['services.document_audio.url' => '', 'services.document_audio.token' => '']);
 
         $this->assertNull(app(ProductDocumentAudioService::class)->generate([
             ['content_text' => 'متن آزمایشی'],
