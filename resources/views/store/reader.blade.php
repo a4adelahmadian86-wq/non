@@ -116,6 +116,20 @@
           </article>
         @endforeach
       </div>
+      @if(($documentKnowledge['knowledge_available'] ?? false) && !empty($documentKnowledge['documents']))
+        <section class="farast-reader-text-panel" aria-label="متن ساختاریافته سند">
+          <header><div><strong>متن و محتوای استخراج‌شده</strong><small>همگام با نسخه صوتی و شماره صفحه‌های منبع</small></div><span>{{ collect($documentKnowledge['documents'])->sum(fn($doc)=>count($doc['blocks'] ?? [])) }} بخش</span></header>
+          @foreach($documentKnowledge['documents'] as $document)
+            <div class="farast-reader-document-heading"><strong>{{ $document['filename'] }}</strong>@if($document['summary'])<p>{{ $document['summary'] }}</p>@endif</div>
+            @foreach($document['blocks'] as $block)
+              <article class="farast-reader-text-block" data-document-block-id="{{ $block['block_id'] }}" data-page-number="{{ $block['page_number'] ?? '' }}">
+                <small>{{ $block['type'] === 'page_text' ? 'متن صفحه' : ($block['type'] === 'table' ? 'جدول' : ($block['type'] === 'image_description' ? 'توضیح تصویر' : 'بخش محتوا')) }} @if($block['page_number']) · صفحه {{ $block['page_number'] }} @endif</small>
+                <p>{{ $block['text'] }}</p>
+              </article>
+            @endforeach
+          @endforeach
+        </section>
+      @endif
       <div class="farast-reader-shortcuts"><kbd>←</kbd><kbd>→</kbd> جابه‌جایی صفحه <span>·</span> <kbd>+</kbd><kbd>−</kbd> بزرگ‌نمایی <span>·</span> <kbd>F</kbd> تمام‌صفحه <span>·</span> <kbd>B</kbd> نشانک</div>
     </main>
   </div>
@@ -144,6 +158,7 @@
 @media(max-width:760px){.reader-search-group{order:3;width:100%;justify-content:center}.reader-search-group input{flex:1;max-width:280px}.farast-reader-header{grid-template-columns:auto 1fr;gap:8px}.farast-reader-heading{text-align:right}.farast-reader-account{grid-column:1/-1;justify-content:flex-start;font-size:.68rem}.farast-reader-toolbar{justify-content:center}.reader-tool-wide span{display:none}.farast-reader-workspace{grid-template-columns:1fr}.farast-reader-sidebar{max-height:150px;border-left:0;border-bottom:1px solid var(--reader-line)}.farast-reader-thumbs{display:flex;overflow:auto}.farast-reader-thumb{flex:0 0 112px}.farast-reader-canvas{min-height:60vh;padding:12px 8px 42px}.farast-reader-page-content img,.farast-reader-page-content iframe{min-height:360px;height:70vh}.farast-reader-shortcuts{display:none}.farast-reader-security-note{font-size:.62rem;text-align:center}}
 @media(prefers-reduced-motion:reduce){.farast-reader-progress span{transition:none}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.farast-reader-text-panel{margin:18px auto 24px;max-width:1000px;padding:16px;background:var(--reader-panel);border:1px solid var(--reader-line);border-radius:14px;color:var(--reader-text)}.farast-reader-text-panel>header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--reader-line)}.farast-reader-text-panel>header div{display:grid;gap:3px}.farast-reader-text-panel>header strong{font-size:.85rem}.farast-reader-text-panel>header small,.farast-reader-text-panel>header span{font-size:.65rem;color:var(--reader-muted)}.farast-reader-document-heading{padding:12px 0 4px}.farast-reader-document-heading strong{font-size:.75rem}.farast-reader-document-heading p{font-size:.68rem;color:var(--reader-muted);line-height:1.8}.farast-reader-text-block{padding:10px 12px;margin:8px 0;border:1px solid var(--reader-line);border-radius:10px;line-height:2;transition:background .2s,border-color .2s}.farast-reader-text-block small{font-size:.62rem;color:var(--reader-muted)}.farast-reader-text-block p{margin:4px 0 0;font-size:.75rem;white-space:pre-wrap;overflow-wrap:anywhere}.farast-reader-text-block.is-audio-active{background:rgba(67,130,255,.12);border-color:#568cf0;box-shadow:inset 3px 0 #568cf0}
 .farast-reader-audio{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--reader-line);background:var(--reader-panel)}.farast-reader-audio>div{display:grid;gap:3px}.farast-reader-audio strong{font-size:.76rem;color:var(--reader-text)}.farast-reader-audio span{font-size:.64rem;color:var(--reader-muted)}.farast-reader-audio audio{width:min(440px,100%);height:36px}
 </style>
 @endpush
