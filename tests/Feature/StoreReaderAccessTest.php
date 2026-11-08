@@ -292,16 +292,17 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Disposition', 'inline; filename="farast-workbook-preview.html"')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
 
-        $response->assertDontSee('09123456789')
-            ->assertSee('گزارش')
-            ->assertSee('42')
-            ->assertSee('73')
-            ->assertDontSee('1+1')
-            ->assertSee('فرمول‌ها اجرا نمی‌شوند')
-            ->assertDontSee('<script', false);
+        $streamedHtml = $response->streamedContent();
+        $this->assertStringNotContainsString('09123456789', $streamedHtml);
+        $this->assertStringContainsString('گزارش', $streamedHtml);
+        $this->assertStringContainsString('42', $streamedHtml);
+        $this->assertStringContainsString('73', $streamedHtml);
+        $this->assertStringNotContainsString('1+1', $streamedHtml);
+        $this->assertStringContainsString('فرمول‌ها اجرا نمی‌شوند', $streamedHtml);
+        $this->assertStringNotContainsString('<script', $streamedHtml);
 
         $this->assertStringContainsString("style-src 'unsafe-inline'", (string) $response->headers->get('Content-Security-Policy'));
-        $this->assertSame($preparedHtml, $response->streamedContent());
+        $this->assertSame($preparedHtml, $streamedHtml);
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 
