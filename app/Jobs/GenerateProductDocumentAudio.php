@@ -6,6 +6,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Services\ProductDocumentAudioService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -103,7 +104,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 $chunk = $chunkByIndex->get((int) ($segment['chunk_index'] ?? -1));
                 $locator = (array) ($segment['locator'] ?? []);
                 $page = (int) ($locator['reader_page'] ?? $locator['page'] ?? $locator['page_start'] ?? 0);
-                $text = trim((string) ($chunk['content_text'] ?? ''));
+                $text = trim((string) ($segment['text'] ?? $chunk['content_text'] ?? ''));
                 if ($page < 1 || $text === '') return null;
 
                 return [
