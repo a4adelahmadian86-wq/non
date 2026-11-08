@@ -101,6 +101,7 @@ return new class extends Migration
             $table->unsignedInteger('duration_ms')->nullable();
             $table->string('state', 24)->default('pending');
             $table->string('voice_profile', 80)->nullable();
+            $table->unsignedInteger('content_version')->default(1);
             $table->json('alignment_metadata')->nullable();
             $table->timestamp('generated_at')->nullable();
             $table->timestamps();
