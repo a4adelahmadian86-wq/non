@@ -309,4 +309,59 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('draft', $product->fresh()->status);
         $this->assertNull($product->fresh()->published_at);
     }
+
+    public function test_pdf_sample_upload_stores_only_the_configured_pages(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول نمونه PDF',
+            'slug' => 'pdf-sample-product',
+            'sku' => 'PDF-SAMPLE-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+            'preview_pages' => 2,
+        ]);
+
+        $source = new \\FPDF();
+        $source->SetFont('Arial', '', 14);
+        for ($page = 1; $page <= 4; $page++) {
+            $source->AddPage();
+            $source->Cell(0, 12, 'Private page '.$page);
+        }
+        $pdfBytes = $source->Output('S');
+
+        $this->mock(UploadSecurityService::class, function ($mock) {
+            $mock->shouldReceive('inspect')->once()->andReturnUsing(function ($path) {
+                $disk = Storage::disk('private');
+
+                return [
+                    'safe' => true,
+                    'mime' => 'application/pdf',
+                    'size' => $disk->size($path),
+                    'checksum' => hash_file('sha256', $disk->path($path)),
+                    'scan' => 'test-clean',
+                ];
+            });
+        });
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->post(route('admin.store.previews.upload', $product), [
+                'preview' => UploadedFile::fake()->createWithContent('private-document.pdf', $pdfBytes),
+                'access_level' => 'sample',
+            ])
+            ->assertRedirect(route('admin.store.edit', $product));
+
+        $preview = \\App\\Models\\StoreProductPreview::query()->where('product_id', $product->id)->firstOrFail();
+        $this->assertSame(4, $preview->source_page_count);
+        $this->assertSame(2, $preview->included_page_count);
+        Storage::disk('private')->assertExists($preview->path);
+        $this->assertSame(2, (new \\setasign\\Fpdi\\Fpdi())->setSourceFile(Storage::disk('private')->path($preview->path)));
+    }
+
+
 }
