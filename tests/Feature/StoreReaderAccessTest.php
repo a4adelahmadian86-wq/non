@@ -89,7 +89,7 @@ class StoreReaderAccessTest extends TestCase
 
     public function test_word_page_builder_preserves_semantic_block_types_and_bounds_cells(): void
     {
-        $built = app(\x5cApp\x5cServices\x5cStoreProductDocumentPageBuilder::class)->build([
+        $built = app(\App\Services\StoreProductDocumentPageBuilder::class)->build([
             ['chunk_type' => 'docx_heading', 'locator' => ['heading_level' => 1], 'content_text' => 'فصل اول'],
             ['chunk_type' => 'docx_paragraph', 'locator' => [], 'content_text' => 'مقدمه'],
             ['chunk_type' => 'docx_list_item', 'locator' => ['list_kind' => 'number', 'list_level' => 2], 'content_text' => 'گزینه'],
