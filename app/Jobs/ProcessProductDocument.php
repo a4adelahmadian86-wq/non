@@ -281,10 +281,23 @@ class ProcessProductDocument implements ShouldQueue
 
             $providers = (array) ($payload['provider_status'] ?? []);
             $hasChunks = $locked->chunks()->exists();
-            $hasSemanticReview = ($providers['gemini'] ?? null) === 'completed';
-            $status = $hasChunks
-                ? ($hasSemanticReview ? 'completed' : 'extracted')
-                : 'partial';
+            $expectedBatches = (int) ($payload['analysis_batch_count'] ?? 0);
+            $successfulBatches = (int) ($payload['successful_analysis_batches'] ?? 0);
+            $analysisBatchesComplete = $expectedBatches > 0 && $successfulBatches >= $expectedBatches;
+            $extractionComplete = ! (bool) ($inspection['extraction_truncated'] ?? false);
+            $hasSemanticReview = ($providers['gemini'] ?? null) === 'completed' && $analysisBatchesComplete;
+            $status = ! $hasChunks
+                ? 'partial'
+                : (! $extractionComplete ? 'partial' : ($hasSemanticReview ? 'completed' : 'extracted'));
+
+            $structure['completeness'] = [
+                'extraction_complete' => $extractionComplete,
+                'analysis_batches_complete' => $analysisBatchesComplete,
+                'analysis_batch_count' => $expectedBatches,
+                'successful_analysis_batches' => $successfulBatches,
+                'source_hash_verified' => true,
+                'status' => $status,
+            ];
 
             $locked->update([
                 'processing_status' => $status,
