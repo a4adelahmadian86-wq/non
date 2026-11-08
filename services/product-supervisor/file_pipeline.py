@@ -266,7 +266,7 @@ def _extract_video_tracks(data: bytes) -> tuple[bytes | None, bytes | None]:
     try:
         result = subprocess.run(
             common + ["-map", "0:a:0?", "-vn", "-ac", "1", "-ar", "16000", "-f", "wav", "pipe:1"],
-            input=data, capture_output=True, timeout=25, check=False,
+            input=data, capture_output=True, timeout=15, check=False,
         )
         if result.returncode == 0 and 44 < len(result.stdout) <= 12 * 1024 * 1024:
             audio = result.stdout
