@@ -156,7 +156,7 @@
 
 @push('scripts')
 <script src="/js/farast-reader.js?v=20261108keyboard1"></script>
-<script src="/js/farast-reader-audio.js?v=20261108precomputed1" defer></script>
+<script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
-<script src="/js/farast-reader-document-audio.js?v=20261108reader-audio2" defer></script>
+<script src="/js/farast-reader-document-audio.js?v=20261108readiness1" defer></script>
 @endpush
