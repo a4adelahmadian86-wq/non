@@ -99,10 +99,12 @@ class AdminStoreController extends Controller
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
+        $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
+            && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+        $hasFullReaderAsset = $product->previews->contains(fn ($preview) => $preview->is_active && $preview->access_level === 'full');
         $contentReady = $product->type === 'course'
             ? ($product->course?->sections()->whereHas('lessons', fn ($query) => $query->publishable())->exists() ?? false)
-            : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
-                && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+            : ($hasSafePrimaryFile && (($product->download_policy ?? 'signed') !== 'reader_only' || $hasFullReaderAsset));
 
         $supervisorEnabled = (bool) data_get($product->metadata, 'ai_supervisor.enabled', false);
         $readiness = [
@@ -157,6 +159,10 @@ class AdminStoreController extends Controller
                         ->exists();
                     if (! $hasSafePrimaryFile) {
                         throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
+                    }
+                    $downloadPolicy = $data['download_policy'] ?? $lockedProduct->download_policy;
+                    if ($downloadPolicy === 'reader_only' && ! $lockedProduct->previews()->where('is_active', true)->where('access_level', 'full')->exists()) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار محصول فقط‌خواندنی، ابتدا محتوای کامل را در بخش خوانشگر بارگذاری کنید.']);
                     }
                 }
                 if (! $lockedProduct->published_at && empty($data['published_at'])) {
