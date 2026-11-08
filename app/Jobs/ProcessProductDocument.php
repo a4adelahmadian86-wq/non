@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\StoreProductDocument;
+use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -187,6 +188,10 @@ class ProcessProductDocument implements ShouldQueue
                 'processed_at' => now(),
             ]);
         });
+
+        if ($document->chunks()->exists()) {
+            GenerateProductDocumentAudio::dispatch($document->id);
+        }
     }
 
     public function failed(Throwable $exception): void
