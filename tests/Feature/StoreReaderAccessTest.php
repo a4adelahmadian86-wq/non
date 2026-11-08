@@ -113,7 +113,7 @@ class StoreReaderAccessTest extends TestCase
         $imagePath = tempnam(sys_get_temp_dir(), 'farast-docx-image-');
         file_put_contents(
             $imagePath,
-            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9b8AAAAASUVORK5CYII=', true)
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGMUiVrAwMDAxMDAwMDAAAAMRgESCxsD7wAAAABJRU5ErkJggg==', true)
         );
         $document = new \PhpOffice\PhpWord\PhpWord();
         $section = $document->addSection(['orientation' => 'landscape']);
