@@ -581,7 +581,10 @@ class StoreXlsxPreviewRenderer
         $heights = $sheetData['heights'] ?? [];
         $merges = $sheetData['merges'] ?? [];
         $covered = $sheetData['covered'] ?? [];
-        $maxColumn = max(1, max(array_map(fn ($row) => max(array_keys($row)), $rows)));
+        $maxColumn = 1;
+        foreach ($rows as $row) {
+            if ($row !== []) $maxColumn = max($maxColumn, max(array_keys($row)));
+        }
         foreach ($merges as $key => $merge) {
             [, $startColumn] = array_map('intval', explode(':', $key, 2));
             $maxColumn = max($maxColumn, $startColumn + (int) ($merge['colspan'] ?? 1) - 1);
