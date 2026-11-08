@@ -6,6 +6,8 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
 use App\Models\StoreLibraryItem;
+use App\Models\StoreProductFile;
+use App\Models\StoreProductDocument;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
