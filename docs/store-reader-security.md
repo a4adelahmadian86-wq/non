@@ -31,13 +31,13 @@ Do not describe the reader as impossible to copy or download. Stronger PDF prote
 
 ## Automated verification status
 
-The reader branch's latest completed CI run before the current toolbar-regression assertion passed:
+Latest completed CI for the reader branch (commit `ce387de2a35c25071a27b57cb2af75c9dcebd7ab`, run [42407030093](https://github.com/a4adelahmadian86-wq/non/actions/runs/42407030093)) passed:
 
-- Laravel suite: **302 tests passed, 1,470 assertions**.
-- Playwright suite: **56 browser tests passed**, including a real PDF.js page render, account watermark, text search, page controls, zoom, rotation, theme, sidebar, and sandboxed Excel iframe checks.
-- PHP migrations, route listing, Blade view cache, JavaScript syntax checks, and the voice-stream smoke steps also completed successfully.
+- Laravel suite: **313 tests passed, 1,526 assertions**.
+- Playwright suite: **56 browser tests passed**, including a PDF.js page render from a generated PDF fixture, account watermark, text search, page controls, zoom, rotation, theme, sidebar, continuous-scroll toolbar availability, and sandboxed Excel iframe checks.
+- PHP migrations, route listing, Blade view cache, JavaScript syntax checks, and the configured voice-stream smoke steps completed successfully. The optional Sherpa workflow job was skipped for this pull-request event.
 
-The continuous-scroll toolbar regression assertion is being added and must pass in the next CI run before this checklist can be considered green again. These automated fixtures do not replace manual visual QA against representative customer documents and real mobile/desktop browsers.
+These tests establish automated behavior against controlled fixtures. They do **not** replace manual visual QA against representative customer documents and real mobile/desktop browsers; no such manual QA is claimed here.
 
 ## Release checklist
 
