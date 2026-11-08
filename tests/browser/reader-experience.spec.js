@@ -210,7 +210,7 @@ test.describe('FARAST sample reader interactions', () => {
     expect(watermarkPixels).toBeGreaterThan(50);
     const textSpan = root.locator('.farast-pdf-text-layer span').first();
     await expect(textSpan).toBeVisible();
-    await expect(textSpan).toHaveCSS('user-select', 'none');
+    await expect(textSpan).toHaveCSS('user-select', 'text');
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
@@ -448,6 +448,57 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(page.locator('[data-audio-progress]')).toContainText('بخش');
     await expect(page.locator('.reader-audio-word')).toHaveCount(3);
     await expect(page.locator('.reader-audio-word').first()).toHaveAttribute('aria-label', 'رفتن به بخش سلام');
+  });
+
+
+  test('granular speech sends the exact clicked word and selected phrase with page locators', async ({ page }) => {
+    const requests = [];
+    await page.goto('/');
+    await page.setContent(`
+      <meta name="csrf-token" content="reader-test-token">
+      <section class="farast-reader" data-reader-root data-reader-speech-url="/store/product/1/reader/speech">
+        <div data-audio-status aria-live="polite"></div>
+        <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="4">
+          <p class="reader-document-paragraph" tabindex="0">
+            <span class="reader-document-sentence" tabindex="0">
+              <span class="reader-document-word" role="button" tabindex="0" data-word="سلام" data-page="4">سلام</span>
+              <span> </span>
+              <span class="reader-document-word" role="button" tabindex="0" data-word="جهان" data-page="4">جهان</span>
+              <span>.</span>
+            </span>
+          </p>
+        </article>
+      </section>
+    `);
+    await page.route('**/store/product/1/reader/speech', async route => {
+      requests.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.from('RIFF0000WAVE') });
+    });
+    await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+    await page.locator('.reader-document-word').first().click();
+    await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0]).toEqual({ text: 'سلام', page: 4 });
+
+    await page.locator('.reader-document-sentence').click({ position: { x: 2, y: 2 } });
+    await expect.poll(() => requests.length).toBe(2);
+    expect(requests[1].page).toBe(4);
+    expect(requests[1].text).toContain('سلام');
+    expect(requests[1].text).toContain('جهان');
+
+    await page.evaluate(() => {
+      const words = document.querySelectorAll('.reader-document-word');
+      const range = document.createRange();
+      range.setStart(words[0].firstChild, 0);
+      range.setEnd(words[1].firstChild, words[1].textContent.length);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.querySelector('[data-reader-root]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    });
+    await expect.poll(() => requests.length).toBe(3);
+    expect(requests[2].page).toBe(4);
+    expect(requests[2].text).toContain('سلام');
+    expect(requests[2].text).toContain('جهان');
   });
 
 });
