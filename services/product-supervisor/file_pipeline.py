@@ -787,9 +787,9 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
 
     source_content = text
     if metadata.get("detected_file_type") == "pdf":
-        page_segments = text.split("\\f")
-        source_content = "\\n\\n".join(
-            f"[صفحه {page_number}]\\n{segment}"
+        page_segments = text.split("\f")
+        source_content = "\n\n".join(
+            f"[صفحه {page_number}]\n{segment}"
             for page_number, segment in enumerate(page_segments, start=1)
             if segment.strip()
         )
