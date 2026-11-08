@@ -695,17 +695,22 @@ class AdminStoreController extends Controller
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
     {
         abort_unless($preview->product_id === $product->id, 404);
-        [$disk, $path] = DB::transaction(function () use ($product, $preview) {
+        [$disk, $path, $audioDisk, $audioPath] = DB::transaction(function () use ($product, $preview) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             $lockedPreview = $lockedProduct->previews()->whereKey($preview->id)->lockForUpdate()->firstOrFail();
             $this->audit('store.product.preview_deleted', $lockedProduct, ['preview_id' => $lockedPreview->id]);
             $disk = $lockedPreview->disk ?: 'private';
             $path = $lockedPreview->path;
+            $audioDisk = $lockedPreview->audio_disk ?: 'private';
+            $audioPath = $lockedPreview->audio_path;
             $lockedPreview->delete();
 
-            return [$disk, $path];
+            return [$disk, $path, $audioDisk, $audioPath];
         });
         Storage::disk($disk)->delete($path);
+        if ($audioPath) {
+            Storage::disk($audioDisk)->delete($audioPath);
+        }
 
         return back()->with('status', 'پیش‌نمایش حذف شد.');
     }
