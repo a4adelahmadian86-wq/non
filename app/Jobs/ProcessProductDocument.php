@@ -135,30 +135,37 @@ class ProcessProductDocument implements ShouldQueue
                     $sampleHash = hash('sha256', $sampleBytes);
                     $samplePath = 'store/products/'.$locked->product_id.'/artifacts/'.$locked->source_sha256.'/sample-v1.pdf';
                     $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
-                    if (! $existingSample || ! hash_equals((string) $existingSample->sha256, $sampleHash) || ! Storage::disk('private')->exists($existingSample->path)) {
-                        if (Storage::disk('private')->put($samplePath, $sampleBytes)) {
-                            $locked->artifacts()->updateOrCreate(
-                                ['artifact_type' => 'sample_pdf', 'version' => 1],
-                                [
-                                    'disk' => 'private',
-                                    'path' => $samplePath,
-                                    'mime' => 'application/pdf',
-                                    'size_bytes' => strlen($sampleBytes),
-                                    'sha256' => $sampleHash,
-                                    'metadata_json' => [
-                                        'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                                        'source_sha256' => $locked->source_sha256,
-                                        'generated_once' => true,
-                                    ],
-                                ]
-                            );
-                        }
+                    $sampleDisk = Storage::disk($existingSample?->disk ?: 'private');
+                    if ($existingSample && $sampleDisk->exists($existingSample->path)) {
+                        $structure['sample'] = [
+                            'artifact_type' => 'sample_pdf',
+                            'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
+                            'sha256' => $existingSample->sha256,
+                            'generated_once' => true,
+                        ];
+                    } elseif (Storage::disk('private')->put($samplePath, $sampleBytes)) {
+                        $artifact = $locked->artifacts()->updateOrCreate(
+                            ['artifact_type' => 'sample_pdf', 'version' => 1],
+                            [
+                                'disk' => 'private',
+                                'path' => $samplePath,
+                                'mime' => 'application/pdf',
+                                'size_bytes' => strlen($sampleBytes),
+                                'sha256' => $sampleHash,
+                                'metadata_json' => [
+                                    'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                                    'source_sha256' => $locked->source_sha256,
+                                    'generated_once' => true,
+                                ],
+                            ]
+                        );
+                        $structure['sample'] = [
+                            'artifact_type' => 'sample_pdf',
+                            'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
+                            'sha256' => $artifact->sha256,
+                            'generated_once' => true,
+                        ];
                     }
-                    $structure['sample'] = [
-                        'artifact_type' => 'sample_pdf',
-                        'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                        'sha256' => $sampleHash,
-                    ];
                 }
             }
 
