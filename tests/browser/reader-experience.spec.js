@@ -692,9 +692,9 @@ test('document word sentence and page controls seek within the one stored full n
 
   const words = page.locator('.reader-document-word');
   await words.nth(0).click();
-  await expect.poll(() => page.evaluate(() => window.__documentAudio?.currentTime ?? document.querySelector('[data-reader-root]').__audio?.currentTime ?? 0)).toBe(0.1);
+  await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBe(0.1);
   const stoppedWord = await page.evaluate(() => {
-    const audio = document.querySelector('[data-reader-root]').__farastAudio;
+    const audio = window.FarastDocumentAudioReader.audio;
     if (audio) { audio.currentTime = 0.3; audio.dispatchEvent(new Event('timeupdate')); return { paused: audio.paused, time: audio.currentTime }; }
     return { paused: true, time: 0.3 };
   });
@@ -702,7 +702,7 @@ test('document word sentence and page controls seek within the one stored full n
   expect(stoppedWord.time).toBe(0.3);
 
   await page.locator('.reader-document-sentence').click();
-  await expect.poll(() => page.evaluate(() => window.__farastAudio?.currentTime ?? 0)).toBe(0.1);
+  await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBe(0.1);
   const stoppedSentence = await page.evaluate(() => {
     const audio = window.__farastAudio;
     audio.currentTime = 0.7;
@@ -713,7 +713,7 @@ test('document word sentence and page controls seek within the one stored full n
   expect(stoppedSentence.time).toBe(0.7);
 
   await page.locator('.farast-reader-page-item').click({ position: { x: 10, y: 180 } });
-  await expect.poll(() => page.evaluate(() => window.__farastAudio.currentTime)).toBe(0.1);
+  await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBe(0.1);
   expect(await page.evaluate(() => window.__documentSpeechRequests)).toBe(0);
 });
 
