@@ -448,7 +448,15 @@
         const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
         const sentenceText = (before.slice(left < 0 ? 0 : left) + (right?.[0] || '')).trim();
         const page = Number(pdfLayer.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || root.querySelector('#reader-page-number')?.value || 1);
-        const range = findTextRange(sentenceText, page);
+        let prefixText = '';
+        try {
+          const prefixRange = document.createRange();
+          prefixRange.selectNodeContents(pdfLayer);
+          prefixRange.setEnd(node, offset);
+          prefixText = prefixRange.toString();
+        } catch (_) { prefixText = ''; }
+        const occurrence = sequenceOccurrenceBefore(prefixText, sentenceText);
+        const range = findTextRange(sentenceText, page, occurrence);
         if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن جملهٔ انتخاب‌شده'); return; }
       }
     }
