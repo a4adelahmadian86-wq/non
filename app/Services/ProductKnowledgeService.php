@@ -17,7 +17,7 @@ class ProductKnowledgeService
             : StoreProduct::query()->findOrFail($product);
 
         $maxCharacters = max(1000, min(120000, $maxCharacters));
-        $product->loadMissing(['files.document.chunks', 'files.document.artifacts']);
+        $product->loadMissing(['files.document.chunks', 'files.document.artifacts', 'files.document.facts']);
 
         $sources = [];
         $remaining = $maxCharacters;
@@ -64,6 +64,37 @@ class ProductKnowledgeService
                 $remaining -= mb_strlen($text);
             }
 
+            $facts = [];
+            foreach ($document->facts as $fact) {
+                if (! hash_equals((string) $file->sha256, (string) $fact->source_sha256)
+                    || $fact->verification_status !== 'evidence_backed') {
+                    continue;
+                }
+                $factLocator = (array) ($fact->locator_json ?? []);
+                if ($sampleOnly) {
+                    $factPages = array_filter([
+                        isset($factLocator['page']) ? (int) $factLocator['page'] : null,
+                        ...(is_array($factLocator['pages'] ?? null) ? array_map('intval', $factLocator['pages']) : []),
+                    ], static fn ($page) => is_int($page) && $page > 0);
+                    if (array_intersect($samplePages, $factPages) === []) {
+                        continue;
+                    }
+                }
+                $factPayload = [
+                    'type' => (string) $fact->fact_type,
+                    'key' => (string) $fact->fact_key,
+                    'value' => (string) $fact->fact_value,
+                    'evidence' => (string) $fact->evidence_text,
+                    'locator' => $factLocator,
+                    'verification_status' => 'evidence_backed',
+                ];
+                $cost = mb_strlen($factPayload['key']) + mb_strlen($factPayload['value']) + mb_strlen($factPayload['evidence']);
+                if ($cost > $remaining) break;
+                $facts[] = $factPayload;
+                $remaining -= $cost;
+                if (count($facts) >= 60) break;
+            }
+
             $review = (array) data_get($document->structure_json, 'ai_review', []);
             $completeness = (array) data_get($document->structure_json, 'completeness', []);
             $sources[] = [
@@ -82,6 +113,8 @@ class ProductKnowledgeService
                 'character_count' => $document->character_count,
                 'summary' => $sampleOnly ? null : data_get($review, 'summary'),
                 'findings' => $sampleOnly ? [] : data_get($review, 'findings', []),
+                'facts' => $facts,
+                'fact_count' => count($facts),
                 'chunks' => $chunks,
                 'audio' => $sampleOnly ? null : data_get($document->structure_json, 'audio.status'),
                 'sample_pages' => $samplePages,
@@ -113,7 +146,7 @@ class ProductKnowledgeService
             'remaining_character_budget' => $remaining,
             'access_scope' => $sampleOnly ? 'public_sample_only' : 'purchased_full_document',
             'sources' => $sources,
-            'grounding_instruction' => 'Use only the supplied product record and source-located chunks. Do not infer missing pages, features, lessons, specifications, or benefits. If evidence is absent or processing is incomplete, state that it is unknown.',
+            'grounding_instruction' => 'Use only the supplied product record, evidence-backed facts, and source-located chunks. Every factual claim must be supported by its exact evidence and locator. Do not infer missing pages, features, lessons, specifications, or benefits. If evidence is absent or processing is incomplete, state that it is unknown.',
         ];
     }
 }
