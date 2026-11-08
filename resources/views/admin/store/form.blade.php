@@ -235,12 +235,12 @@
           data-cancel-url-template="{{ route('admin.store.files.cancel',[$product,'__INGESTION__']) }}"
           data-status-url-template="{{ route('admin.store.files.processing',[$product,'__FILE__']) }}">
           <input type="hidden" data-ingestion-csrf value="{{ csrf_token() }}">
-          <input type="file" data-ingestion-input multiple hidden accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
+          <input type="file" data-ingestion-input multiple hidden accept=".pdf,.zip,.tar,.tar.gz,.tar.bz2,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
           <div class="product-ingestion-dropzone" data-ingestion-pick tabindex="0" role="button" aria-label="انتخاب یا رها کردن فایل محصول">
             <span class="product-ingestion-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
             <strong>فایل را اینجا رها کنید یا برای انتخاب کلیک کنید</strong>
             <span>می‌توانید فایل را روی هر قسمت از همین صفحه بکشید و رها کنید.</span>
-            <small>PDF، Word، Excel، PowerPoint، تصویر، صوت، ویدئو، ZIP و متن · حداکثر ۵۰ مگابایت برای هر فایل</small>
+            <small>PDF، Word، Excel، PowerPoint، تصویر، صوت، ویدئو، ZIP، TAR، TAR.GZ، TAR.BZ2 و متن · حداکثر ۵۰ مگابایت برای هر فایل</small>
           </div>
           <label class="product-ingestion-primary"><input type="checkbox" data-ingestion-primary checked> اولین فایل، فایل اصلی محصول باشد</label>
           <div class="product-ingestion-queue" data-ingestion-queue aria-live="polite"></div>
