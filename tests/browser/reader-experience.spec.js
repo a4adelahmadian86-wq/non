@@ -1239,3 +1239,54 @@ test('renders protected spreadsheet sections as safe responsive tables', async (
   await expect(table.locator('tbody tr').nth(1).locator('td').nth(1)).toHaveText('<img src=x onerror=alert(1)>');
   await expect(page.locator('.farast-reader-sheet-table img')).toHaveCount(0);
 });
+
+
+test('personal reading light, font preferences, highlights and annotations stay in browser storage', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="personal-tools-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>این متن برای هایلایت و حاشیه نویسی آزمایشی است.</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+
+  await page.locator('[data-reading-light]').click();
+  await expect(page.locator('[data-reading-light]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-reader-font]').selectOption('serif');
+  await page.locator('[data-reader-font-size]').fill('125');
+  await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font', 'serif');
+
+  await page.evaluate(() => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const range = document.createRange();
+    range.setStart(text, 4);
+    range.setEnd(text, 8);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await page.locator('[data-reader-highlight]').click();
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText('متن');
+
+  await page.evaluate(() => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const range = document.createRange();
+    range.setStart(text, 9);
+    range.setEnd(text, 24);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  page.once('dialog', dialog => dialog.accept('یادداشت محلی'));
+  await page.locator('[data-reader-note]').click();
+  await expect(page.locator('.farast-reader-note')).toContainText('یادداشت محلی');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:personal-tools-fixture')));
+  expect(saved.light).toBe(true);
+  expect(saved.font).toBe('serif');
+  expect(saved.size).toBe(125);
+  expect(saved.highlights).toHaveLength(1);
+  expect(saved.notes).toHaveLength(1);
+});
