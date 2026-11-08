@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\AiInteraction;
 use App\Models\SiteSetting;
+use App\Models\StoreCategory;
+use App\Models\StoreProduct;
+use App\Services\ProductKnowledgeService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
