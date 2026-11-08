@@ -19,7 +19,7 @@ class FilePipelineTests(unittest.TestCase):
         result = inspect_file("عنوان محصول\nشرح محصول".encode(), "description.txt")
         self.assertEqual(result.detected_type, "text")
         self.assertIn("عنوان محصول", result.extracted_text)
-        self.assertEqual(result.content_chunks[0]["locator"], {"line": 1})
+        self.assertEqual(result.content_chunks[0]["locator"], {"line_start": 1, "line_end": 2})
         self.assertEqual(result.content_chunks[0]["content_text"], "عنوان محصول")
         self.assertEqual(result.content_chunks[1]["locator"], {"line": 2})
         self.assertEqual(result.content_chunks[1]["chunk_type"], "text_line")
