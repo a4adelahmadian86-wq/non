@@ -129,7 +129,23 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
     await expect.poll(() => canvas.evaluate(element => element.width)).toBeGreaterThan(0);
     await expect.poll(() => canvas.evaluate(element => element.height)).toBeGreaterThan(0);
-    await expect(root.locator('.farast-pdf-text-layer span').first()).toBeVisible();
+    // The watermark must be painted into the page bitmap, not merely placed as removable HTML.
+    const watermarkPixels = await canvas.evaluate(element => {
+      const context = element.getContext('2d');
+      const { data, width, height } = context.getImageData(0, 0, element.width, element.height);
+      let darkPixels = 0;
+      for (let y = Math.floor(height * 0.45); y < height; y += 3) {
+        for (let x = 0; x < width; x += 3) {
+          const offset = (y * width + x) * 4;
+          if (data[offset] < 220 && data[offset + 1] < 220 && data[offset + 2] < 220) darkPixels++;
+        }
+      }
+      return darkPixels;
+    });
+    expect(watermarkPixels).toBeGreaterThan(10);
+    const textSpan = root.locator('.farast-pdf-text-layer span').first();
+    await expect(textSpan).toBeVisible();
+    await expect(textSpan).toHaveCSS('user-select', 'none');
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
