@@ -423,7 +423,7 @@ class AdminStoreController extends Controller
             if ($extension === 'xlsx') {
                 $preparedBytes = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
                     $sourceBytes,
-                    '',
+                    '__FARAST_READER_IDENTITY__',
                     $accessLevel === 'sample'
                 );
             }
