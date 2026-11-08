@@ -460,7 +460,14 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
                 for row_index, row in enumerate(element.rows[:1000], start=1):
                     if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
                         break
-                    cells = [cell.text.strip()[:500] for cell in row.cells[:50]]
+                    cells: list[str] = []
+                    cell_budget = 3000
+                    for cell in row.cells[:50]:
+                        if cell_budget <= 0:
+                            break
+                        value = cell.text.strip()[:min(500, cell_budget)]
+                        cells.append(value)
+                        cell_budget -= len(value)
                     if not any(cells):
                         continue
                     add_block(
