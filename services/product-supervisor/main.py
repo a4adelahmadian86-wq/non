@@ -234,6 +234,54 @@ async def review_product_file(
                 "recommendation": str(item.get("recommendation") or "")[:500],
             })
 
+    safe_facts: list[dict[str, Any]] = []
+    raw_facts = model_review.get("facts", [])
+    source_chunks = []
+    for chunk in (inspection.content_chunks or [])[:300]:
+        if not isinstance(chunk, dict):
+            continue
+        source_text, _ = redact_sensitive_content(str(chunk.get("content_text") or ""))
+        if source_text.strip():
+            source_chunks.append({
+                "locator": chunk.get("locator") if isinstance(chunk.get("locator"), dict) else {},
+                "content_text": source_text[:1800],
+            })
+
+    def normalize_fact_evidence(value: str) -> str:
+        return re.sub(r"\s+", " ", value).strip().casefold()
+
+    if isinstance(raw_facts, list):
+        allowed_fact_types = {"definition", "concept", "quantity", "date", "feature", "requirement", "warning", "other"}
+        for item in raw_facts[:100]:
+            if not isinstance(item, dict):
+                continue
+            fact_type = str(item.get("fact_type") or "other").strip().lower()
+            fact_type = fact_type if fact_type in allowed_fact_types else "other"
+            fact_key, _ = redact_sensitive_content(str(item.get("fact_key") or ""))
+            fact_value, _ = redact_sensitive_content(str(item.get("fact_value") or ""))
+            evidence, _ = redact_sensitive_content(str(item.get("evidence") or ""))
+            fact_key = fact_key.strip()[:160]
+            fact_value = fact_value.strip()[:1000]
+            evidence = evidence.strip()[:700]
+            normalized_evidence = normalize_fact_evidence(evidence)
+            if not fact_key or not fact_value or len(normalized_evidence) < 6:
+                continue
+            matched = next(
+                (chunk for chunk in source_chunks
+                 if normalized_evidence in normalize_fact_evidence(chunk["content_text"])),
+                None,
+            )
+            if matched is None:
+                continue
+            safe_facts.append({
+                "fact_type": fact_type,
+                "fact_key": fact_key,
+                "fact_value": fact_value,
+                "evidence_text": evidence,
+                "locator": matched["locator"],
+                "verification_status": "evidence_backed",
+            })
+
     sample_page_numbers: list[int] = []
     sample_pdf_base64 = None
     if allow_sample_generation and inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
@@ -308,6 +356,7 @@ async def review_product_file(
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
+        "facts": safe_facts[:100],
         "warnings": [str(item)[:400] for item in warnings[:20]],
         "redacted_sensitive_items": redaction_count,
         "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("structural_checks_passed" if inspection.antivirus_status == "clean" or inspection.upstream_scan_status == "structural_checks_passed" else ("upstream_scan_verified" if inspection.upstream_scan_status == "clean" else "manual_scan_required")),
