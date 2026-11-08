@@ -662,7 +662,7 @@ test('long paragraph and phrase speech is split into bounded chunks without trun
   await page.locator('.reader-document-paragraph').click();
   await expect.poll(() => requests.length).toBe(2);
   expect(requests.every(request => request.page === 6 && request.text.length <= 2000)).toBe(true);
-  expect(requests.map(request => request.text).join('')).toContain('واژه');
+  expect(requests.map(request => request.text).join(' ').replace(/\\s+/g, ' ').trim()).toBe(longText.trim());
 });
 
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
