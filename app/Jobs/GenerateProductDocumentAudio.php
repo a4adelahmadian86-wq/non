@@ -30,7 +30,8 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 
     public function __construct(public readonly int $documentId)
     {
-        $this->onQueue('documents-audio');
+        // Reuse the existing shared-hosting database worker; no extra queue consumer is required.
+        $this->onQueue('default');
     }
 
     public function handle(ProductDocumentAudioService $audioService): void
