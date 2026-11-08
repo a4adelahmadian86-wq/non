@@ -31,7 +31,7 @@
     const icon = button?.querySelector('i');
     const playing = Boolean(activeAudio && !activeAudio.paused);
     if (icon) icon.className = playing ? 'fa-solid fa-pause' : 'fa-solid fa-play';
-    if (button) button.setAttribute('aria-label', playing ? 'مکث صدای انتخاب‌شده' : 'ادامه صدای انتخاب‌شده');
+    if (button) button.setAttribute('aria-label', !activeAudio ? 'پخش صوت سند' : (playing ? 'مکث صدای انتخاب‌شده' : 'ادامه صدای انتخاب‌شده'));
     if (activeAudio) {
       const current = root.querySelector('[data-audio-current]');
       const duration = root.querySelector('[data-audio-duration]');
