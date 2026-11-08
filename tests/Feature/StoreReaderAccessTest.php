@@ -266,12 +266,21 @@ class StoreReaderAccessTest extends TestCase
             'has_extracted_text' => true,
         ]);
 
+        config([
+            'services.document_audio.url' => 'https://document-audio.example.test/synthesize',
+            'services.document_audio.token' => 'reader-test-token',
+        ]);
+        \Illuminate\Support\Facades\Queue::fake();
+
         $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readerResponse->assertOk()
             ->assertSee('data-reader-mode="document"', false)
+            ->assertSee('data-reader-audio-status="pending"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
             ->assertSee(route('store.reader.page', [$product, 1]), false)
             ->assertDontSee(route('store.preview', $full), false)
             ->assertDontSee($originalBytes, false);
+
 
         $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
         $pageResponse->assertOk()
@@ -306,6 +315,12 @@ class StoreReaderAccessTest extends TestCase
             'sha256' => hash('sha256', $audioBytes),
             'metadata_json' => ['source_sha256' => $document->source_sha256, 'duration_ms' => 1000],
         ]);
+        $headResponse = $this->actingAs($user)
+            ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3');
+        $headResponse->assertOk()
+            ->assertHeader('Content-Type', 'audio/wav')
+            ->assertHeader('Content-Length', '10');
+
         $audioResponse = $this->actingAs($user)
             ->withHeader('Range', 'bytes=2-5')
             ->get(route('store.reader.audio', [$product, $document]));

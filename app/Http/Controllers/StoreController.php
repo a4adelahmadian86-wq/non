@@ -339,6 +339,8 @@ class StoreController extends Controller
         $readerDocument = null;
         $readerAudioUrl = null;
         $readerAudioTiming = [];
+        $readerAudioPollUrl = null;
+        $readerAudioStatus = '';
         $previews = $samplePreviews;
 
         if ($hasReaderEntitlement && $product->type === 'digital_file') {
@@ -367,10 +369,16 @@ class StoreController extends Controller
                     $audioArtifactReady = (bool) $audioArtifact;
 
                     $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
-                    if ($audioNeedsUpgrade
-                        && filled(config('services.document_audio.url'))
-                        && filled(config('services.document_audio.token'))) {
+                    $documentAudioConfigured = filled(config('services.document_audio.url'))
+                        && filled(config('services.document_audio.token'));
+                    if ($audioNeedsUpgrade && $documentAudioConfigured) {
                         GenerateProductDocumentAudio::dispatch((int) $document->id)->afterResponse();
+                        $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
+                        $readerAudioStatus = $audioArtifactReady ? 'upgrading' : 'pending';
+                    } elseif (! $audioArtifactReady) {
+                        $readerAudioStatus = 'unavailable';
+                    } else {
+                        $readerAudioStatus = 'ready';
                     }
 
                     if ($audioArtifactReady) {
@@ -437,7 +445,9 @@ class StoreController extends Controller
                 'readerMode',
                 'readerDocument',
                 'readerAudioUrl',
-                'readerAudioTiming'
+                'readerAudioTiming',
+                'readerAudioPollUrl',
+                'readerAudioStatus'
             ))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
@@ -607,9 +617,6 @@ class StoreController extends Controller
         }
 
         $length = max(0, $end - $start + 1);
-        $stream = $disk->readStream($artifact->path);
-        abort_unless(is_resource($stream), 404);
-
         $headers = [
             'Content-Type' => $artifact->mime ?: 'audio/wav',
             'Content-Length' => (string) $length,
@@ -622,6 +629,14 @@ class StoreController extends Controller
             'Cross-Origin-Resource-Policy' => 'same-origin',
         ];
         if ($status === 206) $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+
+        // Readiness polling uses HEAD: return the same protected metadata without opening the WAV.
+        if (request()->isMethod('HEAD')) {
+            return response('', $status, $headers);
+        }
+
+        $stream = $disk->readStream($artifact->path);
+        abort_unless(is_resource($stream), 404);
 
         return response()->stream(function () use ($stream, $start, $length) {
             if ($start > 0) fseek($stream, $start);
