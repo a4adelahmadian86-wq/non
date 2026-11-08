@@ -319,4 +319,17 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             ->assertDontSee('class="store-primary-btn library-download"', false);
     }
 
+
+    public function test_empty_library_explains_how_to_get_started(): void
+    {
+        $user = $this->makeUser('09123456782');
+
+        $this->actingAs($user)
+            ->get(route('library'))
+            ->assertOk()
+            ->assertSee('کتابخانه شما هنوز خالی است')
+            ->assertSee('کشف محصولات فروشگاه')
+            ->assertDontSee('library-download');
+    }
+
 }
