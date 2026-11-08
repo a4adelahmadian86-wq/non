@@ -11,6 +11,8 @@ services:
     envVars:
       - key: SUPERVISOR_API_TOKEN
         generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.12.11"
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
