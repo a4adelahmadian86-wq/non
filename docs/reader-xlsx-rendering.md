@@ -19,10 +19,12 @@ Only validated formatting values are translated into CSS. Workbook-provided HTML
 
 - Formula expressions are not evaluated; only cached cell values are displayed.
 - Hidden worksheets are omitted.
+- Sample-level workbooks are reduced at upload time to the first visible worksheet and its first 50 rows; full-level workbooks retain all supported visible sheets and up to 2,000 rows per sheet.
+- The prepared HTML stores a watermark placeholder. The private preview response injects the current viewer's escaped account identifier or guest IP on every visit, so one viewer's identity is never baked into the shared prepared snapshot.
 - External workbook relationships are rejected.
 - The renderer limits archive entries, expanded archive size, sheets, rows, columns, cells and XML part sizes.
 - Advanced workbook features such as charts, embedded images, pivot tables, conditional formatting and complete number-format fidelity are not yet reproduced.
 
 ## Validation
 
-The Laravel reader feature test builds a minimal XLSX archive with a styled cell and verifies that its safe formatting is present in the prepared HTML while cached formula values remain inert.
+The Laravel reader feature tests build minimal XLSX archives to verify safe formatting, inert cached formula values, sample sheet/row isolation, and viewer-specific watermark injection.

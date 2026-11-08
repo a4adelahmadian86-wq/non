@@ -337,8 +337,8 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Disposition', 'inline; filename="farast-workbook-preview.html"')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
 
-        $streamedHtml = $response->streamedContent();
-        $this->assertStringNotContainsString('09123456789', $streamedHtml);
+        $streamedHtml = $response->getContent();
+        $this->assertStringContainsString('09123456789', $streamedHtml);
         $this->assertStringContainsString('گزارش', $streamedHtml);
         $this->assertStringContainsString('42', $streamedHtml);
         $this->assertStringContainsString('font-weight:700;color:#1F4E78;background-color:#D9EAF7;text-align:center;vertical-align:middle;white-space:normal', $streamedHtml);
@@ -356,7 +356,8 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringNotContainsString('<script', $streamedHtml);
 
         $this->assertStringContainsString("style-src 'unsafe-inline'", (string) $response->headers->get('Content-Security-Policy'));
-        $this->assertSame($preparedHtml, $streamedHtml);
+        $this->assertNotSame($preparedHtml, $streamedHtml);
+        $this->assertStringContainsString('09123456789', $streamedHtml);
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 
@@ -534,5 +535,45 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('سلام')
             ->assertDontSee('store/reader-audio/sample/narration.mp3');
     }
+
+
+    public function test_workbook_preview_injects_a_fresh_watermark_for_each_viewer(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $html = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
+            $this->makeXlsxBytes(),
+            '__FARAST_READER_IDENTITY__',
+            true
+        );
+        $path = 'store/previews/'.$product->id.'/workbook-sample.html';
+        Storage::disk('private')->put($path, $html);
+        $preview = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => $path,
+            'mime' => 'text/html',
+            'page_number' => 2,
+            'kind' => 'html',
+            'access_level' => 'sample',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+
+        $guestIp = '203.0.113.77';
+        $guestResponse = $this->withServerVariables(['REMOTE_ADDR' => $guestIp])
+            ->get(route('store.preview', $preview));
+        $guestResponse->assertOk()
+            ->assertSee($guestIp)
+            ->assertDontSee('__FARAST_READER_IDENTITY__');
+
+        $user = $this->makeReaderUser();
+        $memberResponse = $this->actingAs($user)->get(route('store.preview', $preview));
+        $memberResponse->assertOk()
+            ->assertSee('09123456789')
+            ->assertDontSee($guestIp)
+            ->assertDontSee('__FARAST_READER_IDENTITY__');
+    }
+
 
 }

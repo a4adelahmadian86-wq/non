@@ -175,7 +175,33 @@ class StoreController extends Controller
             $headers['Content-Type'] = 'text/html; charset=UTF-8';
             $headers['Content-Disposition'] = 'inline; filename="farast-workbook-preview.html"';
             $headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
-            return $disk->response($preview->path, null, $headers);
+
+            $html = $disk->get($preview->path);
+            abort_unless(is_string($html), 404);
+            $user = request()->user();
+            $identity = $user
+                ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
+                : (request()->ip() ?: 'کاربر مهمان');
+            $escapedIdentity = htmlspecialchars($identity, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            if (str_contains($html, '__FARAST_READER_IDENTITY__')) {
+                $html = str_replace('__FARAST_READER_IDENTITY__', $escapedIdentity, $html);
+            } else {
+                // Backfill the dynamic mark for workbooks prepared before the placeholder was introduced.
+                $marks = '';
+                for ($index = 0; $index < 12; $index++) {
+                    $top = 8 + (($index % 4) * 25);
+                    $left = 3 + (intdiv($index, 4) * 32);
+                    $marks .= '<span style="top:'.$top.'%;left:'.$left.'%">'.$escapedIdentity.' · پیش‌نمایش فراست</span>';
+                }
+                $emptyWatermark = '<div class="watermark"></div>';
+                if (str_contains($html, $emptyWatermark)) {
+                    $html = str_replace($emptyWatermark, '<div class="watermark">'.$marks.'</div>', $html);
+                } elseif (str_contains($html, '</body>')) {
+                    $html = str_replace('</body>', '<div class="watermark">'.$marks.'</div></body>', $html);
+                }
+            }
+
+            return response($html, 200, $headers);
         }
 
         abort_unless(!in_array($kind, ['docx', 'xlsx'], true), 409, 'این پیش‌نمایش هنوز آماده‌سازی نشده است؛ نسخهٔ آماده را دوباره بارگذاری کنید.');
