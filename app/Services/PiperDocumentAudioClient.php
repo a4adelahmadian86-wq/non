@@ -49,7 +49,9 @@ class PiperDocumentAudioClient
         }
 
         $encoded = (string) $response->header('X-Farast-Segment-Timings', '');
-        $decoded = base64_decode(strtr($encoded, '-_', '+/'), true);
+        $normalizedHeader = strtr($encoded, '-_', '+/');
+        $normalizedHeader .= str_repeat('=', (4 - strlen($normalizedHeader) % 4) % 4);
+        $decoded = base64_decode($normalizedHeader, true);
         $timings = is_string($decoded) ? json_decode($decoded, true) : null;
         $audio = $response->body();
         if (! is_array($timings) || count($timings) !== count($normalized) || ! str_starts_with($audio, 'RIFF') || substr($audio, 8, 4) !== 'WAVE') {
