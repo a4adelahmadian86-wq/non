@@ -1,16 +1,16 @@
 <?php
 
-namespace App\\Jobs;
+namespace App\Jobs;
 
-use App\\Models\\StoreDocumentAudioTrack;
-use App\\Models\\StoreDocumentRecord;
-use App\\Services\\PiperDocumentAudioClient;
-use Illuminate\\Bus\\Queueable;
-use Illuminate\\Contracts\\Queue\\ShouldQueue;
-use Illuminate\\Foundation\\Bus\\Dispatchable;
-use Illuminate\\Queue\\InteractsWithQueue;
-use Illuminate\\Queue\\SerializesModels;
-use Illuminate\\Support\\Facades\\Storage;
+use App\Models\StoreDocumentAudioTrack;
+use App\Models\StoreDocumentRecord;
+use App\Services\PiperDocumentAudioClient;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class GenerateDocumentAudioTrackJob implements ShouldQueue
@@ -73,7 +73,7 @@ class GenerateDocumentAudioTrackJob implements ShouldQueue
             $result = $tts->synthesize($segments);
             $path = 'store/document-audio/'.$document->product_id.'/'.$file->id.'-'.$document->source_sha256.'.wav';
             if (! Storage::disk('private')->put($path, $result['audio'])) {
-                throw new \\RuntimeException('document_audio_storage_failed');
+                throw new \RuntimeException('document_audio_storage_failed');
             }
 
             $lastTiming = end($result['timings']);
