@@ -63,9 +63,9 @@
           sentence.setAttribute('aria-label', 'خواندن جمله');
           sentence.dataset.readerSpeechText = sentenceText.trim();
           sentence.dataset.page = String(speechPage);
-          const parts = sentenceText.match(/[\p{L}\p{N}\p{M}]+(?:[\u200c][\p{L}\p{N}\p{M}]+)*|[^\p{L}\p{N}]+/gu) || [sentenceText];
+          const parts = sentenceText.match(/\s+|[^\s]+/gu) || [sentenceText];
           parts.forEach(part => {
-            if (/^[\p{L}\p{N}\p{M}]/u.test(part)) {
+            if (/\p{L}|\p{N}/u.test(part)) {
               const word = document.createElement('span');
               word.className = 'reader-document-word';
               word.textContent = part;
