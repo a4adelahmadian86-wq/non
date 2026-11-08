@@ -149,7 +149,7 @@ async def review_product_file(
     if inspection.image_bytes:
         if os.getenv("GROQ_API_KEY"):
             try:
-                visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg", {"title": product_title, "category": category_name, "tags": tags})
+                visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg", {"title": redact_sensitive_content(product_title)[0], "category": redact_sensitive_content(category_name or "")[0], "tags": [redact_sensitive_content(tag)[0] for tag in tags]})
                 provider_status["groq"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
                 provider_status["groq"] = "unavailable"
