@@ -123,6 +123,7 @@ class StaticFileSafetyScanner
         }
 
         $findings = [];
+        $entries = [];
         $total = 0;
         try {
             if ($zip->numFiles > self::MAX_ARCHIVE_ENTRIES) {
@@ -170,7 +171,7 @@ class StaticFileSafetyScanner
             $zip->close();
         }
 
-        return ['findings' => array_values(array_unique($findings))];
+        return ['findings' => array_values(array_unique($findings)), 'entries' => $entries ?? []];
     }
 
     private function inspectOfficeArchive(?array $archive, string $extension): void
@@ -179,8 +180,26 @@ class StaticFileSafetyScanner
             throw new RuntimeException('static_scan_office_container_invalid');
         }
 
-        // The archive is not extracted. The upload is rejected if a macro payload is present.
-        $path = func_get_arg(0);
+        $entries = $archive['entries'] ?? [];
+        $required = match ($extension) {
+            'docx' => ['[Content_Types].xml', 'word/document.xml'],
+            'xlsx' => ['[Content_Types].xml', 'xl/workbook.xml'],
+            'pptx' => ['[Content_Types].xml', 'ppt/presentation.xml'],
+            default => [],
+        };
+
+        foreach ($required as $name) {
+            if (! in_array($name, $entries, true)) {
+                throw new RuntimeException('static_scan_office_container_invalid');
+            }
+        }
+
+        foreach ($entries as $name) {
+            $lower = strtolower($name);
+            if (str_ends_with($lower, 'vbaproject.bin') || str_starts_with($lower, 'word/activex/') || str_starts_with($lower, 'xl/activex/') || str_starts_with($lower, 'ppt/activex/')) {
+                throw new RuntimeException('static_scan_office_active_content');
+            }
+        }
     }
 
     private function inspectPdf(string $path): void
