@@ -79,15 +79,20 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
 }
 
 
-function makePdfFixture() {
-  const stream = 'BT /F1 24 Tf 72 720 Td (FARAST PDF QA) Tj ET';
+function makePdfFixture(pageCount = 1) {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    '<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream',
+    '<< /Type /Pages /Kids [' + Array.from({ length: pageCount }, (_, index) => (3 + index * 3) + ' 0 R').join(' ') + '] /Count ' + pageCount + ' >>',
   ];
+  for (let page = 1; page <= pageCount; page++) {
+    const pageId = 3 + (page - 1) * 3;
+    const fontId = pageId + 1;
+    const streamId = pageId + 2;
+    const stream = 'BT /F1 24 Tf 72 720 Td (FARAST PDF PAGE ' + page + ') Tj ET';
+    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ' + fontId + ' 0 R >> >> /Contents ' + streamId + ' 0 R >>');
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    objects.push('<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream');
+  }
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -103,7 +108,7 @@ function makePdfFixture() {
   return Buffer.from(pdf, 'binary');
 }
 
-async function mountPdfReader(page) {
+async function mountPdfReader(page, pageCount = 1) {
   page.on('console', message => console.log('[PDF QA console]', message.type(), message.text()));
   page.on('pageerror', error => console.log('[PDF QA pageerror]', error.message));
   page.on('requestfailed', request => console.log('[PDF QA requestfailed]', request.url(), request.failure()?.errorText));
@@ -115,14 +120,14 @@ async function mountPdfReader(page) {
   await page.route('**/reader-fixture.pdf', route => route.fulfill({
     status: 200,
     contentType: 'application/pdf',
-    body: makePdfFixture(),
+    body: makePdfFixture(pageCount),
   }));
   await page.goto('/reader-fixture.html');
   await page.setContent(
     '<section class="farast-reader" data-reader-root data-theme="dark">' +
       '<header><div class="farast-reader-account"><span>09123456789</span></div></header>' +
       '<nav><button id="reader-prev" type="button">قبلی</button>' +
-        '<label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ 1</span></label>' +
+        '<label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ ' + pageCount + '</span></label>' +
         '<button id="reader-next" type="button">بعدی</button>' +
         '<button id="reader-zoom-out" type="button">کوچک</button><output id="reader-zoom-label"></output>' +
         '<button id="reader-zoom-in" type="button">بزرگ</button><button id="reader-fit" type="button">تناسب عرض</button>' +
@@ -141,7 +146,7 @@ async function mountPdfReader(page) {
             '<div class="farast-pdf-continuous-pages" hidden></div><div class="farast-pdf-loading" role="status">در حال آماده‌سازی PDF…</div>' +
           '</div></div></article></main></div></section>'
   );
-  await page.addStyleTag({ content: '.farast-pdf-document{position:relative;width:800px;min-height:600px;background:#fff}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff}' });
+  await page.addStyleTag({ content: '#reader-stage{height:600px;max-height:600px;overflow-y:scroll!important;overflow-x:hidden;display:block}.farast-reader-canvas{height:auto;overflow:visible}.farast-pdf-document{position:relative;width:800px;min-height:600px;background:#fff}.farast-pdf-document.is-continuous .farast-pdf-continuous-pages{display:grid;grid-template-columns:1fr;gap:20px}.farast-pdf-cont-page{display:block;position:relative;min-height:792px;margin:0 auto 20px}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff}' });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
@@ -236,6 +241,23 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('#reader-prev')).toBeEnabled();
     await root.locator('#reader-scroll-mode').click();
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeHidden();
+  });
+
+  test('continuous PDF mode releases canvases outside the viewport window', async ({ page }) => {
+    await mountPdfReader(page, 12);
+    const root = page.locator('[data-reader-root]');
+    await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+    await root.locator('#reader-scroll-mode').click();
+    const pages = root.locator('.farast-pdf-cont-page');
+    await expect(pages).toHaveCount(12);
+    await expect.poll(() => pages.locator('canvas').evaluateAll(canvases => canvases.filter(canvas => canvas.width > 0).length)).toBeLessThan(12);
+    await expect.poll(() => root.locator('#reader-stage').evaluate(element => element.scrollHeight)).toBeGreaterThan(600);
+
+    await root.locator('#reader-page-number').fill('12');
+    await root.locator('#reader-page-number').dispatchEvent('change');
+    await expect.poll(() => pages.last().locator('canvas').evaluate(canvas => canvas.width)).toBeGreaterThan(0);
+    await expect.poll(() => pages.first().locator('canvas').evaluate(canvas => canvas.width)).toBe(0);
+    await expect.poll(() => pages.locator('canvas').evaluateAll(canvases => canvases.filter(canvas => canvas.width > 0).length)).toBeLessThan(12);
   });
 
   test('navigates between sample pages without loading PDF.js for image-only previews', async ({ page }) => {
