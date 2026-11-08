@@ -46,11 +46,15 @@ class AdminProductFileIngestionController extends Controller
 
             $token = Str::random(64);
             $session = DB::transaction(function () use ($product, $originalName, $inspection, $sha256, $quarantinePath, $token) {
-                StoreProductUploadSession::query()
+                $expired = StoreProductUploadSession::query()
                     ->where('product_id', $product->id)
                     ->whereIn('state', ['awaiting_confirmation', 'preflight_complete'])
                     ->where('expires_at', '<', now())
-                    ->delete();
+                    ->get();
+                foreach ($expired as $expiredSession) {
+                    Storage::disk($expiredSession->quarantine_disk ?: 'private')->delete($expiredSession->quarantine_path);
+                    $expiredSession->delete();
+                }
 
                 $session = StoreProductUploadSession::create([
                     'product_id' => $product->id,
@@ -108,7 +112,15 @@ class AdminProductFileIngestionController extends Controller
         if ($session->state === 'completed') {
             return response()->json(['ok' => true, 'already_completed' => true, 'message' => 'این فایل قبلاً ثبت شده است.']);
         }
-        abort_unless($session->state === 'awaiting_confirmation' && $session->expires_at?->isFuture(), 410, 'مهلت تأیید فایل تمام شده است؛ فایل را دوباره انتخاب کنید.');
+        $claimed = DB::transaction(function () use ($session) {
+            $locked = StoreProductUploadSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+            if ($locked->state !== 'awaiting_confirmation' || ! $locked->expires_at?->isFuture()) {
+                return false;
+            }
+            $locked->update(['state' => 'confirming']);
+            return true;
+        });
+        abort_unless($claimed, 409, 'این فایل در حال پردازش است یا مهلت تأیید آن تمام شده است.');
 
         $disk = Storage::disk($session->quarantine_disk ?: 'private');
         abort_unless($disk->exists($session->quarantine_path), 410, 'فایل موقت دیگر در دسترس نیست؛ دوباره بارگذاری کنید.');
@@ -139,8 +151,8 @@ class AdminProductFileIngestionController extends Controller
             try {
                 $result = DB::transaction(function () use ($session, $product, $inspection, $actualHash, $finalPath, $isPrimary) {
                     $lockedSession = StoreProductUploadSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
-                    if ($lockedSession->state === 'completed') {
-                        throw new RuntimeException('upload_session_already_completed');
+                    if ($lockedSession->state !== 'confirming') {
+                        throw new RuntimeException('upload_session_state_conflict');
                     }
 
                     $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
@@ -230,6 +242,7 @@ class AdminProductFileIngestionController extends Controller
                 'timeline' => $session->fresh()->events()->get(['stage', 'state', 'title', 'detail', 'created_at']),
             ]);
         } catch (Throwable $exception) {
+            $session->newQuery()->whereKey($session->id)->where('state', 'confirming')->update(['state' => 'failed']);
             $this->event($session, 'security_scan', 'failed', 'فرایند متوقف شد', $this->publicError($exception->getMessage()));
             report($exception);
 
