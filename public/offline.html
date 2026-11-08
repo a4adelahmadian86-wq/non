@@ -1,1 +1,54 @@
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#091735"><title>فراست | بدون اتصال</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 20% 10%,#203d78,#091735 55%);color:#fff;font-family:Vazirmatn,Tahoma,sans-serif}.card{width:min(560px,calc(100% - 32px));padding:42px 34px;border:1px solid rgba(255,255,255,.12);border-radius:26px;background:rgba(255,255,255,.07);backdrop-filter:blur(18px);box-shadow:0 30px 80px rgba(0,0,0,.25);text-align:center}.mark{width:64px;height:64px;margin:0 auto 20px;border-radius:19px;background:linear-gradient(145deg,#1769ff,#6842d4);display:grid;place-items:center;font-size:28px;box-shadow:0 16px 35px rgba(23,105,255,.3)}h1{font-size:24px;margin:0 0 8px}p{color:#b9c8e2;font-size:12px;line-height:2;margin:0 0 22px}.btn{border:0;border-radius:12px;background:#fff;color:#172a4d;padding:11px 18px;font:inherit;font-weight:700;cursor:pointer}</style></head><body><main class="card"><div class="mark">⌁</div><h1>اتصال اینترنت در دسترس نیست</h1><p>فراست آماده است، اما این بخش هنوز در حافظه مرورگر ذخیره نشده است. اتصال را برقرار کنید و دوباره تلاش کنید.</p><button class="btn" onclick="location.reload()">تلاش دوباره</button></main></body></html>
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1734">
+<meta name="robots" content="noindex,nofollow">
+<title>فراست | حالت بدون اتصال</title>
+<style>
+:root{color-scheme:dark;font-family:Vazirmatn,"Segoe UI",Tahoma,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 18% 12%,#1b3d7a 0,transparent 42%),linear-gradient(145deg,#0b1734,#101f43 65%,#111b36);color:#fff}
+main{width:min(520px,100%);padding:clamp(26px,6vw,44px);border:1px solid rgba(255,255,255,.13);border-radius:26px;background:rgba(255,255,255,.065);box-shadow:0 28px 90px rgba(0,0,0,.28);text-align:center}
+.brand{width:68px;height:68px;margin:0 auto 22px;display:grid;place-items:center;border-radius:20px;background:linear-gradient(145deg,#1769ff,#5944cf);box-shadow:0 15px 38px rgba(23,105,255,.3)}
+.brand svg{width:42px;height:42px}
+.eyebrow{display:inline-flex;align-items:center;gap:7px;margin-bottom:12px;color:#9dbcf2;font-size:11px;font-weight:800}
+.dot{width:7px;height:7px;border-radius:50%;background:#f5b94b;box-shadow:0 0 0 4px rgba(245,185,75,.12)}
+h1{margin:0 0 12px;font-size:clamp(21px,5vw,27px);line-height:1.5}
+p{margin:0 auto 24px;max-width:42ch;color:#bdcbe1;font-size:13px;line-height:2.2}
+.actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+button,a{min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 19px;border:1px solid transparent;border-radius:12px;font:inherit;font-size:12px;font-weight:800;text-decoration:none;cursor:pointer}
+button{background:#fff;color:#172b50}
+a{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#e5edfb}
+button:focus-visible,a:focus-visible{outline:3px solid #83b6ff;outline-offset:3px}
+small{display:block;margin-top:22px;color:#8195b7;font-size:10px}
+@media(prefers-reduced-motion:no-preference){main{animation:enter .35s ease-out}@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand" aria-hidden="true">
+    <svg viewBox="0 0 64 64" fill="none"><g fill="#fff"><rect x="24" y="5" width="16" height="16" rx="6" transform="rotate(45 32 13)"/><rect x="43" y="24" width="16" height="16" rx="6" transform="rotate(45 51 32)"/><rect x="24" y="43" width="16" height="16" rx="6" transform="rotate(45 32 51)"/><rect x="5" y="24" width="16" height="16" rx="6" transform="rotate(45 13 32)"/></g><circle cx="32" cy="32" r="4.5" fill="#174fb9"/></svg>
+  </div>
+  <span class="eyebrow"><span class="dot"></span> FARAST · حالت آفلاین</span>
+  <h1>اتصال اینترنت در دسترس نیست</h1>
+  <p>این صفحه هنوز روی دستگاه ذخیره نشده است. پس از برقراری اینترنت، دوباره تلاش کنید. اطلاعات حساب و اسناد شما برای حفظ حریم خصوصی به‌صورت آفلاین ذخیره نمی‌شوند.</p>
+  <div class="actions">
+    <button id="retry" type="button">تلاش دوباره <span aria-hidden="true">↻</span></button>
+    <a href="/">بازگشت به خانه</a>
+  </div>
+  <small id="networkStatus" role="status" aria-live="polite">در انتظار اتصال دوباره…</small>
+</main>
+<script>
+(() => {
+  const status = document.getElementById('networkStatus');
+  const retry = document.getElementById('retry');
+  const refresh = () => { status.textContent = navigator.onLine ? 'اتصال برقرار شد؛ در حال بارگذاری دوباره…' : 'هنوز آفلاین هستید؛ پس از اتصال دوباره تلاش کنید.'; if (navigator.onLine) location.reload(); };
+  retry.addEventListener('click', refresh);
+  window.addEventListener('online', refresh);
+  status.textContent = navigator.onLine ? 'اتصال برقرار است؛ برای ادامه تلاش کنید.' : 'در انتظار اتصال دوباره…';
+})();
+</script>
+</body>
+</html>
