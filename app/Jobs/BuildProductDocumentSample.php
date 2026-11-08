@@ -182,21 +182,21 @@ class BuildProductDocumentSample implements ShouldQueue
                     ->where('access_level', 'sample')
                     ->first();
 
-                if (! $preview) {
-                    StoreProductPreview::create([
-                        'product_id' => $document->product_id,
-                        'document_id' => $document->id,
-                        'disk' => $diskName,
-                        'path' => $path,
-                        'mime' => $sampleMime,
-                        'page_number' => 1,
-                        'kind' => $sampleKind,
-                        'access_level' => 'sample',
-                        'watermarked' => true,
-                        'is_active' => true,
-                        'sort_order' => (int) StoreProductPreview::query()->where('product_id', $document->product_id)->max('sort_order') + 1,
-                    ]);
-                }
+                $previewAttributes = [
+                    'product_id' => $document->product_id,
+                    'document_id' => $document->id,
+                    'disk' => $diskName,
+                    'path' => $path,
+                    'mime' => $sampleMime,
+                    'page_number' => 1,
+                    'kind' => $sampleKind,
+                    'access_level' => 'sample',
+                    'watermarked' => true,
+                    'is_active' => true,
+                    'sort_order' => (int) StoreProductPreview::query()->where('product_id', $document->product_id)->max('sort_order') + 1,
+                ];
+                if ($preview) $preview->update($previewAttributes);
+                else StoreProductPreview::create($previewAttributes);
 
                 $manifest = (array) $document->content_manifest;
                 $manifest['sample_status'] = 'ready';
