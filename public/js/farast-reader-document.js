@@ -48,8 +48,13 @@
       layer.style.webkitUserSelect = 'text';
 
       const speechPage = Math.max(1, Number(payload.page_number || article.dataset.readerPage || 1));
+      let speechWordIndex = 0;
       const appendSpeechText = (element, value) => {
         const source = String(value || '');
+        if (!root.dataset.readerAudioUrl || !root.querySelector('#reader-audio-timing')) {
+          element.textContent = source;
+          return;
+        }
         element.dataset.readerSpeechText = source;
         element.dataset.page = String(speechPage);
         const sentences = source.match(/[^.!؟۔؛]+[.!؟۔؛]?/gu) || [source];
@@ -62,14 +67,15 @@
           sentence.setAttribute('aria-label', 'خواندن جمله');
           sentence.dataset.readerSpeechText = sentenceText.trim();
           sentence.dataset.page = String(speechPage);
-          const parts = sentenceText.match(/[\p{L}\p{N}\p{M}]+(?:[\u200c][\p{L}\p{N}\p{M}]+)*|[^\p{L}\p{N}]+/gu) || [sentenceText];
+          const parts = sentenceText.match(/\s+|[^\s]+/gu) || [sentenceText];
           parts.forEach(part => {
-            if (/^[\p{L}\p{N}\p{M}]/u.test(part)) {
+            if (/\p{L}|\p{N}/u.test(part)) {
               const word = document.createElement('span');
               word.className = 'reader-document-word';
               word.textContent = part;
               word.dataset.word = part;
               word.dataset.page = String(speechPage);
+              word.dataset.readerWordIndex = String(speechWordIndex++);
               word.tabIndex = 0;
               word.setAttribute('role', 'button');
               word.setAttribute('aria-label', 'خواندن واژه ' + part);
