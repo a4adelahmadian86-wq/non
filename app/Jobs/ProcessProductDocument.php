@@ -78,29 +78,36 @@ class ProcessProductDocument implements ShouldQueue
                 if (! is_string($docxBytes) || $docxBytes === '') {
                     throw new \\RuntimeException('product_docx_source_read_failed');
                 }
-                $pdfBytes = app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
+                $readerPdfArtifact = $document->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
+                $readerPdfPath = $readerPdfArtifact?->path;
+                $pdfDisk = Storage::disk($readerPdfArtifact?->disk ?: 'private');
+                $pdfBytes = $readerPdfArtifact && $readerPdfPath && $pdfDisk->exists($readerPdfPath)
+                    ? $pdfDisk->get($readerPdfPath)
+                    : app(\\App\\Http\\Controllers\\StoreController::class)->prepareDocxPreview($docxBytes);
                 if (! is_string($pdfBytes) || ! str_starts_with($pdfBytes, '%PDF-') || strlen($pdfBytes) > 25 * 1024 * 1024) {
                     throw new \\RuntimeException('product_docx_conversion_invalid');
                 }
-                $readerPdfPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/reader-v1.pdf';
-                if (! Storage::disk('private')->put($readerPdfPath, $pdfBytes)) {
-                    throw new \\RuntimeException('product_docx_conversion_storage_failed');
+                if (! $readerPdfArtifact || ! $readerPdfPath || ! $pdfDisk->exists($readerPdfPath)) {
+                    $readerPdfPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/reader-v1.pdf';
+                    if (! Storage::disk('private')->put($readerPdfPath, $pdfBytes)) {
+                        throw new \\RuntimeException('product_docx_conversion_storage_failed');
+                    }
+                    $document->artifacts()->updateOrCreate(
+                        ['artifact_type' => 'reader_pdf', 'version' => 1],
+                        [
+                            'disk' => 'private',
+                            'path' => $readerPdfPath,
+                            'mime' => 'application/pdf',
+                            'size_bytes' => strlen($pdfBytes),
+                            'sha256' => hash('sha256', $pdfBytes),
+                            'metadata_json' => [
+                                'source_sha256' => $document->source_sha256,
+                                'conversion_engine' => 'phpword_dompdf',
+                                'generated_once' => true,
+                            ],
+                        ]
+                    );
                 }
-                $document->artifacts()->updateOrCreate(
-                    ['artifact_type' => 'reader_pdf', 'version' => 1],
-                    [
-                        'disk' => 'private',
-                        'path' => $readerPdfPath,
-                        'mime' => 'application/pdf',
-                        'size_bytes' => strlen($pdfBytes),
-                        'sha256' => hash('sha256', $pdfBytes),
-                        'metadata_json' => [
-                            'source_sha256' => $document->source_sha256,
-                            'conversion_engine' => 'phpword_dompdf',
-                            'generated_once' => true,
-                        ],
-                    ]
-                );
                 $reviewStream = fopen('php://temp', 'w+b');
                 if (! is_resource($reviewStream)) {
                     throw new \\RuntimeException('product_docx_review_stream_failed');
