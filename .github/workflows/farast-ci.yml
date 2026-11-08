@@ -8,6 +8,7 @@ on:
     branches: [main, farast-restoration-2026-09, feat/self-hosted-sherpa-streaming, feature/reader-audio-synchronization]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
 jobs:
   laravel:
     runs-on: ubuntu-latest
@@ -18,6 +19,7 @@ jobs:
           node-version: '22'
       - run: bash -n scripts/prepare-reader-assets.sh && bash scripts/prepare-reader-assets.sh
       - run: python -m compileall -q services/document-audio
+      - run: python -m unittest discover -s services/document-audio/tests -v
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -27,11 +29,11 @@ jobs:
       - run: composer install --no-interaction --prefer-dist --no-progress
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
       - run: php -l database/seeders/SherpaOnnxVoiceProviderSeeder.php && php -l database/seeders/DatabaseSeeder.php && php -l app/Services/VoiceProviderRouter.php && php -l app/Services/ProviderRegistry.php && php -l app/Http/Controllers/AdminPlatformController.php && php -l app/Services/EditorDocumentService.php && php -l app/Services/EditorKernelToolHandler.php && php -l app/Http/Controllers/VoiceController.php && php -l app/Http/Controllers/GlobalAssistantController.php && php -l app/Services/Agent/FarastEditorAgent.php && php -l app/Http/Controllers/EditorAgentController.php && php -l app/Http/Controllers/EditorController.php && php -l app/Http/Controllers/EditorDocumentStateController.php && php -l app/Http/Controllers/EditorSaveController.php && php -l app/Http/Controllers/ExportController.php && php -l app/Models/FarastDocument.php && php -l app/Models/FarastDocumentVersion.php
-      - run: php -l app/Jobs/ProcessProductDocument.php && php -l app/Jobs/GenerateProductDocumentAudio.php && php -l app/Services/ProductDocumentAudioService.php && php -l app/Http/Controllers/StoreReaderSpeechController.php && php -l app/Services/StoreProductDocumentPageBuilder.php && php -l app/Http/Controllers/StoreController.php && php -l config/services.php && php -l app/Services/ProductKnowledgeService.php && php -l app/Services/UploadSecurityService.php && php -l app/Console/Commands/PruneProductIngestions.php && php -l app/Models/StoreProductDocument.php && php -l app/Models/StoreProductDocumentChunk.php && php -l app/Models/StoreProductDocumentArtifact.php && php -l app/Models/StoreProductFile.php && php -l app/Models/StoreProductIngestion.php && php -l app/Http/Controllers/AdminStoreController.php && php -l app/Http/Controllers/AdminProductSupervisorController.php && php -l app/Services/ProductSupervisorClient.php && php -l database/migrations/2026_11_08_000001_create_store_product_ingestion_and_knowledge_tables.php && php -l routes/store_routes.php && php -l routes/console.php && php -l tests/Unit/UploadSecurityServiceTest.php && php -l tests/Unit/ProductDocumentAudioServiceTest.php && php -l tests/Unit/StoreProductDocumentPageBuilderTest.php
+      - run: php -l app/Jobs/ProcessProductDocument.php && php -l app/Jobs/GenerateProductDocumentAudio.php && php -l app/Services/ProductDocumentAudioService.php && php -l app/Services/StoreProductDocumentPageBuilder.php && php -l app/Http/Controllers/StoreController.php && php -l config/services.php && php -l app/Services/ProductKnowledgeService.php && php -l app/Services/UploadSecurityService.php && php -l app/Console/Commands/PruneProductIngestions.php && php -l app/Models/StoreProductDocument.php && php -l app/Models/StoreProductDocumentChunk.php && php -l app/Models/StoreProductDocumentArtifact.php && php -l app/Models/StoreProductFile.php && php -l app/Models/StoreProductIngestion.php && php -l app/Http/Controllers/AdminStoreController.php && php -l app/Http/Controllers/AdminProductSupervisorController.php && php -l app/Services/ProductSupervisorClient.php && php -l database/migrations/2026_11_08_000001_create_store_product_ingestion_and_knowledge_tables.php && php -l routes/store_routes.php && php -l routes/console.php && php -l tests/Unit/UploadSecurityServiceTest.php && php -l tests/Unit/ProductDocumentAudioServiceTest.php && php -l tests/Unit/StoreProductDocumentPageBuilderTest.php
       - run: node --check public/js/editor-core.js
       - run: node --check public/js/editor-agent.js
       - run: node --check public/js/editor-layout.js
-      - run: node --check public/js/farast-reader.js && node --check public/js/farast-reader-audio.js && node --check public/js/farast-reader-document.js && node --check public/js/farast-reader-document-audio.js && node --check public/js/farast-reader-granular-audio.js && node --check tests/browser/reader-experience.spec.js
+      - run: node --check public/js/farast-reader.js && node --check public/js/farast-reader-audio.js && node --check public/js/farast-reader-document.js && node --check public/js/farast-reader-document-audio.js && node --check tests/browser/reader-experience.spec.js
       - run: node --check public/js/editor-voice-hub.js && node --check public/js/farast-assistant.js && node --check public/js/farast-voice.js
       - run: node --check public/js/product-ingestion.js
       - run: node --check public/js/farast-voice-worklet.js && node --check voice-stream/local-ai-gateway/server.mjs && node --check voice-stream/server-pro.mjs && node --check voice-stream/server.mjs && node --check voice-stream/providers/sherpa-onnx.mjs && node --check voice-stream/scripts/sherpa-sidecar-smoke.mjs
@@ -66,6 +68,18 @@ jobs:
           FARAST_E2E_URL: http://127.0.0.1:8000
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
+
+  document-audio-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.11'
+      - run: pip install --no-cache-dir -r services/document-audio/requirements.txt
+      - run: python services/document-audio/download_model.py
+      - run: python services/document-audio/smoke_test.py
 
   voice-model-smoke:
     if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'

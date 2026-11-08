@@ -50,6 +50,7 @@
       const speechPage = Math.max(1, Number(payload.page_number || article.dataset.readerPage || 1));
       const appendSpeechText = (element, value) => {
         const source = String(value || '');
+        if (!root.dataset.readerAudioUrl && !article.dataset.audioUrl) { element.textContent = source; return; }
         element.dataset.readerSpeechText = source;
         element.dataset.page = String(speechPage);
         const sentences = source.match(/[^.!؟۔؛]+[.!؟۔؛]?/gu) || [source];
@@ -62,9 +63,9 @@
           sentence.setAttribute('aria-label', 'خواندن جمله');
           sentence.dataset.readerSpeechText = sentenceText.trim();
           sentence.dataset.page = String(speechPage);
-          const parts = sentenceText.match(/[\p{L}\p{N}\p{M}]+(?:[\u200c][\p{L}\p{N}\p{M}]+)*|[^\p{L}\p{N}]+/gu) || [sentenceText];
+          const parts = sentenceText.match(/\s+|[^\s]+/gu) || [sentenceText];
           parts.forEach(part => {
-            if (/^[\p{L}\p{N}\p{M}]/u.test(part)) {
+            if (/\p{L}|\p{N}/u.test(part)) {
               const word = document.createElement('span');
               word.className = 'reader-document-word';
               word.textContent = part;
@@ -73,6 +74,7 @@
               word.tabIndex = 0;
               word.setAttribute('role', 'button');
               word.setAttribute('aria-label', 'خواندن واژه ' + part);
+              word.style.cursor = 'pointer';
               sentence.appendChild(word);
             } else {
               sentence.appendChild(document.createTextNode(part));
@@ -122,7 +124,6 @@
               const td = document.createElement('td');
               td.className = 'reader-document-cell';
               td.tabIndex = 0;
-              td.setAttribute('role', 'group');
               appendSpeechText(td, cells[column] || '');
               tr.appendChild(td);
             }
@@ -145,7 +146,6 @@
           for (const line of text.split(/\r?\n/)) {
             const span = document.createElement('span');
             span.className = 'reader-document-line reader-document-paragraph';
-            span.tabIndex = 0;
             appendSpeechText(span, line || ' ');
             layer.appendChild(span);
           }
@@ -153,32 +153,11 @@
       } else if (Array.isArray(payload.content_blocks) && payload.content_blocks.length) {
         let activeList = null;
         let activeListKind = '';
-        let activeListStack = [];
-        let activeListKinds = [];
-        let activeListItems = [];
         let activeTable = null;
         let activeTableBody = null;
         let activeTableIndex = 0;
-        const closeList = () => {
-          activeList = null;
-          activeListKind = '';
-          activeListStack = [];
-          activeListKinds = [];
-          activeListItems = [];
-        };
-        const createList = (kind) => {
-          const list = document.createElement(kind === 'number' ? 'ol' : 'ul');
-          list.className = 'farast-reader-docx-list';
-          list.style.paddingInlineStart = '1.5rem';
-          list.style.lineHeight = '1.9';
-          list.style.margin = '0.5rem 0 1rem';
-          return list;
-        };
-        const closeTable = () => {
-          activeTable = null;
-          activeTableBody = null;
-          activeTableIndex = 0;
-        };
+        const closeList = () => { activeList = null; activeListKind = ''; };
+        const closeTable = () => { activeTable = null; activeTableBody = null; activeTableIndex = 0; };
 
         for (const rawBlock of payload.content_blocks.slice(0, 120)) {
           if (!rawBlock || typeof rawBlock !== 'object') continue;
@@ -221,18 +200,15 @@
             row.className = 'reader-document-line reader-document-row';
             row.tabIndex = 0;
             row.dataset.readerSpeechText = value || cells.map(cell => String(cell ?? '')).join(' | ');
-            row.dataset.readerAudioText = row.dataset.readerSpeechText;
             cells.forEach((cellValue, cellIndex) => {
               const cell = document.createElement('td');
               cell.className = 'reader-document-cell';
               cell.tabIndex = 0;
-              cell.setAttribute('role', 'group');
               if (Number(rawBlock.row_index) === 1) {
                 const headerCell = document.createElement('th');
                 headerCell.scope = 'col';
                 headerCell.className = 'reader-document-cell';
                 headerCell.tabIndex = 0;
-                headerCell.setAttribute('role', 'group');
                 appendSpeechText(headerCell, String(cellValue ?? ''));
                 headerCell.style.background = '#eef2f7';
                 headerCell.style.fontWeight = '700';
@@ -254,68 +230,22 @@
           closeTable();
           if (type === 'list_item') {
             const listKind = rawBlock.list_kind === 'number' ? 'number' : 'bullet';
-            const level = Math.max(1, Math.min(5, Number(rawBlock.list_level) || 1));
-            if (!activeList) {
-              activeList = createList(listKind);
-              layer.appendChild(activeList);
-              activeListKind = listKind;
-              activeListStack = [activeList];
-              activeListKinds = [listKind];
-              activeListItems = [null];
-            } else if (level === 1 && activeListKind !== listKind) {
+            if (!activeList || activeListKind !== listKind) {
               closeList();
-              activeList = createList(listKind);
+              activeList = document.createElement(listKind === 'number' ? 'ol' : 'ul');
+              activeList.className = 'farast-reader-docx-list';
+              activeList.style.paddingInlineStart = '1.5rem';
+              activeList.style.lineHeight = '1.9';
+              activeList.style.margin = '0.5rem 0 1rem';
               layer.appendChild(activeList);
               activeListKind = listKind;
-              activeListStack = [activeList];
-              activeListKinds = [listKind];
-              activeListItems = [null];
             }
-
-            while (activeListStack.length < level) {
-              const parentIndex = activeListStack.length - 1;
-              let parentItem = activeListItems[parentIndex];
-              if (!parentItem) {
-                parentItem = document.createElement('li');
-                parentItem.className = 'farast-reader-docx-list-parent';
-                activeListStack[parentIndex].appendChild(parentItem);
-                activeListItems[parentIndex] = parentItem;
-              }
-              const childList = createList(listKind);
-              parentItem.appendChild(childList);
-              activeListStack.push(childList);
-              activeListKinds.push(listKind);
-              activeListItems.push(null);
-            }
-
-            if (activeListStack.length > level) {
-              activeListStack = activeListStack.slice(0, level);
-              activeListKinds = activeListKinds.slice(0, level);
-              activeListItems = activeListItems.slice(0, level);
-            }
-
-            const listIndex = level - 1;
-            if (activeListKinds[listIndex] !== listKind) {
-              const replacement = createList(listKind);
-              if (level === 1) {
-                layer.appendChild(replacement);
-                activeList = replacement;
-                activeListKind = listKind;
-              } else {
-                const parentItem = activeListItems[level - 2];
-                if (parentItem) parentItem.appendChild(replacement);
-              }
-              activeListStack[listIndex] = replacement;
-              activeListKinds[listIndex] = listKind;
-              activeListItems[listIndex] = null;
-            }
-
             const item = document.createElement('li');
             item.className = 'reader-document-line reader-document-paragraph';
             item.tabIndex = 0;
             appendSpeechText(item, value);
-            activeListStack[listIndex].appendChild(item);
-            activeListItems[listIndex] = item;
+            item.style.marginInlineStart = Math.max(0, Math.min(5, Number(rawBlock.list_level) || 1) - 1) + 'em';
+            activeList.appendChild(item);
             continue;
           }
 
@@ -325,7 +255,6 @@
             : document.createElement('p');
           element.className = 'reader-document-line ' + (type === 'heading' ? 'farast-reader-docx-heading reader-document-heading' : 'farast-reader-docx-paragraph reader-document-paragraph');
           element.tabIndex = 0;
-          element.setAttribute('role', 'group');
           appendSpeechText(element, value);
           element.dir = 'auto';
           if (type === 'heading') {
@@ -344,7 +273,6 @@
         for (const line of text.split(/\r?\n/)) {
           const span = document.createElement('span');
           span.className = 'reader-document-line reader-document-paragraph';
-          span.tabIndex = 0;
           appendSpeechText(span, line || ' ');
           span.style.position = 'relative';
           span.style.display = 'block';
@@ -373,7 +301,7 @@
   };
 
   root.addEventListener('farast:reader-section-change', (event) => {
-    const index = Number(event.detail?.section ?? event.detail?.index ?? 0);
+    const index = Number(event.detail?.index ?? event.detail?.section ?? 0);
     const article = root.querySelector('.farast-reader-page-item[data-index="' + index + '"]');
     loadPage(article);
   });

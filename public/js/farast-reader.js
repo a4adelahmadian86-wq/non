@@ -727,7 +727,7 @@
     const modifier=e.ctrlKey||e.metaKey;
     // Print/save must stay blocked even while focus is inside the search or page controls.
     if(modifier&&['p','s'].includes(key)){e.preventDefault();e.stopPropagation();return;}
-    if(isEditableTarget(e.target))return;
+    if(isEditableTarget(e.target)||isReaderSpeechTarget(e.target))return;
     if(e.key==='ArrowLeft'||e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();root.querySelector('#reader-next')?.click();}
     if(e.key==='ArrowRight'||e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();root.querySelector('#reader-prev')?.click();}
     if(e.key==='Home'){
