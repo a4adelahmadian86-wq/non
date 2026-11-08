@@ -585,8 +585,6 @@ test.describe('FARAST sample reader interactions', () => {
     expect(requests[2].text).toContain('جهان');
   });
 
-});
-
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
