@@ -40,5 +40,51 @@
       "type": "image/svg+xml",
       "purpose": "maskable"
     }
+  ],
+  "categories": [
+    "productivity",
+    "education",
+    "business"
+  ],
+  "shortcuts": [
+    {
+      "name": "شروع تایپ و ویرایش",
+      "short_name": "تایپ هوشمند",
+      "description": "ورود به محیط کار با اسناد",
+      "url": "/editor",
+      "icons": [
+        {
+          "src": "/icons/farast-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "فروشگاه محصولات دیجیتال",
+      "short_name": "فروشگاه",
+      "description": "دوره‌ها و فایل‌های دیجیتال",
+      "url": "/store",
+      "icons": [
+        {
+          "src": "/icons/farast-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "فضای کاری من",
+      "short_name": "فضای من",
+      "description": "مدیریت اسناد و پروژه‌ها",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/icons/farast-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
   ]
 }
