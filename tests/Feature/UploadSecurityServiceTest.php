@@ -1,47 +1,29 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\\Feature;
 
-use App\Services\UploadSecurityService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use Tests\TestCase;
+use App\\Services\\UploadSecurityService;
+use Illuminate\\Foundation\\Testing\\RefreshDatabase;
+use Illuminate\\Http\\UploadedFile;
+use Illuminate\\Support\\Facades\\Storage;
+use Tests\\TestCase;
 
 class UploadSecurityServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_upload_is_not_marked_safe_when_malware_scanner_is_not_configured(): void
+    public function test_internal_static_policy_scanner_can_pass_a_valid_image_without_clamav(): void
     {
         Storage::fake('private');
-        $file = UploadedFile::fake()->image('unscanned.png', 2, 2);
+        $file = UploadedFile::fake()->image('locally-checked.png', 2, 2);
         $path = $file->store('security-tests', 'private');
 
-        $previousEnv = getenv('FARAST_CLAMSCAN_BINARY');
-        $previousServer = $_SERVER['FARAST_CLAMSCAN_BINARY'] ?? null;
-        $previousSuperglobal = $_ENV['FARAST_CLAMSCAN_BINARY'] ?? null;
+        $result = app(UploadSecurityService::class)->inspect($path, 'image/png', 1024);
 
-        try {
-            putenv('FARAST_CLAMSCAN_BINARY=');
-            $_SERVER['FARAST_CLAMSCAN_BINARY'] = '';
-            $_ENV['FARAST_CLAMSCAN_BINARY'] = '';
-
-            $result = app(UploadSecurityService::class)->inspect($path, 'image/png', 1024);
-
-            $this->assertFalse($result['safe']);
-            $this->assertSame('not_configured', $result['scan']);
-            $this->assertTrue($result['sandbox_required']);
-        } finally {
-            if ($previousEnv === false) {
-                putenv('FARAST_CLAMSCAN_BINARY');
-            } else {
-                putenv('FARAST_CLAMSCAN_BINARY='.$previousEnv);
-            }
-            if ($previousServer === null) unset($_SERVER['FARAST_CLAMSCAN_BINARY']);
-            else $_SERVER['FARAST_CLAMSCAN_BINARY'] = $previousServer;
-            if ($previousSuperglobal === null) unset($_ENV['FARAST_CLAMSCAN_BINARY']);
-            else $_ENV['FARAST_CLAMSCAN_BINARY'] = $previousSuperglobal;
-        }
+        $this->assertTrue($result['safe']);
+        $this->assertSame('clean', $result['scan']);
+        $this->assertSame('farast-static-policy-v1', $result['scan_engine']);
+        $this->assertTrue($result['sandbox_required']);
+        $this->assertStringContainsString('not a signature-based antivirus', strtolower($result['scan_disclaimer']));
     }
 }
