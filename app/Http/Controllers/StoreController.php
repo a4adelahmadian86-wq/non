@@ -199,32 +199,30 @@ class StoreController extends Controller
         $fullPreviews = $hasReaderEntitlement
             ? $product->previews->where('access_level', 'full')->values()
             : collect();
-        $previews = $fullPreviews->isNotEmpty() ? $fullPreviews : $samplePreviews;
+        if ($hasReaderEntitlement) {
+            $fullDocumentIds = $fullPreviews->pluck('document_id')->filter()->unique();
+            $fallbackSamples = $samplePreviews->filter(fn ($preview) =>
+                ! $preview->document_id || ! $fullDocumentIds->contains($preview->document_id)
+            );
+            $previews = $fullPreviews->concat($fallbackSamples)->sortBy('sort_order')->values();
+        } else {
+            $previews = $samplePreviews;
+        }
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
 
         $documentKnowledge = $hasReaderEntitlement
             ? $knowledgeService->forAssistant($product, 120000, 500)
             : ['product_id' => (string) $product->id, 'knowledge_available' => false, 'documents' => []];
 
-        $documentAudio = $hasReaderEntitlement && $fullPreviews->isNotEmpty()
+        $fullDocumentIds = $fullPreviews->pluck('document_id')->filter()->unique()->values();
+        $documentAudios = $hasReaderEntitlement && $fullDocumentIds->isNotEmpty()
             ? StoreProductDocumentAudio::query()
                 ->with('segments')
                 ->where('state', 'ready')
-                ->whereHas('document', fn ($query) => $query
-                    ->where('product_id', $product->id)
-                    ->whereColumn('store_product_documents.content_version', 'store_product_document_audio.content_version'))
-                ->orderByDesc('generated_at')
-                ->first()
-            : null;
-        $audioSegments = $documentAudio
-            ? $documentAudio->segments->map(fn ($segment) => [
-                'sequence' => $segment->sequence,
-                'start_ms' => $segment->start_ms,
-                'end_ms' => $segment->end_ms,
-                'page_number' => data_get($segment->visual_locator, 'page_number'),
-                'block_id' => $segment->document_block_id,
-                'section' => data_get($segment->visual_locator, 'section_path'),
-            ])->values()
+                ->whereIn('document_id', $fullDocumentIds)
+                ->whereColumn('store_product_document_audio.content_version', 'store_product_document_audio.content_version')
+                ->orderBy('document_id')
+                ->get()
             : collect();
 
         $readerIdentity = $user
@@ -232,7 +230,7 @@ class StoreController extends Controller
             : (string) request()->ip();
 
         return response()
-            ->view('store.reader', compact('product', 'previews', 'readerIdentity', 'documentKnowledge', 'documentAudio', 'audioSegments'))
+            ->view('store.reader', compact('product', 'previews', 'readerIdentity', 'documentKnowledge', 'documentAudios'))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('X-Content-Type-Options', 'nosniff')
