@@ -24,7 +24,7 @@
   const getPdfjs=()=>{
     if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
     if(!pdfjsPromise){
-      pdfjsPromise=import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.mjs')
+      pdfjsPromise=import('/vendor/pdfjs/legacy/build/pdf.mjs')
         .then(module=>{window.pdfjsLib=module;return module;})
         .catch(error=>{pdfjsPromise=null;throw error;});
     }
@@ -358,8 +358,8 @@
     try{
       if(!pdfDoc){
         const pdfjs=await getPdfjs();
-        pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.worker.mjs';
-        pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,disableAutoFetch:true,disableStream:true}).promise;
+        pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/legacy/build/pdf.worker.mjs';
+        pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,disableAutoFetch:true,disableStream:true,isEvalSupported:false,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'}).promise;
       }
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
