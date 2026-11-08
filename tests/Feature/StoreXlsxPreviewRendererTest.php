@@ -71,6 +71,23 @@ class StoreXlsxPreviewRendererTest extends TestCase
         $this->assertStringContainsString('مقدار', $html);
     }
 
+    public function test_renders_multiple_visible_sheets_and_skips_hidden_sheets(): void
+    {
+        $parts = $this->baseParts();
+        $parts['xl/workbook.xml'] = '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="گزارش" sheetId="1" r:id="rId1"/><sheet name="مخفی" sheetId="2" state="veryHidden" r:id="rId2"/></sheets></workbook>';
+        $parts['xl/_rels/workbook.xml.rels'] = '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>';
+        $parts['xl/worksheets/sheet2.xml'] = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>محتوای مخفی</t></is></c></row></sheetData></worksheet>';
+
+        $html = app(StoreXlsxPreviewRenderer::class)->render(
+            $this->workbook($parts),
+            '09123456789'
+        );
+
+        $this->assertStringContainsString('گزارش', $html);
+        $this->assertStringNotContainsString('مخفی', $html);
+        $this->assertStringNotContainsString('محتوای مخفی', $html);
+    }
+
     public function test_rejects_external_workbook_relationships(): void
     {
         $relationship = '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="https://example.invalid/sheet.xml" TargetMode="External"/>';
