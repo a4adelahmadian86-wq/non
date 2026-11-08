@@ -10,7 +10,7 @@ class ProductKnowledgeService
      * Build a source-grounded context for any AI feature. Never infer facts from missing,
      * stale, or only partially extracted documents.
      */
-    public function contextForProduct(StoreProduct|int $product, int $maxCharacters = 12000): array
+    public function contextForProduct(StoreProduct|int $product, int $maxCharacters = 12000, bool $sampleOnly = false): array
     {
         $product = $product instanceof StoreProduct
             ? $product
@@ -31,14 +31,33 @@ class ProductKnowledgeService
                 continue;
             }
 
+            $samplePages = array_values(array_filter(
+                (array) data_get($document->structure_json, 'sample.selected_pages', []),
+                static fn ($page) => is_int($page) && $page > 0
+            ));
+            if ($sampleOnly && $samplePages === []) {
+                continue;
+            }
+
             $chunks = [];
             foreach ($document->chunks as $chunk) {
                 if ($remaining <= 0) break;
+                $locator = (array) ($chunk->locator_json ?? []);
+                if ($sampleOnly) {
+                    $chunkPages = array_filter(array_merge(
+                        isset($locator['page']) ? [(int) $locator['page']] : [],
+                        is_array($locator['pages'] ?? null) ? $locator['pages'] : [],
+                        isset($locator['page_start'], $locator['page_end']) ? range((int) $locator['page_start'], (int) $locator['page_end']) : []
+                    ), static fn ($page) => is_int($page) || ctype_digit((string) $page));
+                    if (array_intersect($samplePages, array_map('intval', $chunkPages)) === []) {
+                        continue;
+                    }
+                }
                 $text = mb_substr((string) $chunk->content_text, 0, $remaining);
                 if ($text === '') continue;
                 $chunks[] = [
                     'chunk_type' => $chunk->chunk_type,
-                    'locator' => $chunk->locator_json ?? [],
+                    'locator' => $locator,
                     'content' => $text,
                     'content_sha256' => $chunk->content_sha256,
                 ];
@@ -56,11 +75,11 @@ class ProductKnowledgeService
                 'page_count' => $document->page_count,
                 'word_count' => $document->word_count,
                 'character_count' => $document->character_count,
-                'summary' => data_get($review, 'summary'),
-                'findings' => data_get($review, 'findings', []),
+                'summary' => $sampleOnly ? null : data_get($review, 'summary'),
+                'findings' => $sampleOnly ? [] : data_get($review, 'findings', []),
                 'chunks' => $chunks,
-                'audio' => data_get($document->structure_json, 'audio.status'),
-                'sample_pages' => data_get($document->structure_json, 'sample.selected_pages', []),
+                'audio' => $sampleOnly ? null : data_get($document->structure_json, 'audio.status'),
+                'sample_pages' => $samplePages,
             ];
 
             if ($remaining <= 0) break;
@@ -79,6 +98,7 @@ class ProductKnowledgeService
             'knowledge_status' => $knowledgeStatus,
             'source_count' => count($sources),
             'remaining_character_budget' => $remaining,
+            'access_scope' => $sampleOnly ? 'public_sample_only' : 'purchased_full_document',
             'sources' => $sources,
             'grounding_instruction' => 'Use only the supplied product record and source-located chunks. Do not infer missing pages, features, lessons, specifications, or benefits. If evidence is absent or processing is incomplete, state that it is unknown.',
         ];
