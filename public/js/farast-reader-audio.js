@@ -276,7 +276,7 @@
   audio.addEventListener('pause', () => { playButton.innerHTML = '<i class="fa-solid fa-play"></i>'; playButton.setAttribute('aria-label', 'پخش'); dock.classList.remove('is-playing'); cancelAnimationFrame(raf); });
   audio.addEventListener('loadedmetadata', () => { durationLabel.textContent = formatTime(audio.duration); });
   audio.addEventListener('timeupdate', () => {
-    if (rangeEnd !== null && audio.currentTime >= rangeEnd) {
+    if (!audio.seeking && rangeEnd !== null && audio.currentTime >= rangeEnd) {
       const stopAt = rangeEnd;
       rangeEnd = null;
       audio.pause();
