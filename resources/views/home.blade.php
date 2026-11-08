@@ -3,6 +3,37 @@
 @php
     $title = 'فراست | فروشگاه محصولات دیجیتال و خدمات هوشمند اسناد';
     $isAuthenticated = auth()->check();
+    $organizationSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'Organization',
+        'name' => 'فراست',
+        'alternateName' => 'FARAST',
+        'url' => url('/'),
+        'logo' => asset('icons/farast-icon.svg'),
+        'description' => 'فروشگاه محصولات دیجیتال و محیط یکپارچه خدمات تایپ، OCR، تبدیل گفتار به متن و ویرایش اسناد.',
+    ];
+    $websiteSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        'name' => 'فراست',
+        'url' => url('/'),
+        'inLanguage' => 'fa-IR',
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => route('store').'?q={search_term_string}',
+            'query-input' => 'required name=search_term_string',
+        ],
+    ];
+    $faqSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => [
+            ['@type' => 'Question', 'name' => 'فراست فروشگاه است یا ابزار انجام کار؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'هر دو مسیر را در یک سایت ارائه می‌کند: می‌توانید محصولات دیجیتال منتشرشده را بررسی کنید یا برای کار با فایل و سند وارد محیط خدمات شوید.']],
+            ['@type' => 'Question', 'name' => 'برای شروع کار با فایل چه مراحلی دارم؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'نوع محتوای فایل را مشخص می‌کنید، فایل را بارگذاری می‌کنید و پس از آماده‌شدن برآورد، جزئیات را پیش از تأیید بررسی می‌کنید.']],
+            ['@type' => 'Question', 'name' => 'هزینه خدمات چگونه مشخص می‌شود؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'برای فرایندهای مشمول برآورد، اطلاعات فایل بررسی می‌شود و مبلغ قابل پرداخت پیش از تأیید به شما نمایش داده می‌شود. جزئیات روش محاسبه در صفحه قیمت‌گذاری آمده است.']],
+            ['@type' => 'Question', 'name' => 'چطور به کار نیمه‌تمامم برگردم؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'پس از ورود به حساب، از فضای کاربری یا بخش پروژه‌های اخیر می‌توانید کارهای ذخیره‌شده خود را ادامه دهید.']],
+        ],
+    ];
 @endphp
 
 @push('head')
@@ -19,15 +50,10 @@
 <meta name="twitter:title" content="فراست | محصولات دیجیتال و خدمات هوشمند">
 <meta name="twitter:description" content="فروشگاه محصولات دیجیتال در کنار ابزارهای تایپ، OCR، گفتار به متن و ویرایش اسناد.">
 <script type="application/ld+json">
-@json([
-    '@context' => 'https://schema.org',
-    '@type' => 'Organization',
-    'name' => 'فراست',
-    'alternateName' => 'FARAST',
-    'url' => url('/'),
-    'logo' => asset('icons/farast-icon.svg'),
-    'description' => 'فروشگاه محصولات دیجیتال و محیط یکپارچه خدمات تایپ، OCR، تبدیل گفتار به متن و ویرایش اسناد.',
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+@json($organizationSchema)
+</script>
+<script type="application/ld+json">
+@json($websiteSchema)
 </script>
 <script type="application/ld+json">
 @json([
@@ -310,17 +336,8 @@
         </div>
     </section>
     <script type="application/ld+json">
-    @json([
-        '@context' => 'https://schema.org',
-        '@type' => 'FAQPage',
-        'mainEntity' => [
-            ['@type' => 'Question', 'name' => 'فراست فروشگاه است یا ابزار انجام کار؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'هر دو مسیر را در یک سایت ارائه می‌کند: می‌توانید محصولات دیجیتال منتشرشده را بررسی کنید یا برای کار با فایل و سند وارد محیط خدمات شوید.']],
-            ['@type' => 'Question', 'name' => 'برای شروع کار با فایل چه مراحلی دارم؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'نوع محتوای فایل را مشخص می‌کنید، فایل را بارگذاری می‌کنید و پس از آماده‌شدن برآورد، جزئیات را پیش از تأیید بررسی می‌کنید.']],
-            ['@type' => 'Question', 'name' => 'هزینه خدمات چگونه مشخص می‌شود؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'برای فرایندهای مشمول برآورد، اطلاعات فایل بررسی می‌شود و مبلغ قابل پرداخت پیش از تأیید به شما نمایش داده می‌شود. جزئیات روش محاسبه در صفحه قیمت‌گذاری آمده است.']],
-            ['@type' => 'Question', 'name' => 'چطور به کار نیمه‌تمامم برگردم؟', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'پس از ورود به حساب، از فضای کاربری یا بخش پروژه‌های اخیر می‌توانید کارهای ذخیره‌شده خود را ادامه دهید.']],
-        ],
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-    </script>
+    @json($faqSchema)
+    </script>ipt>
 </div>
 @endsection
 
