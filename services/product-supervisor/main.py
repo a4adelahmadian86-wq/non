@@ -185,7 +185,10 @@ async def review_product(snapshot: ProductSnapshot):
         score = 0
 
     findings: list[Finding] = []
-    for item in result.get("findings", [])[:MAX_FINDINGS]:
+    raw_findings = result.get("findings", [])
+    if not isinstance(raw_findings, list):
+        raw_findings = []
+    for item in raw_findings[:MAX_FINDINGS]:
         if not isinstance(item, dict):
             continue
         try:
@@ -193,7 +196,40 @@ async def review_product(snapshot: ProductSnapshot):
         except Exception:
             continue
 
+    # Deterministic publication blockers are enforced in code, not left to model judgment.
+    blockers: list[Finding] = []
+    if not snapshot.category_name:
+        blockers.append(Finding(
+            area="general",
+            severity="critical",
+            title="دسته‌بندی محصول مشخص نیست",
+            detail="برای این محصول دسته‌بندی معتبری در اطلاعات ارسالی ثبت نشده است.",
+            recommendation="یک دسته‌بندی فعال انتخاب و اطلاعات محصول را ذخیره کنید.",
+        ))
+    if snapshot.product_type == "digital_file" and not snapshot.has_clean_primary_file:
+        blockers.append(Finding(
+            area="media",
+            severity="critical",
+            title="فایل اصلی سالم ثبت نشده است",
+            detail="محصول فایل‌محور بدون فایل اصلی فعال و اسکن‌شده قابل انتشار نیست.",
+            recommendation="فایل اصلی را بارگذاری کنید و تا پایان اسکن امنیتی موفق منتظر بمانید.",
+        ))
+    if snapshot.product_type == "course" and snapshot.publishable_lesson_count < 1:
+        blockers.append(Finding(
+            area="course",
+            severity="critical",
+            title="جلسه معتبر منتشرشده وجود ندارد",
+            detail="دوره باید دست‌کم یک جلسه منتشرشده با محتوای معتبر یا منبع سالم داشته باشد.",
+            recommendation="یک جلسه کامل ایجاد و پس از بررسی محتوا منتشر کنید.",
+        ))
+    if blockers:
+        findings = (blockers + findings)[:MAX_FINDINGS]
+        verdict = "blocked"
+        score = min(score, 35)
+
     summary = str(result.get("summary") or "بررسی انجام شد؛ نتیجه را با بازبینی انسانی نهایی کنید.")[:700]
+    if blockers:
+        summary = "انتشار محصول به دلیل یک یا چند الزام قطعی متوقف است. " + summary
     return ReviewResponse(
         review_id=str(uuid.uuid4()),
         product_id=snapshot.product_id,
