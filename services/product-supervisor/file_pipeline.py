@@ -26,7 +26,7 @@ ALLOWED_TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
 EXECUTABLE_EXTENSIONS = {
     ".exe", ".dll", ".so", ".dylib", ".msi", ".bat", ".cmd", ".ps1",
     ".sh", ".com", ".scr", ".jar", ".apk", ".app", ".php", ".js",
-    ".vbs", ".hta", ".py", ".rb", ".pl",
+    ".vbs", ".hta", ".py", ".rb", ".pl", ".docm", ".xlsm", ".pptm",
 }
 
 
@@ -272,11 +272,11 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> str:
 
 def redact_sensitive_content(value: str) -> tuple[str, int]:
     patterns = [
-        r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\\s\\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
-        r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*",
-        r"\\b(?:sk-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{25,}|gh[pousr]_[A-Za-z0-9]{20,})\\b",
-        r"(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b",
-        r"(?<!\\d)(?:\\+?\\d[\\d .()/-]{8,}\\d)(?!\\d)",
+        r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+        r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*",
+        r"\b(?:sk-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{25,}|gh[pousr]_[A-Za-z0-9]{20,})\b",
+        r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+        r"(?<!\d)(?:\+?\d[\d .()/-]{8,}\d)(?!\d)",
     ]
     count = 0
     for pattern in patterns:
