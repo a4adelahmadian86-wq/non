@@ -10,6 +10,7 @@ import stat
 import subprocess
 import tarfile
 import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any
@@ -17,7 +18,7 @@ from typing import Any
 import httpx
 from docx import Document
 from PIL import Image, UnidentifiedImageError
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
 from openpyxl import load_workbook
 from pptx import Presentation
 
@@ -28,7 +29,7 @@ MAX_ARCHIVE_UNPACKED = 100 * 1024 * 1024
 MAX_ARCHIVE_DOCUMENTS = 12
 MAX_ARCHIVE_MEMBER_BYTES = 5 * 1024 * 1024
 MAX_ARCHIVE_DOCUMENT_BYTES = 20 * 1024 * 1024
-MAX_IMAGE_PIXELS = 50_000_000
+MAX_IMAGE_PIXELS = 20_000_000
 ALLOWED_TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
 EXECUTABLE_EXTENSIONS = {
     ".exe", ".dll", ".so", ".dylib", ".msi", ".bat", ".cmd", ".ps1",
@@ -47,6 +48,7 @@ class Inspection:
     extracted_text: str = ""
     image_bytes: bytes | None = None
     image_mime: str | None = None
+    image_assets: list[dict[str, Any]] = field(default_factory=list)
     audio_bytes: bytes | None = None
     audio_filename: str | None = None
     archive_entries: list[str] | None = None
@@ -67,6 +69,7 @@ class Inspection:
             "extraction_truncated": self.extraction_truncated,
             "archive_entries": (self.archive_entries or [])[:50],
             "embedded_documents": (self.embedded_documents or [])[:12],
+            "embedded_image_count": len(self.image_assets),
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
         }
@@ -418,7 +421,8 @@ def _extract_docx(data: bytes) -> str:
                 break
         table_rows = 0
         if char_count < MAX_EXTRACTED_CHARS:
-            for table in doc.tables[:100]:
+            for table_index, table in enumerate(doc.tables[:100], start=1):
+                parts.append(f"جدول Word {table_index}")
                 for row in table.rows[:1000]:
                     parts.append(" | ".join(cell.text.strip()[:500] for cell in row.cells[:50]))
                     char_count += len(parts[-1])
@@ -427,11 +431,12 @@ def _extract_docx(data: bytes) -> str:
                         break
                 if char_count >= MAX_EXTRACTED_CHARS or table_rows >= 1000:
                     break
+        if char_count < MAX_EXTRACTED_CHARS:
+            parts.extend(_extract_docx_footnotes(data))
+            parts.extend(_extract_chart_text(data, "word/charts/", "نمودار Word"))
         return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
     except Exception:
         raise FileInspectionError("استخراج امن متن از سند Word انجام نشد.") from None
-
-
 
 def _extract_xlsx(data: bytes) -> str:
     archive, _ = _validate_archive(data)
@@ -459,10 +464,19 @@ def _extract_xlsx(data: bytes) -> str:
             if char_count >= MAX_EXTRACTED_CHARS:
                 break
         workbook.close()
+        parts.extend(_extract_chart_text(data, "xl/charts/", "نمودار Excel"))
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for table_name in sorted(name for name in archive.namelist() if name.startswith("xl/tables/") and name.endswith(".xml"))[:100]:
+                try:
+                    table_root = ET.fromstring(archive.read(table_name))
+                    table_name_attr = table_root.attrib.get("name", "جدول")
+                    table_ref = table_root.attrib.get("ref", "")
+                    parts.append(f"ساختار جدول Excel: {table_name_attr} · محدوده {table_ref}")
+                except ET.ParseError:
+                    continue
         return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
     except Exception:
         raise FileInspectionError("استخراج امن محتوای Excel انجام نشد.") from None
-
 
 def _extract_pptx(data: bytes) -> str:
     archive, _ = _validate_archive(data)
@@ -492,11 +506,127 @@ def _extract_pptx(data: bytes) -> str:
                         line = " | ".join(cell.text for cell in row.cells)
                         parts.append(line)
                         char_count += len(line)
+                if getattr(shape, "has_chart", False):
+                    try:
+                        chart = shape.chart
+                        chart_title = ""
+                        if chart.has_title:
+                            chart_title = " ".join(paragraph.text for paragraph in chart.chart_title.text_frame.paragraphs)
+                        if chart_title:
+                            parts.append(f"عنوان نمودار: {chart_title}")
+                        for series in list(chart.series)[:20]:
+                            values = list(series.values)[:80]
+                            parts.append(f"سری نمودار {series.name}: " + " | ".join(str(value) for value in values))
+                    except Exception:
+                        parts.append("یک نمودار در اسلاید وجود دارد؛ جزئیات داده آن قابل استخراج نبود.")
                 if char_count >= MAX_EXTRACTED_CHARS:
                     break
+        parts.extend(_extract_chart_text(data, "ppt/charts/", "نمودار PowerPoint"))
         return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
     except Exception:
         raise FileInspectionError("استخراج امن محتوای PowerPoint انجام نشد.") from None
+
+
+def _image_assets_from_archive(data: bytes, prefix: str, locator_kind: str, limit: int = 6) -> list[dict[str, Any]]:
+    assets: list[dict[str, Any]] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            names = sorted(
+                name for name in archive.namelist()
+                if name.startswith(prefix) and name.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"))
+            )
+            for name in names[:limit]:
+                info = archive.getinfo(name)
+                if info.file_size <= 0 or info.file_size > 8 * 1024 * 1024:
+                    continue
+                raw = archive.read(info)
+                if not raw or len(raw) > 8 * 1024 * 1024:
+                    continue
+                try:
+                    image_bytes, mime = _inspect_image(raw)
+                except FileInspectionError:
+                    continue
+                assets.append({
+                    "image_bytes": image_bytes,
+                    "image_mime": mime,
+                    "locator": {"media": locator_kind, "asset_name": name[:180]},
+                })
+    except (zipfile.BadZipFile, OSError, RuntimeError):
+        return []
+    return assets
+
+
+def _extract_pdf_image_assets(data: bytes, limit: int = 6) -> list[dict[str, Any]]:
+    assets: list[dict[str, Any]] = []
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        for page_number, page in enumerate(reader.pages[:300], start=1):
+            try:
+                images = page.images
+            except Exception:
+                continue
+            for image in images:
+                if len(assets) >= limit:
+                    return assets
+                raw = getattr(image, "data", None)
+                if not isinstance(raw, bytes) or not raw or len(raw) > 8 * 1024 * 1024:
+                    continue
+                try:
+                    image_bytes, mime = _inspect_image(raw)
+                except FileInspectionError:
+                    continue
+                assets.append({
+                    "image_bytes": image_bytes,
+                    "image_mime": mime,
+                    "locator": {"page": page_number, "media": "pdf_image", "asset_name": str(getattr(image, "name", ""))[:100]},
+                })
+    except Exception:
+        return assets
+    return assets
+
+
+def _extract_docx_footnotes(data: bytes) -> list[str]:
+    output: list[str] = []
+    ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            names = set(archive.namelist())
+            for part_name, label in (("word/footnotes.xml", "پانویس"), ("word/endnotes.xml", "یادداشت پایانی")):
+                if part_name not in names:
+                    continue
+                root = ET.fromstring(archive.read(part_name))
+                for index, paragraph in enumerate(root.iter(ns + "p"), start=1):
+                    value = "".join((node.text or "") for node in paragraph.iter(ns + "t")).strip()
+                    if value:
+                        output.append(f"{label} {index}: {value[:1200]}")
+                    if len(output) >= 300:
+                        return output
+    except (zipfile.BadZipFile, ET.ParseError, OSError):
+        return output
+    return output
+
+
+def _extract_chart_text(data: bytes, prefix: str, label: str, limit: int = 20) -> list[str]:
+    output: list[str] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            names = sorted(name for name in archive.namelist() if name.startswith(prefix) and name.lower().endswith(".xml"))
+            for chart_name in names[:limit]:
+                info = archive.getinfo(chart_name)
+                if info.file_size <= 0 or info.file_size > 2 * 1024 * 1024:
+                    continue
+                root = ET.fromstring(archive.read(info))
+                values = []
+                for node in root.iter():
+                    if node.tag.endswith("}v") or node.tag.endswith("}t"):
+                        value = (node.text or "").strip()
+                        if value:
+                            values.append(value[:160])
+                if values:
+                    output.append(f"{label} ({chart_name}): " + " | ".join(values[:160]))
+    except (zipfile.BadZipFile, ET.ParseError, OSError):
+        return output
+    return output
 
 
 def _extract_pdf(data: bytes) -> str:
@@ -516,36 +646,6 @@ def _extract_pdf(data: bytes) -> str:
         raise
     except Exception:
         raise FileInspectionError("ساختار PDF معتبر نیست یا متن آن قابل استخراج نیست.") from None
-
-
-def build_pdf_sample(data: bytes, page_numbers: list[int], max_pages: int = 3, max_output_bytes: int = 8 * 1024 * 1024) -> tuple[bytes, list[int]] | None:
-    if not page_numbers:
-        return None
-    try:
-        reader = PdfReader(io.BytesIO(data), strict=True)
-        if reader.is_encrypted or len(reader.pages) > 300:
-            return None
-        selected = []
-        for value in page_numbers:
-            if isinstance(value, bool) or not isinstance(value, int):
-                continue
-            if 1 <= value <= len(reader.pages) and value not in selected:
-                selected.append(value)
-            if len(selected) >= max_pages:
-                break
-        if not selected:
-            return None
-        writer = PdfWriter()
-        for page_number in selected:
-            writer.add_page(reader.pages[page_number - 1])
-        output = io.BytesIO()
-        writer.write(output)
-        sample = output.getvalue()
-        if not sample.startswith(b"%PDF-") or len(sample) > max_output_bytes:
-            return None
-        return sample, selected
-    except Exception:
-        return None
 
 
 def _inspect_image(data: bytes) -> tuple[bytes, str]:
@@ -618,6 +718,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.detected_type = "pdf"
         result.extracted_text = _extract_pdf(data)
         result.page_count = len(PdfReader(io.BytesIO(data), strict=True).pages)
+        result.image_assets = _extract_pdf_image_assets(data)
         if not result.extracted_text.strip():
             result.warnings.append("متن قابل استخراجی در PDF پیدا نشد؛ احتمالاً فایل اسکن تصویری است.")
     elif filename.lower().endswith((".tar", ".tar.gz", ".tar.bz2")):
@@ -646,12 +747,15 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         if "[Content_Types].xml" in names and "word/document.xml" in names:
             result.detected_type = "docx"
             result.extracted_text = _extract_docx(data)
+            result.image_assets = _image_assets_from_archive(data, 'word/media/', 'docx_image')
         elif "[Content_Types].xml" in names and "xl/workbook.xml" in names:
             result.detected_type = "xlsx"
             result.extracted_text = _extract_xlsx(data)
+            result.image_assets = _image_assets_from_archive(data, 'xl/media/', 'xlsx_image')
         elif "[Content_Types].xml" in names and "ppt/presentation.xml" in names:
             result.detected_type = "pptx"
             result.extracted_text = _extract_pptx(data)
+            result.image_assets = _image_assets_from_archive(data, 'ppt/media/', 'pptx_image')
             result.page_count = min(100, result.extracted_text.count("اسلاید "))
         else:
             result.detected_type = "zip"
@@ -670,8 +774,10 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     elif data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a")) or suffix in {".webp", ".png", ".jpg", ".jpeg", ".gif"}:
         image_bytes, mime = _inspect_image(data)
         result.detected_type = "image"
+        result.page_count = 1
         result.image_bytes = image_bytes
         result.image_mime = mime
+        result.image_assets = [{'image_bytes': image_bytes, 'image_mime': mime, 'locator': {'media': 'image'}}]
     elif (len(data) >= 12 and data[4:8] == b"ftyp" and suffix not in {".m4a", ".m4b", ".m4p"}) or data.startswith(b"\x1a\x45\xdf\xa3") or (data.startswith(b"RIFF") and data[8:12] == b"AVI "):
         result.detected_type = "video"
         video_audio, video_frame = _extract_video_tracks(data)
@@ -681,6 +787,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         if video_frame:
             result.image_bytes = video_frame
             result.image_mime = "image/jpeg"
+            result.image_assets = [{'image_bytes': video_frame, 'image_mime': 'image/jpeg', 'locator': {'media': 'video_frame', 'time_seconds': 0}}]
         if not video_audio and not video_frame:
             result.warnings.append("استخراج صوت یا تصویر از ویدئو ممکن نشد؛ ffmpeg نصب نیست یا فایل پشتیبانی نمی‌شود.")
     elif data.startswith(b"ID3") or data.startswith(b"OggS") or data.startswith(b"fLaC") or (data.startswith(b"RIFF") and data[8:12] == b"WAVE") or (len(data) >= 12 and data[4:8] == b"ftyp" and suffix == ".m4a") or (len(data) >= 2 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0):
@@ -820,7 +927,8 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
                     "اطلاعات حساس، کلیدها، رمزها و داده شخصی را در خروجی بازنشر نکن؛ فقط وجود احتمالی آن‌ها را هشدار بده.",
                     "محتوای کپی‌رایت‌دار، محتوای نامرتبط، محتوای خالی یا ناقص و ناسازگاری با عنوان محصول را مشخص کن.",
                     "خروجی را به فارسی و به شکل JSON شامل summary و findings و sample_pages و facts بده.",
-                    "sample_pages فقط برای PDF است و باید حداکثر سه شماره صفحه یک‌مبنایی از برچسب‌های صفحه‌ای باشد که واقعاً در همین بخش دیده‌ای؛ برای سایر فرمت‌ها آرایه خالی بده.",
+                    "sample_pages برای PDF و PPTX شماره صفحه/اسلاید یک‌مبنایی و برای یک تصویر مستقل فقط عدد ۱ است؛ حداکثر سه مورد را انتخاب کن و فقط مواردی را بده که واقعاً در ورودی دیده‌ای.",
+                    "sample_sheets فقط برای XLSX است و باید حداکثر سه نام دقیق برگه از برچسب‌های «برگه:» همین بخش باشد؛ برای سایر فرمت‌ها آرایه خالی بده.",
                     "facts حداکثر ۲۰ گزاره اتمی و دقیق است؛ هر گزاره باید fact_type و fact_key و fact_value و evidence داشته باشد.",
                     "evidence باید نقل‌قول کوتاه و عیناً کپی‌شده از متن همین بخش باشد؛ اگر شاهد دقیق وجود ندارد آن fact را حذف کن.",
                     "برای هر fact فقط به اطلاعاتی اشاره کن که در همین بخش وجود دارد؛ locator را فقط در صورت مشاهده شماره صفحه، برگه، سطر یا اسلاید درج کن.",
@@ -879,6 +987,7 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
     findings: list[dict[str, Any]] = []
     seen_findings: set[str] = set()
     sample_pages: list[int] = []
+    sample_sheets: list[str] = []
     facts: list[dict[str, Any]] = []
     seen_facts: set[str] = set()
     for item in results:
@@ -923,10 +1032,19 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
                 if isinstance(page, int) and not isinstance(page, bool) and page not in sample_pages:
                     sample_pages.append(page)
 
+        raw_sheets = item.get("sample_sheets", [])
+        if isinstance(raw_sheets, list):
+            for sheet in raw_sheets:
+                if isinstance(sheet, str):
+                    clean_sheet = sheet.strip()[:120]
+                    if clean_sheet and clean_sheet not in sample_sheets:
+                        sample_sheets.append(clean_sheet)
+
     return {
         "summary": " ".join(summaries)[:700],
         "findings": findings[:50],
         "sample_pages": sample_pages[:3],
+        "sample_sheets": sample_sheets[:3],
         "facts": facts[:100],
         "analysis_status": "completed" if len(results) == len(batches) else "partial",
         "analysis_batch_count": len(batches),

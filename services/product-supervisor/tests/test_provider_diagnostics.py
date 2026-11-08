@@ -75,6 +75,23 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(result["analysis_failure_categories"]["provider_rate_limited"], 1)
         self.assertEqual(result["analysis_failure_categories"]["provider_unavailable"], 1)
 
+    async def test_xlsx_sample_sheet_recommendations_are_returned_as_names(self):
+        model_json = json.dumps({
+            "summary": "برگه‌ها بررسی شدند",
+            "findings": [],
+            "sample_pages": [],
+            "sample_sheets": ["گزارش فروش"],
+            "facts": [],
+        }, ensure_ascii=False)
+        _FakeAsyncClient.responses = [_FakeResponse(200, {
+            "candidates": [{"content": {"parts": [{"text": model_json}]}}],
+        })]
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                result = await analyze_extracted_content("برگه: گزارش فروش\nفروردین | 10", {"detected_file_type": "xlsx"})
+
+        self.assertEqual(result["sample_sheets"], ["گزارش فروش"])
+
     async def test_partial_provider_failure_is_reported_with_batch_counts(self):
         _FakeAsyncClient.responses = [_success_response(), _FakeResponse(503)]
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):

@@ -23,6 +23,7 @@
     };
   });
   const tracks = parseTracks();
+  const allTimings = tracks.flatMap(track => track.timings).sort((a, b) => a.start - b.start).map((item, index) => ({ ...item, globalIndex: index }));
   const available = tracks.filter(track => track.url && track.timings.length);
   if (!available.length) return;
 
@@ -170,24 +171,20 @@
     updateHighlight(audio.currentTime || 0);
   };
   const updateHighlight = time => {
-    if (!activeTrack) return;
-    const timings = activeTrack.timings;
-    let low = 0, high = timings.length - 1, found = -1;
+    if (!activeTrack || !allTimings.length) return;
+    let low = 0, high = allTimings.length - 1, found = -1;
     while (low <= high) {
       const mid = (low + high) >> 1;
-      if (timings[mid].start <= time) { found = mid; low = mid + 1; } else high = mid - 1;
+      if (allTimings[mid].start <= time) { found = mid; low = mid + 1; } else high = mid - 1;
     }
-    if (found >= 0 && time > timings[found].end) {
-      const next = timings[found + 1];
+    if (found >= 0 && time > allTimings[found].end) {
+      const next = allTimings[found + 1];
       if (next && time >= next.start) found++;
-      else if (time > timings[found].end) found = -1;
+      else if (time > allTimings[found].end) found = -1;
     }
-    const item = found >= 0 ? timings[found] : null;
+    const item = found >= 0 ? allTimings[found] : null;
     if (item && item.page !== activePage) {
       const now = performance.now();
-      // Keep the rendered page as the source of truth while throttled. If we
-      // assign activePage before the request is sent, a fast page transition
-      // can be swallowed permanently by this throttle.
       if (now - lastPageRequest > 350) {
         lastPageRequest = now;
         activePage = item.page;
@@ -197,14 +194,17 @@
     }
     if (found !== activeSegment) {
       activeSegment = found;
+      const localIndex = item
+        ? activeTrack.timings.findIndex(candidate => candidate.start === item.start && candidate.end === item.end && candidate.text === item.text)
+        : -1;
       wordMarks.forEach(mark => {
-        mark.element.classList.toggle('is-current', mark.segment === found);
-        mark.element.classList.toggle('is-read', mark.segment < found);
+        mark.element.classList.toggle('is-current', mark.segment === localIndex);
+        mark.element.classList.toggle('is-read', localIndex >= 0 && mark.segment < localIndex);
       });
       if (item) {
         caption.textContent = item.text;
-        progressLabel.textContent = (activeTrack.granularity === 'segment' ? 'بخش ' : 'کلمه ') + fa(found + 1) + ' از ' + fa(timings.length);
-        const current = wordMarks.find(mark => mark.segment === found)?.element;
+        progressLabel.textContent = (activeTrack.granularity === 'segment' ? 'بخش ' : 'کلمه ') + fa(found + 1) + ' از ' + fa(allTimings.length);
+        const current = wordMarks.find(mark => mark.segment === localIndex)?.element;
         if (current && audio.paused === false) {
           const rect = current.getBoundingClientRect();
           const stage = root.querySelector('#reader-stage');
@@ -219,26 +219,41 @@
 
   const selectSection = section => {
     const track = tracks[section];
-    if (!track || !track.url || !track.timings.length) {
+    if (!track || !track.url) {
       audio.pause(); audio.removeAttribute('src'); audio.load();
       activeSection = section; activeTrack = null; clearMarks();
       dock.hidden = true;
       return;
     }
     if (activeSection === section && audio.src) return;
-    audio.pause();
+
+    const nextUrl = new URL(track.url, window.location.href).href;
+    const sameSource = audio.src === nextUrl;
+    const wasPlaying = !audio.paused;
+    const previousTime = Number(audio.currentTime || 0);
+    if (!sameSource) {
+      audio.pause();
+      audio.src = track.url;
+      audio.load();
+    } else if (!wasPlaying && track.timings.length) {
+      const first = track.timings[0];
+      if (previousTime < first.start || previousTime > first.end) {
+        audio.currentTime = first.start;
+      }
+    }
+
     activeSection = section;
     activeTrack = track;
-    activePage = 1;
+    activePage = Number(track.timings[0]?.page || section + 1);
     clearMarks();
-    audio.src = track.url;
-    audio.load();
     buildMarks(activePage);
     dock.hidden = false;
     status.textContent = activeTrack.granularity === 'segment' ? 'صوت از پیش آماده · همگام‌سازی جمله‌ای' : 'صوت از پیش آماده · همگام‌سازی کلمه‌به‌کلمه';
-    caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
-    progressLabel.textContent = fa(track.timings.length) + (track.granularity === 'segment' ? ' بخش زمانی' : ' نشانگر کلمه‌ای');
-    seek.value = '0';
+    if (!sameSource) caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
+    progressLabel.textContent = fa(allTimings.length) + (track.granularity === 'segment' ? ' بخش زمانی' : ' نشانگر همگام');
+    if (!sameSource) seek.value = '0';
+    else if (Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
+    if (sameSource && wasPlaying) updateHighlight(audio.currentTime);
   };
 
   playButton.addEventListener('click', () => {

@@ -35,7 +35,11 @@ class ProductKnowledgeService
                 (array) data_get($document->structure_json, 'sample.selected_pages', []),
                 static fn ($page) => is_int($page) && $page > 0
             ));
-            if ($sampleOnly && $samplePages === []) {
+            $sampleSheets = array_values(array_filter(
+                (array) data_get($document->structure_json, 'sample.selected_sheets', []),
+                static fn ($sheet) => is_string($sheet) && trim($sheet) !== ''
+            ));
+            if ($sampleOnly && $samplePages === [] && $sampleSheets === []) {
                 continue;
             }
 
@@ -46,10 +50,15 @@ class ProductKnowledgeService
                 if ($sampleOnly) {
                     $chunkPages = array_filter(array_merge(
                         isset($locator['page']) ? [(int) $locator['page']] : [],
+                        isset($locator['slide']) ? [(int) $locator['slide']] : [],
+                        isset($locator['reader_page']) ? [(int) $locator['reader_page']] : [],
                         is_array($locator['pages'] ?? null) ? $locator['pages'] : [],
                         isset($locator['page_start'], $locator['page_end']) ? range((int) $locator['page_start'], (int) $locator['page_end']) : []
                     ), static fn ($page) => is_int($page) || ctype_digit((string) $page));
-                    if (array_intersect($samplePages, array_map('intval', $chunkPages)) === []) {
+                    $pageMatch = $samplePages !== [] && array_intersect($samplePages, array_map('intval', $chunkPages)) !== [];
+                    $sheetName = trim((string) ($locator['sheet'] ?? ''));
+                    $sheetMatch = $sampleSheets !== [] && $sheetName !== '' && in_array($sheetName, $sampleSheets, true);
+                    if (! $pageMatch && ! $sheetMatch) {
                         continue;
                     }
                 }
@@ -74,9 +83,14 @@ class ProductKnowledgeService
                 if ($sampleOnly) {
                     $factPages = array_filter([
                         isset($factLocator['page']) ? (int) $factLocator['page'] : null,
+                        isset($factLocator['slide']) ? (int) $factLocator['slide'] : null,
+                        isset($factLocator['reader_page']) ? (int) $factLocator['reader_page'] : null,
                         ...(is_array($factLocator['pages'] ?? null) ? array_map('intval', $factLocator['pages']) : []),
                     ], static fn ($page) => is_int($page) && $page > 0);
-                    if (array_intersect($samplePages, $factPages) === []) {
+                    $pageMatch = $samplePages !== [] && array_intersect($samplePages, $factPages) !== [];
+                    $sheetName = trim((string) ($factLocator['sheet'] ?? ''));
+                    $sheetMatch = $sampleSheets !== [] && $sheetName !== '' && in_array($sheetName, $sampleSheets, true);
+                    if (! $pageMatch && ! $sheetMatch) {
                         continue;
                     }
                 }
@@ -118,6 +132,7 @@ class ProductKnowledgeService
                 'chunks' => $chunks,
                 'audio' => $sampleOnly ? null : data_get($document->structure_json, 'audio.status'),
                 'sample_pages' => $samplePages,
+                'sample_sheets' => $sampleSheets,
             ];
 
             if ($remaining <= 0) break;
@@ -144,7 +159,7 @@ class ProductKnowledgeService
             'knowledge_status' => $knowledgeStatus,
             'source_count' => count($sources),
             'remaining_character_budget' => $remaining,
-            'access_scope' => $sampleOnly ? 'public_sample_only' : 'purchased_full_document',
+            'access_scope' => $sampleOnly ? 'public_sample_only' : 'full_document',
             'sources' => $sources,
             'grounding_instruction' => 'Use only the supplied product record, evidence-backed facts, and source-located chunks. Every factual claim must be supported by its exact evidence and locator. Do not infer missing pages, features, lessons, specifications, or benefits. If evidence is absent or processing is incomplete, state that it is unknown.',
         ];

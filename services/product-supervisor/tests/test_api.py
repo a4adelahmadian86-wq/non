@@ -73,6 +73,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         body = response.json()
         self.assertFalse(body["publication_authorized"])
         self.assertFalse(body["automated_publication"])
+        self.assertNotIn("sample_pdf_base64", body)
         self.assertEqual(body["inspection"]["detected_type"], "text")
         self.assertEqual(body["security_gate"], "upstream_scan_verified")
         self.assertEqual(body["inspection"]["upstream_scan_status"], "clean")

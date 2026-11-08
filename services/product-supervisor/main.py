@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hmac
 import json
 import os
@@ -44,6 +43,7 @@ class ProductSnapshot(BaseModel):
     category_name: str | None = Field(default=None, max_length=160)
     tags: list[str] = Field(default_factory=list, max_length=30)
     document_knowledge: dict[str, Any] | None = None
+    document_knowledge_fingerprint: str | None = Field(default=None, max_length=64)
     has_cover: bool = False
     media_fingerprint: str = Field(default='', max_length=64)
     course_fingerprint: str | None = Field(default=None, max_length=64)
@@ -168,7 +168,6 @@ async def review_product_file(
         FileInspectionError,
         analyze_extracted_content,
         analyze_image_with_groq,
-        build_pdf_sample,
         inspect_file,
         redact_sensitive_content,
         transcribe_audio_with_groq,
@@ -192,7 +191,7 @@ async def review_product_file(
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
     warnings = list(inspection.warnings or [])
-    visual_report = ""
+    visual_reports: list[dict[str, Any]] = []
     transcription = ""
     provider_status = {
         "gemini": "not_requested",
@@ -202,25 +201,57 @@ async def review_product_file(
         "gladia": "disabled",
     }
 
-    if inspection.image_bytes:
+    image_assets = list(inspection.image_assets or [])[:6]
+    if not image_assets and inspection.image_bytes:
+        image_assets = [{
+            "image_bytes": inspection.image_bytes,
+            "image_mime": inspection.image_mime or "image/jpeg",
+            "locator": {"media": inspection.detected_type},
+        }]
+    if len(inspection.image_assets or []) > 6:
+        warnings.append("تعداد تصاویر جاسازی‌شده بیش از سقف تحلیل هم‌زمان بود؛ فقط شش تصویر اول بررسی شدند.")
+
+    if image_assets:
         if os.getenv("GROQ_API_KEY"):
-            try:
-                visual_report = await analyze_image_with_groq(
-                    inspection.image_bytes,
-                    inspection.image_mime or "image/jpeg",
-                    {
-                        "title": redact_sensitive_content(product_title)[0],
-                        "category": redact_sensitive_content(category_name or "")[0],
-                        "tags": [redact_sensitive_content(tag)[0] for tag in tags],
-                    },
-                )
+            successful_images = 0
+            for image_index, asset in enumerate(image_assets, start=1):
+                image_bytes = asset.get("image_bytes")
+                if not isinstance(image_bytes, bytes) or not image_bytes:
+                    continue
+                try:
+                    report = await analyze_image_with_groq(
+                        image_bytes,
+                        str(asset.get("image_mime") or "image/jpeg"),
+                        {
+                            "title": redact_sensitive_content(product_title)[0],
+                            "category": redact_sensitive_content(category_name or "")[0],
+                            "tags": [redact_sensitive_content(tag)[0] for tag in tags],
+                            "source_locator": asset.get("locator") if isinstance(asset.get("locator"), dict) else {},
+                        },
+                    )
+                    if report.strip():
+                        visual_reports.append({
+                            "locator": asset.get("locator") if isinstance(asset.get("locator"), dict) else {"media": "embedded_image", "index": image_index},
+                            "content_text": report[:5000],
+                        })
+                        successful_images += 1
+                except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+                    warnings.append(f"تحلیل تصویر جاسازی‌شده شماره {image_index} انجام نشد؛ محتوای آن بررسی‌نشده باقی ماند.")
+            if successful_images == len(image_assets):
                 provider_status["groq_vision"] = "completed"
-            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+            elif successful_images > 0:
+                provider_status["groq_vision"] = "partial"
+            else:
                 provider_status["groq_vision"] = "unavailable"
                 warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ درباره محتوای تصویر ادعایی ثبت نشد.")
         else:
             provider_status["groq_vision"] = "not_configured"
-            warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصویر انجام نشد.")
+            warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصاویر انجام نشد.")
+
+    visual_report = "\n".join(
+        f"{json.dumps(item['locator'], ensure_ascii=False)}: {item['content_text']}"
+        for item in visual_reports
+    )
 
     if inspection.audio_bytes:
         if os.getenv("GROQ_API_KEY"):
@@ -238,7 +269,7 @@ async def review_product_file(
             warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
 
     groq_statuses = [provider_status["groq_vision"], provider_status["groq_transcription"]]
-    if "completed" in groq_statuses:
+    if any(status in {"completed", "partial"} for status in groq_statuses):
         provider_status["groq"] = "partial" if any(status not in {"completed", "not_requested"} for status in groq_statuses) else "completed"
     elif "unavailable" in groq_statuses:
         provider_status["groq"] = "unavailable"
@@ -319,41 +350,61 @@ async def review_product_file(
             })
     safe_facts = validate_evidence_facts(model_review.get("facts", []), source_chunks)
 
+    # The model recommends source page numbers only. Laravel validates and
+    # creates the immutable sample derivative locally with FPDI.
     sample_page_numbers: list[int] = []
-    sample_pdf_base64 = None
-    if allow_sample_generation and inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
+    if allow_sample_generation and inspection.detected_type in {"pdf", "pptx", "image"} and provider_status.get("gemini") == "completed":
         raw_sample_pages = model_review.get("sample_pages", [])
-        available_pdf_pages: set[int] = set()
+        available_sample_pages: set[int] = set()
         for chunk in (inspection.content_chunks or []):
             locator = chunk.get("locator", {}) if isinstance(chunk, dict) else {}
             if not isinstance(locator, dict):
                 continue
-            page_value = locator.get("page")
+            page_value = locator.get("page", locator.get("slide"))
             if isinstance(page_value, int) and not isinstance(page_value, bool):
-                available_pdf_pages.add(page_value)
+                available_sample_pages.add(page_value)
             page_values = locator.get("pages", [])
             if isinstance(page_values, list):
-                available_pdf_pages.update(
+                available_sample_pages.update(
                     value for value in page_values
                     if isinstance(value, int) and not isinstance(value, bool)
                 )
+        if inspection.detected_type == "image" and inspection.page_count == 1:
+            available_sample_pages.add(1)
         if isinstance(raw_sample_pages, list):
             for candidate in raw_sample_pages[:3]:
-                if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate in available_pdf_pages and inspection.page_count and 1 <= candidate <= inspection.page_count:
+                if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate in available_sample_pages and inspection.page_count and 1 <= candidate <= inspection.page_count:
                     if candidate not in sample_page_numbers:
                         sample_page_numbers.append(candidate)
-        generated_sample = build_pdf_sample(data, sample_page_numbers)
-        if generated_sample:
-            sample_bytes, sample_page_numbers = generated_sample
-            sample_pdf_base64 = base64.b64encode(sample_bytes).decode("ascii")
-        else:
-            sample_page_numbers = []
-            if raw_sample_pages:
-                warnings.append("ساخت فایل نمونه PDF از صفحات انتخاب‌شده انجام نشد؛ فایل اصلی بدون تغییر باقی ماند.")
+        if raw_sample_pages and not sample_page_numbers:
+            warnings.append("شماره صفحه نمونه با صفحات واقعی فایل تطبیق نداشت؛ فایل اصلی بدون تغییر باقی ماند.")
+
+    sample_sheet_names: list[str] = []
+    if allow_sample_generation and inspection.detected_type == "xlsx" and provider_status.get("gemini") == "completed":
+        raw_sample_sheets = model_review.get("sample_sheets", [])
+        available_sample_sheets = {
+            str(chunk.get("locator", {}).get("sheet")).strip()
+            for chunk in (inspection.content_chunks or [])
+            if isinstance(chunk, dict)
+            and isinstance(chunk.get("locator"), dict)
+            and isinstance(chunk.get("locator", {}).get("sheet"), str)
+        }
+        if isinstance(raw_sample_sheets, list):
+            for candidate in raw_sample_sheets[:3]:
+                if isinstance(candidate, str):
+                    sheet_name = candidate.strip()[:120]
+                    if sheet_name in available_sample_sheets and sheet_name not in sample_sheet_names:
+                        sample_sheet_names.append(sheet_name)
+        if raw_sample_sheets and not sample_sheet_names:
+            warnings.append("نام برگه نمونه با برگه‌های واقعی فایل Excel تطبیق نداشت؛ فایل اصلی بدون تغییر باقی ماند.")
 
     raw_chunks = list(inspection.content_chunks or [])
-    if visual_report.strip():
-        raw_chunks.append({"chunk_type": "visual_analysis", "locator": {"media": "image"}, "content_text": visual_report})
+    for visual_item in visual_reports:
+        raw_chunks.append({
+            "chunk_type": "visual_analysis",
+            "locator": visual_item["locator"],
+            "content_text": visual_item["content_text"],
+        })
     if transcription.strip():
         raw_chunks.append({"chunk_type": "audio_transcript", "locator": {"media": "audio", "time_start_seconds": 0}, "content_text": transcription})
 
@@ -387,11 +438,11 @@ async def review_product_file(
         "content_chunks": safe_chunks,
         "analysis_batch_count": int(model_review.get("analysis_batch_count", 0)) if model_review else 0,
         "successful_analysis_batches": int(model_review.get("successful_analysis_batches", 0)) if model_review else 0,
+        "analyzed_characters": int(model_review.get("analyzed_characters", 0)) if model_review else 0,
         "failed_analysis_batches": int(model_review.get("failed_analysis_batches", 0)) if model_review else 0,
         "analysis_failure_categories": model_review.get("analysis_failure_categories", {}) if model_review else {},
-        "analyzed_characters": int(model_review.get("analyzed_characters", 0)) if model_review else 0,
         "sample_page_numbers": sample_page_numbers,
-        "sample_pdf_base64": sample_pdf_base64,
+        "sample_sheet_names": sample_sheet_names,
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
@@ -410,10 +461,6 @@ async def health():
         "status": "ok",
         "service": "product-supervisor",
         "provider_configured": bool(os.getenv("GEMINI_API_KEY")),
-        "providers": {
-            "gemini": {"configured": bool(os.getenv("GEMINI_API_KEY", "").strip())},
-            "groq": {"configured": bool(os.getenv("GROQ_API_KEY", "").strip())},
-        },
     }
 
 

@@ -35,6 +35,29 @@ class AiCorePolicyTest extends TestCase
         $this->assertSame(['sentence'=>'سلام دنیا'], $payload['context']);
     }
 
+    public function test_product_document_knowledge_is_whitelisted_and_counted_in_ai_context(): void
+    {
+        $operation = (new AiOperationRegistry())->resolve('text.title');
+        $payload = (new AiContextEngine())->build($operation, 'عنوان محصول', [
+            'product_reference' => ['id' => 9, 'title' => 'کتاب نمونه', 'tags' => ['آموزش']],
+            'document_knowledge' => [
+                'knowledge_status' => 'available',
+                'scope' => 'full_entitled',
+                'source_count' => 1,
+                'sources' => [['source_sha256' => str_repeat('a', 64)]],
+                'chunks' => [['content' => 'FACT_FROM_FILE']],
+                'facts' => [['value' => '۷ ساعت', 'verification_status' => 'evidence_backed']],
+                'warnings' => [],
+            ],
+            'api_key' => 'must-not-send',
+        ]);
+
+        $this->assertSame('کتاب نمونه', $payload['context']['product_reference']['title']);
+        $this->assertSame('FACT_FROM_FILE', $payload['context']['document_knowledge']['chunks'][0]['content']);
+        $this->assertArrayNotHasKey('api_key', $payload['context']);
+        $this->assertGreaterThan(strlen('عنوان محصول'), $payload['transmitted_bytes']);
+    }
+
     public function test_large_document_is_rejected_instead_of_truncated(): void
     {
         $operation = (new AiOperationRegistry())->resolve('document.summarize');

@@ -147,7 +147,13 @@
     const entries = Array.isArray(inspection.archive_entries) ? inspection.archive_entries : [];
     const archive = entries.length
       ? '<h4>محتویات شناسایی‌شده آرشیو</h4><ol class="product-ingestion-archive">' +
-        entries.map((entry) => '<li>' + escapeHtml(entry.name) + ' · ' + formatBytes(entry.size_bytes) + (entry.type === 'directory' ? ' · پوشه' : ' · فایل') + '</li>').join('') +
+        entries.map((entry) => {
+          const scanLabel = entry.content_scan === 'checked'
+            ? ' · محتوای عضو بررسی شد'
+            : (entry.content_scan === 'skipped_size_limit' ? ' · بررسی محتوایی محدود' : '');
+          return '<li>' + escapeHtml(entry.name) + ' · ' + formatBytes(entry.size_bytes) +
+            (entry.type === 'directory' ? ' · پوشه' : ' · فایل') + scanLabel + '</li>';
+        }).join('') +
         '</ol>' + (inspection.archive_entry_count > entries.length ? '<p>فقط ' + entries.length + ' مورد نخست از ' + inspection.archive_entry_count + ' مورد نمایش داده شده است.</p>' : '')
       : '';
 

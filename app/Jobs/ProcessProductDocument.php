@@ -6,6 +6,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
+use App\Services\StoreProductSampleBuilder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,7 +29,7 @@ class ProcessProductDocument implements ShouldQueue
         $this->onQueue('documents');
     }
 
-    public function handle(ProductSupervisorClient $supervisor): void
+    public function handle(ProductSupervisorClient $supervisor, StoreProductSampleBuilder $sampleBuilder): void
     {
         $document = StoreProductDocument::query()
             ->with(['file.product.category', 'file.product.tags'])
@@ -72,6 +73,7 @@ class ProcessProductDocument implements ShouldQueue
             $product->loadMissing(['category', 'tags']);
             $reviewStream = $stream;
             $reviewFilename = $file->original_name;
+            $sampleSourcePdf = null;
             $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
             if ($sourceExtension === 'docx') {
                 $docxBytes = stream_get_contents($stream);
@@ -108,6 +110,7 @@ class ProcessProductDocument implements ShouldQueue
                         ]
                     );
                 }
+                $sampleSourcePdf = $pdfBytes;
                 $reviewStream = fopen('php://temp', 'w+b');
                 if (! is_resource($reviewStream)) {
                     throw new \RuntimeException('product_docx_review_stream_failed');
@@ -116,6 +119,12 @@ class ProcessProductDocument implements ShouldQueue
                 rewind($reviewStream);
                 $reviewFilename = pathinfo($file->original_name, PATHINFO_FILENAME).'.pdf';
             } else {
+                if ($sourceExtension === 'pdf') {
+                    $sampleSourcePdf = $disk->get($file->path);
+                    if (! is_string($sampleSourcePdf) || ! str_starts_with($sampleSourcePdf, '%PDF-') || strlen($sampleSourcePdf) > 25 * 1024 * 1024) {
+                        throw new \RuntimeException('product_pdf_sample_source_invalid');
+                    }
+                }
                 rewind($stream);
             }
 
@@ -142,11 +151,23 @@ class ProcessProductDocument implements ShouldQueue
             fclose($stream);
         }
 
+        $sample = null;
+        $selectedSamplePages = array_values(array_filter((array) ($payload['sample_page_numbers'] ?? []), static fn ($page) => is_int($page) || (is_string($page) && ctype_digit($page))));
+        if ($file->is_primary && is_string($sampleSourcePdf) && $sampleSourcePdf !== '' && $selectedSamplePages !== []) {
+            try {
+                $sample = $sampleBuilder->build($sampleSourcePdf, $selectedSamplePages, 3, 8 * 1024 * 1024);
+            } catch (Throwable) {
+                $payload['warnings'] = array_values(array_merge((array) ($payload['warnings'] ?? []), [
+                    'ساخت نسخه نمونه در سایت انجام نشد؛ فایل اصلی و نتیجه مطالعه بدون تغییر نگهداری شدند.',
+                ]));
+            }
+        }
+
         $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 120) : [];
         $totalCharacters = 0;
         $totalWords = 0;
 
-        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, &$totalCharacters, &$totalWords) {
+        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $sample, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
             $locked->facts()->delete();
@@ -209,6 +230,7 @@ class ProcessProductDocument implements ShouldQueue
 
             $inspection = is_array($payload['inspection'] ?? null) ? $payload['inspection'] : [];
             $pageBuild = app(\App\Services\StoreProductDocumentPageBuilder::class)->build($chunks, $inspection);
+            $structure = (array) ($locked->structure_json ?? []);
             $locked->pages()->delete();
             foreach ($pageBuild['pages'] as $page) {
                 $locked->pages()->create($page);
@@ -217,7 +239,88 @@ class ProcessProductDocument implements ShouldQueue
                 $locked->chunks()->where('chunk_index', (int) $chunkIndex)->update(['locator_json' => $locator]);
             }
 
-            $structure = (array) ($locked->structure_json ?? []);
+            $documentHtmlPreviews = StoreProductPreview::query()
+                ->where('product_id', $locked->product_id)
+                ->whereIn('kind', ['document_html', 'image'])
+                ->whereIn('access_level', ['sample', 'full'])
+                ->where('source_sha256', $locked->source_sha256);
+            $documentHtmlPreviews->update(['is_active' => false]);
+
+            $storedPages = $locked->pages()->get();
+            if ($file->is_primary && ! in_array($sourceExtension, ['pdf', 'docx'], true)) {
+                $samplePageNumbers = array_values(array_unique(array_filter(
+                    array_map('intval', (array) ($payload['sample_page_numbers'] ?? [])),
+                    static fn ($page) => $page > 0
+                )));
+                $sampleSheetNames = array_values(array_unique(array_filter(
+                    array_map(static fn ($sheet) => is_string($sheet) ? trim($sheet) : '', (array) ($payload['sample_sheet_names'] ?? [])),
+                    static fn ($sheet) => $sheet !== ''
+                )));
+                $isImageSource = in_array($sourceExtension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff'], true);
+                $samplePagesCreated = [];
+                $sampleSourcePagesCreated = [];
+                $sampleSheetsCreated = [];
+
+                foreach ($storedPages as $page) {
+                    $sourcePageNumber = $sourceExtension === 'pptx'
+                        ? (int) data_get($page->locator_json, 'slide', $page->page_number)
+                        : (int) $page->page_number;
+                    $sheetName = (string) data_get($page->locator_json, 'sheet', '');
+                    $isSamplePage = in_array($sourcePageNumber, $samplePageNumbers, true);
+                    if ($sourceExtension === 'xlsx') {
+                        $isSamplePage = $sheetName !== '' && in_array($sheetName, $sampleSheetNames, true);
+                    }
+
+                    $basePreview = [
+                        'disk' => $isImageSource ? ($file->disk ?: 'private') : 'private',
+                        'path' => $isImageSource
+                            ? $file->path
+                            : 'store/products/'.$locked->product_id.'/documents/'.$locked->source_sha256.'/reader/page-'.$page->page_number.'.html',
+                        'mime' => $isImageSource ? ($file->mime ?: 'image/jpeg') : 'text/html',
+                        'page_number' => $page->page_number,
+                        'source_page_count' => count($storedPages),
+                        'included_page_count' => 1,
+                        'kind' => $isImageSource ? 'image' : 'document_html',
+                        'source_sha256' => $locked->source_sha256,
+                        'watermarked' => true,
+                        'is_active' => true,
+                        'sort_order' => $page->page_number,
+                    ];
+
+                    if (($product->download_policy ?? 'signed') === 'reader_only') {
+                        StoreProductPreview::query()->updateOrCreate(
+                            ['product_id' => $locked->product_id, 'product_document_page_id' => $page->id, 'access_level' => 'full'],
+                            array_merge($basePreview, ['product_document_page_id' => $page->id, 'access_level' => 'full'])
+                        );
+                    }
+
+                    if ($isSamplePage) {
+                        StoreProductPreview::query()->updateOrCreate(
+                            ['product_id' => $locked->product_id, 'product_document_page_id' => $page->id, 'access_level' => 'sample'],
+                            array_merge($basePreview, ['product_document_page_id' => $page->id, 'access_level' => 'sample'])
+                        );
+                        $samplePagesCreated[] = (int) $page->page_number;
+                        if ($sourceExtension === 'xlsx') {
+                            $sampleSheetsCreated[] = $sheetName;
+                        } else {
+                            $sampleSourcePagesCreated[] = $sourcePageNumber;
+                        }
+                    }
+                }
+
+                if ($samplePagesCreated !== []) {
+                    $structure['sample'] = [
+                        'selected_pages' => $sampleSourcePagesCreated,
+                        'selected_sheets' => $sampleSheetsCreated,
+                        'reader_pages' => $samplePagesCreated,
+                        'source_page_count' => count($storedPages),
+                        'included_page_count' => count($samplePagesCreated),
+                        'generated_once' => true,
+                        'generator' => $isImageSource ? 'source_image' : 'laravel_document_page_builder',
+                    ];
+                }
+            }
+
             $structure['inspection'] = $inspection;
             $structure['reader'] = [
                 'ready' => $pageBuild['page_count'] > 0,
@@ -240,63 +343,71 @@ class ProcessProductDocument implements ShouldQueue
                 'publication_authorized' => false,
             ];
 
-            $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
-            if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
-                $sampleBytes = base64_decode($sampleBase64, true);
-                if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
-                    $sampleHash = hash('sha256', $sampleBytes);
-                    $samplePath = 'store/products/'.$locked->product_id.'/artifacts/'.$locked->source_sha256.'/sample-v1.pdf';
-                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
-                    $sampleDisk = Storage::disk($existingSample?->disk ?: 'private');
-                    $samplePathForReader = null;
-                    if ($existingSample && $sampleDisk->exists($existingSample->path)) {
-                        $samplePathForReader = $existingSample->path;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
-                            'sha256' => $existingSample->sha256,
-                            'generated_once' => true,
-                        ];
-                    } elseif (Storage::disk('private')->put($samplePath, $sampleBytes)) {
-                        $artifact = $locked->artifacts()->updateOrCreate(
-                            ['artifact_type' => 'sample_pdf', 'version' => 1],
-                            [
-                                'disk' => 'private',
-                                'path' => $samplePath,
-                                'mime' => 'application/pdf',
-                                'size_bytes' => strlen($sampleBytes),
-                                'sha256' => $sampleHash,
-                                'metadata_json' => [
-                                    'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                                    'source_sha256' => $locked->source_sha256,
-                                    'generated_once' => true,
-                                ],
-                            ]
-                        );
-                        $samplePathForReader = $artifact->path;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                            'sha256' => $artifact->sha256,
-                            'generated_once' => true,
-                        ];
-                    }
+            if ($file->is_primary && is_array($sample) && is_string($sample['bytes'] ?? null)) {
+                $sampleBytes = $sample['bytes'];
+                $samplePath = 'store/products/'.$locked->product_id.'/artifacts/'.$locked->source_sha256.'/sample-v1.pdf';
+                $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                $sampleDisk = Storage::disk($existingSample?->disk ?: 'private');
+                $samplePathForReader = null;
+                if ($existingSample
+                    && data_get($existingSample->metadata_json, 'generator') === 'laravel_fpdi'
+                    && $sampleDisk->exists($existingSample->path)) {
+                    $samplePathForReader = $existingSample->path;
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
+                        'source_page_count' => (int) data_get($existingSample->metadata_json, 'source_page_count', 0),
+                        'included_page_count' => (int) data_get($existingSample->metadata_json, 'included_page_count', 0),
+                        'sha256' => $existingSample->sha256,
+                        'generated_once' => true,
+                    ];
+                } elseif (Storage::disk('private')->put($samplePath, $sampleBytes)) {
+                    $artifact = $locked->artifacts()->updateOrCreate(
+                        ['artifact_type' => 'sample_pdf', 'version' => 1],
+                        [
+                            'disk' => 'private',
+                            'path' => $samplePath,
+                            'mime' => 'application/pdf',
+                            'size_bytes' => strlen($sampleBytes),
+                            'sha256' => $sample['sha256'],
+                            'metadata_json' => [
+                                'selected_pages' => $sample['selected_pages'],
+                                'source_page_count' => $sample['source_page_count'],
+                                'included_page_count' => $sample['included_page_count'],
+                                'source_sha256' => $locked->source_sha256,
+                                'generated_once' => true,
+                                'generator' => 'laravel_fpdi',
+                            ],
+                        ]
+                    );
+                    $samplePathForReader = $artifact->path;
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => $sample['selected_pages'],
+                        'source_page_count' => $sample['source_page_count'],
+                        'included_page_count' => $sample['included_page_count'],
+                        'sha256' => $artifact->sha256,
+                        'generated_once' => true,
+                        'generator' => 'laravel_fpdi',
+                    ];
+                }
 
-                    if ($samplePathForReader) {
-                        StoreProductPreview::query()->updateOrCreate(
-                            ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
-                            [
-                                'disk' => 'private',
-                                'mime' => 'application/pdf',
-                                'page_number' => 1,
-                                'kind' => 'pdf',
-                                'access_level' => 'sample',
-                                'watermarked' => true,
-                                'is_active' => true,
-                                'sort_order' => 0,
-                            ]
-                        );
-                    }
+                if ($samplePathForReader) {
+                    StoreProductPreview::query()->updateOrCreate(
+                        ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
+                        [
+                            'disk' => 'private',
+                            'mime' => 'application/pdf',
+                            'page_number' => 1,
+                            'source_page_count' => (int) $sample['source_page_count'],
+                            'included_page_count' => (int) $sample['included_page_count'],
+                            'kind' => 'pdf',
+                            'access_level' => 'sample',
+                            'watermarked' => true,
+                            'is_active' => true,
+                            'sort_order' => 0,
+                        ]
+                    );
                 }
             }
 
