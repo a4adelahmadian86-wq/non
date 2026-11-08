@@ -386,7 +386,7 @@ class StoreController extends Controller
                         }
                     }
 
-                    $previews = $document->pages->map(function ($page) use ($product) {
+                    $previews = $document->pages->map(function ($page) use ($product, $readerAudioTiming) {
                         $label = match ($page->page_kind) {
                             'pdf_page' => 'صفحه '.$page->page_number,
                             'slide' => 'اسلاید '.$page->page_number,
@@ -403,6 +403,10 @@ class StoreController extends Controller
                             'page_kind' => $page->page_kind,
                             'page_label' => $label,
                             'reader_page_url' => route('store.reader.page', [$product, $page->page_number]),
+                            'audio_timing' => array_values(array_filter(
+                                $readerAudioTiming,
+                                static fn (array $timing) => (int) ($timing['page'] ?? 0) === (int) $page->page_number
+                            )),
                         ];
                     })->values();
                 }
