@@ -72,6 +72,7 @@ class ProductSupervisorSnapshotBuilder
             'description_truncated' => mb_strlen((string) $product->description) > 8000,
             'price_rials' => (int) $product->price_rials,
             'compare_at_price_rials' => $product->compare_at_price_rials,
+            'download_policy' => $product->download_policy ?? 'signed',
             'seo_title' => $product->seo_title,
             'seo_description' => $product->seo_description,
             'category_name' => $product->category?->name,
