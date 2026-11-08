@@ -266,7 +266,10 @@ async def review_product_file(
 
     # Normalize document knowledge returned by the model. Evidence is kept separate from source text.
     outline = []
-    for item in model_review.get("outline", [])[:100] if isinstance(model_review.get("outline", []), list) else []:
+    raw_outline = model_review.get("outline", [])
+    if not isinstance(raw_outline, list):
+        raw_outline = []
+    for item in raw_outline[:100]:
         if not isinstance(item, dict):
             continue
         page = item.get("page_number")
@@ -276,9 +279,13 @@ async def review_product_file(
             "evidence_excerpt": str(item.get("evidence_excerpt") or "")[:500],
             "page_number": page,
         })
-    key_topics = [str(item)[:120] for item in model_review.get("key_topics", [])[:40] if isinstance(item, str)] if isinstance(model_review.get("key_topics", []), list) else []
+    raw_topics = model_review.get("key_topics", [])
+    key_topics = [str(item)[:120] for item in raw_topics[:40] if isinstance(item, str)] if isinstance(raw_topics, list) else []
     grounded_facts = []
-    for item in model_review.get("grounded_facts", [])[:100] if isinstance(model_review.get("grounded_facts", []), list) else []:
+    raw_facts = model_review.get("grounded_facts", [])
+    if not isinstance(raw_facts, list):
+        raw_facts = []
+    for item in raw_facts[:100]:
         if not isinstance(item, dict):
             continue
         page = item.get("page_number")
@@ -292,7 +299,7 @@ async def review_product_file(
     if inspection.detected_type == "pdf" and isinstance(model_review.get("sample_page_candidates"), list):
         sample_pages = sorted({
             page for page in model_review["sample_page_candidates"]
-            if isinstance(page, int) and inspection.page_count and 1 <= page <= inspection.page_count
+            if isinstance(page, int) and not isinstance(page, bool) and inspection.page_count and 1 <= page <= inspection.page_count
         })[:12]
 
     # File inspection is advisory; only the site's structural preflight is represented as passed.
