@@ -28,7 +28,7 @@ class HomeIntentTest extends TestCase
         $response = $this->get('/');
 
         $response->assertOk()
-            ->assertSee('چه کاری می‌خواهید انجام دهید؟')
+            ->assertSee('امروز چه کاری را پیش می‌برید؟')
             ->assertSee('فایل دارم')
             ->assertSee('از صفر شروع می‌کنم')
             ->assertSee('دنبال یک سرویس هستم')
