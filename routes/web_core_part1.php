@@ -27,7 +27,24 @@ use App\Http\Controllers\PlatformCompletionController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
-Route::get('/', function () { $recentProjects=auth()->check()&&Schema::hasTable('farast_projects')?auth()->user()->projects()->latest()->limit(3)->get():collect(); return view('home',compact('recentProjects')); })->name('home');
+Route::get('/', function () {
+    $recentProjects = auth()->check() && Schema::hasTable('farast_projects')
+        ? auth()->user()->projects()->latest()->limit(3)->get()
+        : collect();
+
+    $homeProducts = Schema::hasTable('store_products')
+        ? \App\Models\StoreProduct::query()
+            ->with('images')
+            ->published()
+            ->orderByDesc('featured')
+            ->orderBy('sort_order')
+            ->latest('published_at')
+            ->limit(4)
+            ->get()
+        : collect();
+
+    return view('home', compact('recentProjects', 'homeProducts'));
+})->name('home');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('blog.show');
 Route::get('/store',[StoreController::class,'index'])->name('store');

@@ -32,7 +32,11 @@ class HomeIntentTest extends TestCase
             ->assertSee('فایل دارم')
             ->assertSee('از صفر شروع می‌کنم')
             ->assertSee('دنبال یک سرویس هستم')
-            ->assertSee('هنوز مطمئن نیستم');
+            ->assertSee('هنوز مطمئن نیستم')
+            ->assertSee('فروشگاه محصولات دیجیتال')
+            ->assertSee('خدمات هوشمند فراست')
+            ->assertSee('دوره‌های آموزشی')
+            ->assertSee('خروجی Word و PDF');
     }
 
     public function test_word_processor_project_intents_classify_and_suggest_templates(): void

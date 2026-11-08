@@ -21,6 +21,111 @@
         <div class="home-hero-rule" aria-hidden="true"></div>
     </section>
 
+    <section class="home-pathways" aria-label="دو مسیر اصلی استفاده از فراست">
+        <article class="home-pathway home-pathway--products">
+            <div class="pathway-symbol" aria-hidden="true"><i class="fa-solid fa-bag-shopping"></i></div>
+            <div class="pathway-copy">
+                <span class="pathway-eyebrow">فروشگاه محصولات دیجیتال</span>
+                <h2>دانش و فایل موردنیازتان را پیدا کنید</h2>
+                <p>دوره‌های آموزشی و فایل‌های دیجیتال را بررسی کنید، پیش‌نمایش محصولات را ببینید و با آگاهی انتخاب کنید.</p>
+                <ul class="pathway-tags" aria-label="انواع محصولات">
+                    <li>دوره آموزشی</li>
+                    <li>فایل و منابع دیجیتال</li>
+                    <li>پیش‌نمایش پیش از خرید</li>
+                </ul>
+                <a class="pathway-link" href="{{ route('store') }}">مشاهده فروشگاه <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+            </div>
+        </article>
+
+        <article class="home-pathway home-pathway--services">
+            <div class="pathway-symbol" aria-hidden="true"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <div class="pathway-copy">
+                <span class="pathway-eyebrow">خدمات هوشمند فراست</span>
+                <h2>کار با سند را ساده‌تر و سریع‌تر پیش ببرید</h2>
+                <p>از فایل یا گفتار شروع کنید، متن را در محیط ویرایشگر بازبینی کنید و پس از تکمیل، خروجی مناسب بگیرید.</p>
+                <ul class="pathway-tags" aria-label="خدمات فراست">
+                    <li>تایپ و OCR</li>
+                    <li>تبدیل گفتار به متن</li>
+                    <li>ویرایش و خروجی</li>
+                </ul>
+                <a class="pathway-link" href="#homeDiscovery">شروع استفاده از خدمات <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+            </div>
+        </article>
+    </section>
+
+    @if($homeProducts->isNotEmpty())
+    <section class="home-products" aria-labelledby="home-products-title">
+        <div class="home-section-heading">
+            <div>
+                <span class="home-kicker">انتخاب از محصولات منتشرشده</span>
+                <h2 id="home-products-title">محصولات فروشگاه فراست</h2>
+                <p>محصولات موجود را ببینید و جزئیات هرکدام را پیش از انتخاب بررسی کنید.</p>
+            </div>
+            <a class="home-section-link" href="{{ route('store') }}">همه محصولات <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+        </div>
+        <div class="home-product-grid">
+            @foreach($homeProducts as $product)
+                @php($homeProductImage = $product->cover_path ?: $product->images->where('is_active', true)->first()?->path)
+                <article class="home-product-card">
+                    <a class="home-product-cover" href="{{ route('store.product', $product->slug) }}">
+                        @if($homeProductImage)
+                            <img src="{{ asset($homeProductImage) }}" alt="{{ $product->title }}" loading="lazy">
+                        @else
+                            <span class="home-product-placeholder" aria-hidden="true"><i class="fa-solid fa-{{ $product->type === 'course' ? 'graduation-cap' : 'file-lines' }}"></i><b>FARAST</b></span>
+                        @endif
+                        <span class="home-product-kind">{{ $product->type === 'course' ? 'دوره آموزشی' : 'فایل دیجیتال' }}</span>
+                    </a>
+                    <div class="home-product-body">
+                        <h3><a href="{{ route('store.product', $product->slug) }}">{{ $product->title }}</a></h3>
+                        <p>{{ \Illuminate\Support\Str::limit($product->short_description ?: $product->description, 96) }}</p>
+                        <div class="home-product-meta">
+                            <strong>{{ (int) $product->price_rials === 0 ? 'رایگان' : number_format((int) $product->price_rials / 10).' تومان' }}</strong>
+                            <a href="{{ route('store.product', $product->slug) }}">جزئیات <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+                        </div>
+                    </div>
+                </article>
+            @endforeach
+        </div>
+    </section>
+    @endif
+
+    <section class="home-service-showcase" aria-labelledby="home-services-title">
+        <div class="home-section-heading home-section-heading--center">
+            <div>
+                <span class="home-kicker">از فایل تا سند آماده</span>
+                <h2 id="home-services-title">خدماتی که کار را جلو می‌برند</h2>
+                <p>ابزارهای اصلی فراست برای تبدیل، نوشتن و آماده‌سازی اسناد</p>
+            </div>
+        </div>
+        <div class="home-service-grid">
+            <article class="home-service-card">
+                <span><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i></span>
+                <h3>تبدیل فایل به متن</h3>
+                <p>فایل PDF، تصویر یا اسکن را وارد کنید و مسیر استخراج متن را آغاز کنید.</p>
+            </article>
+            <article class="home-service-card">
+                <span><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></span>
+                <h3>تایپ با گفتار</h3>
+                <p>به‌جای تایپ همه متن، گفتار خود را به متن قابل ویرایش تبدیل کنید.</p>
+            </article>
+            <article class="home-service-card">
+                <span><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span>
+                <h3>ویرایش حرفه‌ای سند</h3>
+                <p>متن را در محیط ویرایشگر بازبینی و قالب‌بندی کنید و ادامه دهید.</p>
+            </article>
+            <article class="home-service-card">
+                <span><i class="fa-solid fa-file-export" aria-hidden="true"></i></span>
+                <h3>خروجی Word و PDF</h3>
+                <p>پس از تکمیل سند و طی فرایند سفارش، خروجی موردنیازتان را دریافت کنید.</p>
+            </article>
+        </div>
+        <div class="home-service-note">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+            <span>برآورد هزینه بر اساس محتوای واقعی فایل انجام می‌شود؛ جزئیات و مبلغ پیش از تأیید به شما نمایش داده می‌شود.</span>
+            <a href="{{ route('pricing') }}">روش محاسبه هزینه</a>
+        </div>
+    </section>
+
     <main class="home-discovery" id="homeDiscovery">
         <section class="discovery-panel" aria-labelledby="discovery-title">
             <div class="discovery-heading">
@@ -40,7 +145,7 @@
                 </button>
                 <button class="intent-card" type="button" data-intent="service">
                     <span class="intent-icon"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></span>
-                    <span><strong>دنبال یک سرویس هستم</strong><small>OCR، تبدیل صوت به متن، ترجمه، ویرایش یا خروجی می‌خواهم.</small></span>
+                    <span><strong>دنبال یک سرویس هستم</strong><small>تایپ، OCR، تبدیل گفتار به متن، ویرایش یا خروجی Word و PDF می‌خواهم.</small></span>
                 </button>
                 <button class="intent-card intent-card-muted" type="button" data-intent="unknown">
                     <span class="intent-icon"><i class="fa-solid fa-circle-question" aria-hidden="true"></i></span>
