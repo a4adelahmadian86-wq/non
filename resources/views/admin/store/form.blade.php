@@ -262,7 +262,9 @@
   </div>
 </section>
 @endsection
+@push('scripts')
 <script src="{{ asset('js/product-ingestion.js') }}" defer></script>
+@endpush
 @push('styles')
 
 .product-ingestion{display:grid;gap:10px;margin-top:14px}
