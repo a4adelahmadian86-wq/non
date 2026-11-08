@@ -268,9 +268,13 @@
       const audioText = audio === 'completed'
         ? 'نسخه صوتی همگام آماده شد · ' + Math.round((payload.audio_duration_ms || 0) / 1000) + ' ثانیه'
         : (audio === 'awaiting_provider' ? 'تولید صوت در انتظار اتصال موتور صداست' : 'وضعیت صوت: ' + audio);
+      const factText = 'اطلاعات مستند ثبت‌شده: ' + Number(payload.fact_count || 0) + ' گزاره';
+      const readerText = payload.reader_ready
+        ? 'خوانشگر آماده است · ' + Number(payload.reader_page_count || 0) + ' بخش'
+        : 'نسخه متنی خوانشگر هنوز آماده نشده است';
       report.insertAdjacentHTML('beforeend',
         '<div class="product-ingestion-processing-result"><strong>' + escapeHtml(summary) + '</strong><p>' +
-        escapeHtml(sampleText) + '</p><p>' + escapeHtml(audioText) + '</p></div>'
+        escapeHtml(sampleText) + '</p><p>' + escapeHtml(readerText) + '</p><p>' + escapeHtml(factText) + '</p><p>' + escapeHtml(audioText) + '</p></div>'
       );
       confirmButton.textContent = 'ذخیره شد';
       confirmButton.disabled = true;
