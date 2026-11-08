@@ -263,9 +263,21 @@ async def review_product_file(
                     "page_count": inspection.page_count,
                 },
             )
-            provider_status["gemini"] = "completed" if model_review.get("analysis_status") == "completed" else "partial"
-            if provider_status["gemini"] == "partial":
-                warnings.append("بخشی از دسته‌های تحلیل Gemini ناموفق بود؛ وضعیت مطالعه ناقص ثبت شد.")
+            analysis_status = model_review.get("analysis_status")
+            if analysis_status == "completed":
+                provider_status["gemini"] = "completed"
+            elif analysis_status == "partial":
+                provider_status["gemini"] = "partial"
+                warnings.append("بخشی از دسته‌های تحلیل Gemini ناموفق بود؛ نتیجه ناقص است و باید دوباره بررسی شود.")
+            elif analysis_status == "failed":
+                provider_status["gemini"] = "unavailable"
+                warnings.append("تمام درخواست‌های تحلیل Gemini ناموفق بود؛ نتیجه معنایی قابل اتکا تولید نشد.")
+            elif analysis_status == "not_configured":
+                provider_status["gemini"] = "not_configured"
+                warnings.append("کلید Gemini تنظیم نشده است؛ تحلیل معنایی محتوا انجام نشد.")
+            else:
+                provider_status["gemini"] = "unavailable"
+                warnings.append("تحلیل Gemini نتیجه معتبر برنگرداند؛ نتیجه معنایی قابل اتکا تولید نشد.")
         except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
             provider_status["gemini"] = "unavailable"
             warnings.append("تحلیل محتوای استخراج‌شده توسط Gemini انجام نشد.")
@@ -375,6 +387,8 @@ async def review_product_file(
         "content_chunks": safe_chunks,
         "analysis_batch_count": int(model_review.get("analysis_batch_count", 0)) if model_review else 0,
         "successful_analysis_batches": int(model_review.get("successful_analysis_batches", 0)) if model_review else 0,
+        "failed_analysis_batches": int(model_review.get("failed_analysis_batches", 0)) if model_review else 0,
+        "analysis_failure_categories": model_review.get("analysis_failure_categories", {}) if model_review else {},
         "analyzed_characters": int(model_review.get("analyzed_characters", 0)) if model_review else 0,
         "sample_page_numbers": sample_page_numbers,
         "sample_pdf_base64": sample_pdf_base64,
@@ -396,6 +410,10 @@ async def health():
         "status": "ok",
         "service": "product-supervisor",
         "provider_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "providers": {
+            "gemini": {"configured": bool(os.getenv("GEMINI_API_KEY", "").strip())},
+            "groq": {"configured": bool(os.getenv("GROQ_API_KEY", "").strip())},
+        },
     }
 
 
