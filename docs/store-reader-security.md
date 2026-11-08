@@ -20,7 +20,7 @@ These are defensive ceilings, not a promise that every Office feature is reprodu
 
 - Reader and preview endpoints require an authenticated account; preview requests are rate-limited.
 - Preview responses use private/no-store cache headers, nosniff, same-origin framing/resource policies, no-referrer, and restrictive content security policies.
-- DOCX is converted before delivery; XLSX is rendered as escaped HTML in a sandboxed iframe. The XLSX renderer does not execute formulas, macros, scripts, or external workbook relationships.
+- DOCX is converted once per source-content hash into a neutral PDF; XLSX is converted once per source-content hash into escaped HTML. Both neutral conversions are cached for seven days and reused across accounts. The current account identity is painted at read time (PDF canvas for PDF/DOCX and a per-response escaped identity token for XLSX), so cache entries never contain another user's identity. The XLSX renderer does not execute formulas, macros, scripts, or external workbook relationships.
 - The reader suppresses ordinary copy, cut, drag, context-menu, print, and save shortcuts and paints the account identity into PDF page canvases. Word PDFs and Excel HTML include server-generated identity watermarks.
 
 ## Important security boundary
@@ -47,3 +47,24 @@ These tests establish automated behavior against controlled fixtures. They do **
 4. Verify production PHP extensions and private-disk permissions; keep preview files outside the public web root.
 5. Confirm the PDF.js version and worker are pinned consistently. The current browser implementation loads the official legacy build from a version-pinned CDN; it is not self-hosted.
 6. Reassess server-side PDF watermarking before making any stronger anti-extraction claims.
+
+
+## Conversion reuse and resource policy
+
+- DOCX and XLSX conversions use a content-addressed cache key (SHA-256 of the private source bytes) with a seven-day TTL. The same neutral conversion is reused across all authenticated readers; a changed source automatically receives a new cache key.
+- User-specific identity is applied after the shared conversion. The cache never stores a user's mobile number or account identifier.
+- Cache storage should be configured as a persistent shared Laravel cache backend (Redis or the file cache on a shared persistent volume). An in-memory/array cache only benefits a single process/request lifecycle and is not suitable for production reuse across workers.
+- PDF.js renders the requested page first. Continuous scrolling and thumbnails should remain opt-in/visible-demand features; avoid eager rendering of every page or prefetching full documents.
+- The conversion cache is bounded by TTL, but operators should still monitor cache disk/Redis memory and configure normal cache eviction/cleanup policies.
+
+## Demo product
+
+An opt-in command generates small, synthetic Persian-language PDF, DOCX, and two-sheet XLSX files on the **private** disk and creates a published, free catalog product with three preview entries:
+
+    php artisan farast:seed-reader-demo
+
+Rebuild the files in place with:
+
+    php artisan farast:seed-reader-demo --refresh
+
+The command is intentionally not part of automatic production seeding. Run it only in an environment where you want the public demo catalog item. The product page is `/store/product/farast-reader-demo`; the reader endpoint requires an authenticated account. The generated PDF is marked as the product's primary demo file, but all three preview sources remain on the private disk and are served only through authenticated preview routes.
