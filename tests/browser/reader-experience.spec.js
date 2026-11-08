@@ -1365,3 +1365,34 @@ test('personal reading light, font preferences, highlights and annotations stay 
   expect(saved.highlights).toHaveLength(1);
   expect(saved.notes).toHaveLength(1);
 });
+
+
+test('personal reader backup restores local notes and highlights without a server request', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="backup-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>متن نمونه برای پشتیبان محلی خوانشگر.</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  const backup = { format: 'farast-reader-personal-tools', version: 1, data: {
+    light: true, font: 'serif', size: 130,
+    highlights: [{ id: 'h1', quote: 'متن نمونه', page: 1, created: 1 }],
+    notes: [{ id: 'n1', quote: 'متن نمونه', note: 'یادداشت بازیابی‌شده', page: 1, created: 1 }]
+  }};
+  await page.locator('[data-reader-import-file]').setInputFiles({
+    name: 'reader-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup))
+  });
+  page.once('dialog', dialog => dialog.accept());
+  await expect(page.locator('[data-reader-root]')).toHaveClass(/is-reading-light/);
+  await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font', 'serif');
+  await expect(page.locator('.farast-reader-note')).toContainText('یادداشت بازیابی‌شده');
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText('متن نمونه');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:backup-fixture')));
+  expect(saved.notes[0].note).toBe('یادداشت بازیابی‌شده');
+});
