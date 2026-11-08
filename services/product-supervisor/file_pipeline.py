@@ -68,7 +68,7 @@ def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]
         return []
     chunks: list[dict[str, Any]] = []
     if detected_type == "pdf":
-        for page_number, segment in enumerate(text.split("\\f"), start=1):
+        for page_number, segment in enumerate(text.split("\f"), start=1):
             value = segment.strip()
             if value:
                 chunks.append({"chunk_type": "page_text", "locator": {"page": page_number}, "content_text": value[:1800]})
