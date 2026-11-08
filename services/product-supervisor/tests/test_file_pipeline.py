@@ -88,6 +88,26 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.content_chunks[3]["locator"]["cells"], ["عنوان", "مقدار"])
         self.assertEqual(result.content_chunks[4]["locator"]["cells"][1], "<img src=x onerror=alert(1)>")
 
+    def test_docx_preserves_numbered_and_nested_list_metadata(self):
+        document = Document()
+        numbered = document.add_paragraph("مرحله نخست", style="List Number")
+        numbered._p.get_or_add_pPr().get_or_add_numPr().get_or_add_ilvl().val = 1
+        bulleted = document.add_paragraph("زیرگزینه", style="List Bullet")
+        bulleted._p.get_or_add_pPr().get_or_add_numPr().get_or_add_ilvl().val = 2
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "numbered-lists.docx")
+
+        self.assertEqual(
+            [chunk["chunk_type"] for chunk in result.content_chunks],
+            ["docx_list_item", "docx_list_item"],
+        )
+        self.assertEqual(result.content_chunks[0]["locator"]["list_kind"], "number")
+        self.assertEqual(result.content_chunks[0]["locator"]["list_level"], 2)
+        self.assertEqual(result.content_chunks[1]["locator"]["list_kind"], "bullet")
+        self.assertEqual(result.content_chunks[1]["locator"]["list_level"], 3)
+
     def test_zip_path_traversal_is_rejected(self):
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, "w") as archive:
