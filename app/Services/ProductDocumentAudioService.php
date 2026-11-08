@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -49,8 +51,13 @@ class ProductDocumentAudioService
                 $response = Http::accept('audio/wav')
                     ->withToken($token)
                     ->asJson()
-                    ->connectTimeout(8)
-                    ->timeout(90)
+                    ->connectTimeout(75) // Free Render instances can need about a minute to wake from idle.
+                    ->timeout(180)
+                    ->retry(3, 3000, static fn ($exception) =>
+                        $exception instanceof ConnectionException
+                        || ($exception instanceof RequestException
+                            && in_array($exception->response->status(), [502, 503, 504], true))
+                    )
                     ->post($url, [
                         'text' => $speechText,
                         'language' => 'fa-IR',

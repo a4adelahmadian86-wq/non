@@ -517,7 +517,8 @@ test.describe('FARAST sample reader interactions', () => {
     const words = page.locator('.reader-document-word');
     await words.nth(0).click();
     await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio.currentTime)).toBe(0.1);
-    await expect(page.locator('[data-audio-caption]')).toContainText('واژهٔ سلام');
+    // The caption stays at sentence level; the playback range is asserted below at word boundaries.
+    await expect(page.locator('[data-audio-caption]')).toContainText('سلام جهان');
 
     const stopped = await page.evaluate(() => {
       const audio = window.__fakeReaderAudio;
