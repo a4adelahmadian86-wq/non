@@ -65,13 +65,18 @@ class ProductKnowledgeService
             }
 
             $review = (array) data_get($document->structure_json, 'ai_review', []);
+            $completeness = (array) data_get($document->structure_json, 'completeness', []);
             $sources[] = [
                 'source_file_id' => (int) $file->id,
                 'source_sha256' => (string) $document->source_sha256,
                 'original_name' => (string) $file->original_name,
                 'source_type' => (string) ($document->detected_type ?: $file->mime),
                 'processing_status' => (string) $document->processing_status,
-                'semantic_review_complete' => (data_get($review, 'provider_status.gemini') === 'completed'),
+                'semantic_review_complete' => (data_get($review, 'provider_status.gemini') === 'completed')
+                    && (bool) ($completeness['analysis_batches_complete'] ?? false),
+                'extraction_complete' => (bool) ($completeness['extraction_complete'] ?? false),
+                'analysis_batch_count' => (int) ($completeness['analysis_batch_count'] ?? data_get($review, 'analysis_batch_count', 0)),
+                'successful_analysis_batches' => (int) ($completeness['successful_analysis_batches'] ?? data_get($review, 'successful_analysis_batches', 0)),
                 'page_count' => $document->page_count,
                 'word_count' => $document->word_count,
                 'character_count' => $document->character_count,
@@ -85,7 +90,15 @@ class ProductKnowledgeService
             if ($remaining <= 0) break;
         }
 
-        $hasIncompleteSource = collect($sources)->contains(fn (array $source) => ! ($source['semantic_review_complete'] ?? false));
+        $hasIncompleteSource = collect($sources)->contains(function (array $source): bool {
+            $expected = (int) ($source['analysis_batch_count'] ?? 0);
+            $successful = (int) ($source['successful_analysis_batches'] ?? 0);
+
+            return ($source['processing_status'] ?? null) !== 'completed'
+                || ! ($source['semantic_review_complete'] ?? false)
+                || ! ($source['extraction_complete'] ?? false)
+                || ($expected > 0 && $successful < $expected);
+        });
         $knowledgeStatus = $sources === []
             ? 'not_available'
             : ($remaining <= 0 ? 'context_truncated' : ($hasIncompleteSource ? 'partial' : 'available'));
