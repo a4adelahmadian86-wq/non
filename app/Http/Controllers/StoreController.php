@@ -113,6 +113,7 @@ class StoreController extends Controller
         // explicit contract instead of relying on template-local assignment order.
         $showPreviews = $product->previews
             ->where('is_active', true)
+            ->where('access_level', '!=', 'full')
             ->take(max(1, (int) ($product->preview_pages ?: 5)))
             ->values();
         $hasPreview = $showPreviews->isNotEmpty();
