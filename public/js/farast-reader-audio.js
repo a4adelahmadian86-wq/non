@@ -268,7 +268,7 @@
   });
   const observer = new MutationObserver(mutations => {
     const changed = mutations.some(mutation => [...mutation.addedNodes].some(node =>
-      node.nodeType === Node.ELEMENT_NODE && (node.matches?.('.textLayer span') || node.querySelector?.('.textLayer span'))
+      node.nodeType === Node.ELEMENT_NODE && ((node.matches?.('.textLayer span') && !node.classList.contains('reader-audio-word')) || node.querySelector?.('.textLayer span:not(.reader-audio-word)'))
     ));
     if (changed && activeTrack) requestAnimationFrame(() => buildMarks(activePage));
   });
