@@ -226,7 +226,7 @@ def _build_content_chunks(text: str, detected_type: str) -> tuple[list[dict[str,
             remaining -= len(value)
         if remaining <= 0:
             break
-    return bounded, chunk_limit_hit or remaining <= 0
+    return bounded, chunk_limit_hit or (remaining <= 0 and len(bounded) < len(chunks))
 
 
 def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
