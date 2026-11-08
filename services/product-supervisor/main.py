@@ -551,7 +551,6 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
 
 
 @app.post("/v1/reviews/products", response_model=ReviewResponse, dependencies=[Depends(authenticate)])
-@app.post("/v1/reviews/products", response_model=ReviewResponse, dependencies=[Depends(authenticate)])
 async def review_product(snapshot: ProductSnapshot):
     api_key = os.getenv("GEMINI_API_KEY", "").strip() if _gemini_api_key_is_configured() else ""
     if not api_key:
