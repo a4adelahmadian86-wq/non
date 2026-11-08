@@ -55,7 +55,6 @@
         @endif
         <label class="product-field">نسخه / ویرایش<input name="version" value="{{ old('version',$product->version) }}" maxlength="60" placeholder="مثلاً 1.0"></label>
         <label class="product-field">نوع مجوز استفاده<input name="license_type" value="{{ old('license_type',$product->license_type) }}" maxlength="60" placeholder="مثلاً شخصی / استاندارد"></label>
-        <label class="product-field">سیاست دسترسی به فایل<select name="download_policy"><option value="signed" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'signed')>دانلود پس از خرید</option><option value="reader_only" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'reader_only')>فقط مطالعه در خوانشگر، بدون دانلود</option></select></label>
         <label class="product-field">ترتیب نمایش<input type="number" name="sort_order" value="{{ old('sort_order',$product->sort_order ?? 0) }}" min="0"></label>
         <label class="product-field">تعداد صفحات نمونه<input type="number" name="preview_pages" value="{{ old('preview_pages',$product->preview_pages ?? 3) }}" min="0" max="50"></label>
         <label class="product-field product-field-check"><input type="checkbox" name="featured" value="1" @checked(old('featured',$product->featured))> نمایش به‌عنوان محصول ویژه</label>
@@ -164,10 +163,17 @@
     @endif
 
     @if($isEdit)
+      @php($assetReviews = (array) data_get($product->metadata, 'ai_supervisor.asset_reviews', []))
       <div class="store-panel product-files-panel" id="product-media">
         <div class="product-editor-heading"><div><span>رسانه محصول</span><h2>تصویر کاور</h2></div><span class="product-editor-step">حداکثر ۸ مگابایت</span></div>
         @if($product->cover_path)<img src="{{ asset($product->cover_path) }}" alt="کاور {{ $product->title }}" style="display:block;width:min(320px,100%);aspect-ratio:16/9;object-fit:cover;border-radius:12px;margin:12px 0">@else<p>هنوز کاوری ثبت نشده است.</p>@endif
         <form method="post" action="{{ route('admin.store.cover.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="cover" accept=".jpg,.jpeg,.png,.webp" required><button type="submit" class="store-outline-btn">بارگذاری کاور و اسکن امنیتی</button><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small></form>
+        @if($product->cover_path)
+          <form method="post" action="{{ route('admin.store.ai-supervisor.cover.review',$product) }}" class="product-file-upload">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>تحلیل هوشمند تصویر کاور</button></form>
+          @if(!empty($assetReviews['cover']))
+            <div class="product-asset-review"><b>گزارش ناظر کاور</b><p>{{ $assetReviews['cover']['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>وضعیت امنیتی: {{ $assetReviews['cover']['security_gate'] ?? 'نامشخص' }} · {{ $assetReviews['cover']['reviewed_at'] ?? '' }}</small></div>
+          @endif
+        @endif
         <small class="product-help">فرمت‌های JPG، PNG و WebP · حداکثر ۸ مگابایت</small>
       </div>
       <div class="store-panel product-files-panel product-gallery-panel">
@@ -177,7 +183,13 @@
           @forelse($product->images as $image)
             <div class="product-gallery-item">
               <img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy">
-              <div><small>{{ $image->alt ?: 'بدون متن جایگزین' }}</small><form method="post" action="{{ route('admin.store.images.delete',[$product,$image]) }}" onsubmit="return confirm('این تصویر از گالری حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
+              <div><small>{{ $image->alt ?: 'بدون متن جایگزین' }}</small>
+                <form method="post" action="{{ route('admin.store.ai-supervisor.images.review',[$product,$image]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>تحلیل تصویر</button></form>
+                <form method="post" action="{{ route('admin.store.images.delete',[$product,$image]) }}" onsubmit="return confirm('این تصویر از گالری حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form>
+              </div>
+              @if(!empty($assetReviews['image:'.$image->id]))
+                <div class="product-asset-review"><b>گزارش ناظر تصویر</b><p>{{ $assetReviews['image:'.$image->id]['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>وضعیت امنیتی: {{ $assetReviews['image:'.$image->id]['security_gate'] ?? 'نامشخص' }}</small></div>
+              @endif
             </div>
           @empty
             <div class="course-empty">هنوز تصویری به گالری اضافه نشده است.</div>
@@ -201,51 +213,23 @@
         <div class="product-editor-heading"><div><span>محتوای قابل دریافت</span><h2>فایل‌های محصول</h2></div><span class="product-editor-step">اسکن امنیتی الزامی</span></div>
         <p>فایل‌ها در فضای خصوصی نگهداری می‌شوند. فقط فایل اصلیِ اسکن‌شده و فعال پس از خرید قابل دریافت خواهد بود.</p>
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
-          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'اسکن سالم':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small></span><form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
+          @php($fileReview = $assetReviews['file:'.$file->id] ?? null)
+          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'اسکن سالم':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small>
+            @if($fileReview && hash_equals((string) ($fileReview['sha256'] ?? ''), (string) $file->sha256))
+              <small class="product-asset-review-inline">{{ $fileReview['summary'] ?? 'گزارش بررسی فایل ثبت شد.' }} · وضعیت: {{ $fileReview['security_gate'] ?? 'نامشخص' }}</small>
+            @endif
+          </span>
+          <form method="post" action="{{ route('admin.store.ai-supervisor.files.review',[$product,$file]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>بررسی محتوای فایل</button></form>
+          <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
         <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
         <small class="product-help">حداکثر ۵۰ مگابایت؛ اگر اسکنر ضدبدافزار فعال نباشد، فایل ثبت و قابل انتشار نمی‌شود.</small>
       </div>
-      @if($product->type !== 'course')
-        <div class="store-panel product-files-panel">
-          <h2>پیش‌نمایش عمومی محصول</h2>
-          <p>تصاویر، PDF، Word و Excel برای مطالعهٔ نمونه؛ فایل‌ها پیش از ذخیره اسکن می‌شوند و فقط از مسیر احراز هویت‌شده نمایش داده خواهند شد.</p>
-          <div class="store-preview-grid">
-            @forelse($product->previews as $preview)
-              <div>
-                @if($preview->kind === 'pdf')
-                  <div class="store-preview-pdf">PDF · {{ $preview->page_number }}</div>
-                @elseif($preview->kind === 'docx')
-                  <div class="store-preview-pdf">WORD · DOCX</div>
-                @elseif(in_array($preview->kind, ['xlsx', 'html'], true))
-                  <div class="store-preview-pdf">EXCEL · XLSX</div>
-                @else
-                  <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
-                @endif
-                <form method="post" action="{{ route('admin.store.previews.delete',[$product,$preview]) }}">@csrf @method('DELETE')<button class="product-danger" type="submit">حذف</button></form>
-              </div>
-            @empty
-              <div class="course-empty">هنوز پیش‌نمایشی اضافه نشده است.</div>
-            @endforelse
-          </div>
-          <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>
-            @csrf
-            <input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx" required>
-            <label class="product-field">سطح دسترسی این سند<select name="access_level"><option value="sample">نمونهٔ قابل مشاهده برای همه</option><option value="full">نسخهٔ کامل (فقط برای خریداران محصول فقط‌خواندنی)</option></select></label>
-            <small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small>
-            <input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه">
-            <button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button>
-          </form>
-          @if($product->previews->where('is_active', true)->isNotEmpty())
-            <p style="margin-top:12px"><a class="store-outline-btn" href="{{ route('store.reader',$product->slug) }}" target="_blank" rel="noopener noreferrer">باز کردن خوانشگر امن</a></p>
-          @endif
-        </div>
-      @else
-        <div class="store-panel product-files-panel">
-          <h2>پیش‌نمایش دوره</h2>
-          <p>نمونهٔ دوره از طریق جلسه‌های پیش‌نمایش و مسیر اختصاصی دوره مدیریت می‌شود؛ برای دوره فایل پیش‌نمایش عمومی بارگذاری نکنید.</p>
-        </div>
-      @endif
+      <div class="store-panel product-files-panel">
+        <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
+        <div class="store-preview-grid">@forelse($product->previews as $preview)<div>@if($preview->kind==='pdf')<div class="store-preview-pdf">PDF · {{ $preview->page_number }}</div>@else<img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">@endif<form method="post" action="{{ route('admin.store.previews.delete',[$product,$preview]) }}">@csrf @method('DELETE')<button class="product-danger" type="submit">حذف</button></form></div>@empty<div class="course-empty">هنوز پیش‌نمایشی اضافه نشده است.</div>@endforelse</div>
+        <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" required><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه"><button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button></form>
+      </div>
     @endif
 
     <div class="store-panel product-category-panel"><h2>مدیریت سریع دسته‌بندی</h2><p class="product-inline-feedback" data-inline-feedback role="status" aria-live="polite"></p><form method="post" action="{{ route('admin.store.categories.store') }}" data-inline-create="category">@csrf<input name="name" required maxlength="160" placeholder="نام دسته جدید"><input name="slug" maxlength="180" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن دسته</button></form></div>
@@ -354,7 +338,7 @@
 .product-gallery-item>div{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px}
 .product-gallery-item small{font-size:.62rem;color:var(--st-muted);overflow-wrap:anywhere}
 .product-gallery-item form{margin:0}
-.product-gallery-panel{margin-top:16px}
+.product-gallery-panel{margin-top:16px}.product-asset-review{grid-column:1/-1;padding:9px;border-radius:9px;background:#f5f8fc;border:1px solid #e2eaf4}.product-asset-review b{font-size:.68rem}.product-asset-review p{font-size:.68rem;line-height:1.8;margin:5px 0}.product-asset-review small,.product-asset-review-inline{font-size:.62rem;color:var(--st-muted)}
 
 .product-discovery-links{padding-top:4px}.product-discovery-links select{min-height:118px}.product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
 </style>
