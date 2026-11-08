@@ -28,4 +28,5 @@ class StoreProductDocument extends Model
     public function chunks(): HasMany { return $this->hasMany(StoreProductDocumentChunk::class, 'document_id')->orderBy('chunk_index'); }
     public function artifacts(): HasMany { return $this->hasMany(StoreProductDocumentArtifact::class, 'document_id'); }
     public function facts(): HasMany { return $this->hasMany(StoreProductDocumentFact::class, 'document_id'); }
+    public function pages(): HasMany { return $this->hasMany(StoreProductDocumentPage::class, 'document_id')->orderBy('page_number'); }
 }
