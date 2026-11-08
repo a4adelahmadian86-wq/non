@@ -149,6 +149,7 @@ class ProcessProductDocument implements ShouldQueue
         DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
+            $locked->facts()->delete();
 
             foreach ($chunks as $index => $chunk) {
                 if (! is_array($chunk)) continue;
@@ -170,10 +171,47 @@ class ProcessProductDocument implements ShouldQueue
                 $totalWords += preg_match_all('/[\p{L}\p{N}]+/u', $text);
             }
 
+            $facts = is_array($payload['facts'] ?? null) ? array_slice($payload['facts'], 0, 100) : [];
+            $storedFactCount = 0;
+            $allowedFactTypes = ['definition','concept','quantity','date','feature','requirement','warning','other'];
+            foreach ($facts as $fact) {
+                if (! is_array($fact)) continue;
+                $factKey = mb_substr(trim((string) ($fact['fact_key'] ?? '')), 0, 160);
+                $factValue = mb_substr(trim((string) ($fact['fact_value'] ?? '')), 0, 1000);
+                $evidence = mb_substr(trim((string) ($fact['evidence_text'] ?? '')), 0, 700);
+                if ($factKey === '' || $factValue === '' || mb_strlen($evidence) < 6) continue;
+
+                $normalizedEvidence = mb_strtolower((string) preg_replace('/\\s+/u', ' ', $evidence));
+                $matchedChunk = null;
+                foreach ($chunks as $sourceChunk) {
+                    if (! is_array($sourceChunk)) continue;
+                    $sourceText = mb_strtolower((string) preg_replace('/\\s+/u', ' ', (string) ($sourceChunk['content_text'] ?? '')));
+                    if ($normalizedEvidence !== '' && str_contains($sourceText, $normalizedEvidence)) {
+                        $matchedChunk = $sourceChunk;
+                        break;
+                    }
+                }
+                if (! is_array($matchedChunk)) continue;
+
+                $factType = strtolower((string) ($fact['fact_type'] ?? 'other'));
+                $factType = in_array($factType, $allowedFactTypes, true) ? $factType : 'other';
+                $locked->facts()->create([
+                    'source_sha256' => $locked->source_sha256,
+                    'fact_type' => $factType,
+                    'fact_key' => $factKey,
+                    'fact_value' => $factValue,
+                    'evidence_text' => $evidence,
+                    'locator_json' => is_array($matchedChunk['locator'] ?? null) ? $matchedChunk['locator'] : [],
+                    'verification_status' => 'evidence_backed',
+                ]);
+                $storedFactCount++;
+            }
+
             $inspection = is_array($payload['inspection'] ?? null) ? $payload['inspection'] : [];
             $structure = (array) ($locked->structure_json ?? []);
             $structure['inspection'] = $inspection;
             $structure['analysis_representation'] = $sourceExtension === 'docx' ? 'converted_pdf' : ($inspection['detected_type'] ?? 'unknown');
+            $structure['fact_count'] = $storedFactCount;
             $structure['ai_review'] = [
                 'review_id' => $payload['review_id'] ?? null,
                 'summary' => $payload['summary'] ?? null,
