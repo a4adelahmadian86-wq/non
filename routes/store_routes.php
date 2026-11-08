@@ -43,6 +43,7 @@ Route::middleware(['auth'])->group(function () {
 Route::get('/wallet/top-up/zarinpal/callback',[\App\Http\Controllers\WalletController::class,'topUpCallback'])->middleware('throttle:30,10')->name('wallet.topup.callback');
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('/store/{product}/ai-content/generate', [\App\Http\Controllers\AdminProductContentController::class, 'generate'])->middleware('throttle:3,10')->name('store.ai-content.generate');
     Route::post('/store/{product}/ai-supervisor/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'review'])->middleware('throttle:5,10')->name('store.ai-supervisor.review');
     Route::post('/store/{product}/ai-supervisor/files/{file}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewFile'])->middleware('throttle:5,10')->name('store.ai-supervisor.files.review');
     Route::post('/store/{product}/ai-supervisor/images/{image}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewImage'])->middleware('throttle:5,10')->name('store.ai-supervisor.images.review');
