@@ -229,6 +229,7 @@
     clearMarks();
     audio.src = track.url;
     audio.load();
+    buildMarks(activePage);
     dock.hidden = false;
     status.textContent = 'صوت از پیش آماده · همگام‌سازی کلمه‌به‌کلمه';
     caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
@@ -262,7 +263,8 @@
   root.addEventListener('farast:reader-section-change', event => selectSection(Number(event.detail?.section ?? 0)));
   root.addEventListener('farast:reader-page-change', event => {
     const page = Number(event.detail?.page || 1);
-    if (page !== activePage) { activePage = page; buildMarks(page); }
+    activePage = page;
+    buildMarks(page);
   });
   const observer = new MutationObserver(mutations => {
     const changed = mutations.some(mutation => [...mutation.addedNodes].some(node =>
