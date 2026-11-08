@@ -44,6 +44,7 @@
     }
     const id = ++requestId;
     stop();
+    window.FarastAudioReader?.pause();
     if (status()) status().textContent = 'در حال آماده‌سازی صدای انتخاب‌شده…';
     try {
       const response = await fetch(speechUrl, {
@@ -114,6 +115,24 @@
       return;
     }
 
+    const pdfText = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
+    if (pdfText) {
+      const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+      const node = caret?.startContainer;
+      if (node?.nodeType === Node.TEXT_NODE) {
+        const raw = node.nodeValue || '', offset = Number(caret.startOffset || 0);
+        const before = raw.slice(0, offset), after = raw.slice(offset);
+        const left = before.search(/[^.!؟۔؛]*$/u);
+        const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
+        const sentenceText = (before.slice(left < 0 ? 0 : left) + (right?.[0] || '')).trim();
+        if (sentenceText.length > 1) {
+          event.preventDefault();
+          speak(sentenceText, pageFor(pdfText), pdfText, 'در حال خواندن جملهٔ انتخاب‌شده');
+          return;
+        }
+      }
+    }
+
     const article = event.target.closest('.farast-reader-page-item');
     if (article && !event.target.closest('button,input,select,a,.farast-pdf-text-layer,.farast-pdf-cont-text,.reader-audio-dock')) {
       const page = pageFor(event.target);
@@ -121,6 +140,7 @@
       try { timings = JSON.parse(article.dataset.audioTiming || '[]'); } catch (_) {}
       const pageTimings = timings.filter(item => Number(item.page || page) === page && Number(item.end) > Number(item.start));
       if (pageTimings.length && window.FarastAudioReader?.playRange) {
+        stop();
         const first = pageTimings.reduce((a, b) => Number(a.start) <= Number(b.start) ? a : b);
         const last = pageTimings.reduce((a, b) => Number(a.end) >= Number(b.end) ? a : b);
         window.FarastAudioReader.selectSection(Number(article.dataset.index || 0));
@@ -128,6 +148,15 @@
       }
     }
   }, true);
+
+  root.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph');
+    if (!target) return;
+    event.preventDefault();
+    speak(target.textContent, pageFor(target), target,
+      target.classList.contains('reader-document-sentence') ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده');
+  });
 
   root.addEventListener('pointerup', () => {
     const text = selectedText();
