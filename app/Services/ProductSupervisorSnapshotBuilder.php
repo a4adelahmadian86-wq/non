@@ -7,6 +7,8 @@ use App\Models\StoreProduct;
 
 class ProductSupervisorSnapshotBuilder
 {
+    public function __construct(private ProductKnowledgeService $productKnowledge) {}
+
     public function build(StoreProduct $product, array $settings): array
     {
         $product->loadMissing(['category', 'tags']);
@@ -28,6 +30,8 @@ class ProductSupervisorSnapshotBuilder
                 ->toArray(),
         ];
         $mediaFingerprint = $this->fingerprint($mediaParts);
+        $documentKnowledge = $this->productKnowledge->contextForProduct($product, 18000, false);
+        $documentKnowledgeFingerprint = $this->fingerprint($documentKnowledge);
 
         $publishableLessons = 0;
         $courseFingerprint = null;
@@ -78,6 +82,8 @@ class ProductSupervisorSnapshotBuilder
             'tags' => $product->tags->pluck('name')->take(30)->values()->all(),
             'has_cover' => filled($product->cover_path),
             'media_fingerprint' => $mediaFingerprint,
+            'document_knowledge' => $documentKnowledge,
+            'document_knowledge_fingerprint' => $documentKnowledgeFingerprint,
             'course_fingerprint' => $courseFingerprint,
             'active_image_count' => $product->images()->where('is_active', true)->count(),
             'has_clean_primary_file' => $product->files()
