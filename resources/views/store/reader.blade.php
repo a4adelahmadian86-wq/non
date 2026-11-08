@@ -3,7 +3,7 @@
 @php
   $readerWatermark = trim((string) ($readerIdentity ?? ('کاربر #'.auth()->id())));
 @endphp
-<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" data-reader-mode="{{ $readerMode ?? 'sample' }}" data-reader-audio-url="{{ $readerAudioUrl ?? '' }}" @if(($readerMode ?? 'sample') === 'full') @auth data-reader-speech-url="{{ route('store.reader.speech', $product) }}" @endauth @endif @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
+<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" data-reader-mode="{{ $readerMode ?? 'sample' }}" data-reader-audio-url="{{ $readerAudioUrl ?? '' }}" @if(($readerMode ?? 'sample') === 'document') @auth data-reader-speech-url="{{ route('store.reader.speech', $product) }}" @endauth @endif @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
   <header class="farast-reader-header">
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
@@ -12,6 +12,25 @@
     </div>
     <div class="farast-reader-account"><i class="fa-solid fa-user-shield"></i><span>{{ $readerWatermark }}</span></div>
   </header>
+
+  @if(($readerMode ?? 'sample') === 'document' && filled($readerAudioUrl ?? null) && !empty($readerAudioTiming))
+    <section class="farast-reader-audio" data-reader-audio aria-label="پخش صوت کامل سند" hidden>
+      <button type="button" data-audio-play aria-label="پخش صوت سند"><i class="fa-solid fa-play"></i></button>
+      <input type="range" min="0" max="1000" value="0" step="1" data-audio-seek aria-label="موقعیت پخش صوت سند">
+      <span data-audio-current>۰۰:۰۰</span>
+      <span>/</span>
+      <span data-audio-duration>۰۰:۰۰</span>
+      <label>سرعت
+        <select data-audio-speed aria-label="سرعت پخش صوت سند">
+          <option value="0.75">۰٫۷۵×</option><option value="1" selected>۱×</option>
+          <option value="1.25">۱٫۲۵×</option><option value="1.5">۱٫۵×</option>
+          <option value="1.75">۱٫۷۵×</option><option value="2">۲×</option>
+        </select>
+      </label>
+      <span class="farast-reader-audio-status" data-audio-status aria-live="polite">صوت سند آماده است</span>
+    </section>
+    <script type="application/json" id="reader-audio-timing">{!! json_encode($readerAudioTiming, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) !!}</script>
+  @endif
 
   <nav class="farast-reader-toolbar" aria-label="ابزارهای مطالعه">
     <div class="farast-reader-toolgroup">
