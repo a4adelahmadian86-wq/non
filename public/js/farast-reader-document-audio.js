@@ -356,6 +356,7 @@
   };
 
   window.FarastDocumentAudioReader = {
+    audio,
     playRange,
     playPage,
     pause() { rangeEnd = null; audio.pause(); },
