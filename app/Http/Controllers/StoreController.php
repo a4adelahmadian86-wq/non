@@ -347,7 +347,10 @@ class StoreController extends Controller
             if ($document) {
                 $document->loadMissing(['pages', 'chunks', 'artifacts']);
                 $structure = (array) ($document->structure_json ?? []);
-                $sourceMatches = hash_equals((string) $primaryFile->sha256, (string) $document->source_sha256);
+                $sourceMatches = (int) $document->product_id === (int) $product->id
+                    && (int) $document->product_file_id === (int) $primaryFile->id
+                    && filled($primaryFile->sha256)
+                    && hash_equals((string) $primaryFile->sha256, (string) $document->source_sha256);
                 $readerReady = $sourceMatches
                     && in_array($document->processing_status, ['completed', 'extracted'], true)
                     && (bool) data_get($structure, 'reader.ready', false);
