@@ -207,7 +207,15 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || 'ذخیره‌سازی فایل انجام نشد.');
       setStep(null, ['received', 'inspect', 'review', 'store']);
-      report.insertAdjacentHTML('beforeend', '<div class="product-ingestion-warning" style="background:#eaf7ef;color:#236b43">فایل با موفقیت ذخیره شد. اطلاعات بررسی اولیه ثبت شد و فایل آماده مرحله مطالعه محتوایی است.</div>');
+      const processingState = payload.file?.processing_status || 'pending';
+      const processingLabel = processingState === 'completed'
+        ? 'مطالعه و تحلیل محتوایی فایل تکمیل شد.'
+        : processingState === 'extracted'
+          ? 'متن و ساختار استخراج شد؛ تحلیل معنایی کامل نیست.'
+          : processingState === 'awaiting_provider'
+            ? 'فایل ذخیره شد؛ برای مطالعه محتوایی باید اتصال موتور هوش مصنوعی تنظیم شود.'
+            : 'فایل ذخیره شد و برای مطالعه محتوایی در صف پردازش قرار گرفت.';
+      report.insertAdjacentHTML('beforeend', '<div class="product-ingestion-warning" style="background:#eaf7ef;color:#236b43">' + escapeHtml(processingLabel) + '</div>');
       if (state.primaryForCurrent) state.primaryCommitted = true;
       state.busy = false;
       confirmButton.textContent = 'ذخیره شد';
