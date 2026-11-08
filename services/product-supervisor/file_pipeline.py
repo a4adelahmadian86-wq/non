@@ -234,13 +234,14 @@ def _split_text_blocks(text: str) -> list[dict[str, Any]]:
             block_type = "slide"
         elif page_match:
             block_type = "page_text"
-        blocks.append({
-            "block_type": block_type,
-            "page_number": int(page_match.group(1)) if page_match else None,
-            "text": value[:6000],
-        })
-        if len(blocks) >= 2000:
-            break
+        for offset in range(0, len(value), 6000):
+            blocks.append({
+                "block_type": block_type,
+                "page_number": int(page_match.group(1)) if page_match else None,
+                "text": value[offset:offset + 6000],
+            })
+            if len(blocks) >= 2000:
+                return blocks
     return blocks
 
 
