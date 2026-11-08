@@ -55,6 +55,7 @@
         @endif
         <label class="product-field">نسخه / ویرایش<input name="version" value="{{ old('version',$product->version) }}" maxlength="60" placeholder="مثلاً 1.0"></label>
         <label class="product-field">نوع مجوز استفاده<input name="license_type" value="{{ old('license_type',$product->license_type) }}" maxlength="60" placeholder="مثلاً شخصی / استاندارد"></label>
+        <label class="product-field">سیاست دسترسی به فایل<select name="download_policy"><option value="signed" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'signed')>دانلود پس از خرید</option><option value="reader_only" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'reader_only')>فقط مطالعه در خوانشگر، بدون دانلود</option></select></label>
         <label class="product-field">سیاست دریافت فایل<select name="download_policy"><option value="signed" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'signed')>دانلود پس از خرید</option><option value="reader_only" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'reader_only')>فقط مطالعه در خوانشگر (بدون دانلود)</option></select></label>
         <label class="product-field">ترتیب نمایش<input type="number" name="sort_order" value="{{ old('sort_order',$product->sort_order ?? 0) }}" min="0"></label>
         <label class="product-field">تعداد صفحات نمونه<input type="number" name="preview_pages" value="{{ old('preview_pages',$product->preview_pages ?? 3) }}" min="0" max="50"></label>
@@ -191,6 +192,7 @@
           <form method="post" action="{{ route('admin.store.previews.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>
             @csrf
             <input type="file" name="preview" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx" required>
+            <label class="product-field">سطح دسترسی این سند<select name="access_level"><option value="sample">نمونهٔ قابل مشاهده برای همه</option><option value="full">نسخهٔ کامل (فقط برای خریداران محصول فقط‌خواندنی)</option></select></label>
             <small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small>
             <input type="number" name="page_number" min="1" max="500" placeholder="شماره صفحه">
             <button type="submit" class="store-outline-btn">افزودن پیش‌نمایش</button>
