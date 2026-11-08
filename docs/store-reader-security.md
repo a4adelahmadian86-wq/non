@@ -8,7 +8,7 @@ Prepared artifacts are created once in the administrator upload/preparation flow
 - PDF and image uploads are stored as private preview assets.
 - DOCX uploads are validated and converted to a neutral, paginated PDF before the preview record is created.
 - XLSX uploads are parsed into safe, read-only HTML before the preview record is created. Formulas are not evaluated.
-- The reader serves only these stored artifacts. Legacy raw DOCX/XLSX preview records are rejected (HTTP 409) until re-prepared.
+- The reader serves only these stored artifacts. Legacy raw DOCX/XLSX preview records are rejected (HTTP 409) until re-prepared. The one-time `farast:prepare-reader-previews` command migrates existing records to stored PDF/HTML artifacts; run it with `--dry-run` first.
 - Future AI sample-page selection belongs in the upload/preparation pipeline. It should save selected page assets and metadata once; it is not reader functionality.
 
 ## Supported preview formats and limits
@@ -56,6 +56,8 @@ CI should cover:
 1. Laravel feature tests for guest IP watermark, authenticated mobile watermark, prepared-only Office delivery, full-content entitlement, revocation, and reader-only download denial.
 2. Playwright tests for PDF.js rendering and watermark visibility, text search, page controls, zoom/rotation, lazy thumbnail loading, and copy/context-menu suppression.
 3. Migration, route, Blade cache, and JavaScript syntax checks.
+
+For an existing installation, run `php artisan farast:prepare-reader-previews --dry-run`, review the listed records, then run `php artisan farast:prepare-reader-previews` during a controlled maintenance window before enabling the new reader routes. New uploads are prepared automatically in the admin upload flow.
 
 Automated fixtures do not replace manual visual QA against representative customer PDFs, DOCX, and XLSX files on desktop and mobile browsers. Production deployment, migrations, trusted-proxy configuration, private-disk permissions, and actual uploaded sample content must be verified in the target environment.
 
