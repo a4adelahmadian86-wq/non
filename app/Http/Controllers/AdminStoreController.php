@@ -545,23 +545,26 @@ class AdminStoreController extends Controller
             'ai_supervisor.instructions' => 'nullable|string|max:4000',
         ]);
         $existingMetadata = $product?->metadata ?? [];
-        $supervisorChecks = [
-            'content' => $request->boolean('ai_supervisor.checks.content'),
-            'pricing' => $request->boolean('ai_supervisor.checks.pricing'),
-            'seo' => $request->boolean('ai_supervisor.checks.seo'),
-            'media' => $request->boolean('ai_supervisor.checks.media'),
-            'policy' => $request->boolean('ai_supervisor.checks.policy'),
-            'course' => $request->boolean('ai_supervisor.checks.course'),
-        ];
-        $data['metadata'] = array_merge($existingMetadata, [
-            'ai_supervisor' => [
-                'enabled' => $request->boolean('ai_supervisor.enabled'),
-                'mode' => $request->input('ai_supervisor.mode', 'suggest'),
-                'checks' => $supervisorChecks,
-                'instructions' => trim((string) $request->input('ai_supervisor.instructions', '')),
-                'configuration_version' => 1,
-            ],
-        ]);
+        $data['metadata'] = $existingMetadata;
+        if ($request->has('ai_supervisor')) {
+            $supervisorChecks = [
+                'content' => $request->boolean('ai_supervisor.checks.content'),
+                'pricing' => $request->boolean('ai_supervisor.checks.pricing'),
+                'seo' => $request->boolean('ai_supervisor.checks.seo'),
+                'media' => $request->boolean('ai_supervisor.checks.media'),
+                'policy' => $request->boolean('ai_supervisor.checks.policy'),
+                'course' => $request->boolean('ai_supervisor.checks.course'),
+            ];
+            $data['metadata'] = array_merge($existingMetadata, [
+                'ai_supervisor' => [
+                    'enabled' => $request->boolean('ai_supervisor.enabled'),
+                    'mode' => $request->input('ai_supervisor.mode', 'suggest'),
+                    'checks' => $supervisorChecks,
+                    'instructions' => trim((string) $request->input('ai_supervisor.instructions', '')),
+                    'configuration_version' => 1,
+                ],
+            ]);
+        }
         $data['tag_ids'] = $request->input('tag_ids', []);
         $data['related_product_ids'] = array_values(array_filter($request->input('related_product_ids', []), fn ($id) => ! $product || (int) $id !== (int) $product->id));
         $data['featured'] = $request->boolean('featured');
