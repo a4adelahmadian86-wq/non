@@ -216,6 +216,9 @@
             @if(data_get($file->document?->structure_json, 'ai_review.summary'))
               <small class="product-asset-review-inline">{{ data_get($file->document?->structure_json, 'ai_review.summary') }}</small>
             @endif
+            @if(data_get($file->document?->structure_json, 'sample.selected_pages'))
+              <small>فایل نمونه یک‌بار ساخته شده · صفحات {{ implode('، ', data_get($file->document?->structure_json, 'sample.selected_pages', [])) }}</small>
+            @endif
           </span>
           @if($fileReview && hash_equals((string) ($fileReview['sha256'] ?? ''), (string) $file->sha256))
             @include('admin.store.partials.asset-review', ['assetReview' => $fileReview, 'label' => 'گزارش ناظر فایل'])
