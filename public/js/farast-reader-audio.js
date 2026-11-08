@@ -31,7 +31,7 @@
       url: article.dataset.audioUrl || '',
       timings: validTimings,
       granularity: validTimings.some(item => item.words.length > 0) ? 'word' : 'segment',
-      alignmentQuality: validTimings.length > 0 && validTimings.every(item => item.alignment_quality === 'phoneme') ? 'phoneme' : 'estimated'
+      alignmentQuality: validTimings.length > 0 && validTimings.every(item => item.words.length > 0 && item.alignment_quality === 'phoneme') ? 'phoneme' : 'estimated'
     };
   });
   const tracks = parseTracks();
