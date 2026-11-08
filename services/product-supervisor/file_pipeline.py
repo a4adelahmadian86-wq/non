@@ -588,7 +588,7 @@ def _extract_docx(data: bytes) -> str:
 
 
 
-def _extract_xlsx(data: bytes) -> str:
+def _extract_xlsx(data: bytes) -> tuple[str, bool]:
     archive, _ = _validate_archive(data)
     names = set(archive.namelist())
     if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
@@ -599,7 +599,10 @@ def _extract_xlsx(data: bytes) -> str:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
         parts: list[str] = []
         char_count = 0
+        truncated = len(workbook.worksheets) > 20
         for sheet in workbook.worksheets[:20]:
+            if (sheet.max_row or 0) > 300 or (sheet.max_column or 0) > 30:
+                truncated = True
             heading = f"برگه: {sheet.title}"
             parts.append(heading)
             char_count += len(heading)
@@ -610,16 +613,20 @@ def _extract_xlsx(data: bytes) -> str:
                     parts.append(line)
                     char_count += len(line)
                 if char_count >= MAX_EXTRACTED_CHARS:
+                    truncated = True
                     break
             if char_count >= MAX_EXTRACTED_CHARS:
                 break
+        text = "\n".join(parts)
+        if len(text) > MAX_EXTRACTED_CHARS:
+            truncated = True
         workbook.close()
-        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+        return text[:MAX_EXTRACTED_CHARS], truncated
     except Exception:
         raise FileInspectionError("استخراج امن محتوای Excel انجام نشد.") from None
 
 
-def _extract_pptx(data: bytes) -> str:
+def _extract_pptx(data: bytes) -> tuple[str, bool]:
     archive, _ = _validate_archive(data)
     names = set(archive.namelist())
     if "[Content_Types].xml" not in names or "ppt/presentation.xml" not in names:
@@ -630,8 +637,10 @@ def _extract_pptx(data: bytes) -> str:
         presentation = Presentation(io.BytesIO(data))
         parts: list[str] = []
         char_count = 0
+        truncated = len(presentation.slides) > 100
         for slide_number, slide in enumerate(presentation.slides, start=1):
             if slide_number > 100 or char_count >= MAX_EXTRACTED_CHARS:
+                truncated = True
                 break
             heading = f"اسلاید {slide_number}"
             parts.append(heading)
@@ -648,8 +657,12 @@ def _extract_pptx(data: bytes) -> str:
                         parts.append(line)
                         char_count += len(line)
                 if char_count >= MAX_EXTRACTED_CHARS:
+                    truncated = True
                     break
-        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+        text = "\n".join(parts)
+        if len(text) > MAX_EXTRACTED_CHARS:
+            truncated = True
+        return text[:MAX_EXTRACTED_CHARS], truncated
     except Exception:
         raise FileInspectionError("استخراج امن محتوای PowerPoint انجام نشد.") from None
 
