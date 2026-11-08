@@ -191,7 +191,7 @@ class StoreController extends Controller
         $product = StoreProduct::with([
             'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
             'files' => fn ($query) => $query->where('purpose', 'product_download')
-                ->where('is_primary', true)->where('is_active', true)->where('scan_status', 'clean'),
+                ->where('is_primary', true)->where('is_active', true)->where('scan_status', 'clean')->orderByDesc('id'),
         ])->published()->where('slug', $slug)->firstOrFail();
 
         $user = request()->user();
@@ -331,7 +331,13 @@ class StoreController extends Controller
             'page_number' => (int) $pageRecord->page_number,
             'page_count' => (int) data_get($document->structure_json, 'reader.page_count', 0),
             'page_kind' => (string) $pageRecord->page_kind,
-            'label' => (string) data_get($pageRecord->locator_json, 'sheet', data_get($pageRecord->locator_json, 'archive_entry', 'بخش '.$pageRecord->page_number)),
+            'label' => match ($pageRecord->page_kind) {
+                'pdf_page' => 'صفحه '.$pageRecord->page_number,
+                'slide' => 'اسلاید '.$pageRecord->page_number,
+                'sheet' => 'برگه '.(string) data_get($pageRecord->locator_json, 'sheet', $pageRecord->page_number),
+                'archive_entry' => (string) data_get($pageRecord->locator_json, 'archive_entry', 'فایل داخل آرشیو'),
+                default => 'بخش '.$pageRecord->page_number,
+            },
             'content_text' => (string) $pageRecord->content_text,
             'has_extracted_text' => (bool) $pageRecord->has_extracted_text,
             'content_sha256' => (string) $pageRecord->content_sha256,
@@ -370,7 +376,10 @@ class StoreController extends Controller
             404
         );
 
+        abort_unless((bool) data_get($document->structure_json, 'reader.ready', false)
+            && data_get($document->structure_json, 'audio.status') === 'completed', 409);
         $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 1)->firstOrFail();
+        abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
         $disk = Storage::disk($artifact->disk ?: 'private');
         abort_unless($disk->exists($artifact->path), 404);
         $size = (int) $disk->size($artifact->path);
