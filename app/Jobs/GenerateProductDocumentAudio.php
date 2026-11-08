@@ -95,7 +95,7 @@ class GenerateProductDocumentAudio implements ShouldQueue
                 $chunk = $chunkByIndex->get((int) ($segment['chunk_index'] ?? -1));
                 $locator = (array) ($segment['locator'] ?? []);
                 $page = (int) ($locator['reader_page'] ?? $locator['page'] ?? $locator['page_start'] ?? 0);
-                $text = trim((string) ($chunk['content_text'] ?? ''));
+                $text = trim((string) ($segment['text'] ?? $chunk['content_text'] ?? ''));
                 if ($page < 1 || $text === '') return null;
 
                 return [
