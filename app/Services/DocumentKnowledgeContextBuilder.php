@@ -1,9 +1,9 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\StoreDocumentRecord;
-use Illuminate\\Support\\Collection;
+use App\Models\StoreDocumentRecord;
+use Illuminate\Support\Collection;
 
 class DocumentKnowledgeContextBuilder
 {
@@ -103,7 +103,7 @@ class DocumentKnowledgeContextBuilder
 
         $limit = max(1000, min(30000, $maxCharacters));
         $remaining = $limit;
-        $matchedChunks = \\App\\Models\\StoreDocumentChunk::query()
+        $matchedChunks = \App\Models\StoreDocumentChunk::query()
             ->whereIn('document_id', $documentIds)
             ->where('content', 'like', '%'.$term.'%')
             ->orderBy('document_id')
@@ -134,7 +134,7 @@ class DocumentKnowledgeContextBuilder
             $remaining -= mb_strlen($content);
         }
 
-        $facts = \\App\\Models\\StoreDocumentFact::query()
+        $facts = \App\Models\StoreDocumentFact::query()
             ->whereIn('document_id', array_values(array_unique($matchedDocumentIds)))
             ->where(function ($builder) use ($term) {
                 $builder->where('fact_key', 'like', '%'.$term.'%')->orWhere('fact_value', 'like', '%'.$term.'%');
