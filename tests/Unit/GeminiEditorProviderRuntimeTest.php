@@ -59,6 +59,48 @@ class GeminiEditorProviderRuntimeTest extends TestCase
         });
     }
 
+    public function test_gemini_prompt_includes_product_facts_and_forbids_unsupported_claims(): void
+    {
+        $this->configureGemini();
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/v1beta/interactions' => Http::response([
+                'id' => 'int_product_context',
+                'steps' => [[
+                    'type' => 'model_output',
+                    'content' => [[
+                        'type' => 'text',
+                        'text' => '{"titles":["کتاب آموزشی نمونه"]}',
+                    ]],
+                ]],
+            ], 200),
+        ]);
+
+        (new GeminiEditorProvider())->execute([
+            'name' => 'text.title',
+            'result' => 'titles',
+        ], [
+            'text' => 'برای محصول عنوان پیشنهاد بده',
+            'context' => [
+                'product_reference' => ['title' => 'کتاب نمونه'],
+                'document_knowledge' => [
+                    'knowledge_status' => 'available',
+                    'facts' => [['key' => 'duration', 'value' => '۷ ساعت', 'evidence' => 'مدت کتاب صوتی ۷ ساعت است.', 'verification_status' => 'evidence_backed']],
+                    'chunks' => [['content' => 'FACT_FROM_ORIGINAL_FILE']],
+                ],
+            ],
+        ], 'request-product-context');
+
+        Http::assertSent(function ($request): bool {
+            $prompt = (string) data_get($request->data(), 'input.0.text', '');
+
+            return str_contains($prompt, 'FACT_FROM_ORIGINAL_FILE')
+                && str_contains($prompt, '۷ ساعت')
+                && str_contains($prompt, 'هیچ ویژگی')
+                && str_contains($prompt, 'حدس نزن');
+        });
+    }
+
     public function test_gemini_provider_maps_auth_failure_to_stable_error_code(): void
     {
         $this->configureGemini();
