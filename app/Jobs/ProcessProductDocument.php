@@ -241,7 +241,7 @@ class ProcessProductDocument implements ShouldQueue
 
             $documentHtmlPreviews = StoreProductPreview::query()
                 ->where('product_id', $locked->product_id)
-                ->where('kind', 'document_html')
+                ->whereIn('kind', ['document_html', 'image'])
                 ->whereIn('access_level', ['sample', 'full'])
                 ->where('source_sha256', $locked->source_sha256);
             $documentHtmlPreviews->update(['is_active' => false]);
@@ -252,21 +252,35 @@ class ProcessProductDocument implements ShouldQueue
                     array_map('intval', (array) ($payload['sample_page_numbers'] ?? [])),
                     static fn ($page) => $page > 0
                 )));
+                $sampleSheetNames = array_values(array_unique(array_filter(
+                    array_map(static fn ($sheet) => is_string($sheet) ? trim($sheet) : '', (array) ($payload['sample_sheet_names'] ?? [])),
+                    static fn ($sheet) => $sheet !== ''
+                )));
+                $isImageSource = in_array($sourceExtension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff'], true);
                 $samplePagesCreated = [];
                 $sampleSourcePagesCreated = [];
+                $sampleSheetsCreated = [];
 
                 foreach ($storedPages as $page) {
                     $sourcePageNumber = $sourceExtension === 'pptx'
                         ? (int) data_get($page->locator_json, 'slide', $page->page_number)
                         : (int) $page->page_number;
+                    $sheetName = (string) data_get($page->locator_json, 'sheet', '');
+                    $isSamplePage = in_array($sourcePageNumber, $samplePageNumbers, true);
+                    if ($sourceExtension === 'xlsx') {
+                        $isSamplePage = $sheetName !== '' && in_array($sheetName, $sampleSheetNames, true);
+                    }
+
                     $basePreview = [
-                        'disk' => 'private',
-                        'path' => 'store/products/'.$locked->product_id.'/documents/'.$locked->source_sha256.'/reader/page-'.$page->page_number.'.html',
-                        'mime' => 'text/html',
+                        'disk' => $isImageSource ? ($file->disk ?: 'private') : 'private',
+                        'path' => $isImageSource
+                            ? $file->path
+                            : 'store/products/'.$locked->product_id.'/documents/'.$locked->source_sha256.'/reader/page-'.$page->page_number.'.html',
+                        'mime' => $isImageSource ? ($file->mime ?: 'image/jpeg') : 'text/html',
                         'page_number' => $page->page_number,
                         'source_page_count' => count($storedPages),
                         'included_page_count' => 1,
-                        'kind' => 'document_html',
+                        'kind' => $isImageSource ? 'image' : 'document_html',
                         'source_sha256' => $locked->source_sha256,
                         'watermarked' => true,
                         'is_active' => true,
@@ -280,24 +294,29 @@ class ProcessProductDocument implements ShouldQueue
                         );
                     }
 
-                    if (in_array($sourcePageNumber, $samplePageNumbers, true)) {
+                    if ($isSamplePage) {
                         StoreProductPreview::query()->updateOrCreate(
                             ['product_id' => $locked->product_id, 'product_document_page_id' => $page->id, 'access_level' => 'sample'],
                             array_merge($basePreview, ['product_document_page_id' => $page->id, 'access_level' => 'sample'])
                         );
                         $samplePagesCreated[] = (int) $page->page_number;
-                        $sampleSourcePagesCreated[] = $sourcePageNumber;
+                        if ($sourceExtension === 'xlsx') {
+                            $sampleSheetsCreated[] = $sheetName;
+                        } else {
+                            $sampleSourcePagesCreated[] = $sourcePageNumber;
+                        }
                     }
                 }
 
                 if ($samplePagesCreated !== []) {
                     $structure['sample'] = [
                         'selected_pages' => $sampleSourcePagesCreated,
+                        'selected_sheets' => $sampleSheetsCreated,
                         'reader_pages' => $samplePagesCreated,
                         'source_page_count' => count($storedPages),
                         'included_page_count' => count($samplePagesCreated),
                         'generated_once' => true,
-                        'generator' => 'laravel_document_page_builder',
+                        'generator' => $isImageSource ? 'source_image' : 'laravel_document_page_builder',
                     ];
                 }
             }
