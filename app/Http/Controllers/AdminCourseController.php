@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessProductDocument;
+
 use App\Models\StoreCourse;
 use App\Models\StoreCourseLesson;
 use App\Models\StoreCourseSection;
