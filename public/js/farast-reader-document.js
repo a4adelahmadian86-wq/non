@@ -301,7 +301,7 @@
   };
 
   root.addEventListener('farast:reader-section-change', (event) => {
-    const index = Number(event.detail?.index ?? 0);
+    const index = Number(event.detail?.index ?? event.detail?.section ?? 0);
     const article = root.querySelector('.farast-reader-page-item[data-index="' + index + '"]');
     loadPage(article);
   });
