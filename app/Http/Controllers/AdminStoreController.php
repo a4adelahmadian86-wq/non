@@ -303,10 +303,13 @@ class AdminStoreController extends Controller
         $request->validate([
             'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf,docx,xlsx|max:20480',
             'page_number' => 'nullable|integer|min:1|max:500',
+            'access_level' => 'nullable|in:sample,full',
         ]);
 
         $upload = $request->file('preview');
         $extension = strtolower($upload->getClientOriginalExtension());
+        $accessLevel = $request->input('access_level', 'sample');
+        abort_if($accessLevel === 'full' && $product->download_policy !== 'reader_only', 422, 'محتوای کامل فقط برای محصول با سیاست فقط‌خواندنی قابل ثبت است.');
         $sourcePath = $upload->store('store/quarantine/previews/'.$product->id, 'private');
         $preparedPath = null;
         try {
@@ -343,7 +346,7 @@ class AdminStoreController extends Controller
                 $directory = 'store/previews/'.$product->id;
                 $filename = Str::random(40).'.'.$extension;
                 $preparedPath = $directory.'/'.$filename;
-                Storage::disk('private')->move($sourcePath, $preparedPath);
+                abort_unless(Storage::disk('private')->move($sourcePath, $preparedPath), 503, 'انتقال فایل آماده ممکن نشد.');
                 $finalPath = $preparedPath;
             }
 
@@ -351,7 +354,7 @@ class AdminStoreController extends Controller
                 Storage::disk('private')->delete($sourcePath);
             }
 
-            DB::transaction(function () use ($product, $finalPath, $mime, $request, $kind) {
+            DB::transaction(function () use ($product, $finalPath, $mime, $request, $kind, $accessLevel) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
                 StoreProductPreview::create([
@@ -361,6 +364,7 @@ class AdminStoreController extends Controller
                     'mime' => $mime,
                     'page_number' => $request->input('page_number') ?: $sort,
                     'kind' => $kind,
+                    'access_level' => $accessLevel,
                     'watermarked' => true,
                     'is_active' => true,
                     'sort_order' => $sort,
@@ -368,6 +372,7 @@ class AdminStoreController extends Controller
                 $this->audit('store.product.preview_uploaded', $lockedProduct, [
                     'mime' => $mime,
                     'kind' => $kind,
+                    'access_level' => $accessLevel,
                     'sort_order' => $sort,
                 ]);
             });
