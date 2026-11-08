@@ -100,10 +100,12 @@ class AdminStoreController extends Controller
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
+        $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
+            && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+        $hasFullReaderAsset = $product->previews->contains(fn ($preview) => $preview->is_active && $preview->access_level === 'full');
         $contentReady = $product->type === 'course'
             ? ($product->course?->sections()->whereHas('lessons', fn ($query) => $query->publishable())->exists() ?? false)
-            : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
-                && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
+            : ($hasSafePrimaryFile && (($product->download_policy ?? 'signed') !== 'reader_only' || $hasFullReaderAsset));
 
         $supervisorSettings = (array) data_get($product->metadata, 'ai_supervisor', []);
         $supervisorEnabled = (bool) data_get($supervisorSettings, 'enabled', false);
@@ -121,7 +123,7 @@ class AdminStoreController extends Controller
             ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0 && ($product->compare_at_price_rials === null || $product->compare_at_price_rials > $product->price_rials), 'required' => true],
             ['label' => 'معرفی محصول', 'ready' => filled($product->short_description) || filled($product->description), 'required' => false],
             ['label' => 'تصویر کاور', 'ready' => filled($product->cover_path), 'required' => false],
-            ['label' => $product->type === 'course' ? 'حداقل یک جلسه معتبر و منتشرشده' : 'فایل اصلی سالم و فعال', 'ready' => $contentReady, 'required' => true],
+            ['label' => $product->type === 'course' ? 'حداقل یک جلسه معتبر و منتشرشده' : (($product->download_policy ?? 'signed') === 'reader_only' ? 'فایل اصلی سالم و محتوای کامل خوانشگر' : 'فایل اصلی سالم و فعال'), 'ready' => $contentReady, 'required' => true],
             ['label' => 'اطلاعات سئو', 'ready' => filled($product->seo_title) && filled($product->seo_description), 'required' => false],
             ['label' => 'سیاست ناظر هوشمند', 'ready' => ! $supervisorEnabled || filled(data_get($product->metadata, 'ai_supervisor.mode')), 'required' => false],
         ];
@@ -189,6 +191,10 @@ class AdminStoreController extends Controller
                         ->exists();
                     if (! $hasSafePrimaryFile) {
                         throw ValidationException::withMessages(['status' => 'برای انتشار محصول، یک فایل اصلی فعال با اسکن امنیتی موفق لازم است.']);
+                    }
+                    $downloadPolicy = $data['download_policy'] ?? $lockedProduct->download_policy;
+                    if ($downloadPolicy === 'reader_only' && ! $lockedProduct->previews()->where('is_active', true)->where('access_level', 'full')->exists()) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار محصول فقط‌خواندنی، ابتدا محتوای کامل را در بخش خوانشگر بارگذاری کنید.']);
                     }
                 }
                 if (! $lockedProduct->published_at && empty($data['published_at'])) {
@@ -359,44 +365,95 @@ class AdminStoreController extends Controller
 
     public function uploadPreview(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
+        abort_unless($product->type !== 'course', 422, 'برای دوره، نمونه‌ها را در ساختار جلسات دوره تعریف کنید.');
         $request->validate([
-            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf|max:20480',
+            'preview' => 'required|file|mimes:jpg,jpeg,png,webp,gif,pdf,docx,xlsx|max:20480',
             'page_number' => 'nullable|integer|min:1|max:500',
+            'access_level' => 'nullable|in:sample,full',
         ]);
 
         $upload = $request->file('preview');
-        $path = $upload->store('store/previews/'.$product->id, 'private');
+        $extension = strtolower($upload->getClientOriginalExtension());
+        $accessLevel = $request->input('access_level', 'sample');
+        abort_if($accessLevel === 'full' && $product->download_policy !== 'reader_only', 422, 'محتوای کامل فقط برای محصول با سیاست فقط‌خواندنی قابل ثبت است.');
+        $sourcePath = $upload->store('store/quarantine/previews/'.$product->id, 'private');
+        $preparedPath = null;
         try {
-            $inspection = $security->inspect($path, $upload->getMimeType(), 20 * 1024 * 1024, [
-                'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
+            $inspection = $security->inspect($sourcePath, $upload->getMimeType(), 20 * 1024 * 1024, [
+                'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/zip',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ]);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ پیش‌نمایش ذخیره نشد.');
 
-            DB::transaction(function () use ($product, $path, $inspection, $request) {
+            $kind = match ($extension) {
+                'pdf' => 'pdf',
+                'docx' => 'pdf',
+                'xlsx' => 'html',
+                default => 'image',
+            };
+            $mime = $kind === 'pdf' ? 'application/pdf' : ($kind === 'html' ? 'text/html' : $inspection['mime']);
+            $finalPath = $sourcePath;
+
+            if ($extension === 'docx') {
+                $preparedBytes = app(StoreController::class)->prepareDocxPreview(Storage::disk('private')->get($sourcePath));
+                $preparedPath = 'store/previews/'.$product->id.'/'.Str::random(40).'.pdf';
+                abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده PDF ممکن نشد.');
+                $finalPath = $preparedPath;
+            } elseif ($extension === 'xlsx') {
+                $preparedBytes = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
+                    Storage::disk('private')->get($sourcePath),
+                    ''
+                );
+                $preparedPath = 'store/previews/'.$product->id.'/'.Str::random(40).'.html';
+                abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده Excel ممکن نشد.');
+                $finalPath = $preparedPath;
+            } else {
+                $directory = 'store/previews/'.$product->id;
+                $filename = Str::random(40).'.'.$extension;
+                $preparedPath = $directory.'/'.$filename;
+                abort_unless(Storage::disk('private')->put($preparedPath, Storage::disk('private')->get($sourcePath)), 503, 'ذخیره فایل آماده ممکن نشد.');
+                $finalPath = $preparedPath;
+            }
+
+            if ($finalPath !== $sourcePath) {
+                Storage::disk('private')->delete($sourcePath);
+            }
+
+            DB::transaction(function () use ($product, $finalPath, $mime, $request, $kind, $accessLevel) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
                 StoreProductPreview::create([
                     'product_id' => $lockedProduct->id,
                     'disk' => 'private',
-                    'path' => $path,
-                    'mime' => $inspection['mime'],
+                    'path' => $finalPath,
+                    'mime' => $mime,
                     'page_number' => $request->input('page_number') ?: $sort,
-                    'kind' => $inspection['mime'] === 'application/pdf' ? 'pdf' : 'image',
+                    'kind' => $kind,
+                    'access_level' => $accessLevel,
                     'watermarked' => true,
                     'is_active' => true,
                     'sort_order' => $sort,
                 ]);
-                $this->audit('store.product.preview_uploaded', $lockedProduct, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
+                $this->audit('store.product.preview_uploaded', $lockedProduct, [
+                    'mime' => $mime,
+                    'kind' => $kind,
+                    'access_level' => $accessLevel,
+                    'sort_order' => $sort,
+                ]);
             });
         } catch (Throwable $exception) {
-            Storage::disk('private')->delete($path);
+            Storage::disk('private')->delete($sourcePath);
+            if ($preparedPath) {
+                Storage::disk('private')->delete($preparedPath);
+            }
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
-            abort(503, 'بارگذاری پیش‌نمایش به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
+            abort(503, 'آماده‌سازی پیش‌نمایش به دلیل ناموفق بودن بررسی امنیتی یا تبدیل فایل متوقف شد.');
         }
 
-        return back()->with('status', 'پیش‌نمایش پس از اسکن امنیتی اضافه شد.');
+        return back()->with('status', 'پیش‌نمایش آماده و خصوصی ذخیره شد؛ خوانشگر فقط نسخهٔ آماده را نمایش می‌دهد.');
     }
 
     public function uploadCover(Request $request, StoreProduct $product, UploadSecurityService $security)
@@ -620,6 +677,7 @@ class AdminStoreController extends Controller
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'preview_pages' => 'nullable|integer|min:0|max:50',
             'license_type' => 'nullable|string|max:60',
+            'download_policy' => 'sometimes|in:signed,reader_only',
             'version' => 'nullable|string|max:60',
             'seo_title' => 'nullable|string|max:220',
             'seo_description' => 'nullable|string|max:320',

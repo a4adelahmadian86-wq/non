@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class AdminCourseController extends Controller
@@ -86,19 +85,12 @@ class AdminCourseController extends Controller
 
     public function deleteSection(StoreProduct $product, StoreCourseSection $section)
     {
-        $paths = DB::transaction(function () use ($product, $section) {
-            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
-            $course = $this->assertCourse($lockedProduct);
-            $lockedSection = $course->sections()->whereKey($section->id)->lockForUpdate()->firstOrFail();
-            $lessonIds = $lockedSection->lessons()->pluck('id');
-            $this->assertPublishedCourseKeepsAValidLesson($lockedProduct, $lessonIds);
-            $paths = $this->deleteLessonFiles($lockedProduct, $lessonIds);
-            $this->audit('store.course.section_deleted', $lockedProduct, ['section_id' => $lockedSection->id, 'lesson_ids' => $lessonIds->all()]);
-            $lockedSection->delete();
-
-            return $paths;
-        });
-        $this->deleteStoredFiles($paths);
+        $course = $this->assertCourse($product);
+        abort_unless($section->course_id === $course->id, 404);
+        $lessonIds = $section->lessons()->pluck('id');
+        $this->audit('store.course.section_deleted', $product, ['section_id' => $section->id, 'lesson_ids' => $lessonIds->all()]);
+        $this->deleteLessonFiles($product, $lessonIds);
+        $section->delete();
 
         return back()->with('status', 'فصل و جلسات آن حذف شدند.');
     }
@@ -111,16 +103,8 @@ class AdminCourseController extends Controller
         $data['slug'] = $this->uniqueLessonSlug($data['title']);
         $data['is_preview'] = $request->boolean('is_preview');
         $data['is_published'] = $request->boolean('is_published');
-        $this->assertLessonCanBePublished($data);
-        $lesson = DB::transaction(function () use ($product, $section, $data) {
-            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
-            $lockedCourse = $this->assertCourse($lockedProduct);
-            $lockedSection = $lockedCourse->sections()->whereKey($section->id)->lockForUpdate()->firstOrFail();
-            $lesson = $lockedSection->lessons()->create($data);
-            $this->audit('store.course.lesson_created', $lockedProduct, ['section_id' => $lockedSection->id, 'lesson_id' => $lesson->id]);
-
-            return $lesson;
-        });
+        $lesson = $section->lessons()->create($data);
+        $this->audit('store.course.lesson_created', $product, ['section_id' => $section->id, 'lesson_id' => $lesson->id]);
 
         return back()->with('status', 'جلسه جدید ایجاد شد.');
     }
@@ -132,51 +116,19 @@ class AdminCourseController extends Controller
         $data = $request->validate($this->lessonRules());
         $data['is_preview'] = $request->boolean('is_preview');
         $data['is_published'] = $request->boolean('is_published');
-        $this->assertLessonCanBePublished($data, $lesson);
-        DB::transaction(function () use ($product, $lesson, $data) {
-            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
-            $lockedCourse = $this->assertCourse($lockedProduct);
-            $lockedLesson = StoreCourseLesson::query()
-                ->whereKey($lesson->id)
-                ->whereHas('section', fn ($query) => $query->where('course_id', $lockedCourse->id))
-                ->lockForUpdate()
-                ->firstOrFail();
-            $this->assertLessonCanBePublished($data, $lockedLesson);
-            $wasPublishable = $lockedLesson->is_published && $this->lessonHasPublishableContent($lockedLesson->toArray(), $lockedLesson);
-            $willBePublishable = (bool) ($data['is_published'] ?? false) && $this->lessonHasPublishableContent($data, $lockedLesson);
-            if ($lockedProduct->status === 'published' && $wasPublishable && ! $willBePublishable) {
-                $hasReplacement = $lockedProduct->course()
-                    ->whereHas('sections.lessons', fn ($query) => $query->publishable()->where('id', '!=', $lockedLesson->id))
-                    ->exists();
-                if (! $hasReplacement) {
-                    throw ValidationException::withMessages(['is_published' => 'این تغییر آخرین جلسه معتبر دوره منتشرشده را از دسترس خارج می‌کند؛ ابتدا دوره را از انتشار خارج یا جلسه جایگزین اضافه کنید.']);
-                }
-            }
-            $lockedLesson->update($data);
-            $this->audit('store.course.lesson_updated', $lockedProduct, ['lesson_id' => $lockedLesson->id, 'is_published' => $lockedLesson->is_published]);
-        });
+        $lesson->update($data);
+        $this->audit('store.course.lesson_updated', $product, ['lesson_id' => $lesson->id, 'is_published' => $lesson->is_published]);
 
         return back()->with('status', 'جلسه به‌روزرسانی شد.');
     }
 
     public function deleteLesson(StoreProduct $product, StoreCourseLesson $lesson)
     {
-        $paths = DB::transaction(function () use ($product, $lesson) {
-            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
-            $course = $this->assertCourse($lockedProduct);
-            $lockedLesson = StoreCourseLesson::query()
-                ->whereKey($lesson->id)
-                ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
-                ->lockForUpdate()
-                ->firstOrFail();
-            $this->assertPublishedCourseKeepsAValidLesson($lockedProduct, collect([$lockedLesson->id]));
-            $paths = $this->deleteLessonFiles($lockedProduct, collect([$lockedLesson->id]));
-            $this->audit('store.course.lesson_deleted', $lockedProduct, ['lesson_id' => $lockedLesson->id]);
-            $lockedLesson->delete();
-
-            return $paths;
-        });
-        $this->deleteStoredFiles($paths);
+        $course = $this->assertCourse($product);
+        abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
+        $this->audit('store.course.lesson_deleted', $product, ['lesson_id' => $lesson->id]);
+        $this->deleteLessonFiles($product, collect([$lesson->id]));
+        $lesson->delete();
 
         return back()->with('status', 'جلسه و منابع آن حذف شدند.');
     }
@@ -204,31 +156,24 @@ class AdminCourseController extends Controller
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
             DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
-                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
-                $course = $this->assertCourse($lockedProduct);
-                $lockedLesson = StoreCourseLesson::query()
-                    ->whereKey($lesson->id)
-                    ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
-                    ->lockForUpdate()
-                    ->firstOrFail();
-                $resource = $lockedLesson->resources()->create([
-                    'product_id' => $lockedProduct->id,
-                    'course_lesson_id' => $lockedLesson->id,
-                    'purpose' => 'lesson_resource',
-                    'version' => $lockedProduct->version,
-                    'disk' => 'private',
-                    'path' => $path,
-                    'original_name' => $upload->getClientOriginalName(),
-                    'mime' => $inspection['mime'],
-                    'size_bytes' => $inspection['size'],
-                    'sha256' => $inspection['checksum'],
-                    'is_primary' => false,
-                    'is_active' => true,
-                    'scan_status' => 'clean',
-                    'scan_engine' => $inspection['scan'],
-                    'scanned_at' => now(),
+                $resource = StoreProductFile::create([
+                'product_id' => $product->id,
+                'course_lesson_id' => $lesson->id,
+                'purpose' => 'lesson_resource',
+                'version' => $product->version,
+                'disk' => 'private',
+                'path' => $path,
+                'original_name' => $upload->getClientOriginalName(),
+                'mime' => $inspection['mime'],
+                'size_bytes' => $inspection['size'],
+                'sha256' => $inspection['checksum'],
+                'is_primary' => false,
+                'is_active' => true,
+                'scan_status' => 'clean',
+                'scan_engine' => $inspection['scan'],
+                'scanned_at' => now(),
                 ]);
-                $this->audit('store.course.resource_uploaded', $lockedProduct, ['lesson_id' => $lockedLesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
+                $this->audit('store.course.resource_uploaded', $product, ['lesson_id' => $lesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
@@ -243,26 +188,12 @@ class AdminCourseController extends Controller
 
     public function deleteResource(StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
     {
-        [$disk, $path] = DB::transaction(function () use ($product, $lesson, $file) {
-            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
-            $course = $this->assertCourse($lockedProduct);
-            $lockedLesson = StoreCourseLesson::query()
-                ->whereKey($lesson->id)
-                ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
-                ->lockForUpdate()
-                ->firstOrFail();
-            $lockedFile = $lockedLesson->resources()->whereKey($file->id)->lockForUpdate()->firstOrFail();
-            if ($lockedLesson->is_published && ! $this->lessonHasPublishableContent($lockedLesson->toArray(), $lockedLesson, $lockedFile->id)) {
-                throw ValidationException::withMessages(['file' => 'این منبع برای محتوای منتشرشده ضروری است؛ ابتدا منبع جایگزین ثبت یا جلسه را از انتشار خارج کنید.']);
-            }
-            $this->audit('store.course.resource_deleted', $lockedProduct, ['lesson_id' => $lockedLesson->id, 'file_id' => $lockedFile->id]);
-            $disk = $lockedFile->disk ?: 'private';
-            $path = $lockedFile->path;
-            $lockedFile->delete();
-
-            return [$disk, $path];
-        });
-        Storage::disk($disk)->delete($path);
+        $course = $this->assertCourse($product);
+        abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
+        abort_unless($file->product_id === $product->id && $file->course_lesson_id === $lesson->id && $file->purpose === 'lesson_resource', 404);
+        $this->audit('store.course.resource_deleted', $product, ['lesson_id' => $lesson->id, 'file_id' => $file->id]);
+        Storage::disk($file->disk ?: 'private')->delete($file->path);
+        $file->delete();
 
         return back()->with('status', 'منبع آموزشی حذف شد.');
     }
@@ -306,82 +237,16 @@ class AdminCourseController extends Controller
         return $slug;
     }
 
-    private function assertLessonCanBePublished(array $data, ?StoreCourseLesson $lesson = null): void
-    {
-        if (! ($data['is_published'] ?? false) || $this->lessonHasPublishableContent($data, $lesson)) {
-            return;
-        }
-
-        throw ValidationException::withMessages([
-            'is_published' => match ($data['lesson_type'] ?? '') {
-                'article' => 'برای انتشار جلسه متنی، محتوای آموزشی را وارد کنید.',
-                'video' => 'برای انتشار جلسه ویدئویی، لینک ویدئو یا منبع ویدئویی سالم لازم است.',
-                'audio' => 'برای انتشار جلسه صوتی، لینک صوت یا منبع صوتی سالم لازم است.',
-                'file' => 'برای انتشار جلسه فایلی، دست‌کم یک منبع سالم بارگذاری کنید.',
-                'live' => 'برای انتشار جلسه زنده، لینک جلسه یا توضیحات برگزاری را وارد کنید.',
-                default => 'محتوای جلسه برای انتشار کامل نیست.',
-            },
-        ]);
-    }
-
-    private function lessonHasPublishableContent(array $data, ?StoreCourseLesson $lesson = null, ?int $excludeResourceId = null): bool
-    {
-        $type = $data['lesson_type'] ?? $lesson?->lesson_type;
-        $hasUrl = filled(array_key_exists('video_url', $data) ? $data['video_url'] : $lesson?->video_url);
-        $hasContent = filled(array_key_exists('content', $data) ? $data['content'] : $lesson?->content);
-        $resources = $lesson?->resources()
-            ->where('is_active', true)
-            ->where('scan_status', 'clean')
-            ->when($excludeResourceId, fn ($query) => $query->where('id', '!=', $excludeResourceId));
-
-        return match ($type) {
-            'article' => $hasContent,
-            'video' => $hasUrl || ($resources?->where('mime', 'like', 'video/%')->exists() ?? false),
-            'audio' => $hasUrl || ($resources?->where('mime', 'like', 'audio/%')->exists() ?? false),
-            'file' => $resources?->exists() ?? false,
-            'live' => $hasUrl || $hasContent,
-            default => false,
-        };
-    }
-
-    private function assertPublishedCourseKeepsAValidLesson(StoreProduct $product, $removedLessonIds): void
-    {
-        if ($product->status !== 'published') {
-            return;
-        }
-
-        $hasReplacement = $product->course()
-            ->whereHas('sections.lessons', fn ($query) => $query->publishable()->whereNotIn('id', $removedLessonIds))
-            ->exists();
-
-        if (! $hasReplacement) {
-            throw ValidationException::withMessages([
-                'lesson' => 'این تغییر آخرین جلسه معتبر دوره منتشرشده را حذف می‌کند؛ ابتدا دوره را از انتشار خارج کنید یا جلسه جایگزین بسازید.',
-            ]);
-        }
-    }
-
-    private function deleteLessonFiles(StoreProduct $product, $lessonIds): array
+    private function deleteLessonFiles(StoreProduct $product, $lessonIds): void
     {
         $files = StoreProductFile::query()
             ->where('product_id', $product->id)
             ->where('purpose', 'lesson_resource')
             ->whereIn('course_lesson_id', $lessonIds)
-            ->lockForUpdate()
             ->get();
-        $paths = [];
         foreach ($files as $file) {
-            $paths[] = [$file->disk ?: 'private', $file->path];
+            Storage::disk($file->disk ?: 'private')->delete($file->path);
             $file->delete();
-        }
-
-        return $paths;
-    }
-
-    private function deleteStoredFiles(array $paths): void
-    {
-        foreach ($paths as [$disk, $path]) {
-            Storage::disk($disk)->delete($path);
         }
     }
 }
