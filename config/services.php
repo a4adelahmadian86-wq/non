@@ -14,6 +14,13 @@ return [
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
     ],
 
+    // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.
+    'product_supervisor' => [
+        'url' => env('FARAST_PRODUCT_SUPERVISOR_URL', ''),
+        'token' => env('FARAST_PRODUCT_SUPERVISOR_TOKEN', ''),
+        'timeout' => max(10, min(60, (int) env('FARAST_PRODUCT_SUPERVISOR_TIMEOUT', 40))),
+    ],
+
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
