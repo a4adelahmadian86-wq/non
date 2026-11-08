@@ -16,7 +16,7 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_pdf_is_checked_locally_and_page_count_is_parsed_from_the_document_tree(): void
     {
-        $pdf = new \\FPDF();
+        $pdf = new \FPDF();
         $pdf->SetFont('Arial', '', 12);
         $pdf->AddPage();
         $pdf->Cell(0, 10, 'First page');
