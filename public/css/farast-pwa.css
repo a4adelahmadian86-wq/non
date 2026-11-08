@@ -1,0 +1,11 @@
+.farast-install-app[hidden],.farast-pwa-help[hidden]{display:none!important}
+.farast-install-app{position:fixed;z-index:5900;left:max(18px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));display:inline-flex;align-items:center;gap:9px;min-height:46px;padding:0 17px;border:1px solid rgba(255,255,255,.22);border-radius:15px;background:linear-gradient(135deg,#1769ff,#5144c9);color:#fff;font:700 12px Vazirmatn,Tahoma,sans-serif;box-shadow:0 12px 30px rgba(20,67,160,.28);cursor:pointer;transition:transform .18s,box-shadow .18s}
+.farast-install-app:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(20,67,160,.34)}
+.farast-install-app:focus-visible,.farast-pwa-help button:focus-visible{outline:3px solid rgba(64,139,255,.4);outline-offset:3px}
+.farast-install-app i{font-size:13px}
+.farast-pwa-help{position:fixed;z-index:6000;left:18px;bottom:76px;width:min(340px,calc(100vw - 36px));padding:20px 18px 17px;border:1px solid #dce6f5;border-radius:18px;background:#fff;color:#183153;box-shadow:0 22px 60px rgba(8,27,58,.2);font-family:Vazirmatn,Tahoma,sans-serif}
+.farast-pwa-help strong{display:block;padding-left:25px;font-size:13px}
+.farast-pwa-help p{margin:9px 0 0;color:#6d7e96;font-size:11px;line-height:2}
+.farast-pwa-help__close{position:absolute;top:10px;left:10px;width:27px;height:27px;border:0;border-radius:8px;background:#f1f5fa;color:#536781;font-size:20px;cursor:pointer}
+@media(max-width:600px){.farast-install-app{min-height:43px;padding-inline:14px;bottom:max(14px,env(safe-area-inset-bottom));left:max(14px,env(safe-area-inset-left))}}
+@media(prefers-reduced-motion:reduce){.farast-install-app{transition:none}}

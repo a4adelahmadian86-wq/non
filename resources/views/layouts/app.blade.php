@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="theme-color" content="#0b1734"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-title" content="فراست">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="theme-color" content="#0b1734"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-title" content="فراست"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icons/farast-icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/css/farast-pwa.css?v=20261108pwa1">
 <title>{{ $title ?? 'فراست' }}</title>
 @stack('head')
 @php
@@ -84,8 +84,10 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
   </div>
   <div class="footer-bottom"><span>© {{ now()->year }} فراست — تمامی حقوق محفوظ است.</span><div><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a><a href="/refund-policy">شرایط بازگشت وجه</a><a href="{{ route('blog') }}">مجله</a></div><a class="footer-back-top" href="#app-main"><i class="fa-solid fa-arrow-up"></i> بازگشت به بالا</a></div>
 </footer>@endif
+<button type="button" id="farastInstallApp" class="farast-install-app" aria-label="نصب اپلیکیشن فراست" hidden><i class="fa-solid fa-download" aria-hidden="true"></i><span>نصب فراست</span></button>
+<div id="farastPwaHelp" class="farast-pwa-help" role="dialog" aria-modal="false" aria-labelledby="farastPwaHelpTitle" hidden><button type="button" class="farast-pwa-help__close" aria-label="بستن">×</button><strong id="farastPwaHelpTitle">افزودن فراست به صفحه اصلی</strong><p>در نوار پایین مرورگر روی «اشتراک‌گذاری» بزنید و سپس «افزودن به صفحه اصلی» را انتخاب کنید.</p></div>
 @include('components.support-chat-widget')
-<script src="/js/farast-tab-lock.js"></script><script src="/js/farast.js"></script><script src="/js/farast-sound.js"></script>@if(!$isAdmin&&!$isDashboard)<script src="/js/farast-app.js"></script><script src="/js/store-cart.js?v=20260929c1"></script>@endif
+<script src="/js/farast-pwa.js?v=20261108pwa1"></script><script src="/js/farast-tab-lock.js"></script><script src="/js/farast.js"></script><script src="/js/farast-sound.js"></script>@if(!$isAdmin&&!$isDashboard)<script src="/js/farast-app.js"></script><script src="/js/store-cart.js?v=20260929c1"></script>@endif
 <script src="/js/farast-assistant.js?v=20261107voiceSession1"></script>
 @if($isEditor)<script src="/js/editor-layout.js?v=20261014a"></script><script src="/js/editor-core.js?v=20261014g"></script><script src="/js/editor-agent.js?v=20261010a"></script><script src="/js/farast-voice.js?v=20261031serveronly5"></script>@endif
 @stack('scripts')<script>

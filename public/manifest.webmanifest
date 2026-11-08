@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "FARAST | فراست",
+  "short_name": "فراست",
+  "description": "فضای یکپارچه فراست برای خدمات هوشمند، اسناد و محصولات دیجیتال",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#f4f7fb",
+  "theme_color": "#0b1734",
+  "icons": [
+    {
+      "src": "/icons/farast-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/farast-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
