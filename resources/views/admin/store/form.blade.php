@@ -219,7 +219,7 @@
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
         <form id="productFileIngestionForm" method="post" action="{{ route('admin.store.files.preflight',$product) }}" enctype="multipart/form-data" class="product-ingestion-form" data-confirm-url="{{ route('admin.store.files.confirm',['product'=>$product,'token'=>'__TOKEN__']) }}" data-cancel-url="{{ route('admin.store.files.cancel',['product'=>$product,'token'=>'__TOKEN__']) }}">@csrf
-          <input id="productIngestionInput" type="file" name="files[]" multiple required hidden accept=".pdf,.zip,.tar,.gz,.tgz,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov">
+          <input id="productIngestionInput" type="file" name="files[]" multiple required hidden accept=".pdf,.zip,.tar,.gz,.tgz,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov">
           <div id="productFileDropzone" class="product-file-dropzone" role="button" tabindex="0" aria-controls="productIngestionInput">
             <span class="product-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
             <strong>فایل‌ها را اینجا رها کنید</strong>
