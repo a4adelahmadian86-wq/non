@@ -22,6 +22,7 @@
   };
 
   const stop = () => {
+    requestId++;
     if (activeAudio) {
       activeAudio.pause();
       activeAudio.src = '';
@@ -42,8 +43,8 @@
       if (status()) status().textContent = 'برای پخش انتخابی، متن باید حداکثر ۲۰۰۰ نویسه باشد.';
       return;
     }
-    const id = ++requestId;
     stop();
+    const id = ++requestId;
     window.FarastAudioReader?.pause();
     if (status()) status().textContent = 'در حال آماده‌سازی صدای انتخاب‌شده…';
     try {
@@ -151,12 +152,19 @@
 
   root.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    const word = event.target.closest('.reader-audio-word');
+    if (word) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      speak(word.dataset.word || '', Number(word.dataset.page || pageFor(word)), word, 'در حال خواندن واژهٔ انتخاب‌شده');
+      return;
+    }
     const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph');
     if (!target) return;
     event.preventDefault();
     speak(target.textContent, pageFor(target), target,
       target.classList.contains('reader-document-sentence') ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده');
-  });
+  }, true);
 
   root.addEventListener('pointerup', () => {
     const text = selectedText();
