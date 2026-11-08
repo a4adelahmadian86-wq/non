@@ -821,7 +821,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
 
 
 async def analyze_image_with_groq(image_bytes: bytes, mime: str, context: dict[str, Any] | None = None) -> str:
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = _groq_api_key()
     if not key:
         return ""
     model = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b").strip()
@@ -850,7 +850,7 @@ async def analyze_image_with_groq(image_bytes: bytes, mime: str, context: dict[s
 
 
 async def transcribe_audio_with_groq(data: bytes, filename: str) -> str:
-    key = os.getenv("GROQ_API_KEY", "").strip()
+    key = _groq_api_key()
     if not key:
         return ""
     model = os.getenv("GROQ_AUDIO_MODEL", "whisper-large-v3-turbo").strip()
@@ -881,11 +881,24 @@ def redact_sensitive_content(value: str) -> tuple[str, int]:
     return value, count
 
 
+def groq_provider_ready() -> bool:
+    """Fail closed unless the operator explicitly confirms Groq account-level ZDR."""
+    key = os.getenv("GROQ_API_KEY", "").strip()
+    confirmation = os.getenv("GROQ_ZDR_CONFIRMED", "").strip().lower()
+    return bool(key and confirmation in {"1", "true", "yes", "on"})
+
+
+def _groq_api_key() -> str:
+    return os.getenv("GROQ_API_KEY", "").strip() if groq_provider_ready() else ""
+
+
 async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict[str, Any]:
     """Review extracted file content with Groq. Gemini is never used in this path."""
     key = os.getenv("GROQ_API_KEY", "").strip()
     if not key:
         return {"analysis_status": "not_configured"}
+    if not groq_provider_ready():
+        return {"analysis_status": "privacy_not_confirmed"}
     if not text.strip():
         return {"analysis_status": "no_content"}
 
