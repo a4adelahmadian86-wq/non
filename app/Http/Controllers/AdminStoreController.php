@@ -279,7 +279,7 @@ class AdminStoreController extends Controller
 
         $upload = $request->file('file');
         $extension = strtolower($upload->getClientOriginalExtension());
-        $allowedExtensions = ['pdf','zip','jpg','jpeg','png','webp','gif','doc','docx','xls','xlsx','ppt','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov'];
+        $allowedExtensions = ['pdf','zip','jpg','jpeg','png','webp','gif','docx','xlsx','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov'];
         abort_unless(in_array($extension, $allowedExtensions, true), 422, 'این پسوند در فهرست فرمت‌های مجاز فراست نیست.');
 
         // Remove expired staging records opportunistically; no cron or Redis dependency is required.
