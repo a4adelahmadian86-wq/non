@@ -10,6 +10,7 @@ class UploadSecurityService
     private const MAX_ARCHIVE_ENTRIES = 500;
     private const MAX_ARCHIVE_EXPANDED_BYTES = 250 * 1024 * 1024;
     private const MAX_ARCHIVE_RATIO = 100;
+    private const MAX_ARCHIVE_MEMBER_SCAN_BYTES = 1024 * 1024;
     private const MAX_IMAGE_PIXELS = 50000000;
 
     private array $blockedExtensions = [
@@ -286,6 +287,15 @@ class UploadSecurityService
             }
             return $buffer;
         };
+        $skipExact = static function (int $length) use ($read): bool {
+            $remaining = $length;
+            while ($remaining > 0) {
+                $part = $read(min(65536, $remaining));
+                if (! is_string($part) || $part === '') return false;
+                $remaining -= strlen($part);
+            }
+            return true;
+        };
 
         $entries = [];
         $totalExpanded = 0;
@@ -348,15 +358,36 @@ class UploadSecurityService
                     $findings[] = 'آرشیو تو در تو شناسایی شد؛ محتوای داخلی آن باز یا اجرا نمی‌شود.';
                 }
 
+                $contentScan = 'not_required';
+                if ($type !== '5' && $entrySize <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES) {
+                    $memberBytes = $readExact((int) $entrySize);
+                    if (strlen($memberBytes) !== $entrySize) {
+                        throw new RuntimeException('upload_tar_entry_truncated');
+                    }
+                    $contentScan = 'checked';
+                    $memberFinding = $this->scanArchiveMemberContent($memberBytes, $normalized);
+                    if ($memberFinding !== null) {
+                        $risk = 'warning';
+                        $findings[] = $memberFinding;
+                    }
+                } elseif ($type !== '5') {
+                    $contentScan = 'skipped_size_limit';
+                    $risk = 'warning';
+                    $findings[] = 'محتوای عضو بزرگ آرشیو به‌دلیل سقف بررسی ایستا به‌طور کامل خوانده نشد: '.$normalized;
+                }
+
                 $entries[] = [
                     'name' => mb_substr($normalized, 0, 240),
                     'size_bytes' => (int) $entrySize,
                     'compressed_bytes' => null,
                     'type' => $type === '5' ? 'directory' : 'file',
+                    'content_scan' => $contentScan,
                 ];
 
                 $padding = (int) (ceil($entrySize / 512) * 512);
-                if ($padding > 0 && strlen($readExact($padding)) !== $padding) {
+                $consumedBytes = ($type !== '5' && $entrySize <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES) ? (int) $entrySize : 0;
+                $remainingPadding = $padding - $consumedBytes;
+                if ($remainingPadding > 0 && ! $skipExact($remainingPadding)) {
                     throw new RuntimeException('upload_tar_entry_truncated');
                 }
             }
@@ -455,11 +486,36 @@ class UploadSecurityService
                 fclose($handle);
                 throw new RuntimeException('upload_archive_ratio_suspicious');
             }
+            $centralPosition = ftell($handle);
+            $contentScan = 'not_required';
+            if (! str_ends_with($normalized, '/')) {
+                if ($meta['expanded'] <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES && $meta['compressed'] <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES) {
+                    try {
+                        $memberBytes = $this->readZipMemberForInspection($handle, $meta, $name, $size);
+                        $contentScan = 'checked';
+                        $memberFinding = $this->scanArchiveMemberContent($memberBytes, $normalized);
+                        if ($memberFinding !== null) {
+                            $risk = 'warning';
+                            $findings[] = $memberFinding;
+                        }
+                    } catch (\Throwable $exception) {
+                        fclose($handle);
+                        throw $exception;
+                    }
+                } else {
+                    $contentScan = 'skipped_size_limit';
+                    $risk = 'warning';
+                    $findings[] = 'محتوای عضو بزرگ آرشیو به‌دلیل سقف بررسی ایستا به‌طور کامل خوانده نشد: '.$normalized;
+                }
+            }
+            fseek($handle, $centralPosition);
+
             $entries[] = [
                 'name' => mb_substr($normalized, 0, 240),
                 'size_bytes' => (int) $meta['expanded'],
                 'compressed_bytes' => (int) $meta['compressed'],
                 'type' => str_ends_with($normalized, '/') ? 'directory' : 'file',
+                'content_scan' => $contentScan,
             ];
         }
         fclose($handle);
@@ -472,4 +528,101 @@ class UploadSecurityService
             'findings' => array_values(array_unique($findings)),
         ];
     }
+    /**
+     * Read and inflate a small ZIP member in memory without extracting it to disk.
+     * Central-directory limits are checked before this method is called.
+     */
+    private function readZipMemberForInspection($handle, array $meta, string $centralName, int $archiveSize): string
+    {
+        if ($meta['local_offset'] < 0 || $meta['local_offset'] + 30 > $archiveSize) {
+            throw new RuntimeException('upload_zip_local_header_invalid');
+        }
+
+        if (fseek($handle, (int) $meta['local_offset']) !== 0) {
+            throw new RuntimeException('upload_zip_local_header_invalid');
+        }
+
+        $local = fread($handle, 30);
+        if (! is_string($local) || strlen($local) !== 30 || substr($local, 0, 4) !== "PK\x03\x04") {
+            throw new RuntimeException('upload_zip_local_header_invalid');
+        }
+
+        $localMeta = unpack('vversion/vflags/vmethod/vtime/vdate/Vcrc/Vcompressed/Vexpanded/vname_len/vextra_len', substr($local, 4));
+        if (! is_array($localMeta)
+            || $localMeta['method'] !== $meta['method']
+            || ($localMeta['flags'] & 0x1) !== 0
+            || $localMeta['name_len'] !== strlen($centralName)) {
+            throw new RuntimeException('upload_zip_local_header_mismatch');
+        }
+
+        $localName = fread($handle, $localMeta['name_len']);
+        if (! is_string($localName) || $localName !== $centralName) {
+            throw new RuntimeException('upload_zip_local_name_mismatch');
+        }
+
+        if ($localMeta['extra_len'] > 0) {
+            fseek($handle, $localMeta['extra_len'], SEEK_CUR);
+        }
+
+        $compressed = fread($handle, (int) $meta['compressed']);
+        if (! is_string($compressed) || strlen($compressed) !== (int) $meta['compressed']) {
+            throw new RuntimeException('upload_zip_member_truncated');
+        }
+
+        if ($meta['method'] === 0) {
+            $plain = $compressed;
+        } else {
+            if (! function_exists('inflate_init') || ! function_exists('inflate_add')) {
+                throw new RuntimeException('upload_zip_inspector_unavailable');
+            }
+            $context = @inflate_init(ZLIB_ENCODING_RAW);
+            if ($context === false) {
+                throw new RuntimeException('upload_zip_member_inflate_failed');
+            }
+            $plain = @inflate_add($context, $compressed, ZLIB_FINISH);
+            if (! is_string($plain)) {
+                throw new RuntimeException('upload_zip_member_inflate_failed');
+            }
+        }
+
+        if (strlen($plain) !== (int) $meta['expanded']) {
+            throw new RuntimeException('upload_zip_member_size_mismatch');
+        }
+
+        $crc = sprintf('%u', crc32($plain));
+        if ($crc !== sprintf('%u', (int) $meta['crc'])) {
+            throw new RuntimeException('upload_zip_member_checksum_mismatch');
+        }
+
+        return $plain;
+    }
+
+    /**
+     * First-party signature checks for archive members. This is intentionally
+     * conservative and never executes or loads the member.
+     */
+    private function scanArchiveMemberContent(string $bytes, string $name): ?string
+    {
+        if ($bytes === '') {
+            return null;
+        }
+
+        $eicar = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
+        if (str_contains($bytes, $eicar)) {
+            throw new RuntimeException('upload_archive_known_test_signature_rejected');
+        }
+
+        if (str_starts_with($bytes, 'MZ') || str_starts_with($bytes, "\x7FELF") || str_starts_with($bytes, "#!")) {
+            throw new RuntimeException('upload_archive_executable_signature_rejected');
+        }
+
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if ($extension === 'xml' && preg_match('/TargetMode\\s*=\\s*[\\\'"]External[\\\'"]/i', $bytes) === 1) {
+            return 'پیوند خارجی در ساختار XML آرشیو شناسایی شد؛ مقصد آن اجرا یا بارگذاری نمی‌شود.';
+        }
+
+        return null;
+    }
+
+
 }
