@@ -289,6 +289,7 @@ class AdminStoreController extends Controller
                     throw new \\RuntimeException('intake_stage_write_failed');
                 }
                 $createdPaths[] = $path;
+                $storedMime = strtolower((string) Storage::disk('private')->mimeType($path));
                 DB::table('store_file_intakes')->insert([
                     'id' => $id,
                     'product_id' => $product->id,
@@ -296,7 +297,7 @@ class AdminStoreController extends Controller
                     'disk' => 'private',
                     'path' => $path,
                     'original_name' => $details['original_name'],
-                    'mime' => $details['mime'],
+                    'mime' => $storedMime !== '' ? $storedMime : $details['mime'],
                     'extension' => $details['extension'],
                     'size_bytes' => $details['size_bytes'],
                     'sha256' => $details['sha256'],
@@ -347,7 +348,8 @@ class AdminStoreController extends Controller
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            'text/plain', 'text/markdown', 'text/csv', 'audio/mpeg', 'audio/mp4', 'audio/wav',
+            'application/x-zip-compressed', 'text/plain', 'text/markdown', 'text/csv',
+            'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/webm',
             'video/mp4', 'video/webm',
         ];
 
