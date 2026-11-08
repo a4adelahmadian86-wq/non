@@ -33,7 +33,7 @@ class StoreProductDocumentPageBuilderCompletenessTest extends TestCase
 
     public function test_reader_builder_does_not_silently_truncate_long_text_chunks(): void
     {
-        $longText = str_repeat('متن کامل سند ', 300);
+        $longText = trim(str_repeat('متن کامل سند ', 300));
 
         $result = app(StoreProductDocumentPageBuilder::class)->build([
             [
