@@ -223,12 +223,16 @@ class StoreReaderAccessTest extends TestCase
             'product_id' => $product->id,
             'product_file_id' => $file->id,
             'source_sha256' => $file->sha256,
-            'processing_status' => 'completed',
+            'processing_status' => 'extracted',
             'detected_type' => 'pdf',
             'page_count' => 2,
             'structure_json' => [
                 'reader' => ['ready' => true, 'page_count' => 2],
-                'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
+                'completeness' => [
+                    'extraction_complete' => true,
+                    'analysis_batches_complete' => false,
+                    'semantic_review_complete' => false,
+                ],
             ],
         ]);
         $document->pages()->create([
@@ -288,6 +292,24 @@ class StoreReaderAccessTest extends TestCase
             ->assertJsonPath('row_end', 14)
             ->assertJsonMissingPath('path')
             ->assertJsonMissingPath('disk');
+
+        $audioBytes = '0123456789';
+        $audioPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/audio-v3.wav';
+        Storage::disk('private')->put($audioPath, $audioBytes);
+        $document->artifacts()->create([
+            'artifact_type' => 'audio_full_wav',
+            'version' => 3,
+            'disk' => 'private',
+            'path' => $audioPath,
+            'mime' => 'audio/wav',
+            'size_bytes' => strlen($audioBytes),
+            'sha256' => hash('sha256', $audioBytes),
+            'metadata_json' => ['source_sha256' => $document->source_sha256, 'duration_ms' => 1000],
+        ]);
+        $audioResponse = $this->actingAs($user)
+            ->withHeader('Range', 'bytes=2-5')
+            ->get(route('store.reader.audio', [$product, $document]));
+        $audioResponse->assertStatus(206)->assertHeader('Content-Range', 'bytes 2-5/10');
 
         $this->actingAs($user)->get(route('store.preview', $full))->assertNotFound();
         $this->actingAs($user)->post(route('library.download.issue', $libraryItem))->assertForbidden();

@@ -349,7 +349,7 @@ class StoreController extends Controller
                 $structure = (array) ($document->structure_json ?? []);
                 $sourceMatches = hash_equals((string) $primaryFile->sha256, (string) $document->source_sha256);
                 $readerReady = $sourceMatches
-                    && $document->processing_status === 'completed'
+                    && in_array($document->processing_status, ['completed', 'extracted'], true)
                     && (bool) data_get($structure, 'reader.ready', false);
 
                 if ($readerReady && $document->pages->isNotEmpty()) {
@@ -470,7 +470,7 @@ class StoreController extends Controller
         abort_unless(
             $document
                 && hash_equals((string) $file->sha256, (string) $document->source_sha256)
-                && $document->processing_status === 'completed'
+                && in_array($document->processing_status, ['completed', 'extracted'], true)
                 && (bool) data_get($document->structure_json, 'reader.ready', false),
             409,
             'نسخه خوانش این فایل هنوز آماده یا تأیید نشده است.'
@@ -562,7 +562,7 @@ class StoreController extends Controller
             (int) $document->product_id === (int) $product->id
                 && (int) $document->product_file_id === (int) $file->id
                 && hash_equals((string) $file->sha256, (string) $document->source_sha256)
-                && $document->processing_status === 'completed',
+                && in_array($document->processing_status, ['completed', 'extracted'], true),
             404
         );
 
