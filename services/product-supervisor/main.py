@@ -148,7 +148,7 @@ async def review_product_file(
     if inspection.image_bytes:
         if os.getenv("GROQ_API_KEY"):
             try:
-                visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg")
+                visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg", {"title": product_title, "category": category_name, "tags": tags})
                 provider_status["groq"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
                 provider_status["groq"] = "unavailable"
@@ -231,6 +231,14 @@ async def review_product(snapshot: ProductSnapshot):
     if not model:
         raise HTTPException(status_code=503, detail="Supervisor model is not configured")
 
+    from file_pipeline import redact_sensitive_content
+
+    safe_snapshot = snapshot.model_dump(exclude={"product_id", "sku"})
+    for key in ("title", "short_description", "description", "seo_title", "seo_description", "instructions"):
+        if isinstance(safe_snapshot.get(key), str):
+            safe_snapshot[key] = redact_sensitive_content(safe_snapshot[key])[0]
+    safe_snapshot["tags"] = [redact_sensitive_content(tag)[0] for tag in safe_snapshot["tags"]]
+
     prompt = {
         "role": "product_quality_supervisor",
         "language": "Persian",
@@ -247,7 +255,7 @@ async def review_product(snapshot: ProductSnapshot):
         ],
         "selected_checks": snapshot.checks,
         "additional_instructions": snapshot.instructions or "",
-        "product": snapshot.model_dump(),
+        "product": safe_snapshot,
         "required_output": {
             "verdict": "approved | needs_changes | blocked",
             "score": "integer 0..100",
