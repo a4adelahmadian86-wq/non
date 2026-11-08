@@ -1409,3 +1409,33 @@ test('personal reader backup restores local notes and highlights without a serve
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:backup-fixture')));
   expect(saved.notes[0].note).toBe('یادداشت بازیابی‌شده');
 });
+
+
+test('personal highlights span inline formatting and restore after a page rerender', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="cross-node-highlight">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>ابتدای <strong>عبارت مهم</strong> انتهای متن</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await page.evaluate(() => {
+    const p = document.querySelector('.farast-reader-document p');
+    const range = document.createRange();
+    range.setStart(p.firstChild, 6);
+    range.setEnd(p.lastChild, 0);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+  });
+  await page.locator('[data-reader-highlight]').click();
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
+  await expect(page.locator('mark.farast-reader-local-highlight').nth(0)).toHaveText('عبارت مهم');
+  await page.evaluate(() => {
+    const page = document.querySelector('.farast-reader-page-item');
+    page.querySelectorAll('mark.farast-reader-local-highlight').forEach(mark => mark.replaceWith(document.createTextNode(mark.textContent)));
+    document.querySelector('[data-reader-root]').dispatchEvent(new CustomEvent('farast:reader-page-loaded'));
+  });
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
+});
