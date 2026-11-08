@@ -71,6 +71,10 @@
                 <i class="fa-solid fa-file-word"></i><small>Word</small>
               @elseif(in_array(($preview->kind ?? ''), ['xlsx', 'html'], true))
                 <i class="fa-solid fa-file-excel" style="color:#27834e"></i><small>Excel</small>
+              @elseif(($preview->kind ?? '') === 'audio')
+                <i class="fa-solid fa-file-audio"></i><small>صوت</small>
+              @elseif(($preview->kind ?? '') === 'video')
+                <i class="fa-solid fa-file-video"></i><small>ویدئو</small>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
               @endif
@@ -106,6 +110,10 @@
                 </div>
               @elseif(in_array(($preview->kind ?? ''), ['xlsx', 'html'], true))
                 <iframe class="farast-xlsx-frame" src="{{ route('store.preview',$preview) }}" title="پیش‌نمایش فایل Excel" sandbox="" loading="lazy" referrerpolicy="no-referrer"></iframe>
+              @elseif(($preview->kind ?? '') === 'audio')
+                <audio class="farast-reader-media" controls controlslist="nodownload" preload="metadata" src="{{ route('store.preview',$preview) }}"></audio>
+              @elseif(($preview->kind ?? '') === 'video')
+                <video class="farast-reader-media" controls controlslist="nodownload" playsinline preload="metadata" src="{{ route('store.preview',$preview) }}"></video>
               @else
                 <img src="{{ route('store.preview',$preview) }}" alt="صفحه نمونه {{ $i+1 }}" draggable="false" loading="{{ $i===0 ? 'eager' : 'lazy' }}">
               @endif
@@ -159,6 +167,7 @@
 @media(max-width:760px){.reader-search-group{order:3;width:100%;justify-content:center}.reader-search-group input{flex:1;max-width:280px}.farast-reader-header{grid-template-columns:auto 1fr;gap:8px}.farast-reader-heading{text-align:right}.farast-reader-account{grid-column:1/-1;justify-content:flex-start;font-size:.68rem}.farast-reader-toolbar{justify-content:center}.reader-tool-wide span{display:none}.farast-reader-workspace{grid-template-columns:1fr}.farast-reader-sidebar{max-height:150px;border-left:0;border-bottom:1px solid var(--reader-line)}.farast-reader-thumbs{display:flex;overflow:auto}.farast-reader-thumb{flex:0 0 112px}.farast-reader-canvas{min-height:60vh;padding:12px 8px 42px}.farast-reader-page-content img,.farast-reader-page-content iframe{min-height:360px;height:70vh}.farast-reader-shortcuts{display:none}.farast-reader-security-note{font-size:.62rem;text-align:center}}
 @media(prefers-reduced-motion:reduce){.farast-reader-progress span{transition:none}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.farast-reader-media{display:block;width:min(100%,980px);max-height:75vh;margin:20px auto;border-radius:12px;background:#111}
 .farast-reader-text-panel{margin:18px auto 24px;max-width:1000px;padding:16px;background:var(--reader-panel);border:1px solid var(--reader-line);border-radius:14px;color:var(--reader-text)}.farast-reader-text-panel>header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--reader-line)}.farast-reader-text-panel>header div{display:grid;gap:3px}.farast-reader-text-panel>header strong{font-size:.85rem}.farast-reader-text-panel>header small,.farast-reader-text-panel>header span{font-size:.65rem;color:var(--reader-muted)}.farast-reader-document-heading{padding:12px 0 4px}.farast-reader-document-heading strong{font-size:.75rem}.farast-reader-document-heading p{font-size:.68rem;color:var(--reader-muted);line-height:1.8}.farast-reader-text-block{padding:10px 12px;margin:8px 0;border:1px solid var(--reader-line);border-radius:10px;line-height:2;transition:background .2s,border-color .2s}.farast-reader-text-block small{font-size:.62rem;color:var(--reader-muted)}.farast-reader-text-block p{margin:4px 0 0;font-size:.75rem;white-space:pre-wrap;overflow-wrap:anywhere}.farast-reader-text-block.is-audio-active{background:rgba(67,130,255,.12);border-color:#568cf0;box-shadow:inset 3px 0 #568cf0}
 .farast-reader-audio{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--reader-line);background:var(--reader-panel)}.farast-reader-audio>div{display:grid;gap:3px}.farast-reader-audio strong{font-size:.76rem;color:var(--reader-text)}.farast-reader-audio span{font-size:.64rem;color:var(--reader-muted)}.farast-reader-audio audio{width:min(440px,100%);height:36px}
 </style>
