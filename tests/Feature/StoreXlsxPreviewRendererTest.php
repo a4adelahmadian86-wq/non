@@ -107,4 +107,29 @@ class StoreXlsxPreviewRendererTest extends TestCase
         $this->expectException(RuntimeException::class);
         app(StoreXlsxPreviewRenderer::class)->render($this->workbook($parts), 'reader');
     }
+
+    public function test_sample_workbook_keeps_only_first_visible_sheet_and_first_fifty_rows(): void
+    {
+        $parts = $this->baseParts();
+        $parts['xl/workbook.xml'] = '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="نمونه" sheetId="1" r:id="rId1"/><sheet name="اطلاعات داخلی" sheetId="2" r:id="rId2"/></sheets></workbook>';
+        $parts['xl/_rels/workbook.xml.rels'] = '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>';
+
+        $rows = '<row r="1"><c r="A1" t="inlineStr"><is><t>ردیف نمونه</t></is></c></row>';
+        for ($row = 2; $row <= 55; $row++) {
+            $rows .= '<row r="'.$row.'"><c r="A'.$row.'" t="inlineStr"><is><t>ROW-'.$row.'</t></is></c></row>';
+        }
+        $parts['xl/worksheets/sheet1.xml'] = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'.$rows.'</sheetData></worksheet>';
+        $parts['xl/worksheets/sheet2.xml'] = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>PRIVATE-SECOND-SHEET</t></is></c></row></sheetData></worksheet>';
+
+        $html = app(StoreXlsxPreviewRenderer::class)->render($this->workbook($parts), '', true);
+
+        $this->assertStringContainsString('ROW-2', $html);
+        $this->assertStringContainsString('ROW-50', $html);
+        $this->assertStringNotContainsString('ROW-51', $html);
+        $this->assertStringNotContainsString('ROW-55', $html);
+        $this->assertStringNotContainsString('PRIVATE-SECOND-SHEET', $html);
+        $this->assertStringContainsString('نسخه نمونه فقط ۵۰ ردیف نخست', $html);
+    }
+
+
 }
