@@ -112,7 +112,7 @@ class AdminStoreController extends Controller
             ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0 && ($product->compare_at_price_rials === null || $product->compare_at_price_rials > $product->price_rials), 'required' => true],
             ['label' => 'معرفی محصول', 'ready' => filled($product->short_description) || filled($product->description), 'required' => false],
             ['label' => 'تصویر کاور', 'ready' => filled($product->cover_path), 'required' => false],
-            ['label' => $product->type === 'course' ? 'حداقل یک جلسه معتبر و منتشرشده' : 'فایل اصلی سالم و فعال', 'ready' => $contentReady, 'required' => true],
+            ['label' => $product->type === 'course' ? 'حداقل یک جلسه معتبر و منتشرشده' : (($product->download_policy ?? 'signed') === 'reader_only' ? 'فایل اصلی سالم و محتوای کامل خوانشگر' : 'فایل اصلی سالم و فعال'), 'ready' => $contentReady, 'required' => true],
             ['label' => 'اطلاعات سئو', 'ready' => filled($product->seo_title) && filled($product->seo_description), 'required' => false],
             ['label' => 'سیاست ناظر هوشمند', 'ready' => ! $supervisorEnabled || filled(data_get($product->metadata, 'ai_supervisor.mode')), 'required' => false],
         ];
