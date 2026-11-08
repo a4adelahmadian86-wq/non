@@ -77,10 +77,31 @@ class ProductFilePreflightScanner
                 throw new RuntimeException('preflight_office_macros_not_allowed');
             }
             if ($kind === 'office') {
+                $required = match ($extension) {
+                    'docx' => ['[Content_Types].xml', 'word/document.xml'],
+                    'xlsx' => ['[Content_Types].xml', 'xl/workbook.xml'],
+                    'pptx' => ['[Content_Types].xml', 'ppt/presentation.xml'],
+                    default => [],
+                };
+                $names = array_column($archive['entries'], 'name');
+                foreach ($required as $requiredEntry) {
+                    if (! in_array($requiredEntry, $names, true)) {
+                        throw new RuntimeException('preflight_office_container_invalid');
+                    }
+                }
                 $details['office_type'] = $this->officeType($extension);
             }
         } elseif (in_array($kind, ['tar', 'gzip'], true)) {
             $details['archive'] = $this->inspectTarOrGzip($absolutePath, $extension);
+            if ($details['archive']['suspicious'] !== []) {
+                throw new RuntimeException('preflight_archive_suspicious:'.implode(',', $details['archive']['suspicious']));
+            }
+            if ($details['archive']['entry_count'] < 1) {
+                throw new RuntimeException('preflight_archive_empty_or_invalid');
+            }
+            if ($details['archive']['nested_archives'] > 0) {
+                throw new RuntimeException('preflight_nested_archive_requires_review');
+            }
         } elseif ($kind === 'pdf') {
             $details['page_count'] = $this->countPdfPages($absolutePath, $size);
             if ($details['page_count'] === 0) {
@@ -304,9 +325,16 @@ class ProductFilePreflightScanner
                 if (in_array($extensionName, self::DANGEROUS_EXTENSIONS, true)) {
                     $suspicious[] = 'executable_or_script_entry';
                 }
+                if (! in_array($typeFlag, ['', "\\0", '0', '5'], true)) {
+                    $suspicious[] = 'unsupported_special_entry';
+                }
+                if (in_array($extensionName, ['zip', 'gz', 'tgz', 'tar', 'rar', '7z'], true)) {
+                    $nested++;
+                }
                 $expanded += (int) $entrySize;
                 if ($expanded > self::MAX_EXPANDED_BYTES) {
                     $suspicious[] = 'expanded_size_limit';
+                    break;
                 }
                 if ($typeFlag === '2' || $typeFlag === '1') {
                     $suspicious[] = 'links_not_allowed';
@@ -343,7 +371,7 @@ class ProductFilePreflightScanner
             'entry_count' => $count,
             'expanded_bytes' => $expanded,
             'entries' => $entries,
-            'nested_archives' => 0,
+            'nested_archives' => $nested,
             'contains_macros' => false,
             'suspicious' => array_values(array_unique($suspicious)),
             'listing_complete' => true,
