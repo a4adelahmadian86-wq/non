@@ -1509,13 +1509,26 @@ test('reader highlights stay anchored to the selected duplicate phrase', async (
   const expectedOffset = await page.locator('.farast-reader-document p').evaluate(node => node.textContent.lastIndexOf('عبارت تکراری'));
   expect(saved.highlights[0].startOffset).toBe(expectedOffset);
   expect(saved.highlights[0].endOffset).toBe(expectedOffset + phrase.length);
+  await page.evaluate(phrase => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const start = text.nodeValue.indexOf(phrase);
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + phrase.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, phrase);
+  await page.locator('[data-reader-highlight]').click();
   await page.evaluate(() => document.querySelector('[data-reader-root]').dispatchEvent(new CustomEvent('farast:reader-page-loaded')));
-  const markedOffset = await page.locator('mark.farast-reader-local-highlight').evaluate(mark => {
+  const markedOffsets = await page.locator('mark.farast-reader-local-highlight').evaluateAll(marks => marks.map(mark => {
     const range = document.createRange();
     range.selectNodeContents(mark.parentElement);
     range.setEndBefore(mark);
     return range.toString().length;
-  });
-  expect(markedOffset).toBe(expectedOffset);
-  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText(phrase);
+  }).sort((a, b) => a - b));
+  const firstOffset = await page.locator('.farast-reader-document p').evaluate(node => node.textContent.indexOf('عبارت تکراری'));
+  expect(markedOffsets).toEqual([firstOffset, expectedOffset]);
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
+  await expect(page.locator('mark.farast-reader-local-highlight').first()).toHaveText(phrase);
 });
