@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateProductDocumentAudio;
 use App\Models\StoreCategory;
 use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
@@ -356,10 +357,19 @@ class StoreController extends Controller
                     $readerMode = 'document';
                     $audioArtifact = $document->artifacts
                         ->where('artifact_type', 'audio_full_wav')
+                        ->where('version', '>=', 3)
                         ->sortByDesc('version')
                         ->first();
+                    $audioArtifactReady = $audioArtifact
+                        && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path);
 
-                    if ($audioArtifact && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path)) {
+                    if (! $audioArtifactReady
+                        && filled(config('services.document_audio.url'))
+                        && filled(config('services.document_audio.token'))) {
+                        GenerateProductDocumentAudio::dispatch((int) $document->id)->afterResponse();
+                    }
+
+                    if ($audioArtifactReady) {
                         $readerAudioUrl = route('store.reader.audio', [$product, $document]);
                         $segments = (array) data_get($audioArtifact->metadata_json, 'segments', []);
                         $chunksByIndex = $document->chunks->keyBy('chunk_index');
@@ -557,7 +567,7 @@ class StoreController extends Controller
 
         abort_unless((bool) data_get($document->structure_json, 'reader.ready', false)
             && data_get($document->structure_json, 'audio.status') === 'completed', 409);
-        $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 2)->firstOrFail();
+        $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', '>=', 3)->orderByDesc('version')->firstOrFail();
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
         $disk = Storage::disk($artifact->disk ?: 'private');
         abort_unless($disk->exists($artifact->path), 404);
