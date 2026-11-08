@@ -451,6 +451,55 @@ test.describe('FARAST sample reader interactions', () => {
   });
 
 
+
+  test('clicking a document page plays only that page range from the full narration track', async ({ page }) => {
+    const sampleRate = 8000;
+    const sampleCount = sampleRate * 2;
+    const dataSize = sampleCount * 2;
+    const wav = Buffer.alloc(44 + dataSize);
+    wav.write('RIFF', 0);
+    wav.writeUInt32LE(36 + dataSize, 4);
+    wav.write('WAVE', 8);
+    wav.write('fmt ', 12);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * 2, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36);
+    wav.writeUInt32LE(dataSize, 40);
+    await page.goto('/');
+    await page.route('**/reader-full.wav', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: wav }));
+    await page.setContent(`
+      <meta name="csrf-token" content="reader-test-token">
+      <section data-reader-root data-reader-speech-url="/mock-speech" data-reader-audio-url="/reader-full.wav">
+        <section class="farast-reader-audio" data-reader-audio hidden>
+          <button data-audio-play aria-label="play"></button>
+          <input type="range" data-audio-seek>
+          <span data-audio-current>00:00</span><span data-audio-duration>00:00</span>
+          <select data-audio-speed><option value="1" selected>1x</option></select>
+          <span data-audio-status aria-live="polite"></span>
+        </section>
+        <script type="application/json" id="reader-audio-timing">[
+          {"text":"صفحه اول","start":0,"end":0.6,"page":1},
+          {"text":"صفحه دوم","start":0.7,"end":1.4,"page":2}
+        ]</script>
+        <article class="farast-reader-page-item is-active" data-index="1" data-reader-page="2">
+          <div class="farast-reader-page-content"><div class="reader-page-background">فضای خالی صفحه دوم</div></div>
+        </article>
+      </section>
+    `);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-document-audio.js', page.url()).href });
+    await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
+    await expect(page.locator('[data-reader-audio]')).toBeVisible();
+    await expect.poll(() => page.locator('[data-audio-duration]').textContent()).not.toBe('00:00');
+    await page.locator('.farast-reader-page-item').click();
+    await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBeGreaterThanOrEqual(0.7);
+    await expect(page.locator('[data-audio-status]')).toContainText('صفحه');
+  });
+
   test('granular speech sends the exact clicked word and selected phrase with page locators', async ({ page }) => {
     const requests = [];
     await page.goto('/');
