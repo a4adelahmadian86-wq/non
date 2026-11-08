@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductDocument;
 use App\Models\StoreProductImage;
 use App\Models\StoreTag;
 use App\Models\User;
