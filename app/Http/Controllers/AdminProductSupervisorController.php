@@ -229,6 +229,9 @@ class AdminProductSupervisorController extends Controller
             $supervisorMeta = (array) data_get($metadata, 'ai_supervisor', []);
             $assetReviews = (array) data_get($supervisorMeta, 'asset_reviews', []);
             $assetReviews[$assetKey] = $review;
+            if (count($assetReviews) > 100) {
+                $assetReviews = array_slice($assetReviews, -100, null, true);
+            }
             $supervisorMeta['asset_reviews'] = $assetReviews;
             $metadata['ai_supervisor'] = $supervisorMeta;
             $locked->update(['metadata' => $metadata]);
