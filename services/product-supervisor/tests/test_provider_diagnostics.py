@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import httpx
 
-from file_pipeline import analyze_extracted_content
+from file_pipeline import analyze_extracted_content, groq_provider_ready
 
 
 class _FakeResponse:
@@ -68,6 +68,7 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         _FakeAsyncClient.responses = [_success_response()]
         with patch.dict(os.environ, {
             "GROQ_API_KEY": "groq-test-key",
+            "GROQ_ZDR_CONFIRMED": "true",
             "GROQ_TEXT_MODEL": "openai/gpt-oss-20b",
             "GEMINI_API_KEY": "must-not-be-used",
         }, clear=False):
@@ -80,9 +81,16 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(call["headers"]["Authorization"], "Bearer groq-test-key")
         self.assertEqual(call["json"]["model"], "openai/gpt-oss-20b")
 
+    async def test_groq_is_blocked_until_zdr_is_confirmed(self):
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": ""}, clear=False):
+            result = await analyze_extracted_content("متن محرمانه", {})
+        self.assertEqual(result["analysis_status"], "privacy_not_confirmed")
+        self.assertFalse(groq_provider_ready())
+        self.assertEqual(_FakeAsyncClient.calls, [])
+
     async def test_all_provider_batches_failing_is_not_silent_success(self):
         _FakeAsyncClient.responses = [_FakeResponse(429), _FakeResponse(503)]
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
                 result = await analyze_extracted_content("x" * 24_001, {})
 
@@ -94,7 +102,7 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
 
     async def test_partial_provider_failure_is_reported_with_batch_counts(self):
         _FakeAsyncClient.responses = [_success_response(), _FakeResponse(503)]
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
                 result = await analyze_extracted_content("x" * 24_001, {})
 
@@ -113,7 +121,7 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
             "facts": [],
         }, ensure_ascii=False)
         _FakeAsyncClient.responses = [_FakeResponse(200, {"choices": [{"message": {"content": model_json}}]})]
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
                 result = await analyze_extracted_content("برگه: گزارش فروش\nفروردین | 10", {"detected_file_type": "xlsx"})
 
