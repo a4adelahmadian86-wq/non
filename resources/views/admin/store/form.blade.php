@@ -171,7 +171,7 @@
         @if($product->cover_path)
           <form method="post" action="{{ route('admin.store.ai-supervisor.cover.review',$product) }}" class="product-file-upload">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>تحلیل هوشمند تصویر کاور</button></form>
           @if(!empty($assetReviews['cover']))
-            <div class="product-asset-review"><b>گزارش ناظر کاور</b><p>{{ $assetReviews['cover']['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>وضعیت امنیتی: {{ $assetReviews['cover']['security_gate'] ?? 'نامشخص' }} · {{ $assetReviews['cover']['reviewed_at'] ?? '' }}</small></div>
+            <div class="product-asset-review"><b>گزارش ناظر کاور</b><p>{{ $assetReviews['cover']['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>اسکن ثانویه ناظر: {{ $assetReviews['cover']['security_gate'] ?? 'نامشخص' }} · {{ $assetReviews['cover']['reviewed_at'] ?? '' }}</small></div>
           @endif
         @endif
         <small class="product-help">فرمت‌های JPG، PNG و WebP · حداکثر ۸ مگابایت</small>
@@ -188,7 +188,7 @@
                 <form method="post" action="{{ route('admin.store.images.delete',[$product,$image]) }}" onsubmit="return confirm('این تصویر از گالری حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form>
               </div>
               @if(!empty($assetReviews['image:'.$image->id]))
-                <div class="product-asset-review"><b>گزارش ناظر تصویر</b><p>{{ $assetReviews['image:'.$image->id]['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>وضعیت امنیتی: {{ $assetReviews['image:'.$image->id]['security_gate'] ?? 'نامشخص' }}</small></div>
+                <div class="product-asset-review"><b>گزارش ناظر تصویر</b><p>{{ $assetReviews['image:'.$image->id]['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>اسکن ثانویه ناظر: {{ $assetReviews['image:'.$image->id]['security_gate'] ?? 'نامشخص' }}</small></div>
               @endif
             </div>
           @empty
@@ -216,14 +216,14 @@
           @php($fileReview = $assetReviews['file:'.$file->id] ?? null)
           <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'اسکن سالم':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small>
             @if($fileReview && hash_equals((string) ($fileReview['sha256'] ?? ''), (string) $file->sha256))
-              <small class="product-asset-review-inline">{{ $fileReview['summary'] ?? 'گزارش بررسی فایل ثبت شد.' }} · وضعیت: {{ $fileReview['security_gate'] ?? 'نامشخص' }}</small>
+              <small class="product-asset-review-inline">{{ $fileReview['summary'] ?? 'گزارش بررسی فایل ثبت شد.' }} · اسکن ثانویه ناظر: {{ $fileReview['security_gate'] ?? 'نامشخص' }}</small>
             @endif
           </span>
           <form method="post" action="{{ route('admin.store.ai-supervisor.files.review',[$product,$file]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>بررسی محتوای فایل</button></form>
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
         <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
-        <small class="product-help">حداکثر ۵۰ مگابایت؛ اگر اسکنر ضدبدافزار فعال نباشد، فایل ثبت و قابل انتشار نمی‌شود.</small>
+        <small class="product-help">حداکثر بارگذاری ۵۰ مگابایت؛ بررسی هوشمند هر فایل تا ۲۵ مگابایت. اسکن اصلی فروشگاه همچنان شرط انتشار است.</small>
       </div>
       <div class="store-panel product-files-panel">
         <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند.</p>
