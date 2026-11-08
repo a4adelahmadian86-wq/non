@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
+use App\Models\StoreLibraryItem;
 use App\Models\StoreWishlist;
 use App\Services\StoreXlsxPreviewRenderer;
 use Illuminate\Http\Request;
@@ -149,6 +150,11 @@ class StoreController extends Controller
     {
         $preview->load('product');
         abort_unless($preview->is_active && $preview->product && $preview->product->status === 'published' && $preview->product->published_at?->lte(now()), 404);
+        if (($preview->access_level ?? 'sample') === 'full') {
+            $user = request()->user();
+            abort_unless($user && ($preview->product->download_policy ?? 'signed') === 'reader_only', 403);
+            abort_unless(StoreLibraryItem::query()->where('user_id', $user->id)->where('product_id', $preview->product_id)->whereNull('revoked_at')->exists(), 403);
+        }
         $disk = Storage::disk($preview->disk ?: 'private');
         abort_unless($disk->exists($preview->path), 404);
 
@@ -191,13 +197,20 @@ class StoreController extends Controller
             ->where('slug', $slug)
             ->firstOrFail();
 
-        $previews = $product->previews;
+        $user = request()->user();
+        $samplePreviews = $product->previews->where('access_level', '!=', 'full')->values();
+        $hasReaderEntitlement = $user
+            && ($product->download_policy ?? 'signed') === 'reader_only'
+            && StoreLibraryItem::query()->where('user_id', $user->id)->where('product_id', $product->id)->whereNull('revoked_at')->exists();
+        $fullPreviews = $hasReaderEntitlement
+            ? $product->previews->where('access_level', 'full')->values()
+            : collect();
+        $previews = $fullPreviews->isNotEmpty() ? $fullPreviews : $samplePreviews;
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
 
-        $user = request()->user();
-        $readerIdentity = trim((string) ($user->mobile ?? ''));
+        $readerIdentity = trim((string) ($user?->mobile ?? ''));
         if ($readerIdentity === '') {
-            $readerIdentity = 'شناسه کاربر #'.$user->id;
+            $readerIdentity = (string) request()->ip();
         }
 
         return response()
@@ -214,7 +227,10 @@ class StoreController extends Controller
      * Convert an uploaded DOCX preview to a read-only, sanitized HTML document.
      * The source document is never exposed through a public storage URL.
      */
-    public function prepareDocxPreview(string $docxBytes): string\n    {\n        return $this->renderDocxPreview($docxBytes);\n    }\n\n    private function renderDocxPreview(string $docxBytes): string
+    public function prepareDocxPreview(string $docxBytes): string
+    {
+        return $this->renderDocxPreview($docxBytes);
+    }\n\n    private function renderDocxPreview(string $docxBytes): string
     {
         abort_unless(
             class_exists(\PhpOffice\PhpWord\IOFactory::class)
