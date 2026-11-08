@@ -219,6 +219,9 @@
             @if(data_get($file->document?->structure_json, 'sample.selected_pages'))
               <small>فایل نمونه یک‌بار ساخته شده · صفحات {{ implode('، ', data_get($file->document?->structure_json, 'sample.selected_pages', [])) }}</small>
             @endif
+            @if(data_get($file->document?->structure_json, 'audio.status'))
+              <small>نسخه صوتی: {{ ['completed'=>'ساخته و ذخیره شد','awaiting_semantic_review'=>'در انتظار تکمیل مطالعه محتوایی','awaiting_provider'=>'در انتظار موتور تبدیل متن به صدا','partial'=>'تولید صوت ناقص','failed'=>'خطا در تولید صوت'][data_get($file->document?->structure_json, 'audio.status')] ?? 'در حال آماده‌سازی' }}</small>
+            @endif
           </span>
           @if($fileReview && hash_equals((string) ($fileReview['sha256'] ?? ''), (string) $file->sha256))
             @include('admin.store.partials.asset-review', ['assetReview' => $fileReview, 'label' => 'گزارش ناظر فایل'])
