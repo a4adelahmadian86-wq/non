@@ -278,11 +278,12 @@
     return true;
   };
   const tokens = value => String(value || '').toLocaleLowerCase().replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\u064B-\u065F\u0670]/g, '').replace(/[\u200c\u200f\u202a-\u202e]/g, '').match(/[\p{L}\p{N}]+/gu) || [];
-  const findTextRange = value => {
+  const findTextRange = (value, page = null) => {
     const wanted = tokens(value);
     if (!wanted.length || !activeTrack) return null;
     const indexedWords = [];
     for (const item of activeTrack.timings) {
+      if (page !== null && Number(item.page) !== Number(page)) continue;
       const words = Array.isArray(item.words) && item.words.length
         ? item.words
         : String(item.text).trim().split(/\s+/u).map((text, index, all) => ({
@@ -314,7 +315,7 @@
     const sentence = event.target.closest('.reader-document-sentence');
     const paragraph = event.target.closest('.reader-document-paragraph');
     const target = sentence || paragraph;
-    if (target) { const range = findTextRange(target.textContent); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
+    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
     const pdfLayer = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
     if (pdfLayer) {
       const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
@@ -326,7 +327,8 @@
         const left = before.search(/[^.!؟۔؛]*$/u);
         const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
         const sentenceText = (before.slice(left < 0 ? 0 : left) + (right?.[0] || '')).trim();
-        const range = findTextRange(sentenceText);
+        const page = Number(pdfLayer.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || root.querySelector('#reader-page-number')?.value || 1);
+        const range = findTextRange(sentenceText, page);
         if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن جملهٔ انتخاب‌شده'); return; }
       }
     }
@@ -341,13 +343,15 @@
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph');
     if (!target) return;
-    const range = findTextRange(target.textContent);
+    const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+    const range = findTextRange(target.textContent, page);
     if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); }
   });
   root.addEventListener('pointerup', () => {
     const selection = window.getSelection(); if (!selection || selection.isCollapsed) return;
     const anchor = selection.anchorNode?.parentElement; if (!anchor || !root.contains(anchor)) return;
-    const range = findTextRange(selection.toString()); if (range) playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
+    const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+    const range = findTextRange(selection.toString(), page); if (range) playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
   });
   function startFrameLoop() {
     cancelAnimationFrame(raf);
