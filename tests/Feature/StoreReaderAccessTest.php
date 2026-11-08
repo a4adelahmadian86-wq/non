@@ -539,7 +539,7 @@ class StoreReaderAccessTest extends TestCase
     public function test_workbook_preview_injects_a_fresh_watermark_for_each_viewer(): void
     {
         [$product] = $this->makePreviewFixture();
-        $html = app(\\App\\Services\\StoreXlsxPreviewRenderer::class)->render(
+        $html = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
             $this->makeXlsxBytes(),
             '__FARAST_READER_IDENTITY__',
             true
