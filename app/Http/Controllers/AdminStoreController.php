@@ -526,6 +526,9 @@ class AdminStoreController extends Controller
             'audio_status' => (string) ($audio['status'] ?? ($document->processing_status === 'completed' ? 'pending' : 'not_started')),
             'audio_duration_ms' => (int) ($audio['duration_ms'] ?? 0),
             'audio_segment_count' => (int) ($audio['segment_count'] ?? 0),
+            'fact_count' => $document->facts()->where('source_sha256', $document->source_sha256)->where('verification_status', 'evidence_backed')->count(),
+            'reader_ready' => (bool) data_get($structure, 'reader.ready', false),
+            'reader_page_count' => (int) data_get($structure, 'reader.page_count', 0),
             'updated_at' => $document->updated_at?->toISOString(),
         ])->header('Cache-Control', 'private, no-store');
     }
