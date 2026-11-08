@@ -16,6 +16,7 @@ class StoreXlsxPreviewRenderer
     private const MAX_ROWS = 2000;
     private const MAX_COLUMNS = 40;
     private const MAX_CELLS = 80000;
+    private const MAX_STYLES = 10000;
 
     public function render(string $bytes, string $identity): string
     {
@@ -293,6 +294,12 @@ class StoreXlsxPreviewRenderer
         }
         $xml = $this->parseXml($contents);
         $xpath = new DOMXPath($xml);
+        foreach (['fonts' => 1024, 'fills' => 1024, 'borders' => 1024, 'cellXfs' => self::MAX_STYLES] as $collection => $limit) {
+            $nodes = $xpath->query('//*[local-name()="'.$collection.'"]/*');
+            if ($nodes && $nodes->length > $limit) {
+                throw new RuntimeException('Workbook style collection exceeds the supported limit.');
+            }
+        }
 
         $fonts = [];
         foreach ($xpath->query('//*[local-name()="fonts"]/*[local-name()="font"]') as $font) {
@@ -310,7 +317,11 @@ class StoreXlsxPreviewRenderer
         $fills = [];
         foreach ($xpath->query('//*[local-name()="fills"]/*[local-name()="fill"]') as $fill) {
             $pattern = $xpath->query('./*[local-name()="patternFill"]', $fill)->item(0);
-            $type = $pattern instanceof DOMElement ? $pattern->getAttribute('patternType') : '';
+            if (!$pattern instanceof DOMElement) {
+                $fills[] = [];
+                continue;
+            }
+            $type = $pattern->getAttribute('patternType');
             $color = $xpath->query('./*[local-name()="fgColor"]', $pattern)->item(0);
             $hex = $this->xlsxColor($color instanceof DOMElement ? $color->getAttribute('rgb') : '');
             $fills[] = $type === 'solid' && $hex !== null ? ['background-color:'.$hex] : [];
