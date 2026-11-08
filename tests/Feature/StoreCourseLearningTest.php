@@ -10,6 +10,7 @@ use App\Models\StoreCourseLesson;
 use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
+use App\Models\StoreProductFile;
 use App\Models\User;
 use App\Services\StoreCourseEnrollmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -94,6 +95,79 @@ class StoreCourseLearningTest extends TestCase
         app(StoreCourseEnrollmentService::class)->grant($item, $product);
 
         return $item;
+    }
+
+    private function makeAdmin(): User
+    {
+        return User::create([
+            'name' => 'Course Admin',
+            'mobile' => '09123456788',
+            'password' => 'secret',
+            'role' => User::ROLE_ADMIN,
+        ]);
+    }
+
+    public function test_admin_cannot_publish_an_article_lesson_without_body_content(): void
+    {
+        $admin = $this->makeAdmin();
+        [$product, , , $lesson] = $this->makeCourse('empty-article', 10000);
+        $product->update(['status' => 'draft', 'published_at' => null]);
+        $lesson->update(['content' => null, 'is_published' => false]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.course.edit', $product))
+            ->put(route('admin.store.course.lessons.update', [$product, $lesson]), [
+                'title' => $lesson->title,
+                'lesson_type' => 'article',
+                'summary' => '',
+                'content' => '',
+                'video_url' => '',
+                'duration_seconds' => 0,
+                'sort_order' => 1,
+                'is_published' => '1',
+            ])
+            ->assertRedirect(route('admin.store.course.edit', $product))
+            ->assertSessionHasErrors('is_published');
+
+        $this->assertFalse($lesson->fresh()->is_published);
+    }
+
+    public function test_course_cannot_be_published_without_a_valid_published_lesson(): void
+    {
+        $admin = $this->makeAdmin();
+        [$product, , , $lesson] = $this->makeCourse('invalid-course-content', 10000);
+        $product->update(['status' => 'draft', 'published_at' => null]);
+        $lesson->update(['content' => null, 'is_published' => true]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->put(route('admin.store.update', $product), [
+                'category_id' => $product->category_id,
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'type' => 'course',
+                'price_rials' => $product->price_rials,
+                'status' => 'published',
+            ])
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHasErrors('status');
+
+        $this->assertSame('draft', $product->fresh()->status);
+    }
+
+    public function test_last_valid_lesson_cannot_be_deleted_from_a_published_course(): void
+    {
+        $admin = $this->makeAdmin();
+        [$product, , , $lesson] = $this->makeCourse('protected-course-lesson', 10000);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.course.edit', $product))
+            ->delete(route('admin.store.course.lessons.delete', [$product, $lesson]))
+            ->assertRedirect(route('admin.store.course.edit', $product))
+            ->assertSessionHasErrors('lesson');
+
+        $this->assertDatabaseHas('store_course_lessons', ['id' => $lesson->id, 'is_published' => true]);
+        $this->assertSame('published', $product->fresh()->status);
     }
 
     public function test_free_course_checkout_creates_library_entitlement_and_enrollment(): void
