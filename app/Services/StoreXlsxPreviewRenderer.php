@@ -300,7 +300,7 @@ class StoreXlsxPreviewRenderer
             if ($xpath->query('./*[local-name()="b"]', $font)->length > 0) $css[] = 'font-weight:700';
             if ($xpath->query('./*[local-name()="i"]', $font)->length > 0) $css[] = 'font-style:italic';
             $size = $xpath->query('./*[local-name()="sz"]', $font)->item(0)?->getAttribute('val');
-            if (is_numeric($size) && (float) $size >= 6 && (float) $size <= 36) $css[] = 'font-size:'.rtrim(rtrim((string) $size, '0'), '.').'pt';
+            if (is_numeric($size) && (float) $size >= 6 && (float) $size <= 36) $css[] = 'font-size:'.rtrim(rtrim(number_format((float) $size, 2, '.', ''), '0'), '.').'pt';
             $color = $xpath->query('./*[local-name()="color"]', $font)->item(0);
             $hex = $this->xlsxColor($color instanceof DOMElement ? $color->getAttribute('rgb') : '');
             if ($hex !== null) $css[] = 'color:'.$hex;
