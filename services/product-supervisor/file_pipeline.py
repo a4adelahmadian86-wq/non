@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 from docx import Document
 from PIL import Image, UnidentifiedImageError
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 from openpyxl import load_workbook
 from pptx import Presentation
 
@@ -275,6 +275,36 @@ def _extract_pdf(data: bytes) -> str:
         raise FileInspectionError("ساختار PDF معتبر نیست یا متن آن قابل استخراج نیست.") from None
 
 
+def build_pdf_sample(data: bytes, page_numbers: list[int], max_pages: int = 3, max_output_bytes: int = 8 * 1024 * 1024) -> tuple[bytes, list[int]] | None:
+    if not page_numbers:
+        return None
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        if reader.is_encrypted or len(reader.pages) > 300:
+            return None
+        selected = []
+        for value in page_numbers:
+            if isinstance(value, bool) or not isinstance(value, int):
+                continue
+            if 1 <= value <= len(reader.pages) and value not in selected:
+                selected.append(value)
+            if len(selected) >= max_pages:
+                break
+        if not selected:
+            return None
+        writer = PdfWriter()
+        for page_number in selected:
+            writer.add_page(reader.pages[page_number - 1])
+        output = io.BytesIO()
+        writer.write(output)
+        sample = output.getvalue()
+        if not sample.startswith(b"%PDF-") or len(sample) > max_output_bytes:
+            return None
+        return sample, selected
+    except Exception:
+        return None
+
+
 def _inspect_image(data: bytes) -> tuple[bytes, str]:
     try:
         with Image.open(io.BytesIO(data)) as image:
@@ -507,7 +537,9 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
             "اطلاعات ساختگی یا جزئیات ناموجود تولید نکن.",
             "اطلاعات حساس، کلیدها، رمزها و داده شخصی را در خروجی بازنشر نکن؛ فقط وجود احتمالی آن‌ها را هشدار بده.",
             "محتوای کپی‌رایت‌دار، محتوای نامرتبط، محتوای خالی یا ناقص و ناسازگاری با عنوان محصول را مشخص کن.",
-            "خروجی را به فارسی و به شکل JSON شامل summary و findings بده.",
+            "خروجی را به فارسی و به شکل JSON شامل summary و findings و sample_pages بده.",
+            "sample_pages باید حداکثر سه شماره صفحه یک‌مبنایی باشد که فقط از locatorهای صفحه PDF و در محدوده metadata.page_count انتخاب می‌شوند؛ برای فایل غیر PDF یا شواهد ناکافی آرایه خالی بده.",
+            "شماره صفحه یا محتوای مشاهده‌نشده را حدس نزن.",
         ],
     }
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
