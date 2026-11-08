@@ -152,7 +152,7 @@ class StoreCourseLearningController extends Controller
     public function resource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
     {
         $enrollment = $this->enrollment($request, $product);
-        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
+        abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published && $this->lessonHasPublishableContent($lesson), 404);
         abort_unless($this->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
         abort_unless(
             $file->product_id === $product->id
