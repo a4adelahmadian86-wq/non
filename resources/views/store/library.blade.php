@@ -32,6 +32,7 @@
                             ? number_format($fileBytes / 1048576, 2).' مگابایت'
                             : ($fileBytes > 0 ? number_format($fileBytes / 1024, 0).' کیلوبایت' : null);
                         $fileAvailable = $item->file && $item->file->is_active;
+                        $readerOnly = ($item->product?->download_policy ?? 'signed') === 'reader_only';
                     @endphp
                     <article class="store-product-card library-product-card">
                         <div class="store-product-cover library-product-cover">
@@ -54,6 +55,8 @@
                             @endif
                             @if($item->product?->type === 'course')
                                 <a class="store-primary-btn" href="{{ route('store.course.learn',$item->product) }}"><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i> ورود به دوره</a>
+                            @elseif($readerOnly)
+                                <a class="store-primary-btn library-read" href="{{ route('store.reader', $item->product->slug) }}"><i class="fa-solid fa-book-open" aria-hidden="true"></i> مطالعه در خوانشگر</a>
                             @elseif($fileAvailable)
                                 <button type="button" class="store-primary-btn library-download" data-library-download="{{ $item->id }}" data-label="دریافت امن فایل">
                                     <i class="fa-solid fa-download" aria-hidden="true"></i> دریافت امن فایل
