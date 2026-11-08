@@ -43,6 +43,22 @@ class SeedReaderDemoProduct extends Command
             $disk->put($assets['xlsx'][0], $this->makeXlsx());
         }
 
+        // Demo generation is an explicit preparation task. The reader itself only
+        // receives these stored, neutral artifacts and never converts Office files.
+        $prepared = [
+            'pdf' => [$assets['pdf'][0], 'application/pdf', 'pdf'],
+            'word' => [$directory.'/FARAST-Reader-Demo-Word.pdf', 'application/pdf', 'pdf'],
+            'excel' => [$directory.'/FARAST-Reader-Demo-Excel.html', 'text/html', 'html'],
+        ];
+        if ($this->option('refresh') || !$disk->exists($prepared['word'][0])) {
+            $bytes = app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview($disk->get($assets['docx'][0]));
+            $disk->put($prepared['word'][0], $bytes);
+        }
+        if ($this->option('refresh') || !$disk->exists($prepared['excel'][0])) {
+            $html = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($disk->get($assets['xlsx'][0]), 'FARAST_READER_IDENTITY_TOKEN');
+            $disk->put($prepared['excel'][0], $html);
+        }
+
         $category = StoreCategory::firstOrCreate(
             ['slug' => 'reader-demo'],
             ['name' => 'نمونه‌های خوانشگر', 'description' => 'اسناد نمونه برای آزمایش پیش‌نمایش امن', 'is_active' => true, 'sort_order' => 900]
@@ -68,26 +84,25 @@ class SeedReaderDemoProduct extends Command
             ]
         );
 
-        foreach ($assets as $kind => [$filePath, $mime]) {
-            $size = $disk->size($filePath);
-            $absolute = $disk->path($filePath);
-            $hash = hash_file('sha256', $absolute);
+        foreach ($prepared as $kind => [$filePath, $mime, $previewKind]) {
             StoreProductPreview::updateOrCreate(
                 ['product_id' => $product->id, 'path' => $filePath],
-                ['disk' => 'private', 'mime' => $mime, 'page_number' => 1, 'kind' => $kind, 'watermarked' => true, 'is_active' => true, 'sort_order' => array_search($kind, ['pdf', 'docx', 'xlsx'], true)]
+                ['disk' => 'private', 'mime' => $mime, 'page_number' => 1, 'kind' => $previewKind, 'access_level' => 'sample', 'watermarked' => true, 'is_active' => true, 'sort_order' => array_search($kind, ['pdf', 'word', 'excel'], true)]
             );
-            if ($kind === 'pdf') {
-                StoreProductFile::updateOrCreate(
-                    ['product_id' => $product->id, 'purpose' => 'product_download', 'original_name' => 'FARAST-Reader-Demo.pdf'],
-                    [
-                        'version' => $product->version, 'disk' => 'private', 'path' => $filePath,
-                        'mime' => $mime, 'size_bytes' => $size, 'sha256' => $hash,
-                        'is_primary' => true, 'is_active' => true, 'scan_status' => 'clean',
-                        'scan_engine' => 'trusted-demo-fixture-generator', 'scanned_at' => now(),
-                    ]
-                );
-            }
         }
+
+        $filePath = $assets['pdf'][0];
+        $size = $disk->size($filePath);
+        $hash = hash_file('sha256', $disk->path($filePath));
+        StoreProductFile::updateOrCreate(
+            ['product_id' => $product->id, 'purpose' => 'product_download', 'original_name' => 'FARAST-Reader-Demo.pdf'],
+            [
+                'version' => $product->version, 'disk' => 'private', 'path' => $filePath,
+                'mime' => $assets['pdf'][1], 'size_bytes' => $size, 'sha256' => $hash,
+                'is_primary' => true, 'is_active' => true, 'scan_status' => 'clean',
+                'scan_engine' => 'trusted-demo-fixture-generator', 'scanned_at' => now(),
+            ]
+        );
 
         $this->info('Demo product is ready: '.url('/store/product/'.$product->slug));
         $this->line('Authenticated reader: '.url('/store/product/'.$product->slug.'/reader'));
