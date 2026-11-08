@@ -145,6 +145,29 @@ class StaticFileSafetyScanner
 
                 $size = (int) ($stat['size'] ?? 0);
                 $compressed = (int) ($stat['comp_size'] ?? 0);
+                $opsys = 0;
+                $attributes = 0;
+                if ($zip->getExternalAttributesIndex($index, $opsys, $attributes) && $opsys === ZipArchive::OPSYS_UNIX) {
+                    $fileType = ($attributes >> 16) & 0170000;
+                    if ($fileType === 0120000) {
+                        throw new RuntimeException('static_scan_archive_symlink');
+                    }
+                }
+                if ($size > 0 && ! str_ends_with($name, '/')) {
+                    $entryStream = $zip->getStream($name);
+                    if (is_resource($entryStream)) {
+                        try {
+                            $entryHeader = (string) fread($entryStream, 16);
+                        } finally {
+                            fclose($entryStream);
+                        }
+                        foreach (self::EXECUTABLE_SIGNATURES as $signature => $reason) {
+                            if (str_starts_with($entryHeader, $signature)) {
+                                throw new RuntimeException('static_scan_archive_'.$reason);
+                            }
+                        }
+                    }
+                }
                 if ($size > self::MAX_SINGLE_ENTRY_BYTES) {
                     throw new RuntimeException('static_scan_archive_entry_too_large');
                 }
