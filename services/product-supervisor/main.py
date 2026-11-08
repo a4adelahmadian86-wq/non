@@ -24,6 +24,7 @@ MAX_BODY_BYTES = 26 * 1024 * 1024
 MAX_FINDINGS = 12
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 
 class ProductSnapshot(BaseModel):
@@ -468,7 +469,7 @@ def _groq_zdr_is_confirmed() -> bool:
 
 def _gemini_api_key_is_configured() -> bool:
     key = os.getenv("GEMINI_API_KEY", "").strip()
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    model = GEMINI_MODEL
     # Guard against accidentally pasting the model identifier into the API-key field.
     return bool(key and key != model and not key.lower().startswith("gemini-"))
 
@@ -595,7 +596,7 @@ async def review_product(snapshot: ProductSnapshot):
     if not api_key:
         raise HTTPException(status_code=503, detail="Supervisor provider is not configured")
 
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    model = GEMINI_MODEL
     model = re.sub(r"[^a-zA-Z0-9._-]", "", model)
     if not model:
         raise HTTPException(status_code=503, detail="Supervisor model is not configured")
