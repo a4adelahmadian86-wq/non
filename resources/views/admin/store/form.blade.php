@@ -171,7 +171,7 @@
         @if($product->cover_path)
           <form method="post" action="{{ route('admin.store.ai-supervisor.cover.review',$product) }}" class="product-file-upload">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>تحلیل هوشمند تصویر کاور</button></form>
           @if(!empty($assetReviews['cover']))
-            <div class="product-asset-review"><b>گزارش ناظر کاور</b><p>{{ $assetReviews['cover']['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>اسکن ثانویه ناظر: {{ $assetReviews['cover']['security_gate'] ?? 'نامشخص' }} · {{ $assetReviews['cover']['reviewed_at'] ?? '' }}</small></div>
+            <div class="product-asset-review"><b>گزارش ناظر کاور</b><p>{{ $assetReviews['cover']['summary'] ?? 'تحلیل ساختاری انجام شد.' }}</p><small>وضعیت امنیتی فایل: {{ $assetReviews['cover']['security_gate'] ?? 'نامشخص' }} · {{ $assetReviews['cover']['reviewed_at'] ?? '' }}</small></div>
           @endif
         @endif
         <small class="product-help">فرمت‌های JPG، PNG و WebP · حداکثر ۸ مگابایت</small>
