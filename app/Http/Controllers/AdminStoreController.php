@@ -386,6 +386,9 @@ class AdminStoreController extends Controller
         abort_if($accessLevel === 'full' && $product->download_policy !== 'reader_only', 422, 'محتوای کامل فقط برای محصول با سیاست فقط‌خواندنی قابل ثبت است.');
         $sourcePath = $upload->store('store/quarantine/previews/'.$product->id, 'private');
         $preparedPath = null;
+        $sourcePageCount = null;
+        $includedPageCount = null;
+
         try {
             $inspection = $security->inspect($sourcePath, $upload->getMimeType(), 20 * 1024 * 1024, [
                 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/zip',
@@ -395,48 +398,54 @@ class AdminStoreController extends Controller
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ پیش‌نمایش ذخیره نشد.');
 
             $kind = match ($extension) {
-                'pdf' => 'pdf',
-                'docx' => 'pdf',
+                'pdf', 'docx' => 'pdf',
                 'xlsx' => 'html',
                 default => 'image',
             };
             $mime = $kind === 'pdf' ? 'application/pdf' : ($kind === 'html' ? 'text/html' : $inspection['mime']);
-            $finalPath = $sourcePath;
+            $sourceBytes = Storage::disk('private')->get($sourcePath);
+            $preparedBytes = $sourceBytes;
 
             if ($extension === 'docx') {
-                $preparedBytes = app(StoreController::class)->prepareDocxPreview(Storage::disk('private')->get($sourcePath));
-                $preparedPath = 'store/previews/'.$product->id.'/'.Str::random(40).'.pdf';
-                abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده PDF ممکن نشد.');
-                $finalPath = $preparedPath;
-            } elseif ($extension === 'xlsx') {
-                $preparedBytes = app(\App\Services\StoreXlsxPreviewRenderer::class)->render(
-                    Storage::disk('private')->get($sourcePath),
-                    ''
+                $preparedBytes = app(StoreController::class)->prepareDocxPreview($sourceBytes);
+            }
+
+            if (in_array($extension, ['pdf', 'docx'], true) && $accessLevel === 'sample') {
+                $sample = app(\\App\\Services\\StorePdfPreviewPreparer::class)->prepareSample(
+                    $preparedBytes,
+                    max(1, min(50, (int) ($product->preview_pages ?: 3)))
                 );
-                $preparedPath = 'store/previews/'.$product->id.'/'.Str::random(40).'.html';
-                abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده Excel ممکن نشد.');
-                $finalPath = $preparedPath;
-            } else {
-                $directory = 'store/previews/'.$product->id;
-                $filename = Str::random(40).'.'.$extension;
-                $preparedPath = $directory.'/'.$filename;
-                abort_unless(Storage::disk('private')->put($preparedPath, Storage::disk('private')->get($sourcePath)), 503, 'ذخیره فایل آماده ممکن نشد.');
-                $finalPath = $preparedPath;
+                $preparedBytes = $sample['bytes'];
+                $sourcePageCount = $sample['source_page_count'];
+                $includedPageCount = $sample['included_page_count'];
             }
 
-            if ($finalPath !== $sourcePath) {
-                Storage::disk('private')->delete($sourcePath);
+            if ($extension === 'xlsx') {
+                $preparedBytes = app(\\App\\Services\\StoreXlsxPreviewRenderer::class)->render(
+                    $sourceBytes,
+                    '',
+                    $accessLevel === 'sample'
+                );
             }
 
-            DB::transaction(function () use ($product, $finalPath, $mime, $request, $kind, $accessLevel) {
+            $directory = 'store/previews/'.$product->id;
+            $filename = Str::random(40).'.'.($kind === 'html' ? 'html' : ($kind === 'pdf' ? 'pdf' : $extension));
+            $preparedPath = $directory.'/'.$filename;
+            abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده پیش‌نمایش ممکن نشد.');
+
+            Storage::disk('private')->delete($sourcePath);
+
+            DB::transaction(function () use ($product, $preparedPath, $mime, $request, $kind, $accessLevel, $sourcePageCount, $includedPageCount) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
                 StoreProductPreview::create([
                     'product_id' => $lockedProduct->id,
                     'disk' => 'private',
-                    'path' => $finalPath,
+                    'path' => $preparedPath,
                     'mime' => $mime,
                     'page_number' => $request->input('page_number') ?: $sort,
+                    'source_page_count' => $sourcePageCount,
+                    'included_page_count' => $includedPageCount,
                     'kind' => $kind,
                     'access_level' => $accessLevel,
                     'watermarked' => true,
@@ -447,6 +456,8 @@ class AdminStoreController extends Controller
                     'mime' => $mime,
                     'kind' => $kind,
                     'access_level' => $accessLevel,
+                    'source_page_count' => $sourcePageCount,
+                    'included_page_count' => $includedPageCount,
                     'sort_order' => $sort,
                 ]);
             });
@@ -458,10 +469,15 @@ class AdminStoreController extends Controller
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
-            abort(503, 'آماده‌سازی پیش‌نمایش به دلیل ناموفق بودن بررسی امنیتی یا تبدیل فایل متوقف شد.');
+            report($exception);
+            abort(503, 'آماده‌سازی امن پیش‌نمایش ناموفق بود؛ فایل اصلی در خوانشگر منتشر نشد.');
         }
 
-        return back()->with('status', 'پیش‌نمایش آماده و خصوصی ذخیره شد؛ خوانشگر فقط نسخهٔ آماده را نمایش می‌دهد.');
+        $message = $includedPageCount !== null
+            ? 'پیش‌نمایش آماده شد؛ فقط '.$includedPageCount.' صفحه از '.$sourcePageCount.' صفحهٔ سند در نسخهٔ نمونه ذخیره شد.'
+            : 'پیش‌نمایش آماده و خصوصی ذخیره شد؛ خوانشگر فقط نسخهٔ آماده را نمایش می‌دهد.';
+
+        return back()->with('status', $message);
     }
 
     public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview, UploadSecurityService $security)
