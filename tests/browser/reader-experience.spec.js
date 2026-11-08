@@ -71,9 +71,10 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
           ${excelPage}
         </main>
       </div>
+      <div class="farast-reader-print-block" hidden>این پیش‌نمایش فقط برای مطالعهٔ آنلاین ارائه شده است.</div>
     </section>
   `);
-  await page.addStyleTag({ content: '.farast-reader-page-content img,.farast-reader-page-content iframe { transform: scale(var(--reader-zoom, 1)); transform-origin: top center; }' });
+  await page.addStyleTag({ content: '.farast-reader-page-content img,.farast-reader-page-content iframe { transform: scale(var(--reader-zoom, 1)); transform-origin: top center; }.farast-reader-print-block{display:none}@media print{body *{visibility:hidden!important}.farast-reader-print-block{display:block!important;visibility:visible!important;position:fixed;inset:0;padding:48px;background:#fff;color:#111}.farast-reader-print-block *{visibility:visible!important}}' });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
@@ -296,7 +297,7 @@ test.describe('FARAST sample reader interactions', () => {
 
     const results = await page.evaluate(() => {
       const target = document.querySelector('[data-reader-root]');
-      const input = document.querySelector('#reader-search');
+      const input = document.querySelector('#reader-search-input');
       const copy = new ClipboardEvent('copy', { bubbles: true, cancelable: true });
       const cut = new ClipboardEvent('cut', { bubbles: true, cancelable: true });
       const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
