@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import httpx
 
-from file_pipeline import analyze_extracted_content
+from file_pipeline import analyze_extracted_content, analyze_image_with_groq, groq_provider_ready, transcribe_audio_with_groq
 
 
 class _FakeResponse:
@@ -27,11 +27,12 @@ class _FakeResponse:
 
 class _FakeAsyncClient:
     responses: list[_FakeResponse] = []
+    calls: list[dict] = []
     call_count = 0
 
     def __init__(self, *args, **kwargs):
-        self.responses = type(self).responses
         type(self).call_count = 0
+        type(self).calls = []
 
     async def __aenter__(self):
         return self
@@ -39,8 +40,9 @@ class _FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, traceback):
         return False
 
-    async def post(self, *args, **kwargs):
-        response = self.responses[type(self).call_count]
+    async def post(self, url, **kwargs):
+        type(self).calls.append({"url": url, **kwargs})
+        response = type(self).responses[type(self).call_count]
         type(self).call_count += 1
         return response
 
@@ -50,22 +52,57 @@ def _success_response():
         "summary": "تحلیل انجام شد",
         "findings": [],
         "sample_pages": [],
+        "sample_sheets": [],
         "facts": [],
     }, ensure_ascii=False)
-    return _FakeResponse(200, {
-        "candidates": [{"content": {"parts": [{"text": model_json}]}}],
-    })
+    return _FakeResponse(200, {"choices": [{"message": {"content": model_json}}]})
 
 
 class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
-    async def test_missing_key_is_reported_as_not_configured(self):
-        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
+    async def test_missing_groq_key_is_reported_as_not_configured(self):
+        with patch.dict(os.environ, {"GROQ_API_KEY": ""}, clear=False):
             result = await analyze_extracted_content("متن محصول", {})
         self.assertEqual(result["analysis_status"], "not_configured")
 
+    async def test_file_analyzer_uses_groq_not_gemini(self):
+        _FakeAsyncClient.responses = [_success_response()]
+        with patch.dict(os.environ, {
+            "GROQ_API_KEY": "groq-test-key",
+            "GROQ_ZDR_CONFIRMED": "true",
+            "GROQ_TEXT_MODEL": "openai/gpt-oss-20b",
+            "GEMINI_API_KEY": "must-not-be-used",
+        }, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                result = await analyze_extracted_content("متن محرمانه آزمایشی", {"detected_file_type": "txt"})
+
+        self.assertEqual(result["analysis_status"], "completed")
+        call = _FakeAsyncClient.calls[0]
+        self.assertEqual(call["url"], "https://api.groq.com/openai/v1/chat/completions")
+        self.assertEqual(call["headers"]["Authorization"], "Bearer groq-test-key")
+        self.assertEqual(call["json"]["model"], "openai/gpt-oss-20b")
+
+    async def test_groq_is_blocked_until_zdr_is_confirmed(self):
+        _FakeAsyncClient.calls = []
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": ""}, clear=False):
+            result = await analyze_extracted_content("متن محرمانه", {})
+        self.assertEqual(result["analysis_status"], "privacy_not_confirmed")
+        self.assertFalse(groq_provider_ready())
+        self.assertEqual(_FakeAsyncClient.calls, [])
+
+    async def test_groq_image_and_audio_are_blocked_until_zdr_is_confirmed(self):
+        _FakeAsyncClient.calls = []
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": ""}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                image_result = await analyze_image_with_groq(b"image-bytes", "image/jpeg")
+                audio_result = await transcribe_audio_with_groq(b"audio-bytes", "sample.wav")
+
+        self.assertEqual(image_result, "")
+        self.assertEqual(audio_result, "")
+        self.assertEqual(_FakeAsyncClient.calls, [])
+
     async def test_all_provider_batches_failing_is_not_silent_success(self):
         _FakeAsyncClient.responses = [_FakeResponse(429), _FakeResponse(503)]
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
                 result = await analyze_extracted_content("x" * 24_001, {})
 
@@ -77,7 +114,7 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
 
     async def test_partial_provider_failure_is_reported_with_batch_counts(self):
         _FakeAsyncClient.responses = [_success_response(), _FakeResponse(503)]
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
             with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
                 result = await analyze_extracted_content("x" * 24_001, {})
 
@@ -86,6 +123,21 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(result["successful_analysis_batches"], 1)
         self.assertEqual(result["failed_analysis_batches"], 1)
         self.assertEqual(result["analysis_failure_categories"]["provider_unavailable"], 1)
+
+    async def test_xlsx_sample_sheet_recommendations_are_returned_as_names(self):
+        model_json = json.dumps({
+            "summary": "برگه‌ها بررسی شدند",
+            "findings": [],
+            "sample_pages": [],
+            "sample_sheets": ["گزارش فروش"],
+            "facts": [],
+        }, ensure_ascii=False)
+        _FakeAsyncClient.responses = [_FakeResponse(200, {"choices": [{"message": {"content": model_json}}]})]
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                result = await analyze_extracted_content("برگه: گزارش فروش\nفروردین | 10", {"detected_file_type": "xlsx"})
+
+        self.assertEqual(result["sample_sheets"], ["گزارش فروش"])
 
 
 if __name__ == "__main__":
