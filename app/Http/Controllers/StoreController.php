@@ -480,6 +480,36 @@ class StoreController extends Controller
                 'archive_entry' => (string) data_get($pageRecord->locator_json, 'archive_entry', 'فایل داخل آرشیو'),
                 default => 'بخش '.$pageRecord->page_number,
             },
+            'content_blocks' => collect(
+                data_get($pageRecord->locator_json, 'content_blocks', [])
+            )->take(120)->map(function ($block) {
+                if (! is_array($block)) {
+                    return null;
+                }
+                $type = (string) ($block['type'] ?? '');
+                if (! in_array($type, ['heading', 'paragraph', 'list_item', 'table_row'], true)) {
+                    return null;
+                }
+
+                $safe = [
+                    'type' => $type,
+                    'text' => mb_substr((string) ($block['text'] ?? ''), 0, 1800),
+                ];
+                if ($type === 'heading') {
+                    $safe['level'] = max(1, min(6, (int) ($block['level'] ?? 2)));
+                } elseif ($type === 'list_item') {
+                    $safe['list_kind'] = ($block['list_kind'] ?? '') === 'number' ? 'number' : 'bullet';
+                    $safe['list_level'] = max(1, min(5, (int) ($block['list_level'] ?? 1)));
+                } elseif ($type === 'table_row') {
+                    $safe['cells'] = array_slice(array_map(
+                        fn ($cell) => mb_substr((string) $cell, 0, 500),
+                        is_array($block['cells'] ?? null) ? $block['cells'] : []
+                    ), 0, 50);
+                    $safe['table_index'] = max(1, min(100, (int) ($block['table_index'] ?? 1)));
+                    $safe['row_index'] = max(1, min(1000, (int) ($block['row_index'] ?? 1)));
+                }
+                return $safe;
+            })->filter()->values()->all(),
             'content_text' => (string) $pageRecord->content_text,
             'has_extracted_text' => (bool) $pageRecord->has_extracted_text,
             'content_sha256' => (string) $pageRecord->content_sha256,
