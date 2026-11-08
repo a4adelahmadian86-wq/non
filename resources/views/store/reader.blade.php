@@ -101,6 +101,11 @@
                 <div class="farast-document-reader-page" dir="auto" data-document-page="{{ $preview->page_number }}">
                   {!! $preview->documentPage->content_html !!}
                 </div>
+              @elseif(($preview->kind ?? '') === 'image' && $preview->documentPage)
+                <div class="farast-document-reader-page farast-document-image-page" dir="auto" data-document-page="{{ $preview->page_number }}">
+                  <img src="{{ route('store.preview',$preview) }}" alt="تصویر محتوای محصول" loading="lazy" style="display:block;max-width:100%;max-height:70vh;object-fit:contain;margin:0 auto 22px;border-radius:12px;">
+                  {!! $preview->documentPage->content_html !!}
+                </div>
               @elseif(in_array(($preview->kind ?? ''), ['xlsx', 'html'], true))
                 <iframe class="farast-xlsx-frame" src="{{ route('store.preview',$preview) }}" title="پیش‌نمایش فایل Excel" sandbox="" loading="lazy" referrerpolicy="no-referrer"></iframe>
               @else
