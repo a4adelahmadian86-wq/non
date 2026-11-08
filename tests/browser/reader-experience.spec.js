@@ -17,30 +17,7 @@ test('syncs authenticated reading progress to the account endpoint', async ({ pa
   await page.locator('#reader-next').click();
   await expect.poll(() => savedState?.progress?.section).toBe(1);
   expect(savedState.bookmarks).toEqual([]);
-  test('uses phrase-level labels when only sentence timestamps are supplied', async ({ page }) => {
-    await page.goto('/');
-    await page.route('**/reader-audio.wav', route => route.fulfill({
-      status: 200,
-      contentType: 'audio/wav',
-      body: Buffer.alloc(44),
-    }));
-    const timings = [{ text: 'سلام به همه', start: 0, end: 1.2, page: 1 }];
-    await page.setContent(`
-      <section class="farast-reader" data-reader-root>
-        <div id="reader-stage"><article class="farast-reader-page-item is-active" data-index="0"
-          data-audio-url="/reader-audio.wav" data-audio-timing='${JSON.stringify(timings)}'>
-          <div class="farast-pdf-document"><div class="farast-pdf-text-layer" style="position:relative;width:500px;height:120px">
-            <span style="position:relative;display:inline-block;font-size:24px;direction:rtl">سلام به همه</span>
-          </div></div>
-        </article></div>
-      </section>`);
-    await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
-    await expect(page.locator('.farast-audio-dock')).toBeVisible();
-    await expect(page.locator('[data-audio-status]')).toContainText('همگام‌سازی جمله‌ای');
-    await expect(page.locator('[data-audio-progress]')).toContainText('بخش');
-    await expect(page.locator('.reader-audio-word')).toHaveCount(3);
-    await expect(page.locator('.reader-audio-word').first()).toHaveAttribute('aria-label', 'رفتن به بخش سلام');
-  });
+
 
 });
 
@@ -385,6 +362,31 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(marks).toHaveCount(2);
     await expect(marks.nth(0)).toHaveClass(/is-current/);
     await expect(page.locator('[data-audio-caption]')).toContainText('سلام');
+  });
+
+  test('uses phrase-level labels when only sentence timestamps are supplied', async ({ page }) => {
+    await page.goto('/');
+    await page.route('**/reader-audio.wav', route => route.fulfill({
+      status: 200,
+      contentType: 'audio/wav',
+      body: Buffer.alloc(44),
+    }));
+    const timings = [{ text: 'سلام به همه', start: 0, end: 1.2, page: 1 }];
+    await page.setContent(`
+      <section class="farast-reader" data-reader-root>
+        <div id="reader-stage"><article class="farast-reader-page-item is-active" data-index="0"
+          data-audio-url="/reader-audio.wav" data-audio-timing='${JSON.stringify(timings)}'>
+          <div class="farast-pdf-document"><div class="farast-pdf-text-layer" style="position:relative;width:500px;height:120px">
+            <span style="position:relative;display:inline-block;font-size:24px;direction:rtl">سلام به همه</span>
+          </div></div>
+        </article></div>
+      </section>`);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+    await expect(page.locator('.farast-audio-dock')).toBeVisible();
+    await expect(page.locator('[data-audio-status]')).toContainText('همگام‌سازی جمله‌ای');
+    await expect(page.locator('[data-audio-progress]')).toContainText('بخش');
+    await expect(page.locator('.reader-audio-word')).toHaveCount(3);
+    await expect(page.locator('.reader-audio-word').first()).toHaveAttribute('aria-label', 'رفتن به بخش سلام');
   });
 
 });
