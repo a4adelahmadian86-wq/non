@@ -409,6 +409,7 @@ async def review_product_file(
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
         "content_chunks": safe_chunks,
+        "visual_report": visual_report[:4000],
         "analysis_batch_count": int(model_review.get("analysis_batch_count", 0)) if model_review else 0,
         "successful_analysis_batches": int(model_review.get("successful_analysis_batches", 0)) if model_review else 0,
         "failed_analysis_batches": int(model_review.get("failed_analysis_batches", 0)) if model_review else 0,
