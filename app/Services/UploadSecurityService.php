@@ -19,7 +19,7 @@ class UploadSecurityService
     ];
 
     private array $allowedExtensions = [
-        'pdf','zip','doc','docx','xls','xlsx','ppt','pptx','txt','csv','md',
+        'pdf','zip','docx','xlsx','pptx','txt','csv','md',
         'jpg','jpeg','png','webp','gif','mp3','wav','ogg','flac','m4a','mp4','webm','mov',
     ];
 
