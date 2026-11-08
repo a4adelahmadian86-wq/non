@@ -117,7 +117,7 @@ class ProductKnowledgeService
                 'original_name' => (string) $file->original_name,
                 'source_type' => (string) ($document->detected_type ?: $file->mime),
                 'processing_status' => (string) $document->processing_status,
-                'semantic_review_complete' => (data_get($review, 'provider_status.gemini') === 'completed')
+                'semantic_review_complete' => (data_get($review, 'provider_status.groq_text') === 'completed')
                     && (bool) ($completeness['analysis_batches_complete'] ?? false),
                 'extraction_complete' => (bool) ($completeness['extraction_complete'] ?? false),
                 'analysis_batch_count' => (int) ($completeness['analysis_batch_count'] ?? data_get($review, 'analysis_batch_count', 0)),
