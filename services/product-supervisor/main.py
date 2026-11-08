@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hmac
 import json
 import os
@@ -119,6 +120,7 @@ async def review_product_file(
 ):
     from file_pipeline import (
         FileInspectionError,
+        build_pdf_sample,
         analyze_extracted_content,
         analyze_image_with_groq,
         inspect_file,
@@ -194,6 +196,7 @@ async def review_product_file(
                     "tags": [redact_sensitive_content(tag)[0] for tag in tags],
                     "description": redact_sensitive_content(description or "")[0],
                     "detected_file_type": inspection.detected_type,
+                    "page_count": inspection.page_count,
                 },
             )
             provider_status["gemini"] = "completed"
@@ -226,6 +229,24 @@ async def review_product_file(
                 "detail": str(item.get("detail") or "")[:700],
                 "recommendation": str(item.get("recommendation") or "")[:500],
             })
+
+    sample_page_numbers: list[int] = []
+    sample_pdf_base64 = None
+    if inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
+        raw_sample_pages = model_review.get("sample_pages", [])
+        if isinstance(raw_sample_pages, list):
+            for candidate in raw_sample_pages[:3]:
+                if isinstance(candidate, int) and not isinstance(candidate, bool) and inspection.page_count and 1 <= candidate <= inspection.page_count:
+                    if candidate not in sample_page_numbers:
+                        sample_page_numbers.append(candidate)
+        generated_sample = build_pdf_sample(data, sample_page_numbers)
+        if generated_sample:
+            sample_bytes, sample_page_numbers = generated_sample
+            sample_pdf_base64 = base64.b64encode(sample_bytes).decode("ascii")
+        else:
+            sample_page_numbers = []
+            if raw_sample_pages:
+                warnings.append("ساخت فایل نمونه PDF از صفحات انتخاب‌شده انجام نشد؛ فایل اصلی بدون تغییر باقی ماند.")
 
     raw_chunks = list(inspection.content_chunks or [])
     if visual_report.strip():
@@ -261,6 +282,8 @@ async def review_product_file(
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
         "content_chunks": safe_chunks,
+        "sample_page_numbers": sample_page_numbers,
+        "sample_pdf_base64": sample_pdf_base64,
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
