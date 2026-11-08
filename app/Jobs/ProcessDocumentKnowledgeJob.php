@@ -3,6 +3,8 @@
 namespace App\\Jobs;
 
 use App\\Models\\StoreDocumentRecord;
+use App\\Models\\StoreDocumentSample;
+use App\\Models\\StoreProductPreview;
 use App\\Services\\ProductSupervisorClient;
 use Illuminate\\Bus\\Queueable;
 use Illuminate\\Contracts\\Queue\\ShouldQueue;
@@ -149,8 +151,94 @@ class ProcessDocumentKnowledgeJob implements ShouldQueue
             'processed_at' => now(),
         ]);
 
+        $this->preparePdfSample($document->fresh(), $file, $response, $supervisor);
+
         if ($chunks !== []) {
             GenerateDocumentAudioTrackJob::dispatch($document->id)->onQueue('document-audio');
+        }
+    }
+
+    private function preparePdfSample(StoreDocumentRecord $document, $file, array $response, ProductSupervisorClient $supervisor): void
+    {
+        $pages = is_array($response['sample_pages'] ?? null) ? array_values(array_unique(array_filter(
+            array_map('intval', $response['sample_pages']),
+            fn ($page) => $page > 0
+        ))) : [];
+        if (($document->detected_type ?? '') !== 'pdf' || $pages === []) {
+            return;
+        }
+
+        $sourceDisk = Storage::disk($file->disk ?: 'private');
+        $stream = $sourceDisk->readStream($file->path);
+        if (! is_resource($stream)) {
+            throw new \\RuntimeException('document_sample_source_unavailable');
+        }
+
+        try {
+            $sample = $supervisor->createPdfSample($stream, $file->original_name ?: basename($file->path), $pages);
+        } finally {
+            fclose($stream);
+        }
+
+        $samplePath = 'store/previews/'.$document->product_id.'/document-'.$file->id.'-'.$document->source_sha256.'-sample.pdf';
+        if (! Storage::disk('private')->put($samplePath, $sample['bytes'])) {
+            throw new \\RuntimeException('document_sample_storage_failed');
+        }
+
+        StoreDocumentSample::query()->updateOrCreate(
+            ['document_id' => $document->id, 'source_sha256' => $document->source_sha256],
+            [
+                'disk' => 'private',
+                'path' => $samplePath,
+                'mime' => 'application/pdf',
+                'kind' => 'pdf',
+                'selected_pages' => $pages,
+                'status' => 'ready',
+            ]
+        );
+
+        StoreProductPreview::query()
+            ->where('document_id', $document->id)
+            ->where('access_level', 'sample')
+            ->where('source_sha256', '!=', $document->source_sha256)
+            ->update(['is_active' => false]);
+
+        StoreProductPreview::query()->updateOrCreate(
+            ['document_id' => $document->id, 'access_level' => 'sample', 'source_sha256' => $document->source_sha256],
+            [
+                'product_id' => $document->product_id,
+                'disk' => 'private',
+                'path' => $samplePath,
+                'mime' => 'application/pdf',
+                'page_number' => $pages[0],
+                'kind' => 'pdf',
+                'watermarked' => true,
+                'is_active' => true,
+                'sort_order' => 0,
+            ]
+        );
+
+        if (($document->product?->download_policy ?? 'signed') === 'reader_only') {
+            StoreProductPreview::query()
+                ->where('document_id', $document->id)
+                ->where('access_level', 'full')
+                ->where('source_sha256', '!=', $document->source_sha256)
+                ->update(['is_active' => false]);
+
+            StoreProductPreview::query()->updateOrCreate(
+                ['document_id' => $document->id, 'access_level' => 'full', 'source_sha256' => $document->source_sha256],
+                [
+                    'product_id' => $document->product_id,
+                    'disk' => $file->disk ?: 'private',
+                    'path' => $file->path,
+                    'mime' => 'application/pdf',
+                    'page_number' => null,
+                    'kind' => 'pdf',
+                    'watermarked' => true,
+                    'is_active' => true,
+                    'sort_order' => 0,
+                ]
+            );
         }
     }
 
