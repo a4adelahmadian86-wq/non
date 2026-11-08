@@ -6,8 +6,16 @@
 @endphp
 
 @push('head')
-<meta name="description" content="فراست ابتدا هدف شما را می‌فهمد، فقط سؤال‌های لازم را می‌پرسد و سپس پروژه را در محیط کاری مناسب باز می‌کند.">
+<meta name="description" content="با فراست از فایل، ایده یا یک سرویس هوشمند شروع کنید؛ مسیر مناسب را انتخاب کنید و کارتان را در یک فضای حرفه‌ای ادامه دهید.">
 <link rel="canonical" href="{{ url('/') }}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="فراست | FARAST">
+<meta property="og:title" content="فراست؛ از ایده تا نتیجه">
+<meta property="og:description" content="فایل، ایده یا سرویس موردنیازتان را انتخاب کنید و با راهنمایی مرحله‌به‌مرحله وارد مسیر درست شوید.">
+<meta property="og:url" content="{{ url('/') }}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="فراست؛ از ایده تا نتیجه">
+<meta name="twitter:description" content="یک نقطه شروع روشن برای کار با اسناد و ابزارهای هوشمند.">
 @endpush
 
 @section('content')
@@ -19,6 +27,21 @@
             <p>فایل دارید، می‌خواهید چیزی خلق کنید یا به یک سرویس هوشمند نیاز دارید؟ فراست مسیر مناسب را پیدا می‌کند تا بدون پیچیدگی وارد جریان کار شوید.</p>
         </div>
         <div class="home-hero-rule" aria-hidden="true"></div>
+    </section>
+
+    <section class="home-value" aria-label="مزیت‌های استفاده از فراست">
+        <article class="home-value-item">
+            <span class="home-value-icon"><i class="fa-solid fa-route" aria-hidden="true"></i></span>
+            <div><strong>مسیر روشن برای شروع</strong><p>به‌جای گشتن میان ابزارها، بگویید چه کاری دارید تا قدم بعدی مشخص شود.</p></div>
+        </article>
+        <article class="home-value-item">
+            <span class="home-value-icon"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span>
+            <div><strong>از فایل تا سند نهایی</strong><p>از فایل و اسکن شروع کنید یا یک سند تازه بسازید؛ مسیر متناسب را انتخاب کنید.</p></div>
+        </article>
+        <article class="home-value-item">
+            <span class="home-value-icon"><i class="fa-solid fa-sliders" aria-hidden="true"></i></span>
+            <div><strong>انتخاب با کنترل شما</strong><p>پیش از ادامه، نوع کار و مسیر موردنظر خودتان را مشخص می‌کنید.</p></div>
+        </article>
     </section>
 
     <main class="home-discovery" id="homeDiscovery">
@@ -74,6 +97,18 @@
         </section>
         @endif
     </main>
+
+    <section class="home-explore" aria-labelledby="home-explore-title">
+        <div class="home-explore-copy">
+            <span class="home-kicker">بیشتر کشف کنید</span>
+            <h2 id="home-explore-title">برای قدم بعدی آماده‌اید؟</h2>
+            <p>با راهنماهای مجله آشنا شوید یا نمونه‌ها و فایل‌های کاربردی را در فروشگاه ببینید.</p>
+        </div>
+        <div class="home-explore-actions">
+            <a class="home-explore-link primary" href="{{ route('store') }}"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> دیدن فروشگاه</a>
+            <a class="home-explore-link secondary" href="{{ route('blog') }}"><i class="fa-solid fa-book-open" aria-hidden="true"></i> خواندن مجله</a>
+        </div>
+    </section>
 </div>
 @endsection
 
