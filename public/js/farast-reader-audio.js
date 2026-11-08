@@ -9,7 +9,7 @@
     if (!article.hasAttribute('tabindex')) article.tabIndex = 0;
     if (!article.hasAttribute('aria-label')) {
       const page = Number(article.dataset.readerPage || index + 1);
-      article.setAttribute('aria-label', 'خواندن صفحه ' + fa(page));
+      article.setAttribute('aria-label', 'خواندن صفحه ' + String(page).replace(/\\d/g, digit => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]));
     }
     article.dataset.readerAudioPageTarget = '1';
   });
