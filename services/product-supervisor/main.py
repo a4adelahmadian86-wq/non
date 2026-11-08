@@ -114,6 +114,7 @@ async def review_product_file(
     product_title: str = Form(..., min_length=2, max_length=220),
     product_type: Literal["digital_file", "course"] = Form(...),
     primary_scan_status: Literal["clean", "structural_checks_passed"] = Form(...),
+    allow_sample_generation: bool = Form(default=True),
     category_name: str | None = Form(default=None, max_length=160),
     tags_json: str = Form(default="[]", max_length=5000),
     description: str | None = Form(default=None, max_length=8000),
@@ -232,7 +233,7 @@ async def review_product_file(
 
     sample_page_numbers: list[int] = []
     sample_pdf_base64 = None
-    if inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
+    if allow_sample_generation and inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
         raw_sample_pages = model_review.get("sample_pages", [])
         available_pdf_pages: set[int] = set()
         for chunk in (inspection.content_chunks or []):
