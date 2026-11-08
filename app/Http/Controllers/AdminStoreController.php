@@ -7,7 +7,6 @@ use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductIngestion;
-use App\Models\StoreProductPreview;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
