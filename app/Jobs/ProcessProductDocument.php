@@ -345,30 +345,21 @@ class ProcessProductDocument implements ShouldQueue
                 }
             }
 
-            $providers = (array) ($payload['provider_status'] ?? []);
-            $hasChunks = $locked->chunks()->exists();
-            $expectedBatches = (int) ($payload['analysis_batch_count'] ?? 0);
-            $successfulBatches = (int) ($payload['successful_analysis_batches'] ?? 0);
-            $analysisBatchesComplete = $expectedBatches > 0 && $successfulBatches >= $expectedBatches;
-            $extractionComplete = ! (bool) ($inspection['extraction_truncated'] ?? false);
-            $hasSemanticReview = ($providers['groq_text'] ?? null) === 'completed' && $analysisBatchesComplete;
-            $status = ! $hasChunks
-                ? 'partial'
-                : (! $extractionComplete ? 'partial' : ($hasSemanticReview ? 'completed' : 'extracted'));
+            $processingState = app(\App\Services\ProductDocumentProcessingState::class)->derive(
+                (array) $inspection,
+                (array) ($payload['provider_status'] ?? []),
+                (int) ($payload['analysis_batch_count'] ?? 0),
+                (int) ($payload['successful_analysis_batches'] ?? 0),
+                $locked->chunks()->exists(),
+                (int) ($pageBuild['page_count'] ?? 0),
+            );
 
-            $structure['completeness'] = [
-                'extraction_complete' => $extractionComplete,
-                'analysis_batches_complete' => $analysisBatchesComplete,
-                'analysis_batch_count' => $expectedBatches,
-                'successful_analysis_batches' => $successfulBatches,
-                'source_hash_verified' => true,
-                'status' => $status,
-            ];
-            $structure['reader']['ready'] = $status === 'completed' && (int) ($pageBuild['page_count'] ?? 0) > 0;
-            $structure['reader']['status'] = $status;
+            $structure['completeness'] = $processingState['completeness'];
+            $structure['reader']['ready'] = $processingState['reader_ready'];
+            $structure['reader']['status'] = $processingState['status'];
 
             $locked->update([
-                'processing_status' => $status,
+                'processing_status' => $processingState['status'],
                 'detected_type' => $sourceExtension === 'docx' ? 'docx' : ($inspection['detected_type'] ?? $locked->detected_type),
                 'page_count' => isset($inspection['page_count']) ? (int) $inspection['page_count'] : $locked->page_count,
                 'character_count' => $totalCharacters,
@@ -380,11 +371,13 @@ class ProcessProductDocument implements ShouldQueue
         });
 
         $processedDocument = $document->fresh();
-        if ($processedDocument && $processedDocument->processing_status === 'completed' && $processedDocument->chunks()->exists()) {
+        if ($processedDocument
+            && (bool) data_get($processedDocument->structure_json, 'reader.ready', false)
+            && $processedDocument->chunks()->exists()) {
             GenerateProductDocumentAudio::dispatch($processedDocument->id);
         } elseif ($processedDocument && $processedDocument->chunks()->exists()) {
             $structure = (array) ($processedDocument->structure_json ?? []);
-            $structure['audio'] = ['status' => 'awaiting_semantic_review'];
+            $structure['audio'] = ['status' => 'awaiting_extraction_completion'];
             $processedDocument->update(['structure_json' => $structure]);
         }
     }
