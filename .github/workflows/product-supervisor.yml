@@ -33,3 +33,12 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run service tests
         run: pytest -q
+      - name: Set up PHP for Laravel integration checks
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+      - name: Check Laravel integration syntax
+        run: |
+          php -l ../../app/Http/Controllers/AdminProductSupervisorController.php
+          php -l ../../app/Services/ProductSupervisorClient.php
+          php -l ../../app/Services/ProductSupervisorSnapshotBuilder.php
