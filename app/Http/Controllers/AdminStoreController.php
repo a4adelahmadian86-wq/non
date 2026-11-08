@@ -286,7 +286,7 @@ class AdminStoreController extends Controller
                 $extension = preg_replace('/[^a-z0-9]+/i', '', (string) $details['extension']) ?: 'bin';
                 $path = $upload->storeAs('store/quarantine/intakes/'.$product->id, $id.'.'.$extension, 'private');
                 if (! $path) {
-                    throw new \\RuntimeException('intake_stage_write_failed');
+                    throw new \RuntimeException('intake_stage_write_failed');
                 }
                 $createdPaths[] = $path;
                 $storedMime = strtolower((string) Storage::disk('private')->mimeType($path));
@@ -370,7 +370,7 @@ class AdminStoreController extends Controller
                 $extension = preg_replace('/[^a-z0-9]+/i', '', (string) $intake->extension) ?: 'bin';
                 $finalPath = 'store/products/'.$product->id.'/'.Str::random(40).'.'.$extension;
                 if (! Storage::disk('private')->move($intake->path, $finalPath)) {
-                    throw new \\RuntimeException('intake_final_storage_move_failed');
+                    throw new \RuntimeException('intake_final_storage_move_failed');
                 }
                 $moved[] = $finalPath;
                 $records[] = ['intake' => $intake, 'scan' => $item['scan'], 'path' => $finalPath];
@@ -404,7 +404,7 @@ class AdminStoreController extends Controller
                         'scanned_at' => now(),
                     ]);
 
-                    $document = \\App\\Models\\StoreDocumentRecord::create([
+                    $document = \App\Models\StoreDocumentRecord::create([
                         'product_id' => $lockedProduct->id,
                         'file_id' => $file->id,
                         'source_sha256' => $file->sha256,
@@ -446,7 +446,7 @@ class AdminStoreController extends Controller
         }
 
         foreach ($saved as $item) {
-            \\App\\Jobs\\ProcessDocumentKnowledgeJob::dispatch((int) $item['document_id'])->onQueue('document-analysis');
+            \App\Jobs\ProcessDocumentKnowledgeJob::dispatch((int) $item['document_id'])->onQueue('document-analysis');
         }
 
         return response()->json([
