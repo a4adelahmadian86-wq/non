@@ -161,14 +161,14 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('.farast-pdf-cont-page canvas')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page')).toHaveAttribute('data-rendered', '1');
     // Page-number navigation in continuous mode must scroll the matching page into view.
-    const scrollCalls = await root.locator('.farast-pdf-cont-page').evaluate(element => {
-      let calls = 0;
-      element.scrollIntoView = () => { calls++; };
-      return calls;
+    const continuousPage = root.locator('.farast-pdf-cont-page').first();
+    await continuousPage.evaluate(element => {
+      element.dataset.scrollCalls = '0';
+      element.scrollIntoView = () => { element.dataset.scrollCalls = String(Number(element.dataset.scrollCalls) + 1); };
     });
-    expect(scrollCalls).toBe(0);
     await root.locator('#reader-page-number').fill('1');
     await root.locator('#reader-page-number').dispatchEvent('change');
+    await expect(continuousPage).toHaveAttribute('data-scroll-calls', '1');
     // Continuous rendering must not lock the rest of the reading toolbar.
     await expect(root.locator('#reader-zoom-in')).toBeEnabled();
     await root.locator('#reader-zoom-in').click();
