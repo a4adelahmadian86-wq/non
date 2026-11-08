@@ -956,6 +956,83 @@ test('clicking a repeated sentence across PDF text spans plays the sentence at t
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.8);
 });
 
+
+test('explicit sentence and paragraph controls play their own exact ranges', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeAudio extends EventTarget {
+      constructor() {
+        super();
+        this.currentTime = 0;
+        this.duration = 2;
+        this.paused = true;
+        this.seeking = false;
+        this.playbackRate = 1;
+        this.volume = 1;
+        this.src = '';
+        this.currentSrc = '';
+        window.__fakeReaderAudio = this;
+      }
+      setAttribute() {}
+      load() { this.currentSrc = this.src; this.dispatchEvent(new Event('loadedmetadata')); }
+      play() { this.paused = false; this.dispatchEvent(new Event('play')); return Promise.resolve(); }
+      pause() { if (!this.paused) { this.paused = true; this.dispatchEvent(new Event('pause')); } }
+      removeAttribute(name) { if (name === 'src') { this.src = ''; this.currentSrc = ''; } }
+    }
+    window.Audio = FakeAudio;
+  });
+  await page.goto('/');
+  const timings = [
+    { text: 'سلام جهان.', start: 0.1, end: 0.4, page: 1, alignment_quality: 'phoneme', words: [
+      { text: 'سلام', start: 0.1, end: 0.25 }, { text: 'جهان.', start: 0.25, end: 0.4 }
+    ] },
+    { text: 'خوب هستی.', start: 0.5, end: 0.8, page: 1, alignment_quality: 'phoneme', words: [
+      { text: 'خوب', start: 0.5, end: 0.65 }, { text: 'هستی.', start: 0.65, end: 0.8 }
+    ] }
+  ];
+  const encodedTimings = JSON.stringify(timings).replace(/"/g, '&quot;');
+  await page.setContent(
+    '<section class="farast-reader" data-reader-root data-reader-mode="document" ' +
+      'data-reader-audio-url="/reader-full.wav" data-reader-audio-timing="' + encodedTimings + '">' +
+      '<article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-audio-url="/reader-full.wav">' +
+        '<p class="reader-document-paragraph" data-reader-speech-text="سلام جهان. خوب هستی.">' +
+          '<span class="reader-document-sentence" data-reader-speech-text="سلام جهان.">' +
+            '<span class="reader-document-word" data-page="1" role="button" tabindex="0">سلام</span><span> </span>' +
+            '<span class="reader-document-word" data-page="1" role="button" tabindex="0">جهان.</span>' +
+          '</span><span> </span>' +
+          '<span class="reader-document-sentence" data-reader-speech-text="خوب هستی.">' +
+            '<span class="reader-document-word" data-page="1" role="button" tabindex="0">خوب</span><span> </span>' +
+            '<span class="reader-document-word" data-page="1" role="button" tabindex="0">هستی.</span>' +
+          '</span>' +
+        '</p>' +
+      '</article>' +
+    '</section>'
+  );
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-audio.js') });
+
+  const paragraphControl = page.locator('[data-reader-speech-control="paragraph"]');
+  await expect(paragraphControl).toHaveAttribute('aria-label', 'خواندن پاراگراف');
+  await paragraphControl.click();
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
+  await page.evaluate(() => {
+    const audio = window.__fakeReaderAudio;
+    audio.currentTime = 0.8;
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.8);
+
+  const sentenceControl = page.locator('[data-reader-speech-control="sentence"]').nth(1);
+  await expect(sentenceControl).toHaveAttribute('aria-label', 'خواندن جمله');
+  await sentenceControl.click();
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.5);
+  await page.evaluate(() => {
+    const audio = window.__fakeReaderAudio;
+    audio.currentTime = 0.8;
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+});
+
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
