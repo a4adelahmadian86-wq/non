@@ -314,6 +314,115 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertDatabaseMissing('store_products', ['sku' => 'TEST-PRODUCT-001']);
     }
 
+    public function test_uploading_a_secondary_file_does_not_replace_the_primary_file_when_checkbox_is_unchecked(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول چندفایلی',
+            'slug' => 'multi-file-product',
+            'sku' => 'MULTI-FILE-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+            'version' => '1.0',
+        ]);
+        $primaryPath = 'store/products/'.$product->id.'/primary.pdf';
+        Storage::disk('private')->put($primaryPath, 'primary');
+        $primary = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => $primaryPath,
+            'original_name' => 'primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 7,
+            'sha256' => hash('sha256', 'primary'),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'test',
+            'scanned_at' => now(),
+        ]);
+
+        $this->mock(UploadSecurityService::class, function ($mock) {
+            $mock->shouldReceive('inspect')->once()->andReturn([
+                'safe' => true,
+                'mime' => 'application/pdf',
+                'size' => 9,
+                'checksum' => hash('sha256', 'secondary'),
+                'scan' => 'test-clean',
+            ]);
+        });
+
+        $this->actingAs($admin)
+            ->post(route('admin.store.files.upload', $product), [
+                'file' => UploadedFile::fake()->createWithContent('secondary.pdf', 'secondary'),
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('store_product_files', ['id' => $primary->id, 'is_primary' => true]);
+        $this->assertDatabaseHas('store_product_files', [
+            'product_id' => $product->id,
+            'original_name' => 'secondary.pdf',
+            'is_primary' => false,
+        ]);
+    }
+
+    public function test_publishing_is_blocked_when_the_product_category_is_inactive(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول دسته غیرفعال',
+            'slug' => 'inactive-category-product',
+            'sku' => 'INACTIVE-CATEGORY-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $category->update(['is_active' => false]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'status' => 'published',
+            ]))
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHasErrors('category_id');
+
+        $this->assertSame('draft', $product->fresh()->status);
+    }
+
+    public function test_product_editor_renders_live_seo_preview_and_contextual_media_step(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول پیش‌نمایش',
+            'slug' => 'preview-product',
+            'sku' => 'PREVIEW-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.edit', $product))
+            ->assertOk()
+            ->assertSee('پیش‌نمایش زنده نتیجه جست‌وجو')
+            ->assertSee('رسانه و فایل')
+            ->assertSee('ناظر هوشمند')
+            ->assertSee('product-media');
+    }
+
     public function test_last_primary_file_cannot_be_deleted_while_product_is_published(): void
     {
         Storage::fake('private');
