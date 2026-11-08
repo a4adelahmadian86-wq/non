@@ -150,6 +150,59 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame(1, data_get($product->metadata, 'ai_supervisor.configuration_version'));
     }
 
+    public function test_inline_category_creation_returns_json_for_the_product_editor(): void
+    {
+        $this->actingAs($this->admin())
+            ->postJson(route('admin.store.categories.store'), [
+                'name' => 'دسته سریع',
+                'slug' => 'quick-category',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('name', 'دسته سریع')
+            ->assertJsonStructure(['id', 'name']);
+
+        $this->assertDatabaseHas('store_categories', ['slug' => 'quick-category', 'is_active' => true]);
+    }
+
+    public function test_inline_tag_creation_returns_json_for_the_product_editor(): void
+    {
+        $this->actingAs($this->admin())
+            ->postJson(route('admin.store.tags.store'), [
+                'name' => 'برچسب سریع',
+                'slug' => 'quick-tag',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('name', 'برچسب سریع')
+            ->assertJsonStructure(['id', 'name']);
+
+        $this->assertDatabaseHas('store_tags', ['slug' => 'quick-tag']);
+    }
+
+    public function test_product_update_preserves_unrelated_metadata_when_supervisor_configuration_is_not_submitted(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول دارای تنظیمات',
+            'slug' => 'metadata-product',
+            'sku' => 'METADATA-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+            'metadata' => ['fulfillment' => ['region' => 'eu'], 'ai_supervisor' => ['enabled' => true, 'mode' => 'suggest']],
+        ]);
+
+        $this->actingAs($admin)->put(route('admin.store.update', $product), $this->payload($category, [
+            'title' => 'محصول ویرایش‌شده',
+            'sku' => $product->sku,
+        ]))->assertRedirect();
+
+        $product->refresh();
+        $this->assertSame('eu', data_get($product->metadata, 'fulfillment.region'));
+        $this->assertTrue(data_get($product->metadata, 'ai_supervisor.enabled'));
+    }
+
     public function test_admin_can_create_a_tag_from_the_product_editor(): void
     {
         $this->actingAs($this->admin())
