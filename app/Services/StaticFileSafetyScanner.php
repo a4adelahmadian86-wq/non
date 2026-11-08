@@ -137,6 +137,7 @@ class StaticFileSafetyScanner
                 }
 
                 $name = str_replace('\\', '/', (string) ($stat['name'] ?? ''));
+                $entries[] = $name;
                 $parts = explode('/', $name);
                 if ($name === '' || str_starts_with($name, '/') || preg_match('/^[A-Za-z]:/', $name) || in_array('..', $parts, true)) {
                     throw new RuntimeException('static_scan_archive_path_traversal');
