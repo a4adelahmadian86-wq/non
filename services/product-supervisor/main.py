@@ -20,9 +20,9 @@ app = FastAPI(
     openapi_url=None,
 )
 
-MAX_BODY_BYTES = 26 * 1024 * 1024
+MAX_BODY_BYTES = 52 * 1024 * 1024
 MAX_FINDINGS = 12
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
