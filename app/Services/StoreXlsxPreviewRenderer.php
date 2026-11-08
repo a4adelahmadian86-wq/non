@@ -490,6 +490,12 @@ class StoreXlsxPreviewRenderer
             }
         }
 
+        foreach ($merges as $key => $merge) {
+            [$mergeRow] = array_map('intval', explode(':', $key, 2));
+            for ($offset = 1; $offset < (int) ($merge['rowspan'] ?? 1); $offset++) {
+                $rows[$mergeRow + $offset] ??= [];
+            }
+        }
         ksort($rows);
 
         return ['rows' => $rows, 'widths' => $widths, 'heights' => $heights, 'merges' => $merges, 'covered' => $covered];
@@ -576,7 +582,10 @@ class StoreXlsxPreviewRenderer
         $merges = $sheetData['merges'] ?? [];
         $covered = $sheetData['covered'] ?? [];
         $maxColumn = max(1, max(array_map(fn ($row) => max(array_keys($row)), $rows)));
-        foreach ($merges as $merge) $maxColumn = max($maxColumn, 1 + (int) ($merge['colspan'] ?? 1));
+        foreach ($merges as $key => $merge) {
+            [, $startColumn] = array_map('intval', explode(':', $key, 2));
+            $maxColumn = max($maxColumn, $startColumn + (int) ($merge['colspan'] ?? 1) - 1);
+        }
         $html = '<div class="table-wrap"><table><colgroup><col style="width:42px">';
         for ($column = 1; $column <= $maxColumn; $column++) {
             $html .= '<col'.(isset($widths[$column]) ? ' style="width:'.(int) $widths[$column].'px"' : '').'>';
