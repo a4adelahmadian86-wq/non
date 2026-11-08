@@ -66,7 +66,7 @@ class ProductSupervisorClient
         $response = Http::acceptJson()
             ->withToken((string) config('services.product_supervisor.token'))
             ->connectTimeout(8)
-            ->timeout(max(60, (int) config('services.product_supervisor.timeout', 40)))
+            ->timeout(max(120, (int) config('services.product_supervisor.timeout', 40)))
             ->attach('file', $stream, basename($filename))
             ->post($baseUrl.'/v1/reviews/files', $metadata);
 
