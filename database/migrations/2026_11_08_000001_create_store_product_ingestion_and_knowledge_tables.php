@@ -104,7 +104,7 @@ return new class extends Migration
             $table->string('mime', 180);
             $table->unsignedBigInteger('size_bytes')->default(0);
             $table->char('sha256', 64);
-            $table->json('metadata_json')->nullable();
+            $table->longText('metadata_json')->nullable();
             $table->timestamps();
             $table->unique(['document_id', 'artifact_type', 'version'], 'store_document_artifacts_version_unique');
             $table->index(['document_id', 'artifact_type'], 'store_document_artifacts_type_idx');
