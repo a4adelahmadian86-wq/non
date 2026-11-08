@@ -7,7 +7,6 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductDocumentPage;
-use App\Models\StoreProductPreview;
 use App\Models\StoreProductImage;
 use App\Models\StoreTag;
 use App\Models\User;
@@ -579,21 +578,6 @@ class AdminStoreProductWorkflowTest extends TestCase
             'page_count' => 1,
             'structure_json' => ['reader' => ['ready' => false, 'page_count' => 1]],
         ]);
-        StoreProductPreview::create([
-            'product_id' => $product->id,
-            'disk' => 'private',
-            'path' => 'store/products/'.$product->id.'/reader-only-full.pdf',
-            'mime' => 'application/pdf',
-            'page_number' => 1,
-            'source_page_count' => 1,
-            'included_page_count' => 1,
-            'kind' => 'pdf',
-            'access_level' => 'full',
-            'watermarked' => true,
-            'is_active' => true,
-            'sort_order' => 1,
-        ]);
-
         $publishPayload = $this->payload($category, [
             'title' => $product->title,
             'sku' => $product->sku,
