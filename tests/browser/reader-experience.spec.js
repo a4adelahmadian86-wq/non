@@ -122,11 +122,20 @@ async function mountPdfReader(page) {
 }
 
 test.describe('FARAST sample reader interactions', () => {
-  test('loads a real PDF page with PDF.js, account watermark and text search', async ({ page }) => {
+  test('loads a real PDF page with same-origin PDF.js, account watermark and text search', async ({ page }) => {
+    const pdfjsRequests = [];
+    const externalPdfjsRequests = [];
+    page.on('request', request => {
+      if (request.url().includes('/vendor/pdfjs/')) pdfjsRequests.push(request.url());
+      if (request.url().includes('cdn.jsdelivr.net/npm/pdfjs-dist')) externalPdfjsRequests.push(request.url());
+    });
     await mountPdfReader(page);
     const root = page.locator('[data-reader-root]');
     const canvas = root.locator('.farast-pdf-canvas');
     await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+    await expect.poll(() => pdfjsRequests.some(url => url.endsWith('/pdf.mjs'))).toBe(true);
+    await expect.poll(() => pdfjsRequests.some(url => url.endsWith('/pdf.worker.mjs'))).toBe(true);
+    expect(externalPdfjsRequests).toHaveLength(0);
     await expect.poll(() => canvas.evaluate(element => element.width)).toBeGreaterThan(0);
     await expect.poll(() => canvas.evaluate(element => element.height)).toBeGreaterThan(0);
     // The watermark must be painted into the page bitmap, not merely placed as removable HTML.
