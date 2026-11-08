@@ -147,15 +147,31 @@
       }});
       const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
       records.filter(item => item.page === pageNo).forEach(item => {
-        let remaining = item.quote;
-        for (const node of nodes) {
-          if (!remaining) break;
-          const at = node.nodeValue.indexOf(remaining);
-          if (at < 0) continue;
-          const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + remaining.length);
-          const mark = document.createElement('mark'); mark.className = 'farast-reader-local-highlight'; mark.dataset.highlightId = item.id; mark.style.backgroundColor = highlightColors[item.color] || highlightColors.yellow; mark.title = 'برای حذف این هایلایت کلیک کنید';
-          try { range.surroundContents(mark); remaining = ''; } catch (_) {}
-        }
+        const fullText = nodes.map(node => node.nodeValue).join('');
+        const start = fullText.indexOf(item.quote);
+        if (start < 0) return;
+        const end = start + item.quote.length;
+        let cursor = 0;
+        const segments = [];
+        nodes.forEach(node => {
+          const nodeStart = cursor;
+          const nodeEnd = cursor + node.nodeValue.length;
+          cursor = nodeEnd;
+          const from = Math.max(start, nodeStart);
+          const to = Math.min(end, nodeEnd);
+          if (from < to) segments.push({ node, from: from - nodeStart, to: to - nodeStart });
+        });
+        segments.reverse().forEach(segment => {
+          const range = document.createRange();
+          range.setStart(segment.node, segment.from);
+          range.setEnd(segment.node, segment.to);
+          const mark = document.createElement('mark');
+          mark.className = 'farast-reader-local-highlight';
+          mark.dataset.highlightId = item.id;
+          mark.style.backgroundColor = highlightColors[item.color] || highlightColors.yellow;
+          mark.title = 'برای حذف این هایلایت کلیک کنید';
+          try { range.surroundContents(mark); } catch (_) {}
+        });
       });
     });
   };
