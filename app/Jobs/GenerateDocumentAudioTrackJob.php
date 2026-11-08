@@ -69,6 +69,15 @@ class GenerateDocumentAudioTrackJob implements ShouldQueue
             return;
         }
 
+        $totalCharacters = array_sum(array_map(fn ($segment) => mb_strlen((string) $segment['text']), $segments));
+        if ($totalCharacters > 60000) {
+            $document->update(['metadata' => array_merge((array) $document->metadata, [
+                'audio_status' => 'requires_audio_segmentation',
+                'audio_character_count' => $totalCharacters,
+            ])]);
+            return;
+        }
+
         try {
             $result = $tts->synthesize($segments);
             $path = 'store/document-audio/'.$document->product_id.'/'.$file->id.'-'.$document->source_sha256.'.wav';
