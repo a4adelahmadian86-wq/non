@@ -159,8 +159,8 @@ class ProductFilePreflightScanner
             }
             return 'tar';
         }
-        if (in_array($extension, ['doc', 'xls', 'ppt'], true) && str_starts_with($prefix, "\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")) {
-            return 'office_legacy';
+        if (in_array($extension, ['doc', 'xls', 'ppt'], true)) {
+            throw new RuntimeException('preflight_legacy_office_not_supported');
         }
         if (in_array($extension, ['mp3', 'm4a', 'wav', 'ogg'], true)) {
             if (str_starts_with($prefix, 'ID3') || str_starts_with($prefix, "\xff\xfb")
