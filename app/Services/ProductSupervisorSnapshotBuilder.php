@@ -20,6 +20,7 @@ class ProductSupervisorSnapshotBuilder
         $mediaParts = [
             'cover' => $product->cover_path,
             'images' => $product->images()->orderBy('id')->get(['id', 'path', 'alt', 'is_active'])->toArray(),
+            'previews' => $product->previews()->orderBy('id')->get(['id', 'path', 'mime', 'page_number', 'kind', 'watermarked', 'is_active'])->toArray(),
             'files' => $product->files()
                 ->where('purpose', 'product_download')
                 ->orderBy('id')
