@@ -257,10 +257,14 @@ async def review_product_file(
             if not key or not value:
                 continue
             evidence = fact.get("evidence") if isinstance(fact.get("evidence"), dict) else {}
+            try:
+                confidence = max(0.0, min(1.0, float(fact.get("confidence", 0.0) or 0.0)))
+            except (TypeError, ValueError):
+                confidence = 0.0
             safe_facts.append({
                 "key": key[:180],
                 "value": redact_sensitive_content(value)[0][:2000],
-                "confidence": max(0.0, min(1.0, float(fact.get("confidence", 0.0) or 0.0))),
+                "confidence": confidence,
                 "evidence": {
                     "page": evidence.get("page") if isinstance(evidence.get("page"), int) else None,
                     "quote": redact_sensitive_content(str(evidence.get("quote") or ""))[0][:500],
@@ -271,6 +275,7 @@ async def review_product_file(
     return {
         "review_id": str(uuid.uuid4()),
         "product_id": product_id,
+        "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash") if provider_status.get("gemini") == "completed" else None,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
         "content_chunks": content_chunks[:150],
