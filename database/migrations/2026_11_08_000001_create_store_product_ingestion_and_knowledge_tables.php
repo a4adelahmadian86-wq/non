@@ -78,6 +78,22 @@ return new class extends Migration
             $table->index(['source_sha256', 'verification_status'], 'store_document_facts_hash_idx');
         });
 
+        Schema::create('store_product_document_pages', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('document_id')->constrained('store_product_documents')->cascadeOnDelete();
+            $table->unsignedInteger('page_number');
+            $table->string('page_kind', 32)->default('document_page');
+            $table->string('locator_key', 190)->nullable();
+            $table->longText('locator_json')->nullable();
+            $table->longText('content_text');
+            $table->longText('content_html');
+            $table->char('content_sha256', 64);
+            $table->boolean('has_extracted_text')->default(true);
+            $table->timestamps();
+            $table->unique(['document_id', 'page_number'], 'store_document_pages_order_unique');
+            $table->index(['document_id', 'page_kind'], 'store_document_pages_kind_idx');
+        });
+
         Schema::create('store_product_document_artifacts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('document_id')->constrained('store_product_documents')->cascadeOnDelete();
@@ -98,6 +114,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('store_product_document_artifacts');
+        Schema::dropIfExists('store_product_document_pages');
         Schema::dropIfExists('store_product_document_facts');
         Schema::dropIfExists('store_product_document_chunks');
         Schema::dropIfExists('store_product_documents');
