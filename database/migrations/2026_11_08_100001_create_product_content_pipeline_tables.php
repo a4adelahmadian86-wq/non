@@ -90,6 +90,7 @@ return new class extends Migration
             $table->string('mime', 160);
             $table->json('selected_pages')->nullable();
             $table->string('sample_format', 20)->nullable();
+            $table->unsignedInteger('content_version')->default(1);
             $table->string('state', 24)->default('ready');
             $table->timestamp('generated_at')->nullable();
             $table->timestamps();
