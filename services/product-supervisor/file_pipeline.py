@@ -517,11 +517,13 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
             "خروجی را به فارسی و به شکل JSON شامل summary و findings بده.",
             "برای هر واقعیت قابل اتکا، یک fact با شاهد دقیق از متن و شماره صفحه در صورت وجود ارائه کن؛ اگر شاهد کافی نیست fact نساز.",
             "اطلاعات facts باید صرفاً بازنویسی کوتاه اطلاعات صریح فایل باشد، نه نتیجه‌گیری حدسی.",
+            "برای نمونه، فقط شماره‌های موجود در metadata.available_pages را انتخاب کن؛ حداکثر سه صفحه نماینده و مفید. اگر شماره صفحه موجود نیست، sample_pages را خالی برگردان.",
         ],
         "required_output": {
             "summary": "خلاصه محتوای واقعی فایل",
             "findings": [{"title": "یافته", "detail": "شرح مستند", "recommendation": "پیشنهاد"}],
             "facts": [{"key": "شناسه موضوع", "value": "واقعیت صریح", "confidence": 0.0, "evidence": {"page": 1, "quote": "عبارت دقیق منبع"}}],
+            "sample_pages": [1, 4, 7],
         },
     }
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
