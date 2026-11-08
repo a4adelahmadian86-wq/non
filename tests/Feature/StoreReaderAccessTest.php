@@ -315,6 +315,12 @@ class StoreReaderAccessTest extends TestCase
             'sha256' => hash('sha256', $audioBytes),
             'metadata_json' => ['source_sha256' => $document->source_sha256, 'duration_ms' => 1000],
         ]);
+        $headResponse = $this->actingAs($user)
+            ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3');
+        $headResponse->assertOk()
+            ->assertHeader('Content-Type', 'audio/wav')
+            ->assertHeader('Content-Length', '10');
+
         $audioResponse = $this->actingAs($user)
             ->withHeader('Range', 'bytes=2-5')
             ->get(route('store.reader.audio', [$product, $document]));
