@@ -490,6 +490,8 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
   await expect(table).toBeVisible();
   await expect(table.locator('tbody tr')).toHaveCount(2);
   await expect(table.locator('tbody tr').nth(1).locator('td').nth(1)).toHaveText('<img src=x onerror=alert(1)>');
+  await expect(table.locator('tbody tr').nth(1)).toHaveClass(/reader-document-line/);
+  await expect(table.locator('tbody tr').nth(1)).toHaveAttribute('data-reader-audio-text', 'محتوا | <img src=x onerror=alert(1)>');
   await expect(table.locator('img')).toHaveCount(0);
 });
 
