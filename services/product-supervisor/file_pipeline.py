@@ -198,7 +198,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         else:
             result.detected_type = "zip"
             result.warnings.append("محتوای آرشیو استخراج یا اجرا نشد؛ فقط فهرست ساختاری آن بررسی شد.")
-    elif data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"RIFF")) or suffix in {".webp", ".png", ".jpg", ".jpeg", ".gif"}:
+    elif data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a")) or suffix in {".webp", ".png", ".jpg", ".jpeg", ".gif"}:
         image_bytes, mime = _inspect_image(data)
         result.detected_type = "image"
         result.image_bytes = image_bytes
