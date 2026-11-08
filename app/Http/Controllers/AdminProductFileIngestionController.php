@@ -101,7 +101,7 @@ class AdminProductFileIngestionController extends Controller
         }
     }
 
-    public function confirm(Request $request, StoreProduct $product, string $token, ProductFilePreflightScanner $scanner)
+    public function confirm(Request $request, StoreProduct $product, string $token, ProductFilePreflightScanner $scanner, ProductFileStorageSelector $storageSelector)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها باید از بخش منابع جلسه بارگذاری شوند.');
         $session = StoreProductUploadSession::query()
@@ -138,18 +138,29 @@ class AdminProductFileIngestionController extends Controller
 
             $extension = strtolower(pathinfo($session->original_name, PATHINFO_EXTENSION));
             $finalPath = 'store/products/'.$product->id.'/'.Str::uuid().($extension ? '.'.$extension : '');
-            $targetDisk = Storage::disk('private');
-            $this->event($session, 'storage_selection', 'completed', 'فضای ذخیره‌سازی انتخاب شد', 'مخزن خصوصی مناسب این نوع فایل انتخاب شد.', [
+            $targetDiskName = $storageSelector->select($product, $inspection);
+            $targetDisk = Storage::disk($targetDiskName);
+            $this->event($session, 'storage_selection', 'completed', 'فضای ذخیره‌سازی انتخاب شد', 'مخزن خصوصی متناسب با سیاست داخلی فراست انتخاب شد.', [
                 'storage_class' => 'private',
             ]);
 
-            if (! $targetDisk->move($session->quarantine_path, $finalPath)) {
-                throw new RuntimeException('product_file_storage_move_failed');
+            $sourceStream = $disk->readStream($session->quarantine_path);
+            if (! is_resource($sourceStream)) {
+                throw new RuntimeException('product_file_source_stream_unavailable');
             }
+            try {
+                $stored = $targetDisk->writeStream($finalPath, $sourceStream);
+            } finally {
+                fclose($sourceStream);
+            }
+            if (! $stored) {
+                throw new RuntimeException('product_file_storage_write_failed');
+            }
+            $disk->delete($session->quarantine_path);
 
             $isPrimary = $request->boolean('is_primary', true);
             try {
-                $result = DB::transaction(function () use ($session, $product, $inspection, $actualHash, $finalPath, $isPrimary) {
+                $result = DB::transaction(function () use ($session, $product, $inspection, $actualHash, $finalPath, $targetDiskName, $isPrimary) {
                     $lockedSession = StoreProductUploadSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
                     if ($lockedSession->state !== 'confirming') {
                         throw new RuntimeException('upload_session_state_conflict');
@@ -164,7 +175,7 @@ class AdminProductFileIngestionController extends Controller
                         'product_id' => $lockedProduct->id,
                         'purpose' => 'product_download',
                         'version' => $lockedProduct->version,
-                        'disk' => 'private',
+                        'disk' => $targetDiskName,
                         'path' => $finalPath,
                         'original_name' => $lockedSession->original_name,
                         'mime' => $inspection['detected_mime'] ?? $lockedSession->detected_mime,
@@ -185,7 +196,7 @@ class AdminProductFileIngestionController extends Controller
                         'detected_mime' => $inspection['detected_mime'] ?? null,
                         'extension' => strtolower(pathinfo($lockedSession->original_name, PATHINFO_EXTENSION)),
                         'size_bytes' => $lockedSession->size_bytes,
-                        'storage_disk' => 'private',
+                        'storage_disk' => $targetDiskName,
                         'storage_path' => $finalPath,
                         'processing_state' => 'pending_study',
                         'page_count' => data_get($inspection, 'page_count'),
