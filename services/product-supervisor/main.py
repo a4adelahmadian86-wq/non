@@ -197,7 +197,7 @@ async def review_product_file(
                 "sequence": len(safe_content_blocks) + 1,
                 "block_type": str(block.get("block_type") or "paragraph")[:32],
                 "page_number": page_value if isinstance(page_value, int) and page_value > 0 else None,
-                "text": block_text[:6000],
+                "text": block_text[:120000],
             })
     if visual_report.strip():
         visual_text, count = redact_sensitive_content(visual_report)
@@ -206,7 +206,7 @@ async def review_product_file(
             "sequence": len(safe_content_blocks) + 1,
             "block_type": "image_description",
             "page_number": None,
-            "text": visual_text[:6000],
+            "text": visual_text[:120000],
         })
     if transcription.strip():
         audio_text, count = redact_sensitive_content(transcription)
@@ -215,7 +215,7 @@ async def review_product_file(
             "sequence": len(safe_content_blocks) + 1,
             "block_type": "transcription",
             "page_number": None,
-            "text": audio_text[:6000],
+            "text": audio_text[:120000],
         })
     extracted = "\n\n".join(block["text"] for block in safe_content_blocks)[:120000]
     model_review = {}
