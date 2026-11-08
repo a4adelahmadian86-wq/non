@@ -155,6 +155,8 @@
             }
             const cells = Array.isArray(rawBlock.cells) ? rawBlock.cells.slice(0, 50) : value.split('|').slice(0, 50);
             const row = document.createElement('tr');
+            row.className = 'reader-document-line';
+            row.dataset.readerAudioText = value || cells.map(cell => String(cell ?? '')).join(' | ');
             cells.forEach((cellValue, cellIndex) => {
               const cell = document.createElement('td');
               cell.textContent = String(cellValue ?? '');
@@ -192,6 +194,7 @@
               activeListKind = listKind;
             }
             const item = document.createElement('li');
+            item.className = 'reader-document-line';
             item.textContent = value;
             item.style.marginInlineStart = Math.max(0, Math.min(5, Number(rawBlock.list_level) || 1) - 1) + 'em';
             activeList.appendChild(item);
@@ -202,7 +205,7 @@
           const element = type === 'heading'
             ? document.createElement('h' + Math.max(1, Math.min(6, Number(rawBlock.level) || 2)))
             : document.createElement('p');
-          element.className = type === 'heading' ? 'farast-reader-docx-heading' : 'farast-reader-docx-paragraph';
+          element.className = 'reader-document-line ' + (type === 'heading' ? 'farast-reader-docx-heading' : 'farast-reader-docx-paragraph');
           element.textContent = value;
           element.dir = 'auto';
           if (type === 'heading') {
