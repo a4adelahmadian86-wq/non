@@ -341,6 +341,16 @@ async def review_product(snapshot: ProductSnapshot):
         if isinstance(safe_snapshot.get(key), str):
             safe_snapshot[key] = redact_sensitive_content(safe_snapshot[key])[0]
     safe_snapshot["tags"] = [redact_sensitive_content(tag)[0] for tag in safe_snapshot["tags"]]
+    knowledge = safe_snapshot.get("document_knowledge")
+    if isinstance(knowledge, dict):
+        for source in knowledge.get("sources", []) if isinstance(knowledge.get("sources"), list) else []:
+            if not isinstance(source, dict):
+                continue
+            if isinstance(source.get("summary"), str):
+                source["summary"] = redact_sensitive_content(source["summary"])[0]
+            for chunk in source.get("chunks", []) if isinstance(source.get("chunks"), list) else []:
+                if isinstance(chunk, dict) and isinstance(chunk.get("content"), str):
+                    chunk["content"] = redact_sensitive_content(chunk["content"])[0]
 
     prompt = {
         "role": "product_quality_supervisor",
