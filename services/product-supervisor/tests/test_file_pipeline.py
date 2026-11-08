@@ -20,6 +20,8 @@ class FilePipelineTests(unittest.TestCase):
         self.assertIn("عنوان محصول", result.extracted_text)
         self.assertEqual(result.content_chunks[0]["locator"], {"line": 1})
         self.assertEqual(result.content_chunks[0]["content_text"], "عنوان محصول")
+        self.assertEqual(result.content_chunks[1]["locator"], {"line": 2})
+        self.assertEqual(result.content_chunks[1]["chunk_type"], "text_line")
 
     def test_sensitive_values_are_redacted(self):
         text, count = redact_sensitive_content("Contact person@example.com or Bearer abcdefghijklmnopqrstuvwxyz")
