@@ -44,7 +44,7 @@ class UploadSecurityServiceTest extends TestCase
                 try {
                     app(UploadSecurityService::class)->inspect($path, 'image/png', 1024);
                     $this->fail('An infected upload must be rejected.');
-                } catch (\\RuntimeException $exception) {
+                } catch (\RuntimeException $exception) {
                     $this->assertSame('upload_malware_scan_failed', $exception->getMessage());
                 }
             });
@@ -66,7 +66,7 @@ class UploadSecurityServiceTest extends TestCase
                 try {
                     app(UploadSecurityService::class)->inspect($path, 'image/png', 1024);
                     $this->fail('A timed-out malware scan must fail closed.');
-                } catch (\\RuntimeException $exception) {
+                } catch (\RuntimeException $exception) {
                     $this->assertSame('upload_malware_scan_timeout', $exception->getMessage());
                 }
             });
