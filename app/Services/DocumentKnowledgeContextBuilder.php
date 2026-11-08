@@ -13,7 +13,7 @@ class DocumentKnowledgeContextBuilder
         $documents = StoreDocumentRecord::query()
             ->with(['file:id,product_id,original_name,sha256,is_active', 'chunks:id,document_id,chunk_index,content_type,page_number,heading,content,source_anchor,content_hash', 'facts:id,document_id,fact_key,fact_value,confidence,evidence,model'])
             ->where('product_id', $productId)
-            ->whereIn('status', ['ready', 'extracted'])
+            ->whereIn('status', ['ready', 'extracted', 'partial'])
             ->whereHas('file', fn ($query) => $query->where('is_active', true))
             ->orderBy('id')
             ->get();
