@@ -135,5 +135,5 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261108secure-reader3"></script>
+<script src="/js/farast-reader.js?v=20261108secure-reader4"></script>
 @endpush
