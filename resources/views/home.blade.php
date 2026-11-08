@@ -55,20 +55,7 @@
 <script type="application/ld+json">
 @json($websiteSchema)
 </script>
-<script type="application/ld+json">
-@json([
-    '@context' => 'https://schema.org',
-    '@type' => 'WebSite',
-    'name' => 'فراست',
-    'url' => url('/'),
-    'inLanguage' => 'fa-IR',
-    'potentialAction' => [
-        '@type' => 'SearchAction',
-        'target' => route('store').'?q={search_term_string}',
-        'query-input' => 'required name=search_term_string',
-    ],
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-</script>
+
 @endpush
 
 @section('content')
