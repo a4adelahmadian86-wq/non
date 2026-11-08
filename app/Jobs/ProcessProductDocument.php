@@ -208,7 +208,7 @@ class ProcessProductDocument implements ShouldQueue
             }
 
             $inspection = is_array($payload['inspection'] ?? null) ? $payload['inspection'] : [];
-            $pageBuild = app(\\App\\Services\\StoreProductDocumentPageBuilder::class)->build($chunks, $inspection);
+            $pageBuild = app(\App\Services\StoreProductDocumentPageBuilder::class)->build($chunks, $inspection);
             $locked->pages()->delete();
             foreach ($pageBuild['pages'] as $page) {
                 $locked->pages()->create($page);
