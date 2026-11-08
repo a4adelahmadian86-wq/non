@@ -44,8 +44,8 @@
       layer.style.overflow = 'visible';
       layer.style.opacity = '1';
       layer.style.pointerEvents = 'auto';
-      layer.style.userSelect = 'text';
-      layer.style.webkitUserSelect = 'text';
+      layer.style.userSelect = 'none';
+      layer.style.webkitUserSelect = 'none';
 
       const heading = document.createElement('div');
       heading.className = 'farast-document-html-heading';
