@@ -163,7 +163,7 @@ class AdminStoreController extends Controller
                     $snapshotMatches = is_array($lastReview)
                         && filled($lastReview['snapshot_hash'] ?? null)
                         && hash_equals((string) $lastReview['snapshot_hash'], $snapshotBuilder->fingerprint($snapshot));
-                    $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'seo_title', 'seo_description'];
+                    $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'download_policy', 'seo_title', 'seo_description'];
                     $reviewInputsChanged = collect($reviewFields)->contains(
                         fn ($field) => array_key_exists($field, $data)
                             && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
@@ -215,7 +215,7 @@ class AdminStoreController extends Controller
             $metadata = $data['metadata'] ?? $lockedProduct->metadata ?? [];
             $previousSupervisorSettings = (array) data_get($lockedProduct->metadata, 'ai_supervisor', []);
             $nextSupervisorSettings = (array) data_get($metadata, 'ai_supervisor', []);
-            $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'seo_title', 'seo_description'];
+            $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'download_policy', 'seo_title', 'seo_description'];
             $reviewInputsChanged = collect($reviewFields)->contains(
                 fn ($field) => array_key_exists($field, $data)
                     && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
