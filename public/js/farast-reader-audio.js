@@ -19,7 +19,7 @@
         && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
         .map((item, index) => ({ ...item, start: Number(item.start), end: Number(item.end), page: Math.max(1, Number(item.page) || 1), index }))
         .sort((a, b) => a.start - b.start),
-      granularity: timings.length > 0 && timings.some(item => typeof item?.text === 'string' && /\\s/u.test(item.text.trim())) ? 'segment' : 'word'
+      granularity: timings.length > 0 && timings.some(item => typeof item?.text === 'string' && /\s/u.test(item.text.trim())) ? 'segment' : 'word'
     };
   });
   const tracks = parseTracks();
