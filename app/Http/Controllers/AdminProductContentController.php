@@ -1,11 +1,11 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\StoreProduct;
-use App\\Services\\ProductContentGenerationService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Validation\\ValidationException;
+use App\Models\StoreProduct;
+use App\Services\ProductContentGenerationService;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class AdminProductContentController extends Controller
