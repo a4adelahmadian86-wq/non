@@ -80,20 +80,52 @@ class ProductDocumentAudioService
                 $pcm .= $parsed['pcm'];
 
                 $words = preg_split('/\s+/u', trim($speechText), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-                $weights = array_map(static fn (string $word) => max(1, mb_strlen($word, 'UTF-8')), $words);
-                $totalWeight = max(1, array_sum($weights));
-                $wordCursor = $startMs;
+                $providerWords = (array) ($parsed['word_timings'] ?? []);
+                $alignmentValid = count($providerWords) === count($words);
+                $previousRelativeEnd = 0;
+                if ($alignmentValid) {
+                    foreach ($words as $wordIndex => $word) {
+                        $candidate = (array) ($providerWords[$wordIndex] ?? []);
+                        $candidateText = (string) ($candidate['text'] ?? '');
+                        $relativeStart = is_numeric($candidate['start_ms'] ?? null) ? (int) $candidate['start_ms'] : -1;
+                        $relativeEnd = is_numeric($candidate['end_ms'] ?? null) ? (int) $candidate['end_ms'] : -1;
+                        if (! hash_equals($word, $candidateText)
+                            || $relativeStart < $previousRelativeEnd
+                            || $relativeEnd <= $relativeStart
+                            || $relativeEnd > $segmentDuration + 1) {
+                            $alignmentValid = false;
+                            break;
+                        }
+                        $previousRelativeEnd = $relativeEnd;
+                    }
+                }
+
                 $wordTimings = [];
-                foreach ($words as $wordIndex => $word) {
-                    $wordEnd = $wordIndex === array_key_last($words)
-                        ? $durationMs
-                        : $wordCursor + (int) round($segmentDuration * ($weights[$wordIndex] / $totalWeight));
-                    $wordTimings[] = [
-                        'text' => $word,
-                        'start_ms' => $wordCursor,
-                        'end_ms' => max($wordCursor + 1, $wordEnd),
-                    ];
-                    $wordCursor = $wordEnd;
+                $alignmentQuality = $alignmentValid ? 'phoneme' : 'estimated';
+                if ($alignmentValid) {
+                    foreach ($words as $wordIndex => $word) {
+                        $candidate = (array) $providerWords[$wordIndex];
+                        $wordTimings[] = [
+                            'text' => $word,
+                            'start_ms' => $startMs + max(0, (int) $candidate['start_ms']),
+                            'end_ms' => min($durationMs, $startMs + (int) $candidate['end_ms']),
+                        ];
+                    }
+                } else {
+                    $weights = array_map(static fn (string $word) => max(1, mb_strlen($word, 'UTF-8')), $words);
+                    $totalWeight = max(1, array_sum($weights));
+                    $wordCursor = $startMs;
+                    foreach ($words as $wordIndex => $word) {
+                        $wordEnd = $wordIndex === array_key_last($words)
+                            ? $durationMs
+                            : $wordCursor + (int) round($segmentDuration * ($weights[$wordIndex] / $totalWeight));
+                        $wordTimings[] = [
+                            'text' => $word,
+                            'start_ms' => $wordCursor,
+                            'end_ms' => max($wordCursor + 1, $wordEnd),
+                        ];
+                        $wordCursor = $wordEnd;
+                    }
                 }
 
                 $segments[] = [
@@ -104,6 +136,7 @@ class ProductDocumentAudioService
                     'end_ms' => $durationMs,
                     'text' => $speechText,
                     'words' => $wordTimings,
+                    'alignment_quality' => $alignmentQuality,
                     'text_sha256' => hash('sha256', $speechText),
                 ];
             }
@@ -168,6 +201,7 @@ class ProductDocumentAudioService
         $offset = 12;
         $format = null;
         $pcm = null;
+        $wordTimings = [];
         $length = strlen($wav);
         while ($offset + 8 <= $length) {
             $chunkId = substr($wav, $offset, 4);
@@ -188,6 +222,14 @@ class ProductDocumentAudioService
                 ];
             } elseif ($chunkId === 'data') {
                 $pcm = substr($wav, $start, $chunkSize);
+            } elseif ($chunkId === 'FARA' && $chunkSize <= 1000000) {
+                $metadata = json_decode(substr($wav, $start, $chunkSize), true);
+                if (is_array($metadata)
+                    && (int) ($metadata['version'] ?? 0) === 1
+                    && ($metadata['alignment'] ?? null) === 'phoneme'
+                    && is_array($metadata['words'] ?? null)) {
+                    $wordTimings = array_slice($metadata['words'], 0, 1500);
+                }
             }
             $offset = $start + $chunkSize + ($chunkSize % 2);
         }
@@ -202,7 +244,7 @@ class ProductDocumentAudioService
             throw new RuntimeException('product_audio_wav_format_unsupported');
         }
 
-        return ['format' => $format, 'pcm' => $pcm];
+        return ['format' => $format, 'pcm' => $pcm, 'word_timings' => $wordTimings];
     }
 
     private function buildWav(string $pcm, array $format): string
