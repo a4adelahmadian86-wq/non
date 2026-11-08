@@ -49,8 +49,8 @@ class ProductDocumentAudioService
                 $response = Http::accept('audio/wav')
                     ->withToken($token)
                     ->asJson()
-                    ->connectTimeout(8)
-                    ->timeout(90)
+                    ->connectTimeout(75) // Free Render instances can need about a minute to wake from idle.
+                    ->timeout(180)
                     ->post($url, [
                         'text' => $speechText,
                         'language' => 'fa-IR',
