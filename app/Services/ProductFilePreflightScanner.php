@@ -12,7 +12,7 @@ class ProductFilePreflightScanner
     public const MAX_EXPANDED_BYTES = 500 * 1024 * 1024;
 
     private const ALLOWED_EXTENSIONS = [
-        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        'pdf', 'docx', 'xlsx', 'pptx',
         'txt', 'csv', 'md', 'jpg', 'jpeg', 'png', 'webp', 'gif',
         'mp3', 'm4a', 'wav', 'ogg', 'mp4', 'webm', 'mov',
         'zip', 'tar', 'gz', 'tgz',
@@ -164,7 +164,7 @@ class ProductFilePreflightScanner
         }
         if (in_array($extension, ['mp3', 'm4a', 'wav', 'ogg'], true)) {
             if (str_starts_with($prefix, 'ID3') || str_starts_with($prefix, "\xff\xfb")
-                || str_starts_with($prefix, 'RIFF') || str_starts_with($prefix, 'OggS')
+                || (str_starts_with($prefix, 'RIFF') && substr($prefix, 8, 4) === 'WAVE') || str_starts_with($prefix, 'OggS')
                 || substr($prefix, 4, 4) === 'ftyp') {
                 return 'audio';
             }
@@ -228,6 +228,9 @@ class ProductFilePreflightScanner
             }
             if (strtolower($normalized) === 'word/vbaproject.bin' || str_contains(strtolower($normalized), 'vbaproject.bin')) {
                 $containsMacros = true;
+            }
+            if (preg_match('#(^|/)(word|xl|ppt)/embeddings/#i', $normalized)) {
+                $suspicious[] = 'embedded_ole_object';
             }
             if (! $isDirectory && in_array($extension, ['zip', 'gz', 'tgz', 'tar', 'rar', '7z'], true)) {
                 $nested++;
