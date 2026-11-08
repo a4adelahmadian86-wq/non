@@ -8,6 +8,11 @@ Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
 Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->withoutOverlapping();
 
+// Shared-hosting friendly database queue worker; no Redis or daemon manager is required.
+Schedule::command('queue:work database --queue=documents,documents-audio,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')
+    ->everyMinute()
+    ->withoutOverlapping(20);
+
 // پایش SLA پشتیبانی — هر ۱۵ دقیقه
 Schedule::command('support:check-sla')
     ->everyFifteenMinutes()

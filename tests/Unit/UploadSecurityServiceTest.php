@@ -82,6 +82,7 @@ class UploadSecurityServiceTest extends TestCase
         $this->assertSame('archive', $result['detected_type']);
         $this->assertSame(1, $result['archive_entry_count']);
         $this->assertSame('chapters/intro.txt', $result['archive_entries'][0]['name']);
+        $this->assertSame('checked', $result['archive_entries'][0]['content_scan']);
     }
 
     public function test_zip_manifest_is_listed_without_extracting_archive_members(): void
@@ -105,6 +106,27 @@ class UploadSecurityServiceTest extends TestCase
         $this->assertSame('archive', $result['detected_type']);
         $this->assertSame(1, $result['archive_entry_count']);
         $this->assertSame('chapters/intro.txt', $result['archive_entries'][0]['name']);
+        $this->assertSame('checked', $result['archive_entries'][0]['content_scan']);
+    }
+
+    public function test_zip_member_with_known_malware_test_signature_is_rejected_without_extraction(): void
+    {
+        if (! class_exists(\ZipArchive::class)) {
+            $this->markTestSkipped('PHP zip extension is unavailable.');
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-eicar-');
+        $archive = new \ZipArchive();
+        $this->assertSame(true, $archive->open($temporary, \ZipArchive::CREATE));
+        $archive->addFromString('notes.txt', 'X5O!P%@AP[4\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
+        $archive->close();
+
+        Storage::disk('private')->put('quarantine/eicar.zip', file_get_contents($temporary));
+        @unlink($temporary);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('upload_archive_known_test_signature_rejected');
+        app(UploadSecurityService::class)->inspect('quarantine/eicar.zip', 'application/zip');
     }
 
     public function test_zip_path_traversal_is_rejected_without_extraction(): void

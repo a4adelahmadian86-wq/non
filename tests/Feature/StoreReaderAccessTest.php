@@ -5,8 +5,6 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
-use App\Models\StoreProductFile;
-use App\Models\StoreProductDocument;
 use App\Models\StoreLibraryItem;
 use App\Models\Order;
 use App\Models\User;
@@ -87,6 +85,95 @@ class StoreReaderAccessTest extends TestCase
         ]);
     }
 
+    public function test_reader_only_html_document_pages_are_private_until_purchase_and_then_render_from_database(): void
+    {
+        [$product, $sample] = $this->makePreviewFixture();
+        $product->update(['download_policy' => 'reader_only']);
+        $sourceHash = str_repeat('a', 64);
+
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/source.pptx',
+            'original_name' => 'source.pptx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'size_bytes' => 1200,
+            'sha256' => $sourceHash,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $sourceHash,
+            'processing_status' => 'completed',
+            'detected_type' => 'pptx',
+            'page_count' => 1,
+            'word_count' => 3,
+            'character_count' => 24,
+            'structure_json' => ['reader' => ['ready' => true, 'page_count' => 1]],
+            'processed_at' => now(),
+        ]);
+        $page = $document->pages()->create([
+            'page_number' => 1,
+            'page_kind' => 'slide',
+            'locator_key' => 'slide:1',
+            'locator_json' => ['slide' => 1, 'reader_page' => 1],
+            'content_text' => 'متن محرمانه اسلاید',
+            'content_html' => '<section class="farast-document-html-page"><div class="farast-pdf-text-layer"><span class="reader-document-line">متن محرمانه اسلاید</span></div></section>',
+            'content_sha256' => hash('sha256', 'متن محرمانه اسلاید'),
+            'has_extracted_text' => true,
+        ]);
+        $full = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'product_document_page_id' => $page->id,
+            'source_sha256' => $sourceHash,
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/documents/'.$sourceHash.'/reader/page-1.html',
+            'mime' => 'text/html',
+            'page_number' => 1,
+            'kind' => 'document_html',
+            'access_level' => 'full',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $this->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee(route('store.preview', $sample))
+            ->assertDontSee('متن محرمانه اسلاید');
+        $this->get(route('store.preview', $full))->assertForbidden();
+
+        $user = $this->makeReaderUser();
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100,
+            'total_rials' => 100,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'granted_at' => now(),
+        ]);
+
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('متن محرمانه اسلاید')
+            ->assertDontSee(route('store.preview', $sample));
+
+        $this->actingAs($user)->get(route('store.preview', $full))
+            ->assertOk()
+            ->assertSee('متن محرمانه اسلاید');
+    }
+
     public function test_authenticated_reader_progress_and_bookmarks_sync_across_sessions(): void
     {
         [$product] = $this->makePreviewFixture();
@@ -147,9 +234,10 @@ class StoreReaderAccessTest extends TestCase
         $this->assertSame('%PDF-1.4 sample', $previewResponse->streamedContent());
     }
 
-    public function test_reader_only_purchase_unlocks_page_text_but_never_the_original_file_or_download(): void
+    public function test_reader_only_purchase_unlocks_full_content_without_issuing_a_download(): void
     {
         [$product, $sample] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/previews/sample/full.pdf', '%PDF-1.4 full');
         $full = StoreProductPreview::create([
             'product_id' => $product->id,
             'disk' => 'private',
@@ -183,63 +271,15 @@ class StoreReaderAccessTest extends TestCase
             'granted_at' => now(),
         ]);
 
-        $originalBytes = '%PDF-1.4 original private file';
-        Storage::disk('private')->put('store/products/'.$product->id.'/full.pdf', $originalBytes);
-        $file = StoreProductFile::create([
-            'product_id' => $product->id,
-            'purpose' => 'product_download',
-            'version' => '1.0',
-            'disk' => 'private',
-            'path' => 'store/products/'.$product->id.'/full.pdf',
-            'original_name' => 'full.pdf',
-            'mime' => 'application/pdf',
-            'size_bytes' => strlen($originalBytes),
-            'sha256' => hash('sha256', $originalBytes),
-            'is_primary' => true,
-            'is_active' => true,
-            'scan_status' => 'clean',
-            'scan_engine' => 'farast_static_v1',
-            'scanned_at' => now(),
-        ]);
-        $document = StoreProductDocument::create([
-            'product_id' => $product->id,
-            'product_file_id' => $file->id,
-            'source_sha256' => $file->sha256,
-            'processing_status' => 'completed',
-            'detected_type' => 'pdf',
-            'page_count' => 1,
-            'structure_json' => [
-                'reader' => ['ready' => true, 'page_count' => 1],
-                'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
-            ],
-        ]);
-        $document->pages()->create([
-            'page_number' => 1,
-            'page_kind' => 'pdf_page',
-            'locator_key' => 'page:1',
-            'locator_json' => ['page' => 1, 'reader_page' => 1],
-            'content_text' => 'متن مجاز صفحه اول کتاب',
-            'content_html' => '<section><p>متن مجاز صفحه اول کتاب</p></section>',
-            'content_sha256' => hash('sha256', 'متن مجاز صفحه اول کتاب'),
-            'has_extracted_text' => true,
-        ]);
-
-        $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
-        $readerResponse->assertOk()
-            ->assertSee('data-reader-mode="document"', false)
-            ->assertSee(route('store.reader.page', [$product, 1]), false)
-            ->assertDontSee(route('store.preview', $full), false)
-            ->assertDontSee($originalBytes, false);
-
-        $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
-        $pageResponse->assertOk()
-            ->assertJsonPath('page_number', 1)
-            ->assertJsonPath('content_text', 'متن مجاز صفحه اول کتاب')
-            ->assertJsonMissingPath('path')
-            ->assertJsonMissingPath('disk');
-
-        $this->actingAs($user)->get(route('store.preview', $full))->assertNotFound();
-        $this->actingAs($user)->post(route('library.download.issue', $libraryItem))->assertForbidden();
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee(route('store.preview', $full))
+            ->assertDontSee(route('store.preview', $sample));
+        $fullResponse = $this->actingAs($user)->get(route('store.preview', $full));
+        $fullResponse->assertOk();
+        $this->assertSame('%PDF-1.4 full', $fullResponse->streamedContent());
+        $this->actingAs($user)->post(route('library.download.issue', $libraryItem))
+            ->assertForbidden();
     }
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void

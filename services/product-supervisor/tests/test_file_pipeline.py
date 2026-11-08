@@ -11,8 +11,11 @@ from pptx import Presentation
 from pptx.util import Inches
 from PIL import Image
 
-from file_pipeline import FileInspectionError, build_pdf_sample, inspect_file, redact_sensitive_content
-from pypdf import PdfReader, PdfWriter
+from file_pipeline import FileInspectionError, inspect_file, redact_sensitive_content
+from openpyxl.chart import BarChart, Reference
+from openpyxl.drawing.image import Image as SpreadsheetImage
+from pptx.chart.data import CategoryChartData
+from pptx.enum.chart import XL_CHART_TYPE
 
 
 class FilePipelineTests(unittest.TestCase):
@@ -23,20 +26,6 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.content_chunks[0]["locator"], {"line_start": 1, "line_end": 2})
         self.assertEqual(result.content_chunks[0]["content_text"], "عنوان محصول\nشرح محصول")
         self.assertEqual(result.content_chunks[0]["chunk_type"], "text_lines")
-
-    def test_pdf_sample_uses_only_valid_ai_selected_pages_and_keeps_page_order(self):
-        writer = PdfWriter()
-        for _ in range(4):
-            writer.add_blank_page(width=200, height=300)
-        source = io.BytesIO()
-        writer.write(source)
-
-        generated = build_pdf_sample(source.getvalue(), [4, 2, 4, 99])
-
-        self.assertIsNotNone(generated)
-        sample_bytes, selected_pages = generated
-        self.assertEqual(selected_pages, [4, 2])
-        self.assertEqual(len(PdfReader(io.BytesIO(sample_bytes)).pages), 2)
 
     def test_sensitive_values_are_redacted(self):
         text, count = redact_sensitive_content("Contact person@example.com or Bearer abcdefghijklmnopqrstuvwxyz")
@@ -60,6 +49,30 @@ class FilePipelineTests(unittest.TestCase):
         result = inspect_file(stream.getvalue(), "lesson.docx")
         self.assertEqual(result.detected_type, "docx")
         self.assertIn("متن آزمایشی دوره", result.extracted_text)
+
+    def test_docx_extracts_footnotes_and_embedded_images(self):
+        document = Document()
+        document.add_paragraph("متن اصلی سند")
+        image_stream = io.BytesIO()
+        Image.new("RGB", (16, 16), "white").save(image_stream, format="PNG")
+        document.add_picture(io.BytesIO(image_stream.getvalue()))
+        source = io.BytesIO()
+        document.save(source)
+
+        rewritten = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(source.getvalue()), "r") as original, zipfile.ZipFile(rewritten, "w") as output:
+            for item in original.infolist():
+                output.writestr(item, original.read(item.filename))
+            output.writestr(
+                "word/footnotes.xml",
+                '<?xml version="1.0"?><w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:footnote w:id="1"><w:p><w:r><w:t>توضیح پانویس</w:t></w:r></w:p></w:footnote></w:footnotes>',
+            )
+
+        result = inspect_file(rewritten.getvalue(), "lesson.docx")
+        self.assertIn("متن اصلی سند", result.extracted_text)
+        self.assertIn("توضیح پانویس", result.extracted_text)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertEqual(result.image_assets[0]["locator"]["media"], "docx_image")
 
     def test_zip_path_traversal_is_rejected(self):
         stream = io.BytesIO()
@@ -138,6 +151,31 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "xlsx")
         self.assertIn("مبانی فروش", result.extracted_text)
 
+    def test_xlsx_extracts_chart_metadata_and_embedded_images(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["ماه", "فروش"])
+        sheet.append(["فروردین", 10])
+        sheet.append(["اردیبهشت", 20])
+        chart = BarChart()
+        chart.title = "نمودار فروش ماهانه"
+        data = Reference(sheet, min_col=2, min_row=1, max_row=3)
+        categories = Reference(sheet, min_col=1, min_row=2, max_row=3)
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(categories)
+        sheet.add_chart(chart, "D2")
+
+        image_stream = io.BytesIO()
+        Image.new("RGB", (12, 12), "white").save(image_stream, format="PNG")
+        sheet.add_image(SpreadsheetImage(io.BytesIO(image_stream.getvalue())), "A5")
+
+        stream = io.BytesIO()
+        workbook.save(stream)
+        result = inspect_file(stream.getvalue(), "report.xlsx")
+        self.assertIn("نمودار فروش ماهانه", result.extracted_text)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertEqual(result.image_assets[0]["locator"]["media"], "xlsx_image")
+
     def test_pptx_content_is_extracted(self):
         presentation = Presentation()
         slide = presentation.slides.add_slide(presentation.slide_layouts[5])
@@ -148,6 +186,32 @@ class FilePipelineTests(unittest.TestCase):
         result = inspect_file(stream.getvalue(), "course.pptx")
         self.assertEqual(result.detected_type, "pptx")
         self.assertIn("جلسه اول دوره", result.extracted_text)
+
+    def test_pptx_extracts_chart_series_and_embedded_images(self):
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        chart_data = CategoryChartData()
+        chart_data.categories = ["فروردین", "اردیبهشت"]
+        chart_data.add_series("فروش", (10, 20))
+        chart = slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED,
+            Inches(1), Inches(1), Inches(5), Inches(3), chart_data
+        ).chart
+        chart.has_title = True
+        chart.chart_title.text_frame.text = "نمودار درآمد"
+
+        image_stream = io.BytesIO()
+        Image.new("RGB", (12, 12), "white").save(image_stream, format="PNG")
+        slide.shapes.add_picture(io.BytesIO(image_stream.getvalue()), Inches(1), Inches(4))
+
+        stream = io.BytesIO()
+        presentation.save(stream)
+        result = inspect_file(stream.getvalue(), "charts.pptx")
+        self.assertIn("نمودار درآمد", result.extracted_text)
+        self.assertIn("فروش", result.extracted_text)
+        self.assertIn("10", result.extracted_text)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertEqual(result.image_assets[0]["locator"]["media"], "pptx_image")
 
     def test_wav_is_not_misclassified_as_image(self):
         wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + b"0" * 16 + b"data" + b"0" * 4

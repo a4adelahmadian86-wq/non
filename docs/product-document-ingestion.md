@@ -4,36 +4,47 @@
 
 - `store_product_ingestions`: short-lived, authenticated quarantine sessions. A staged file expires after 30 minutes unless explicitly confirmed.
 - `store_product_documents`: one processing profile per immutable product-file version, keyed by the source SHA-256.
-- `store_product_document_chunks`: extracted text with source locators (PDF page, spreadsheet sheet/row, presentation slide/element, or text line).
-- `store_product_document_artifacts`: versioned private derivatives such as sample files, reader assets and audio segments.
+- `store_product_document_chunks`: extracted text with source locators (PDF page, spreadsheet sheet/row, presentation slide/element, archive entry, or text line).
+- `store_product_document_facts`: claims retained only when their evidence exactly matches a stored source chunk.
+- `store_product_document_pages`: reader-ready, escaped HTML/text pages generated once during ingestion.
+- `store_product_document_artifacts`: versioned private derivatives such as normalized reader PDFs, samples and synchronized audio.
 
-Binary originals and derivatives stay on private storage disks. SQL stores metadata, text, hashes, locators and private storage paths; do not place binary payloads in JSON or LONGTEXT columns.
+Binary originals and derivatives stay on private storage disks. SQL stores metadata, text, hashes, locators and private storage paths; binary payloads do not belong in JSON or LONGTEXT columns. Large document text is split into bounded, source-located chunks rather than one unbounded field.
 
 The schema uses ordinary indexed InnoDB-compatible relations and JSON/LONGTEXT columns. MySQL 8 or a supported MariaDB release is the intended shared-host database. SQLite remains suitable for local tests only.
 
+## Upload and security boundary
+
+1. The browser sends one selected file at a time from the multi-file queue to a private quarantine path. Files can be selected together or dropped anywhere on the product editor.
+2. PHP validates the extension, detected MIME and file signature, computes SHA-256, inspects supported PDF/image/Office/archive structures, checks archive entry paths, links, compression ratios, expansion limits and active PDF actions, and returns a report before the user can confirm.
+3. The confirmation endpoint re-runs the local checks and verifies the SHA-256 before moving the file into private product storage. A stale or altered staging file cannot be committed.
+4. The static scanner is first-party and does not invoke ClamAV or another antivirus binary. It is a bounded structural/rule-based gate, not a full antivirus engine; it cannot promise detection of every unknown malware family. The file is never executed.
+5. ZIP/TAR manifests are inspected without extracting files to disk. Nested archives are reported as nested and are not recursively unpacked during the lightweight preflight. The AI processing service later extracts only supported document members within its own strict byte/count limits.
+
 ## Queue on inexpensive shared hosting
 
-The upload-confirm action writes a document row and dispatches `ProcessProductDocument` to the `documents` queue. After successful semantic study, a separate `GenerateProductDocumentAudio` job creates a single WAV asset and stores per-chunk time offsets and source locators for reader synchronization. Configure Laravel's database queue driver and ensure the standard `jobs` and `failed_jobs` tables are migrated.
+The upload-confirm action writes a document row and dispatches `ProcessProductDocument` to the database-backed `documents` queue. After successful semantic study, `GenerateProductDocumentAudio` creates one private WAV asset and stores per-chunk time offsets and source locators for reader synchronization.
 
-For cPanel or another cron-only host, run a short worker every minute (adjust the project path and PHP binary):
-
-```sh
-cd /home/ACCOUNT/public_html && /usr/local/bin/php artisan queue:work database --queue=documents,documents-audio,default --stop-when-empty --max-time=50 --tries=3
-```
-
-Do not keep a long-running worker alive on a host that terminates background processes. The stop-when-empty worker exits after the available batch and can be safely invoked again by cron.
-
-Also register Laravel's scheduler every minute so expired quarantine files are removed hourly:
+No Redis or always-on queue daemon is required. Configure `QUEUE_CONNECTION=database`, migrate the standard `jobs` and `failed_jobs` tables, and register Laravel's scheduler every minute:
 
 ```sh
 * * * * * cd /home/ACCOUNT/public_html && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
 ```
 
+The scheduler starts a bounded `queue:work --stop-when-empty` worker for `documents,documents-audio,default`. Queue `retry_after` is longer than the longest document/audio job timeout to prevent a slow job being reserved and executed twice. Adjust the PHP binary and project path for the host's cPanel configuration.
 
-## Current processing boundaries
+## Content study, samples and reader
 
-- The first-party PHP gate performs bounded static checks and never executes an uploaded file. It is not a full antivirus engine and does not promise detection of every unknown malware family.
-- ZIP members are listed from the central directory; archive contents are not extracted or executed during preflight.
-- The AI service currently accepts up to 25 MiB per source file and extracts up to 120,000 characters into source-located chunks and runs sequential 24,000-character Gemini review batches. Files larger than that remain stored with an explicit awaiting-provider state rather than repeatedly submitting a request that cannot succeed.
-- AI review is advisory. It never authorizes publication.
-- AI-selected PDF sample pages (including DOCX documents converted once through the existing PHPWord/Dompdf renderer) are rendered once by pypdf and stored as private versioned artifacts. TTS generation uses the configured FARAST voice TTS endpoint after semantic review; the combined WAV and segment-to-source offsets are stored once. DOCX conversion fidelity checks, audio/reader synchronization UI, multi-pass analysis for long documents, and full-content reader access controls are follow-on stages. The reader consumes stored artifacts and does not create them. For entitled PDF/DOCX reader-only products, the prebuilt audio is attached to the existing reader player with segment text, page locator, and start/end time offsets; the player streams the private audio through the entitlement-checked range route.
+- The model returns structured analysis, source-located facts and (for PDF/PPTX) recommended page/slide numbers. It does not return a generated sample file.
+- Laravel validates the recommended page numbers against the source and creates PDF samples locally with the existing FPDI dependency. DOCX is normalized to PDF once by the existing PHPWord/Dompdf path before analysis and sample extraction.
+- For other supported formats, the page builder stores source-located HTML/text sections. Reader preview records link to these database pages; the reader displays the saved representation rather than rebuilding it on each visit.
+- The full HTML reader pages are created for `reader_only` products. PDF/DOCX use their private PDF representation. Access remains gated by the product's reader entitlement; a successful purchase does not create a direct-download URL when `download_policy=reader_only`.
+- The TTS job generates one combined private WAV after semantic analysis. Timing records map audio segments back to page/slide locators. The reader reuses the same audio asset while navigating document pages.
+- Public assistant context is sample-only until a valid library entitlement exists. Paid document facts and chunks are hash-matched to the active source version and only evidence-backed facts are eligible for factual answers.
+
+## Current processing limits
+
+- Product upload preflight: 50 MiB per file; each staging session expires after 30 minutes.
+- Product Supervisor: 25 MiB per source file and up to 120,000 extracted characters. Larger files remain stored with an explicit `awaiting_provider` state rather than being silently truncated and represented as complete.
+- Archive inspection: bounded entry count, expanded bytes and compression ratio. Unsupported/encrypted archive structures are rejected; nested archives are disclosed and not executed or extracted in preflight.
+- AI review is advisory. It never authorizes publication or overrides the server-side publication rules.
