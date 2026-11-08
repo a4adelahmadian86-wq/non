@@ -23,12 +23,12 @@ class ReaderDemoProductCommandTest extends TestCase
         $this->assertSame('published', $product->status);
         $this->assertSame(3, $product->previews()->count());
         $this->assertDatabaseHas('store_product_previews', ['product_id' => $product->id, 'kind' => 'pdf', 'disk' => 'private']);
-        $this->assertDatabaseHas('store_product_previews', ['product_id' => $product->id, 'kind' => 'docx', 'disk' => 'private']);
-        $this->assertDatabaseHas('store_product_previews', ['product_id' => $product->id, 'kind' => 'xlsx', 'disk' => 'private']);
+        $this->assertDatabaseHas('store_product_previews', ['product_id' => $product->id, 'kind' => 'pdf', 'disk' => 'private', 'access_level' => 'sample']);
+        $this->assertDatabaseHas('store_product_previews', ['product_id' => $product->id, 'kind' => 'html', 'disk' => 'private', 'access_level' => 'sample']);
         $this->assertDatabaseHas('store_product_files', ['product_id' => $product->id, 'purpose' => 'product_download', 'scan_status' => 'clean']);
         Storage::disk('private')->assertExists('store/reader-demo/FARAST-Reader-Demo.pdf');
-        Storage::disk('private')->assertExists('store/reader-demo/FARAST-Reader-Demo.docx');
-        Storage::disk('private')->assertExists('store/reader-demo/FARAST-Reader-Demo.xlsx');
+        Storage::disk('private')->assertExists('store/reader-demo/FARAST-Reader-Demo-Word.pdf');
+        Storage::disk('private')->assertExists('store/reader-demo/FARAST-Reader-Demo-Excel.html');
 
         $this->assertSame(0, Artisan::call('farast:seed-reader-demo'));
         $this->assertSame(1, StoreProduct::query()->where('slug', 'farast-reader-demo')->count());
