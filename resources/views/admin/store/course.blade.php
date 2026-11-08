@@ -1,5 +1,6 @@
 @extends('layouts.admin')
 @section('admin-content')
+@php($assetReviews = (array) data_get($product->metadata, 'ai_supervisor.asset_reviews', []))
 <section class="store-page" dir="rtl">
   <div class="store-container course-admin">
     <div class="store-section-head">
@@ -72,10 +73,19 @@
                 </form>
                 <div class="course-resources"><strong>منابع این جلسه</strong>
                   @forelse($lesson->resources as $resource)
-                    <div class="course-resource-row"><span><i class="fa-solid fa-paperclip"></i> {{ $resource->original_name }} <small>{{ number_format($resource->size_bytes/1024,1) }} KB · {{ $resource->scan_status==='clean'?'اسکن سالم':'وضعیت بررسی نامشخص' }}</small></span><form method="post" action="{{ route('admin.store.course.resources.delete',[$product,$lesson,$resource]) }}" onsubmit="return confirm('منبع حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="course-danger-link">حذف</button></form></div>
+                    @php($resourceReview = $assetReviews['lesson-resource:'.$resource->id] ?? null)
+                    <div class="course-resource-row">
+                      <span><i class="fa-solid fa-paperclip"></i> {{ $resource->original_name }} <small>{{ number_format($resource->size_bytes/1024,1) }} KB · {{ $resource->scan_status==='clean'?'اسکن سالم':'وضعیت بررسی نامشخص' }}</small>
+                        @if($resourceReview && hash_equals((string) ($resourceReview['sha256'] ?? ''), (string) $resource->sha256))
+                          <small>{{ $resourceReview['summary'] ?? 'گزارش ناظر ثبت شد.' }} · اسکن ثانویه: {{ $resourceReview['security_gate'] ?? 'نامشخص' }}</small>
+                        @endif
+                      </span>
+                      <form method="post" action="{{ route('admin.store.course.resources.review',[$product,$lesson,$resource]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>بررسی هوشمند</button></form>
+                      <form method="post" action="{{ route('admin.store.course.resources.delete',[$product,$lesson,$resource]) }}" onsubmit="return confirm('منبع حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="course-danger-link">حذف</button></form>
+                    </div>
                   @empty <p>هنوز منبعی برای این جلسه ثبت نشده است.</p> @endforelse
                   <form method="post" action="{{ route('admin.store.course.resources.upload',[$product,$lesson]) }}" enctype="multipart/form-data" class="course-resource-upload">@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mp3,.m4a,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"><button type="submit" class="store-outline-btn">بارگذاری منبع امن</button></form>
-                  <small>حداکثر ۲۵۶ مگابایت؛ فایل پس از اسکن ضدبدافزار در فضای خصوصی ثبت می‌شود.</small>
+                  <small>حداکثر بارگذاری ۲۵۶ مگابایت؛ بررسی هوشمند هر منبع تا ۲۵ مگابایت. فایل پس از اسکن اصلی در فضای خصوصی ثبت می‌شود.</small>
                 </div>
                 <form method="post" action="{{ route('admin.store.course.lessons.delete',[$product,$lesson]) }}" onsubmit="return confirm('جلسه و تمام منابع آن حذف شوند؟')">@csrf @method('DELETE')<button type="submit" class="course-danger-link">حذف جلسه</button></form>
               </div>
