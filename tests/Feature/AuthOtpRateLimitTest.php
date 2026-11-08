@@ -60,4 +60,16 @@ class AuthOtpRateLimitTest extends TestCase
 
         $this->assertDatabaseCount('email_otp_challenges', 3);
     }
+    public function test_login_entry_page_exposes_accessible_mobile_login_feedback(): void
+    {
+        $this->get('/login')
+            ->assertOk()
+            ->assertSee('id="loginMobile"', false)
+            ->assertSee('autocomplete="tel"', false)
+            ->assertSee('id="loginMessage"', false)
+            ->assertSee('aria-live="polite"', false)
+            ->assertSee('ورود با ایمیل')
+            ->assertDontSee('alert(');
+    }
+
 }

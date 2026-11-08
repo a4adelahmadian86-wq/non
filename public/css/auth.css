@@ -42,3 +42,13 @@ body.auth-page #app-main{min-height:calc(100svh - 70px)}
 .auth-step span.active{background:linear-gradient(90deg,#1e5fc4,#6b9df0)}
 @media(max-width:520px){.auth-shell{padding:24px 14px}.auth-card{padding:26px 20px;border-radius:21px}.auth-brand{margin-bottom:24px}}
 @media(prefers-reduced-motion:reduce){.auth-btn,.email-login-hero,.auth-field input{transition:none}}
+
+/* Login entry form refinements */
+.auth-field-hint{display:block;margin-top:7px;color:#8795a8;font-size:10px;line-height:1.8}
+.auth-field input[aria-invalid="true"]{border-color:#d65a62;box-shadow:0 0 0 3px rgba(214,90,98,.1)}
+#loginMessage{scroll-margin:24px}
+#loginMessage:focus{outline:3px solid rgba(44,105,208,.16);outline-offset:2px}
+#phoneForm .auth-btn{display:flex;align-items:center;justify-content:center;gap:9px}
+#phoneForm .auth-btn[aria-busy="true"]{opacity:.78;cursor:wait}
+#phoneForm .auth-btn:focus-visible{outline:3px solid rgba(44,105,208,.28);outline-offset:3px}
+@media(max-width:520px){.auth-field-hint{font-size:9px}.auth-brand p{max-width:32ch;margin-inline:auto}}
