@@ -189,8 +189,13 @@ class ProcessProductDocument implements ShouldQueue
             ]);
         });
 
-        if ($document->chunks()->exists()) {
-            GenerateProductDocumentAudio::dispatch($document->id);
+        $processedDocument = $document->fresh();
+        if ($processedDocument && $processedDocument->processing_status === 'completed' && $processedDocument->chunks()->exists()) {
+            GenerateProductDocumentAudio::dispatch($processedDocument->id);
+        } elseif ($processedDocument && $processedDocument->chunks()->exists()) {
+            $structure = (array) ($processedDocument->structure_json ?? []);
+            $structure['audio'] = ['status' => 'awaiting_semantic_review'];
+            $processedDocument->update(['structure_json' => $structure]);
         }
     }
 
