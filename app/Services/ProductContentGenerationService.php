@@ -24,6 +24,7 @@ class ProductContentGenerationService
             'reasons' => $context['reasons'],
             'source_count' => $context['source_count'],
             'facts_included' => $context['facts_included'],
+            'lesson_count' => $context['course_lesson_count'],
             'source_fingerprints' => $context['source_fingerprints'],
             'source_signature' => $this->signature($product, $context['source_fingerprints']),
             'stored_content_stale' => $this->storedContentIsStale($product, $context['source_fingerprints']),
