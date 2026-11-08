@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\StoreProductDocument;
+use App\Models\StoreProductPreview;
 use App\Services\ProductDocumentAudioService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,7 +28,7 @@ class GenerateProductDocumentAudio implements ShouldQueue
 
     public function handle(ProductDocumentAudioService $audioService): void
     {
-        $document = StoreProductDocument::query()->with('chunks')->find($this->documentId);
+        $document = StoreProductDocument::query()->with(['chunks', 'file'])->find($this->documentId);
         if (! $document || $document->chunks->isEmpty()) {
             return;
         }
@@ -88,6 +89,37 @@ class GenerateProductDocumentAudio implements ShouldQueue
                     ],
                 ]
             );
+
+            $chunkByIndex = collect($chunks)->keyBy('chunk_index');
+            $readerTimings = collect($generated['segments'])->map(function (array $segment) use ($chunkByIndex) {
+                $chunk = $chunkByIndex->get((int) ($segment['chunk_index'] ?? -1));
+                $locator = (array) ($segment['locator'] ?? []);
+                $page = (int) ($locator['page'] ?? $locator['page_start'] ?? 0);
+                $text = trim((string) ($chunk['content_text'] ?? ''));
+                if ($page < 1 || $text === '') return null;
+
+                return [
+                    'text' => $text,
+                    'start' => round(((int) ($segment['start_ms'] ?? 0)) / 1000, 3),
+                    'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
+                    'page' => $page,
+                ];
+            })->filter()->values()->all();
+
+            $fullReaderPreview = StoreProductPreview::query()
+                ->where('product_id', $document->product_id)
+                ->where('access_level', 'full')
+                ->where('is_active', true)
+                ->first();
+
+            if ($fullReaderPreview && $readerTimings !== []) {
+                $fullReaderPreview->update([
+                    'audio_disk' => 'private',
+                    'audio_path' => $path,
+                    'audio_mime' => 'audio/wav',
+                    'audio_timing' => $readerTimings,
+                ]);
+            }
 
             $this->setAudioState($document->fresh(), [
                 'status' => 'completed',
