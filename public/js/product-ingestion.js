@@ -28,7 +28,7 @@
   };
   const openModal = () => { modal.hidden = false; modal.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; };
   const closeModal = () => { modal.hidden = true; modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; };
-  const renderTimeline = (current, pendingLast) => {
+  const renderTimeline = (current, pendingIndex) => {
     const steps = [
       ['preflight','بررسی اولیه سایت','fa-magnifying-glass'],
       ['security_scan','کنترل امنیتی داخلی','fa-shield-halved'],
@@ -37,9 +37,9 @@
     ];
     timeline.innerHTML = steps.map((step,index) => {
       const done = current > index;
-      const running = current === index && !(pendingLast && index === 3);
-      const pending = pendingLast && index === 3;
-      const label = pending ? 'مطالعه محتوای فایل · در انتظار' : step[1];
+      const running = current === index && pendingIndex !== index;
+      const pending = pendingIndex === index;
+      const label = pending ? (index === 3 ? 'مطالعه محتوای فایل · در انتظار' : step[1]+' · در انتظار تأیید') : step[1];
       return '<div class="product-ingestion-step '+(done?'is-done':running?'is-running':pending?'is-pending':'')+'"><i class="fa-solid '+step[2]+'"></i><span>'+label+'</span></div>';
     }).join('');
   };
@@ -48,7 +48,7 @@
     fileMeta.textContent = bytes(file.size)+' · '+(inspection.detected_mime || file.type || 'نوع نامشخص');
     status.textContent = 'آماده تأیید';
     status.style.background = '#dcfce7'; status.style.color = '#166534';
-    renderTimeline(1);
+    renderTimeline(1,1);
     const rows = [
       ['نوع شناسایی‌شده',inspection.kind || '—'],
       ['حجم فایل',inspection.size_label || bytes(file.size)],
@@ -89,7 +89,7 @@
   const confirmUpload = async () => {
     if (!active || busy) return;
     busy = true; confirmButton.disabled = true; cancelButton.disabled = true;
-    status.textContent = 'در حال ذخیره'; renderTimeline(2);
+    status.textContent = 'در حال بررسی امنیتی'; renderTimeline(1);
     try {
       const url = form.dataset.confirmUrl.replace('__TOKEN__',encodeURIComponent(active.token));
       const isPrimary = !!form.querySelector('[name="is_primary"]')?.checked && accepted===0;
@@ -97,13 +97,13 @@
       const result = await response.json().catch(()=>({message:'پاسخ سرور قابل خواندن نیست.'}));
       if (!response.ok || !result.ok) throw new Error(result.message || 'ذخیره فایل انجام نشد.');
       status.textContent = 'ذخیره شد · مطالعه محتوا در انتظار'; status.style.background='#dcfce7'; status.style.color='#166534';
-      renderTimeline(3,true); accepted++;
+      renderTimeline(3,3); accepted++;
       confirmButton.textContent = 'ثبت شد';
       setTimeout(async () => { closeModal(); active=null; await processNext(); },650);
     } catch(error) {
       status.textContent = 'متوقف شد'; status.style.background='#fee2e2'; status.style.color='#991b1b';
       warnings.hidden=false; warnings.textContent=error.message;
-      confirmButton.disabled=false;
+      confirmButton.disabled=true; confirmButton.textContent='برای تلاش دوباره فایل را دوباره انتخاب کنید';
     } finally { busy=false; cancelButton.disabled=false; }
   };
   const rejectActive = async () => {
