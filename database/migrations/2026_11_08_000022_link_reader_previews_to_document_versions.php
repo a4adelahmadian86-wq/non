@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\\Database\\Migrations\\Migration;
-use Illuminate\\Database\\Schema\\Blueprint;
-use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('store_product_previews', function (Blueprint $table) {
             if (! Schema::hasColumn('store_product_previews', 'document_id')) {
-                $table->foreignId('document_id')->nullable()->after('product_id')->constrained('store_document_records')->nullOnDelete();
+                $table->foreignId('document_id')->nullable()->after('product_id')->constrained('farast_documents')->nullOnDelete();
             }
             if (! Schema::hasColumn('store_product_previews', 'source_sha256')) {
                 $table->char('source_sha256', 64)->nullable()->after('document_id');
