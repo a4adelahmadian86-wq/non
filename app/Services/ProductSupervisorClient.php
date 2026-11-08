@@ -49,7 +49,7 @@ class ProductSupervisorClient
         return $payload;
     }
 
-    public function reviewFile($stream, string $filename, array $metadata): array
+    public function reviewFile($stream, string $filename, array $metadata, $readerSourceStream = null, ?string $readerSourceFilename = null): array
     {
         if (! $this->configured()) {
             throw new RuntimeException('product_supervisor_not_configured');
@@ -68,6 +68,7 @@ class ProductSupervisorClient
             ->connectTimeout(8)
             ->timeout(max(300, (int) config('services.product_supervisor.timeout', 40)))
             ->attach('file', $stream, basename($filename))
+            ->when(is_resource($readerSourceStream) && filled($readerSourceFilename), fn ($request) => $request->attach('reader_source_file', $readerSourceStream, basename((string) $readerSourceFilename)))
             ->post($baseUrl.'/v1/reviews/files', $metadata);
 
         if (! $response->successful()) {
