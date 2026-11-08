@@ -42,9 +42,35 @@ class BuildProductDocumentSample implements ShouldQueue
         if ($existing && $existing->state === 'ready') return;
 
         $extension = strtolower((string) $document->extension);
-        $sourceDisk = Storage::disk($document->storage_disk);
-        if (! $sourceDisk->exists($document->storage_path)) {
+        $readerDiskName = $document->reader_asset_disk ?: $document->storage_disk;
+        $readerPath = $document->reader_asset_path ?: $document->storage_path;
+        $readerMime = $document->reader_asset_mime ?: ($document->detected_mime ?: 'application/octet-stream');
+        $readerKind = $document->reader_asset_kind;
+        $sourceDisk = Storage::disk($readerDiskName);
+        if (! $sourceDisk->exists($readerPath)) {
             throw new RuntimeException('document_sample_source_missing');
+        }
+
+        if (($document->product->download_policy ?? 'signed') === 'reader_only' && in_array($readerKind, ['pdf', 'image', 'audio', 'video'], true)) {
+            $fullPreview = StoreProductPreview::query()
+                ->where('document_id', $document->id)
+                ->where('access_level', 'full')
+                ->first();
+            $fullAttributes = [
+                'product_id' => $document->product_id,
+                'document_id' => $document->id,
+                'disk' => $readerDiskName,
+                'path' => $readerPath,
+                'mime' => $readerMime,
+                'page_number' => 1,
+                'kind' => $readerKind,
+                'access_level' => 'full',
+                'watermarked' => true,
+                'is_active' => true,
+                'sort_order' => (int) StoreProductPreview::query()->where('product_id', $document->product_id)->max('sort_order') + 1,
+            ];
+            if ($fullPreview) $fullPreview->update($fullAttributes);
+            else StoreProductPreview::create($fullAttributes);
         }
 
         $selectedPages = array_values(array_unique(array_filter(
@@ -57,13 +83,8 @@ class BuildProductDocumentSample implements ShouldQueue
         $sampleMime = 'application/pdf';
         $sampleKind = 'pdf';
         $sampleFormat = 'pdf';
-        $readerBytes = null;
-        $readerDiskName = $document->storage_disk;
-        $readerPath = $document->storage_path;
-        $readerMime = $document->detected_mime ?: 'application/octet-stream';
-        $readerKind = $extension === 'pdf' ? 'pdf' : 'image';
 
-        if (in_array($extension, ['pdf', 'docx'], true)) {
+        if ($readerKind === 'pdf') {
             if ($selectedPages === []) {
                 StoreProductDocumentSample::updateOrCreate(
                     ['document_id' => $document->id],
@@ -80,54 +101,43 @@ class BuildProductDocumentSample implements ShouldQueue
                 return;
             }
 
-            $sourceStream = $sourceDisk->readStream($document->storage_path);
-            if (! is_resource($sourceStream)) throw new RuntimeException('document_sample_source_stream_unavailable');
-            $pdfStream = $sourceStream;
-            $convertedStream = null;
-            $sampleFilename = $document->original_name;
-
+            $pdfStream = $sourceDisk->readStream($readerPath);
+            if (! is_resource($pdfStream)) throw new RuntimeException('document_sample_source_stream_unavailable');
             try {
-                if ($extension === 'docx') {
-                    $sourceBytes = stream_get_contents($sourceStream);
-                    if (! is_string($sourceBytes) || $sourceBytes === '') throw new RuntimeException('document_sample_docx_read_failed');
-                    $pdfBytes = app(StoreController::class)->prepareDocxPreview($sourceBytes);
-                    $readerBytes = $pdfBytes;
-                    $readerMime = 'application/pdf';
-                    $readerKind = 'pdf';
-                    $readerDiskName = $storageSelector->select($document->product, ['kind' => 'pdf']);
-                    $readerPath = 'store/product-reader/'.$document->product_id.'/'.$document->id.'-v'.$document->content_version.'.pdf';
-                    if (! is_string($pdfBytes) || ! str_starts_with($pdfBytes, '%PDF-')) throw new RuntimeException('document_sample_docx_conversion_failed');
-                    $convertedStream = fopen('php://temp', 'w+b');
-                    if (! is_resource($convertedStream) || fwrite($convertedStream, $pdfBytes) !== strlen($pdfBytes)) {
-                        throw new RuntimeException('document_sample_docx_temp_failed');
-                    }
-                    rewind($convertedStream);
-                    $pdfStream = $convertedStream;
-                    $sampleFilename = pathinfo($document->original_name, PATHINFO_FILENAME).'.pdf';
-                }
-                $sampleBytes = $supervisor->createPdfSample($pdfStream, $sampleFilename, $selectedPages);
+                $sampleBytes = $supervisor->createPdfSample($pdfStream, pathinfo($document->original_name, PATHINFO_FILENAME).'.pdf', $selectedPages);
             } finally {
-                if (is_resource($convertedStream)) fclose($convertedStream);
-                fclose($sourceStream);
+                fclose($pdfStream);
             }
-        } elseif (in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
-            $sampleMime = $document->detected_mime ?: 'application/octet-stream';
+        } elseif ($readerKind === 'image') {
+            $sampleMime = $readerMime;
             $sampleKind = 'image';
-            $readerMime = $sampleMime;
-            $readerKind = 'image';
             $sampleFormat = $extension;
-            $sampleStream = $sourceDisk->readStream($document->storage_path);
+            $sampleStream = $sourceDisk->readStream($readerPath);
             if (! is_resource($sampleStream)) throw new RuntimeException('document_sample_source_stream_unavailable');
             $sampleBytes = stream_get_contents($sampleStream);
             fclose($sampleStream);
             if (! is_string($sampleBytes) || $sampleBytes === '') throw new RuntimeException('document_sample_image_read_failed');
+        } elseif (in_array($readerKind, ['audio', 'video'], true)) {
+            StoreProductDocumentSample::updateOrCreate(
+                ['document_id' => $document->id],
+                [
+                    'storage_disk' => $readerDiskName,
+                    'storage_path' => $readerPath,
+                    'mime' => $readerMime,
+                    'selected_pages' => [],
+                    'sample_format' => $readerKind,
+                    'state' => 'awaiting_clip_builder',
+                ]
+            );
+            $this->recordEvent($document, 'pending', 'ساخت کلیپ نمونه در صف توسعه است', 'فایل اصلی برای خوانشگر خصوصی آماده است؛ نسخه کوتاه نمونه هنوز ساخته نشده است.');
+            return;
         } else {
             StoreProductDocumentSample::updateOrCreate(
                 ['document_id' => $document->id],
                 [
                     'storage_disk' => 'private',
                     'storage_path' => 'store/product-samples/pending/'.$document->id.'.bin',
-                    'mime' => $document->detected_mime ?: 'application/octet-stream',
+                    'mime' => $readerMime,
                     'selected_pages' => $selectedPages,
                     'sample_format' => $extension,
                     'state' => 'awaiting_converter',
@@ -148,18 +158,8 @@ class BuildProductDocumentSample implements ShouldQueue
             throw new RuntimeException('document_sample_storage_failed');
         }
 
-        $readerDisk = Storage::disk($readerDiskName);
-        $readerDerivedWritten = false;
-        if ($readerBytes !== null) {
-            if (! $readerDisk->put($readerPath, $readerBytes)) {
-                $targetDisk->delete($path);
-                throw new RuntimeException('document_reader_asset_storage_failed');
-            }
-            $readerDerivedWritten = true;
-        }
-
         try {
-            DB::transaction(function () use ($document, $diskName, $path, $sampleMime, $selectedPages, $sampleFormat, $sampleKind, $readerDiskName, $readerPath, $readerMime, $readerKind) {
+            DB::transaction(function () use ($document, $diskName, $path, $sampleMime, $selectedPages, $sampleFormat, $sampleKind) {
                 StoreProductDocumentSample::updateOrCreate(
                     ['document_id' => $document->id],
                     [
@@ -194,28 +194,6 @@ class BuildProductDocumentSample implements ShouldQueue
                     ]);
                 }
 
-                if (($document->product->download_policy ?? 'signed') === 'reader_only') {
-                    $fullPreview = StoreProductPreview::query()
-                        ->where('document_id', $document->id)
-                        ->where('access_level', 'full')
-                        ->first();
-                    $fullAttributes = [
-                        'product_id' => $document->product_id,
-                        'document_id' => $document->id,
-                        'disk' => $readerDiskName,
-                        'path' => $readerPath,
-                        'mime' => $readerMime,
-                        'page_number' => 1,
-                        'kind' => $readerKind,
-                        'access_level' => 'full',
-                        'watermarked' => true,
-                        'is_active' => true,
-                        'sort_order' => (int) StoreProductPreview::query()->where('product_id', $document->product_id)->max('sort_order') + 1,
-                    ];
-                    if ($fullPreview) $fullPreview->update($fullAttributes);
-                    else StoreProductPreview::create($fullAttributes);
-                }
-
                 $manifest = (array) $document->content_manifest;
                 $manifest['sample_status'] = 'ready';
                 $manifest['sample_pages'] = $selectedPages;
@@ -224,7 +202,6 @@ class BuildProductDocumentSample implements ShouldQueue
             });
         } catch (Throwable $exception) {
             $targetDisk->delete($path);
-            if ($readerDerivedWritten) $readerDisk->delete($readerPath);
             throw $exception;
         }
 
