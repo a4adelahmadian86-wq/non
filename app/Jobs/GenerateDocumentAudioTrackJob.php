@@ -76,13 +76,15 @@ class GenerateDocumentAudioTrackJob implements ShouldQueue
                 throw new \\RuntimeException('document_audio_storage_failed');
             }
 
+            $lastTiming = end($result['timings']);
+            $durationMs = is_array($lastTiming) ? max(0, (int) ($lastTiming['end_ms'] ?? 0)) : 0;
             $track = StoreDocumentAudioTrack::query()->updateOrCreate(
                 ['document_id' => $document->id, 'source_sha256' => $document->source_sha256],
                 [
                     'disk' => 'private',
                     'path' => $path,
                     'mime' => 'audio/wav',
-                    'duration_ms' => (int) (end($result['timings'])['end_ms'] ?? 0),
+                    'duration_ms' => $durationMs,
                     'status' => 'ready',
                     'provider' => $result['provider'],
                     'generated_at' => now(),
