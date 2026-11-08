@@ -406,7 +406,7 @@ def _validate_tar_archive(data: bytes) -> tuple[tarfile.TarFile, list[str]]:
     return archive, names[:MAX_ARCHIVE_ENTRIES]
 
 
-def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
+def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]], bool]:
     """Extract bounded Word blocks in document order without rendering source XML or HTML."""
     archive, _ = _validate_archive(data)
     names = set(archive.namelist())
@@ -427,6 +427,7 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
         char_count = 0
         table_count = 0
         block_index = 0
+        truncated = False
 
         # Resolve Word's numbering definitions instead of guessing every list is
         # a bullet from its paragraph style name. Numbering may be attached to
@@ -498,11 +499,19 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
             return None
 
         def add_block(kind: str, value: str, locator: dict[str, Any]) -> None:
-            nonlocal char_count, block_index
-            value = value.strip()[:1800]
-            if not value or char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+            nonlocal char_count, block_index, truncated
+            value = value.strip()
+            if not value:
                 return
-            value = value[:max(0, MAX_EXTRACTED_CHARS - char_count)]
+            if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                truncated = True
+                return
+            if len(value) > 1800:
+                truncated = True
+            remaining = max(0, MAX_EXTRACTED_CHARS - char_count)
+            if len(value) > remaining:
+                truncated = True
+            value = value[:min(1800, remaining)]
             if not value:
                 return
             block_index += 1
@@ -513,6 +522,7 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
 
         for element in doc.iter_inner_content():
             if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                truncated = True
                 break
             if isinstance(element, Paragraph):
                 paragraph = element
@@ -534,16 +544,27 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
             elif isinstance(element, Table):
                 table_count += 1
                 if table_count > 100:
+                    truncated = True
                     break
+                if len(element.rows) > 1000:
+                    truncated = True
                 for row_index, row in enumerate(element.rows[:1000], start=1):
                     if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                        truncated = True
                         break
                     cells: list[str] = []
                     cell_budget = 3000
+                    if len(row.cells) > 50:
+                        truncated = True
                     for cell in row.cells[:50]:
                         if cell_budget <= 0:
+                            truncated = True
                             break
-                        value = cell.text.strip()[:min(500, cell_budget)]
+                        raw_cell_value = cell.text.strip()
+                        cell_limit = min(500, cell_budget)
+                        if len(raw_cell_value) > cell_limit:
+                            truncated = True
+                        value = raw_cell_value[:cell_limit]
                         cells.append(value)
                         cell_budget -= len(value)
                     if not any(cells):
@@ -554,7 +575,7 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
                         {"table_index": table_count, "row_index": row_index, "cells": cells},
                     )
 
-        return "\n".join(text_parts)[:MAX_EXTRACTED_CHARS], chunks
+        return "\n".join(text_parts)[:MAX_EXTRACTED_CHARS], chunks, truncated
     except FileInspectionError:
         raise
     except Exception:
