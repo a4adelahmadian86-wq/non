@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use InvalidArgumentException;
+
 class StoreProductDocumentPageBuilder
 {
     /**
@@ -13,7 +15,7 @@ class StoreProductDocumentPageBuilder
         $groups = [];
         $fallbackIndex = 0;
 
-        foreach (array_slice($chunks, 0, 300) as $chunkIndex => $chunk) {
+        foreach ($chunks as $chunkIndex => $chunk) {
             if (! is_array($chunk)) {
                 continue;
             }
@@ -68,13 +70,20 @@ class StoreProductDocumentPageBuilder
                 'chunk_index' => (int) $chunkIndex,
                 'chunk_type' => (string) ($chunk['chunk_type'] ?? 'text'),
                 'locator' => $locator,
-                'content_text' => mb_substr((string) ($chunk['content_text'] ?? ''), 0, 1800),
+                'content_text' => (string) ($chunk['content_text'] ?? ''),
             ];
             $fallbackIndex++;
         }
 
         $detectedType = strtolower((string) ($inspection['detected_type'] ?? ''));
-        $declaredPages = max(0, min(300, (int) ($inspection['page_count'] ?? 0)));
+        $declaredPages = max(0, (int) ($inspection['page_count'] ?? 0));
+        $maxReaderPages = max(1, (int) ($inspection['max_reader_pages'] ?? 10000));
+        if ($declaredPages > $maxReaderPages) {
+            throw new InvalidArgumentException(
+                'Document page count exceeds the configured reader limit of '.$maxReaderPages.'.'
+            );
+        }
+
         if ($detectedType === 'pdf' && $declaredPages > 0) {
             for ($page = 1; $page <= $declaredPages; $page++) {
                 $key = 'page:'.$page;
