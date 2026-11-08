@@ -7,6 +7,7 @@ use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductIngestion;
+use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
@@ -14,6 +15,7 @@ use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -420,6 +422,30 @@ class AdminStoreController extends Controller
             throw $exception;
         }
 
+        $documentId = (int) DB::table('store_product_documents')
+            ->where('product_file_id', $fileRecord->id)
+            ->value('id');
+
+        try {
+            if ($documentId > 0) {
+                ProcessProductDocument::dispatch($documentId);
+            }
+        } catch (Throwable $exception) {
+            DB::table('store_product_documents')->where('id', $documentId)->update([
+                'processing_status' => 'awaiting_provider',
+                'failure_code' => 'processing_dispatch_failed',
+                'updated_at' => now(),
+            ]);
+            Log::warning('Product document processing could not be dispatched', [
+                'document_id' => $documentId,
+                'exception' => class_basename($exception),
+            ]);
+        }
+
+        $processingStatus = $documentId > 0
+            ? (DB::table('store_product_documents')->where('id', $documentId)->value('processing_status') ?: 'pending')
+            : 'pending';
+
         return response()->json([
             'success' => true,
             'message' => 'فایل پس از تأیید شما در فضای خصوصی فروشگاه ذخیره شد.',
@@ -428,7 +454,7 @@ class AdminStoreController extends Controller
                 'name' => $fileRecord->original_name,
                 'size_bytes' => $fileRecord->size_bytes,
                 'scan_status' => $fileRecord->scan_status,
-                'processing_status' => 'pending',
+                'processing_status' => $processingStatus,
             ],
         ]);
     }
