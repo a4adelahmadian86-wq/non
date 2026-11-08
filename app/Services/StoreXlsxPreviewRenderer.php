@@ -491,14 +491,14 @@ class StoreXlsxPreviewRenderer
             $seconds = (int) round(($number - $days) * 86400);
             if ($seconds >= 86400) { $days++; $seconds -= 86400; }
             try {
-                $date = (new \\DateTimeImmutable('1899-12-30 00:00:00', new \\DateTimeZone('UTC')))
+                $date = (new \DateTimeImmutable('1899-12-30 00:00:00', new \DateTimeZone('UTC')))
                     ->modify(($days >= 0 ? '+' : '').$days.' days')
                     ->modify(($seconds >= 0 ? '+' : '').$seconds.' seconds');
                 if (preg_match('/[hms]/i', $unquoted)) {
                     return $date->format(preg_match('/s/i', $unquoted) ? 'Y-m-d H:i:s' : 'Y-m-d H:i');
                 }
                 return $date->format('Y-m-d');
-            } catch (\\Throwable) {
+            } catch (\Throwable) {
                 return $value;
             }
         }
