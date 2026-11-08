@@ -144,31 +144,39 @@ async def review_product_file(
     warnings = list(inspection.warnings or [])
     visual_report = ""
     transcription = ""
-    provider_status = {"gemini": "not_requested", "groq": "not_requested", "gladia": "disabled"}
+    provider_status = {"gemini": "not_requested", "groq": "not_requested", "groq_vision": "not_requested", "groq_transcription": "not_requested", "gladia": "disabled"}
 
     if inspection.image_bytes:
         if os.getenv("GROQ_API_KEY"):
             try:
                 visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg", {"title": redact_sensitive_content(product_title)[0], "category": redact_sensitive_content(category_name or "")[0], "tags": [redact_sensitive_content(tag)[0] for tag in tags]})
-                provider_status["groq"] = "completed"
+                provider_status["groq_vision"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
-                provider_status["groq"] = "unavailable"
+                provider_status["groq_vision"] = "unavailable"
                 warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ نتیجه‌ای درباره تصویر فرض نشده است.")
         else:
-            provider_status["groq"] = "not_configured"
+            provider_status["groq_vision"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصویر انجام نشد.")
 
     if inspection.audio_bytes:
         if os.getenv("GROQ_API_KEY"):
             try:
                 transcription = await transcribe_audio_with_groq(inspection.audio_bytes, inspection.audio_filename or "upload.audio")
-                provider_status["groq"] = "completed"
+                provider_status["groq_transcription"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
-                provider_status["groq"] = "unavailable"
+                provider_status["groq_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی نشده است.")
         else:
-            provider_status["groq"] = "not_configured"
+            provider_status["groq_transcription"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
+
+    groq_results = [provider_status["groq_vision"], provider_status["groq_transcription"]]
+    if "completed" in groq_results:
+        provider_status["groq"] = "partial" if any(status not in {"completed", "not_requested"} for status in groq_results) else "completed"
+    elif "unavailable" in groq_results:
+        provider_status["groq"] = "unavailable"
+    elif "not_configured" in groq_results:
+        provider_status["groq"] = "not_configured"
 
     extracted, redaction_count = redact_sensitive_content("\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip()))
     model_review = {}
