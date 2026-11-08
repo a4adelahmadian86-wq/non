@@ -29,7 +29,7 @@ class StoreController extends Controller
                     ->orWhere('description', 'like', '%'.$q.'%')
                     ->orWhereHas('tags', fn ($tagQuery) => $tagQuery->where('name', 'like', '%'.$q.'%'));
             }))
-            ->when($category, fn ($query) => $query->whereHas('category', fn ($cat) => $cat->where('slug', $category)))
+            ->when($category, fn ($query) => $query->whereHas('category', fn ($cat) => $cat->where('slug', $category)->where('is_active', true)))
             ->when($price === 'free', fn ($query) => $query->where('price_rials', 0))
             ->when($price === 'paid', fn ($query) => $query->where('price_rials', '>', 0));
 
@@ -62,7 +62,7 @@ class StoreController extends Controller
 
     public function product(Request $request, string $slug)
     {
-        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related', 'course.sections.lessons'])
+        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related', 'course.sections.lessons' => fn ($query) => $query->publishable()])
             ->published()
             ->where('slug', $slug)
             ->firstOrFail();
@@ -129,8 +129,8 @@ class StoreController extends Controller
                 && $product->published_at?->lte(now())
                 && $product->course
                 && $lesson->section()->where('course_id', $product->course->id)->exists()
-                && $lesson->is_published
-                && $lesson->is_preview,
+                && $lesson->is_preview
+                && StoreCourseLesson::query()->publishable()->whereKey($lesson->id)->exists(), 
             404
         );
 
@@ -147,7 +147,7 @@ class StoreController extends Controller
     public function preview(StoreProductPreview $preview)
     {
         $preview->load('product');
-        abort_unless($preview->is_active && $preview->product && $preview->product->status === 'published', 404);
+        abort_unless($preview->is_active && $preview->product && $preview->product->status === 'published' && $preview->product->published_at?->lte(now()), 404);
         $disk = Storage::disk($preview->disk ?: 'private');
         abort_unless($disk->exists($preview->path), 404);
 
