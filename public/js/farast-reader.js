@@ -500,6 +500,62 @@
   root.addEventListener('cut',e=>e.preventDefault());
   root.addEventListener('dragstart',e=>e.preventDefault());
   window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom===0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
+  const audioPlayer=root.querySelector('#reader-audio-player');
+  const audioText=root.querySelector('#reader-audio-current-text');
+  const audioLabel=root.querySelector('#reader-audio-segment-label');
+  const audioTime=root.querySelector('#reader-audio-time');
+  let audioSegments=[];
+  let activeAudioSegment=-1;
+  let lastAudioPage=0;
+  try{
+    const payload=root.querySelector('#reader-audio-segments')?.textContent||'[]';
+    const parsed=JSON.parse(payload);
+    if(Array.isArray(parsed))audioSegments=parsed.filter(item=>item&&Number.isFinite(Number(item.start_ms))&&Number.isFinite(Number(item.end_ms)));
+  }catch(_){audioSegments=[];}
+  const formatAudioTime=seconds=>{
+    const value=Math.max(0,Math.floor(Number(seconds)||0));
+    return String(Math.floor(value/60)).padStart(2,'0')+':'+String(value%60).padStart(2,'0');
+  };
+  const updateAudioSync=()=>{
+    if(!audioPlayer)return;
+    const currentMs=audioPlayer.currentTime*1000;
+    if(audioTime)audioTime.textContent=formatAudioTime(audioPlayer.currentTime);
+    const nextIndex=audioSegments.findIndex(segment=>currentMs>=Number(segment.start_ms)&&currentMs<=Number(segment.end_ms));
+    if(nextIndex<0||nextIndex===activeAudioSegment)return;
+    activeAudioSegment=nextIndex;
+    const segment=audioSegments[nextIndex];
+    if(audioText){
+      audioText.textContent=String(segment.text||'');
+      audioText.classList.add('is-active');
+    }
+    const anchor=segment.source_anchor||{};
+    const sourceAnchor=anchor.source_anchor||{};
+    const page=Number(anchor.page_number||sourceAnchor.page||sourceAnchor.page_number||0);
+    if(audioLabel)audioLabel.textContent=page>0?'در حال مطالعه صفحه '+faNumber(page)+' · بخش '+faNumber(nextIndex+1):'در حال مطالعه بخش '+faNumber(nextIndex+1);
+    if(page>0&&isPdf()&&pdfDoc&&page!==lastAudioPage){
+      lastAudioPage=page;
+      navigatePdfPage(page).catch(showPdfError);
+    }
+    const textLayer=activeArticle()?.querySelector('.farast-pdf-text-layer');
+    if(textLayer){
+      const normalized=String(segment.text||'').toLocaleLowerCase().replace(/\s+/g,' ').trim();
+      textLayer.querySelectorAll('span').forEach(span=>{
+        const value=(span.textContent||'').toLocaleLowerCase().replace(/\s+/g,' ').trim();
+        span.classList.toggle('reader-audio-highlight',value.length>1&&normalized.includes(value));
+      });
+    }
+  };
+  audioPlayer?.addEventListener('timeupdate',updateAudioSync);
+  audioPlayer?.addEventListener('seeked',updateAudioSync);
+  audioPlayer?.addEventListener('ended',()=>{
+    activeAudioSegment=-1;
+    if(audioLabel)audioLabel.textContent='نسخه صوتی به پایان رسید.';
+    if(audioText)audioText.classList.remove('is-active');
+  });
+  audioPlayer?.addEventListener('error',()=>{
+    if(audioLabel)audioLabel.textContent='پخش صوت در حال حاضر در دسترس نیست؛ دوباره تلاش کنید.';
+  });
+
   setZoomLabel();
   showItem(0).catch(showPdfError);
 })();
