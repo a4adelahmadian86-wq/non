@@ -16,6 +16,9 @@
   const primaryInput = root.querySelector('[data-ingestion-primary]');
   const csrf = root.querySelector('[data-ingestion-csrf]').value;
   const queueView = root.querySelector('[data-ingestion-queue]');
+  const progress = root.querySelector('[data-ingestion-progress]');
+  const progressBar = root.querySelector('[data-ingestion-progress-bar]');
+  const progressLabel = root.querySelector('[data-ingestion-progress-label]');
 
   const state = {
     queue: [],
@@ -51,6 +54,36 @@
       element.classList.toggle('is-done', done.includes(name));
     });
   };
+
+  const setProgress = (percent, label, visible = true) => {
+    if (!progress || !progressBar || !progressLabel) return;
+    progress.hidden = !visible;
+    progressBar.style.width = Math.max(0, Math.min(100, Number(percent || 0))) + '%';
+    progressLabel.textContent = label || '';
+  };
+
+  const sendPreflight = (url, form, onProgress) => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100), event.loaded >= event.total);
+    });
+    xhr.addEventListener('load', () => {
+      let payload = {};
+      try { payload = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(payload.message || 'بررسی اولیه فایل انجام نشد.'));
+        return;
+      }
+      resolve(payload);
+    });
+    xhr.addEventListener('error', () => reject(new Error('ارتباط با سرور برای بارگذاری فایل برقرار نشد.')));
+    xhr.addEventListener('abort', () => reject(new Error('بارگذاری فایل لغو شد.')));
+    xhr.send(form);
+  });
 
   const openModal = (file) => {
     state.current = file;
@@ -148,17 +181,16 @@
     form.append('is_primary', state.primaryForCurrent ? '1' : '0');
 
     try {
-      const response = await fetch(root.dataset.preflightUrl, {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-        body: form,
-        credentials: 'same-origin',
+      setStep('upload', ['received']);
+      setProgress(0, 'در حال انتقال فایل به قرنطینه خصوصی...');
+      const payload = await sendPreflight(root.dataset.preflightUrl, form, (percent, uploaded) => {
+        setProgress(percent, uploaded ? 'انتقال کامل شد؛ بررسی ساختار و امنیت در حال اجراست...' : 'در حال انتقال امن فایل · ' + percent + '٪');
+        if (uploaded) setStep('inspect', ['received', 'upload']);
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message || 'بررسی اولیه فایل انجام نشد.');
+      setProgress(100, 'بررسی اولیه کامل شد؛ گزارش آماده است.');
       state.ingestionId = payload.ingestion_id;
       renderReport(payload);
-      setStep('review', ['received', 'inspect']);
+      setStep('review', ['received', 'upload', 'inspect']);
       confirmButton.disabled = !payload.inspection?.safe;
       if (!payload.inspection?.safe) {
         showError('این فایل از بررسی ایستای داخلی عبور نکرد و ذخیره نخواهد شد.');
@@ -188,6 +220,100 @@
     }
   };
 
+  const pollProcessing = async (fileId) => {
+    const template = root.dataset.statusUrlTemplate;
+    if (!template || !fileId) return;
+    const url = template.replace('__FILE__', encodeURIComponent(fileId));
+    let attempts = 0;
+    const completedSteps = ['received', 'upload', 'inspect', 'review', 'store'];
+
+    const finish = (payload) => {
+      const status = payload.processing_status || 'pending';
+      const audio = payload.audio_status || 'not_started';
+      const sample = payload.sample_status || 'not_available';
+      const pages = Array.isArray(payload.sample_pages) ? payload.sample_pages : [];
+      if (status === 'completed') {
+        setStep(audio === 'completed' ? null : (sample === 'completed' ? 'audio' : 'sample'), [
+          ...completedSteps, 'study', ...(sample !== 'pending' ? ['sample'] : []), ...(audio !== 'pending' ? ['audio'] : []),
+        ]);
+      } else {
+        setStep(null, [...completedSteps, 'study']);
+      }
+
+      const messages = {
+        completed: 'مطالعه محتوایی فایل تکمیل شد.',
+        extracted: 'متن استخراج شد؛ تحلیل معنایی کامل نیست و فایل به‌عنوان دانش کامل معرفی نمی‌شود.',
+        partial: 'پردازش فایل ناقص است؛ اطلاعات ناموجود به هوش مصنوعی اعلام خواهد شد.',
+        failed: 'پردازش فایل با خطا متوقف شد؛ فایل اصلی محفوظ مانده است.',
+        stale: 'هش فایل با نسخه پردازش‌شده تطابق ندارد؛ پردازش دوباره لازم است.',
+        awaiting_provider: 'فایل ذخیره شد؛ برای مطالعه محتوایی اتصال ارائه‌دهنده هوش مصنوعی لازم است.',
+      };
+      const summary = messages[status] || 'وضعیت پردازش: ' + status;
+      const sampleText = sample === 'completed'
+        ? 'نمونه یک‌بار ساخته شد' + (pages.length ? ' · صفحات ' + pages.join('، ') : '')
+        : (sample === 'not_available' ? 'برای این فایل نمونه صفحه‌ای تولید نشد' : 'نمونه هنوز آماده نشده است');
+      const audioText = audio === 'completed'
+        ? 'نسخه صوتی همگام آماده شد · ' + Math.round((payload.audio_duration_ms || 0) / 1000) + ' ثانیه'
+        : (audio === 'awaiting_provider' ? 'تولید صوت در انتظار اتصال موتور صداست' : 'وضعیت صوت: ' + audio);
+      report.insertAdjacentHTML('beforeend',
+        '<div class="product-ingestion-processing-result"><strong>' + escapeHtml(summary) + '</strong><p>' +
+        escapeHtml(sampleText) + '</p><p>' + escapeHtml(audioText) + '</p></div>'
+      );
+      confirmButton.textContent = 'ذخیره شد';
+      confirmButton.disabled = true;
+      cancelButton.textContent = 'بستن';
+      cancelButton.disabled = false;
+      closeButton.disabled = false;
+      setProgress(100, 'مراحل پردازش در پس‌زمینه ثبت شدند.');
+    };
+
+    const poll = async () => {
+      if (modal.hidden) return;
+      attempts += 1;
+      try {
+        const response = await fetch(url, {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.message || 'وضعیت پردازش دریافت نشد.');
+        const status = payload.processing_status || 'pending';
+        const audio = payload.audio_status || 'not_started';
+        const sample = payload.sample_status || 'not_available';
+
+        if (status === 'pending' || status === 'processing') {
+          setStep('study', completedSteps);
+          setProgress(100, status === 'pending' ? 'فایل در صف مطالعه محتوایی است...' : 'هوش مصنوعی در حال مطالعه محتوای استخراج‌شده است...');
+        } else if (status === 'completed' && (sample === 'pending' || audio === 'pending')) {
+          setStep(sample === 'pending' ? 'sample' : 'audio', [...completedSteps, 'study']);
+          setProgress(100, sample === 'pending' ? 'در حال ثبت فایل نمونه...' : 'در حال ساخت صوت و زمان‌بندی همگام...');
+        } else {
+          finish(payload);
+          window.setTimeout(() => {
+            closeModal();
+            if (state.queue.length) processNext();
+            else window.location.reload();
+          }, 1800);
+          return;
+        }
+      } catch (error) {
+        setProgress(100, error.message || 'وضعیت پردازش موقتاً در دسترس نیست؛ پردازش در پس‌زمینه ادامه دارد.');
+      }
+
+      if (attempts >= 90) {
+        report.insertAdjacentHTML('beforeend', '<p>پردازش در پس‌زمینه ادامه دارد. وضعیت نهایی در فهرست فایل‌های محصول ثبت خواهد شد.</p>');
+        cancelButton.textContent = 'بستن';
+        cancelButton.disabled = false;
+        closeButton.disabled = false;
+        return;
+      }
+      window.setTimeout(poll, 2000);
+    };
+
+    await poll();
+  };
+
   const confirmCurrent = async () => {
     if (state.busy || !state.ingestionId) return;
     state.busy = true;
@@ -206,24 +332,23 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || 'ذخیره‌سازی فایل انجام نشد.');
-      setStep(null, ['received', 'inspect', 'review', 'store']);
-      const processingState = payload.file?.processing_status || 'pending';
-      const processingLabel = processingState === 'completed'
-        ? 'مطالعه و تحلیل محتوایی فایل تکمیل شد.'
-        : processingState === 'extracted'
-          ? 'متن و ساختار استخراج شد؛ تحلیل معنایی کامل نیست.'
-          : processingState === 'awaiting_provider'
-            ? 'فایل ذخیره شد؛ برای مطالعه محتوایی باید اتصال موتور هوش مصنوعی تنظیم شود.'
-            : 'فایل ذخیره شد و برای مطالعه محتوایی در صف پردازش قرار گرفت.';
-      report.insertAdjacentHTML('beforeend', '<div class="product-ingestion-warning" style="background:#eaf7ef;color:#236b43">' + escapeHtml(processingLabel) + '</div>');
+      setStep('study', ['received', 'upload', 'inspect', 'review', 'store']);
       if (state.primaryForCurrent) state.primaryCommitted = true;
+      state.ingestionId = null;
       state.busy = false;
       confirmButton.textContent = 'ذخیره شد';
-      window.setTimeout(() => {
-        closeModal();
-        if (state.queue.length) processNext();
-        else window.location.reload();
-      }, 850);
+      cancelButton.textContent = 'بستن';
+      cancelButton.disabled = false;
+      closeButton.disabled = false;
+      report.insertAdjacentHTML('beforeend', '<div class="product-ingestion-processing-result"><strong>فایل در فضای خصوصی ذخیره شد.</strong><p>مطالعه محتوا، ساخت نمونه و تولید صوت به‌صورت مرحله‌ای در پس‌زمینه انجام می‌شود.</p></div>');
+      if (payload.file?.id) {
+        await pollProcessing(payload.file.id);
+      } else {
+        window.setTimeout(() => {
+          closeModal();
+          window.location.reload();
+        }, 1200);
+      }
     } catch (error) {
       state.busy = false;
       cancelButton.disabled = false;
