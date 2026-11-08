@@ -213,9 +213,17 @@ class AdminStoreController extends Controller
             $reviewPolicyChanged = collect(['enabled', 'mode', 'checks', 'instructions'])->contains(
                 fn ($key) => ($previousSupervisorSettings[$key] ?? null) !== ($nextSupervisorSettings[$key] ?? null)
             );
-            if (isset($metadata['ai_supervisor']) && is_array($metadata['ai_supervisor'])
-                && ($reviewInputsChanged || $currentTagIds !== $submittedTagIds || $reviewPolicyChanged)) {
-                unset($metadata['ai_supervisor']['last_review'], $metadata['ai_supervisor']['last_reviewed_at']);
+            if (isset($metadata['ai_supervisor']) && is_array($metadata['ai_supervisor'])) {
+                if ($reviewInputsChanged || $currentTagIds !== $submittedTagIds || $reviewPolicyChanged) {
+                    unset($metadata['ai_supervisor']['last_review'], $metadata['ai_supervisor']['last_reviewed_at']);
+                } else {
+                    $previousReview = data_get($lockedProduct->metadata, 'ai_supervisor.last_review');
+                    $previousReviewedAt = data_get($lockedProduct->metadata, 'ai_supervisor.last_reviewed_at');
+                    if (is_array($previousReview)) {
+                        $metadata['ai_supervisor']['last_review'] = $previousReview;
+                        $metadata['ai_supervisor']['last_reviewed_at'] = $previousReviewedAt;
+                    }
+                }
                 $data['metadata'] = $metadata;
             }
             $lockedProduct->update($data);
