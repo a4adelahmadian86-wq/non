@@ -356,7 +356,8 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringNotContainsString('<script', $streamedHtml);
 
         $this->assertStringContainsString("style-src 'unsafe-inline'", (string) $response->headers->get('Content-Security-Policy'));
-        $this->assertSame($preparedHtml, $streamedHtml);
+        $this->assertNotSame($preparedHtml, $streamedHtml);
+        $this->assertStringContainsString('09123456789', $streamedHtml);
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 
