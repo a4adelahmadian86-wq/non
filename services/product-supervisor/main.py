@@ -171,6 +171,7 @@ async def review_product_file(
         inspect_file,
         redact_sensitive_content,
         transcribe_audio_with_groq,
+        groq_provider_ready,
     )
 
     data = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -213,7 +214,7 @@ async def review_product_file(
         warnings.append("تعداد تصاویر جاسازی‌شده بیش از سقف تحلیل هم‌زمان بود؛ فقط شش تصویر اول بررسی شدند.")
 
     if image_assets:
-        if os.getenv("GROQ_API_KEY"):
+        if groq_provider_ready():
             successful_images = 0
             for image_index, asset in enumerate(image_assets, start=1):
                 image_bytes = asset.get("image_bytes")
@@ -255,7 +256,7 @@ async def review_product_file(
     )
 
     if inspection.audio_bytes:
-        if os.getenv("GROQ_API_KEY"):
+        if groq_provider_ready():
             try:
                 transcription = await transcribe_audio_with_groq(
                     inspection.audio_bytes,
@@ -281,7 +282,7 @@ async def review_product_file(
         "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
     )
     model_review: dict[str, Any] = {}
-    if extracted.strip() and os.getenv("GROQ_API_KEY", "").strip():
+    if extracted.strip() and groq_provider_ready():
         try:
             model_review = await analyze_extracted_content(
                 extracted,
@@ -312,7 +313,7 @@ async def review_product_file(
             warnings.append("تحلیل محتوای استخراج‌شده توسط Groq انجام نشد.")
     elif extracted.strip():
         provider_status["groq_text"] = "not_configured"
-        warnings.append("کلید Groq تنظیم نشده است؛ تحلیل متنی فایل انجام نشد.")
+        warnings.append("تحلیل متنی فایل تا زمان تأیید Zero Data Retention در تنظیمات حساب Groq غیرفعال است؛ هیچ متن فایلی به Groq ارسال نشد.")
     else:
         warnings.append("از فایل محتوای متنی قابل تحلیل استخراج نشد.")
 
@@ -461,6 +462,10 @@ async def review_product_file(
     }
 
 
+def _groq_zdr_is_confirmed() -> bool:
+    return os.getenv("GROQ_ZDR_CONFIRMED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _gemini_api_key_is_configured() -> bool:
     key = os.getenv("GEMINI_API_KEY", "").strip()
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
@@ -471,6 +476,7 @@ def _gemini_api_key_is_configured() -> bool:
 @app.get("/health")
 async def health():
     groq_configured = bool(os.getenv("GROQ_API_KEY", "").strip())
+    groq_ready = groq_configured and _groq_zdr_is_confirmed()
     gemini_configured = _gemini_api_key_is_configured()
     return {
         "status": "ok",
@@ -479,9 +485,11 @@ async def health():
             "gemini": {"configured": gemini_configured, "role": "product_snapshot_and_database_report_review"},
             "groq": {
                 "configured": groq_configured,
-                "text_review": groq_configured,
-                "vision": groq_configured,
-                "audio_transcription": groq_configured,
+                "privacy_gate_confirmed": _groq_zdr_is_confirmed(),
+                "ready_for_file_review": groq_ready,
+                "text_review": groq_ready,
+                "vision": groq_ready,
+                "audio_transcription": groq_ready,
             },
             "gladia": {"configured": False, "enabled": False},
         },
@@ -492,6 +500,7 @@ async def health():
 async def authenticated_readiness():
     gemini_configured = _gemini_api_key_is_configured()
     groq_configured = bool(os.getenv("GROQ_API_KEY", "").strip())
+    groq_ready = groq_configured and _groq_zdr_is_confirmed()
     return {
         "status": "ok",
         "service": "product-supervisor",
@@ -500,7 +509,8 @@ async def authenticated_readiness():
             "gemini": {"configured": gemini_configured, "ready_for_product_review": gemini_configured},
             "groq": {
                 "configured": groq_configured,
-                "ready_for_file_review": groq_configured,
+                "privacy_gate_confirmed": _groq_zdr_is_confirmed(),
+                "ready_for_file_review": groq_ready,
                 "text_model": os.getenv("GROQ_TEXT_MODEL", "openai/gpt-oss-20b"),
             },
             "gladia": {"configured": False, "enabled": False},
