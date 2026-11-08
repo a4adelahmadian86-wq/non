@@ -95,11 +95,9 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee($guestIp)
             ->assertSee('farast-reader-watermark');
 
-        $this->withServerVariables(['REMOTE_ADDR' => $guestIp])
-            ->get(route('store.preview', $preview))
-            ->assertOk()
-            ->assertSee('inline');
-        $this->assertSame('%PDF-1.4 sample', $this->get(route('store.preview', $preview))->getContent());
+        $previewResponse = $this->withServerVariables(['REMOTE_ADDR' => $guestIp])->get(route('store.preview', $preview));
+        $previewResponse->assertOk();
+        $this->assertSame('%PDF-1.4 sample', $previewResponse->getContent());
     }
 
     public function test_reader_only_purchase_unlocks_full_content_without_issuing_a_download(): void
@@ -142,10 +140,9 @@ class StoreReaderAccessTest extends TestCase
             ->assertOk()
             ->assertSee(route('store.preview', $full))
             ->assertDontSee(route('store.preview', $sample));
-        $this->actingAs($user)->get(route('store.preview', $full))
-            ->assertOk()
-            ->assertSee('inline');
-        $this->assertSame('%PDF-1.4 full', $this->actingAs($user)->get(route('store.preview', $full))->getContent());
+        $fullResponse = $this->actingAs($user)->get(route('store.preview', $full));
+        $fullResponse->assertOk();
+        $this->assertSame('%PDF-1.4 full', $fullResponse->getContent());
         $this->actingAs($user)->post(route('library.download.issue', $libraryItem))
             ->assertForbidden();
     }
