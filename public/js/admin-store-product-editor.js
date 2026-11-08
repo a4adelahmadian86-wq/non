@@ -181,7 +181,7 @@
     };
     let generated = null;
 
-    const normalized = value => String(value || '').trim().toLocaleLowerCase('fa-IR').replace(/\\s+/g, ' ');
+    const normalized = value => String(value || '').trim().toLocaleLowerCase('fa-IR').replace(/\s+/g, ' ');
     const field = name => modal?.querySelector('[data-ai-content-field="' + name + '"]');
     const renderList = (container, values, className) => {
       if (!container) return;
