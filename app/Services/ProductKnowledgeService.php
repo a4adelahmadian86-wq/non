@@ -3,8 +3,6 @@
 namespace App\Services;
 
 use App\Models\StoreProduct;
-use App\Models\StoreProductDocument;
-use Illuminate\Support\Collection;
 
 class ProductKnowledgeService
 {
