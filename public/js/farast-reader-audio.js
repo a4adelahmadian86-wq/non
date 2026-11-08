@@ -85,6 +85,9 @@
     @keyframes farast-audio-pulse{50%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}
     .farast-audio-caption{flex:1;min-width:0;text-align:center;color:#dce8fa;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.farast-audio-collapse{border:0;background:transparent;color:#9db0ca;cursor:pointer;padding:7px}.farast-audio-controls{margin-top:8px}.farast-audio-play{width:38px;height:38px;border:0;border-radius:50%;background:#3b82f6;color:white;cursor:pointer;flex:0 0 auto}.farast-audio-timeline{flex:1;min-width:100px}.farast-audio-timeline input{width:100%;accent-color:#60a5fa;cursor:pointer}.farast-audio-time{display:flex;justify-content:space-between;color:#9db0ca;font-size:.63rem;font-variant-numeric:tabular-nums}.farast-audio-speed,.farast-audio-volume{display:flex;align-items:center;gap:7px;color:#aebfd7;font-size:.65rem;white-space:nowrap}.farast-audio-speed select{border:1px solid rgba(148,180,225,.22);border-radius:7px;background:#172941;color:#edf4ff;padding:5px}.farast-audio-volume input{width:76px;accent-color:#60a5fa}.farast-audio-foot{justify-content:space-between;margin-top:6px;color:#8298b7;font-size:.6rem}.farast-audio-dock.is-collapsed .farast-audio-controls,.farast-audio-dock.is-collapsed .farast-audio-foot{display:none}.farast-audio-dock.is-collapsed .farast-audio-collapse i{transform:rotate(180deg)}
     .farast-pdf-text-layer .reader-audio-word,.farast-pdf-cont-text .reader-audio-word{position:absolute;display:block;z-index:8;color:transparent;background:transparent;border:0;border-radius:3px;padding:0;margin:0;cursor:pointer;pointer-events:auto;user-select:none;-webkit-user-select:none;outline-offset:1px}.farast-pdf-text-layer .reader-audio-word.is-current,.farast-pdf-cont-text .reader-audio-word.is-current,.reader-document-word.is-current{background:rgba(250,204,21,.58);box-shadow:0 0 0 1px rgba(217,150,0,.28);border-radius:3px}.farast-pdf-text-layer .reader-audio-word.is-read,.farast-pdf-cont-text .reader-audio-word.is-read,.reader-document-word.is-read{background:rgba(52,211,153,.13)}.farast-audio-dock[hidden]{display:none}
+    .reader-speech-target-control{display:inline-flex;align-items:center;justify-content:center;margin-inline-start:6px;padding:2px 6px;min-width:24px;min-height:24px;border:1px solid rgba(59,130,246,.35);border-radius:6px;background:rgba(59,130,246,.08);color:#2563eb;font-size:.72em;line-height:1;cursor:pointer;vertical-align:middle;opacity:.58}
+    .reader-speech-target-control:hover,.reader-speech-target-control:focus-visible{opacity:1;background:rgba(59,130,246,.16);outline:2px solid #60a5fa;outline-offset:2px}
+    .farast-reader[data-theme="dark"] .reader-speech-target-control{color:#93c5fd;border-color:rgba(147,197,253,.38);background:rgba(59,130,246,.16)}
     @media(max-width:700px){.farast-audio-top{gap:7px}.farast-audio-title{min-width:112px}.farast-audio-caption{font-size:.68rem}.farast-audio-volume{display:none}.farast-audio-foot span:last-child{display:none}.farast-audio-controls{gap:8px}.farast-audio-speed{font-size:.6rem}}
     @media(prefers-reduced-motion:reduce){.farast-audio-pulse{animation:none!important}}
   `;
@@ -318,6 +321,7 @@
       caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
       seek.value = '0';
     }
+    decorateSpeechTargets(article || root);
     buildMarks(activePage);
     buildDocumentWordMarks(activePage);
     dock.hidden = false;
@@ -458,6 +462,52 @@
     );
     return Math.max(0, matches.indexOf(target));
   };
+  const speechTargetKinds = [
+    ['.reader-document-sentence', 'sentence', 'جمله'],
+    ['.reader-document-paragraph', 'paragraph', 'پاراگراف'],
+    ['.reader-document-heading', 'heading', 'عنوان'],
+    ['.reader-document-cell', 'cell', 'سلول'],
+    ['.reader-document-row', 'row', 'ردیف']
+  ];
+  const speechTargetSelector = Object.fromEntries(speechTargetKinds.map(([selector, kind]) => [kind, selector]));
+  const decorateSpeechTargets = (scope = root) => {
+    if (!scope?.querySelectorAll) return;
+    speechTargetKinds.forEach(([selector, kind, label]) => {
+      scope.querySelectorAll(selector).forEach(target => {
+        if (target.querySelector('[data-reader-speech-control="' + kind + '"]')) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'reader-speech-target-control';
+        button.dataset.readerSpeechControl = kind;
+        button.setAttribute('aria-label', 'خواندن ' + label);
+        button.title = 'خواندن ' + label;
+        button.innerHTML = '<i class="fa-solid fa-volume-high" aria-hidden="true"></i>';
+        if (kind === 'row') {
+          const cell = target.querySelector('th,td');
+          (cell || target).append(button);
+        } else {
+          target.append(button);
+        }
+      });
+    });
+  };
+  const playSemanticTarget = (target, kind) => {
+    const selector = speechTargetSelector[kind];
+    if (!target || !selector) return false;
+    const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage
+      || target.closest('.farast-reader-page-item')?.dataset.readerPage
+      || root.querySelector('#reader-page-number')?.value || 1);
+    const text = target.dataset.readerSpeechText || target.textContent;
+    const range = findTextRange(text, page, targetOccurrence(target, selector, text));
+    if (!range) {
+      status.textContent = 'برای این محدوده، زمان‌بندی صوتی آماده نیست.';
+      return false;
+    }
+    return playRange(range.start, range.end, 'در حال خواندن ' + ({
+      sentence: 'جمله', paragraph: 'پاراگراف', heading: 'عنوان', cell: 'سلول', row: 'ردیف'
+    }[kind] || 'محدوده'));
+  };
+
   const playPage = article => {
     if (!article) return false;
     const section = Math.max(0, Number(article.dataset.index) || 0);
@@ -481,6 +531,14 @@
   root.addEventListener('click', event => {
     if (suppressNextClick) { suppressNextClick = false; window.clearTimeout(selectionSuppressTimer); return; }
     if (event.target.closest('.reader-audio-word')) return;
+    const speechControl = event.target.closest('[data-reader-speech-control]');
+    if (speechControl) {
+      event.preventDefault();
+      const kind = speechControl.dataset.readerSpeechControl;
+      const selector = speechTargetSelector[kind];
+      playSemanticTarget(selector ? speechControl.closest(selector) : null, kind);
+      return;
+    }
     const word = event.target.closest('.reader-document-word');
     if (word) {
       const range = rangeForDocumentWord(word);
@@ -625,11 +683,12 @@
   const observer = new MutationObserver(mutations => {
     const changed = mutations.some(mutation => [...mutation.addedNodes].some(node =>
       node.nodeType === Node.ELEMENT_NODE && (
-        node.matches?.('.reader-document-word,.textLayer span:not(.reader-audio-word)') ||
-        node.querySelector?.('.reader-document-word,.textLayer span:not(.reader-audio-word)')
+        node.matches?.('.reader-document-word,.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row,.textLayer span:not(.reader-audio-word)') ||
+        node.querySelector?.('.reader-document-word,.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row,.textLayer span:not(.reader-audio-word)')
       )
     ));
     if (changed && activeTrack) requestAnimationFrame(() => {
+      decorateSpeechTargets(root);
       buildMarks(activePage);
       buildDocumentWordMarks(activePage);
     });
