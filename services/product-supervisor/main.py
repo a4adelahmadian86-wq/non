@@ -215,8 +215,10 @@ async def review_product_file(
         for item in raw_findings[:12]:
             if not isinstance(item, dict):
                 continue
-            area = item.get("area") if item.get("area") in allowed_areas else "general"
-            severity = item.get("severity") if item.get("severity") in allowed_severities else "warning"
+            area_value = item.get("area")
+            severity_value = item.get("severity")
+            area = area_value if isinstance(area_value, str) and area_value in allowed_areas else "general"
+            severity = severity_value if isinstance(severity_value, str) and severity_value in allowed_severities else "warning"
             safe_findings.append({
                 "area": area,
                 "severity": severity,
