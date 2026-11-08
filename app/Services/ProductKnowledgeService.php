@@ -162,6 +162,7 @@ class ProductKnowledgeService
             'category',
             'tags',
             'files.document.facts',
+            'course.sections.lessons.section',
             'course.sections.lessons.resources.document.facts',
         ]);
 
