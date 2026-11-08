@@ -259,6 +259,10 @@ class ProductFilePreflightScanner
             if (($header['flags'] & 0x1) !== 0) {
                 $suspicious[] = 'encrypted_entry';
             }
+            $unixMode = ($header['external'] >> 16) & 0xF000;
+            if ($unixMode === 0xA000) {
+                $suspicious[] = 'symbolic_link_entry';
+            }
             $expanded += (int) $header['uncompressed'];
             if ($header['uncompressed'] > 0 && ($header['compressed'] === 0 || $header['uncompressed'] / $header['compressed'] > 200)) {
                 $suspicious[] = 'extreme_compression_ratio';
