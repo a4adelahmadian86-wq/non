@@ -252,7 +252,8 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(pages).toHaveCount(12);
     await expect.poll(() => pages.locator('canvas').evaluateAll(canvases => canvases.filter(canvas => canvas.width > 0).length)).toBeLessThan(12);
 
-    await pages.last().scrollIntoViewIfNeeded();
+    await root.locator('#reader-page-number').fill('12');
+    await root.locator('#reader-page-number').dispatchEvent('change');
     await expect.poll(() => pages.last().locator('canvas').evaluate(canvas => canvas.width)).toBeGreaterThan(0);
     await expect.poll(() => pages.first().locator('canvas').evaluate(canvas => canvas.width)).toBe(0);
     await expect.poll(() => pages.locator('canvas').evaluateAll(canvases => canvases.filter(canvas => canvas.width > 0).length)).toBeLessThan(12);
