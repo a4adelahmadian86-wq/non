@@ -380,4 +380,75 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringContainsString("frame-ancestors 'self'", (string) $response->headers->get('Content-Security-Policy'));
         $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
+    public function test_sample_reader_audio_supports_byte_range_seeking(): void
+    {
+        [, $preview] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/reader-audio/sample/narration.mp3', '0123456789');
+        $preview->update([
+            'audio_disk' => 'private',
+            'audio_path' => 'store/reader-audio/sample/narration.mp3',
+            'audio_mime' => 'audio/mpeg',
+            'audio_timing' => [
+                ['text' => 'سلام', 'start' => 0.0, 'end' => 0.4, 'page' => 1],
+                ['text' => 'دنیا', 'start' => 0.4, 'end' => 0.8, 'page' => 1],
+            ],
+        ]);
+
+        $response = $this->withHeader('Range', 'bytes=2-5')
+            ->get(route('store.preview.audio', $preview));
+
+        $response->assertStatus(206)
+            ->assertHeader('Content-Type', 'audio/mpeg')
+            ->assertHeader('Accept-Ranges', 'bytes')
+            ->assertHeader('Content-Range', 'bytes 2-5/10')
+            ->assertHeader('Content-Length', '4');
+        $this->assertSame('2345', $response->streamedContent());
+    }
+
+    public function test_full_reader_audio_requires_the_same_reader_entitlement_as_the_document(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/reader-audio/sample/full.mp3', 'private-audio');
+        $preview = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => 'store/previews/sample/preview.pdf',
+            'mime' => 'application/pdf',
+            'page_number' => 1,
+            'kind' => 'pdf',
+            'access_level' => 'full',
+            'audio_disk' => 'private',
+            'audio_path' => 'store/reader-audio/sample/full.mp3',
+            'audio_mime' => 'audio/mpeg',
+            'audio_timing' => [['text' => 'محرمانه', 'start' => 0, 'end' => 1, 'page' => 1]],
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+        $product->update(['download_policy' => 'reader_only']);
+
+        $this->get(route('store.preview.audio', $preview))->assertForbidden();
+
+        $user = $this->makeReaderUser();
+        $this->actingAs($user)->get(route('store.preview.audio', $preview))->assertForbidden();
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100,
+            'total_rials' => 100,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'granted_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('store.preview.audio', $preview));
+        $response->assertOk();
+        $this->assertSame('private-audio', $response->streamedContent());
+    }
+
 }
