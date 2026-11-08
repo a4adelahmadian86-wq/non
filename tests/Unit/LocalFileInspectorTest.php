@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\\Unit;
+namespace Tests\Unit;
 
-use App\\Services\\LocalFileInspector;
-use App\\Services\\StaticFileSafetyScanner;
-use Illuminate\\Http\\UploadedFile;
+use App\Services\LocalFileInspector;
+use App\Services\StaticFileSafetyScanner;
+use Illuminate\Http\UploadedFile;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 use ZipArchive;
 
 class LocalFileInspectorTest extends TestCase
