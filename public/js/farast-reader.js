@@ -468,8 +468,8 @@
     const nextIndex=clamp(Number(index)||0,0,articles.length-1);
     if(nextIndex!==itemIndex){searchRequest++;pdfMatches=[];matchIndex=-1;}
     itemIndex=nextIndex;
-    root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: itemIndex } }));
     articles.forEach((article,i)=>article.classList.toggle('is-active',i===itemIndex));
+    root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: itemIndex } }));
     if(!isPdf()&&continuousMode){
       continuousMode=false;continuousObserver?.disconnect();continuousObserver=null;
       pdfSurface?.classList.remove('is-continuous');
