@@ -193,6 +193,7 @@ class AdminProductFileIngestionController extends Controller
                     $document = StoreProductDocument::create([
                         'product_id' => $lockedProduct->id,
                         'product_file_id' => $file->id,
+                        'upload_session_id' => $lockedSession->id,
                         'source_sha256' => $actualHash,
                         'original_name' => $lockedSession->original_name,
                         'detected_mime' => $inspection['detected_mime'] ?? null,
