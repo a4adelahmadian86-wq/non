@@ -151,7 +151,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 'segment_count' => count($generated['segments']),
                 'voice_id' => $generated['voice_id'],
                 'engine' => 'farast-document-audio',
-                'granularity' => 'sentence_word_index',
+                'granularity' => 'phoneme_aligned_sentence_word',
                 'generated_once' => true,
             ]);
         } catch (Throwable $exception) {
