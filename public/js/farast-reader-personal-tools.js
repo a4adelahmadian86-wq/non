@@ -6,7 +6,7 @@
   if (!toolbar) return;
   const product = root.dataset.productId || location.pathname;
   const storageKey = 'farast.reader.personal-tools.v1:' + product;
-  const defaults = { light: false, font: 'system', size: 100, highlights: [], notes: [] };
+  const defaults = { light: false, font: 'system', size: 100, highlightColor: 'yellow', highlights: [], notes: [] };
   let state = { ...defaults };
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
@@ -17,7 +17,7 @@
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
   group.setAttribute('aria-label', 'ابزارهای شخصی مطالعه');
-  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-export><i class="fa-solid fa-file-export"></i><span>خروجی یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-import><i class="fa-solid fa-file-import"></i><span>بازیابی</span></button><input type="file" accept="application/json,.json" data-reader-import-file hidden aria-label="انتخاب پشتیبان یادداشت‌ها"></div>';
+  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><label class="reader-personal-label">رنگ <select data-reader-highlight-color aria-label="رنگ هایلایت"><option value="yellow">زرد</option><option value="green">سبز</option><option value="blue">آبی</option><option value="pink">صورتی</option></select></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-export><i class="fa-solid fa-file-export"></i><span>خروجی یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-import><i class="fa-solid fa-file-import"></i><span>بازیابی</span></button><input type="file" accept="application/json,.json" data-reader-import-file hidden aria-label="انتخاب پشتیبان یادداشت‌ها"></div>';
   const status = document.createElement('span');
   status.className = 'sr-only';
   status.setAttribute('role', 'status');
@@ -50,13 +50,15 @@
     .farast-reader-note{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--reader-line);font-size:.75rem}
     .farast-reader-note blockquote{margin:4px 0;color:var(--reader-muted);border-right:2px solid #60a5fa;padding-right:8px}
     .farast-reader-note button{align-self:start;border:1px solid var(--reader-line);border-radius:6px;background:transparent;color:var(--reader-text);padding:4px 7px;cursor:pointer}
-    .farast-reader-local-highlight{background:rgba(250,204,21,.55);color:inherit;border-radius:2px}\n    .farast-reader-personal-tools [data-reader-import-file]{display:none}
+    .farast-reader-local-highlight{color:inherit;border-radius:2px;cursor:pointer}\n    .farast-reader-personal-tools [data-reader-import-file]{display:none}
     @media(max-width:760px){.farast-reader-personal-tools{justify-content:center}.reader-personal-label{font-size:.65rem}}
   `;
   document.head.append(css);
   const lightButton = group.querySelector('[data-reading-light]');
   const fontSelect = group.querySelector('[data-reader-font]');
   const sizeInput = group.querySelector('[data-reader-font-size]');
+  const highlightColorSelect = group.querySelector('[data-reader-highlight-color]');
+  const highlightColors = { yellow: 'rgba(250,204,21,.55)', green: 'rgba(74,222,128,.38)', blue: 'rgba(96,165,250,.42)', pink: 'rgba(244,114,182,.4)' };
   const applyPrefs = () => {
     root.classList.toggle('is-reading-light', !!state.light);
     root.dataset.readerFont = state.font;
@@ -64,12 +66,12 @@
     root.style.setProperty('--reader-font-scale', String(state.size / 100));
     lightButton.setAttribute('aria-pressed', String(!!state.light));
     fontSelect.value = state.font;
-    sizeInput.value = String(state.size);
+    sizeInput.value = String(state.size);\n    state.highlightColor = highlightColors[state.highlightColor] ? state.highlightColor : 'yellow';\n    highlightColorSelect.value = state.highlightColor;
   };
   applyPrefs();
   lightButton.addEventListener('click', () => { state.light = !state.light; applyPrefs(); persist(); announce(state.light ? 'نور مطالعه روشن شد.' : 'نور مطالعه خاموش شد.'); });
   fontSelect.addEventListener('change', () => { state.font = fontSelect.value; applyPrefs(); persist(); announce('قلم مطالعه تغییر کرد. قلم‌های نصب‌شدهٔ سیستم قابل استفاده‌اند.'); });
-  sizeInput.addEventListener('input', () => { state.size = Number(sizeInput.value); applyPrefs(); persist(); });
+  sizeInput.addEventListener('input', () => { state.size = Number(sizeInput.value); applyPrefs(); persist(); });\n  highlightColorSelect.addEventListener('change', () => { state.highlightColor = highlightColorSelect.value; persist(); announce('رنگ هایلایت تغییر کرد.'); });
   const getContext = () => {
     const selection = window.getSelection();
     const text = selection ? selection.toString().trim() : '';
@@ -101,7 +103,7 @@
       const incoming = payload.data;
       if (!Array.isArray(incoming.highlights) || !Array.isArray(incoming.notes) || incoming.highlights.length > 500 || incoming.notes.length > 500) throw new Error('محتوای فایل پشتیبان معتبر نیست.');
       if (!window.confirm('یادداشت‌ها و هایلایت‌های فعلی با نسخهٔ پشتیبان جایگزین شوند؟')) return;
-      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))) };
+      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', highlightColor: highlightColors[incoming.highlightColor] ? incoming.highlightColor : 'yellow', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))) };
       persist(); applyPrefs(); renderNotes(); renderHighlights(); announce('نسخهٔ پشتیبان در همین مرورگر بازیابی شد.');
     } catch (error) { announce(error.message || 'بازیابی فایل ناموفق بود.'); }
     finally { importFile.value = ''; }
@@ -109,7 +111,7 @@
   highlightButton.addEventListener('click', () => {
     const context = getContext();
     if (!context) return announce('ابتدا بخشی از متن قابل انتخاب را انتخاب کنید.');
-    const record = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, created: Date.now() };
+    const record = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, color: state.highlightColor, created: Date.now() };
     state.highlights.push(record);
     persist(); renderHighlights(); announce('هایلایت در همین مرورگر ذخیره شد.');
     window.getSelection()?.removeAllRanges();
@@ -141,13 +143,13 @@
           const at = node.nodeValue.indexOf(remaining);
           if (at < 0) continue;
           const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + remaining.length);
-          const mark = document.createElement('mark'); mark.className = 'farast-reader-local-highlight';
+          const mark = document.createElement('mark'); mark.className = 'farast-reader-local-highlight'; mark.dataset.highlightId = item.id; mark.style.backgroundColor = highlightColors[item.color] || highlightColors.yellow; mark.title = 'برای حذف این هایلایت کلیک کنید';
           try { range.surroundContents(mark); remaining = ''; } catch (_) {}
         }
       });
     });
   };
-  const renderNotes = () => {
+  root.addEventListener('click', event => {\n    const mark = event.target.closest('mark[data-highlight-id]');\n    if (!mark) return;\n    const id = mark.dataset.highlightId;\n    state.highlights = state.highlights.filter(item => item.id !== id);\n    persist(); renderHighlights(); announce('هایلایت حذف شد.');\n  });\n  const renderNotes = () => {
     notesPanel.replaceChildren();
     if (!state.notes.length) { const empty = document.createElement('p'); empty.textContent = 'هنوز یادداشتی ثبت نشده است.'; notesPanel.append(empty); return; }
     state.notes.forEach(item => {
