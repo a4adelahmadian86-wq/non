@@ -293,7 +293,20 @@
     const isWord = target.matches('.reader-document-word');
     const page = pageFor(target);
     const value = isWord ? (target.dataset.word || target.textContent) : (target.dataset.readerSpeechText || target.textContent);
-    const range = findTextRange(value, page, isWord ? target.dataset.readerWordIndex : null);
+    let range = null;
+    if (!isWord && target.dataset.readerWordStartIndex !== undefined && target.dataset.readerWordEndIndex !== undefined) {
+      const indexedWords = wordTimingsByPage.get(page) || [];
+      const startIndex = Number(target.dataset.readerWordStartIndex);
+      const endIndex = Number(target.dataset.readerWordEndIndex);
+      const wanted = tokens(value);
+      const indexedSlice = indexedWords.slice(startIndex, endIndex);
+      if (Number.isInteger(startIndex) && Number.isInteger(endIndex) && startIndex >= 0
+        && endIndex > startIndex && indexedSlice.length === wanted.length
+        && wanted.every((token, index) => indexedSlice[index]?.token === token)) {
+        range = { start: indexedSlice[0].start, end: indexedSlice[indexedSlice.length - 1].end, page };
+      }
+    }
+    if (!range) range = findTextRange(value, page, isWord ? target.dataset.readerWordIndex : null);
     if (!range) return false;
     event?.preventDefault();
     const label = isWord ? 'واژه' : target.matches('.reader-document-sentence') ? 'جمله'
