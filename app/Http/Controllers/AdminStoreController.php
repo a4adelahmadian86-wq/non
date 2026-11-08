@@ -430,8 +430,14 @@ class AdminStoreController extends Controller
             ->value('id');
 
         try {
-            if ($documentId > 0) {
+            if ($documentId > 0 && $fileRecord->size_bytes <= 25 * 1024 * 1024) {
                 ProcessProductDocument::dispatch($documentId);
+            } elseif ($documentId > 0) {
+                DB::table('store_product_documents')->where('id', $documentId)->update([
+                    'processing_status' => 'awaiting_provider',
+                    'failure_code' => 'ai_processing_size_limit',
+                    'updated_at' => now(),
+                ]);
             }
         } catch (Throwable $exception) {
             DB::table('store_product_documents')->where('id', $documentId)->update([
