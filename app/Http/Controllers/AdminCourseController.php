@@ -29,7 +29,7 @@ class AdminCourseController extends Controller
     public function edit(StoreProduct $product)
     {
         $course = $this->assertCourse($product);
-        $course->load(['sections.lessons.resources']);
+        $course->load(['sections.lessons.resources.document']);
 
         return view('admin.store.course', compact('product', 'course'));
     }
