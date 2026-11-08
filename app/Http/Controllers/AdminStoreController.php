@@ -606,6 +606,7 @@ class AdminStoreController extends Controller
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'preview_pages' => 'nullable|integer|min:0|max:50',
             'license_type' => 'nullable|string|max:60',
+            'download_policy' => 'required|in:signed,reader_only',
             'version' => 'nullable|string|max:60',
             'seo_title' => 'nullable|string|max:220',
             'seo_description' => 'nullable|string|max:320',
