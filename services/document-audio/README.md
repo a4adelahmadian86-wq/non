@@ -48,3 +48,5 @@ This service has no database, queue, user accounts, document storage, or access 
 
 
 The `FARA` RIFF chunk is a private transport envelope between the isolated synthesis service and Laravel. Laravel validates and extracts the word intervals while assembling the single full-document WAV; the final reader receives only the one stored WAV URL plus page-filtered timing metadata. Word, phrase, sentence, paragraph, and page activation never invokes synthesis on demand.
+
+The reader embeds one shared timing map per document view, not one copy per page. Each page points to the same version-pinned WAV URL; page navigation changes only the active timing/highlight scope and never reloads or restarts the audio stream. Legacy v2 artifacts remain playable with an explicit estimated-timing status while a unique background job prepares v3 phoneme alignment.
