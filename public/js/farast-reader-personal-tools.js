@@ -86,7 +86,7 @@
   highlightColorSelect.addEventListener('change', () => { state.highlightColor = highlightColorSelect.value; persist(); announce('رنگ هایلایت تغییر کرد.'); });
   const getPageTextMap = page => {
     const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT, { acceptNode(node) {
-      if (!node.nodeValue || !node.nodeValue.trim() || node.parentElement.closest('button,script,style,textarea,select,.farast-reader-local-highlight,.farast-reader-ink-tools')) return NodeFilter.FILTER_REJECT;
+      if (!node.nodeValue || !node.nodeValue.trim() || node.parentElement.closest('button,script,style,textarea,select,.farast-reader-ink-tools')) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }});
     const nodes = [];
@@ -171,9 +171,9 @@
     const records = state.highlights.slice(-100);
     root.querySelectorAll('.farast-reader-page-item').forEach((page, index) => {
       const pageNo = Number(page.dataset.readerPage || index + 1);
-      const map = getPageTextMap(page);
-      const nodes = map.nodes;
       records.filter(item => item.page === pageNo).forEach(item => {
+        const map = getPageTextMap(page);
+        const nodes = map.nodes;
         const fullText = map.fullText;
         const anchored = Number.isInteger(item.startOffset) && Number.isInteger(item.endOffset) && item.startOffset >= 0 && item.endOffset > item.startOffset && fullText.slice(item.startOffset, item.endOffset) === item.quote;
         const start = anchored ? item.startOffset : fullText.indexOf(item.quote);
