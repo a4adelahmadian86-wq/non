@@ -486,6 +486,7 @@ test('supports PageUp PageDown Home and End shortcuts without hijacking form con
 });
 
 test('renders Word headings lists and tables as safe semantic document blocks', async ({ page }) => {
+  let protectedWordPageRequests = 0;
   await page.goto('/');
   await page.setContent(`
     <section data-reader-root data-reader-mode="document">
@@ -497,7 +498,9 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
       </article>
     </section>
   `);
-  await page.route('**/protected-word-page', route => route.fulfill({
+  await page.route('**/protected-word-page', route => {
+    protectedWordPageRequests += 1;
+    return route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
@@ -515,8 +518,11 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
       ],
       content_sha256: 'word-fixture-hash'
     })
-  }));
+    });
+  });
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 0 } })));
+  await expect.poll(() => protectedWordPageRequests).toBe(1);
   await expect(page.locator('[data-reader-text-layer] h1')).toHaveText('فصل اول');
   await expect(page.locator('[data-reader-text-layer] p')).toHaveText('متن توضیحی');
   await expect(page.locator('[data-reader-text-layer] ul > li').first()).toContainText('گزینه نخست');
