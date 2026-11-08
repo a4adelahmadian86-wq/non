@@ -727,4 +727,80 @@ class AdminStoreProductWorkflowTest extends TestCase
         Queue::assertPushed(ProcessProductDocument::class);
     }
 
+
+    public function test_ai_product_content_is_disabled_until_complete_file_knowledge_exists(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول بدون دانش',
+            'slug' => 'product-without-knowledge',
+            'sku' => 'NO-KNOWLEDGE-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.store.edit', $product));
+
+        $response->assertOk()
+            ->assertSee('data-product-ai-content', false)
+            ->assertSee('data-ai-content-generate', false)
+            ->assertSee('disabled', false);
+    }
+
+    public function test_ai_product_content_endpoint_rejects_missing_knowledge_before_calling_model(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول بدون فایل',
+            'slug' => 'product-no-file',
+            'sku' => 'NO-FILE-002',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->mock(\\App\\Services\\EditorAiAssistService::class, function ($mock) {
+            $mock->shouldNotReceive('assist');
+        });
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.store.ai-content.generate', $product), ['tone' => 'professional'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('knowledge');
+    }
+
+    public function test_seo_focus_and_secondary_keywords_are_saved_in_product_metadata(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+
+        $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
+            'seo_focus_keyword' => 'آموزش طراحی',
+            'seo_secondary_keywords' => 'طراحی حرفه‌ای، آموزش کاربردی',
+        ]));
+
+        $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
+        $this->assertSame('آموزش طراحی', data_get($product->metadata, 'seo.focus_keyword'));
+        $this->assertSame(['طراحی حرفه‌ای', 'آموزش کاربردی'], data_get($product->metadata, 'seo.secondary_keywords'));
+    }
+
+    public function test_persian_tag_creation_reuses_existing_tag_by_name(): void
+    {
+        $admin = $this->admin();
+        $existing = StoreTag::create(['name' => 'آموزش کاربردی', 'slug' => 'tag-legacy-random']);
+
+        $response = $this->actingAs($admin)->postJson(route('admin.store.tags.store'), [
+            'name' => 'آموزش کاربردی',
+        ]);
+
+        $response->assertOk()->assertJson(['id' => $existing->id]);
+        $this->assertSame(1, StoreTag::query()->where('name', 'آموزش کاربردی')->count());
+    }
+
+
 }
