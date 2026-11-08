@@ -7,4 +7,8 @@ return [
     ],
     'observability'=>['enabled'=>filter_var(env('FARAST_OBSERVABILITY_ENABLED',true),FILTER_VALIDATE_BOOLEAN)],
     'evaluation'=>['max_regression'=>(float)env('FARAST_EVALUATION_MAX_REGRESSION',0.05)],
+    'product_storage'=>[
+        'default'=>env('FARAST_PRODUCT_STORAGE_DEFAULT','private'),
+        'by_kind'=>[],
+    ],
 ];

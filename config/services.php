@@ -49,6 +49,14 @@ return [
         'url' => env('FARAST_VOICE_ASR_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? '' : 'https://voice-typing-r5r7.onrender.com/v1/transcribe'),
         'token' => env('FARAST_VOICE_ASR_TOKEN', env('FARAST_VOICE_TOKEN')),
     ],
+    // Isolated, optional local TTS for one-time product document narration; does not alter the live voice assistant.
+    'product_document_tts' => [
+        'url' => env('FARAST_DOCUMENT_TTS_URL', ''),
+        'token' => env('FARAST_DOCUMENT_TTS_TOKEN', ''),
+        'voice_id' => env('FARAST_DOCUMENT_TTS_VOICE_ID', 'farast-fa-male-v1'),
+        'timeout' => max(15, min(240, (int) env('FARAST_DOCUMENT_TTS_TIMEOUT', 120))),
+    ],
+
     'voice_tts' => [
         'url' => env('FARAST_VOICE_TTS_URL', filter_var(env('FARAST_VOICE_LOCAL_SPEECH_ENABLED', false), FILTER_VALIDATE_BOOLEAN) ? 'http://127.0.0.1:7007/v1/synthesize' : 'https://voice-typing-r5r7.onrender.com/v1/synthesize'),
         'token' => env('FARAST_VOICE_TTS_TOKEN', env('FARAST_VOICE_TOKEN')),

@@ -95,7 +95,7 @@ class AdminStoreController extends Controller
 
     public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder)
     {
-        $product->load(['files', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
+        $product->load(['files.document', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);

@@ -206,20 +206,54 @@
       <div class="store-panel product-next-step"><div><strong>مرحله بعد: طراحی برنامه آموزشی</strong><p>فصل‌ها، جلسات، ویدئوها، فایل‌های ضمیمه و تنظیمات گواهی را مدیریت کنید.</p></div><a class="store-primary-btn" href="{{ route('admin.store.course.edit',$product) }}">ورود به مدیریت دوره <i class="fa-solid fa-arrow-left"></i></a></div>
     @elseif($isEdit)
       <div class="store-panel product-files-panel">
-        <div class="product-editor-heading"><div><span>محتوای قابل دریافت</span><h2>فایل‌های محصول</h2></div><span class="product-editor-step">اسکن امنیتی الزامی</span></div>
-        <p>فایل‌ها در فضای خصوصی نگهداری می‌شوند. فقط فایل اصلیِ اسکن‌شده و فعال پس از خرید قابل دریافت خواهد بود.</p>
+        <div class="product-editor-heading"><div><span>محتوای محصول</span><h2>فایل‌های اصلی و پایگاه دانش</h2></div><span class="product-editor-step">پیش‌بررسی و تأیید الزامی</span></div>
+        <p>هر فایل پس از بررسی ساختاری داخلی و تأیید شما در مخزن خصوصی ثبت می‌شود؛ سپس مطالعه محتوایی آن برای ساخت پایگاه دانش مشترک آغاز می‌شود.</p>
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
           @php($fileReview = $assetReviews['file:'.$file->id] ?? null)
-          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'اسکن سالم':'نیازمند بررسی مجدد' }} @if($file->is_primary) · فایل اصلی @endif</small>
+          @php($document = $file->document)
+          @php($studyLabel = match($document?->processing_state) {'studied'=>'مطالعه هوشمند تکمیل شد','extracted_only'=>'متن استخراج شد؛ تحلیل معنایی ناقص','studying'=>'در حال مطالعه محتوا','study_failed'=>'مطالعه ناموفق؛ نیازمند تلاش مجدد','study_incomplete'=>'محتوای قابل استخراج محدود','pending_study'=>'در انتظار مطالعه محتوا',default=>'پرونده دانش هنوز ساخته نشده است'})
+          <div class="product-file-row"><span><i class="fa-solid fa-file-arrow-down"></i><b>{{ $file->original_name }}</b><small>{{ number_format($file->size_bytes/1024,1) }} KB · {{ $file->scan_status==='clean'?'بررسی ساختاری فراست موفق':'نیازمند بررسی مجدد' }} · {{ $studyLabel }} @if($document?->page_count) · {{ number_format($document->page_count) }} صفحه @endif @if($file->is_primary) · فایل اصلی @endif</small>
           </span>
           @if($fileReview && hash_equals((string) ($fileReview['sha256'] ?? ''), (string) $file->sha256))
             @include('admin.store.partials.asset-review', ['assetReview' => $fileReview, 'label' => 'گزارش ناظر فایل'])
           @endif
+          @if($document && is_array($document->content_manifest))
+            <details class="product-document-knowledge">
+              <summary><i class="fa-solid fa-book-open"></i> مشاهده دانش استخراج‌شده از فایل</summary>
+              @if(filled(data_get($document->content_manifest,'summary')))<p>{{ data_get($document->content_manifest,'summary') }}</p>@endif
+              @if(count((array) data_get($document->content_manifest,'key_topics',[])))<div><strong>موضوعات شناسایی‌شده</strong><ul>@foreach(data_get($document->content_manifest,'key_topics',[]) as $topic)<li>{{ $topic }}</li>@endforeach</ul></div>@endif
+              @if(count((array) data_get($document->content_manifest,'outline',[])))<div><strong>ساختار محتوا</strong><ol>@foreach(data_get($document->content_manifest,'outline',[]) as $section)<li>{{ $section['title'] ?? 'بخش' }} @if(!empty($section['page_number']))<small>صفحه {{ $section['page_number'] }}</small>@endif</li>@endforeach</ol></div>@endif
+              <small>بلوک‌های متن، شواهد و فراداده در پایگاه دانش محصول ذخیره شده‌اند.</small>
+            </details>
+          @endif
           <form method="post" action="{{ route('admin.store.ai-supervisor.files.review',[$product,$file]) }}">@csrf<button type="submit" class="store-outline-btn" @disabled(!data_get($product->metadata,'ai_supervisor.enabled',false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>بررسی محتوای فایل</button></form>
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
-        <form method="post" action="{{ route('admin.store.files.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.mp3,.mp4,.webm,.m4a"><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small><label><input type="checkbox" name="is_primary" value="1" checked> فایل اصلی محصول</label><button type="submit" class="store-primary-btn">بارگذاری و اسکن فایل</button></form>
-        <small class="product-help">حداکثر بارگذاری ۵۰ مگابایت؛ بررسی هوشمند هر فایل تا ۲۵ مگابایت. اسکن اصلی فروشگاه همچنان شرط انتشار است.</small>
+        <form id="productFileIngestionForm" method="post" action="{{ route('admin.store.files.preflight',$product) }}" enctype="multipart/form-data" class="product-ingestion-form" data-confirm-url="{{ route('admin.store.files.confirm',['product'=>$product,'token'=>'__TOKEN__']) }}" data-cancel-url="{{ route('admin.store.files.cancel',['product'=>$product,'token'=>'__TOKEN__']) }}">@csrf
+          <input id="productIngestionInput" type="file" name="files[]" multiple required hidden accept=".pdf,.zip,.tar,.gz,.tgz,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov">
+          <div id="productFileDropzone" class="product-file-dropzone" role="button" tabindex="0" aria-controls="productIngestionInput">
+            <span class="product-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+            <strong>فایل‌ها را اینجا رها کنید</strong>
+            <small>یا برای انتخاب یک یا چند فایل کلیک کنید</small>
+            <span class="product-drop-formats">PDF · Word · Excel · PowerPoint · تصویر · صوت · ویدئو · ZIP و TAR</span>
+          </div>
+          <div class="product-ingestion-options"><label><input type="checkbox" name="is_primary" value="1" checked> اولین فایل تأییدشده، فایل اصلی محصول باشد</label><small id="productIngestionSelection">هنوز فایلی انتخاب نشده است.</small></div>
+          <button type="button" id="productIngestionStart" class="store-primary-btn" disabled>بررسی فایل‌های انتخاب‌شده</button>
+        </form>
+        <small class="product-help">ابتدا سایت بدون هوش مصنوعی فایل را بررسی می‌کند. هیچ فایلی پیش از نمایش گزارش و تأیید شما وارد مخزن اصلی نمی‌شود. سقف فعلی هر فایل ۵۰ مگابایت است.</small>
+        <div id="productIngestionModal" class="product-ingestion-modal" hidden aria-hidden="true">
+          <div class="product-ingestion-backdrop" data-ingestion-close></div>
+          <section class="product-ingestion-dialog" role="dialog" aria-modal="true" aria-labelledby="productIngestionTitle">
+            <header><div><span class="eyebrow">FARAST · SECURE INGESTION</span><h3 id="productIngestionTitle">گزارش بررسی فایل</h3></div><button type="button" class="product-ingestion-close" data-ingestion-close aria-label="بستن">×</button></header>
+            <div class="product-ingestion-file-head"><span class="product-ingestion-file-icon"><i class="fa-solid fa-file-shield"></i></span><div><strong id="productIngestionFileName">—</strong><small id="productIngestionFileMeta">—</small></div><span id="productIngestionStatus" class="product-ingestion-status">در انتظار</span></div>
+            <div id="productIngestionTimeline" class="product-ingestion-timeline" aria-live="polite"></div>
+            <div id="productIngestionFacts" class="product-ingestion-facts"></div>
+            <div id="productIngestionEntries" class="product-ingestion-entries" hidden></div>
+            <div id="productIngestionWarnings" class="product-ingestion-warnings" hidden></div>
+            <p class="product-ingestion-security-note"><i class="fa-solid fa-shield-halved"></i> این بررسی با موتور داخلی فراست انجام می‌شود و فایل به سرویس اسکن ثالث ارسال نمی‌شود. کنترل ساختاری جایگزین تضمین کشف تمام بدافزارها نیست.</p>
+            <footer><button type="button" class="store-outline-btn" id="productIngestionCancel">رد کردن این فایل</button><button type="button" class="store-primary-btn" id="productIngestionConfirm" disabled>تأیید و ذخیره فایل</button></footer>
+          </section>
+        </div>
       </div>
       <div class="store-panel product-files-panel">
         <h2>پیش‌نمایش عمومی محصول</h2><p>تصاویر یا صفحات نمونه برای آشنایی خریدار؛ فایل‌ها پیش از ذخیره اسکن می‌شوند. برای همراهی صوتی، روی هر پیش‌نمایش فایل صوتی ازپیش‌ساخته و JSON زمان‌بندی کلمات همان بخش را ثبت کنید.</p>
@@ -234,6 +268,7 @@
 </section>
 @endsection
 @push('styles')
+<link rel="stylesheet" href="/css/product-ingestion.css?v=1">
 <link rel="stylesheet" href="/css/store.css?v=20261107product1">
 <style>
 
@@ -337,10 +372,12 @@
 .product-gallery-panel{margin-top:16px}.product-file-row{flex-wrap:wrap}.product-asset-review{grid-column:1/-1;flex-basis:100%;padding:9px;border-radius:9px;background:#f5f8fc;border:1px solid #e2eaf4}.product-asset-review b{font-size:.68rem}.product-asset-review p{font-size:.68rem;line-height:1.8;margin:5px 0}.product-asset-review small{font-size:.62rem;color:var(--st-muted)}.product-asset-review-list,.product-asset-review-warnings{margin:7px 0 0;padding-right:18px;font-size:.65rem;line-height:1.7}.product-asset-review-list li{margin:4px 0}.product-asset-review-list span,.product-asset-review-list small{display:block}.product-asset-review-warnings{color:#9b5b17}
 
 .product-discovery-links{padding-top:4px}.product-discovery-links select{min-height:118px}.product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
+.product-document-knowledge{grid-column:1/-1;padding:10px 12px;border:1px solid var(--st-line);border-radius:11px;background:#f8fbff;font-size:.7rem;line-height:1.9}.product-document-knowledge summary{cursor:pointer;font-weight:800;color:#24518b}.product-document-knowledge p{margin:8px 0}.product-document-knowledge ul,.product-document-knowledge ol{margin:5px 0;padding-right:20px}.product-document-knowledge small{color:var(--st-muted)}
 </style>
 @endpush
 
 @push('scripts')
+<script src="/js/product-ingestion.js?v=1" defer></script>
 <script>
 (() => {
   const form = document.getElementById('productEditorForm');

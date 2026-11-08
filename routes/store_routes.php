@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminCourseController;
 use App\Http\Controllers\AdminProductSupervisorController;
+use App\Http\Controllers\AdminProductFileIngestionController;
 use App\Http\Controllers\AdminStoreController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StoreController;
@@ -20,6 +21,7 @@ Route::middleware(['auth'])->group(function () {
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/my-courses/{product}', [StoreCourseLearningController::class, 'show'])->name('store.course.learn');
+    Route::get('/my-library/document-audio/{audio}', [\\App\\Http\\Controllers\\StoreProductDocumentAudioController::class, 'stream'])->middleware('throttle:30,10')->name('store.document.audio');
     Route::get('/my-courses/{product}/lessons/{lesson}', [StoreCourseLearningController::class, 'lesson'])->name('store.course.lesson');
     Route::post('/my-courses/{product}/lessons/{lesson}/progress', [StoreCourseLearningController::class, 'progress'])->middleware('throttle:60,10')->name('store.course.progress');
     Route::get('/my-courses/{product}/lessons/{lesson}/resources/{file}', [StoreCourseLearningController::class, 'resource'])->middleware('throttle:60,10')->name('store.course.resource');
@@ -52,7 +54,9 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/cover',[AdminStoreController::class,'uploadCover'])->middleware('throttle:10,10')->name('store.cover.upload');
     Route::post('/store/{product}/images',[AdminStoreController::class,'uploadImage'])->middleware('throttle:20,10')->name('store.images.upload');
     Route::delete('/store/{product}/images/{image}',[AdminStoreController::class,'deleteImage'])->name('store.images.delete');
-    Route::post('/store/{product}/files',[AdminStoreController::class,'uploadFile'])->middleware('throttle:10,10')->name('store.files.upload');
+    Route::post('/store/{product}/files/preflight',[AdminProductFileIngestionController::class,'preflight'])->middleware('throttle:10,10')->name('store.files.preflight');
+    Route::post('/store/{product}/files/{token}/confirm',[AdminProductFileIngestionController::class,'confirm'])->middleware('throttle:10,10')->name('store.files.confirm');
+    Route::delete('/store/{product}/files/{token}/cancel',[AdminProductFileIngestionController::class,'cancel'])->middleware('throttle:20,10')->name('store.files.cancel');
     Route::delete('/store/{product}/files/{file}',[AdminStoreController::class,'deleteFile'])->name('store.files.delete');
     Route::post('/store/{product}/previews',[AdminStoreController::class,'uploadPreview'])->middleware('throttle:10,10')->name('store.previews.upload');
     Route::post('/store/{product}/previews/{preview}/audio', [AdminStoreController::class, 'uploadPreviewAudio'])->middleware('throttle:10,10')->name('store.previews.audio.upload');
