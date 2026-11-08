@@ -81,6 +81,30 @@ class ProductDocumentAudioServiceTest extends TestCase
         ], $result['segments'][0]['words']);
     }
 
+    public function test_transient_render_cold_start_response_is_retried_before_synthesis(): void
+    {
+        config([
+            'services.document_audio.url' => 'https://document-audio.example.test/v1/synthesize',
+            'services.document_audio.token' => 'test-token',
+        ]);
+
+        $pcm = str_repeat("\\0", 1600);
+        $format = pack('vvVVvv', 1, 1, 16000, 32000, 2, 16);
+        $wav = 'RIFF'.pack('V', 36 + strlen($pcm)).'WAVEfmt '.pack('V', 16).$format.'data'.pack('V', strlen($pcm)).$pcm;
+        Http::fake([
+            'document-audio.example.test/*' => Http::sequence()
+                ->push('service is waking up', 503)
+                ->push($wav, 200, ['Content-Type' => 'audio/wav']),
+        ]);
+
+        $result = app(ProductDocumentAudioService::class)->generate([
+            ['chunk_index' => 0, 'chunk_type' => 'page_text', 'locator' => ['page' => 1], 'content_text' => 'متن آماده'],
+        ]);
+
+        $this->assertNotNull($result);
+        Http::assertSentCount(2);
+    }
+
     public function test_document_pipeline_classes_are_autoloadable(): void
     {
         $this->assertTrue(class_exists(\App\Jobs\ProcessProductDocument::class));
