@@ -31,10 +31,12 @@ Do not describe the reader as impossible to copy or download. Stronger PDF prote
 
 ## Automated verification status
 
-Latest completed CI for the reader branch is recorded in the PR. The latest DOCX pagination update is being verified in [run 42449244268](https://github.com/a4adelahmadian86-wq/non/actions/runs/42449244268); do not treat that run as successful until it completes.
+Latest completed reader verification is [run 42449244268](https://github.com/a4adelahmadian86-wq/non/actions/runs/42449244268), which passed:
 
-- Previous confirmed reader run: **316 PHP tests, 1,547 assertions, and 56 browser tests passed** in [run 42448620155](https://github.com/a4adelahmadian86-wq/non/actions/runs/42448620155).
-- The new DOCX page-break, embedded-image, and page-layout checks are included in the pending run., including a PDF.js page render from a generated PDF fixture, account watermark, text search, page controls, zoom, rotation, theme, sidebar, continuous-scroll toolbar availability, and sandboxed Excel iframe checks.
+- Laravel suite: **316 tests passed, 1,551 assertions**.
+- Playwright suite: **56 browser tests passed**, including PDF.js rendering, watermark pixels, text search, page controls, zoom/rotation, lazy PDF.js loading for image-only previews, and sandboxed Excel checks.
+- The DOCX feature test verifies a landscape page size, embedded image output, and at least two rendered pages after an explicit page break.
+- PHP migrations, route listing, Blade view cache, syntax checks, and configured voice-stream smoke steps completed successfully. The optional Sherpa workflow job was skipped for this pull-request event., including a PDF.js page render from a generated PDF fixture, account watermark, text search, page controls, zoom, rotation, theme, sidebar, continuous-scroll toolbar availability, and sandboxed Excel iframe checks.
 - PHP migrations, route listing, Blade view cache, JavaScript syntax checks, and the configured voice-stream smoke steps completed successfully. The optional Sherpa workflow job was skipped for this pull-request event.
 
 These tests establish automated behavior against controlled fixtures. They do **not** replace manual visual QA against representative customer documents and real mobile/desktop browsers; no such manual QA is claimed here.
