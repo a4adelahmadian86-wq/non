@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import io
 import unittest
 import zipfile
 
@@ -10,7 +11,8 @@ from pptx import Presentation
 from pptx.util import Inches
 from PIL import Image
 
-from file_pipeline import FileInspectionError, inspect_file, redact_sensitive_content
+from file_pipeline import FileInspectionError, build_pdf_sample, inspect_file, redact_sensitive_content
+from pypdf import PdfReader, PdfWriter
 
 
 class FilePipelineTests(unittest.TestCase):
@@ -22,6 +24,20 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.content_chunks[0]["content_text"], "عنوان محصول")
         self.assertEqual(result.content_chunks[1]["locator"], {"line": 2})
         self.assertEqual(result.content_chunks[1]["chunk_type"], "text_line")
+
+    def test_pdf_sample_uses_only_valid_ai_selected_pages_and_keeps_page_order(self):
+        writer = PdfWriter()
+        for _ in range(4):
+            writer.add_blank_page(width=200, height=300)
+        source = io.BytesIO()
+        writer.write(source)
+
+        generated = build_pdf_sample(source.getvalue(), [4, 2, 4, 99])
+
+        self.assertIsNotNone(generated)
+        sample_bytes, selected_pages = generated
+        self.assertEqual(selected_pages, [4, 2])
+        self.assertEqual(len(PdfReader(io.BytesIO(sample_bytes)).pages), 2)
 
     def test_sensitive_values_are_redacted(self):
         text, count = redact_sensitive_content("Contact person@example.com or Bearer abcdefghijklmnopqrstuvwxyz")
