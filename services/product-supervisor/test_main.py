@@ -1,3 +1,5 @@
+import os
+
 from fastapi.testclient import TestClient
 
 import main
@@ -26,7 +28,7 @@ def test_health_does_not_expose_secrets(monkeypatch):
         "provider_configured": True,
         "providers": {
             "gemini": {"configured": True},
-            "groq": {"configured": bool(__import__("os").getenv("GROQ_API_KEY", "").strip())},
+            "groq": {"configured": bool(os.getenv("GROQ_API_KEY", "").strip())},
         },
     }
     assert "private-api-key" not in response.text
