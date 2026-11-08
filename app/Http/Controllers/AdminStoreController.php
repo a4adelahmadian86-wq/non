@@ -193,7 +193,7 @@ class AdminStoreController extends Controller
                     $reviewInputsChanged = collect($reviewFields)->contains(
                         fn ($field) => array_key_exists($field, $data)
                             && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
-                    );
+                    ) || (data_get($data, 'metadata.seo') !== data_get($lockedProduct->metadata, 'seo'));
                     $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
                     $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
                     if (! $snapshotMatches || $reviewInputsChanged || $currentTagIds !== $submittedTagIds || ($lastReview['verdict'] ?? null) !== 'approved') {
@@ -245,7 +245,7 @@ class AdminStoreController extends Controller
             $reviewInputsChanged = collect($reviewFields)->contains(
                 fn ($field) => array_key_exists($field, $data)
                     && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
-            );
+            ) || (data_get($data, 'metadata.seo') !== data_get($lockedProduct->metadata, 'seo'));
             $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
             $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
             $reviewPolicyChanged = collect(['enabled', 'mode', 'checks', 'instructions'])->contains(
