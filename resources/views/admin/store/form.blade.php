@@ -41,13 +41,20 @@
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
-        <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
+        <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
         <label class="product-field">شناسه محصول (SKU) *<input name="sku" value="{{ old('sku',$product->sku) }}" required maxlength="80" placeholder="مثلاً COURSE-001"></label>
         <label class="product-field">نشانی اختصاصی (Slug)<input name="slug" data-product-slug value="{{ old('slug',$product->slug) }}" maxlength="240" placeholder="خودکار از عنوان ساخته می‌شود"></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
         <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
         <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
         <label class="product-field">قیمت قبل از تخفیف (ریال)<input type="number" name="compare_at_price_rials" value="{{ old('compare_at_price_rials',$product->compare_at_price_rials) }}" min="0" max="999999999999" inputmode="numeric"><small>برای نمایش تخفیف، باید از قیمت فروش بیشتر باشد.</small></label>
+        <label class="product-field" data-download-policy-field>روش تحویل پس از خرید
+          <select name="download_policy" data-download-policy>
+            <option value="signed" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'signed')>دانلود فایل اصلی پس از خرید</option>
+            <option value="reader_only" @selected(old('download_policy',$product->download_policy ?? 'signed') === 'reader_only')>فقط مطالعه آنلاین؛ بدون دانلود مستقیم</option>
+          </select>
+          <small>حالت مطالعه آنلاین فقط وقتی قابل انتشار است که استخراج کامل، صفحات خوانشگر و نسخه کامل خصوصی آماده باشند.</small>
+        </label>
         @if($isEdit)
           <label class="product-field">وضعیت انتشار *<select name="status" required>@foreach(['draft'=>'پیش‌نویس','published'=>'منتشرشده','archived'=>'بایگانی'] as $value=>$label)<option value="{{ $value }}" @selected(old('status',$product->status)===$value)>{{ $label }}</option>@endforeach</select><small>انتشار فقط پس از تکمیل الزامات محصول و بررسی فایل اصلی یا جلسات دوره ممکن است.</small></label>
         @else
@@ -433,6 +440,18 @@
 (() => {
   const form = document.getElementById('productEditorForm');
   if (!form) return;
+  const typeSelect = form.querySelector('[data-product-type]');
+  const deliveryPolicyField = form.querySelector('[data-download-policy-field]');
+  const deliveryPolicySelect = form.querySelector('[data-download-policy]');
+  const syncDeliveryPolicy = () => {
+    if (!deliveryPolicyField || !deliveryPolicySelect) return;
+    const isDigitalFile = typeSelect?.value === 'digital_file';
+    deliveryPolicyField.hidden = !isDigitalFile;
+    deliveryPolicySelect.disabled = !isDigitalFile;
+  };
+  typeSelect?.addEventListener('change', syncDeliveryPolicy);
+  syncDeliveryPolicy();
+
   const price = form.querySelector('[name="price_rials"]');
   const pricePreview = form.querySelector('[data-price-preview]');
   const updatePrice = () => {
