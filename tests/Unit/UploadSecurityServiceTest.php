@@ -61,14 +61,14 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_tar_manifest_is_listed_without_extracting_archive_members(): void
     {
-        if (! class_exists(\\PharData::class)) {
+        if (! class_exists(\PharData::class)) {
             $this->markTestSkipped('PHP PharData is unavailable.');
         }
 
         $base = tempnam(sys_get_temp_dir(), 'farast-tar-');
         @unlink($base);
         $tarPath = $base.'.tar';
-        $archive = new \\PharData($tarPath);
+        $archive = new \PharData($tarPath);
         $archive->addFromString('chapters/intro.txt', 'مقدمه کتاب');
         unset($archive);
 
