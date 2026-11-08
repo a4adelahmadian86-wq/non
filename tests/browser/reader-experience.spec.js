@@ -1272,10 +1272,13 @@ test('personal reading light, font preferences, highlights and annotations stay 
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText('متن');
 
   await page.evaluate(() => {
-    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const walker = document.createTreeWalker(document.querySelector('.farast-reader-document p'), NodeFilter.SHOW_TEXT);
+    let text = null;
+    while (walker.nextNode()) if (walker.currentNode.nodeValue.includes('حاشیه')) { text = walker.currentNode; break; }
+    const start = text.nodeValue.indexOf('حاشیه');
     const range = document.createRange();
-    range.setStart(text, 9);
-    range.setEnd(text, 24);
+    range.setStart(text, start);
+    range.setEnd(text, start + 'حاشیه نویسی آزمایشی'.length);
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
