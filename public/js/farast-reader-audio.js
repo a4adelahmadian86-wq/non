@@ -380,7 +380,19 @@
   });
   function startFrameLoop() {
     cancelAnimationFrame(raf);
-    const tick = () => { if (audio.paused) return; updateHighlight(audio.currentTime); raf = requestAnimationFrame(tick); };
+    const tick = () => {
+      if (audio.paused) return;
+      if (rangeEnd !== null && audio.currentTime >= rangeEnd) {
+        const stopAt = rangeEnd;
+        rangeEnd = null;
+        audio.pause();
+        audio.currentTime = stopAt;
+        updateHighlight(stopAt);
+        return;
+      }
+      updateHighlight(audio.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
     raf = requestAnimationFrame(tick);
   }
 
