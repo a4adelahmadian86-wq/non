@@ -79,6 +79,23 @@ class ProductDocumentAudioService
                 $durationMs += $segmentDuration;
                 $pcm .= $parsed['pcm'];
 
+                $words = preg_split('/\s+/u', trim($speechText), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $weights = array_map(static fn (string $word) => max(1, mb_strlen($word, 'UTF-8')), $words);
+                $totalWeight = max(1, array_sum($weights));
+                $wordCursor = $startMs;
+                $wordTimings = [];
+                foreach ($words as $wordIndex => $word) {
+                    $wordEnd = $wordIndex === array_key_last($words)
+                        ? $durationMs
+                        : $wordCursor + (int) round($segmentDuration * ($weights[$wordIndex] / $totalWeight));
+                    $wordTimings[] = [
+                        'text' => $word,
+                        'start_ms' => $wordCursor,
+                        'end_ms' => max($wordCursor + 1, $wordEnd),
+                    ];
+                    $wordCursor = $wordEnd;
+                }
+
                 $segments[] = [
                     'chunk_index' => (int) ($chunk['chunk_index'] ?? $index),
                     'chunk_type' => (string) ($chunk['chunk_type'] ?? 'text'),
@@ -86,6 +103,7 @@ class ProductDocumentAudioService
                     'start_ms' => $startMs,
                     'end_ms' => $durationMs,
                     'text' => $speechText,
+                    'words' => $wordTimings,
                     'text_sha256' => hash('sha256', $speechText),
                 ];
             }
