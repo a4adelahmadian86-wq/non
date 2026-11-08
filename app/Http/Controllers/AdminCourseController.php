@@ -159,36 +159,37 @@ class AdminCourseController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 256 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
-            $resourceId = DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
+            [$resourceId, $documentId] = DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
                 $resource = StoreProductFile::create([
-                'product_id' => $product->id,
-                'course_lesson_id' => $lesson->id,
-                'purpose' => 'lesson_resource',
-                'version' => $product->version,
-                'disk' => 'private',
-                'path' => $path,
-                'original_name' => $upload->getClientOriginalName(),
-                'mime' => $inspection['mime'],
-                'size_bytes' => $inspection['size'],
-                'sha256' => $inspection['checksum'],
-                'is_primary' => false,
-                'is_active' => true,
-                'scan_status' => 'clean',
-                'scan_engine' => $inspection['scan'],
-                'scanned_at' => now(),
+                    'product_id' => $product->id,
+                    'course_lesson_id' => $lesson->id,
+                    'purpose' => 'lesson_resource',
+                    'version' => $product->version,
+                    'disk' => 'private',
+                    'path' => $path,
+                    'original_name' => $upload->getClientOriginalName(),
+                    'mime' => $inspection['mime'],
+                    'size_bytes' => $inspection['size'],
+                    'sha256' => $inspection['checksum'],
+                    'is_primary' => false,
+                    'is_active' => true,
+                    'scan_status' => 'clean',
+                    'scan_engine' => $inspection['scan'],
+                    'scanned_at' => now(),
+                ]);
+                $documentId = DB::table('store_product_documents')->insertGetId([
+                    'product_file_id' => $resource->id,
+                    'source_sha256' => $resource->sha256,
+                    'processing_status' => 'queued',
+                    'structure_json' => json_encode(['source' => ['file_id' => $resource->id, 'purpose' => 'lesson_resource']], JSON_UNESCAPED_UNICODE),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
                 $this->audit('store.course.resource_uploaded', $product, ['lesson_id' => $lesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
-                return (int) $resource->id;
+
+                return [(int) $resource->id, (int) $documentId];
             });
             $resource = StoreProductFile::query()->findOrFail($resourceId);
-            $documentId = DB::table('store_product_documents')->insertGetId([
-                'product_file_id' => $resource->id,
-                'source_sha256' => $resource->sha256,
-                'processing_status' => 'queued',
-                'structure_json' => json_encode(['source' => ['file_id' => $resource->id, 'purpose' => 'lesson_resource']], JSON_UNESCAPED_UNICODE),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
             if ($resource->size_bytes <= 25 * 1024 * 1024) {
                 $shouldDispatchDocument = true;
             } else {
