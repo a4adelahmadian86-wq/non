@@ -331,7 +331,7 @@
     audio.play().catch(() => { status.textContent = 'پخش صوت ممکن نشد؛ دسترسی فایل را بررسی کنید.'; });
     return true;
   };
-  const tokens = value => String(value || '').toLocaleLowerCase().replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\u064B-\u065F\u0670]/g, '').replace(/[\u200c\u200f\u202a-\u202e]/g, '').match(/[\p{L}\p{N}]+/gu) || [];
+  const tokens = value => String(value || '').trim().split(/\s+/u).map(normalize).filter(Boolean);
   const findTextRange = (value, page = null, occurrence = 0) => {
     const wanted = tokens(value);
     if (!wanted.length || !activeTrack) return null;
@@ -345,12 +345,16 @@
             start: item.start + (item.end - item.start) * index / all.length,
             end: item.start + (item.end - item.start) * (index + 1) / all.length
           }));
-      words.forEach(word => indexedWords.push({
-        token: tokens(word.text)[0] || '',
-        start: Number(word.start),
-        end: Number(word.end),
-        page: item.page
-      }));
+      words.forEach(word => {
+        const token = tokens(word.text)[0] || '';
+        if (!token) return;
+        indexedWords.push({
+          token,
+          start: Number(word.start),
+          end: Number(word.end),
+          page: item.page
+        });
+      });
     }
     let matchedOccurrences = 0;
     for (let i = 0; i <= indexedWords.length - wanted.length; i++) {
