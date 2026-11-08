@@ -279,7 +279,7 @@ class StoreReaderAccessTest extends TestCase
 
         $this->actingAs($this->makeReaderUser())
             ->get(route('store.preview', $preview))
-            ->assertStatus(422);
+            ->assertStatus(409);
     }
 
     public function test_reader_rejects_invalid_unprepared_xlsx_assets(): void
