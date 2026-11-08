@@ -33,7 +33,8 @@ class ProductSnapshot(BaseModel):
     title: str = Field(min_length=2, max_length=220)
     sku: str | None = Field(default=None, max_length=80)
     short_description: str | None = Field(default=None, max_length=2000)
-    description: str | None = Field(default=None, max_length=12000)
+    description: str | None = Field(default=None, max_length=8000)
+    description_truncated: bool = False
     price_rials: int = Field(ge=0, le=999999999999)
     compare_at_price_rials: int | None = Field(default=None, ge=0, le=999999999999)
     seo_title: str | None = Field(default=None, max_length=220)
