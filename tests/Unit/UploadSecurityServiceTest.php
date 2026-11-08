@@ -59,6 +59,31 @@ class UploadSecurityServiceTest extends TestCase
         app(UploadSecurityService::class)->inspect('quarantine/fake.pdf');
     }
 
+    public function test_tar_manifest_is_listed_without_extracting_archive_members(): void
+    {
+        if (! class_exists(\\PharData::class)) {
+            $this->markTestSkipped('PHP PharData is unavailable.');
+        }
+
+        $base = tempnam(sys_get_temp_dir(), 'farast-tar-');
+        @unlink($base);
+        $tarPath = $base.'.tar';
+        $archive = new \\PharData($tarPath);
+        $archive->addFromString('chapters/intro.txt', 'مقدمه کتاب');
+        unset($archive);
+
+        $bytes = file_get_contents($tarPath);
+        @unlink($tarPath);
+        Storage::disk('private')->put('quarantine/book.tar', $bytes);
+
+        $result = app(UploadSecurityService::class)->inspect('quarantine/book.tar', 'application/x-tar');
+
+        $this->assertTrue($result['safe']);
+        $this->assertSame('archive', $result['detected_type']);
+        $this->assertSame(1, $result['archive_entry_count']);
+        $this->assertSame('chapters/intro.txt', $result['archive_entries'][0]['name']);
+    }
+
     public function test_zip_manifest_is_listed_without_extracting_archive_members(): void
     {
         if (! class_exists(\ZipArchive::class)) {
