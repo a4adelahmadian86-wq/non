@@ -142,7 +142,7 @@ class AdminStoreController extends Controller
         $provenance = null;
         if ($request->filled('ai_content_source_fingerprints') || $request->filled('ai_content_signature')) {
             $request->validate([
-                'ai_content_source_fingerprints' => 'required|string|max:4000',
+                'ai_content_source_fingerprints' => 'required|string|max:12000',
                 'ai_content_signature' => 'required|string|size:64',
                 'ai_content_request_id' => 'nullable|string|max:64',
                 'ai_content_model' => 'nullable|string|max:120',
@@ -1106,7 +1106,7 @@ class AdminStoreController extends Controller
             'seo_description' => 'nullable|string|max:320',
             'seo_focus_keyword' => 'nullable|string|max:120',
             'seo_secondary_keywords' => 'nullable|string|max:1000',
-            'ai_content_source_fingerprints' => 'nullable|string|max:4000',
+            'ai_content_source_fingerprints' => 'nullable|string|max:12000',
             'ai_content_signature' => 'nullable|string|size:64',
             'ai_content_request_id' => 'nullable|string|max:64',
             'ai_content_model' => 'nullable|string|max:120',
