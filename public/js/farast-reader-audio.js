@@ -205,13 +205,13 @@
         if (input) { input.value = String(activePage); input.dispatchEvent(new Event('change', { bubbles: true })); }
       }
     }
+    wordMarks.forEach(mark => {
+      const isCurrent = time >= mark.start && time < mark.end;
+      mark.element.classList.toggle('is-current', isCurrent);
+      mark.element.classList.toggle('is-read', mark.end <= time);
+    });
     if (found !== activeSegment) {
       activeSegment = found;
-      wordMarks.forEach(mark => {
-        const isCurrent = time >= mark.start && time < mark.end;
-        mark.element.classList.toggle('is-current', isCurrent);
-        mark.element.classList.toggle('is-read', mark.end <= time);
-      });
       if (item) {
         caption.textContent = item.text;
         progressLabel.textContent = (activeTrack.granularity === 'segment' ? 'بخش ' : 'کلمه ') + fa(found + 1) + ' از ' + fa(timings.length);
