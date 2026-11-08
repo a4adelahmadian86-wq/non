@@ -169,7 +169,7 @@ class StoreProductDocumentPageBuilder
                         $sentenceHtml[] = '<span class="reader-document-sentence" role="button" tabindex="0">'.$safeSentence.'</span>';
                     }
                 }
-                $htmlLines[] = '<p class="reader-document-paragraph" tabindex="0" role="group" style="position:relative;display:block;color:#1f2937;white-space:pre-wrap;line-height:1.95;unicode-bidi:plaintext;margin:0 0 10px;">'.($sentenceHtml === [] ? '&nbsp;' : implode(' ', $sentenceHtml)).'</p>';
+                $htmlLines[] = '<p class="reader-document-line reader-document-paragraph" tabindex="0" role="group" style="position:relative;display:block;color:#1f2937;white-space:pre-wrap;line-height:1.95;unicode-bidi:plaintext;margin:0 0 10px;">'.($sentenceHtml === [] ? '&nbsp;' : implode(' ', $sentenceHtml)).'</p>';
             }
 
             if ($htmlLines === []) {
