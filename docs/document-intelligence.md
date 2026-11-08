@@ -18,7 +18,7 @@
 - store_document_facts: short facts with evidence quotes, page references and confidence.
 - store_document_samples: immutable sample artifact and AI-selected page list.
 - store_document_audio_tracks / store_document_audio_segments: one generated audio asset and synchronized source segments.
-- store_product_previews.document_id and source_sha256 bind reader artifacts to the exact source version.
+- store_product_previews.store_document_record_id and source_sha256 bind reader artifacts to the exact store-file source version. The existing document_id column remains reserved for the Farast editor document relation.
 
 DocumentKnowledgeContextBuilder is the shared Laravel context provider. Internal AI services can request /internal/store/products/{product}/document-knowledge with the existing Product Supervisor bearer token. It returns source filenames, hashes, chunks, facts and provenance. It is not a public browser API.
 
