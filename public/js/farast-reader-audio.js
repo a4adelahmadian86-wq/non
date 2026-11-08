@@ -454,17 +454,17 @@
     }
     const article = event.target.closest('.farast-reader-page-item');
     if (article && !event.target.closest('button,input,select,a,.farast-audio-dock')) {
-      const page = event.target.closest('[data-pdf-cont-page]');
-      if (page) {
-        const pageNumber = Number(page.dataset.pdfContPage || 0);
-        const pageArticle = page.closest('.farast-reader-page-item') || article;
-        if (pageNumber > 0) {
-          const pageItems = activeTrack?.timings.filter(item => Number(item.page) === pageNumber) || [];
-          if (pageItems.length) { event.preventDefault(); playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ ' + fa(pageNumber)); return; }
+      const continuousPage = event.target.closest('[data-pdf-cont-page]');
+      if (continuousPage) {
+        const pageNumber = Number(continuousPage.dataset.pdfContPage || 0);
+        const pageItems = activeTrack?.timings.filter(item => Number(item.page) === pageNumber) || [];
+        if (pageItems.length) {
+          event.preventDefault();
+          playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ ' + fa(pageNumber));
         }
+        return;
       }
-      if (!event.target.closest('.farast-pdf-cont-text')) playPage(article);
-      else if (!event.target.closest('.farast-pdf-cont-text [data-pdf-cont-page]')) playPage(article);
+      playPage(article);
     }
   }, true);
   root.addEventListener('keydown', event => {
