@@ -212,7 +212,7 @@ class StoreController extends Controller
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('X-Frame-Options', 'SAMEORIGIN')
             ->header('Referrer-Policy', 'no-referrer')
-            ->header('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
+            ->header('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:'")
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
     /**
