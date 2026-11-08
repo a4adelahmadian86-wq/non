@@ -31,7 +31,7 @@
     return pdfjsPromise;
   };
 
-  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null,continuousMode=false,continuousObserver=null,activePdfUrl=null,searchRequest=0;
+  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -257,11 +257,35 @@
     setPageControls(pdfPage,pdfDoc.numPages);
   };
 
+  const releaseContinuousPage=wrapper=>{
+    if(!wrapper)return;
+    wrapper.dataset.keepRendered='0';
+    if(wrapper.dataset.rendering==='1')return;
+    wrapper.dataset.rendered='0';
+    const canvas=wrapper.querySelector('canvas');
+    if(canvas){canvas.width=0;canvas.height=0;canvas.style.width='';canvas.style.height='';}
+    const text=wrapper.querySelector('.farast-pdf-cont-text');
+    if(text){text.innerHTML='';text.style.width='';text.style.height='';}
+    // Preserve the measured page box so off-screen pages remain scrollable placeholders.
+    const width=Number(wrapper.dataset.renderedWidth)||0;
+    const height=Number(wrapper.dataset.renderedHeight)||0;
+    wrapper.style.width=width>0?width+'px':'';
+    wrapper.style.minHeight=height>0?height+'px':'';
+  };
+
+  const clearContinuousFallback=()=>{
+    if(continuousFallbackHandler&&stage)stage.removeEventListener('scroll',continuousFallbackHandler);
+    continuousFallbackHandler=null;
+    if(continuousFallbackFrame){cancelAnimationFrame(continuousFallbackFrame);continuousFallbackFrame=0;}
+  };
+
   const renderContinuousPage=async(number)=>{
     if(!pdfDoc||!continuousHost)return;
     const wrapper=continuousHost.querySelector('[data-pdf-cont-page="'+number+'"]');
     const canvas=wrapper?.querySelector('canvas');
-    if(!wrapper||!canvas||wrapper.dataset.rendered==='1'||wrapper.dataset.rendering==='1')return;
+    if(!wrapper||!canvas)return;
+    wrapper.dataset.keepRendered='1';
+    if(wrapper.dataset.rendered==='1'||wrapper.dataset.rendering==='1')return;
     wrapper.dataset.rendering='1';
     try{
     const page=await pdfDoc.getPage(number);
@@ -276,6 +300,8 @@
     canvas.style.height=viewport.height+'px';
     wrapper.style.width=viewport.width+'px';
     wrapper.style.minHeight=viewport.height+'px';
+    wrapper.dataset.renderedWidth=String(Math.round(viewport.width));
+    wrapper.dataset.renderedHeight=String(Math.round(viewport.height));
     const context=canvas.getContext('2d',{alpha:false});
     context.setTransform(ratio,0,0,ratio,0,0);
     await page.render({canvasContext:context,viewport}).promise;
@@ -297,6 +323,7 @@
     wrapper.dataset.rendered='1';
     }finally{
       delete wrapper.dataset.rendering;
+      if(wrapper.dataset.keepRendered==='0')releaseContinuousPage(wrapper);
     }
   };
 
@@ -304,6 +331,8 @@
     if(!pdfDoc||!continuousHost)return;
     continuousHost.hidden=false;
     continuousObserver?.disconnect();
+    continuousObserver=null;
+    clearContinuousFallback();
     continuousHost.innerHTML='';
     const fragment=document.createDocumentFragment();
     for(let n=1;n<=pdfDoc.numPages;n++){
@@ -311,6 +340,7 @@
       wrapper.className='farast-pdf-cont-page';
       wrapper.dataset.pdfContPage=String(n);
       wrapper.dataset.rendered='0';
+      wrapper.dataset.keepRendered='0';
       wrapper.setAttribute('aria-label','صفحه '+faNumber(n));
       const canvas=document.createElement('canvas');
       const textLayer=document.createElement('div');
@@ -324,18 +354,30 @@
       continuousObserver=new IntersectionObserver(entries=>{
         let best=null;
         entries.forEach(entry=>{
-          if(!entry.isIntersecting)return;
           const number=Number(entry.target.dataset.pdfContPage);
-          if(!best||entry.intersectionRatio>best.ratio)best={number,ratio:entry.intersectionRatio};
-          renderContinuousPage(number).catch(showPdfError);
+          if(entry.isIntersecting){
+            entry.target.dataset.keepRendered='1';
+            if(!best||entry.intersectionRatio>best.ratio)best={number,ratio:entry.intersectionRatio};
+            renderContinuousPage(number).catch(showPdfError);
+          }else{
+            releaseContinuousPage(entry.target);
+          }
         });
         if(best){pdfPage=best.number;setPageControls(best.number,pdfDoc.numPages);}
-      },{root:stage,threshold:[.05,.15,.35,.6]});
+      },{root:stage,rootMargin:'650px 0px',threshold:[.05,.15,.35,.6]});
       continuousHost.querySelectorAll('[data-pdf-cont-page]').forEach(node=>continuousObserver.observe(node));
-      // Start the current page without blocking the toolbar while the canvas and text layer render.
+      // Render only pages near the viewport; off-screen canvases are released as they leave the window.
       renderContinuousPage(pdfPage).catch(showPdfError);
     }else{
-      for(let n=1;n<=pdfDoc.numPages;n++)await renderContinuousPage(n);
+      continuousFallbackHandler=()=>{
+        if(continuousFallbackFrame)return;
+        continuousFallbackFrame=requestAnimationFrame(()=>{
+          continuousFallbackFrame=0;
+          refreshContinuousVisiblePages().catch(showPdfError);
+        });
+      };
+      stage?.addEventListener('scroll',continuousFallbackHandler,{passive:true});
+      await refreshContinuousVisiblePages();
     }
   };
 
@@ -347,14 +389,7 @@
       const rect=node.getBoundingClientRect();
       return rect.bottom>=stageRect.top-180&&rect.top<=stageRect.bottom+180;
     });
-    nodes.forEach(node=>{
-      node.dataset.rendered='0';
-      delete node.dataset.rendering;
-      const canvas=node.querySelector('canvas');
-      if(canvas){canvas.width=0;canvas.height=0;}
-      const text=node.querySelector('.farast-pdf-cont-text');
-      if(text)text.innerHTML='';
-    });
+    nodes.forEach(releaseContinuousPage);
     for(const node of visible)await renderContinuousPage(Number(node.dataset.pdfContPage));
   };
 
@@ -509,7 +544,7 @@
     articles.forEach((article,i)=>article.classList.toggle('is-active',i===itemIndex));
     root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: itemIndex } }));
     if(!isPdf()&&continuousMode){
-      continuousMode=false;continuousObserver?.disconnect();continuousObserver=null;
+      continuousMode=false;continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();
       pdfSurface?.classList.remove('is-continuous');
       if(continuousHost)continuousHost.innerHTML='';
       scrollModeButton?.setAttribute('aria-pressed','false');
@@ -517,7 +552,7 @@
     const pdfActive=isPdf();
     if(!pdfActive&&pdfDoc){
       if(renderTask){try{renderTask.cancel();}catch(_){}renderTask=null;}
-      continuousObserver?.disconnect();continuousObserver=null;continuousMode=false;
+      continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();continuousMode=false;
       try{await pdfDoc.destroy();}catch(_){}
       pdfDoc=null;activePdfUrl=null;pdfCanvas=null;pdfSurface=null;pdfLoading=null;continuousHost=null;
       scrollModeButton?.setAttribute('aria-pressed','false');
@@ -618,7 +653,7 @@
         await buildContinuousPages();
         await navigatePdfPage(pdfPage);
       }else{
-        continuousObserver?.disconnect();continuousObserver=null;
+        continuousObserver?.disconnect();continuousObserver=null;clearContinuousFallback();
         pdfSurface?.classList.remove('is-continuous');
         if(continuousHost){continuousHost.innerHTML='';continuousHost.hidden=true;}
         if(pdfSurface){pdfSurface.style.width='';pdfSurface.style.minHeight='';}
