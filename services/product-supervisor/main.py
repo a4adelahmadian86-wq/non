@@ -112,7 +112,7 @@ async def review_product_file(
     product_id: str = Form(..., min_length=1, max_length=80),
     product_title: str = Form(..., min_length=2, max_length=220),
     product_type: Literal["digital_file", "course"] = Form(...),
-    primary_scan_status: Literal["clean"] = Form(...),
+    primary_scan_status: Literal["clean", "structural_clean"] = Form(...),
     category_name: str | None = Form(default=None, max_length=160),
     tags_json: str = Form(default="[]", max_length=5000),
     description: str | None = Form(default=None, max_length=8000),
@@ -181,7 +181,43 @@ async def review_product_file(
         else:
             provider_status["groq"] = "unavailable"
 
-    extracted, redaction_count = redact_sensitive_content("\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip()))
+    source_blocks = inspection.content_blocks or []
+    if not source_blocks and inspection.extracted_text.strip():
+        source_blocks = [{"block_type": "paragraph", "page_number": None, "text": inspection.extracted_text}]
+    safe_content_blocks = []
+    redaction_count = 0
+    for block in source_blocks[:2000]:
+        if not isinstance(block, dict):
+            continue
+        block_text, count = redact_sensitive_content(str(block.get("text") or ""))
+        redaction_count += count
+        if block_text.strip():
+            page_value = block.get("page_number")
+            safe_content_blocks.append({
+                "sequence": len(safe_content_blocks) + 1,
+                "block_type": str(block.get("block_type") or "paragraph")[:32],
+                "page_number": page_value if isinstance(page_value, int) and page_value > 0 else None,
+                "text": block_text[:6000],
+            })
+    if visual_report.strip():
+        visual_text, count = redact_sensitive_content(visual_report)
+        redaction_count += count
+        safe_content_blocks.append({
+            "sequence": len(safe_content_blocks) + 1,
+            "block_type": "image_description",
+            "page_number": None,
+            "text": visual_text[:6000],
+        })
+    if transcription.strip():
+        audio_text, count = redact_sensitive_content(transcription)
+        redaction_count += count
+        safe_content_blocks.append({
+            "sequence": len(safe_content_blocks) + 1,
+            "block_type": "transcription",
+            "page_number": None,
+            "text": audio_text[:6000],
+        })
+    extracted = "\n\n".join(block["text"] for block in safe_content_blocks)[:120000]
     model_review = {}
     if extracted.strip() and os.getenv("GEMINI_API_KEY"):
         try:
@@ -194,6 +230,7 @@ async def review_product_file(
                     "tags": [redact_sensitive_content(tag)[0] for tag in tags],
                     "description": redact_sensitive_content(description or "")[0],
                     "detected_file_type": inspection.detected_type,
+                    "page_count": inspection.page_count,
                 },
             )
             provider_status["gemini"] = "completed"
@@ -227,18 +264,58 @@ async def review_product_file(
                 "recommendation": str(item.get("recommendation") or "")[:500],
             })
 
-    # File inspection is advisory. A missing antivirus engine is never reported as clean.
+    # Normalize document knowledge returned by the model. Evidence is kept separate from source text.
+    outline = []
+    for item in model_review.get("outline", [])[:100] if isinstance(model_review.get("outline", []), list) else []:
+        if not isinstance(item, dict):
+            continue
+        page = item.get("page_number")
+        page = page if isinstance(page, int) and page > 0 and (inspection.page_count is None or page <= inspection.page_count) else None
+        outline.append({
+            "title": str(item.get("title") or "")[:180],
+            "evidence_excerpt": str(item.get("evidence_excerpt") or "")[:500],
+            "page_number": page,
+        })
+    key_topics = [str(item)[:120] for item in model_review.get("key_topics", [])[:40] if isinstance(item, str)] if isinstance(model_review.get("key_topics", []), list) else []
+    grounded_facts = []
+    for item in model_review.get("grounded_facts", [])[:100] if isinstance(model_review.get("grounded_facts", []), list) else []:
+        if not isinstance(item, dict):
+            continue
+        page = item.get("page_number")
+        page = page if isinstance(page, int) and page > 0 and (inspection.page_count is None or page <= inspection.page_count) else None
+        grounded_facts.append({
+            "claim": str(item.get("claim") or "")[:500],
+            "evidence_excerpt": str(item.get("evidence_excerpt") or "")[:500],
+            "page_number": page,
+        })
+    sample_pages = []
+    if inspection.detected_type == "pdf" and isinstance(model_review.get("sample_page_candidates"), list):
+        sample_pages = sorted({
+            page for page in model_review["sample_page_candidates"]
+            if isinstance(page, int) and inspection.page_count and 1 <= page <= inspection.page_count
+        })[:12]
+
+    # File inspection is advisory; only the site's structural preflight is represented as passed.
     return {
         "review_id": str(uuid.uuid4()),
         "product_id": product_id,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
+        "extracted_content": extracted,
+        "content_blocks": safe_content_blocks,
+        "content_profile": {
+            "outline": outline,
+            "key_topics": key_topics,
+            "grounded_facts": grounded_facts,
+            "sample_page_candidates": sample_pages,
+        },
+        "content_study_status": "completed" if provider_status.get("gemini") == "completed" else ("extracted_only" if extracted else "no_extractable_content"),
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
         "warnings": [str(item)[:400] for item in warnings[:20]],
         "redacted_sensitive_items": redaction_count,
-        "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("structural_checks_passed" if inspection.antivirus_status == "clean" else ("upstream_scan_verified" if inspection.upstream_scan_status == "clean" else "manual_scan_required")),
+        "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("structural_checks_passed" if inspection.upstream_scan_status in {"clean", "structural_clean"} else "manual_scan_required"),
         "publication_authorized": False,
         "automated_publication": False,
     }
