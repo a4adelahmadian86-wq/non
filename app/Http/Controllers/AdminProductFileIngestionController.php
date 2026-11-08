@@ -247,6 +247,16 @@ class AdminProductFileIngestionController extends Controller
                 throw $exception;
             }
 
+            try {
+                $this->event($session->fresh(), 'content_study', 'queued', 'مطالعه محتوایی در صف قرار گرفت', 'پردازشگر محتوایی فایل را استخراج و اطلاعات مستند آن را در پایگاه دانش ثبت می‌کند.', [
+                    'document_id' => $result['document_id'],
+                ]);
+                StudyProductDocument::dispatch($result['document_id']);
+            } catch (Throwable $queueException) {
+                $this->event($session->fresh(), 'content_study', 'pending', 'مطالعه محتوایی در انتظار اجراست', 'ثبت فایل موفق بود؛ اجرای پردازشگر در دسترس نبود و باید دوباره تلاش شود.');
+                report($queueException);
+            }
+
             return response()->json([
                 'ok' => true,
                 'message' => 'فایل تأیید و ذخیره شد. پرونده محتوایی برای مطالعه آماده است.',
