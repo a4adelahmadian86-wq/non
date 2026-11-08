@@ -48,3 +48,14 @@ The scheduler starts a bounded `queue:work --stop-when-empty` worker for `docume
 - Product Supervisor: 25 MiB per source file and up to 120,000 extracted characters. Larger files remain stored with an explicit `awaiting_provider` state rather than being silently truncated and represented as complete.
 - Archive inspection: bounded entry count, expanded bytes and compression ratio. Unsupported/encrypted archive structures are rejected; nested archives are disclosed and not executed or extracted in preflight.
 - AI review is advisory. It never authorizes publication or overrides the server-side publication rules.
+
+## Granular reader speech
+
+The authenticated full-document reader supports speech at several selection levels:
+- Clicking a word requests a short, exact WAV from the dedicated document-audio service.
+- Clicking a sentence or paragraph in the structured HTML reader synthesizes that exact text.
+- Selecting a phrase with the pointer synthesizes only the selected phrase.
+- Clicking the page surface seeks within the pre-generated full-document WAV and stops at that page's timing boundary.
+- The persistent player continues to read the complete document and synchronizes the active source segment.
+
+Selection synthesis is restricted to the authenticated purchaser, the currently published reader-only product, and text that is verified as a substring of the selected extracted page. Requests are bounded to 2,000 characters, throttled, cached privately by source version and exact text, and never routed through the existing voice assistant.
