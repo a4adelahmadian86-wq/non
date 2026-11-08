@@ -27,4 +27,5 @@ class StoreProductDocument extends Model
     public function file(): BelongsTo { return $this->belongsTo(StoreProductFile::class, 'product_file_id'); }
     public function chunks(): HasMany { return $this->hasMany(StoreProductDocumentChunk::class, 'document_id')->orderBy('chunk_index'); }
     public function artifacts(): HasMany { return $this->hasMany(StoreProductDocumentArtifact::class, 'document_id'); }
+    public function facts(): HasMany { return $this->hasMany(StoreProductDocumentFact::class, 'document_id'); }
 }
