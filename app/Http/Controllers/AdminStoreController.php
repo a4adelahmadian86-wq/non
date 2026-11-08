@@ -381,6 +381,11 @@ class AdminStoreController extends Controller
                         ->where('product_id', $lockedProduct->id)
                         ->where('access_level', 'full')
                         ->update(['is_active' => false]);
+                    StoreProductPreview::query()
+                        ->where('product_id', $lockedProduct->id)
+                        ->where('access_level', 'sample')
+                        ->where('path', 'like', 'store/products/'.$lockedProduct->id.'/artifacts/%/sample-v1.pdf')
+                        ->update(['is_active' => false]);
                 }
 
                 $record = StoreProductFile::create([
