@@ -390,7 +390,7 @@
     return occurrences;
   };
   const targetOccurrence = (target, selector, value) => {
-    const scope = target.closest('.farast-reader-page-item') || root;
+    const scope = target.closest('[data-pdf-cont-page]') || target.closest('.farast-reader-page-item') || root;
     const wanted = tokens(value).join(' ');
     const matches = [...scope.querySelectorAll(selector)].filter(item =>
       tokens(item.dataset.readerSpeechText || item.textContent).join(' ') === wanted
@@ -507,7 +507,7 @@
     const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
     const selectedText = selection.toString();
     const selectionRange = selection.getRangeAt(0);
-    const pageScope = anchor.closest('.farast-reader-page-item') || root;
+    const pageScope = anchor.closest('[data-pdf-cont-page]') || anchor.closest('.farast-reader-page-item') || root;
     let prefixText = '';
     try {
       const prefixRange = document.createRange();
