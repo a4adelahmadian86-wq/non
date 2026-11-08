@@ -262,7 +262,7 @@ class StoreXlsxPreviewRenderer
                 throw new RuntimeException('Workbook shared-string count exceeds the limit.');
             }
             $value = '';
-            foreach ((new DOMXPath($xml))->query('.//*[local-name()="t"]', $item) as $text) {
+            foreach ($xpath->query('.//*[local-name()="t"]', $item) as $text) {
                 $value .= $text->textContent;
                 if (strlen($value) > 100000) {
                     throw new RuntimeException('A workbook text value is too large.');
