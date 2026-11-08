@@ -150,6 +150,7 @@ class FilePipelineTests(unittest.TestCase):
         result = inspect_file(stream.getvalue(), "outline.xlsx")
         self.assertEqual(result.detected_type, "xlsx")
         self.assertIn("مبانی فروش", result.extracted_text)
+        self.assertTrue(any(chunk.get("locator", {}).get("sheet") == "Sheet" for chunk in result.content_chunks))
 
     def test_xlsx_extracts_chart_metadata_and_embedded_images(self):
         workbook = Workbook()
@@ -212,6 +213,14 @@ class FilePipelineTests(unittest.TestCase):
         self.assertIn("10", result.extracted_text)
         self.assertEqual(len(result.image_assets), 1)
         self.assertEqual(result.image_assets[0]["locator"]["media"], "pptx_image")
+
+    def test_standalone_image_is_one_reader_page_with_a_visual_asset(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (20, 20), "white").save(image_stream, format="PNG")
+        result = inspect_file(image_stream.getvalue(), "cover.png")
+        self.assertEqual(result.detected_type, "image")
+        self.assertEqual(result.page_count, 1)
+        self.assertEqual(len(result.image_assets), 1)
 
     def test_wav_is_not_misclassified_as_image(self):
         wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + b"0" * 16 + b"data" + b"0" * 4
