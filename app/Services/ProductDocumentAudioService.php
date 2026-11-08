@@ -35,12 +35,16 @@ class ProductDocumentAudioService
         $durationMs = 0;
         $maxAudioBytes = 100 * 1024 * 1024;
 
-        foreach (array_slice($chunks, 0, 300) as $index => $chunk) {
+        if (count($chunks) > 300) {
+            throw new RuntimeException('product_audio_chunk_limit_exceeded');
+        }
+
+        foreach ($chunks as $index => $chunk) {
             $text = trim((string) ($chunk['content_text'] ?? ''));
             if ($text === '') continue;
 
             foreach ($this->splitForSpeech($text) as $speechText) {
-            $response = Http::accept('audio/wav')
+                $response = Http::accept('audio/wav')
                 ->withToken($token)
                 ->asJson()
                 ->connectTimeout(8)
@@ -51,37 +55,37 @@ class ProductDocumentAudioService
                     'voice_id' => $voiceId,
                 ]);
 
-            if (! $response->successful()) {
-                throw new RuntimeException('product_audio_provider_failed');
-            }
+                if (! $response->successful()) {
+                    throw new RuntimeException('product_audio_provider_failed');
+                }
 
-            $parsed = $this->parseWav($response->body());
-            $currentFormat = $parsed['format'];
+                    $currentFormat = $parsed['format'];
+                if ($format === null) { = $parsed['format'];
             if ($format === null) {
-                $format = $currentFormat;
-            } elseif ($format !== $currentFormat) {
-                throw new RuntimeException('product_audio_format_changed');
-            }
+                    $format = $currentFormat;
+                } elseif ($format !== $currentFormat) {
+                    throw new RuntimeException('product_audio_format_changed');
+                }
 
-            $segmentBytes = strlen($parsed['pcm']);
-            if ($segmentBytes === 0 || strlen($pcm) + $segmentBytes > $maxAudioBytes) {
-                throw new RuntimeException('product_audio_size_limit');
-            }
+                $segmentBytes = strlen($parsed['pcm']);
+                if ($segmentBytes === 0 || strlen($pcm) + $segmentBytes > $maxAudioBytes) {
+                    throw new RuntimeException('product_audio_size_limit');
+                }
 
-            $startMs = $durationMs;
-            $segmentDuration = (int) round(($segmentBytes / $format['byte_rate']) * 1000);
-            $durationMs += $segmentDuration;
-            $pcm .= $parsed['pcm'];
+                $startMs = $durationMs;
+                $segmentDuration = (int) round(($segmentBytes / $format['byte_rate']) * 1000);
+                $durationMs += $segmentDuration;
+                $pcm .= $parsed['pcm'];
 
-            $segments[] = [
-                'chunk_index' => (int) ($chunk['chunk_index'] ?? $index),
-                'chunk_type' => (string) ($chunk['chunk_type'] ?? 'text'),
-                'locator' => is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [],
-                'start_ms' => $startMs,
-                'end_ms' => $durationMs,
-                'text' => $speechText,
-                'text_sha256' => hash('sha256', $speechText),
-            ];
+                $segments[] = [
+                    'chunk_index' => (int) ($chunk['chunk_index'] ?? $index),
+                    'chunk_type' => (string) ($chunk['chunk_type'] ?? 'text'),
+                    'locator' => is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [],
+                    'start_ms' => $startMs,
+                    'end_ms' => $durationMs,
+                    'text' => $speechText,
+                    'text_sha256' => hash('sha256', $speechText),
+                ];
             }
         }
 
