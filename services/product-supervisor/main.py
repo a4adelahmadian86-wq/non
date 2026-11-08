@@ -121,6 +121,7 @@ async def review_product_file(
         analyze_extracted_content,
         analyze_image_with_groq,
         inspect_file,
+        redact_sensitive_content,
         transcribe_audio_with_groq,
     )
 
@@ -175,12 +176,11 @@ async def review_product_file(
             model_review = await analyze_extracted_content(
                 extracted,
                 {
-                    "product_id": product_id,
                     "product_title": product_title,
                     "product_type": product_type,
                     "category_name": category_name,
                     "tags": tags,
-                    "description": description or "",
+                    "description": redact_sensitive_content(description or "")[0],
                     "detected_file_type": inspection.detected_type,
                 },
             )
@@ -204,6 +204,7 @@ async def review_product_file(
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": model_review.get("findings", [])[:12] if isinstance(model_review.get("findings", []), list) else [],
         "warnings": warnings[:20],
+        "redacted_sensitive_items": redaction_count,
         "security_gate": "blocked" if inspection.antivirus_status == "infected" else ("manual_scan_required" if inspection.antivirus_status != "clean" else "structural_checks_passed"),
         "publication_authorized": False,
         "automated_publication": False,
