@@ -63,6 +63,21 @@ return new class extends Migration
             $table->index('content_sha256', 'store_document_chunks_hash_idx');
         });
 
+        Schema::create('store_product_document_facts', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('document_id')->constrained('store_product_documents')->cascadeOnDelete();
+            $table->char('source_sha256', 64);
+            $table->string('fact_type', 32)->default('other');
+            $table->string('fact_key', 160);
+            $table->longText('fact_value');
+            $table->longText('evidence_text');
+            $table->longText('locator_json')->nullable();
+            $table->string('verification_status', 24)->default('evidence_backed');
+            $table->timestamps();
+            $table->index(['document_id', 'fact_type'], 'store_document_facts_type_idx');
+            $table->index(['source_sha256', 'verification_status'], 'store_document_facts_hash_idx');
+        });
+
         Schema::create('store_product_document_artifacts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('document_id')->constrained('store_product_documents')->cascadeOnDelete();
@@ -83,6 +98,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('store_product_document_artifacts');
+        Schema::dropIfExists('store_product_document_facts');
         Schema::dropIfExists('store_product_document_chunks');
         Schema::dropIfExists('store_product_documents');
         Schema::dropIfExists('store_product_ingestions');
