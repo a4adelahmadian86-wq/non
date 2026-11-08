@@ -66,7 +66,12 @@
     const clean = String(text || '').trim();
     if (!clean) return;
     if (clean.length > 2000) {
-      if (status()) status().textContent = 'برای پخش انتخابی، متن باید حداکثر ۲۰۰۰ نویسه باشد.';
+      const chunks = splitSpeechText(clean);
+      if (chunks.length) {
+        void speakSnippetSequence(chunks, page, element, label || 'در حال خواندن محدودهٔ انتخاب‌شده');
+        return;
+      }
+      if (status()) status().textContent = 'تقسیم متن انتخاب‌شده برای پخش صوتی ممکن نشد.';
       return;
     }
     stop();
