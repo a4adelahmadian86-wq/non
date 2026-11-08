@@ -170,6 +170,54 @@ class StoreCourseLearningTest extends TestCase
         $this->assertSame('published', $product->fresh()->status);
     }
 
+    public function test_enrolled_student_cannot_open_a_published_lesson_without_valid_content(): void
+    {
+        $user = $this->makeUser();
+        [$product, , , $lesson] = $this->makeCourse('empty-published-lesson', 10000);
+        $lesson->update(['content' => null, 'is_published' => true]);
+        $this->grantCourse($user, $product);
+
+        $this->actingAs($user)
+            ->get(route('store.course.lesson', [$product, $lesson]))
+            ->assertNotFound();
+    }
+
+    public function test_last_clean_file_resource_cannot_be_removed_from_a_published_file_lesson(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('private');
+        $admin = $this->makeAdmin();
+        [$product, , , $lesson] = $this->makeCourse('file-resource-course', 10000);
+        $lesson->update(['lesson_type' => 'file', 'content' => null, 'video_url' => null]);
+        $path = 'store/products/'.$product->id.'/lessons/'.$lesson->id.'/handout.pdf';
+        \Illuminate\Support\Facades\Storage::disk('private')->put($path, 'course-handout');
+        $resource = StoreProductFile::create([
+            'product_id' => $product->id,
+            'course_lesson_id' => $lesson->id,
+            'purpose' => 'lesson_resource',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => $path,
+            'original_name' => 'handout.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 14,
+            'sha256' => hash('sha256', 'course-handout'),
+            'is_primary' => false,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'test',
+            'scanned_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.course.edit', $product))
+            ->delete(route('admin.store.course.resources.delete', [$product, $lesson, $resource]))
+            ->assertRedirect(route('admin.store.course.edit', $product))
+            ->assertSessionHasErrors('file');
+
+        $this->assertDatabaseHas('store_product_files', ['id' => $resource->id]);
+        \Illuminate\Support\Facades\Storage::disk('private')->assertExists($path);
+    }
+
     public function test_free_course_checkout_creates_library_entitlement_and_enrollment(): void
     {
         $user = $this->makeUser();
