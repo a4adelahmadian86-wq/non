@@ -91,6 +91,8 @@
   let raf = 0;
   let lastPageRequest = 0;
   let rangeEnd = null;
+  let suppressNextClick = false;
+  let selectionSuppressTimer = 0;
 
   const formatTime = seconds => {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -162,6 +164,7 @@
           if (!rect.width || !rect.height) return;
           const mark = document.createElement('span');
           mark.className = 'reader-audio-word';
+          mark.textContent = word;
           mark.dataset.segment = String(item.index);
           mark.setAttribute('role', 'button');
           mark.setAttribute('aria-label', (activeTrack.granularity === 'word' ? 'رفتن به کلمه ' : 'رفتن به بخش ') + word);
@@ -170,7 +173,14 @@
             left: (rect.left - layerRect.left) + 'px',
             top: (rect.top - layerRect.top) + 'px',
             width: rect.width + 'px',
-            height: rect.height + 'px'
+            height: rect.height + 'px',
+            font: getComputedStyle(found.node.parentElement || layer).font,
+            lineHeight: getComputedStyle(found.node.parentElement || layer).lineHeight,
+            direction: getComputedStyle(found.node.parentElement || layer).direction,
+            whiteSpace: 'nowrap',
+            color: 'transparent',
+            userSelect: 'text',
+            webkitUserSelect: 'text'
           });
           const indexedWord = Array.isArray(item.words) ? item.words[wordIndex] : null;
           const fallbackStart = item.start + ((item.end - item.start) * (wordIndex / Math.max(1, words.length)));
@@ -348,6 +358,7 @@
   };
 
   root.addEventListener('click', event => {
+    if (suppressNextClick) { suppressNextClick = false; window.clearTimeout(selectionSuppressTimer); return; }
     if (event.target.closest('.reader-audio-word')) return;
     const word = event.target.closest('.reader-document-word');
     if (word) {
@@ -398,7 +409,13 @@
     const selection = window.getSelection(); if (!selection || selection.isCollapsed) return;
     const anchor = selection.anchorNode?.parentElement; if (!anchor || !root.contains(anchor)) return;
     const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(selection.toString(), page); if (range) playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
+    const range = findTextRange(selection.toString(), page);
+    if (range) {
+      suppressNextClick = true;
+      window.clearTimeout(selectionSuppressTimer);
+      selectionSuppressTimer = window.setTimeout(() => { suppressNextClick = false; }, 500);
+      playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
+    }
   });
   function startFrameLoop() {
     cancelAnimationFrame(raf);
