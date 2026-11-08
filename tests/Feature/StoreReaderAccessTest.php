@@ -314,7 +314,7 @@ class StoreReaderAccessTest extends TestCase
     public function test_xlsx_preview_is_served_as_sandboxable_read_only_html_with_watermark(): void
     {
         [$product, $preview] = $this->makePreviewFixture();
-        $preparedHtml = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($this->makeXlsxBytes(), '');
+        $preparedHtml = app(\App\Services\StoreXlsxPreviewRenderer::class)->render($this->makeXlsxBytes(), '__FARAST_READER_IDENTITY__');
         Storage::disk('private')->put('store/previews/sample/workbook.html', $preparedHtml);
         $preview->update([
             'path' => 'store/previews/sample/workbook.html',
@@ -337,8 +337,8 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Disposition', 'inline; filename="farast-workbook-preview.html"')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
 
-        $streamedHtml = $response->streamedContent();
-        $this->assertStringNotContainsString('09123456789', $streamedHtml);
+        $streamedHtml = $response->getContent();
+        $this->assertStringContainsString('09123456789', $streamedHtml);
         $this->assertStringContainsString('گزارش', $streamedHtml);
         $this->assertStringContainsString('42', $streamedHtml);
         $this->assertStringContainsString('font-weight:700;color:#1F4E78;background-color:#D9EAF7;text-align:center;vertical-align:middle;white-space:normal', $streamedHtml);
