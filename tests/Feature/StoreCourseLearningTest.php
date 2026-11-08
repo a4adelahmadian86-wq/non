@@ -155,6 +155,30 @@ class StoreCourseLearningTest extends TestCase
         $this->assertSame('draft', $product->fresh()->status);
     }
 
+    public function test_last_valid_lesson_cannot_be_unpublished_while_course_is_live(): void
+    {
+        $admin = $this->makeAdmin();
+        [$product, , , $lesson] = $this->makeCourse('protected-course-unpublish', 10000);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.course.edit', $product))
+            ->put(route('admin.store.course.lessons.update', [$product, $lesson]), [
+                'title' => $lesson->title,
+                'lesson_type' => 'article',
+                'summary' => $lesson->summary,
+                'content' => $lesson->content,
+                'video_url' => '',
+                'duration_seconds' => $lesson->duration_seconds,
+                'sort_order' => $lesson->sort_order,
+                'is_published' => '0',
+            ])
+            ->assertRedirect(route('admin.store.course.edit', $product))
+            ->assertSessionHasErrors('is_published');
+
+        $this->assertTrue($lesson->fresh()->is_published);
+        $this->assertSame('published', $product->fresh()->status);
+    }
+
     public function test_last_valid_lesson_cannot_be_deleted_from_a_published_course(): void
     {
         $admin = $this->makeAdmin();
