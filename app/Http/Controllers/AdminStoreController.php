@@ -452,6 +452,28 @@ class AdminStoreController extends Controller
         ]);
     }
 
+    public function cancelFileIntakes(Request $request, StoreProduct $product)
+    {
+        $data = $request->validate([
+            'intake_ids' => 'required|array|min:1|max:10',
+            'intake_ids.*' => 'required|uuid',
+        ]);
+
+        $intakes = DB::table('store_file_intakes')
+            ->where('product_id', $product->id)
+            ->where('user_id', auth()->id())
+            ->where('status', 'awaiting_confirmation')
+            ->whereIn('id', $data['intake_ids'])
+            ->get();
+
+        foreach ($intakes as $intake) {
+            Storage::disk($intake->disk)->delete($intake->path);
+            DB::table('store_file_intakes')->where('id', $intake->id)->delete();
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
     public function uploadFile(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها را در بخش منابع هر جلسه بارگذاری کنید.');
