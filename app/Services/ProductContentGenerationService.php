@@ -130,6 +130,28 @@ class ProductContentGenerationService
         return hash_hmac('sha256', $payload, (string) config('app.key'));
     }
 
+    public function assertFreshProvenance(StoreProduct $product, string $encodedFingerprints, string $signature): array
+    {
+        $submitted = json_decode($encodedFingerprints, true);
+        if (! is_array($submitted) || $submitted === [] || count($submitted) > 30) {
+            throw ValidationException::withMessages(['ai_content' => 'منبع پیشنهاد هوشمند معتبر نیست؛ دوباره تولید محتوا را اجرا کن.']);
+        }
+
+        $current = $this->knowledge->contentGenerationContext($product);
+        if ($current['knowledge_status'] !== 'available') {
+            throw ValidationException::withMessages(['ai_content' => 'دانش محصول پس از تولید پیشنهاد تغییر کرده یا دیگر کامل نیست؛ دوباره تولید محتوا را اجرا کن.']);
+        }
+
+        ksort($submitted);
+        $currentFingerprints = $current['source_fingerprints'];
+        ksort($currentFingerprints);
+        if ($submitted !== $currentFingerprints || ! hash_equals($this->signature($product, $submitted), $signature)) {
+            throw ValidationException::withMessages(['ai_content' => 'فایل یا محتوای دوره پس از تولید پیشنهاد تغییر کرده است؛ پیشنهاد تازه بساز.']);
+        }
+
+        return $submitted;
+    }
+
     private function storedContentIsStale(StoreProduct $product, array $fingerprints): bool
     {
         $stored = (array) data_get($product->metadata, 'ai_content.source_fingerprints', []);
