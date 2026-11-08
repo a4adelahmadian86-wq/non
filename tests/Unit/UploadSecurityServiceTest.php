@@ -14,10 +14,16 @@ class UploadSecurityServiceTest extends TestCase
         Storage::fake('private');
     }
 
-    public function test_pdf_is_checked_locally_and_page_count_is_reported(): void
+    public function test_pdf_is_checked_locally_and_page_count_is_parsed_from_the_document_tree(): void
     {
-        $pdf = "%PDF-1.4\n1 0 obj << /Type /Page >> endobj\n2 0 obj << /Type /Page >> endobj\n%%EOF";
-        Storage::disk('private')->put('quarantine/sample.pdf', $pdf);
+        $pdf = new \\FPDF();
+        $pdf->SetFont('Arial', '', 12);
+        $pdf->AddPage();
+        $pdf->Cell(0, 10, 'First page');
+        $pdf->AddPage();
+        $pdf->Cell(0, 10, 'Second page');
+        $bytes = $pdf->Output('S');
+        Storage::disk('private')->put('quarantine/sample.pdf', $bytes);
 
         $result = app(UploadSecurityService::class)->inspect('quarantine/sample.pdf', 'application/pdf');
 
@@ -25,7 +31,7 @@ class UploadSecurityServiceTest extends TestCase
         $this->assertSame('pdf', $result['detected_type']);
         $this->assertSame(2, $result['page_count']);
         $this->assertSame('farast_static_v1', $result['scan']);
-        $this->assertSame(hash('sha256', $pdf), $result['checksum']);
+        $this->assertSame(hash('sha256', $bytes), $result['checksum']);
         $this->assertStringContainsString('تضمین', $result['security_notice']);
     }
 
