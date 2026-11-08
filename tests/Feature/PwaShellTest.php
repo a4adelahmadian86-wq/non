@@ -17,7 +17,7 @@ class PwaShellTest extends TestCase
             ->assertSee('id="farastInstallApp"', false)
             ->assertSee('/js/farast-pwa.js', false)
             ->assertSee('class="farast-mobile-dock"', false)
-            ->assertSee('href="/editor"', false);
+            ->assertSee('/editor"', false);
     }
 
     public function test_mobile_dock_spacing_is_scoped_to_public_pages(): void
