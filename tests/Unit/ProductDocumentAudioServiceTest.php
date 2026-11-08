@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductDocumentAudioService;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
