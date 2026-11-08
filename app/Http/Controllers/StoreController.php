@@ -183,7 +183,23 @@ class StoreController extends Controller
                 ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
                 : (request()->ip() ?: 'کاربر مهمان');
             $escapedIdentity = htmlspecialchars($identity, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $html = str_replace('__FARAST_READER_IDENTITY__', $escapedIdentity, $html);
+            if (str_contains($html, '__FARAST_READER_IDENTITY__')) {
+                $html = str_replace('__FARAST_READER_IDENTITY__', $escapedIdentity, $html);
+            } else {
+                // Backfill the dynamic mark for workbooks prepared before the placeholder was introduced.
+                $marks = '';
+                for ($index = 0; $index < 12; $index++) {
+                    $top = 8 + (($index % 4) * 25);
+                    $left = 3 + (intdiv($index, 4) * 32);
+                    $marks .= '<span style="top:'.$top.'%;left:'.$left.'%">'.$escapedIdentity.' · پیش‌نمایش فراست</span>';
+                }
+                $emptyWatermark = '<div class="watermark"></div>';
+                if (str_contains($html, $emptyWatermark)) {
+                    $html = str_replace($emptyWatermark, '<div class="watermark">'.$marks.'</div>', $html);
+                } elseif (str_contains($html, '</body>')) {
+                    $html = str_replace('</body>', '<div class="watermark">'.$marks.'</div></body>', $html);
+                }
+            }
 
             return response($html, 200, $headers);
         }
