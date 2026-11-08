@@ -379,7 +379,7 @@
         if(continuousFallbackFrame)return;
         continuousFallbackFrame=requestAnimationFrame(()=>{
           continuousFallbackFrame=0;
-          refreshContinuousVisiblePages().catch(showPdfError);
+          refreshContinuousVisiblePages(false).catch(showPdfError);
         });
       };
       stage?.addEventListener('scroll',continuousFallbackHandler,{passive:true});
@@ -387,7 +387,7 @@
     }
   };
 
-  const refreshContinuousVisiblePages=async()=>{
+  const refreshContinuousVisiblePages=async(force=true)=>{
     if(!continuousMode||!stage||!continuousHost)return;
     const stageRect=stage.getBoundingClientRect();
     const nodes=[...continuousHost.querySelectorAll('[data-pdf-cont-page]')];
@@ -396,18 +396,23 @@
       return rect.bottom>=stageRect.top-180&&rect.top<=stageRect.bottom+180;
     });
     const visibleSet=new Set(visible);
+    const pending=[];
     nodes.forEach(node=>{
-      if(node.dataset.rendering==='1'){
-        node.dataset.keepRendered=visibleSet.has(node)?'1':'0';
-        if(visibleSet.has(node))node.dataset.rerenderAfterRender='1';
-        else delete node.dataset.rerenderAfterRender;
-      }else{
+      if(!visibleSet.has(node)){
         releaseContinuousPage(node);
+        return;
       }
+      node.dataset.keepRendered='1';
+      if(force){
+        if(node.dataset.rendering==='1'){
+          node.dataset.rerenderAfterRender='1';
+        }else{
+          releaseContinuousPage(node);
+        }
+      }
+      if(node.dataset.rendered!=='1'&&node.dataset.rendering!=='1')pending.push(node);
     });
-    for(const node of visible){
-      if(node.dataset.rendering!=='1')await renderContinuousPage(Number(node.dataset.pdfContPage));
-    }
+    for(const node of pending)await renderContinuousPage(Number(node.dataset.pdfContPage));
   };
 
   const navigatePdfPage=async(number)=>{
