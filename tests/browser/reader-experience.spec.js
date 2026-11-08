@@ -547,7 +547,7 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
   await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: 0 } })));
   await expect.poll(() => protectedWordPageRequests).toBe(1);
-  await expect(page.locator('.farast-reader-page-item')).toHaveAttribute('data-reader-loaded', '1');
+  await expect(page.locator('.farast-reader-page-item[data-index="0"]')).toHaveAttribute('data-reader-loaded', '1');
   expect(wordPageErrors).toEqual([]);
   await expect(page.locator('[data-reader-text-layer] h1')).toHaveText('فصل اول');
   await expect(page.locator('[data-reader-text-layer] p')).toHaveText('متن توضیحی');
