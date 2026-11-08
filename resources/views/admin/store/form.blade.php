@@ -2,7 +2,7 @@
 @section('admin-content')
 @php($isEdit = $product->exists)
 <section class="store-page" dir="rtl">
-  <div class="store-container product-editor">
+  <div class="store-container product-editor" @if($isEdit) data-product-id="{{ $product->id }}" @endif>
     <div class="store-section-head">
       <div><span class="eyebrow">مرکز مدیریت محصولات</span><h1>{{ $isEdit ? 'ویرایش محصول' : 'ایجاد محصول جدید' }}</h1><p>اطلاعات فروش، محتوا و نوع دسترسی را از یک نقطه مدیریت کنید.</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="store-outline-btn" href="{{ route('admin.store.index') }}">فهرست محصولات</a>@if($isEdit)<a class="store-outline-btn" href="{{ route('store.product',$product->slug) }}" target="_blank" rel="noopener">پیش‌نمایش فروشگاه</a>@endif</div>
