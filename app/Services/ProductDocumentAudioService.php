@@ -35,7 +35,7 @@ class ProductDocumentAudioService
         $durationMs = 0;
         $maxAudioBytes = 100 * 1024 * 1024;
 
-        foreach (array_slice($chunks, 0, 120) as $index => $chunk) {
+        foreach (array_slice($chunks, 0, 300) as $index => $chunk) {
             $text = trim((string) ($chunk['content_text'] ?? ''));
             if ($text === '') continue;
 
