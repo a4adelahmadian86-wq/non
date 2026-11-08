@@ -132,6 +132,7 @@ class ProductKnowledgeService
                 'chunks' => $chunks,
                 'audio' => $sampleOnly ? null : data_get($document->structure_json, 'audio.status'),
                 'sample_pages' => $samplePages,
+                'sample_sheets' => $sampleSheets,
             ];
 
             if ($remaining <= 0) break;
@@ -158,7 +159,7 @@ class ProductKnowledgeService
             'knowledge_status' => $knowledgeStatus,
             'source_count' => count($sources),
             'remaining_character_budget' => $remaining,
-            'access_scope' => $sampleOnly ? 'public_sample_only' : 'purchased_full_document',
+            'access_scope' => $sampleOnly ? 'public_sample_only' : 'full_document',
             'sources' => $sources,
             'grounding_instruction' => 'Use only the supplied product record, evidence-backed facts, and source-located chunks. Every factual claim must be supported by its exact evidence and locator. Do not infer missing pages, features, lessons, specifications, or benefits. If evidence is absent or processing is incomplete, state that it is unknown.',
         ];
