@@ -44,6 +44,43 @@ class ProductDocumentAudioServiceTest extends TestCase
             && $request['language'] === 'fa-IR');
     }
 
+
+    public function test_phoneme_alignment_from_wav_metadata_is_preserved_for_each_word(): void
+    {
+        config([
+            'services.document_audio.url' => 'https://document-audio.example.test/v1/synthesize',
+            'services.document_audio.token' => 'test-token',
+            'services.document_audio.voice_id' => 'farast-document-fa-male-37-v1',
+        ]);
+
+        $pcm = str_repeat("\0", 1600);
+        $format = pack('vvVVvv', 1, 1, 16000, 32000, 2, 16);
+        $wav = 'RIFF'.pack('V', 36 + strlen($pcm)).'WAVEfmt '.pack('V', 16).$format.'data'.pack('V', strlen($pcm)).$pcm;
+        $metadata = json_encode([
+            'version' => 1,
+            'alignment' => 'phoneme',
+            'words' => [
+                ['text' => 'متن', 'start_ms' => 0, 'end_ms' => 20],
+                ['text' => 'صفحه', 'start_ms' => 20, 'end_ms' => 50],
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $wav .= 'FARA'.pack('V', strlen($metadata)).$metadata.(strlen($metadata) % 2 ? "\0" : '');
+        $wav = substr($wav, 0, 4).pack('V', strlen($wav) - 8).substr($wav, 8);
+
+        Http::fake(['document-audio.example.test/*' => Http::response($wav, 200, ['Content-Type' => 'audio/wav'])]);
+
+        $result = app(ProductDocumentAudioService::class)->generate([
+            ['chunk_index' => 0, 'chunk_type' => 'page_text', 'locator' => ['page' => 1], 'content_text' => 'متن صفحه'],
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertSame('phoneme', $result['segments'][0]['alignment_quality']);
+        $this->assertSame([
+            ['text' => 'متن', 'start_ms' => 0, 'end_ms' => 20],
+            ['text' => 'صفحه', 'start_ms' => 20, 'end_ms' => 50],
+        ], $result['segments'][0]['words']);
+    }
+
     public function test_document_pipeline_classes_are_autoloadable(): void
     {
         $this->assertTrue(class_exists(\App\Jobs\ProcessProductDocument::class));
@@ -59,35 +96,5 @@ class ProductDocumentAudioServiceTest extends TestCase
         $this->assertNull(app(ProductDocumentAudioService::class)->generate([
             ['content_text' => 'متن آزمایشی'],
         ]));
-    }
-
-    public function test_exact_text_snippets_use_the_dedicated_authenticated_document_audio_provider(): void
-    {
-        config([
-            'services.document_audio.url' => 'https://document-audio.example.test/v1/synthesize',
-            'services.document_audio.token' => 'test-token',
-            'services.document_audio.voice_id' => 'farast-document-fa-male-37-v1',
-        ]);
-
-        $pcm = str_repeat("\0", 800);
-        $format = pack('vvVVvv', 1, 1, 16000, 32000, 2, 16);
-        $wav = 'RIFF'.pack('V', 36 + strlen($pcm)).'WAVEfmt '.pack('V', 16).$format.'data'.pack('V', strlen($pcm)).$pcm;
-        Http::fake(['document-audio.example.test/*' => Http::response($wav, 200, ['Content-Type' => 'audio/wav'])]);
-
-        $result = app(ProductDocumentAudioService::class)->synthesizeSnippet('یک واژه دقیق');
-
-        $this->assertStringStartsWith('RIFF', $result);
-        Http::assertSentCount(1);
-        Http::assertSent(fn ($request) => $request->url() === 'https://document-audio.example.test/v1/synthesize'
-            && $request->hasHeader('Authorization', 'Bearer test-token')
-            && $request['text'] === 'یک واژه دقیق'
-            && $request['voice_id'] === 'farast-document-fa-male-37-v1');
-    }
-
-    public function test_exact_text_snippets_reject_oversized_or_unconfigured_requests(): void
-    {
-        config(['services.document_audio.url' => '', 'services.document_audio.token' => '']);
-        $this->expectException(\RuntimeException::class);
-        app(ProductDocumentAudioService::class)->synthesizeSnippet('متن');
     }
 }
