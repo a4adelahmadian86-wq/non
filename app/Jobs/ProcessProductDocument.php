@@ -351,7 +351,7 @@ class ProcessProductDocument implements ShouldQueue
             $successfulBatches = (int) ($payload['successful_analysis_batches'] ?? 0);
             $analysisBatchesComplete = $expectedBatches > 0 && $successfulBatches >= $expectedBatches;
             $extractionComplete = ! (bool) ($inspection['extraction_truncated'] ?? false);
-            $hasSemanticReview = ($providers['gemini'] ?? null) === 'completed' && $analysisBatchesComplete;
+            $hasSemanticReview = ($providers['groq_text'] ?? null) === 'completed' && $analysisBatchesComplete;
             $status = ! $hasChunks
                 ? 'partial'
                 : (! $extractionComplete ? 'partial' : ($hasSemanticReview ? 'completed' : 'extracted'));
