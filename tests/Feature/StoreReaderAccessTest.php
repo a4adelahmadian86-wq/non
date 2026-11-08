@@ -61,7 +61,8 @@ class StoreReaderAccessTest extends TestCase
             '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
             'xl/workbook.xml' => '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="گزارش" sheetId="1" r:id="rId1"/></sheets></workbook>',
             'xl/_rels/workbook.xml.rels' => '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1"><v>42</v></c><c r="C1"><f>1+1</f><v>73</v></c></row></sheetData></worksheet>',
+            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1" s="1"><v>42</v></c><c r="C1"><f>1+1</f><v>73</v></c></row></sheetData></worksheet>',
+            'xl/styles.xml' => '<?xml version="1.0"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font/><font><b/><color rgb="FF1F4E78"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" fillId="1" borderId="0" xfId="0"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>',
         ];
         foreach ($parts as $name => $contents) {
             $archive->addFromString($name, $contents);
@@ -296,6 +297,7 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringNotContainsString('09123456789', $streamedHtml);
         $this->assertStringContainsString('گزارش', $streamedHtml);
         $this->assertStringContainsString('42', $streamedHtml);
+        $this->assertStringContainsString('font-weight:700;color:#1F4E78;background-color:#D9EAF7;text-align:center;vertical-align:middle;white-space:normal', $streamedHtml);
         $this->assertStringContainsString('73', $streamedHtml);
         $this->assertStringNotContainsString('1+1', $streamedHtml);
         $this->assertStringContainsString('فرمول‌ها اجرا نمی‌شوند', $streamedHtml);
