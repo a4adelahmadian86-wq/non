@@ -133,6 +133,8 @@ def _extract_xlsx(data: bytes) -> str:
     names = set(archive.namelist())
     if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
         raise FileInspectionError("فایل ZIP، سند XLSX معتبر نیست.")
+    if any(name.lower().endswith("vbaproject.bin") for name in names):
+        raise FileInspectionError("فایل Excel دارای ماکرو است و برای بررسی متنی پذیرفته نمی‌شود.")
     try:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
         parts: list[str] = []
@@ -162,6 +164,8 @@ def _extract_pptx(data: bytes) -> str:
     names = set(archive.namelist())
     if "[Content_Types].xml" not in names or "ppt/presentation.xml" not in names:
         raise FileInspectionError("فایل ZIP، سند PPTX معتبر نیست.")
+    if any(name.lower().endswith("vbaproject.bin") for name in names):
+        raise FileInspectionError("فایل PowerPoint دارای ماکرو است و برای بررسی متنی پذیرفته نمی‌شود.")
     try:
         presentation = Presentation(io.BytesIO(data))
         parts: list[str] = []
