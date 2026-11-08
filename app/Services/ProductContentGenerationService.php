@@ -136,7 +136,7 @@ class ProductContentGenerationService
     public function assertFreshProvenance(StoreProduct $product, string $encodedFingerprints, string $signature): array
     {
         $submitted = json_decode($encodedFingerprints, true);
-        if (! is_array($submitted) || $submitted === [] || count($submitted) > 30) {
+        if (! is_array($submitted) || $submitted === [] || count($submitted) > 100) {
             throw ValidationException::withMessages(['ai_content' => 'منبع پیشنهاد هوشمند معتبر نیست؛ دوباره تولید محتوا را اجرا کن.']);
         }
 
