@@ -50,7 +50,7 @@ class StoreReaderSpeechController extends Controller
         abort_unless($needle !== '' && str_contains($haystack, $needle), 422, 'متن انتخاب‌شده با محتوای همین صفحه مطابقت ندارد.');
         abort_unless($audio->configured(), 503);
 
-        $cachePath = 'store/products/'.$product->id.'/reader-snippets/'.$document->source_sha256.'/'.hash('sha256', $needle).'.wav';
+        $cachePath = 'store/products/'.$product->id.'/reader-snippets/'.$document->source_sha256.'/'.hash('sha256', $text).'.wav';
         $disk = Storage::disk('private');
         if ($disk->exists($cachePath)) {
             $wav = $disk->get($cachePath);
