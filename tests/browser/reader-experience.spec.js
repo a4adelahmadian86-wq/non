@@ -486,7 +486,7 @@ test.describe('FARAST sample reader interactions', () => {
           {"text":"صفحه اول","start":0,"end":0.6,"page":1},
           {"text":"صفحه دوم","start":0.7,"end":1.4,"page":2}
         ]</script>
-        <article class="farast-reader-page-item is-active" data-index="1" data-reader-page="2">
+        <article class="farast-reader-page-item is-active" data-index="1" data-reader-page="2" tabindex="0">
           <div class="farast-reader-page-content"><div class="reader-page-background">فضای خالی صفحه دوم</div></div>
         </article>
       </section>
@@ -495,9 +495,14 @@ test.describe('FARAST sample reader interactions', () => {
     await page.addScriptTag({ url: new URL('/js/farast-reader-granular-audio.js', page.url()).href });
     await expect(page.locator('[data-reader-audio]')).toBeVisible();
     await expect.poll(() => page.locator('[data-audio-duration]').textContent()).not.toBe('00:00');
-    await page.locator('.farast-reader-page-item').click();
+    const pageTarget = page.locator('.farast-reader-page-item');
+    await pageTarget.click();
     await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBeGreaterThanOrEqual(0.7);
     await expect(page.locator('[data-audio-status]')).toContainText('صفحه');
+    await page.evaluate(() => window.FarastDocumentAudioReader.pause());
+    await pageTarget.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => window.FarastDocumentAudioReader.currentTime)).toBeGreaterThanOrEqual(0.7);
   });
 
   test('granular speech sends the exact clicked word and selected phrase with page locators', async ({ page }) => {
