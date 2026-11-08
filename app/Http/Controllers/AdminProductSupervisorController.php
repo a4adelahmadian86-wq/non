@@ -2,18 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
 use App\Services\AuditEventService;
 use App\Services\ProductSupervisorClient;
-use Illuminate\Http\Request;
+use App\Services\ProductSupervisorSnapshotBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class AdminProductSupervisorController extends Controller
 {
-    public function review(Request $request, StoreProduct $product, ProductSupervisorClient $supervisor, ProductSupervisorSnapshotBuilder $snapshotBuilder)
+    public function review(StoreProduct $product, ProductSupervisorClient $supervisor, ProductSupervisorSnapshotBuilder $snapshotBuilder)
     {
         $settings = data_get($product->metadata, 'ai_supervisor', []);
         abort_unless((bool) data_get($settings, 'enabled', false), 409, 'ناظر هوشمند برای این محصول فعال نیست.');
