@@ -23,6 +23,9 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 120_000
 MAX_ARCHIVE_ENTRIES = 500
 MAX_ARCHIVE_UNPACKED = 100 * 1024 * 1024
+MAX_ARCHIVE_DOCUMENTS = 12
+MAX_ARCHIVE_MEMBER_BYTES = 5 * 1024 * 1024
+MAX_ARCHIVE_DOCUMENT_BYTES = 20 * 1024 * 1024
 MAX_IMAGE_PIXELS = 50_000_000
 ALLOWED_TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
 EXECUTABLE_EXTENSIONS = {
@@ -45,6 +48,7 @@ class Inspection:
     audio_bytes: bytes | None = None
     audio_filename: str | None = None
     archive_entries: list[str] | None = None
+    embedded_documents: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] | None = None
     antivirus_status: str = "not_configured"
     upstream_scan_status: str = "not_provided"
@@ -60,6 +64,7 @@ class Inspection:
             "page_count": self.page_count,
             "extraction_truncated": self.extraction_truncated,
             "archive_entries": (self.archive_entries or [])[:50],
+            "embedded_documents": (self.embedded_documents or [])[:12],
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
         }
@@ -245,6 +250,92 @@ def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
             names.append(item.filename[:240])
 
     return archive, names[:MAX_ARCHIVE_ENTRIES]
+
+
+def _extract_archive_documents(archive: zipfile.ZipFile) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], bool]:
+    """Read only bounded, supported document members in memory; never extract to disk or execute members."""
+    chunks: list[dict[str, Any]] = []
+    summaries: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    total_read = 0
+    truncated = False
+    supported = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".csv"}
+
+    for info in archive.infolist():
+        if info.is_dir():
+            continue
+        name = info.filename.replace("\\", "/")
+        suffix = PurePosixPath(name).suffix.lower()
+        if suffix in {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"}:
+            warnings.append("آرشیو تو در تو فقط فهرست شده است و برای جلوگیری از استخراج بازگشتی پردازش نشد.")
+            truncated = True
+            continue
+        if suffix not in supported:
+            if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".mp4", ".mov", ".webm"}:
+                warnings.append("رسانه داخل آرشیو شناسایی شد؛ در این مرحله فقط اسناد متنی داخلی استخراج شدند.")
+                truncated = True
+            continue
+        if info.file_size < 1:
+            continue
+        if info.file_size > MAX_ARCHIVE_MEMBER_BYTES or total_read + info.file_size > MAX_ARCHIVE_DOCUMENT_BYTES:
+            warnings.append("بعضی اسناد داخل آرشیو به دلیل سقف حجم استخراج داخلی، فقط در فهرست محتویات ثبت شدند.")
+            truncated = True
+            continue
+        if len(summaries) >= MAX_ARCHIVE_DOCUMENTS:
+            warnings.append("تعداد اسناد قابل مطالعه داخل آرشیو به سقف مجاز رسید.")
+            truncated = True
+            break
+
+        try:
+            with archive.open(info, "r") as member:
+                member_bytes = member.read(MAX_ARCHIVE_MEMBER_BYTES + 1)
+        except (OSError, RuntimeError, zipfile.BadZipFile):
+            warnings.append("خواندن یکی از اعضای آرشیو ناموفق بود؛ محتوای آن قابل تأیید نیست.")
+            truncated = True
+            continue
+
+        if len(member_bytes) > MAX_ARCHIVE_MEMBER_BYTES or len(member_bytes) != info.file_size:
+            warnings.append("اندازه واقعی یکی از اعضای آرشیو با اطلاعات فهرست آن تطابق نداشت.")
+            truncated = True
+            continue
+
+        try:
+            child = inspect_file(member_bytes, name, None, "structural_checks_passed")
+        except FileInspectionError:
+            warnings.append("یکی از اسناد داخل آرشیو ساختار قابل‌قبولی نداشت و از تحلیل محتوایی کنار گذاشته شد.")
+            truncated = True
+            continue
+
+        if child.detected_type in {"zip", "archive"}:
+            warnings.append("آرشیو تو در تو فقط فهرست شد و محتوای آن باز نشد.")
+            truncated = True
+            continue
+
+        total_read += len(member_bytes)
+        summaries.append({
+            "name": name[:240],
+            "detected_type": child.detected_type,
+            "size_bytes": len(member_bytes),
+            "page_count": child.page_count,
+            "extracted_characters": len(child.extracted_text),
+        })
+        for child_chunk in (child.content_chunks or _build_content_chunks(child.extracted_text, child.detected_type))[:60]:
+            locator = dict(child_chunk.get("locator") or {})
+            locator["archive_entry"] = name[:240]
+            chunks.append({
+                "chunk_type": child_chunk.get("chunk_type", "document_blocks"),
+                "locator": locator,
+                "content_text": str(child_chunk.get("content_text") or "")[:1800],
+            })
+            if len(chunks) >= 300:
+                warnings.append("تعداد قطعات محتوایی آرشیو به سقف پردازش رسید.")
+                truncated = True
+                return chunks, summaries, warnings, truncated
+
+    if not summaries and not warnings:
+        warnings.append("آرشیو فقط شامل فایل‌هایی بود که خوانشگر محتوایی فعلاً پشتیبانی نمی‌کند.")
+        truncated = True
+    return chunks, summaries, warnings, truncated
 
 
 def _extract_docx(data: bytes) -> str:
@@ -512,7 +603,15 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             result.page_count = min(100, result.extracted_text.count("اسلاید "))
         else:
             result.detected_type = "zip"
-            result.warnings.append("محتوای آرشیو استخراج یا اجرا نشد؛ فقط فهرست ساختاری آن بررسی شد.")
+            archive_chunks, embedded, archive_warnings, archive_truncated = _extract_archive_documents(archive)
+            result.content_chunks = archive_chunks
+            result.embedded_documents = embedded
+            result.warnings.extend(archive_warnings)
+            result.extraction_truncated = archive_truncated
+            if archive_chunks:
+                result.extracted_text = "\\n".join(
+                    f"فایل داخل آرشیو: {item['name']}\\n" for item in embedded
+                )[:MAX_EXTRACTED_CHARS]
     elif data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a")) or suffix in {".webp", ".png", ".jpg", ".jpeg", ".gif"}:
         image_bytes, mime = _inspect_image(data)
         result.detected_type = "image"
@@ -545,7 +644,8 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     if result.extracted_text and len(result.extracted_text) >= MAX_EXTRACTED_CHARS:
         result.extraction_truncated = True
         result.warnings.append("استخراج متن به سقف پردازش فعلی رسید؛ ممکن است بخشی از سند هنوز تحلیل نشده باشد.")
-    result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
+    if not result.content_chunks:
+        result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
 
     if result.antivirus_status != "clean":
         if result.upstream_scan_status == "clean":
