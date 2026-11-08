@@ -293,13 +293,13 @@ class GlobalAssistantController extends Controller
         if (! $productId) return '';
 
         try {
-            $product = StoreProduct::query()
-                ->where('status', 'published')
-                ->find($productId);
-
+            $product = StoreProduct::query()->find($productId);
             if (! $product) return '';
 
-            $hasEntitlement = DB::table('store_library_items')
+            $isOwner = (int) $product->user_id === (int) $user->id;
+            if (! $isOwner && $product->status !== 'published') return '';
+
+            $hasEntitlement = $isOwner || DB::table('store_library_items')
                 ->where('user_id', $user->id)
                 ->where('product_id', $product->id)
                 ->whereNull('revoked_at')
