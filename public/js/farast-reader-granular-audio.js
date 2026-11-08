@@ -137,7 +137,7 @@
         current += value;
         return;
       }
-      const words = value.match(/\S+\\s*/gu) || [value];
+      const words = value.match(/\S+\s*/gu) || [value];
       for (const word of words) {
         if (current && current.length + word.length > 1800) {
           chunks.push(current.trim());
