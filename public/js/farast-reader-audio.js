@@ -84,7 +84,7 @@
     .farast-audio-top,.farast-audio-controls,.farast-audio-foot{display:flex;align-items:center;gap:14px}.farast-audio-top{min-height:34px}.farast-audio-title{display:flex;align-items:center;gap:10px;min-width:150px}.farast-audio-title strong{display:block;font-size:.78rem}.farast-audio-title small{display:block;color:#9db0ca;font-size:.65rem;margin-top:2px}.farast-audio-pulse{width:9px;height:9px;border-radius:50%;background:#60a5fa;box-shadow:0 0 0 4px rgba(96,165,250,.13)}.farast-audio-dock.is-playing .farast-audio-pulse{background:#34d399;animation:farast-audio-pulse 1.5s infinite}
     @keyframes farast-audio-pulse{50%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}
     .farast-audio-caption{flex:1;min-width:0;text-align:center;color:#dce8fa;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.farast-audio-collapse{border:0;background:transparent;color:#9db0ca;cursor:pointer;padding:7px}.farast-audio-controls{margin-top:8px}.farast-audio-play{width:38px;height:38px;border:0;border-radius:50%;background:#3b82f6;color:white;cursor:pointer;flex:0 0 auto}.farast-audio-timeline{flex:1;min-width:100px}.farast-audio-timeline input{width:100%;accent-color:#60a5fa;cursor:pointer}.farast-audio-time{display:flex;justify-content:space-between;color:#9db0ca;font-size:.63rem;font-variant-numeric:tabular-nums}.farast-audio-speed,.farast-audio-volume{display:flex;align-items:center;gap:7px;color:#aebfd7;font-size:.65rem;white-space:nowrap}.farast-audio-speed select{border:1px solid rgba(148,180,225,.22);border-radius:7px;background:#172941;color:#edf4ff;padding:5px}.farast-audio-volume input{width:76px;accent-color:#60a5fa}.farast-audio-foot{justify-content:space-between;margin-top:6px;color:#8298b7;font-size:.6rem}.farast-audio-dock.is-collapsed .farast-audio-controls,.farast-audio-dock.is-collapsed .farast-audio-foot{display:none}.farast-audio-dock.is-collapsed .farast-audio-collapse i{transform:rotate(180deg)}
-    .farast-pdf-text-layer .reader-audio-word,.farast-pdf-cont-text .reader-audio-word{position:absolute;display:block;z-index:8;color:transparent;background:transparent;border:0;border-radius:3px;padding:0;margin:0;cursor:pointer;pointer-events:auto;user-select:none;-webkit-user-select:none;outline-offset:1px}.farast-pdf-text-layer .reader-audio-word.is-current,.farast-pdf-cont-text .reader-audio-word.is-current{background:rgba(250,204,21,.58);box-shadow:0 0 0 1px rgba(217,150,0,.28);border-radius:3px}.farast-pdf-text-layer .reader-audio-word.is-read,.farast-pdf-cont-text .reader-audio-word.is-read{background:rgba(52,211,153,.13)}.farast-audio-dock[hidden]{display:none}
+    .farast-pdf-text-layer .reader-audio-word,.farast-pdf-cont-text .reader-audio-word{position:absolute;display:block;z-index:8;color:transparent;background:transparent;border:0;border-radius:3px;padding:0;margin:0;cursor:pointer;pointer-events:auto;user-select:none;-webkit-user-select:none;outline-offset:1px}.farast-pdf-text-layer .reader-audio-word.is-current,.farast-pdf-cont-text .reader-audio-word.is-current,.reader-document-word.is-current{background:rgba(250,204,21,.58);box-shadow:0 0 0 1px rgba(217,150,0,.28);border-radius:3px}.farast-pdf-text-layer .reader-audio-word.is-read,.farast-pdf-cont-text .reader-audio-word.is-read,.reader-document-word.is-read{background:rgba(52,211,153,.13)}.farast-audio-dock[hidden]{display:none}
     @media(max-width:700px){.farast-audio-top{gap:7px}.farast-audio-title{min-width:112px}.farast-audio-caption{font-size:.68rem}.farast-audio-volume{display:none}.farast-audio-foot span:last-child{display:none}.farast-audio-controls{gap:8px}.farast-audio-speed{font-size:.6rem}}
     @media(prefers-reduced-motion:reduce){.farast-audio-pulse{animation:none!important}}
   `;
@@ -106,6 +106,8 @@
   let activeSegment = -1;
   let activePage = 1;
   let wordMarks = [];
+  let documentWordMarks = [];
+  let activeDocumentWord = null;
   let raf = 0;
   let lastPageRequest = 0;
   let rangeEnd = null;
@@ -132,6 +134,9 @@
   const clearMarks = () => {
     wordMarks.forEach(mark => mark.element.remove());
     wordMarks = [];
+    documentWordMarks.forEach(mark => mark.element.classList.remove('is-current', 'is-read'));
+    documentWordMarks = [];
+    activeDocumentWord = null;
     activeSegment = -1;
   };
   const getTextLayer = page => {
@@ -250,6 +255,23 @@
       mark.element.classList.toggle('is-current', isCurrent);
       mark.element.classList.toggle('is-read', mark.end <= time);
     });
+    let documentLow = 0, documentHigh = documentWordMarks.length - 1, documentFound = -1;
+    while (documentLow <= documentHigh) {
+      const middle = (documentLow + documentHigh) >> 1;
+      if (documentWordMarks[middle].start <= time) { documentFound = middle; documentLow = middle + 1; }
+      else documentHigh = middle - 1;
+    }
+    if (documentFound >= 0 && time >= documentWordMarks[documentFound].end) {
+      const nextWord = documentWordMarks[documentFound + 1];
+      if (nextWord && time >= nextWord.start) documentFound += 1;
+      else documentFound = -1;
+    }
+    const currentDocumentWord = documentFound >= 0 ? documentWordMarks[documentFound].element : null;
+    if (currentDocumentWord !== activeDocumentWord) {
+      activeDocumentWord?.classList.remove('is-current');
+      currentDocumentWord?.classList.add('is-current');
+      activeDocumentWord = currentDocumentWord;
+    }
     if (found !== activeSegment) {
       activeSegment = found;
       if (item) {
@@ -297,6 +319,7 @@
       seek.value = '0';
     }
     buildMarks(activePage);
+    buildDocumentWordMarks(activePage);
     dock.hidden = false;
     status.textContent = activeTrack.alignmentQuality === 'phoneme'
       ? 'صوت از پیش آماده · هم‌ترازی واجی واژه‌ها'
@@ -341,6 +364,43 @@
     return true;
   };
   const tokens = value => String(value || '').trim().split(/\s+/u).map(normalize).filter(Boolean);
+  const buildDocumentWordMarks = page => {
+    documentWordMarks.forEach(mark => mark.element.classList.remove('is-current', 'is-read'));
+    documentWordMarks = [];
+    activeDocumentWord = null;
+    if (!activeTrack) return;
+    const elements = [...root.querySelectorAll('.reader-document-word')].filter(element => {
+      const article = element.closest('.farast-reader-page-item');
+      const elementPage = Number(element.dataset.page || article?.dataset.readerPage || 1);
+      return elementPage === Number(page);
+    });
+    if (!elements.length) return;
+    let cursor = 0;
+    activeTrack.timings.filter(item => Number(item.page) === Number(page)).forEach(item => {
+      const words = Array.isArray(item.words) && item.words.length
+        ? item.words
+        : String(item.text || '').trim().split(/\s+/u).filter(Boolean).map((text, index, all) => ({
+            text,
+            start: item.start + (item.end - item.start) * index / all.length,
+            end: item.start + (item.end - item.start) * (index + 1) / all.length
+          }));
+      words.forEach(word => {
+        const wanted = tokens(word.text)[0] || '';
+        if (!wanted) return;
+        let found = -1;
+        for (let index = cursor; index < elements.length; index += 1) {
+          if ((tokens(elements[index].textContent)[0] || '') === wanted) { found = index; break; }
+        }
+        if (found < 0) return;
+        documentWordMarks.push({
+          element: elements[found],
+          start: Number(word.start),
+          end: Number(word.end)
+        });
+        cursor = found + 1;
+      });
+    });
+  };
   const findTextRange = (value, page = null, occurrence = 0) => {
     const wanted = tokens(value);
     if (!wanted.length || !activeTrack) return null;
@@ -547,12 +607,23 @@
     const page = Number(event.detail?.page || 1);
     activePage = page;
     buildMarks(page);
+    buildDocumentWordMarks(page);
+  });
+  root.addEventListener('farast:reader-page-loaded', event => {
+    const page = Number(event.detail?.page || 0);
+    if (activeTrack && page === activePage) buildDocumentWordMarks(page);
   });
   const observer = new MutationObserver(mutations => {
     const changed = mutations.some(mutation => [...mutation.addedNodes].some(node =>
-      node.nodeType === Node.ELEMENT_NODE && ((node.matches?.('.textLayer span') && !node.classList.contains('reader-audio-word')) || node.querySelector?.('.textLayer span:not(.reader-audio-word)'))
+      node.nodeType === Node.ELEMENT_NODE && (
+        node.matches?.('.reader-document-word,.textLayer span:not(.reader-audio-word)') ||
+        node.querySelector?.('.reader-document-word,.textLayer span:not(.reader-audio-word)')
+      )
     ));
-    if (changed && activeTrack) requestAnimationFrame(() => buildMarks(activePage));
+    if (changed && activeTrack) requestAnimationFrame(() => {
+      buildMarks(activePage);
+      buildDocumentWordMarks(activePage);
+    });
   });
   observer.observe(root, { childList: true, subtree: true });
 
@@ -562,7 +633,7 @@
     selectSection,
     playRange,
     pause() { rangeEnd = null; audio.pause(); },
-    setPage(page) { activePage = Number(page) || 1; buildMarks(activePage); },
+    setPage(page) { activePage = Number(page) || 1; buildMarks(activePage); buildDocumentWordMarks(activePage); },
     destroy() { audio.pause(); observer.disconnect(); cancelAnimationFrame(raf); clearMarks(); }
   };
 })();
