@@ -225,9 +225,9 @@ class UploadSecurityService
         }
 
         try {
-            $reader = new \\setasign\\Fpdi\\Fpdi();
+            $reader = new \setasign\Fpdi\Fpdi();
             $count = (int) $reader->setSourceFile($path);
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             throw new RuntimeException('upload_pdf_structure_unreadable');
         }
 
