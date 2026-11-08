@@ -9,7 +9,7 @@
         <div class="farast-dashboard-nav__brand-copy"><strong>فراست</strong><small>{{ $isAdminNavigation ? 'مرکز عملیات' : 'فضای کاری' }}</small></div>
         <div class="farast-dashboard-nav__brand-actions">
             @include('components.notification-bell')
-            <button type="button" class="farast-dashboard-nav__collapse" data-dashboard-nav-toggle aria-expanded="true" aria-controls="farast-dashboard-groups" aria-label="جمع کردن منوی داشبورد" title="جمع کردن منو"><i class="fa-solid fa-angles-right" aria-hidden="true"></i></button>
+            <button type="button" class="farast-dashboard-nav__collapse" data-dashboard-nav-toggle aria-expanded="true" aria-controls="farast-dashboard-groups" aria-label="جمع کردن منوی داشبورد" title="جمع کردن منو" disabled><i class="fa-solid fa-angles-right" aria-hidden="true"></i></button>
         </div>
     </div>
     <nav id="farast-dashboard-groups" class="farast-dashboard-nav__groups">
@@ -76,6 +76,9 @@
         setCollapsed(collapsed);
         try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch (_) {}
     });
+    // Do not expose an inert control before its state and click handler are ready.
+    toggle.disabled = false;
+    nav.dataset.navReady = 'true';
 })();
 </script>
 @endpush

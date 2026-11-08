@@ -28,6 +28,7 @@ test.describe('Dashboard navigation recovery', () => {
     await signInAndOpenDashboard(page);
     const nav = page.locator('[data-dashboard-nav]');
     const toggle = nav.locator('[data-dashboard-nav-toggle]');
+    await expect(toggle).toBeEnabled();
 
     await toggle.click();
     await expect(nav).toHaveClass(/is-collapsed/);
@@ -49,6 +50,7 @@ test.describe('Dashboard navigation recovery', () => {
     await signInAndOpenDashboard(page);
     const nav = page.locator('[data-dashboard-nav]');
     const toggle = nav.locator('[data-dashboard-nav-toggle]');
+    await expect(toggle).toBeEnabled();
 
     await toggle.click();
     await expect(nav).toHaveClass(/is-collapsed/);
@@ -63,7 +65,9 @@ test.describe('Dashboard navigation recovery', () => {
   test('compact desktop navigation exposes accessible names for icon-only destinations', async ({ page }) => {
     await signInAndOpenDashboard(page);
     const nav = page.locator('[data-dashboard-nav]');
-    await nav.locator('[data-dashboard-nav-toggle]').click();
+    const toggle = nav.locator('[data-dashboard-nav-toggle]');
+    await expect(toggle).toBeEnabled();
+    await toggle.click();
     const links = nav.locator('.farast-dashboard-nav__items a');
     await expect(links.first()).toHaveAttribute('aria-label', /.+/);
     await expect(links.first()).toHaveAttribute('title', /.+/);
