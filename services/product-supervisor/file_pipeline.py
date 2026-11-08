@@ -428,11 +428,11 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
         abstract_formats: dict[tuple[str, int], str] = {}
         abstract_by_num_id: dict[str, str] = {}
         for num in numbering_root.findall(qn("w:num")):
-            num_id_node = num.find(qn("w:numId"))
+            # w:numId is an attribute on w:num (not a child element).
+            num_id = str(num.get(qn("w:numId"), ""))
             abstract_id_node = num.find(qn("w:abstractNumId"))
-            if num_id_node is None or abstract_id_node is None:
+            if not num_id or abstract_id_node is None:
                 continue
-            num_id = str(num_id_node.get(qn("w:val"), ""))
             abstract_id = str(abstract_id_node.get(qn("w:val"), ""))
             abstract_by_num_id[num_id] = abstract_id
             for override in num.findall(qn("w:lvlOverride")):
