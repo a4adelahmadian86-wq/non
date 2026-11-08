@@ -110,6 +110,189 @@ async def _json_error(status: int, message: str):
 
 def validate_evidence_facts(raw_facts: Any, source_chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Accept only facts whose exact evidence occurs in an extracted source chunk."""
+    safe_facts: list[dict[str, Any]] = []
+    if not isinstance(raw_facts, list):
+        return safe_facts
+
+    def normalize(value: str) -> str:
+        return re.sub(r"\s+", " ", value).strip().casefold()
+
+    allowed_fact_types = {"definition", "concept", "quantity", "date", "feature", "requirement", "warning", "other"}
+    for item in raw_facts[:100]:
+        if not isinstance(item, dict):
+            continue
+        fact_type = str(item.get("fact_type") or "other").strip().lower()
+        fact_type = fact_type if fact_type in allowed_fact_types else "other"
+        fact_key, _ = redact_sensitive_content(str(item.get("fact_key") or ""))
+        fact_value, _ = redact_sensitive_content(str(item.get("fact_value") or ""))
+        evidence, _ = redact_sensitive_content(str(item.get("evidence") or ""))
+        fact_key = fact_key.strip()[:160]
+        fact_value = fact_value.strip()[:1000]
+        evidence = evidence.strip()[:700]
+        normalized_evidence = normalize(evidence)
+        if not fact_key or not fact_value or len(normalized_evidence) < 6:
+            continue
+        matched = next(
+            (chunk for chunk in source_chunks
+             if normalized_evidence in normalize(str(chunk.get("content_text") or ""))),
+            None,
+        )
+        if matched is None:
+            continue
+        safe_facts.append({
+            "fact_type": fact_type,
+            "fact_key": fact_key,
+            "fact_value": fact_value,
+            "evidence_text": evidence,
+            "locator": matched.get("locator") if isinstance(matched.get("locator"), dict) else {},
+            "verification_status": "evidence_backed",
+        })
+    return safe_facts[:100]
+
+
+@app.post("/v1/reviews/files", dependencies=[Depends(authenticate)])
+async def review_product_file(
+    file: UploadFile = File(...),
+    product_id: str = Form(..., min_length=1, max_length=80),
+    product_title: str = Form(..., min_length=2, max_length=220),
+    product_type: Literal["digital_file", "course"] = Form(...),
+    primary_scan_status: Literal["clean", "structural_checks_passed"] = Form(...),
+    allow_sample_generation: bool = Form(default=True),
+    category_name: str | None = Form(default=None, max_length=160),
+    tags_json: str = Form(default="[]", max_length=5000),
+    description: str | None = Form(default=None, max_length=8000),
+):
+    from file_pipeline import (
+        FileInspectionError,
+        analyze_extracted_content,
+        analyze_image_with_groq,
+        build_pdf_sample,
+        inspect_file,
+        redact_sensitive_content,
+        transcribe_audio_with_groq,
+    )
+
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds 25 MB")
+
+    try:
+        tags = json.loads(tags_json or "[]")
+        if not isinstance(tags, list) or len(tags) > 30 or any(not isinstance(item, str) for item in tags):
+            raise ValueError
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid tags_json") from None
+
+    try:
+        inspection = inspect_file(data, file.filename or "upload.bin", file.content_type, primary_scan_status)
+    except FileInspectionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    warnings = list(inspection.warnings or [])
+    visual_report = ""
+    transcription = ""
+    provider_status = {
+        "gemini": "not_requested",
+        "groq": "not_requested",
+        "groq_vision": "not_requested",
+        "groq_transcription": "not_requested",
+        "gladia": "disabled",
+    }
+
+    if inspection.image_bytes:
+        if os.getenv("GROQ_API_KEY"):
+            try:
+                visual_report = await analyze_image_with_groq(
+                    inspection.image_bytes,
+                    inspection.image_mime or "image/jpeg",
+                    {
+                        "title": redact_sensitive_content(product_title)[0],
+                        "category": redact_sensitive_content(category_name or "")[0],
+                        "tags": [redact_sensitive_content(tag)[0] for tag in tags],
+                    },
+                )
+                provider_status["groq_vision"] = "completed"
+            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+                provider_status["groq_vision"] = "unavailable"
+                warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ درباره محتوای تصویر ادعایی ثبت نشد.")
+        else:
+            provider_status["groq_vision"] = "not_configured"
+            warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصویر انجام نشد.")
+
+    if inspection.audio_bytes:
+        if os.getenv("GROQ_API_KEY"):
+            try:
+                transcription = await transcribe_audio_with_groq(
+                    inspection.audio_bytes,
+                    inspection.audio_filename or "upload.audio",
+                )
+                provider_status["groq_transcription"] = "completed"
+            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+                provider_status["groq_transcription"] = "unavailable"
+                warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
+        else:
+            provider_status["groq_transcription"] = "not_configured"
+            warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
+
+    groq_statuses = [provider_status["groq_vision"], provider_status["groq_transcription"]]
+    if "completed" in groq_statuses:
+        provider_status["groq"] = "partial" if any(status not in {"completed", "not_requested"} for status in groq_statuses) else "completed"
+    elif "unavailable" in groq_statuses:
+        provider_status["groq"] = "unavailable"
+    elif "not_configured" in groq_statuses:
+        provider_status["groq"] = "not_configured"
+
+    extracted, redaction_count = redact_sensitive_content(
+        "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
+    )
+    model_review: dict[str, Any] = {}
+    if extracted.strip() and os.getenv("GEMINI_API_KEY"):
+        try:
+            model_review = await analyze_extracted_content(
+                extracted,
+                {
+                    "product_title": redact_sensitive_content(product_title)[0],
+                    "product_type": product_type,
+                    "category_name": redact_sensitive_content(category_name or "")[0],
+                    "tags": [redact_sensitive_content(tag)[0] for tag in tags],
+                    "description": redact_sensitive_content(description or "")[0],
+                    "detected_file_type": inspection.detected_type,
+                    "page_count": inspection.page_count,
+                },
+            )
+            provider_status["gemini"] = "completed" if model_review.get("analysis_status") == "completed" else "partial"
+            if provider_status["gemini"] == "partial":
+                warnings.append("بخشی از دسته‌های تحلیل Gemini ناموفق بود؛ وضعیت مطالعه ناقص ثبت شد.")
+        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+            provider_status["gemini"] = "unavailable"
+            warnings.append("تحلیل محتوای استخراج‌شده توسط Gemini انجام نشد.")
+    elif extracted.strip():
+        provider_status["gemini"] = "not_configured"
+        warnings.append("کلید Gemini تنظیم نشده است؛ تحلیل معنایی محتوا انجام نشد.")
+    else:
+        warnings.append("از فایل محتوای متنی قابل تحلیل استخراج نشد.")
+
+    safe_findings = []
+    raw_findings = model_review.get("findings", [])
+    if isinstance(raw_findings, list):
+        allowed_areas = {"content", "pricing", "seo", "media", "policy", "course", "general"}
+        allowed_severities = {"info", "warning", "critical"}
+        for item in raw_findings[:12]:
+            if not isinstance(item, dict):
+                continue
+            area_value = item.get("area")
+            severity_value = item.get("severity")
+            area = area_value if isinstance(area_value, str) and area_value in allowed_areas else "general"
+            severity = severity_value if isinstance(severity_value, str) and severity_value in allowed_severities else "warning"
+            safe_findings.append({
+                "area": area,
+                "severity": severity,
+                "title": str(item.get("title") or "نکته قابل بررسی")[:140],
+                "detail": str(item.get("detail") or "")[:700],
+                "recommendation": str(item.get("recommendation") or "")[:500],
+            })
+
     source_chunks = []
     for chunk in (inspection.content_chunks or [])[:300]:
         if not isinstance(chunk, dict):
