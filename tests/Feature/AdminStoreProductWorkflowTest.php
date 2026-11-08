@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductImage;
+use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
 use App\Models\User;
 use App\Services\UploadSecurityService;
@@ -296,6 +297,38 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $this->assertDatabaseMissing('store_product_images', ['id' => $image->id]);
         Storage::disk('public')->assertMissing($relativePath);
+    }
+
+    public function test_scheduled_product_preview_is_not_public_before_publish_time(): void
+    {
+        Storage::fake('private');
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول زمان‌بندی‌شده',
+            'slug' => 'scheduled-preview-product',
+            'sku' => 'SCHEDULED-PREVIEW-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'published',
+            'published_at' => now()->addDay(),
+        ]);
+        $path = 'store/previews/'.$product->id.'/sample.jpg';
+        Storage::disk('private')->put($path, 'sample-preview');
+        $preview = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => $path,
+            'mime' => 'image/jpeg',
+            'page_number' => 1,
+            'kind' => 'image',
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $this->get(route('store.preview', $preview))->assertNotFound();
+        Storage::disk('private')->assertExists($path);
     }
 
     public function test_compare_at_price_must_be_greater_than_the_sale_price(): void
