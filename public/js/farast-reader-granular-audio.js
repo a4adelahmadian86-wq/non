@@ -123,6 +123,122 @@
     return selection && !selection.isCollapsed && selection.toString().trim().length >= 2
       ? selection.toString().trim() : '';
   };
+  const splitSpeechText = source => {
+    const sentences = String(source || '').match(/[^.!؟۔؛]+[.!؟۔؛]?/gu) || [String(source || '')];
+    const chunks = [];
+    let current = '';
+    const append = value => {
+      if (!value) return;
+      if (current && current.length + value.length > 1800) {
+        chunks.push(current.trim());
+        current = '';
+      }
+      if (value.length <= 1800) {
+        current += value;
+        return;
+      }
+      const words = value.match(/\S+\\s*/gu) || [value];
+      for (const word of words) {
+        if (current && current.length + word.length > 1800) {
+          chunks.push(current.trim());
+          current = '';
+        }
+        current += word;
+      }
+    };
+    sentences.forEach(append);
+    if (current.trim()) chunks.push(current.trim());
+    return chunks.filter(chunk => chunk.length > 0 && chunk.length <= 2000);
+  };
+
+  const speakSnippetSequence = async (chunks, page, element, label) => {
+    stop();
+    const id = ++requestId;
+    window.FarastAudioReader?.pause();
+    window.FarastDocumentAudioReader?.pause();
+    if (status()) status().textContent = 'در حال آماده‌سازی صدای صفحه…';
+    const playAt = async index => {
+      if (id !== requestId) return;
+      try {
+        const response = await fetch(speechUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: {
+            'Accept': 'audio/wav',
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrf(),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ text: chunks[index], page: Math.max(1, Number(page) || 1) })
+        });
+        if (!response.ok) throw new Error(response.status === 503
+          ? 'سرویس صدای خوانشگر هنوز آماده نیست.'
+          : 'تولید صدای صفحه ممکن نشد.');
+        const blob = await response.blob();
+        if (id !== requestId) return;
+        if (!blob.size || blob.size > 8 * 1024 * 1024) throw new Error('اندازه صدای تولیدشده معتبر نیست.');
+        if (activeUrl) URL.revokeObjectURL(activeUrl);
+        activeUrl = URL.createObjectURL(blob);
+        activeAudio = new Audio(activeUrl);
+        activeAudio.preload = 'auto';
+        activeAudio.playbackRate = Number(root.querySelector('[data-audio-speed]')?.value || 1);
+        activeAudio.volume = Number(root.querySelector('[data-audio-volume]')?.value || 1);
+        activeElement = element || null;
+        activeElement?.classList.add('reader-audio-selection-active');
+        activeAudio.addEventListener('timeupdate', syncSnippetControls);
+        activeAudio.addEventListener('play', syncSnippetControls);
+        activeAudio.addEventListener('pause', syncSnippetControls);
+        activeAudio.addEventListener('ended', () => {
+          activeElement?.classList.remove('reader-audio-selection-active');
+          activeElement = null;
+          activeAudio = null;
+          if (activeUrl) URL.revokeObjectURL(activeUrl);
+          activeUrl = null;
+          if (id !== requestId) return;
+          if (index + 1 < chunks.length) {
+            void playAt(index + 1);
+          } else {
+            if (status()) status().textContent = 'پایان خواندن صفحه';
+            stop();
+          }
+        }, { once: true });
+        activeAudio.addEventListener('error', () => {
+          if (status()) status().textContent = 'پخش صدای صفحه ناموفق بود.';
+          stop();
+        }, { once: true });
+        await activeAudio.play();
+        syncSnippetControls();
+        if (status()) status().textContent = label || ('در حال خواندن صفحه · بخش ' + (index + 1) + ' از ' + chunks.length);
+      } catch (error) {
+        if (id === requestId && status()) status().textContent = error.message || 'پخش صدای صفحه ناموفق بود.';
+        stop();
+      }
+    };
+    await playAt(0);
+  };
+
+  const playPageText = async (article, page) => {
+    const url = article?.dataset.readerPageUrl || '';
+    if (!url) return false;
+    try {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error('دریافت متن صفحه برای خواندن صوتی ممکن نشد.');
+      const payload = await response.json();
+      const chunks = splitSpeechText(payload.content_text || '');
+      if (!chunks.length) throw new Error('متن قابل‌خواندنی برای این صفحه موجود نیست.');
+      await speakSnippetSequence(chunks, page, article, 'در حال خواندن صفحهٔ انتخاب‌شده');
+      return true;
+    } catch (error) {
+      if (status()) status().textContent = error.message || 'خواندن صفحه ممکن نشد.';
+      return false;
+    }
+  };
+
   const speechTarget = '.reader-document-word,.reader-audio-word,.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row,.reader-document-section';
 
   const speakPdfCaret = (event, layer) => {
@@ -212,7 +328,9 @@
         const last = pageTimings.reduce((a, b) => Number(a.end) >= Number(b.end) ? a : b);
         window.FarastAudioReader.selectSection(Number(article.dataset.index || 0));
         window.FarastAudioReader.playRange(Number(first.start), Number(last.end), 'در حال خواندن صفحهٔ انتخاب‌شده');
+        return;
       }
+      if (article.dataset.readerPageUrl) void playPageText(article, page);
     }
   }, true);
 
@@ -234,7 +352,9 @@
         const last = pageTimings.reduce((a, b) => Number(a.end) >= Number(b.end) ? a : b);
         window.FarastAudioReader.selectSection(Number(pageTarget.dataset.index || 0));
         window.FarastAudioReader.playRange(Number(first.start), Number(last.end), 'در حال خواندن صفحهٔ انتخاب‌شده');
+        return;
       }
+      if (pageTarget.dataset.readerPageUrl) void playPageText(pageTarget, page);
       return;
     }
     const target = event.target.closest(speechTarget);
