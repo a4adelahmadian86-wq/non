@@ -114,6 +114,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                         'start' => round(((int) ($word['start_ms'] ?? 0)) / 1000, 3),
                         'end' => round(((int) ($word['end_ms'] ?? 0)) / 1000, 3),
                     ], (array) ($segment['words'] ?? [])),
+                    'alignment_quality' => (string) ($segment['alignment_quality'] ?? 'estimated'),
                     'start' => round(((int) ($segment['start_ms'] ?? 0)) / 1000, 3),
                     'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
                     'page' => $page,
