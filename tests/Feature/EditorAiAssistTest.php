@@ -37,6 +37,86 @@ class EditorAiAssistTest extends TestCase
         $this->assertArrayNotHasKey('text', AiInteraction::latest('id')->firstOrFail()->input_meta);
     }
 
+    public function test_product_editor_ai_uses_owned_file_facts_as_grounding_context(): void
+    {
+        $user = $this->user();
+        $category = StoreCategory::create(['name' => 'آموزش', 'slug' => 'ai-editor-education', 'is_active' => true]);
+        $product = StoreProduct::create([
+            'seller_id' => $user->id,
+            'category_id' => $category->id,
+            'title' => 'کتاب نمونه',
+            'slug' => 'ai-editor-book',
+            'sku' => 'AI-EDITOR-BOOK',
+            'type' => 'digital_file',
+            'price_rials' => 1000,
+            'status' => 'draft',
+            'version' => '1.0',
+        ]);
+
+        $knowledge = [
+            'knowledge_status' => 'available',
+            'scope' => 'full_entitled',
+            'source_count' => 1,
+            'sources' => [],
+            'chunks' => [['content' => 'EXACT_PRODUCT_SOURCE_FACT']],
+            'facts' => [['key' => 'duration', 'value' => '۷ ساعت', 'evidence' => 'مدت فایل ۷ ساعت است.', 'verification_status' => 'evidence_backed']],
+            'warnings' => [],
+        ];
+        $service = \\Mockery::mock(ProductKnowledgeService::class);
+        $service->shouldReceive('contextForProduct')
+            ->once()
+            ->with(\\Mockery::on(fn ($candidate) => $candidate->is($product)), 12000, false)
+            ->andReturn($knowledge);
+        $this->app->instance(ProductKnowledgeService::class, $service);
+
+        Http::fake(fn () => Http::response([
+            'id' => 'product-title-test',
+            'outputs' => [['type' => 'text', 'text' => json_encode(['titles' => ['کتاب آموزشی دقیق']], JSON_UNESCAPED_UNICODE)]],
+        ], 200));
+
+        $this->actingAs($user)->postJson('/editor/ai/assist', [
+            'operation' => 'text.title',
+            'text' => 'برای کتاب عنوان دقیق پیشنهاد بده',
+            'product_id' => $product->id,
+            'processing_mode' => 'external',
+        ])->assertOk()->assertJsonPath('titles.0', 'کتاب آموزشی دقیق');
+
+        Http::assertSent(function ($request): bool {
+            $prompt = (string) data_get($request->data(), 'input.0.text', '');
+            return str_contains($prompt, 'EXACT_PRODUCT_SOURCE_FACT')
+                && str_contains($prompt, '۷ ساعت')
+                && str_contains($prompt, 'حدس نزن');
+        });
+    }
+
+    public function test_editor_ai_cannot_read_another_sellers_product_knowledge(): void
+    {
+        Http::fake();
+        $owner = $this->user();
+        $other = $this->user();
+        $category = StoreCategory::create(['name' => 'آموزش', 'slug' => 'ai-editor-other', 'is_active' => true]);
+        $product = StoreProduct::create([
+            'seller_id' => $owner->id,
+            'category_id' => $category->id,
+            'title' => 'محصول خصوصی',
+            'slug' => 'private-ai-product',
+            'sku' => 'PRIVATE-AI-PRODUCT',
+            'type' => 'digital_file',
+            'price_rials' => 1000,
+            'status' => 'draft',
+            'version' => '1.0',
+        ]);
+
+        $this->actingAs($other)->postJson('/editor/ai/assist', [
+            'operation' => 'text.title',
+            'text' => 'عنوان بده',
+            'product_id' => $product->id,
+            'processing_mode' => 'external',
+        ])->assertForbidden();
+
+        Http::assertNothingSent();
+    }
+
     public function test_local_mode_never_falls_back_to_external(): void
     {
         Http::fake();
