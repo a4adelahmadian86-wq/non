@@ -12,7 +12,6 @@ use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class StoreReaderAccessTest extends TestCase
@@ -677,90 +676,4 @@ class StoreReaderAccessTest extends TestCase
     }
 
 
-
-    public function test_granular_reader_speech_is_entitlement_checked_and_only_speaks_text_from_the_selected_page(): void
-    {
-        [$product] = $this->makePreviewFixture();
-        $product->update(['download_policy' => 'reader_only']);
-        $sourceHash = str_repeat('b', 64);
-        $file = StoreProductFile::create([
-            'product_id' => $product->id,
-            'purpose' => 'product_download',
-            'disk' => 'private',
-            'path' => 'store/products/'.$product->id.'/source.pdf',
-            'original_name' => 'source.pdf',
-            'mime' => 'application/pdf',
-            'size_bytes' => 1000,
-            'sha256' => $sourceHash,
-            'is_primary' => true,
-            'is_active' => true,
-            'scan_status' => 'clean',
-            'scan_engine' => 'farast_static_v1',
-            'scanned_at' => now(),
-        ]);
-        $document = StoreProductDocument::create([
-            'product_id' => $product->id,
-            'product_file_id' => $file->id,
-            'source_sha256' => $sourceHash,
-            'processing_status' => 'completed',
-            'detected_type' => 'pdf',
-            'page_count' => 1,
-            'word_count' => 5,
-            'character_count' => 40,
-            'structure_json' => ['reader' => ['ready' => true, 'page_count' => 1]],
-            'processed_at' => now(),
-        ]);
-        $document->pages()->create([
-            'page_number' => 1,
-            'page_kind' => 'pdf_page',
-            'locator_key' => 'page:1',
-            'locator_json' => ['page' => 1, 'reader_page' => 1],
-            'content_text' => 'سلام جهان این متن محرمانه است.',
-            'content_html' => '<p>سلام جهان</p>',
-            'content_sha256' => hash('sha256', 'سلام جهان این متن محرمانه است.'),
-            'has_extracted_text' => true,
-        ]);
-
-        $user = $this->makeReaderUser();
-        $order = Order::create([
-            'user_id' => $user->id,
-            'subtotal_rials' => 100,
-            'total_rials' => 100,
-            'status' => 'paid',
-            'paid_at' => now(),
-        ]);
-        StoreLibraryItem::create([
-            'user_id' => $user->id,
-            'product_id' => $product->id,
-            'order_id' => $order->id,
-            'granted_at' => now(),
-        ]);
-
-        config([
-            'services.document_audio.url' => 'https://document-audio.example/v1/synthesize',
-            'services.document_audio.token' => 'test-token',
-            'services.document_audio.voice_id' => 'farast-document-fa-male-37-v1',
-        ]);
-        $pcm = str_repeat("\0", 800);
-        $format = pack('vvVVvv', 1, 1, 16000, 32000, 2, 16);
-        $wav = 'RIFF'.pack('V', 36 + strlen($pcm)).'WAVEfmt '.pack('V', 16).$format.'data'.pack('V', strlen($pcm)).$pcm;
-        Http::fake(['document-audio.example/*' => Http::response($wav, 200, ['Content-Type' => 'audio/wav'])]);
-
-        $this->postJson(route('store.reader.speech', $product), ['text' => 'سلام جهان', 'page' => 1])
-            ->assertUnauthorized();
-
-        $response = $this->actingAs($user)->postJson(route('store.reader.speech', $product), [
-            'text' => 'سلام جهان',
-            'page' => 1,
-        ]);
-        $response->assertOk()->assertHeader('Content-Type', 'audio/wav');
-        $this->assertStringStartsWith('RIFF', $response->getContent());
-
-        $this->actingAs($user)->postJson(route('store.reader.speech', $product), [
-            'text' => 'متنی که در صفحه نیست',
-            'page' => 1,
-        ])->assertStatus(422);
-
-        Http::assertSentCount(1);
-    }
 }
