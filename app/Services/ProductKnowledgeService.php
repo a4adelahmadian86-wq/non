@@ -66,12 +66,17 @@ class ProductKnowledgeService
             if ($remaining <= 0) break;
         }
 
+        $hasIncompleteSource = collect($sources)->contains(fn (array $source) => ! ($source['semantic_review_complete'] ?? false));
+        $knowledgeStatus = $sources === []
+            ? 'not_available'
+            : ($remaining <= 0 ? 'context_truncated' : ($hasIncompleteSource ? 'partial' : 'available'));
+
         return [
             'product_id' => (int) $product->id,
             'product_title' => (string) $product->title,
             'product_type' => (string) $product->type,
             'download_policy' => (string) $product->download_policy,
-            'knowledge_status' => $sources === [] ? 'not_available' : ($remaining > 0 ? 'available' : 'context_truncated'),
+            'knowledge_status' => $knowledgeStatus,
             'source_count' => count($sources),
             'remaining_character_budget' => $remaining,
             'sources' => $sources,
