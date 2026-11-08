@@ -8,9 +8,7 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreWishlist;
-use App\Services\StoreXlsxPreviewRenderer;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class StoreController extends Controller
