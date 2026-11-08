@@ -26,7 +26,7 @@ Request body:
 }
 ```
 
-The API accepts one bounded text chunk at a time. Laravel's document-audio job submits source-located chunks in document order, combines the returned PCM/WAV segments into one private audio artifact, and stores offsets linked to page/chunk locators. The browser can therefore highlight the corresponding text line while the single audio track plays and continue across page navigation.
+The API accepts one bounded text chunk at a time. The pinned Piper model is patched during the build to expose phoneme sample counts. The service maps those counts to source words and carries the timings in a private RIFF metadata chunk; Laravel validates and persists them beside the single final WAV. No document text is sent to an alignment provider. Laravel's document-audio job submits source-located chunks in document order, combines the returned PCM/WAV segments into one private audio artifact, and stores offsets linked to page/chunk locators. The browser can therefore highlight the corresponding text line while the single audio track plays and continue across page navigation.
 
 ## Deployment
 
