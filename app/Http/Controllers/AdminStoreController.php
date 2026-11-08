@@ -138,6 +138,9 @@ class AdminStoreController extends Controller
             }
 
             if (($data['status'] ?? '') === 'published') {
+                if (! $lockedProduct->category()->where('is_active', true)->exists()) {
+                    throw ValidationException::withMessages(['category_id' => 'برای انتشار محصول، دسته‌بندی آن باید فعال باشد.']);
+                }
                 if ($data['type'] === 'course') {
                     $hasPublishedLesson = $lockedProduct->course()
                         ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
@@ -212,7 +215,7 @@ class AdminStoreController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل انتشار نخواهد بود.');
 
-            $primary = $request->boolean('is_primary', true);
+            $primary = $request->boolean('is_primary');
             $fileRecord = DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 if ($primary) {
@@ -309,10 +312,11 @@ class AdminStoreController extends Controller
             ]);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ پیش‌نمایش ذخیره نشد.');
 
-            $sort = (int) ($product->previews()->max('sort_order') ?? 0) + 1;
-            DB::transaction(function () use ($product, $path, $inspection, $request, $sort) {
+            DB::transaction(function () use ($product, $path, $inspection, $request) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
                 StoreProductPreview::create([
-                    'product_id' => $product->id,
+                    'product_id' => $lockedProduct->id,
                     'disk' => 'private',
                     'path' => $path,
                     'mime' => $inspection['mime'],
@@ -322,7 +326,7 @@ class AdminStoreController extends Controller
                     'is_active' => true,
                     'sort_order' => $sort,
                 ]);
-                $this->audit('store.product.preview_uploaded', $product, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
+                $this->audit('store.product.preview_uploaded', $lockedProduct, ['mime' => $inspection['mime'], 'sort_order' => $sort]);
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
@@ -459,9 +463,17 @@ class AdminStoreController extends Controller
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
     {
         abort_unless($preview->product_id === $product->id, 404);
-        $this->audit('store.product.preview_deleted', $product, ['preview_id' => $preview->id]);
-        Storage::disk($preview->disk ?: 'private')->delete($preview->path);
-        $preview->delete();
+        [$disk, $path] = DB::transaction(function () use ($product, $preview) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $lockedPreview = $lockedProduct->previews()->whereKey($preview->id)->lockForUpdate()->firstOrFail();
+            $this->audit('store.product.preview_deleted', $lockedProduct, ['preview_id' => $lockedPreview->id]);
+            $disk = $lockedPreview->disk ?: 'private';
+            $path = $lockedPreview->path;
+            $lockedPreview->delete();
+
+            return [$disk, $path];
+        });
+        Storage::disk($disk)->delete($path);
 
         return back()->with('status', 'پیش‌نمایش حذف شد.');
     }
