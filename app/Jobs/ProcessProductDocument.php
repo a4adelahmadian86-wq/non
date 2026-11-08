@@ -72,6 +72,8 @@ class ProcessProductDocument implements ShouldQueue
             $product->loadMissing(['category', 'tags']);
             $reviewStream = $stream;
             $reviewFilename = $file->original_name;
+            $readerSourceStream = null;
+            $readerSourceFilename = null;
             $sourceExtension = strtolower(pathinfo($file->original_name, PATHINFO_EXTENSION));
             if ($sourceExtension === 'docx') {
                 $docxBytes = stream_get_contents($stream);
@@ -115,6 +117,12 @@ class ProcessProductDocument implements ShouldQueue
                 fwrite($reviewStream, $pdfBytes);
                 rewind($reviewStream);
                 $reviewFilename = pathinfo($file->original_name, PATHINFO_FILENAME).'.pdf';
+                $readerSourceStream = fopen('php://temp', 'w+b');
+                if (! is_resource($readerSourceStream) || fwrite($readerSourceStream, $docxBytes) === false) {
+                    throw new \\RuntimeException('product_docx_source_stream_failed');
+                }
+                rewind($readerSourceStream);
+                $readerSourceFilename = $file->original_name;
             } else {
                 rewind($stream);
             }
@@ -128,7 +136,7 @@ class ProcessProductDocument implements ShouldQueue
                 'category_name' => $product->category?->name,
                 'tags_json' => json_encode($product->tags->pluck('name')->take(30)->values()->all(), JSON_UNESCAPED_UNICODE),
                 'description' => mb_substr((string) $product->description, 0, 8000),
-            ]);
+            ], $readerSourceStream, $readerSourceFilename);
         } catch (Throwable $exception) {
             Log::warning('Product document processing failed', [
                 'document_id' => $this->documentId,
@@ -136,6 +144,9 @@ class ProcessProductDocument implements ShouldQueue
             ]);
             throw $exception;
         } finally {
+            if (isset($readerSourceStream) && is_resource($readerSourceStream)) {
+                fclose($readerSourceStream);
+            }
             if (isset($reviewStream) && is_resource($reviewStream) && $reviewStream !== $stream) {
                 fclose($reviewStream);
             }
