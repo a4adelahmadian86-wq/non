@@ -9,6 +9,7 @@ use App\Models\StoreProductFile;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
+use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,7 +93,7 @@ class AdminStoreController extends Controller
         return redirect()->route('admin.store.edit', $product)->with('status', 'محصول ایجاد شد؛ فایل اصلی را بارگذاری کنید.');
     }
 
-    public function edit(StoreProduct $product)
+    public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder)
     {
         $product->load(['files', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
@@ -104,7 +105,17 @@ class AdminStoreController extends Controller
             : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
                 && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
 
-        $supervisorEnabled = (bool) data_get($product->metadata, 'ai_supervisor.enabled', false);
+        $supervisorSettings = (array) data_get($product->metadata, 'ai_supervisor', []);
+        $supervisorEnabled = (bool) data_get($supervisorSettings, 'enabled', false);
+        $storedSupervisorReview = data_get($supervisorSettings, 'last_review');
+        $supervisorReviewFresh = false;
+        if (is_array($storedSupervisorReview) && filled($storedSupervisorReview['snapshot_hash'] ?? null)) {
+            $currentSnapshot = $snapshotBuilder->build($product, $supervisorSettings);
+            $supervisorReviewFresh = hash_equals(
+                (string) $storedSupervisorReview['snapshot_hash'],
+                $snapshotBuilder->fingerprint($currentSnapshot)
+            );
+        }
         $readiness = [
             ['label' => 'مشخصات و دسته‌بندی', 'ready' => filled($product->title) && filled($product->sku) && $product->category !== null && (bool) $product->category?->is_active, 'required' => true],
             ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0 && ($product->compare_at_price_rials === null || $product->compare_at_price_rials > $product->price_rials), 'required' => true],
@@ -116,10 +127,10 @@ class AdminStoreController extends Controller
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady'));
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh'));
     }
 
-    public function update(Request $request, StoreProduct $product)
+    public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder)
     {
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
@@ -129,7 +140,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $snapshotBuilder) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($data['type'] !== $lockedProduct->type) {
                 throw ValidationException::withMessages([
@@ -138,6 +149,27 @@ class AdminStoreController extends Controller
             }
 
             if (($data['status'] ?? '') === 'published') {
+                $supervisorSettings = (array) data_get($data, 'metadata.ai_supervisor', []);
+                if ((bool) data_get($supervisorSettings, 'enabled', false)
+                    && data_get($supervisorSettings, 'mode', 'suggest') === 'review_gate') {
+                    $lastReview = data_get($lockedProduct->metadata, 'ai_supervisor.last_review');
+                    $snapshot = $snapshotBuilder->build($lockedProduct, $supervisorSettings);
+                    $snapshotMatches = is_array($lastReview)
+                        && filled($lastReview['snapshot_hash'] ?? null)
+                        && hash_equals((string) $lastReview['snapshot_hash'], $snapshotBuilder->fingerprint($snapshot));
+                    $reviewFields = ['category_id', 'title', 'sku', 'type', 'short_description', 'description', 'price_rials', 'compare_at_price_rials', 'seo_title', 'seo_description'];
+                    $reviewInputsChanged = collect($reviewFields)->contains(
+                        fn ($field) => array_key_exists($field, $data)
+                            && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
+                    );
+                    $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+                    $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
+                    if (! $snapshotMatches || $reviewInputsChanged || $currentTagIds !== $submittedTagIds || ($lastReview['verdict'] ?? null) !== 'approved') {
+                        throw ValidationException::withMessages([
+                            'status' => 'برای انتشار در حالت تأییدمحور، ابتدا اطلاعات و رسانه‌ها را ذخیره کنید و پس از اجرای یک بررسی تازه با نتیجه تأیید، دوباره انتشار را انجام دهید.',
+                        ]);
+                    }
+                }
                 if (! $lockedProduct->category()->where('is_active', true)->exists()) {
                     throw ValidationException::withMessages(['category_id' => 'برای انتشار محصول، دسته‌بندی آن باید فعال باشد.']);
                 }
