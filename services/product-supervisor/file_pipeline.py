@@ -854,6 +854,9 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.image_mime = mime
     elif (len(data) >= 12 and data[4:8] == b"ftyp" and suffix not in {".m4a", ".m4b", ".m4p"}) or data.startswith(b"\x1a\x45\xdf\xa3") or (data.startswith(b"RIFF") and data[8:12] == b"AVI "):
         result.detected_type = "video"
+        # Only a bounded audio segment and one frame are sampled; never claim full video review.
+        result.extraction_truncated = True
+        result.warnings.append("تحلیل ویدئو نمونه‌ای است و کل مدت ویدئو بررسی نشده؛ تولید محتوای خودکار از این منبع غیرفعال می‌ماند.")
         video_audio, video_frame = _extract_video_tracks(data)
         if video_audio:
             result.audio_bytes = video_audio
@@ -939,7 +942,7 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> str:
             files={"file": (filename, data, "application/octet-stream")},
         )
         response.raise_for_status()
-        return str(response.json().get("text", ""))[:MAX_EXTRACTED_CHARS]
+        return str(response.json().get("text", ""))
 
 
 
