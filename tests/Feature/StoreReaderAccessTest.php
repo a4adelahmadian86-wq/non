@@ -223,12 +223,16 @@ class StoreReaderAccessTest extends TestCase
             'product_id' => $product->id,
             'product_file_id' => $file->id,
             'source_sha256' => $file->sha256,
-            'processing_status' => 'completed',
+            'processing_status' => 'extracted',
             'detected_type' => 'pdf',
             'page_count' => 2,
             'structure_json' => [
                 'reader' => ['ready' => true, 'page_count' => 2],
-                'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
+                'completeness' => [
+                    'extraction_complete' => true,
+                    'analysis_batches_complete' => false,
+                    'semantic_review_complete' => false,
+                ],
             ],
         ]);
         $document->pages()->create([
