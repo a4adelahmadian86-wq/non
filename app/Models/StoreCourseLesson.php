@@ -34,10 +34,10 @@ class StoreCourseLesson extends Model
             $lesson->where(function ($article) {
                 $article->where('lesson_type', 'article')
                     ->whereNotNull('content')
-                    ->where('content', '!=', '');
+                    ->whereRaw('TRIM(content) <> ?', ['']);
             })->orWhere(function ($video) {
                 $video->where('lesson_type', 'video')->where(function ($source) {
-                    $source->where(fn ($url) => $url->whereNotNull('video_url')->where('video_url', '!=', ''))
+                    $source->where(fn ($url) => $url->whereNotNull('video_url')->whereRaw('TRIM(video_url) <> ?', ['']))
                         ->orWhereHas('resources', fn ($file) => $file->where('is_active', true)->where('scan_status', 'clean')->where('mime', 'like', 'video/%'));
                 });
             })->orWhere(function ($audio) {
@@ -51,7 +51,7 @@ class StoreCourseLesson extends Model
             })->orWhere(function ($live) {
                 $live->where('lesson_type', 'live')->where(function ($source) {
                     $source->where(fn ($url) => $url->whereNotNull('video_url')->where('video_url', '!=', ''))
-                        ->orWhere(fn ($content) => $content->whereNotNull('content')->where('content', '!=', ''));
+                        ->orWhere(fn ($content) => $content->whereNotNull('content')->whereRaw('TRIM(content) <> ?', ['']));
                 });
             });
         });
