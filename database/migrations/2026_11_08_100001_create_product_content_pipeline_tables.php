@@ -43,6 +43,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('product_id')->constrained('store_products')->cascadeOnDelete();
             $table->foreignId('product_file_id')->nullable()->constrained('store_product_files')->nullOnDelete();
+            $table->foreignId('upload_session_id')->nullable()->constrained('store_product_upload_sessions')->nullOnDelete();
             $table->char('source_sha256', 64)->index();
             $table->string('original_name', 255);
             $table->string('detected_mime', 160)->nullable();
