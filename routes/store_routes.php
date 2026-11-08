@@ -33,6 +33,9 @@ Route::get('/wallet/top-up/zarinpal/callback',[\App\Http\Controllers\WalletContr
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::post('/store/{product}/ai-supervisor/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'review'])->middleware('throttle:5,10')->name('store.ai-supervisor.review');
+    Route::post('/store/{product}/ai-supervisor/files/{file}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewFile'])->middleware('throttle:5,10')->name('store.ai-supervisor.files.review');
+    Route::post('/store/{product}/ai-supervisor/images/{image}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewImage'])->middleware('throttle:5,10')->name('store.ai-supervisor.images.review');
+    Route::post('/store/{product}/ai-supervisor/cover/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewCover'])->middleware('throttle:5,10')->name('store.ai-supervisor.cover.review');
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
