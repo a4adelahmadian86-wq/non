@@ -319,6 +319,8 @@ class AdminProductFileIngestionController extends Controller
             'preflight_executable_signature_rejected', 'preflight_dangerous_extension' => 'فایل اجرایی یا اسکریپت قابل بارگذاری نیست.',
             'preflight_archive_format_not_supported_for_safe_listing' => 'این نوع آرشیو هنوز امکان فهرست‌برداری امن داخلی ندارد.',
             'preflight_nested_archive_requires_review' => 'آرشیو تو‌در‌تو شناسایی شد؛ برای جلوگیری از عبور محتوای بررسی‌نشده، فعلاً آن را جداگانه بارگذاری کنید.',
+            'preflight_office_container_invalid' => 'ساختار داخلی فایل Office معتبر نیست یا با پسوند آن تطابق ندارد.',
+            'preflight_archive_empty_or_invalid' => 'آرشیو خالی یا ناقص است و امکان بررسی معتبر آن وجود ندارد.',
             'preflight_tar_signature_invalid' => 'ساختار فایل TAR معتبر نیست.',
             'preflight_legacy_office_not_supported' => 'فرمت‌های قدیمی Office فعلاً پشتیبانی نمی‌شوند؛ فایل را به DOCX، XLSX یا PPTX تبدیل کنید.',
             'preflight_office_macros_not_allowed' => 'فایل آفیس دارای ماکرو قابل پذیرش نیست.',
