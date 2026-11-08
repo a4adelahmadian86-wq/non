@@ -48,7 +48,7 @@ Administrators can upload prepared preview assets with access level `sample` or 
 
 Preview and reader responses use private/no-store cache headers, nosniff, same-origin framing/resource policies, no-referrer, and restrictive content security policies. Preview assets remain on the private disk and are delivered through throttled application routes; no public storage URL is used.
 
-The PDF.js legacy build and worker are currently loaded from a version-pinned CDN; they are not self-hosted yet.
+The reader self-hosts the pinned PDF.js legacy module, worker, viewer styles, CMaps, standard fonts, and optional WASM assets under `public/vendor/pdfjs/`. Run `bash scripts/prepare-reader-assets.sh` during deployment (Node.js/npm required); CI runs the same preparation step before browser tests. The generated distribution is version-pinned to `6.5.438` and its upstream license is copied alongside the assets. The reader no longer depends on a third-party CDN at runtime.
 
 ## Automated verification and release checks
 
@@ -57,7 +57,7 @@ CI should cover:
 2. Playwright tests for PDF.js rendering and watermark visibility, text search, page controls, zoom/rotation, lazy thumbnail loading, and copy/context-menu suppression.
 3. Migration, route, Blade cache, and JavaScript syntax checks.
 
-For an existing installation, run `php artisan farast:prepare-reader-previews --dry-run`, review the listed records, then run `php artisan farast:prepare-reader-previews` during a controlled maintenance window before enabling the new reader routes. New uploads are prepared automatically in the admin upload flow.
+For an existing installation, first run `bash scripts/prepare-reader-assets.sh` to install the pinned, same-origin PDF.js assets. Then run `php artisan farast:prepare-reader-previews --dry-run`, review the listed records, and run `php artisan farast:prepare-reader-previews` during a controlled maintenance window before enabling the new reader routes. New uploads are prepared automatically in the admin upload flow.
 
 Automated fixtures do not replace manual visual QA against representative customer PDFs, DOCX, and XLSX files on desktop and mobile browsers. Production deployment, migrations, trusted-proxy configuration, private-disk permissions, and actual uploaded sample content must be verified in the target environment.
 
