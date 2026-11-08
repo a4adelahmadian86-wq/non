@@ -16,6 +16,12 @@ on:
     branches: [main]
     paths:
       - "services/product-supervisor/**"
+      - "app/Http/Controllers/AdminProductSupervisorController.php"
+      - "app/Http/Controllers/AdminStoreController.php"
+      - "app/Services/ProductSupervisorClient.php"
+      - "config/services.php"
+      - "routes/store_routes.php"
+      - "resources/views/admin/store/form.blade.php"
       - "render.yaml"
       - ".github/workflows/product-supervisor.yml"
 
