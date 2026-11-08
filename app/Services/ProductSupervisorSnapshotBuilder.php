@@ -17,10 +17,43 @@ class ProductSupervisorSnapshotBuilder
             ->values()
             ->all();
 
+        $mediaParts = [
+            'cover' => $product->cover_path,
+            'images' => $product->images()->orderBy('id')->get(['id', 'path', 'alt', 'is_active'])->toArray(),
+            'files' => $product->files()
+                ->where('purpose', 'product_download')
+                ->orderBy('id')
+                ->get(['id', 'sha256', 'is_primary', 'is_active', 'scan_status'])
+                ->toArray(),
+        ];
+        $mediaFingerprint = $this->fingerprint($mediaParts);
+
         $publishableLessons = 0;
+        $courseFingerprint = null;
         if ($product->type === 'course') {
             $courseId = $product->course()->value('id');
             if ($courseId) {
+                $courseLessons = StoreCourseLesson::query()
+                    ->whereHas('section', fn ($query) => $query->where('course_id', $courseId))
+                    ->with(['resources:id,course_lesson_id,sha256,is_active,scan_status,mime'])
+                    ->orderBy('id')
+                    ->get(['id', 'section_id', 'title', 'lesson_type', 'content', 'video_url', 'is_published']);
+                $courseFingerprint = $this->fingerprint($courseLessons->map(fn ($lesson) => [
+                    'id' => $lesson->id,
+                    'section_id' => $lesson->section_id,
+                    'title' => $lesson->title,
+                    'lesson_type' => $lesson->lesson_type,
+                    'content' => $lesson->content,
+                    'video_url' => $lesson->video_url,
+                    'is_published' => $lesson->is_published,
+                    'resources' => $lesson->resources->map(fn ($resource) => [
+                        'id' => $resource->id,
+                        'sha256' => $resource->sha256,
+                        'is_active' => $resource->is_active,
+                        'scan_status' => $resource->scan_status,
+                        'mime' => $resource->mime,
+                    ])->all(),
+                ])->all());
                 $publishableLessons = StoreCourseLesson::query()
                     ->whereHas('section', fn ($query) => $query->where('course_id', $courseId))
                     ->publishable()
@@ -42,6 +75,8 @@ class ProductSupervisorSnapshotBuilder
             'category_name' => $product->category?->name,
             'tags' => $product->tags->pluck('name')->take(30)->values()->all(),
             'has_cover' => filled($product->cover_path),
+            'media_fingerprint' => $mediaFingerprint,
+            'course_fingerprint' => $courseFingerprint,
             'active_image_count' => $product->images()->where('is_active', true)->count(),
             'has_clean_primary_file' => $product->files()
                 ->where('purpose', 'product_download')
