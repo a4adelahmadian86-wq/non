@@ -517,7 +517,7 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
       content_text: 'فصل اول\\nمتن توضیحی\\nگزینه نخست\\nعنوان | مقدار',
       content_blocks: [
         { type: 'heading', level: 1, text: 'فصل اول' },
-        { type: 'paragraph', text: 'متن توضیحی' },
+        { type: 'paragraph', text: 'متن متن توضیحی' },
         { type: 'list_item', list_kind: 'bullet', list_level: 1, text: 'گزینه نخست' },
         { type: 'list_item', list_kind: 'number', list_level: 2, text: 'زیرگزینه شماره‌دار' },
         { type: 'table_row', table_index: 1, row_index: 1, cells: ['عنوان', 'مقدار'], text: 'عنوان | مقدار' },
@@ -624,7 +624,7 @@ test('clicking an HTML document word seeks the single precomputed audio track', 
   await page.goto('/');
   const timings = [
     { text: 'فصل اول', start: 0, end: 1, page: 1, words: [{ text: 'فصل', start: 0, end: 0.4 }, { text: 'اول', start: 0.4, end: 0.8 }] },
-    { text: 'متن توضیحی', start: 1, end: 2, page: 1, words: [{ text: 'متن', start: 1, end: 1.4 }, { text: 'توضیحی', start: 1.4, end: 2 }] }
+    { text: 'متن متن توضیحی', start: 1, end: 2, page: 1, words: [{ text: 'متن', start: 1, end: 1.2 }, { text: 'متن', start: 1.2, end: 1.4 }, { text: 'توضیحی', start: 1.4, end: 2 }] }
   ];
   await page.setContent(`
     <section data-reader-root data-reader-mode="document">
@@ -635,20 +635,20 @@ test('clicking an HTML document word seeks the single precomputed audio track', 
   `);
   await page.route('**/protected-word-page', route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ page_number: 1, page_kind: 'section', label: 'بخش ۱', content_text: 'فصل اول\\nمتن توضیحی', content_blocks: [
+    body: JSON.stringify({ page_number: 1, page_kind: 'section', label: 'بخش ۱', content_text: 'فصل اول\\nمتن متن توضیحی', content_blocks: [
       { type: 'heading', level: 1, text: 'فصل اول' },
       { type: 'paragraph', text: 'متن توضیحی' }
     ], content_sha256: 'precomputed-audio-fixture' })
   }));
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
-  await expect(page.locator('.reader-document-word')).toHaveCount(4);
+  await expect(page.locator('.reader-document-word')).toHaveCount(5);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-audio.js') });
   await expect(page.locator('.farast-audio-dock')).toBeVisible();
   await page.locator('[data-reader-root]').evaluate(root => root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section: 0 } })));
-  const word = page.locator('.reader-document-word').filter({ hasText: 'متن' }).first();
+  const word = page.locator('.reader-document-word').filter({ hasText: 'متن' }).nth(1);
   await expect(word).toHaveAttribute('role', 'button');
   await word.click();
-  await expect.poll(() => page.evaluate(() => window.__audioInstances[0]?.currentTime)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__audioInstances[0]?.currentTime)).toBe(1.2);
   expect(await page.evaluate(() => window.__audioInstances[0]?.src)).toBe('/reader-audio.wav');
   await expect(page.locator('[data-reader-root]')).not.toHaveAttribute('data-reader-speech-url');
 });

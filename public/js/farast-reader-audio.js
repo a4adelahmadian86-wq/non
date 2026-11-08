@@ -278,7 +278,7 @@
     return true;
   };
   const tokens = value => String(value || '').toLocaleLowerCase().replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\u064B-\u065F\u0670]/g, '').replace(/[\u200c\u200f\u202a-\u202e]/g, '').match(/[\p{L}\p{N}]+/gu) || [];
-  const findTextRange = (value, page = null) => {
+  const findTextRange = (value, page = null, wordIndex = null) => {
     const wanted = tokens(value);
     if (!wanted.length || !activeTrack) return null;
     const indexedWords = [];
@@ -298,6 +298,11 @@
         page: item.page
       }));
     }
+    const preferredWordIndex = Number(wordIndex);
+    if (wanted.length === 1 && Number.isInteger(preferredWordIndex) && preferredWordIndex >= 0 && preferredWordIndex < indexedWords.length) {
+      const candidate = indexedWords[preferredWordIndex];
+      if (candidate.token === wanted[0]) return { start: candidate.start, end: candidate.end, page: candidate.page };
+    }
     for (let i = 0; i <= indexedWords.length - wanted.length; i++) {
       if (wanted.every((word, offset) => indexedWords[i + offset].token === word)) {
         return {
@@ -314,7 +319,7 @@
     const documentWord = event.target.closest('.reader-document-word');
     if (documentWord) {
       const page = Number(documentWord.dataset.page || documentWord.closest('.farast-reader-page-item')?.dataset.readerPage || 1);
-      const range = findTextRange(documentWord.dataset.word || documentWord.textContent, page);
+      const range = findTextRange(documentWord.dataset.word || documentWord.textContent, page, Number(documentWord.dataset.readerWordIndex));
       if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ انتخاب‌شده'); }
       return;
     }
@@ -356,7 +361,7 @@
     if (!target) return;
     const page = Number(target.dataset.page || target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
     const value = word ? (word.dataset.word || word.textContent) : (target.dataset.readerSpeechText || target.textContent);
-    const range = findTextRange(value, page);
+    const range = findTextRange(value, page, word ? Number(word.dataset.readerWordIndex) : null);
     if (range) { event.preventDefault(); playRange(range.start, range.end, word ? 'در حال خواندن واژهٔ انتخاب‌شده' : 'در حال خواندن بخش انتخاب‌شده'); }
   });
   root.addEventListener('pointerup', () => {

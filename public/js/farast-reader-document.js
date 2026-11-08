@@ -48,6 +48,7 @@
       layer.style.webkitUserSelect = 'text';
 
       const speechPage = Math.max(1, Number(payload.page_number || article.dataset.readerPage || 1));
+      let speechWordIndex = 0;
       const appendSpeechText = (element, value) => {
         const source = String(value || '');
         element.dataset.readerSpeechText = source;
@@ -71,6 +72,8 @@
               word.textContent = part;
               word.dataset.word = part;
               word.dataset.page = String(speechPage);
+              word.dataset.readerWordIndex = String(speechWordIndex);
+              speechWordIndex += 1;
               word.tabIndex = 0;
               word.setAttribute('role', 'button');
               word.setAttribute('aria-label', 'خواندن واژه ' + part);
