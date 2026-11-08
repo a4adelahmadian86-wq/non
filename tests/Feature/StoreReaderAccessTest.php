@@ -118,6 +118,7 @@ class StoreReaderAccessTest extends TestCase
         ]);
         $product->update(['download_policy' => 'reader_only']);
 
+        $this->get(route('store.product', $product->slug))->assertOk()->assertDontSee(route('store.preview', $full));
         $this->get(route('store.reader', $product->slug))->assertOk()->assertSee(route('store.preview', $sample))->assertDontSee(route('store.preview', $full));
         $this->get(route('store.preview', $full))->assertForbidden();
 
