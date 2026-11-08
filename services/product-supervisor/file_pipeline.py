@@ -47,10 +47,12 @@ class Inspection:
     archive_entries: list[str] | None = None
     warnings: list[str] | None = None
     antivirus_status: str = "not_configured"
+    upstream_scan_status: str = "not_provided"
 
     def public_dict(self) -> dict[str, Any]:
         return {
             "detected_type": self.detected_type,
+            "upstream_scan_status": self.upstream_scan_status,
             "extracted_characters": len(self.extracted_text),
             "archive_entries": self.archive_entries or [],
             "warnings": self.warnings or [],
@@ -284,7 +286,7 @@ def _extract_video_tracks(data: bytes) -> tuple[bytes | None, bytes | None]:
     return audio, frame
 
 
-def inspect_file(data: bytes, filename: str, declared_content_type: str | None = None) -> Inspection:
+def inspect_file(data: bytes, filename: str, declared_content_type: str | None = None, primary_scan_status: str = "") -> Inspection:
     if not data:
         raise FileInspectionError("فایل خالی است.")
     if len(data) > MAX_FILE_BYTES:
@@ -296,6 +298,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
 
     result = Inspection(detected_type="unknown", warnings=[])
     result.antivirus_status = _clamav_scan(data)
+    result.upstream_scan_status = "clean" if primary_scan_status == "clean" else "not_provided"
     if result.antivirus_status == "infected":
         raise FileInspectionError("اسکنر امنیتی محتوای آلوده را شناسایی کرد؛ فایل قرنطینه شد.")
 
@@ -350,7 +353,10 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         raise FileInspectionError("نوع فایل پشتیبانی نمی‌شود یا امضای واقعی فایل با پسوند آن تطابق ندارد.")
 
     if result.antivirus_status != "clean":
-        result.warnings.append("اسکن آنتی‌ویروس در این محیط تأیید نشده است؛ فایل را سالم فرض نکنید.")
+        if result.upstream_scan_status == "clean":
+            result.warnings.append("اسکن ثانویه ناظر در دسترس نیست؛ فایل از اسکنر اصلی فروشگاه وضعیت سالم دارد.")
+        else:
+            result.warnings.append("اسکن آنتی‌ویروس در این محیط تأیید نشده است؛ فایل را سالم فرض نکنید.")
 
     return result
 
