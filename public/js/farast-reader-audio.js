@@ -124,7 +124,7 @@
     const layerRect = layer.getBoundingClientRect();
     items.forEach(item => {
       const words = String(item.text).trim().split(/\s+/u).filter(Boolean);
-      words.forEach(word => {
+      words.forEach((word, wordIndex) => {
         const target = normalize(word);
         if (!target) return;
         let found = null;
