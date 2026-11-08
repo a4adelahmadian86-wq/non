@@ -1,10 +1,10 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\StoreProduct;
-use App\\Services\\DocumentKnowledgeContextBuilder;
-use Illuminate\\Http\\Request;
+use App\Models\StoreProduct;
+use App\Services\DocumentKnowledgeContextBuilder;
+use Illuminate\Http\Request;
 
 class InternalDocumentKnowledgeController extends Controller
 {
