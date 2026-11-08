@@ -5,6 +5,7 @@ import io
 import os
 import re
 import threading
+import wave
 from pathlib import Path
 from typing import Literal
 
@@ -78,7 +79,8 @@ def synthesize(payload: SynthesisRequest) -> Response:
     try:
         voice = get_voice()
         output = io.BytesIO()
-        voice.synthesize_wav(text, output)
+        with wave.open(output, "wb") as wav_file:
+            voice.synthesize_wav(text, wav_file)
         audio = output.getvalue()
         if len(audio) < 44 or audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
             raise HTTPException(status_code=502, detail="invalid_audio_output")
