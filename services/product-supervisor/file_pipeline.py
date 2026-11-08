@@ -806,8 +806,12 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
                     "اطلاعات ساختگی یا جزئیات ناموجود تولید نکن.",
                     "اطلاعات حساس، کلیدها، رمزها و داده شخصی را در خروجی بازنشر نکن؛ فقط وجود احتمالی آن‌ها را هشدار بده.",
                     "محتوای کپی‌رایت‌دار، محتوای نامرتبط، محتوای خالی یا ناقص و ناسازگاری با عنوان محصول را مشخص کن.",
-                    "خروجی را به فارسی و به شکل JSON شامل summary و findings و sample_pages بده.",
+                    "خروجی را به فارسی و به شکل JSON شامل summary و findings و sample_pages و facts بده.",
                     "sample_pages فقط برای PDF است و باید حداکثر سه شماره صفحه یک‌مبنایی از برچسب‌های صفحه‌ای باشد که واقعاً در همین بخش دیده‌ای؛ برای سایر فرمت‌ها آرایه خالی بده.",
+                    "facts حداکثر ۲۰ گزاره اتمی و دقیق است؛ هر گزاره باید fact_type و fact_key و fact_value و evidence داشته باشد.",
+                    "evidence باید نقل‌قول کوتاه و عیناً کپی‌شده از متن همین بخش باشد؛ اگر شاهد دقیق وجود ندارد آن fact را حذف کن.",
+                    "برای هر fact فقط به اطلاعاتی اشاره کن که در همین بخش وجود دارد؛ locator را فقط در صورت مشاهده شماره صفحه، برگه، سطر یا اسلاید درج کن.",
+                    "از حدس، تعمیم، نتیجه‌گیری فراتر از متن و تبدیل احتمال به واقعیت خودداری کن.",
                     "شماره صفحه یا محتوای مشاهده‌نشده را حدس نزن.",
                     "در این مرحله فقط همین بخش را ارزیابی کن؛ درباره بخش‌هایی که در ورودی این درخواست نیستند ادعا نکن.",
                 ],
@@ -835,6 +839,8 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
     findings: list[dict[str, Any]] = []
     seen_findings: set[str] = set()
     sample_pages: list[int] = []
+    facts: list[dict[str, Any]] = []
+    seen_facts: set[str] = set()
     for item in results:
         raw_findings = item.get("findings", [])
         if isinstance(raw_findings, list):
@@ -849,6 +855,28 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
                 if identity not in seen_findings:
                     seen_findings.add(identity)
                     findings.append(finding)
+        raw_facts = item.get("facts", [])
+        if isinstance(raw_facts, list):
+            for fact in raw_facts[:20]:
+                if not isinstance(fact, dict):
+                    continue
+                fact_type = str(fact.get("fact_type") or "other")[:32]
+                fact_key = str(fact.get("fact_key") or "").strip()[:160]
+                fact_value = str(fact.get("fact_value") or "").strip()[:1000]
+                evidence = str(fact.get("evidence") or "").strip()[:700]
+                if not fact_key or not fact_value or len(evidence) < 6:
+                    continue
+                identity = json.dumps([fact_type, fact_key, fact_value, evidence], ensure_ascii=False, sort_keys=True)
+                if identity in seen_facts:
+                    continue
+                seen_facts.add(identity)
+                facts.append({
+                    "fact_type": fact_type,
+                    "fact_key": fact_key,
+                    "fact_value": fact_value,
+                    "evidence": evidence,
+                })
+
         raw_pages = item.get("sample_pages", [])
         if isinstance(raw_pages, list):
             for page in raw_pages:
@@ -859,6 +887,7 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
         "summary": " ".join(summaries)[:700],
         "findings": findings[:50],
         "sample_pages": sample_pages[:3],
+        "facts": facts[:100],
         "analysis_status": "completed" if len(results) == len(batches) else "partial",
         "analysis_batch_count": len(batches),
         "successful_analysis_batches": len(results),
