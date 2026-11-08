@@ -207,9 +207,9 @@ class StoreReaderAccessTest extends TestCase
             'source_sha256' => $file->sha256,
             'processing_status' => 'completed',
             'detected_type' => 'pdf',
-            'page_count' => 1,
+            'page_count' => 2,
             'structure_json' => [
-                'reader' => ['ready' => true, 'page_count' => 1],
+                'reader' => ['ready' => true, 'page_count' => 2],
                 'completeness' => ['extraction_complete' => true, 'analysis_batches_complete' => true],
             ],
         ]);
@@ -224,6 +224,17 @@ class StoreReaderAccessTest extends TestCase
             'has_extracted_text' => true,
         ]);
 
+        $document->pages()->create([
+            'page_number' => 2,
+            'page_kind' => 'sheet',
+            'locator_key' => 'sheet:Sales',
+            'locator_json' => ['sheet' => 'Sales', 'row_start' => 12, 'row_end' => 14, 'reader_page' => 2],
+            'content_text' => "سطر ۱۲: نام | تعداد\nسطر ۱۳: کتاب | ۴\nسطر ۱۴: دفتر | ۷",
+            'content_html' => '<section>Sales</section>',
+            'content_sha256' => hash('sha256', "سطر ۱۲: نام | تعداد\nسطر ۱۳: کتاب | ۴\nسطر ۱۴: دفتر | ۷"),
+            'has_extracted_text' => true,
+        ]);
+
         $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readerResponse->assertOk()
             ->assertSee('data-reader-mode="document"', false)
@@ -235,6 +246,15 @@ class StoreReaderAccessTest extends TestCase
         $pageResponse->assertOk()
             ->assertJsonPath('page_number', 1)
             ->assertJsonPath('content_text', 'متن مجاز صفحه اول کتاب')
+            ->assertJsonMissingPath('path')
+            ->assertJsonMissingPath('disk');
+
+        $sheetResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 2]));
+        $sheetResponse->assertOk()
+            ->assertJsonPath('page_kind', 'sheet')
+            ->assertJsonPath('sheet_name', 'Sales')
+            ->assertJsonPath('row_start', 12)
+            ->assertJsonPath('row_end', 14)
             ->assertJsonMissingPath('path')
             ->assertJsonMissingPath('disk');
 

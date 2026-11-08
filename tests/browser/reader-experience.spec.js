@@ -451,3 +451,39 @@ test.describe('FARAST sample reader interactions', () => {
   });
 
 });
+
+test('renders protected spreadsheet sections as safe responsive tables', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section data-reader-root data-reader-mode="document">
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1" data-reader-page-url="/protected-page">
+        <div data-reader-document-page>
+          <div class="farast-pdf-loading" role="status">loading</div>
+          <div data-reader-text-layer></div>
+        </div>
+      </article>
+    </section>
+  `);
+  await page.route('**/protected-page', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      page_number: 1,
+      page_kind: 'sheet',
+      label: 'برگه Sales',
+      sheet_name: 'Sales',
+      row_start: 12,
+      row_end: 13,
+      content_text: 'نام | توضیح\nکتاب | <img src=x onerror=alert(1)>',
+      content_sha256: 'fixture-hash'
+    })
+  }));
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-document.js') });
+  const table = page.locator('.farast-reader-sheet-table');
+  await expect(table).toBeVisible();
+  await expect(table.locator('caption')).toHaveText('Sales');
+  await expect(table.locator('tbody tr')).toHaveCount(2);
+  await expect(table.locator('tbody tr').nth(0).locator('th')).toHaveText('۱۲');
+  await expect(table.locator('tbody tr').nth(1).locator('td').nth(1)).toHaveText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('.farast-reader-sheet-table img')).toHaveCount(0);
+});

@@ -464,6 +464,15 @@ class StoreController extends Controller
             'page_number' => (int) $pageRecord->page_number,
             'page_count' => (int) data_get($document->structure_json, 'reader.page_count', 0),
             'page_kind' => (string) $pageRecord->page_kind,
+            'sheet_name' => $pageRecord->page_kind === 'sheet'
+                ? mb_substr((string) data_get($pageRecord->locator_json, 'sheet', ''), 0, 120)
+                : null,
+            'row_start' => $pageRecord->page_kind === 'sheet'
+                ? max(1, min(1000000, (int) data_get($pageRecord->locator_json, 'row_start', 1)))
+                : null,
+            'row_end' => $pageRecord->page_kind === 'sheet'
+                ? max(1, min(1000000, (int) data_get($pageRecord->locator_json, 'row_end', 1)))
+                : null,
             'label' => match ($pageRecord->page_kind) {
                 'pdf_page' => 'صفحه '.$pageRecord->page_number,
                 'slide' => 'اسلاید '.$pageRecord->page_number,
