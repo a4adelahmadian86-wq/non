@@ -507,20 +507,28 @@
       const position = document.caretPositionFromPoint?.(event.clientX, event.clientY);
       const node = caret?.startContainer || position?.offsetNode;
       if (node?.nodeType === Node.TEXT_NODE) {
-        const raw = node.nodeValue || '', offset = Number(caret?.startOffset ?? position?.offset ?? 0);
-        const before = raw.slice(0, offset), after = raw.slice(offset);
-        const left = before.search(/[^.!؟۔؛]*$/u);
-        const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
-        const sentenceText = (before.slice(left < 0 ? 0 : left) + (right?.[0] || '')).trim();
-        const page = Number(pdfLayer.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || root.querySelector('#reader-page-number')?.value || 1);
-        let prefixText = '';
+        const offset = Number(caret?.startOffset ?? position?.offset ?? 0);
+        let before = '', after = '';
         try {
           const prefixRange = document.createRange();
           prefixRange.selectNodeContents(pdfLayer);
           prefixRange.setEnd(node, offset);
-          prefixText = prefixRange.toString();
-        } catch (_) { prefixText = ''; }
-        const occurrence = sequenceOccurrenceBefore(prefixText, sentenceText);
+          before = prefixRange.toString();
+          const suffixRange = document.createRange();
+          suffixRange.selectNodeContents(pdfLayer);
+          suffixRange.setStart(node, offset);
+          after = suffixRange.toString();
+        } catch (_) {
+          const raw = node.nodeValue || '';
+          before = raw.slice(0, offset);
+          after = raw.slice(offset);
+        }
+        const left = before.search(/[^.!؟۔؛]*$/u);
+        const sentenceStart = left < 0 ? 0 : left;
+        const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
+        const sentenceText = (before.slice(sentenceStart) + (right?.[0] || '')).trim();
+        const page = Number(pdfLayer.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || root.querySelector('#reader-page-number')?.value || 1);
+        const occurrence = sequenceOccurrenceBefore(before.slice(0, sentenceStart), sentenceText);
         const range = findTextRange(sentenceText, page, occurrence);
         if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن جملهٔ انتخاب‌شده'); return; }
       }
