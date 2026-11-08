@@ -11,11 +11,17 @@ use App\Models\StoreLibraryItem;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class StoreReaderAccessTest extends TestCase
 {
+
+    public function test_on_demand_reader_speech_route_is_not_registered(): void
+    {
+        $this->assertFalse(Route::has('store.reader.speech'));
+    }
     use RefreshDatabase;
 
     private function makePreviewFixture(): array
