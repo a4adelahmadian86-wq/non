@@ -547,7 +547,9 @@ test.describe('FARAST sample reader interactions', () => {
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
-      document.querySelector('[data-reader-root]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+      const root = document.querySelector('[data-reader-root]');
+      root.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+      root.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
     await expect.poll(() => requests.length).toBe(3);
     expect(requests[2].page).toBe(4);
