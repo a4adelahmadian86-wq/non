@@ -66,49 +66,153 @@ class Inspection:
 def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]:
     if not text.strip():
         return []
+
     chunks: list[dict[str, Any]] = []
+
+    def add_chunk(chunk_type: str, locator: dict[str, Any], value: str) -> None:
+        value = value.strip()
+        if value:
+            chunks.append({
+                "chunk_type": chunk_type,
+                "locator": locator,
+                "content_text": value[:1800],
+            })
+
     if detected_type == "pdf":
+        buffer: list[str] = []
+        page_numbers: list[int] = []
+        length = 0
         for page_number, segment in enumerate(text.split("\f"), start=1):
             value = segment.strip()
-            if value:
-                chunks.append({"chunk_type": "page_text", "locator": {"page": page_number}, "content_text": value[:1800]})
+            if not value:
+                continue
+            if buffer and length + len(value) > 1800:
+                add_chunk("page_text", {
+                    "page": page_numbers[0],
+                    "page_start": page_numbers[0],
+                    "page_end": page_numbers[-1],
+                    "pages": page_numbers[:],
+                }, "\n\n".join(buffer))
+                buffer, page_numbers, length = [], [], 0
+            buffer.append(value)
+            page_numbers.append(page_number)
+            length += len(value)
+        if buffer:
+            add_chunk("page_text", {
+                "page": page_numbers[0],
+                "page_start": page_numbers[0],
+                "page_end": page_numbers[-1],
+                "pages": page_numbers[:],
+            }, "\n\n".join(buffer))
+
     elif detected_type == "xlsx":
         current_sheet = "نامشخص"
-        row_number = 0
+        row_start = 0
+        row_end = 0
+        buffer: list[str] = []
+        length = 0
+
+        def flush_rows() -> None:
+            nonlocal buffer, row_start, row_end, length
+            if buffer:
+                add_chunk("spreadsheet_rows", {
+                    "sheet": current_sheet,
+                    "row_start": row_start,
+                    "row_end": row_end,
+                }, "\n".join(buffer))
+            buffer, row_start, row_end, length = [], 0, 0, 0
+
         for line in text.splitlines():
             if line.startswith("برگه: "):
+                flush_rows()
                 current_sheet = line[6:].strip()[:120]
-                row_number = 0
-            elif line.strip():
-                row_number += 1
-                chunks.append({"chunk_type": "spreadsheet_row", "locator": {"sheet": current_sheet, "row": row_number}, "content_text": line[:1800]})
+                continue
+            value = line.strip()
+            if not value:
+                continue
+            match = re.match(r"^سطر\s+(\d+):", value)
+            row_number = int(match.group(1)) if match else (row_end + 1)
+            if buffer and length + len(value) > 1800:
+                flush_rows()
+            if row_start == 0:
+                row_start = row_number
+            row_end = row_number
+            buffer.append(value)
+            length += len(value)
+        flush_rows()
+
     elif detected_type == "pptx":
-        slide_number = 0
-        element_number = 0
+        current_slide = 0
+        element_start = 0
+        element_end = 0
+        buffer: list[str] = []
+        length = 0
+
+        def flush_slide() -> None:
+            nonlocal buffer, element_start, element_end, length
+            if buffer:
+                add_chunk("slide_elements", {
+                    "slide": current_slide or None,
+                    "element_start": element_start,
+                    "element_end": element_end,
+                }, "\n".join(buffer))
+            buffer, element_start, element_end, length = [], 0, 0, 0
+
         for line in text.splitlines():
-            match = re.match(r"^اسلاید (\d+)$", line.strip())
+            match = re.match(r"^اسلاید\s+(\d+)$", line.strip())
             if match:
-                slide_number = int(match.group(1))
-                element_number = 0
-            elif line.strip():
-                element_number += 1
-                chunks.append({"chunk_type": "slide_element", "locator": {"slide": slide_number or None, "element": element_number}, "content_text": line[:1800]})
+                flush_slide()
+                current_slide = int(match.group(1))
+                continue
+            value = line.strip()
+            if not value:
+                continue
+            element_end += 1
+            if buffer and length + len(value) > 1800:
+                flush_slide()
+            if element_start == 0:
+                element_start = element_end
+            buffer.append(value)
+            length += len(value)
+        flush_slide()
+
     else:
+        line_start = 0
+        line_end = 0
+        buffer: list[str] = []
+        length = 0
         for line_number, line in enumerate(text.splitlines(), start=1):
-            if line.strip():
-                chunks.append({
-                    "chunk_type": "text_line" if detected_type == "text" else "document_block",
-                    "locator": {"line": line_number},
-                    "content_text": line.strip()[:1800],
-                })
+            value = line.strip()
+            if not value:
+                continue
+            for offset in range(0, len(value), 1800):
+                part = value[offset:offset + 1800]
+                if buffer and length + len(part) > 1800:
+                    add_chunk(
+                        "text_lines" if detected_type == "text" else "document_blocks",
+                        {"line_start": line_start, "line_end": line_end},
+                        "\n".join(buffer),
+                    )
+                    buffer, line_start, line_end, length = [], 0, 0, 0
+                if line_start == 0:
+                    line_start = line_number
+                line_end = line_number
+                buffer.append(part)
+                length += len(part)
+        if buffer:
+            add_chunk(
+                "text_lines" if detected_type == "text" else "document_blocks",
+                {"line_start": line_start, "line_end": line_end},
+                "\n".join(buffer),
+            )
 
     if not chunks:
-        for offset in range(0, min(len(text), MAX_EXTRACTED_CHARS), 1600):
-            chunks.append({
-                "chunk_type": "text_segment",
-                "locator": {"character_start": offset, "character_end": min(offset + 1600, len(text))},
-                "content_text": text[offset:offset + 1600],
-            })
+        for offset in range(0, min(len(text), MAX_EXTRACTED_CHARS), 1800):
+            add_chunk(
+                "text_segment",
+                {"character_start": offset, "character_end": min(offset + 1800, len(text))},
+                text[offset:offset + 1800],
+            )
 
     bounded: list[dict[str, Any]] = []
     remaining = MAX_EXTRACTED_CHARS
