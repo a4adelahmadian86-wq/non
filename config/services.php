@@ -26,6 +26,13 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
+    // Dedicated document narration engine. Intentionally separate from the existing voice assistant / gateway.
+    'document_audio' => [
+        'url' => env('FARAST_DOCUMENT_AUDIO_URL', ''),
+        'token' => env('FARAST_DOCUMENT_AUDIO_TOKEN', ''),
+        'voice_id' => 'farast-document-fa-male-37-v1',
+    ],
+
     'files' => [
         'key' => env('FILES_API_KEY'),
     ],
