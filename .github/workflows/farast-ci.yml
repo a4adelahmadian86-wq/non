@@ -68,6 +68,18 @@ jobs:
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
+  document-audio-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.11'
+      - run: pip install --no-cache-dir -r services/document-audio/requirements.txt
+      - run: python services/document-audio/download_model.py
+      - run: python services/document-audio/smoke_test.py
+
   voice-model-smoke:
     if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
     runs-on: ubuntu-latest
