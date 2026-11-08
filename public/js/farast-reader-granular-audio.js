@@ -167,12 +167,14 @@
   }, true);
 
   root.addEventListener('pointerup', () => {
+    const selection = window.getSelection();
     const text = selectedText();
     if (!text) return;
-    const anchor = window.getSelection()?.anchorNode?.parentElement;
+    const anchor = selection?.anchorNode?.parentElement;
     if (!anchor || !root.contains(anchor)) return;
     speak(text, pageFor(anchor), anchor.closest('.reader-document-paragraph,.reader-document-sentence') || anchor,
       'در حال خواندن عبارت انتخاب‌شده');
+    selection.removeAllRanges();
   });
 
   root.addEventListener('farast:reader-section-change', stop);
