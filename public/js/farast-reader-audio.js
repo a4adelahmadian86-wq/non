@@ -352,8 +352,7 @@
     const word = event.target.closest('.reader-document-word');
     if (word) {
       const range = rangeForDocumentWord(word);
-      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); }
-      return;
+      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); return; }
     }
     const sentence = event.target.closest('.reader-document-sentence');
     const paragraph = event.target.closest('.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
@@ -387,8 +386,7 @@
     const word = event.target.closest('.reader-document-word');
     if (word) {
       const range = rangeForDocumentWord(word);
-      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); }
-      return;
+      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); return; }
     }
     const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
     if (!target) return;
