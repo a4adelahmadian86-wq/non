@@ -46,6 +46,8 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertFalse(body["publication_authorized"])
         self.assertFalse(body["automated_publication"])
         self.assertEqual(body["inspection"]["detected_type"], "text")
+        self.assertEqual(body["security_gate"], "upstream_scan_verified")
+        self.assertEqual(body["inspection"]["upstream_scan_status"], "clean")
         self.assertEqual(body["provider_status"]["gladia"], "disabled")
 
     def test_health_does_not_disclose_secret(self):
