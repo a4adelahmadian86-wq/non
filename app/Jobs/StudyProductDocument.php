@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductDocumentBlock;
 use App\Models\StoreProductUploadEvent;
+use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\AuditEventService;
 use App\Services\ProductSupervisorClient;
 use Illuminate\Bus\Queueable;
@@ -152,6 +153,8 @@ class StudyProductDocument implements ShouldQueue
                 'product_ingestion'
             );
         });
+
+        GenerateProductDocumentAudio::dispatch($document->id);
     }
 
     public function failed(Throwable $exception): void
