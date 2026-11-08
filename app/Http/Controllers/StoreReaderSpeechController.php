@@ -1,13 +1,13 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\StoreLibraryItem;
-use App\\Models\\StoreProduct;
-use App\\Models\\StoreProductFile;
-use App\\Services\\ProductDocumentAudioService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Storage;
+use App\Models\StoreLibraryItem;
+use App\Models\StoreProduct;
+use App\Models\StoreProductFile;
+use App\Services\ProductDocumentAudioService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class StoreReaderSpeechController extends Controller
@@ -41,9 +41,9 @@ class StoreReaderSpeechController extends Controller
         abort_unless($page->has_extracted_text, 422);
 
         $normalize = static function (string $value): string {
-            $value = str_replace(['ي', 'ى', 'ك', "\\u{0640}"], ['ی', 'ی', 'ک', ''], mb_strtolower($value, 'UTF-8'));
-            $value = preg_replace('/[\\x{064B}-\\x{065F}\\x{0670}\\x{200C}\\x{200F}\\x{202A}-\\x{202E}]/u', '', $value) ?? $value;
-            return trim(preg_replace('/[\\p{P}\\p{Z}\\s]+/u', ' ', $value) ?? $value);
+            $value = str_replace(['ي', 'ى', 'ك', "\u{0640}"], ['ی', 'ی', 'ک', ''], mb_strtolower($value, 'UTF-8'));
+            $value = preg_replace('/[\x{064B}-\x{065F}\x{0670}\x{200C}\x{200F}\x{202A}-\x{202E}]/u', '', $value) ?? $value;
+            return trim(preg_replace('/[\p{P}\p{Z}\s]+/u', ' ', $value) ?? $value);
         };
         $needle = $normalize($text);
         $haystack = $normalize((string) $page->content_text);
