@@ -344,7 +344,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertJsonPath('audio_status', 'completed')
             ->assertJsonPath('audio_duration_ms', 240000)
             ->assertJsonMissingPath('content_chunks')
-            ->assertHeader('Cache-Control', 'private, no-store');
+            ->assertHeader('Cache-Control', 'no-store, private');
     }
 
     public function test_product_knowledge_uses_only_hash_matched_evidence_backed_facts_and_respects_sample_pages(): void
