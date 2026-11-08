@@ -731,12 +731,12 @@
     if(e.key==='ArrowRight'||e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();root.querySelector('#reader-prev')?.click();}
     if(e.key==='Home'){
       e.preventDefault();
-      if(isPdf()&&pdfDoc)navigatePdfPage(1).catch(showPdfError);
+      if(isPdf()){if(pdfDoc)navigatePdfPage(1).catch(showPdfError);}
       else showItem(0).catch(showPdfError);
     }
     if(e.key==='End'){
       e.preventDefault();
-      if(isPdf()&&pdfDoc)navigatePdfPage(pdfDoc.numPages).catch(showPdfError);
+      if(isPdf()){if(pdfDoc)navigatePdfPage(pdfDoc.numPages).catch(showPdfError);}
       else showItem(articles.length-1).catch(showPdfError);
     }
     if(e.key==='+'||e.key==='='){e.preventDefault();root.querySelector('#reader-zoom-in')?.click();}
