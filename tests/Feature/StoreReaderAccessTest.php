@@ -87,6 +87,24 @@ class StoreReaderAccessTest extends TestCase
         ]);
     }
 
+    public function test_word_page_builder_preserves_semantic_block_types_and_bounds_cells(): void
+    {
+        $built = app(\\App\\Services\\StoreProductDocumentPageBuilder::class)->build([
+            ['chunk_type' => 'docx_heading', 'locator' => ['heading_level' => 1], 'content_text' => 'فصل اول'],
+            ['chunk_type' => 'docx_paragraph', 'locator' => [], 'content_text' => 'مقدمه'],
+            ['chunk_type' => 'docx_list_item', 'locator' => ['list_kind' => 'number', 'list_level' => 2], 'content_text' => 'گزینه'],
+            ['chunk_type' => 'docx_table_row', 'locator' => ['table_index' => 1, 'row_index' => 1, 'cells' => ['عنوان', 'مقدار']], 'content_text' => 'عنوان | مقدار'],
+        ], ['detected_type' => 'docx']);
+
+        $this->assertCount(1, $built['pages']);
+        $blocks = $built['pages'][0]['locator_json']['content_blocks'];
+        $this->assertSame(['heading', 'paragraph', 'list_item', 'table_row'], array_column($blocks, 'type'));
+        $this->assertSame(1, $blocks[0]['level']);
+        $this->assertSame('number', $blocks[2]['list_kind']);
+        $this->assertSame(['عنوان', 'مقدار'], $blocks[3]['cells']);
+        $this->assertSame('مقدمه', $blocks[1]['text']);
+    }
+
     public function test_authenticated_reader_progress_and_bookmarks_sync_across_sessions(): void
     {
         [$product] = $this->makePreviewFixture();
