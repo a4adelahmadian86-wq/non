@@ -1383,12 +1383,12 @@ test('personal reader backup restores local notes and highlights without a serve
     highlights: [{ id: 'h1', quote: 'متن نمونه', page: 1, created: 1 }],
     notes: [{ id: 'n1', quote: 'متن نمونه', note: 'یادداشت بازیابی‌شده', page: 1, created: 1 }]
   }};
+  page.once('dialog', dialog => dialog.accept());
   await page.locator('[data-reader-import-file]').setInputFiles({
     name: 'reader-backup.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(backup))
   });
-  page.once('dialog', dialog => dialog.accept());
   await expect(page.locator('[data-reader-root]')).toHaveClass(/is-reading-light/);
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font', 'serif');
   await expect(page.locator('.farast-reader-note')).toContainText('یادداشت بازیابی‌شده');
