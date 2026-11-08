@@ -19,7 +19,7 @@ from pypdf import PdfReader
 from openpyxl import load_workbook
 from pptx import Presentation
 
-MAX_FILE_BYTES = 25 * 1024 * 1024
+MAX_FILE_BYTES = 50 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 120_000
 MAX_ARCHIVE_ENTRIES = 500
 MAX_ARCHIVE_UNPACKED = 100 * 1024 * 1024
