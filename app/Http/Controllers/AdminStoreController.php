@@ -100,7 +100,7 @@ class AdminStoreController extends Controller
         $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
         $contentReady = $product->type === 'course'
-            ? $product->course?->sections->contains(fn ($section) => $section->lessons->contains(fn ($lesson) => $lesson->is_published)) ?? false
+            ? ($product->course?->sections()->whereHas('lessons', fn ($query) => $query->publishable())->exists() ?? false)
             : $product->files->contains(fn ($file) => $file->purpose === 'product_download'
                 && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
 
@@ -110,7 +110,7 @@ class AdminStoreController extends Controller
             ['label' => 'قیمت‌گذاری', 'ready' => $product->price_rials !== null && $product->price_rials >= 0 && ($product->compare_at_price_rials === null || $product->compare_at_price_rials > $product->price_rials), 'required' => true],
             ['label' => 'معرفی محصول', 'ready' => filled($product->short_description) || filled($product->description), 'required' => false],
             ['label' => 'تصویر کاور', 'ready' => filled($product->cover_path), 'required' => false],
-            ['label' => $product->type === 'course' ? 'حداقل یک جلسه منتشرشده' : 'فایل اصلی سالم و فعال', 'ready' => $contentReady, 'required' => true],
+            ['label' => $product->type === 'course' ? 'حداقل یک جلسه معتبر و منتشرشده' : 'فایل اصلی سالم و فعال', 'ready' => $contentReady, 'required' => true],
             ['label' => 'اطلاعات سئو', 'ready' => filled($product->seo_title) && filled($product->seo_description), 'required' => false],
             ['label' => 'سیاست ناظر هوشمند', 'ready' => ! $supervisorEnabled || filled(data_get($product->metadata, 'ai_supervisor.mode')), 'required' => false],
         ];
@@ -142,11 +142,11 @@ class AdminStoreController extends Controller
                     throw ValidationException::withMessages(['category_id' => 'برای انتشار محصول، دسته‌بندی آن باید فعال باشد.']);
                 }
                 if ($data['type'] === 'course') {
-                    $hasPublishedLesson = $lockedProduct->course()
-                        ->whereHas('sections.lessons', fn ($query) => $query->where('is_published', true))
+                    $hasPublishableLesson = $lockedProduct->course()
+                        ->whereHas('sections.lessons', fn ($query) => $query->publishable())
                         ->exists();
-                    if (! $hasPublishedLesson) {
-                        throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده در برنامه آموزشی لازم است.']);
+                    if (! $hasPublishableLesson) {
+                        throw ValidationException::withMessages(['status' => 'برای انتشار دوره، دست‌کم یک جلسه منتشرشده با محتوای معتبر یا منبع سالم لازم است.']);
                     }
                 } else {
                     $hasSafePrimaryFile = $lockedProduct->files()
@@ -358,6 +358,7 @@ class AdminStoreController extends Controller
         $request->validate(['cover' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192']);
         $upload = $request->file('cover');
         $temporaryPath = $upload->store('store/quarantine/covers/'.$product->id, 'private');
+        $storagePath = null;
 
         try {
             $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
@@ -375,14 +376,22 @@ class AdminStoreController extends Controller
                 throw new \RuntimeException('cover_public_storage_failed');
             }
 
-            $oldPath = (string) $product->cover_path;
-            $product->update(['cover_path' => $publicPath]);
-            $this->audit('store.product.cover_updated', $product, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum']]);
+            $oldPath = DB::transaction(function () use ($product, $publicPath, $inspection) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $oldPath = (string) $lockedProduct->cover_path;
+                $lockedProduct->update(['cover_path' => $publicPath]);
+                $this->audit('store.product.cover_updated', $lockedProduct, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum']]);
+
+                return $oldPath;
+            });
             if ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
                 Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
             }
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($temporaryPath);
+            if ($storagePath) {
+                Storage::disk('public')->delete($storagePath);
+            }
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
