@@ -10,6 +10,9 @@ from typing import Any, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import Response
+from pypdf import PdfReader, PdfWriter
+import io
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 app = FastAPI(
@@ -195,6 +198,7 @@ async def review_product_file(
                     "tags": [redact_sensitive_content(tag)[0] for tag in tags],
                     "description": redact_sensitive_content(description or "")[0],
                     "detected_file_type": inspection.detected_type,
+                    "available_pages": sorted({chunk["page_number"] for chunk in (inspection.content_chunks or []) if isinstance(chunk.get("page_number"), int)}),
                 },
             )
             provider_status["gemini"] = "completed"
@@ -247,6 +251,16 @@ async def review_product_file(
     if transcription.strip():
         content_chunks.append({"chunk_index": len(content_chunks), "content_type": "audio_transcript", "page_number": None, "heading": "متن صوت استخراج‌شده", "text": redact_sensitive_content(transcription)[0][:5000], "source_anchor": {"asset": "audio"}})
 
+    available_pages = {chunk["page_number"] for chunk in (inspection.content_chunks or []) if isinstance(chunk.get("page_number"), int)}
+    requested_sample_pages = model_review.get("sample_pages", []) if isinstance(model_review, dict) else []
+    sample_pages = []
+    if isinstance(requested_sample_pages, list):
+        for value in requested_sample_pages:
+            if isinstance(value, int) and not isinstance(value, bool) and value in available_pages and value not in sample_pages:
+                sample_pages.append(value)
+            if len(sample_pages) >= 3:
+                break
+
     raw_facts = model_review.get("facts", []) if isinstance(model_review, dict) else []
     safe_facts = []
     if isinstance(raw_facts, list):
@@ -281,6 +295,7 @@ async def review_product_file(
         "inspection": inspection.public_dict(),
         "content_chunks": content_chunks[:150],
         "facts": safe_facts,
+        "sample_pages": sample_pages,
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
@@ -290,6 +305,56 @@ async def review_product_file(
         "publication_authorized": False,
         "automated_publication": False,
     }
+
+
+@app.post("/v1/documents/samples/pdf", dependencies=[Depends(authenticate)])
+async def create_pdf_sample(
+    file: UploadFile = File(...),
+    selected_pages_json: str = Form(..., max_length=2000),
+):
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds 25 MB")
+    try:
+        selected_pages = json.loads(selected_pages_json)
+        if not isinstance(selected_pages, list) or not 1 <= len(selected_pages) <= 10:
+            raise ValueError
+        pages = []
+        for value in selected_pages:
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError
+            if value not in pages:
+                pages.append(value)
+        if not pages:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid selected pages") from None
+
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        if reader.is_encrypted or len(reader.pages) > 1000 or any(page > len(reader.pages) for page in pages):
+            raise ValueError
+        writer = PdfWriter()
+        for page_number in pages:
+            writer.add_page(reader.pages[page_number - 1])
+        output = io.BytesIO()
+        writer.write(output)
+        sample = output.getvalue()
+        if not sample.startswith(b"%PDF-") or len(sample) < 100:
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=422, detail="PDF sample generation failed") from None
+
+    return Response(
+        content=sample,
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "X-Farast-Sample-Pages": ",".join(str(page) for page in pages),
+        },
+    )
 
 
 @app.get("/health")
