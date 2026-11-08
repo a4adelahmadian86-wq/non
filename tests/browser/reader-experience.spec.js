@@ -328,7 +328,7 @@ test.describe('FARAST sample reader interactions', () => {
     const root = page.locator('[data-reader-root]');
     await page.emulateMedia({ media: 'print' });
     await expect(root.locator('.farast-reader-print-block')).toBeVisible();
-    await expect(root.locator('.farast-reader-workspace')).not.toBeVisible();
+    await expect(root.locator('#reader-stage')).not.toBeVisible();
   });
   test('plays a prerecorded track and maps timestamped Persian words onto the PDF text layer', async ({ page }) => {
     const sampleRate = 8000;
