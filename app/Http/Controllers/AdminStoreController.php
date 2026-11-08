@@ -464,6 +464,70 @@ class AdminStoreController extends Controller
         return back()->with('status', 'پیش‌نمایش آماده و خصوصی ذخیره شد؛ خوانشگر فقط نسخهٔ آماده را نمایش می‌دهد.');
     }
 
+    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview)
+    {
+        abort_unless((int) $preview->product_id === (int) $product->id, 404);
+        $data = $request->validate([
+            'audio' => ['required', 'file', 'max:102400', 'mimes:mp3,m4a,wav,ogg,webm'],
+            'timings' => ['required', 'file', 'max:2048', 'mimes:json,txt'],
+        ]);
+
+        $decoded = json_decode(file_get_contents($data['timings']->getRealPath()), true);
+        abort_unless(is_array($decoded) && array_is_list($decoded) && count($decoded) > 0 && count($decoded) <= 100000, 422, 'فایل زمان‌بندی باید آرایه‌ای از قطعه‌های متنی باشد.');
+
+        $timings = [];
+        $previousStart = -1.0;
+        foreach ($decoded as $index => $item) {
+            abort_unless(is_array($item)
+                && isset($item['text'], $item['start'], $item['end'])
+                && is_string($item['text'])
+                && trim($item['text']) !== ''
+                && is_numeric($item['start'])
+                && is_numeric($item['end']), 422, 'ساختار زمان‌بندی در ردیف '.($index + 1).' معتبر نیست.');
+            $start = (float) $item['start'];
+            $end = (float) $item['end'];
+            abort_unless($start >= 0 && $end > $start && $start >= $previousStart, 422, 'زمان‌های شروع و پایان باید معتبر و مرتب باشند.');
+            $timings[] = [
+                'text' => trim($item['text']),
+                'start' => round($start, 3),
+                'end' => round($end, 3),
+                'page' => max(1, (int) ($item['page'] ?? 1)),
+            ];
+            $previousStart = $start;
+        }
+
+        $audio = $data['audio'];
+        $mime = $audio->getMimeType() ?: 'application/octet-stream';
+        abort_unless(in_array($mime, ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm', 'application/ogg'], true), 422, 'قالب صوت پشتیبانی نمی‌شود.');
+        $path = $audio->store('store/reader-audio/'.$product->id, 'private');
+        abort_unless($path, 503, 'ذخیره فایل صوتی ممکن نشد.');
+
+        $oldDisk = $preview->audio_disk ?: 'private';
+        $oldPath = $preview->audio_path;
+        try {
+            $preview->forceFill([
+                'audio_disk' => 'private',
+                'audio_path' => $path,
+                'audio_mime' => $mime,
+                'audio_timing' => $timings,
+            ])->save();
+        } catch (Throwable $exception) {
+            Storage::disk('private')->delete($path);
+            throw $exception;
+        }
+        if ($oldPath) {
+            Storage::disk($oldDisk)->delete($oldPath);
+        }
+
+        $this->audit('store.product.preview_audio_uploaded', $product, [
+            'preview_id' => $preview->id,
+            'timing_segments' => count($timings),
+            'audio_mime' => $mime,
+        ]);
+
+        return back()->with('status', 'صوت و زمان‌بندی همگام‌سازی برای این پیش‌نمایش ذخیره شد.');
+    }
+
     public function uploadCover(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         $request->validate(['cover' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192']);
