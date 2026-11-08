@@ -527,6 +527,18 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('name="download_policy"', false)
             ->assertSee('فقط مطالعه آنلاین');
 
+        $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
+            'title' => 'محصول سیاست تحویل',
+            'sku' => 'DELIVERY-POLICY-001',
+            'download_policy' => 'reader_only',
+        ]))->assertRedirect();
+
+        $this->assertDatabaseHas('store_products', [
+            'sku' => 'DELIVERY-POLICY-001',
+            'download_policy' => 'reader_only',
+            'status' => 'draft',
+        ]);
+
         $product = StoreProduct::create([
             'category_id' => $category->id,
             'title' => 'محصول مطالعه آنلاین',
