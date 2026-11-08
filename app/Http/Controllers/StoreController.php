@@ -204,7 +204,7 @@ class StoreController extends Controller
 
         $audioTrack = null;
         $audioSegments = [];
-        if ($libraryItem) {
+        if ($hasReaderEntitlement) {
             $primaryFile = $product->files()
                 ->where('purpose', 'product_download')
                 ->where('is_primary', true)
@@ -249,7 +249,7 @@ class StoreController extends Controller
             ->where('product_id', $product->id)
             ->whereNull('revoked_at')
             ->exists();
-        abort_unless($hasEntitlement, 403);
+        abort_unless($hasEntitlement && ($product->download_policy ?? 'signed') === 'reader_only', 403);
 
         $track = \\App\\Models\\StoreDocumentAudioTrack::query()
             ->with('document.file')
