@@ -159,55 +159,28 @@ class StoreController extends Controller
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
             'X-Frame-Options' => 'SAMEORIGIN',
-            'Content-Security-Policy' => "default-src 'none'; frame-ancestors 'self'",
             'Cross-Origin-Resource-Policy' => 'same-origin',
             'Referrer-Policy' => 'no-referrer',
             'X-Permitted-Cross-Domain-Policies' => 'none',
             'Content-Disposition' => 'inline',
         ];
 
-        if (($preview->kind ?? '') === 'xlsx' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'xlsx') {
+        $kind = strtolower((string) $preview->kind);
+        if ($kind === 'html' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'html') {
             $user = request()->user();
-            $identity = trim((string) ($user->mobile ?? ''));
+            $identity = trim((string) ($user?->mobile ?? ''));
             if ($identity === '') {
-                $identity = 'شناسه کاربر #'.$user->id;
+                $identity = (string) request()->ip();
             }
-
-            try {
-                $bytes = $disk->get($preview->path);
-                $cacheKey = 'farast:reader:xlsx:'.hash('sha256', $bytes);
-                $html = Cache::remember($cacheKey, now()->addDays(7), function () use ($bytes) {
-                    return app(StoreXlsxPreviewRenderer::class)->render($bytes, 'FARAST_READER_IDENTITY_TOKEN');
-                });
-                $html = str_replace('FARAST_READER_IDENTITY_TOKEN', e($identity), $html);
-            } catch (\Throwable $exception) {
-                report($exception);
-                abort(422, 'نمایش این فایل Excel ممکن نیست. لطفاً فایل XLSX سالم و ساده‌تری بارگذاری کنید.');
-            }
-
-            $xlsxHeaders = $headers;
-            $xlsxHeaders['Content-Type'] = 'text/html; charset=UTF-8';
-            $xlsxHeaders['Content-Disposition'] = 'inline; filename="farast-excel-preview.html"';
-            $xlsxHeaders['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
-
-            return response($html, 200, $xlsxHeaders);
+            $html = str_replace('FARAST_READER_IDENTITY_TOKEN', e($identity), $disk->get($preview->path));
+            $headers['Content-Type'] = 'text/html; charset=UTF-8';
+            $headers['Content-Disposition'] = 'inline; filename="farast-workbook-preview.html"';
+            $headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
+            return response($html, 200, $headers);
         }
 
-        if (($preview->kind ?? '') === 'docx' || strtolower(pathinfo($preview->path, PATHINFO_EXTENSION)) === 'docx') {
-            try {
-                $bytes = $disk->get($preview->path);
-                $cacheKey = 'farast:reader:docx:'.hash('sha256', $bytes);
-                $pdf = Cache::remember($cacheKey, now()->addDays(7), fn () => $this->renderDocxPreview($bytes));
-            } catch (\Throwable $exception) {
-                report($exception);
-                abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
-            }
-            $docxHeaders = $headers;
-            $docxHeaders['Content-Type'] = 'application/pdf';
-            $docxHeaders['Content-Disposition'] = 'inline; filename="farast-word-preview.pdf"';
-            return response($pdf, 200, $docxHeaders);
-        }
-
+        abort_unless(!in_array($kind, ['docx', 'xlsx'], true), 409, 'این پیش‌نمایش هنوز آماده‌سازی نشده است؛ نسخهٔ آماده را دوباره بارگذاری کنید.');
+        $headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
         return $disk->response($preview->path, null, $headers);
     }
 
@@ -241,7 +214,7 @@ class StoreController extends Controller
      * Convert an uploaded DOCX preview to a read-only, sanitized HTML document.
      * The source document is never exposed through a public storage URL.
      */
-    private function renderDocxPreview(string $docxBytes): string
+    public function prepareDocxPreview(string $docxBytes): string\n    {\n        return $this->renderDocxPreview($docxBytes);\n    }\n\n    private function renderDocxPreview(string $docxBytes): string
     {
         abort_unless(
             class_exists(\PhpOffice\PhpWord\IOFactory::class)
