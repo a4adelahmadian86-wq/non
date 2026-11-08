@@ -229,9 +229,9 @@ class StoreReaderAccessTest extends TestCase
             'page_kind' => 'sheet',
             'locator_key' => 'sheet:Sales',
             'locator_json' => ['sheet' => 'Sales', 'row_start' => 12, 'row_end' => 14, 'reader_page' => 2],
-            'content_text' => "سطر ۱۲: نام | تعداد\\nسطر ۱۳: کتاب | ۴\\nسطر ۱۴: دفتر | ۷",
+            'content_text' => "سطر ۱۲: نام | تعداد\nسطر ۱۳: کتاب | ۴\nسطر ۱۴: دفتر | ۷",
             'content_html' => '<section>Sales</section>',
-            'content_sha256' => hash('sha256', "سطر ۱۲: نام | تعداد\\nسطر ۱۳: کتاب | ۴\\nسطر ۱۴: دفتر | ۷"),
+            'content_sha256' => hash('sha256', "سطر ۱۲: نام | تعداد\nسطر ۱۳: کتاب | ۴\nسطر ۱۴: دفتر | ۷"),
             'has_extracted_text' => true,
         ]);
 
