@@ -1425,8 +1425,8 @@ test('personal highlights span inline formatting and restore after a page rerend
   await page.evaluate(() => {
     const p = document.querySelector('.farast-reader-document p');
     const range = document.createRange();
-    range.setStart(p.firstChild, 6);
-    range.setEnd(p.lastChild, 0);
+    range.setStart(p.firstChild, 7);
+    range.setEnd(p.lastChild, 1);
     const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
   });
   await page.locator('[data-reader-highlight]').click();
