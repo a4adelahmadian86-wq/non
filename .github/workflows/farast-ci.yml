@@ -5,7 +5,7 @@ concurrency:
   cancel-in-progress: true
 on:
   push:
-    branches: [main, farast-restoration-2026-09, feat/self-hosted-sherpa-streaming]
+    branches: [main, farast-restoration-2026-09, feat/self-hosted-sherpa-streaming, feature/reader-audio-synchronization]
   pull_request:
     branches: [main]
 jobs:
