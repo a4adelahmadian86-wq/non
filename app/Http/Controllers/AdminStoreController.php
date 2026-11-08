@@ -464,7 +464,7 @@ class AdminStoreController extends Controller
         return back()->with('status', 'پیش‌نمایش آماده و خصوصی ذخیره شد؛ خوانشگر فقط نسخهٔ آماده را نمایش می‌دهد.');
     }
 
-    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview)
+    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview, UploadSecurityService $security)
     {
         abort_unless((int) $preview->product_id === (int) $product->id, 404);
         $data = $request->validate([
@@ -497,33 +497,57 @@ class AdminStoreController extends Controller
         }
 
         $audio = $data['audio'];
+        $extension = strtolower($audio->getClientOriginalExtension());
         $mime = $audio->getMimeType() ?: 'application/octet-stream';
-        abort_unless(in_array($mime, ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm', 'application/ogg'], true), 422, 'قالب صوت پشتیبانی نمی‌شود.');
-        $path = $audio->store('store/reader-audio/'.$product->id, 'private');
-        abort_unless($path, 503, 'ذخیره فایل صوتی ممکن نشد.');
-
-        $oldDisk = $preview->audio_disk ?: 'private';
-        $oldPath = $preview->audio_path;
+        $quarantinePath = $audio->store('store/quarantine/reader-audio/'.$product->id, 'private');
+        $path = 'store/reader-audio/'.$product->id.'/'.Str::random(40).'.'.$extension;
         try {
-            $preview->forceFill([
-                'audio_disk' => 'private',
-                'audio_path' => $path,
-                'audio_mime' => $mime,
-                'audio_timing' => $timings,
-            ])->save();
+            $inspection = $security->inspect($quarantinePath, $mime, 100 * 1024 * 1024, [
+                'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav',
+                'audio/ogg', 'audio/webm', 'application/ogg',
+            ]);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن امنیتی صوت آماده نیست؛ فایل ذخیره نشد.');
+            abort_unless(
+                hash_equals((string) $inspection['checksum'], (string) hash_file('sha256', $audio->getRealPath())),
+                409,
+                'محتوای صوت هنگام انتقال تغییر کرده است.'
+            );
+            abort_unless(Storage::disk('private')->copy($quarantinePath, $path), 503, 'ذخیره فایل صوتی ممکن نشد.');
+
+            [$oldDisk, $oldPath] = DB::transaction(function () use ($product, $preview, $path, $mime, $timings) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $lockedPreview = StoreProductPreview::query()
+                    ->whereKey($preview->id)
+                    ->where('product_id', $lockedProduct->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $old = [$lockedPreview->audio_disk ?: 'private', $lockedPreview->audio_path];
+                $lockedPreview->forceFill([
+                    'audio_disk' => 'private',
+                    'audio_path' => $path,
+                    'audio_mime' => $mime,
+                    'audio_timing' => $timings,
+                ])->save();
+                $this->audit('store.product.preview_audio_uploaded', $lockedProduct, [
+                    'preview_id' => $lockedPreview->id,
+                    'timing_segments' => count($timings),
+                    'audio_mime' => $mime,
+                ]);
+
+                return $old;
+            });
+            if ($oldPath) {
+                Storage::disk($oldDisk)->delete($oldPath);
+            }
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
+            if ($exception instanceof ValidationException) {
+                throw $exception;
+            }
             throw $exception;
+        } finally {
+            Storage::disk('private')->delete($quarantinePath);
         }
-        if ($oldPath) {
-            Storage::disk($oldDisk)->delete($oldPath);
-        }
-
-        $this->audit('store.product.preview_audio_uploaded', $product, [
-            'preview_id' => $preview->id,
-            'timing_segments' => count($timings),
-            'audio_mime' => $mime,
-        ]);
 
         return back()->with('status', 'صوت و زمان‌بندی همگام‌سازی برای این پیش‌نمایش ذخیره شد.');
     }
