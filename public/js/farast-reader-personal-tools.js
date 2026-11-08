@@ -12,7 +12,7 @@
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
     if (saved && typeof saved === 'object') state = { ...defaults, ...saved };
   } catch (_) {}
-  const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
+  state.light = !!state.light;\n  state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';\n  state.size = Math.min(160, Math.max(80, Number(state.size) || 100));\n  state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];\n  state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];\n  const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
   const announce = message => { status.textContent = message; };
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
@@ -61,7 +61,7 @@
   const highlightColors = { yellow: 'rgba(250,204,21,.55)', green: 'rgba(74,222,128,.38)', blue: 'rgba(96,165,250,.42)', pink: 'rgba(244,114,182,.4)' };
   const applyPrefs = () => {
     root.classList.toggle('is-reading-light', !!state.light);
-    root.dataset.readerFont = state.font;
+    root.dataset.readerFont = state.font;\n    root.dataset.readerFontSize = String(state.size);
     root.style.setProperty('--reader-personal-font-size', state.size + '%');
     root.style.setProperty('--reader-font-scale', String(state.size / 100));
     lightButton.setAttribute('aria-pressed', String(!!state.light));
