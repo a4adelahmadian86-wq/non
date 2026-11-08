@@ -72,20 +72,28 @@ class Inspection:
         }
 
 
-def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]:
+def _build_content_chunks(text: str, detected_type: str) -> tuple[list[dict[str, Any]], bool]:
     if not text.strip():
-        return []
+        return [], False
 
     chunks: list[dict[str, Any]] = []
+    chunk_limit_hit = False
 
     def add_chunk(chunk_type: str, locator: dict[str, Any], value: str) -> None:
+        nonlocal chunk_limit_hit
         value = value.strip()
-        if value:
-            chunks.append({
-                "chunk_type": chunk_type,
-                "locator": locator,
-                "content_text": value[:1800],
-            })
+        if not value:
+            return
+        if len(chunks) >= 300:
+            chunk_limit_hit = True
+            return
+        if len(value) > 1800:
+            chunk_limit_hit = True
+        chunks.append({
+            "chunk_type": chunk_type,
+            "locator": locator,
+            "content_text": value[:1800],
+        })
 
     if detected_type == "pdf":
         for page_number, segment in enumerate(text.split("\f"), start=1):
@@ -218,7 +226,7 @@ def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]
             remaining -= len(value)
         if remaining <= 0:
             break
-    return bounded
+    return bounded, chunk_limit_hit or remaining <= 0
 
 
 def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
