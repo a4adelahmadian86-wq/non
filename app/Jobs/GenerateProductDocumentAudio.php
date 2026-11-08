@@ -40,7 +40,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
             return;
         }
 
-        $existing = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 2)->first();
+        $existing = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 3)->first();
         if ($existing && Storage::disk($existing->disk ?: 'private')->exists($existing->path)) {
             $this->setAudioState($document, [
                 'status' => 'completed',
@@ -75,13 +75,13 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 
             $bytes = $generated['audio'];
             $sha256 = hash('sha256', $bytes);
-            $path = 'store/products/'.$document->product_id.'/artifacts/'.$document->source_sha256.'/audio-v2.wav';
+            $path = 'store/products/'.$document->product_id.'/artifacts/'.$document->source_sha256.'/audio-v3.wav';
             if (! Storage::disk('private')->put($path, $bytes)) {
                 throw new \RuntimeException('product_audio_storage_failed');
             }
 
             $artifact = $document->artifacts()->updateOrCreate(
-                ['artifact_type' => 'audio_full_wav', 'version' => 2],
+                ['artifact_type' => 'audio_full_wav', 'version' => 3],
                 [
                     'disk' => 'private',
                     'path' => $path,
@@ -94,7 +94,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                         'segments' => $generated['segments'],
                         'source_sha256' => $document->source_sha256,
                         'generated_once' => true,
-                        'granularity' => 'sentence_word_index',
+                        'granularity' => 'phoneme_aligned_sentence_word',
                     ],
                 ]
             );
@@ -114,6 +114,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                         'start' => round(((int) ($word['start_ms'] ?? 0)) / 1000, 3),
                         'end' => round(((int) ($word['end_ms'] ?? 0)) / 1000, 3),
                     ], (array) ($segment['words'] ?? [])),
+                    'alignment_quality' => (string) ($segment['alignment_quality'] ?? 'estimated'),
                     'start' => round(((int) ($segment['start_ms'] ?? 0)) / 1000, 3),
                     'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
                     'page' => $page,
@@ -150,7 +151,7 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
                 'segment_count' => count($generated['segments']),
                 'voice_id' => $generated['voice_id'],
                 'engine' => 'farast-document-audio',
-                'granularity' => 'sentence_word_index',
+                'granularity' => 'phoneme_aligned_sentence_word',
                 'generated_once' => true,
             ]);
         } catch (Throwable $exception) {

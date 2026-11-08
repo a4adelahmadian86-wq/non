@@ -7,19 +7,41 @@
   if (!articles.some(article => article.dataset.audioUrl)) return;
 
   const fa = value => Number(value || 0).toLocaleString('fa-IR');
+  const parseTimingJson = raw => {
+    try {
+      const value = JSON.parse(raw || '[]');
+      return Array.isArray(value) ? value : [];
+    } catch (_) {
+      return [];
+    }
+  };
+  const normalizeTimings = timings => timings.filter(item => item && typeof item.text === 'string'
+    && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
+    && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
+    .map((item, index) => ({
+      ...item,
+      start: Number(item.start),
+      end: Number(item.end),
+      page: Math.max(1, Number(item.page) || 1),
+      words: Array.isArray(item.words) ? item.words.filter(word => word && typeof word.text === 'string'
+        && Number.isFinite(Number(word.start)) && Number.isFinite(Number(word.end))
+        && Number(word.start) >= 0 && Number(word.end) > Number(word.start))
+        .map(word => ({ ...word, start: Number(word.start), end: Number(word.end) })) : [],
+      index
+    }))
+    .sort((a, b) => a.start - b.start);
+  const sharedDocumentTimings = normalizeTimings(parseTimingJson(root.dataset.readerAudioTiming));
+  const useSharedDocumentTimeline = root.dataset.readerMode === 'document' && sharedDocumentTimings.length > 0;
   const parseTracks = () => articles.map((article, section) => {
-    let timings = [];
-    try { timings = JSON.parse(article.dataset.audioTiming || '[]'); } catch (_) {}
-    if (!Array.isArray(timings)) timings = [];
+    const timings = useSharedDocumentTimeline
+      ? sharedDocumentTimings
+      : normalizeTimings(parseTimingJson(article.dataset.audioTiming));
     return {
       section,
       url: article.dataset.audioUrl || '',
-      timings: timings.filter(item => item && typeof item.text === 'string'
-        && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
-        && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
-        .map((item, index) => ({ ...item, start: Number(item.start), end: Number(item.end), page: Math.max(1, Number(item.page) || 1), index }))
-        .sort((a, b) => a.start - b.start),
-      granularity: timings.length > 0 && timings.some(item => typeof item?.text === 'string' && /\s/u.test(item.text.trim())) ? 'segment' : 'word'
+      timings,
+      granularity: timings.some(item => item.words.length > 0) ? 'word' : 'segment',
+      alignmentQuality: timings.length > 0 && timings.every(item => item.words.length > 0 && item.alignment_quality === 'phoneme') ? 'phoneme' : 'estimated'
     };
   });
   const tracks = parseTracks();
@@ -79,6 +101,8 @@
   let raf = 0;
   let lastPageRequest = 0;
   let rangeEnd = null;
+  let suppressNextClick = false;
+  let selectionSuppressTimer = 0;
 
   const formatTime = seconds => {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -150,15 +174,23 @@
           if (!rect.width || !rect.height) return;
           const mark = document.createElement('span');
           mark.className = 'reader-audio-word';
+          mark.textContent = word;
           mark.dataset.segment = String(item.index);
           mark.setAttribute('role', 'button');
-          mark.setAttribute('aria-label', (activeTrack.granularity === 'segment' ? 'رفتن به بخش ' : 'رفتن به کلمه ') + word);
+          mark.setAttribute('aria-label', (activeTrack.granularity === 'word' ? 'رفتن به کلمه ' : 'رفتن به بخش ') + word);
           mark.tabIndex = 0;
           Object.assign(mark.style, {
             left: (rect.left - layerRect.left) + 'px',
             top: (rect.top - layerRect.top) + 'px',
             width: rect.width + 'px',
-            height: rect.height + 'px'
+            height: rect.height + 'px',
+            font: getComputedStyle(found.node.parentElement || layer).font,
+            lineHeight: getComputedStyle(found.node.parentElement || layer).lineHeight,
+            direction: getComputedStyle(found.node.parentElement || layer).direction,
+            whiteSpace: 'nowrap',
+            color: 'transparent',
+            userSelect: 'text',
+            webkitUserSelect: 'text'
           });
           const indexedWord = Array.isArray(item.words) ? item.words[wordIndex] : null;
           const fallbackStart = item.start + ((item.end - item.start) * (wordIndex / Math.max(1, words.length)));
@@ -214,7 +246,7 @@
       activeSegment = found;
       if (item) {
         caption.textContent = item.text;
-        progressLabel.textContent = (activeTrack.granularity === 'segment' ? 'بخش ' : 'کلمه ') + fa(found + 1) + ' از ' + fa(timings.length);
+        progressLabel.textContent = (activeTrack.granularity === 'word' ? 'جمله ' : 'بخش ') + fa(found + 1) + ' از ' + fa(timings.length);
         const current = wordMarks.find(mark => mark.segment === found)?.element;
         if (current && audio.paused === false) {
           const rect = current.getBoundingClientRect();
@@ -236,20 +268,33 @@
       dock.hidden = true;
       return;
     }
-    if (activeSection === section && audio.src) return;
-    audio.pause();
+    const article = articles[section];
+    const page = Math.max(1, Number(article?.dataset.readerPage || track.timings[0]?.page || 1));
+    const resolvedUrl = new URL(track.url, document.baseURI).href;
+    const currentUrl = audio.currentSrc || audio.src || '';
+    const sameSource = currentUrl === resolvedUrl || currentUrl === track.url;
+    if (activeSection === section && sameSource) return;
+
     activeSection = section;
     activeTrack = track;
-    activePage = 1;
+    activePage = page;
     clearMarks();
-    audio.src = track.url;
-    audio.load();
+
+    if (!sameSource) {
+      rangeEnd = null;
+      audio.pause();
+      audio.src = track.url;
+      audio.load();
+      caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
+      seek.value = '0';
+    }
     buildMarks(activePage);
     dock.hidden = false;
-    status.textContent = activeTrack.granularity === 'segment' ? 'صوت از پیش آماده · همگام‌سازی جمله‌ای' : 'صوت از پیش آماده · همگام‌سازی کلمه‌به‌کلمه';
-    caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
-    progressLabel.textContent = fa(track.timings.length) + (track.granularity === 'segment' ? ' بخش زمانی' : ' نشانگر کلمه‌ای');
-    seek.value = '0';
+    status.textContent = activeTrack.alignmentQuality === 'phoneme'
+      ? 'صوت از پیش آماده · هم‌ترازی واجی واژه‌ها'
+      : 'صوت از پیش آماده · زمان‌بندی تقریبی واژه‌ها';
+    const totalWordMarks = track.timings.reduce((count, item) => count + item.words.length, 0);
+    progressLabel.textContent = track.granularity === 'word' ? fa(totalWordMarks) + ' نشانگر واژهٔ آماده' : fa(track.timings.length) + ' بخش آماده';
   };
 
   playButton.addEventListener('click', () => {
@@ -260,11 +305,21 @@
   audio.addEventListener('play', () => { playButton.innerHTML = '<i class="fa-solid fa-pause"></i>'; playButton.setAttribute('aria-label', 'مکث'); dock.classList.add('is-playing'); status.textContent = 'در حال همراهی با متن'; startFrameLoop(); });
   audio.addEventListener('pause', () => { playButton.innerHTML = '<i class="fa-solid fa-play"></i>'; playButton.setAttribute('aria-label', 'پخش'); dock.classList.remove('is-playing'); cancelAnimationFrame(raf); });
   audio.addEventListener('loadedmetadata', () => { durationLabel.textContent = formatTime(audio.duration); });
-  audio.addEventListener('timeupdate', () => { if (Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000)); currentLabel.textContent = formatTime(audio.currentTime); updateHighlight(audio.currentTime); });
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.seeking && rangeEnd !== null && audio.currentTime >= rangeEnd) {
+      const stopAt = rangeEnd;
+      rangeEnd = null;
+      audio.pause();
+      audio.currentTime = stopAt;
+    }
+    if (Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
+    currentLabel.textContent = formatTime(audio.currentTime);
+    updateHighlight(audio.currentTime);
+  });
   audio.addEventListener('seeking', () => updateHighlight(audio.currentTime));
-  audio.addEventListener('ended', () => { status.textContent = 'این بخش به پایان رسید'; caption.textContent = 'برای ادامه، بخش بعدی را انتخاب کنید.'; });
+  audio.addEventListener('ended', () => { rangeEnd = null; status.textContent = 'این بخش به پایان رسید'; caption.textContent = 'برای ادامه، بخش بعدی را انتخاب کنید.'; });
   audio.addEventListener('error', () => { status.textContent = 'بارگذاری صوت ناموفق بود؛ فایل یا دسترسی آن را بررسی کنید.'; });
-  seek.addEventListener('input', () => { if (Number.isFinite(audio.duration)) { audio.currentTime = (Number(seek.value) / 1000) * audio.duration; updateHighlight(audio.currentTime); } });
+  seek.addEventListener('input', () => { rangeEnd = null; if (Number.isFinite(audio.duration)) { audio.currentTime = (Number(seek.value) / 1000) * audio.duration; updateHighlight(audio.currentTime); } });
   $('[data-audio-speed]').addEventListener('change', event => { audio.playbackRate = Number(event.target.value) || 1; });
   $('[data-audio-volume]').addEventListener('input', event => { audio.volume = Math.max(0, Math.min(1, Number(event.target.value))); });
   $('[data-audio-collapse]').addEventListener('click', event => { const collapsed = dock.classList.toggle('is-collapsed'); event.currentTarget.setAttribute('aria-expanded', String(!collapsed)); });
@@ -277,8 +332,8 @@
     audio.play().catch(() => { status.textContent = 'پخش صوت ممکن نشد؛ دسترسی فایل را بررسی کنید.'; });
     return true;
   };
-  const tokens = value => String(value || '').toLocaleLowerCase().replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\u064B-\u065F\u0670]/g, '').replace(/[\u200c\u200f\u202a-\u202e]/g, '').match(/[\p{L}\p{N}]+/gu) || [];
-  const findTextRange = (value, page = null) => {
+  const tokens = value => String(value || '').trim().split(/\s+/u).map(normalize).filter(Boolean);
+  const findTextRange = (value, page = null, occurrence = 0) => {
     const wanted = tokens(value);
     if (!wanted.length || !activeTrack) return null;
     const indexedWords = [];
@@ -291,15 +346,21 @@
             start: item.start + (item.end - item.start) * index / all.length,
             end: item.start + (item.end - item.start) * (index + 1) / all.length
           }));
-      words.forEach(word => indexedWords.push({
-        token: tokens(word.text)[0] || '',
-        start: Number(word.start),
-        end: Number(word.end),
-        page: item.page
-      }));
+      words.forEach(word => {
+        const token = tokens(word.text)[0] || '';
+        if (!token) return;
+        indexedWords.push({
+          token,
+          start: Number(word.start),
+          end: Number(word.end),
+          page: item.page
+        });
+      });
     }
+    let matchedOccurrences = 0;
     for (let i = 0; i <= indexedWords.length - wanted.length; i++) {
       if (wanted.every((word, offset) => indexedWords[i + offset].token === word)) {
+        if (wanted.length === 1 && matchedOccurrences++ < Math.max(0, Number(occurrence) || 0)) continue;
         return {
           start: indexedWords[i].start,
           end: indexedWords[i + wanted.length - 1].end,
@@ -310,12 +371,28 @@
     return null;
   };
 
+  const rangeForDocumentWord = element => {
+    const article = element.closest('.farast-reader-page-item');
+    const page = Number(element.dataset.page || article?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+    const token = tokens(element.textContent)[0] || '';
+    const scope = article || root;
+    const matches = [...scope.querySelectorAll('.reader-document-word')]
+      .filter(item => (tokens(item.textContent)[0] || '') === token);
+    return findTextRange(element.textContent, page, Math.max(0, matches.indexOf(element)));
+  };
+
   root.addEventListener('click', event => {
+    if (suppressNextClick) { suppressNextClick = false; window.clearTimeout(selectionSuppressTimer); return; }
     if (event.target.closest('.reader-audio-word')) return;
+    const word = event.target.closest('.reader-document-word');
+    if (word) {
+      const range = rangeForDocumentWord(word);
+      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); return; }
+    }
     const sentence = event.target.closest('.reader-document-sentence');
-    const paragraph = event.target.closest('.reader-document-paragraph');
+    const paragraph = event.target.closest('.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
     const target = sentence || paragraph;
-    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
+    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
     const pdfLayer = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
     if (pdfLayer) {
       const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
@@ -341,21 +418,44 @@
   }, true);
   root.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph');
+    const word = event.target.closest('.reader-document-word');
+    if (word) {
+      const range = rangeForDocumentWord(word);
+      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); return; }
+    }
+    const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
     if (!target) return;
     const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(target.textContent, page);
+    const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page);
     if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); }
   });
   root.addEventListener('pointerup', () => {
     const selection = window.getSelection(); if (!selection || selection.isCollapsed) return;
     const anchor = selection.anchorNode?.parentElement; if (!anchor || !root.contains(anchor)) return;
     const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(selection.toString(), page); if (range) playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
+    const range = findTextRange(selection.toString(), page);
+    if (range) {
+      suppressNextClick = true;
+      window.clearTimeout(selectionSuppressTimer);
+      selectionSuppressTimer = window.setTimeout(() => { suppressNextClick = false; }, 500);
+      playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
+    }
   });
   function startFrameLoop() {
     cancelAnimationFrame(raf);
-    const tick = () => { if (audio.paused) return; updateHighlight(audio.currentTime); raf = requestAnimationFrame(tick); };
+    const tick = () => {
+      if (audio.paused) return;
+      if (rangeEnd !== null && audio.currentTime >= rangeEnd) {
+        const stopAt = rangeEnd;
+        rangeEnd = null;
+        audio.pause();
+        audio.currentTime = stopAt;
+        updateHighlight(stopAt);
+        return;
+      }
+      updateHighlight(audio.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
     raf = requestAnimationFrame(tick);
   }
 

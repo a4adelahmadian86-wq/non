@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateProductDocumentAudio;
 use App\Models\StoreCategory;
 use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
@@ -356,10 +357,21 @@ class StoreController extends Controller
                     $readerMode = 'document';
                     $audioArtifact = $document->artifacts
                         ->where('artifact_type', 'audio_full_wav')
-                        ->first();
+                        ->where('version', '>=', 2)
+                        ->sortByDesc('version')
+                        ->first(static fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
+                            && Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
+                    $audioArtifactReady = (bool) $audioArtifact;
 
-                    if ($audioArtifact && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path)) {
-                        $readerAudioUrl = route('store.reader.audio', [$product, $document]);
+                    $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
+                    if ($audioNeedsUpgrade
+                        && filled(config('services.document_audio.url'))
+                        && filled(config('services.document_audio.token'))) {
+                        GenerateProductDocumentAudio::dispatch((int) $document->id)->afterResponse();
+                    }
+
+                    if ($audioArtifactReady) {
+                        $readerAudioUrl = route('store.reader.audio', [$product, $document]).'?version='.(int) $audioArtifact->version;
                         $segments = (array) data_get($audioArtifact->metadata_json, 'segments', []);
                         $chunksByIndex = $document->chunks->keyBy('chunk_index');
                         foreach ($segments as $segment) {
@@ -368,10 +380,16 @@ class StoreController extends Controller
                             if (! $chunk) continue;
                             $locator = (array) ($chunk->locator_json ?? []);
                             $page = (int) ($locator['reader_page'] ?? $locator['page'] ?? 0);
-                            $text = trim((string) $chunk->content_text);
+                            $text = trim((string) ($segment['text'] ?? $chunk->content_text));
                             if ($page < 1 || $text === '') continue;
                             $readerAudioTiming[] = [
                                 'text' => $text,
+                                'words' => array_map(static fn (array $word) => [
+                                    'text' => (string) ($word['text'] ?? ''),
+                                    'start' => round(((int) ($word['start_ms'] ?? 0)) / 1000, 3),
+                                    'end' => round(((int) ($word['end_ms'] ?? 0)) / 1000, 3),
+                                ], array_filter((array) ($segment['words'] ?? []), 'is_array')),
+                                'alignment_quality' => (string) ($segment['alignment_quality'] ?? 'estimated'),
                                 'start' => round(((int) ($segment['start_ms'] ?? 0)) / 1000, 3),
                                 'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
                                 'page' => $page,
@@ -379,7 +397,7 @@ class StoreController extends Controller
                         }
                     }
 
-                    $previews = $document->pages->map(function ($page) use ($product) {
+                    $previews = $document->pages->map(function ($page) use ($product, $readerAudioTiming) {
                         $label = match ($page->page_kind) {
                             'pdf_page' => 'صفحه '.$page->page_number,
                             'slide' => 'اسلاید '.$page->page_number,
@@ -548,12 +566,20 @@ class StoreController extends Controller
             404
         );
 
-        abort_unless((bool) data_get($document->structure_json, 'reader.ready', false)
-            && data_get($document->structure_json, 'audio.status') === 'completed', 409);
-        $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 2)->firstOrFail();
+        abort_unless((bool) data_get($document->structure_json, 'reader.ready', false), 409);
+        $artifactQuery = $document->artifacts()->where('artifact_type', 'audio_full_wav');
+        $requestedVersion = (int) request()->query('version', 0);
+        if ($requestedVersion >= 2) {
+            $artifactQuery->where('version', $requestedVersion);
+        } else {
+            $artifactQuery->where('version', '>=', 2)->orderByDesc('version');
+        }
+        $artifact = $artifactQuery->get()
+            ->first(static fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
+                && Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
+        abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
         $disk = Storage::disk($artifact->disk ?: 'private');
-        abort_unless($disk->exists($artifact->path), 404);
         $size = (int) $disk->size($artifact->path);
         $start = 0;
         $end = max(0, $size - 1);

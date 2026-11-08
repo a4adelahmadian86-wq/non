@@ -40,7 +40,6 @@
   let activeSegmentIndex = -1;
   let activePage = 0;
   let seeking = false;
-  let rangeEnd = null;
 
   const faNumber = (value) => String(value).replace(/\d/g, digit => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
   const formatTime = (seconds) => {
@@ -129,7 +128,6 @@
 
   seek.addEventListener('input', () => {
     seeking = true;
-    rangeEnd = null;
     if (Number.isFinite(audio.duration) && audio.duration > 0) {
       audio.currentTime = (Number(seek.value) / 1000) * audio.duration;
       updateSegment();
@@ -149,16 +147,10 @@
   audio.addEventListener('timeupdate', () => {
     updateTime();
     updateSegment();
-    if (rangeEnd !== null && audio.currentTime >= rangeEnd) {
-      rangeEnd = null;
-      audio.pause();
-      if (status) status.textContent = 'پایان محدوده انتخاب‌شده';
-    }
   });
   audio.addEventListener('play', updatePlayButton);
   audio.addEventListener('pause', updatePlayButton);
   audio.addEventListener('ended', () => {
-    rangeEnd = null;
     updatePlayButton();
     clearHighlights();
     if (status) status.textContent = 'پایان نسخه صوتی';
@@ -173,38 +165,6 @@
       highlightSegment(timings[activeSegmentIndex]);
     }
   });
-
-  const playRange = (start, end, label) => {
-    const from = Math.max(0, Number(start) || 0);
-    const to = Number(end);
-    if (!Number.isFinite(to) || to <= from) return false;
-    rangeEnd = to;
-    audio.currentTime = from;
-    if (label && status) status.textContent = label;
-    audio.play().catch(() => {
-      if (status) status.textContent = 'پخش محدودهٔ انتخاب‌شده ممکن نشد.';
-    });
-    return true;
-  };
-
-  const playPage = page => {
-    const pageNumber = Math.max(1, Number(page) || 1);
-    const pageSegments = timings.filter(item => Number(item.page) === pageNumber
-      && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
-      && Number(item.end) > Number(item.start));
-    if (!pageSegments.length) return false;
-    const start = Math.min(...pageSegments.map(item => Number(item.start)));
-    const end = Math.max(...pageSegments.map(item => Number(item.end)));
-    return playRange(start, end, 'در حال خواندن صفحهٔ ' + faNumber(String(pageNumber)));
-  };
-
-  window.FarastDocumentAudioReader = {
-    playRange,
-    playPage,
-    pause() { rangeEnd = null; audio.pause(); },
-    get available() { return timings.length > 0; },
-    get currentTime() { return audio.currentTime; }
-  };
 
   dock.hidden = false;
   updatePlayButton();
