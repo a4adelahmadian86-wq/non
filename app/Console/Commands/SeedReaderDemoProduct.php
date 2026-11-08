@@ -1,16 +1,16 @@
 <?php
 
-namespace App\\Console\\Commands;
+namespace App\Console\Commands;
 
-use App\\Models\\StoreCategory;
-use App\\Models\\StoreProduct;
-use App\\Models\\StoreProductFile;
-use App\\Models\\StoreProductPreview;
-use Illuminate\\Console\\Command;
-use Illuminate\\Support\\Facades\\Storage;
-use Illuminate\\Support\\Str;
-use PhpOffice\\PhpWord\\IOFactory;
-use PhpOffice\\PhpWord\\PhpWord;
+use App\Models\StoreCategory;
+use App\Models\StoreProduct;
+use App\Models\StoreProductFile;
+use App\Models\StoreProductPreview;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\PhpWord;
 use ZipArchive;
 
 class SeedReaderDemoProduct extends Command
@@ -20,7 +20,7 @@ class SeedReaderDemoProduct extends Command
 
     public function handle(): int
     {
-        if (!class_exists(ZipArchive::class) || !class_exists(\\Dompdf\\Dompdf::class) || !class_exists(IOFactory::class)) {
+        if (!class_exists(ZipArchive::class) || !class_exists(\Dompdf\Dompdf::class) || !class_exists(IOFactory::class)) {
             $this->error('The ZIP, Dompdf and PHPWord extensions/packages are required.');
             return self::FAILURE;
         }
@@ -99,11 +99,11 @@ class SeedReaderDemoProduct extends Command
     private function makePdf(): string
     {
         $html = '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><style>body{font-family:DejaVu Sans,Tahoma,sans-serif;line-height:2;color:#172033}h1{color:#155e75}table{border-collapse:collapse;width:100%}td,th{border:1px solid #94a3b8;padding:8px}</style><h1>نمونه PDF خوانشگر فراست</h1><p>این فایل برای آزمون نمایش PDF، زوم، جست‌وجو و واترمارک ساخته شده است.</p><p>شناسه نمونه: FARAST-DEMO-001</p><table><tr><th>ویژگی</th><th>وضعیت</th></tr><tr><td>متن فارسی و راست‌چین</td><td>نمونه</td></tr><tr><td>جدول</td><td>فعال</td></tr></table><p style="page-break-before:always">صفحه دوم برای آزمون پیمایش و شماره صفحه.</p><h2>صفحه دوم</h2><p>خوانشگر باید این صفحه را بدون بارگذاری مجدد فایل اصلی نمایش دهد.</p>';
-        $options = new \\Dompdf\\Options();
+        $options = new \Dompdf\Options();
         $options->set('isRemoteEnabled', false);
         $options->set('isPhpEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
-        $renderer = new \\Dompdf\\Dompdf($options);
+        $renderer = new \Dompdf\Dompdf($options);
         $renderer->loadHtml($html, 'UTF-8');
         $renderer->setPaper('A4');
         $renderer->render();
@@ -144,7 +144,7 @@ class SeedReaderDemoProduct extends Command
         $zip = new ZipArchive();
         try {
             if ($zip->open($tmp, ZipArchive::OVERWRITE) !== true) {
-                throw new \\RuntimeException('Unable to create demo workbook.');
+                throw new \RuntimeException('Unable to create demo workbook.');
             }
             $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
             $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
