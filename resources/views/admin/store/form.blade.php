@@ -94,13 +94,13 @@
           <label class="product-ai-switch"><input type="checkbox" name="ai_supervisor[enabled]" value="1" @checked(old('ai_supervisor.enabled', data_get($product->metadata, 'ai_supervisor.enabled', false)))><span></span><b>فعال‌سازی ناظر</b></label>
         </div>
         <div class="product-ai-supervisor-body">
-          <div class="product-ai-notice"><i class="fa-solid fa-circle-info"></i><span><b>پیکربندی مستقل از موتور هوش فعلی</b><small>در این مرحله فقط سیاست‌ها و محدوده نظارت ذخیره می‌شوند؛ اجرای تحلیل به اتصال ناظر اختصاصی در مرحله بعد وابسته است.</small></span></div>
+          <div class="product-ai-notice"><i class="fa-solid fa-circle-info"></i><span><b>پیکربندی مستقل از موتور هوش فعلی</b><small>این ناظر از سرویس مستقل مخصوص کنترل کیفیت محصول استفاده می‌کند و هیچ وابستگی به موتور یا رندر فعلی سایت ندارد.</small></span></div>
           @if($isEdit)
             @php($lastSupervisorReview = data_get($product->metadata, 'ai_supervisor.last_review'))
             <div class="product-ai-runtime">
               <div class="product-ai-runtime-head">
-                <div><span>موتور ناظر مستقل</span><strong>بررسی کیفیت محصول</strong><small>این عملیات فقط یک گزارش پیشنهاد می‌دهد و هیچ‌گاه محصول را خودکار منتشر یا ویرایش نمی‌کند.</small></div>
-                <button type="submit" form="productSupervisorReviewForm" class="store-primary-btn" @disabled(!data_get($product->metadata, 'ai_supervisor.enabled', false))>اجرای بررسی هوشمند</button>
+                <div><span>موتور ناظر مستقل</span><strong>بررسی کیفیت محصول</strong><small>این عملیات فقط یک گزارش پیشنهاد می‌دهد و هیچ‌گاه محصول را خودکار منتشر یا ویرایش نمی‌کند.</small><small>{{ config('services.product_supervisor.url') && config('services.product_supervisor.token') ? 'اتصال سرویس پیکربندی شده است.' : 'اتصال سرویس مستقل هنوز تکمیل نشده است.' }}</small></div>
+                <button type="submit" form="productSupervisorReviewForm" class="store-primary-btn" @disabled(!data_get($product->metadata, 'ai_supervisor.enabled', false) || !config('services.product_supervisor.url') || !config('services.product_supervisor.token'))>اجرای بررسی هوشمند</button>
               </div>
               @if($lastSupervisorReview && $supervisorReviewFresh)
                 <div class="product-ai-result">
