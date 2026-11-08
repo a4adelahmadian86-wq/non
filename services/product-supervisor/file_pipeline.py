@@ -42,6 +42,7 @@ class Inspection:
     extracted_text: str = ""
     content_chunks: list[dict[str, Any]] | None = None
     page_count: int | None = None
+    extraction_truncated: bool = False
     image_bytes: bytes | None = None
     image_mime: str | None = None
     audio_bytes: bytes | None = None
@@ -57,6 +58,7 @@ class Inspection:
             "upstream_scan_status": self.upstream_scan_status,
             "extracted_characters": len(self.extracted_text),
             "page_count": self.page_count,
+            "extraction_truncated": self.extraction_truncated or len(self.extracted_text) >= MAX_EXTRACTED_CHARS,
             "archive_entries": (self.archive_entries or [])[:50],
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
@@ -421,6 +423,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     elif suffix in ALLOWED_TEXT_EXTENSIONS:
         try:
             result.extracted_text = data.decode("utf-8-sig")[:MAX_EXTRACTED_CHARS]
+            result.extraction_truncated = len(data) > MAX_EXTRACTED_CHARS
             result.detected_type = "text"
         except UnicodeDecodeError:
             raise FileInspectionError("فایل متنی باید با UTF-8 ذخیره شده باشد.") from None
