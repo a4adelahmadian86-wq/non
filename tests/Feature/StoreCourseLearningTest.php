@@ -137,7 +137,7 @@ class StoreCourseLearningTest extends TestCase
         $admin = $this->makeAdmin();
         [$product, , , $lesson] = $this->makeCourse('invalid-course-content', 10000);
         $product->update(['status' => 'draft', 'published_at' => null]);
-        $lesson->update(['content' => null, 'is_published' => true]);
+        $lesson->update(['content' => '   ', 'is_published' => true]);
 
         $this->actingAs($admin)
             ->from(route('admin.store.edit', $product))
