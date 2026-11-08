@@ -251,6 +251,7 @@ test.describe('FARAST sample reader interactions', () => {
     const pages = root.locator('.farast-pdf-cont-page');
     await expect(pages).toHaveCount(12);
     await expect.poll(() => pages.locator('canvas').evaluateAll(canvases => canvases.filter(canvas => canvas.width > 0).length)).toBeLessThan(12);
+    await expect.poll(() => root.locator('#reader-stage').evaluate(element => element.scrollHeight)).toBeGreaterThan(600);
 
     await root.locator('#reader-page-number').fill('12');
     await root.locator('#reader-page-number').dispatchEvent('change');
