@@ -117,7 +117,7 @@ class StoreXlsxPreviewRenderer
                     .notice{margin-top:22px;padding:11px 14px;border-radius:8px;background:#f1f6fc;color:#52647b;font-size:11px}
                     .watermark{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:.14;overflow:hidden}.watermark span{position:absolute;white-space:nowrap;transform:rotate(-24deg);font-weight:700;color:#26364b;background:rgba(255,255,255,.24);padding:5px 8px}
                     @media(max-width:700px){body{padding:10px}.workbook{padding:14px}.sheet{margin-top:18px}}
-                    @media print{body{background:#fff;padding:0}.workbook{box-shadow:none;border:0}.watermark{position:fixed}}
+                    @media print{body{display:none!important}}
                 </style></head><body><div class="watermark">'.$marks.'</div><main class="workbook"><header class="intro"><h1>پیش‌نمایش کتاب کار Excel</h1><p>حالت فقط‌خواندنی · '.count($tables).' برگه · فرمول‌ها اجرا نمی‌شوند و فقط مقدار ذخیره‌شده نمایش داده می‌شود.</p></header><nav class="sheet-nav" aria-label="برگه‌های فایل Excel">'.implode('', $tabs).'</nav>'.implode('', $tables).'<p class="notice">'.$notice.'</p></main></body></html>';
             } finally {
                 $zip->close();
