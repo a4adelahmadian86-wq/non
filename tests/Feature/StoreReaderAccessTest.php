@@ -97,7 +97,7 @@ class StoreReaderAccessTest extends TestCase
 
         $previewResponse = $this->withServerVariables(['REMOTE_ADDR' => $guestIp])->get(route('store.preview', $preview));
         $previewResponse->assertOk();
-        $this->assertSame('%PDF-1.4 sample', $previewResponse->getContent());
+        $this->assertSame('%PDF-1.4 sample', $previewResponse->streamedContent());
     }
 
     public function test_reader_only_purchase_unlocks_full_content_without_issuing_a_download(): void
@@ -143,7 +143,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee(route('store.preview', $sample));
         $fullResponse = $this->actingAs($user)->get(route('store.preview', $full));
         $fullResponse->assertOk();
-        $this->assertSame('%PDF-1.4 full', $fullResponse->getContent());
+        $this->assertSame('%PDF-1.4 full', $fullResponse->streamedContent());
         $this->actingAs($user)->post(route('library.download.issue', $libraryItem))
             ->assertForbidden();
     }
@@ -207,7 +207,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'inline');
 
-        $pdf = $response->getContent();
+        $pdf = $response->streamedContent();
         $this->assertStringStartsWith('%PDF-', $pdf);
         $this->assertGreaterThan(1000, strlen($pdf));
         $this->assertStringContainsString('/Subtype /Image', $pdf);
@@ -301,7 +301,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee('<script', false);
 
         $this->assertStringContainsString("style-src 'unsafe-inline'", (string) $response->headers->get('Content-Security-Policy'));
-        $this->assertSame($preparedHtml, $response->getContent());
+        $this->assertSame($preparedHtml, $response->streamedContent());
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 
