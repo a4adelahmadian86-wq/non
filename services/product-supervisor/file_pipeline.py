@@ -398,7 +398,8 @@ def _validate_tar_archive(data: bytes) -> tuple[tarfile.TarFile, list[str]]:
     return archive, names[:MAX_ARCHIVE_ENTRIES]
 
 
-def _extract_docx(data: bytes) -> str:
+def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
+    """Extract bounded Word blocks in document order without rendering source XML or HTML."""
     archive, _ = _validate_archive(data)
     names = set(archive.namelist())
     required = {"[Content_Types].xml", "word/document.xml"}
@@ -406,30 +407,78 @@ def _extract_docx(data: bytes) -> str:
         raise FileInspectionError("فایل ZIP، سند DOCX معتبر نیست.")
     if any(name.lower().endswith("vbaproject.bin") for name in names):
         raise FileInspectionError("سند دارای محتوای ماکرو است و برای بررسی متنی پذیرفته نمی‌شود.")
+
     try:
+        from docx.text.paragraph import Paragraph
+        from docx.table import Table
+
         doc = Document(io.BytesIO(data))
-        parts: list[str] = []
+        text_parts: list[str] = []
+        chunks: list[dict[str, Any]] = []
         char_count = 0
-        for paragraph in doc.paragraphs[:5000]:
-            if paragraph.text.strip():
-                parts.append(paragraph.text[:2000])
-                char_count += len(parts[-1])
-            if char_count >= MAX_EXTRACTED_CHARS:
+        table_count = 0
+        block_index = 0
+
+        def add_block(kind: str, value: str, locator: dict[str, Any]) -> None:
+            nonlocal char_count, block_index
+            value = value.strip()[:1800]
+            if not value or char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                return
+            value = value[:max(0, MAX_EXTRACTED_CHARS - char_count)]
+            if not value:
+                return
+            block_index += 1
+            locator = {"block_index": block_index, **locator}
+            chunks.append({"chunk_type": kind, "locator": locator, "content_text": value})
+            text_parts.append(value)
+            char_count += len(value)
+
+        for element in doc.iter_inner_content():
+            if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
                 break
-        table_rows = 0
-        if char_count < MAX_EXTRACTED_CHARS:
-            for table in doc.tables[:100]:
-                for row in table.rows[:1000]:
-                    parts.append(" | ".join(cell.text.strip()[:500] for cell in row.cells[:50]))
-                    char_count += len(parts[-1])
-                    table_rows += 1
-                    if char_count >= MAX_EXTRACTED_CHARS or table_rows >= 1000:
-                        break
-                if char_count >= MAX_EXTRACTED_CHARS or table_rows >= 1000:
+            if isinstance(element, Paragraph):
+                paragraph = element
+                value = paragraph.text.strip()
+                if not value:
+                    continue
+                style_name = str(getattr(paragraph.style, "name", "") or "")
+                heading_match = re.match(r"(?i)^heading\s*([1-9])$", style_name.strip())
+                if heading_match:
+                    level = int(heading_match.group(1))
+                    add_block("docx_heading", value, {"heading_level": level, "style": "heading"})
+                elif style_name.strip().lower() in {"title", "subtitle"}:
+                    add_block("docx_heading", value, {"heading_level": 1 if style_name.lower() == "title" else 2, "style": style_name.lower()})
+                elif "list" in style_name.lower() or getattr(paragraph._p, "pPr", None) is not None and paragraph._p.pPr.numPr is not None:
+                    list_kind = "number" if "number" in style_name.lower() else "bullet"
+                    add_block("docx_list_item", value, {"list_kind": list_kind, "list_level": 1})
+                else:
+                    add_block("docx_paragraph", value, {})
+            elif isinstance(element, Table):
+                table_count += 1
+                if table_count > 100:
                     break
-        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+                for row_index, row in enumerate(element.rows[:1000], start=1):
+                    if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                        break
+                    cells = [cell.text.strip()[:500] for cell in row.cells[:50]]
+                    if not any(cells):
+                        continue
+                    add_block(
+                        "docx_table_row",
+                        " | ".join(cells),
+                        {"table_index": table_count, "row_index": row_index, "cells": cells},
+                    )
+
+        return "\n".join(text_parts)[:MAX_EXTRACTED_CHARS], chunks
+    except FileInspectionError:
+        raise
     except Exception:
         raise FileInspectionError("استخراج امن متن از سند Word انجام نشد.") from None
+
+
+def _extract_docx(data: bytes) -> str:
+    # Preserve the legacy text-only helper contract for existing callers.
+    return _extract_docx_structured(data)[0]
 
 
 
@@ -645,7 +694,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         names = set(archive.namelist())
         if "[Content_Types].xml" in names and "word/document.xml" in names:
             result.detected_type = "docx"
-            result.extracted_text = _extract_docx(data)
+            result.extracted_text, result.content_chunks = _extract_docx_structured(data)
         elif "[Content_Types].xml" in names and "xl/workbook.xml" in names:
             result.detected_type = "xlsx"
             result.extracted_text = _extract_xlsx(data)
