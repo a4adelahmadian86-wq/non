@@ -1,12 +1,18 @@
 'use strict';
 
-const CACHE_NAME = 'farast-static-v2';
-const LEGACY_CACHES = ['farast-shell-v1'];
+const CACHE_NAME = 'farast-static-v3';
+const LEGACY_CACHES = ['farast-shell-v1', 'farast-static-v2'];
 const CORE_ASSETS = [
   '/offline.html',
   '/manifest.webmanifest',
   '/icons/farast-icon.svg',
-  '/icons/farast-maskable.svg'
+  '/icons/farast-maskable.svg',
+  '/icons/farast-192.png',
+  '/icons/farast-512.png',
+  '/css/farast-pwa.css?v=20261108pwa1',
+  '/css/farast-mobile-dock.css?v=20261108dock1',
+  '/css/farast-experience.css?v=20261108ux1',
+  '/js/farast-pwa.js?v=20261108pwa1'
 ];
 
 self.addEventListener('install', event => {
