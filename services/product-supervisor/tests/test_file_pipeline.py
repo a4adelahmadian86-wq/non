@@ -208,6 +208,48 @@ class FilePipelineTests(unittest.TestCase):
         self.assertTrue(result.image_bytes)
 
 
+    def test_docx_marks_the_reader_block_limit_as_truncated(self):
+        document = Document()
+        for index in range(301):
+            document.add_paragraph(f"پاراگراف {index}")
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "long-document.docx")
+
+        self.assertTrue(result.extraction_truncated)
+        self.assertEqual(len(result.content_chunks), 300)
+        self.assertIn("پاراگراف 299", result.extracted_text)
+        self.assertNotIn("پاراگراف 300", result.extracted_text)
+
+    def test_xlsx_marks_sheet_row_and_column_safety_limits_as_truncated(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        for row in range(1, 302):
+            sheet.cell(row=row, column=1, value=f"ردیف {row}")
+        stream = io.BytesIO()
+        workbook.save(stream)
+
+        result = inspect_file(stream.getvalue(), "long-sheet.xlsx")
+
+        self.assertTrue(result.extraction_truncated)
+        self.assertIn("ردیف 300", result.extracted_text)
+        self.assertNotIn("ردیف 301", result.extracted_text)
+
+    def test_pptx_marks_slide_limit_as_truncated(self):
+        presentation = Presentation()
+        for _ in range(101):
+            presentation.slides.add_slide(presentation.slide_layouts[5])
+        stream = io.BytesIO()
+        presentation.save(stream)
+
+        result = inspect_file(stream.getvalue(), "long-presentation.pptx")
+
+        self.assertTrue(result.extraction_truncated)
+        self.assertEqual(result.page_count, 100)
+        self.assertIn("اسلاید 100", result.extracted_text)
+        self.assertNotIn("اسلاید 101", result.extracted_text)
+
     def test_xlsx_content_is_extracted(self):
         workbook = Workbook()
         sheet = workbook.active
