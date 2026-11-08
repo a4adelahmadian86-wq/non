@@ -110,6 +110,8 @@ async def _json_error(status: int, message: str):
 
 def validate_evidence_facts(raw_facts: Any, source_chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Accept only facts whose exact evidence occurs in an extracted source chunk."""
+    from file_pipeline import redact_sensitive_content
+
     safe_facts: list[dict[str, Any]] = []
     if not isinstance(raw_facts, list):
         return safe_facts
