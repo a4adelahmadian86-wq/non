@@ -17,6 +17,18 @@
   "theme_color": "#0b1734",
   "icons": [
     {
+      "src": "/icons/farast-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/farast-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icons/farast-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
