@@ -18,7 +18,7 @@ class StoreXlsxPreviewRenderer
     private const MAX_CELLS = 80000;
     private const MAX_STYLES = 10000;
 
-    public function render(string $bytes, string $identity): string
+    public function render(string $bytes, string $identity, bool $sampleOnly = false): string
     {
         if (!class_exists(ZipArchive::class) || strlen($bytes) > 20 * 1024 * 1024) {
             throw new RuntimeException('XLSX preview is unavailable or too large.');
@@ -53,6 +53,9 @@ class StoreXlsxPreviewRenderer
                 }
 
                 $safeIdentity = $this->escape($identity !== '' ? $identity : 'حساب کاربر');
+                $notice = $sampleOnly
+                    ? 'نسخه نمونه فقط ۵۰ ردیف نخست از نخستین برگه قابل‌مشاهده را نگه می‌دارد؛ برگه‌ها و ردیف‌های دیگر در فایل نمونه ذخیره نشده‌اند.'
+                    : 'این سند برای مطالعه ارائه شده است. ویرایش، اجرای فرمول و دریافت فایل از این محیط پشتیبانی نمی‌شود. برای هر برگه حداکثر ۲۰۰۰ ردیف و ۴۰ ستون نمایش داده می‌شود؛ قالب‌بندی پیشرفته، نمودارها و تصاویر ممکن است بازتولید نشوند.';
                 $tables = [];
                 $tabs = [];
                 $cellCount = 0;
@@ -63,6 +66,9 @@ class StoreXlsxPreviewRenderer
                     }
                     if (in_array(strtolower($sheet->getAttribute('state')), ['hidden', 'veryhidden'], true)) {
                         continue;
+                    }
+                    if ($sampleOnly && $tables !== []) {
+                        break;
                     }
 
                     $relationshipId = $sheet->getAttributeNS(
@@ -76,7 +82,7 @@ class StoreXlsxPreviewRenderer
 
                     $sheetPath = $this->normalizeWorksheetPath($target);
                     $xml = $this->loadXml($zip, $sheetPath, 20 * 1024 * 1024);
-                    $sheetData = $this->readWorksheet($xml, $sharedStrings, $styles, $cellCount);
+                    $sheetData = $this->readWorksheet($xml, $sharedStrings, $styles, $cellCount, $sampleOnly ? 50 : self::MAX_ROWS);
                     $name = $this->escape($sheet->getAttribute('name') ?: 'Sheet '.($sheetIndex + 1));
                     $sheetId = 'sheet-'.($sheetIndex + 1);
                     $tabs[] = '<a href="#'.$sheetId.'">'.$name.'</a>';
@@ -112,7 +118,7 @@ class StoreXlsxPreviewRenderer
                     .watermark{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:.14;overflow:hidden}.watermark span{position:absolute;white-space:nowrap;transform:rotate(-24deg);font-weight:700;color:#26364b;background:rgba(255,255,255,.24);padding:5px 8px}
                     @media(max-width:700px){body{padding:10px}.workbook{padding:14px}.sheet{margin-top:18px}}
                     @media print{body{background:#fff;padding:0}.workbook{box-shadow:none;border:0}.watermark{position:fixed}}
-                </style></head><body><div class="watermark">'.$marks.'</div><main class="workbook"><header class="intro"><h1>پیش‌نمایش کتاب کار Excel</h1><p>حالت فقط‌خواندنی · '.count($tables).' برگه · فرمول‌ها اجرا نمی‌شوند و فقط مقدار ذخیره‌شده نمایش داده می‌شود.</p></header><nav class="sheet-nav" aria-label="برگه‌های فایل Excel">'.implode('', $tabs).'</nav>'.implode('', $tables).'<p class="notice">این سند برای مطالعه ارائه شده است. ویرایش، اجرای فرمول و دریافت فایل از این محیط پشتیبانی نمی‌شود. برای هر برگه حداکثر ۲۰۰۰ ردیف و ۴۰ ستون نمایش داده می‌شود؛ قالب‌بندی پیشرفته، نمودارها و تصاویر ممکن است بازتولید نشوند.</p></main></body></html>';
+                </style></head><body><div class="watermark">'.$marks.'</div><main class="workbook"><header class="intro"><h1>پیش‌نمایش کتاب کار Excel</h1><p>حالت فقط‌خواندنی · '.count($tables).' برگه · فرمول‌ها اجرا نمی‌شوند و فقط مقدار ذخیره‌شده نمایش داده می‌شود.</p></header><nav class="sheet-nav" aria-label="برگه‌های فایل Excel">'.implode('', $tabs).'</nav>'.implode('', $tables).'<p class="notice">'.$notice.'</p></main></body></html>';
             } finally {
                 $zip->close();
             }
@@ -392,7 +398,7 @@ class StoreXlsxPreviewRenderer
         return null;
     }
 
-    private function readWorksheet(DOMDocument $xml, array $sharedStrings, array $styles, int &$cellCount): array
+    private function readWorksheet(DOMDocument $xml, array $sharedStrings, array $styles, int &$cellCount, int $maxRows = self::MAX_ROWS): array
     {
         $rows = [];
         $widths = [];
@@ -418,7 +424,7 @@ class StoreXlsxPreviewRenderer
             $endColumn = $this->columnIndex(strtoupper($match[3]));
             $endRow = (int) $match[4];
             if ($startColumn < 1 || $startRow < 1 || $endColumn < $startColumn || $endRow < $startRow
-                || $endColumn > self::MAX_COLUMNS || $endRow > self::MAX_ROWS) continue;
+                || $endColumn > self::MAX_COLUMNS || $endRow > min(self::MAX_ROWS, $maxRows)) continue;
             $key = $startRow.':'.$startColumn;
             $merges[$key] = ['colspan' => $endColumn - $startColumn + 1, 'rowspan' => $endRow - $startRow + 1];
             for ($rowNumber = $startRow; $rowNumber <= $endRow; $rowNumber++) {
@@ -438,7 +444,7 @@ class StoreXlsxPreviewRenderer
                 continue;
             }
             $rowNumber = (int) $rowNode->getAttribute('r');
-            if ($rowNumber < 1 || $rowNumber > self::MAX_ROWS) {
+            if ($rowNumber < 1 || $rowNumber > min(self::MAX_ROWS, $maxRows)) {
                 continue;
             }
             $height = is_numeric($rowNode->getAttribute('ht')) ? (float) $rowNode->getAttribute('ht') : 0;
@@ -456,7 +462,7 @@ class StoreXlsxPreviewRenderer
                 }
                 $column = $this->columnIndex($match[1]);
                 $cellRow = (int) $match[2];
-                if ($column < 1 || $column > self::MAX_COLUMNS || $cellRow > self::MAX_ROWS || isset($covered[$cellRow.':'.$column])) {
+                if ($column < 1 || $column > self::MAX_COLUMNS || $cellRow > min(self::MAX_ROWS, $maxRows) || isset($covered[$cellRow.':'.$column])) {
                     continue;
                 }
 
