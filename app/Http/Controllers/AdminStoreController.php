@@ -501,6 +501,7 @@ class AdminStoreController extends Controller
         $mime = $audio->getMimeType() ?: 'application/octet-stream';
         $quarantinePath = $audio->store('store/quarantine/reader-audio/'.$product->id, 'private');
         $path = 'store/reader-audio/'.$product->id.'/'.Str::random(40).'.'.$extension;
+        $databaseCommitted = false;
         try {
             $inspection = $security->inspect($quarantinePath, $mime, 100 * 1024 * 1024, [
                 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav',
@@ -536,11 +537,14 @@ class AdminStoreController extends Controller
 
                 return $old;
             });
+            $databaseCommitted = true;
             if ($oldPath) {
                 Storage::disk($oldDisk)->delete($oldPath);
             }
         } catch (Throwable $exception) {
-            Storage::disk('private')->delete($path);
+            if (! $databaseCommitted) {
+                Storage::disk('private')->delete($path);
+            }
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
