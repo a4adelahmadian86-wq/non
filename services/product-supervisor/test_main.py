@@ -19,19 +19,17 @@ def valid_payload():
 
 
 def test_health_does_not_expose_secrets(monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "private-api-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza-test-only-not-a-real-key")
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "service": "product-supervisor",
-        "provider_configured": True,
-        "providers": {
-            "gemini": {"configured": True},
-            "groq": {"configured": bool(os.getenv("GROQ_API_KEY", "").strip())},
-        },
-    }
-    assert "private-api-key" not in response.text
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "product-supervisor"
+    assert body["providers"]["gemini"]["configured"] is True
+    assert body["providers"]["gemini"]["role"] == "product_snapshot_and_database_report_review"
+    assert body["providers"]["groq"]["configured"] is bool(os.getenv("GROQ_API_KEY", "").strip())
+    assert "privacy_gate_confirmed" in body["providers"]["groq"]
+    assert "AIza-test-only-not-a-real-key" not in response.text
 
 
 def test_review_requires_dedicated_bearer_token(monkeypatch):

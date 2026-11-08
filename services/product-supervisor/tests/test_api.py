@@ -58,7 +58,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_file_review_never_authorizes_publication(self):
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "", "GROQ_API_KEY": ""}):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "AIza-test-only-not-a-real-key", "GROQ_API_KEY": "", "GROQ_ZDR_CONFIRMED": ""}):
             response = self.client.post(
                 "/v1/reviews/files",
                 headers={"Authorization": "Bearer test-token"},
@@ -80,9 +80,38 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(body["security_gate"], "upstream_scan_verified")
         self.assertEqual(body["inspection"]["upstream_scan_status"], "clean")
         self.assertEqual(body["provider_status"]["gladia"], "disabled")
-        self.assertEqual(body["provider_status"]["gemini"], "not_configured")
+        self.assertEqual(body["provider_status"]["gemini"], "not_requested")
+        self.assertEqual(body["provider_status"]["groq_text"], "not_configured")
+        self.assertTrue(any("هیچ متن فایلی" in warning for warning in body["warnings"]))
         self.assertEqual(body["analysis_batch_count"], 0)
         self.assertEqual(body["failed_analysis_batches"], 0)
+
+
+    def test_gemini_knowledge_payload_excludes_raw_document_chunks(self):
+        from main import minimize_document_knowledge_for_gemini
+        report = minimize_document_knowledge_for_gemini({
+            "knowledge_status": "available",
+            "access_scope": "full_document",
+            "sources": [{
+                "source_file_id": 4, "source_sha256": "a" * 64,
+                "summary": "گزارش بررسی‌شده",
+                "chunks": [{"content": "متن کامل محرمانه فایل"}],
+                "findings": [{"area": "content", "severity": "warning", "title": "نقص", "detail": "گزارش کوتاه", "recommendation": "اصلاح شود"}],
+                "facts": [{"type": "feature", "key": "ویژگی", "value": "مقدار", "evidence": "شاهد کوتاه از سند", "locator": {"page": 3}, "verification_status": "evidence_backed"},
+                          {"type": "feature", "key": "ساختگی", "value": "نباید وارد شود", "evidence": "بدون تأیید", "locator": {}, "verification_status": "unverified"}],
+            }],
+        }, lambda value: (value, 0))
+        source = report["sources"][0]
+        self.assertNotIn("chunks", source)
+        self.assertNotIn("متن کامل محرمانه فایل", str(report))
+        self.assertEqual(len(source["facts"]), 1)
+        self.assertEqual(source["facts"][0]["verification_status"], "evidence_backed")
+        self.assertEqual(source["facts"][0]["locator"]["page"], 3)
+
+    def test_gemini_model_identifier_is_not_accepted_as_api_key(self):
+        from main import _gemini_api_key_is_configured
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "gemini-2.5-flash", "GEMINI_MODEL": "gemini-2.5-flash"}, clear=False):
+            self.assertFalse(_gemini_api_key_is_configured())
 
     def test_docx_reader_source_keeps_semantic_blocks_while_pdf_remains_visual_artifact(self):
         document = Document()
@@ -130,7 +159,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("test-token", response.text)
-        self.assertEqual(response.json()["providers"]["gemini"]["configured"], bool(os.getenv("GEMINI_API_KEY", "").strip()))
+        self.assertEqual(response.json()["providers"]["gemini"]["configured"], bool(os.getenv("GEMINI_API_KEY", "").strip()) and not os.getenv("GEMINI_API_KEY", "").strip().lower().startswith("gemini-"))
         self.assertEqual(response.json()["providers"]["groq"]["configured"], bool(os.getenv("GROQ_API_KEY", "").strip()))
 
 
@@ -142,7 +171,8 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["authenticated"])
-        self.assertFalse(response.json()["providers"]["gemini"]["ready_for_text_review"])
+        self.assertFalse(response.json()["providers"]["gemini"]["ready_for_product_review"])
+        self.assertFalse(response.json()["providers"]["groq"]["ready_for_file_review"])
 
     def test_authenticated_readiness_rejects_missing_token(self):
         response = self.client.get("/v1/ready")
