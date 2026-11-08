@@ -57,11 +57,6 @@
         @foreach($previews as $i => $preview)
           <button type="button" class="farast-reader-thumb {{ $i===0 ? 'is-active' : '' }}" data-goto="{{ $i }}" aria-label="رفتن به بخش {{ $i+1 }}" aria-current="{{ $i===0 ? 'page' : 'false' }}">
             <span class="farast-reader-thumb-preview">
-              @if(($preview->kind ?? '') === 'reader_document')
-                <div class="farast-pdf-document farast-reader-document" data-reader-document-page aria-label="محتوای متنی صفحه">
-                  <div class="farast-pdf-loading" role="status">در حال دریافت محتوای مجاز این صفحه…</div>
-                  <div class="farast-pdf-text-layer" data-reader-text-layer></div>
-                </div>
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <i class="fa-solid fa-file-pdf"></i><small>PDF</small>
               @elseif(($preview->kind ?? '') === 'reader_document')
@@ -89,7 +84,12 @@
         @foreach($previews as $i => $preview)
           <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}" @if(($preview->kind ?? '') === 'reader_document') data-reader-page="{{ $preview->page_number }}" data-reader-page-url="{{ $preview->reader_page_url }}" @endif @if($preview->audio_path) data-audio-url="{{ route('store.preview.audio',$preview) }}" data-audio-timing="{{ json_encode($preview->audio_timing ?? [], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP) }}" @endif>
             <div class="farast-reader-page-content">
-              @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
+              @if(($preview->kind ?? '') === 'reader_document')
+                <div class="farast-pdf-document farast-reader-document" data-reader-document-page aria-label="محتوای متنی صفحه">
+                  <div class="farast-pdf-loading" role="status">در حال دریافت محتوای مجاز این صفحه…</div>
+                  <div class="farast-pdf-text-layer" data-reader-text-layer></div>
+                </div>
+              @elseif(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <div class="farast-pdf-document" data-pdf-url="{{ route('store.preview',$preview) }}" aria-label="نمایش سند PDF">
                   <canvas class="farast-pdf-canvas"></canvas>
                   <div class="farast-pdf-text-layer"></div>
