@@ -48,6 +48,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::delete('/store/{product}/images/{image}',[AdminStoreController::class,'deleteImage'])->name('store.images.delete');
     Route::post('/store/{product}/files/inspect',[AdminStoreController::class,'inspectFiles'])->middleware('throttle:10,10')->name('store.files.inspect');
     Route::post('/store/{product}/files/confirm',[AdminStoreController::class,'confirmFiles'])->middleware('throttle:10,10')->name('store.files.confirm');
+    Route::post('/store/{product}/files/cancel',[AdminStoreController::class,'cancelFileIntakes'])->middleware('throttle:20,10')->name('store.files.cancel');
     Route::delete('/store/{product}/files/{file}',[AdminStoreController::class,'deleteFile'])->name('store.files.delete');
     Route::post('/store/{product}/previews',[AdminStoreController::class,'uploadPreview'])->middleware('throttle:10,10')->name('store.previews.upload');
     Route::delete('/store/{product}/previews/{preview}',[AdminStoreController::class,'deletePreview'])->name('store.previews.delete');
