@@ -450,61 +450,7 @@ class AdminStoreController extends Controller
 
     public function uploadFile(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
-        abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها را در بخش منابع هر جلسه بارگذاری کنید.');
-        $request->validate([
-            'file' => 'required|file|max:51200|mimes:pdf,zip,jpg,jpeg,png,webp,gif,doc,docx,xls,xlsx,ppt,pptx,txt,mp3,mp4,webm,m4a',
-            'is_primary' => 'nullable|boolean',
-        ]);
-
-        $upload = $request->file('file');
-        $path = $upload->store('store/products/'.$product->id, 'private');
-        try {
-            $allowed = [
-                'application/pdf', 'application/zip', 'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-                'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                'text/plain', 'audio/mpeg', 'audio/mp4', 'video/mp4', 'video/webm',
-            ];
-            $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024, $allowed);
-            abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل انتشار نخواهد بود.');
-
-            $primary = $request->boolean('is_primary');
-            $fileRecord = DB::transaction(function () use ($product, $path, $upload, $inspection, $primary) {
-                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
-                if ($primary) {
-                    $lockedProduct->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
-                }
-
-                $record = StoreProductFile::create([
-                    'product_id' => $lockedProduct->id,
-                    'purpose' => 'product_download',
-                    'version' => $product->version,
-                    'disk' => 'private',
-                    'path' => $path,
-                    'original_name' => $upload->getClientOriginalName(),
-                    'mime' => $inspection['mime'],
-                    'size_bytes' => $inspection['size'],
-                    'sha256' => $inspection['checksum'],
-                    'is_primary' => $primary,
-                    'is_active' => true,
-                    'scan_status' => 'clean',
-                    'scan_engine' => $inspection['scan'],
-                    'scanned_at' => now(),
-                ]);
-                $this->audit('store.product.file_uploaded', $lockedProduct, ['file_id' => $record->id, 'mime' => $record->mime, 'size_bytes' => $record->size_bytes, 'sha256' => $record->sha256]);
-
-                return $record;
-            });
-        } catch (Throwable $exception) {
-            Storage::disk('private')->delete($path);
-            if ($exception instanceof ValidationException) {
-                throw $exception;
-            }
-            abort(503, 'بارگذاری به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
-        }
-
-        return back()->with('status', 'فایل اصلی پس از اسکن امنیتی ذخیره شد.');
+        abort(409, 'بارگذاری مستقیم غیرفعال است؛ ابتدا گزارش بررسی اولیه را مشاهده و سپس فایل را تأیید کنید.');
     }
 
     public function deleteFile(StoreProduct $product, StoreProductFile $file)
