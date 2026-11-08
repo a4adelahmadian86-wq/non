@@ -50,6 +50,7 @@
       const speechPage = Math.max(1, Number(payload.page_number || article.dataset.readerPage || 1));
       const appendSpeechText = (element, value) => {
         const source = String(value || '');
+        if (!root.dataset.readerAudioUrl && !article.dataset.audioUrl) { element.textContent = source; return; }
         element.dataset.readerSpeechText = source;
         element.dataset.page = String(speechPage);
         const sentences = source.match(/[^.!؟۔؛]+[.!؟۔؛]?/gu) || [source];
