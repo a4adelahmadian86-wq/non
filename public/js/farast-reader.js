@@ -115,6 +115,7 @@
     readerState.progress=currentPosition();
     persistReaderState();
     refreshResumeButton();
+    queueRemoteSync();
   };
   const isCurrentBookmarked=()=>readerState.bookmarks.some(item=>samePosition(item,currentPosition()));
   const refreshBookmarkButton=()=>{
@@ -156,7 +157,7 @@
       remove.textContent='×';
       remove.addEventListener('click',()=>{
         readerState.bookmarks.splice(index,1);
-        persistReaderState();renderBookmarks();refreshBookmarkButton();
+        persistReaderState();renderBookmarks();refreshBookmarkButton();queueRemoteSync();
       });
       item.append(go,remove);
       bookmarksPanel.append(item);
@@ -639,7 +640,7 @@
     if(index>=0)readerState.bookmarks.splice(index,1);
     else readerState.bookmarks.unshift(current);
     readerState.bookmarks=readerState.bookmarks.slice(0,100);
-    persistReaderState();renderBookmarks();refreshBookmarkButton();
+    persistReaderState();renderBookmarks();refreshBookmarkButton();queueRemoteSync();
   });
   bookmarksOpenButton?.addEventListener('click',()=>{
     const open=bookmarksPanel?.hidden!==false;
