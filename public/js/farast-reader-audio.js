@@ -11,15 +11,27 @@
     let timings = [];
     try { timings = JSON.parse(article.dataset.audioTiming || '[]'); } catch (_) {}
     if (!Array.isArray(timings)) timings = [];
+    const validTimings = timings.filter(item => item && typeof item.text === 'string'
+      && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
+      && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
+      .map((item, index) => ({
+        ...item,
+        start: Number(item.start),
+        end: Number(item.end),
+        page: Math.max(1, Number(item.page) || 1),
+        words: Array.isArray(item.words) ? item.words.filter(word => word && typeof word.text === 'string'
+          && Number.isFinite(Number(word.start)) && Number.isFinite(Number(word.end))
+          && Number(word.start) >= 0 && Number(word.end) > Number(word.start))
+          .map(word => ({ ...word, start: Number(word.start), end: Number(word.end) })) : [],
+        index
+      }))
+      .sort((a, b) => a.start - b.start);
     return {
       section,
       url: article.dataset.audioUrl || '',
-      timings: timings.filter(item => item && typeof item.text === 'string'
-        && Number.isFinite(Number(item.start)) && Number.isFinite(Number(item.end))
-        && Number(item.start) >= 0 && Number(item.end) > Number(item.start))
-        .map((item, index) => ({ ...item, start: Number(item.start), end: Number(item.end), page: Math.max(1, Number(item.page) || 1), index }))
-        .sort((a, b) => a.start - b.start),
-      granularity: timings.length > 0 && timings.some(item => typeof item?.text === 'string' && /\s/u.test(item.text.trim())) ? 'segment' : 'word'
+      timings: validTimings,
+      granularity: validTimings.some(item => item.words.length > 0) ? 'word' : 'segment',
+      alignmentQuality: validTimings.length > 0 && validTimings.every(item => item.alignment_quality === 'phoneme') ? 'phoneme' : 'estimated'
     };
   });
   const tracks = parseTracks();
@@ -152,7 +164,7 @@
           mark.className = 'reader-audio-word';
           mark.dataset.segment = String(item.index);
           mark.setAttribute('role', 'button');
-          mark.setAttribute('aria-label', (activeTrack.granularity === 'segment' ? 'رفتن به بخش ' : 'رفتن به کلمه ') + word);
+          mark.setAttribute('aria-label', (activeTrack.granularity === 'word' ? 'رفتن به کلمه ' : 'رفتن به بخش ') + word);
           mark.tabIndex = 0;
           Object.assign(mark.style, {
             left: (rect.left - layerRect.left) + 'px',
@@ -214,7 +226,7 @@
       activeSegment = found;
       if (item) {
         caption.textContent = item.text;
-        progressLabel.textContent = (activeTrack.granularity === 'segment' ? 'بخش ' : 'کلمه ') + fa(found + 1) + ' از ' + fa(timings.length);
+        progressLabel.textContent = (activeTrack.granularity === 'word' ? 'جمله ' : 'بخش ') + fa(found + 1) + ' از ' + fa(timings.length);
         const current = wordMarks.find(mark => mark.segment === found)?.element;
         if (current && audio.paused === false) {
           const rect = current.getBoundingClientRect();
@@ -241,12 +253,15 @@
     activeSection = section;
     activeTrack = track;
     activePage = 1;
+    rangeEnd = null;
     clearMarks();
     audio.src = track.url;
     audio.load();
     buildMarks(activePage);
     dock.hidden = false;
-    status.textContent = activeTrack.granularity === 'segment' ? 'صوت از پیش آماده · همگام‌سازی جمله‌ای' : 'صوت از پیش آماده · همگام‌سازی کلمه‌به‌کلمه';
+    status.textContent = activeTrack.alignmentQuality === 'phoneme'
+      ? 'صوت از پیش آماده · هم‌ترازی واجی واژه‌ها'
+      : 'صوت از پیش آماده · زمان‌بندی تقریبی واژه‌ها';
     caption.textContent = 'برای شروع، پخش را انتخاب کنید.';
     progressLabel.textContent = fa(track.timings.length) + (track.granularity === 'segment' ? ' بخش زمانی' : ' نشانگر کلمه‌ای');
     seek.value = '0';
@@ -260,11 +275,21 @@
   audio.addEventListener('play', () => { playButton.innerHTML = '<i class="fa-solid fa-pause"></i>'; playButton.setAttribute('aria-label', 'مکث'); dock.classList.add('is-playing'); status.textContent = 'در حال همراهی با متن'; startFrameLoop(); });
   audio.addEventListener('pause', () => { playButton.innerHTML = '<i class="fa-solid fa-play"></i>'; playButton.setAttribute('aria-label', 'پخش'); dock.classList.remove('is-playing'); cancelAnimationFrame(raf); });
   audio.addEventListener('loadedmetadata', () => { durationLabel.textContent = formatTime(audio.duration); });
-  audio.addEventListener('timeupdate', () => { if (Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000)); currentLabel.textContent = formatTime(audio.currentTime); updateHighlight(audio.currentTime); });
+  audio.addEventListener('timeupdate', () => {
+    if (rangeEnd !== null && audio.currentTime >= rangeEnd) {
+      const stopAt = rangeEnd;
+      rangeEnd = null;
+      audio.pause();
+      audio.currentTime = stopAt;
+    }
+    if (Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
+    currentLabel.textContent = formatTime(audio.currentTime);
+    updateHighlight(audio.currentTime);
+  });
   audio.addEventListener('seeking', () => updateHighlight(audio.currentTime));
-  audio.addEventListener('ended', () => { status.textContent = 'این بخش به پایان رسید'; caption.textContent = 'برای ادامه، بخش بعدی را انتخاب کنید.'; });
+  audio.addEventListener('ended', () => { rangeEnd = null; status.textContent = 'این بخش به پایان رسید'; caption.textContent = 'برای ادامه، بخش بعدی را انتخاب کنید.'; });
   audio.addEventListener('error', () => { status.textContent = 'بارگذاری صوت ناموفق بود؛ فایل یا دسترسی آن را بررسی کنید.'; });
-  seek.addEventListener('input', () => { if (Number.isFinite(audio.duration)) { audio.currentTime = (Number(seek.value) / 1000) * audio.duration; updateHighlight(audio.currentTime); } });
+  seek.addEventListener('input', () => { rangeEnd = null; if (Number.isFinite(audio.duration)) { audio.currentTime = (Number(seek.value) / 1000) * audio.duration; updateHighlight(audio.currentTime); } });
   $('[data-audio-speed]').addEventListener('change', event => { audio.playbackRate = Number(event.target.value) || 1; });
   $('[data-audio-volume]').addEventListener('input', event => { audio.volume = Math.max(0, Math.min(1, Number(event.target.value))); });
   $('[data-audio-collapse]').addEventListener('click', event => { const collapsed = dock.classList.toggle('is-collapsed'); event.currentTarget.setAttribute('aria-expanded', String(!collapsed)); });
