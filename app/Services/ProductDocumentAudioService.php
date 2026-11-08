@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -52,8 +54,8 @@ class ProductDocumentAudioService
                     ->connectTimeout(75) // Free Render instances can need about a minute to wake from idle.
                     ->timeout(180)
                     ->retry(3, [1000, 3000, 8000], static fn ($exception) =>
-                        $exception instanceof \\Illuminate\\Http\\Client\\ConnectionException
-                        || ($exception instanceof \\Illuminate\\Http\\Client\\RequestException
+                        $exception instanceof ConnectionException
+                        || ($exception instanceof RequestException
                             && in_array($exception->response->status(), [502, 503, 504], true))
                     )
                     ->post($url, [
