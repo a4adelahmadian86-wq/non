@@ -800,7 +800,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         names = set(archive.namelist())
         if "[Content_Types].xml" in names and "word/document.xml" in names:
             result.detected_type = "docx"
-            result.extracted_text, result.content_chunks = _extract_docx_structured(data)
+            result.extracted_text, result.content_chunks, result.extraction_truncated = _extract_docx_structured(data)
         elif "[Content_Types].xml" in names and "xl/workbook.xml" in names:
             result.detected_type = "xlsx"
             result.extracted_text = _extract_xlsx(data)
@@ -855,7 +855,11 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.extraction_truncated = True
         result.warnings.append("استخراج متن به سقف پردازش فعلی رسید؛ ممکن است بخشی از سند هنوز تحلیل نشده باشد.")
     if not result.content_chunks:
-        result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
+        result.content_chunks, chunks_truncated = _build_content_chunks(result.extracted_text, result.detected_type)
+        result.extraction_truncated = result.extraction_truncated or chunks_truncated
+
+    if result.extraction_truncated and not any("ممکن است بخشی از سند" in warning for warning in result.warnings):
+        result.warnings.append("استخراج سند به یکی از سقف‌های ایمنی رسید؛ ممکن است بخشی از محتوا در نسخه متنی موجود نباشد.")
 
     if result.antivirus_status != "clean":
         if result.upstream_scan_status == "clean":
