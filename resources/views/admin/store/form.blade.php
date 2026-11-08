@@ -39,10 +39,10 @@
       @csrf @if($isEdit) @method('PUT') @endif
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
-        <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
+        <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
         <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
         <label class="product-field">شناسه محصول (SKU) *<input name="sku" value="{{ old('sku',$product->sku) }}" required maxlength="80" placeholder="مثلاً COURSE-001"></label>
-        <label class="product-field">نشانی اختصاصی (Slug)<input name="slug" value="{{ old('slug',$product->slug) }}" maxlength="240" placeholder="خودکار از عنوان ساخته می‌شود"></label>
+        <label class="product-field">نشانی اختصاصی (Slug)<input name="slug" data-product-slug value="{{ old('slug',$product->slug) }}" maxlength="240" placeholder="خودکار از عنوان ساخته می‌شود"></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
         <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
         <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
@@ -59,8 +59,33 @@
         <label class="product-field product-field-check"><input type="checkbox" name="featured" value="1" @checked(old('featured',$product->featured))> نمایش به‌عنوان محصول ویژه</label>
       </div>
       <div class="product-editor-subhead" id="product-content"><span>گام سوم</span><strong>محتوا و معرفی محصول</strong><small>به مشتری کمک کنید پیش از خرید ارزش محصول را دقیق بشناسد.</small></div>
-      <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
+      <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" data-product-short-description rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
       <label class="product-field product-field-wide">توضیحات کامل<textarea name="description" rows="6" maxlength="20000" placeholder="شرح کامل محتوا، کاربردها، پیش‌نیازها و آنچه خریدار دریافت می‌کند.">{{ old('description',$product->description) }}</textarea></label>
+
+
+      <div class="product-editor-subhead" id="product-discovery"><span>گام چهارم</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
+      <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" data-seo-title value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
+      <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" data-seo-description rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
+      <section class="product-search-preview" aria-label="پیش‌نمایش نتیجه جست‌وجو">
+        <span>پیش‌نمایش زنده نتیجه جست‌وجو</span>
+        <strong data-seo-preview-title>{{ old('seo_title', $product->seo_title ?: $product->title ?: 'عنوان محصول شما') }}</strong>
+        <small data-seo-preview-url>{{ url('/store/product') }}/{{ old('slug', $product->slug ?: 'product-url') }}</small>
+        <p data-seo-preview-description>{{ old('seo_description', $product->seo_description ?: $product->short_description ?: 'توضیحات محصول شما در این قسمت نمایش داده می‌شود.') }}</p>
+      </section>
+      <div class="product-editor-grid product-discovery-links">
+        <label class="product-field product-field-wide">برچسب‌های محصول
+          <select name="tag_ids[]" multiple size="5" aria-describedby="product-tags-help">
+            @foreach($tags as $tag)<option value="{{ $tag->id }}" @selected(in_array($tag->id, old('tag_ids', $product->tags->pluck('id')->all())))>{{ $tag->name }}</option>@endforeach
+          </select>
+          <small id="product-tags-help">برای انتخاب چند مورد، در رایانه Ctrl یا در موبایل لمس چندگانه را استفاده کنید. برچسب‌ها برای دسته‌بندی و کشف بهتر محصولات استفاده می‌شوند.</small>
+        </label>
+        <label class="product-field product-field-wide">محصولات مرتبط
+          <select name="related_product_ids[]" multiple size="5" aria-describedby="product-related-help">
+            @foreach($relatedProducts as $relatedProduct)<option value="{{ $relatedProduct->id }}" @selected(in_array($relatedProduct->id, old('related_product_ids', $product->related->pluck('id')->all())))>{{ $relatedProduct->title }} · {{ $relatedProduct->sku }} · {{ $relatedProduct->type === 'course' ? 'دوره' : 'فایل' }}</option>@endforeach
+          </select>
+          <small id="product-related-help">حداکثر ۱۲ محصول مرتبط؛ محصول جاری از فهرست انتخاب حذف شده است.</small>
+        </label>
+      </div>
       <section class="product-ai-supervisor" id="product-ai-supervisor" aria-labelledby="product-ai-supervisor-title">
         <div class="product-ai-supervisor-head">
           <div class="product-ai-mark"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></div>
@@ -93,23 +118,6 @@
         </div>
       </section>
 
-      <div class="product-editor-subhead" id="product-discovery"><span>گام چهارم</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
-      <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
-      <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
-      <div class="product-editor-grid product-discovery-links">
-        <label class="product-field product-field-wide">برچسب‌های محصول
-          <select name="tag_ids[]" multiple size="5" aria-describedby="product-tags-help">
-            @foreach($tags as $tag)<option value="{{ $tag->id }}" @selected(in_array($tag->id, old('tag_ids', $product->tags->pluck('id')->all())))>{{ $tag->name }}</option>@endforeach
-          </select>
-          <small id="product-tags-help">برای انتخاب چند مورد، در رایانه Ctrl یا در موبایل لمس چندگانه را استفاده کنید. برچسب‌ها برای دسته‌بندی و کشف بهتر محصولات استفاده می‌شوند.</small>
-        </label>
-        <label class="product-field product-field-wide">محصولات مرتبط
-          <select name="related_product_ids[]" multiple size="5" aria-describedby="product-related-help">
-            @foreach($relatedProducts as $relatedProduct)<option value="{{ $relatedProduct->id }}" @selected(in_array($relatedProduct->id, old('related_product_ids', $product->related->pluck('id')->all())))>{{ $relatedProduct->title }} · {{ $relatedProduct->sku }} · {{ $relatedProduct->type === 'course' ? 'دوره' : 'فایل' }}</option>@endforeach
-          </select>
-          <small id="product-related-help">حداکثر ۱۲ محصول مرتبط؛ محصول جاری از فهرست انتخاب حذف شده است.</small>
-        </label>
-      </div>
       <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ایجاد پیش‌نویس و ادامه تکمیل' }}</button><span>اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.</span></div>
     </form>
 
@@ -163,8 +171,8 @@
       </div>
     @endif
 
-    <div class="store-panel product-category-panel"><h2>مدیریت سریع دسته‌بندی</h2><form method="post" action="{{ route('admin.store.categories.store') }}">@csrf<input name="name" required maxlength="160" placeholder="نام دسته جدید"><input name="slug" maxlength="180" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن دسته</button></form></div>
-    <div class="store-panel product-category-panel product-tag-panel"><h2>مدیریت سریع برچسب‌ها</h2><form method="post" action="{{ route('admin.store.tags.store') }}">@csrf<input name="name" required maxlength="100" placeholder="نام برچسب جدید"><input name="slug" maxlength="120" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن برچسب</button></form><small class="product-help">پس از ذخیره، برچسب در فهرست برچسب‌های قابل انتخاب محصول قرار می‌گیرد.</small></div>
+    <div class="store-panel product-category-panel"><h2>مدیریت سریع دسته‌بندی</h2><p class="product-inline-feedback" data-inline-feedback role="status" aria-live="polite"></p><form method="post" action="{{ route('admin.store.categories.store') }}" data-inline-create="category">@csrf<input name="name" required maxlength="160" placeholder="نام دسته جدید"><input name="slug" maxlength="180" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن دسته</button></form></div>
+    <div class="store-panel product-category-panel product-tag-panel"><h2>مدیریت سریع برچسب‌ها</h2><p class="product-inline-feedback" data-inline-feedback role="status" aria-live="polite"></p><form method="post" action="{{ route('admin.store.tags.store') }}" data-inline-create="tag">@csrf<input name="name" required maxlength="100" placeholder="نام برچسب جدید"><input name="slug" maxlength="120" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن برچسب</button></form><small class="product-help">پس از ذخیره، برچسب در فهرست برچسب‌های قابل انتخاب محصول قرار می‌گیرد.</small></div>
   </div>
 </section>
 @endsection
@@ -233,6 +241,8 @@
 .product-ai-footer i{color:#4a83c9}
 @media(max-width:760px){.product-ai-supervisor-head{align-items:flex-start;flex-wrap:wrap}.product-ai-switch{width:100%;padding-inline-start:57px}.product-ai-checks{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.product-ai-checks{grid-template-columns:1fr}.product-ai-supervisor-head,.product-ai-supervisor-body{padding:13px}}
+.product-search-preview{grid-column:1/-1;display:grid;gap:6px;padding:15px 17px;border:1px solid #dfe7f1;border-radius:13px;background:#fff;box-shadow:0 3px 12px rgba(15,35,70,.04)}
+.product-search-preview>span{font-size:.64rem;font-weight:900;color:#73849b}.product-search-preview strong{font-size:.9rem;line-height:1.6;color:#1a5bb8}.product-search-preview small{font-size:.65rem;color:#18804c;direction:ltr;text-align:right;overflow-wrap:anywhere}.product-search-preview p{margin:0;font-size:.72rem;line-height:1.8;color:#66768b}.product-inline-feedback{margin:0 0 8px;color:#18764a;font-size:.7rem}.product-inline-feedback:empty{display:none}
 .product-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px;margin:14px 0}
 .product-gallery-item{overflow:hidden;border:1px solid var(--st-line);border-radius:12px;background:#fff}
 .product-gallery-item img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#f4f6fa}
@@ -272,6 +282,49 @@
     });
   });
 
+  const bindPreview = (selector, outputSelector, fallback) => {
+    const input = form.querySelector(selector);
+    const output = document.querySelector(outputSelector);
+    if (!input || !output) return;
+    const render = () => { output.textContent = input.value.trim() || fallback; };
+    input.addEventListener('input', render);
+    render();
+  };
+  bindPreview('[data-seo-title]', '[data-seo-preview-title]', 'عنوان محصول شما');
+  bindPreview('[data-seo-description]', '[data-seo-preview-description]', 'توضیحات محصول شما در این قسمت نمایش داده می‌شود.');
+  const slugInput = form.querySelector('[data-product-slug]');
+  const slugOutput = document.querySelector('[data-seo-preview-url]');
+  if (slugInput && slugOutput) {
+    const renderSlug = () => { slugOutput.textContent = window.location.origin + '/store/product/' + (slugInput.value.trim() || 'product-url'); };
+    slugInput.addEventListener('input', renderSlug);
+    renderSlug();
+  }
+  const shortDescription = form.querySelector('[data-product-short-description]');
+  const seoDescription = form.querySelector('[data-seo-description]');
+  if (shortDescription && seoDescription) shortDescription.addEventListener('input', () => {
+    if (!seoDescription.value.trim()) { const output = document.querySelector('[data-seo-preview-description]'); if (output) output.textContent = shortDescription.value.trim() || 'توضیحات محصول شما در این قسمت نمایش داده می‌شود.'; }
+  });
+  document.querySelectorAll('[data-inline-create]').forEach(inlineForm => {
+    inlineForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = inlineForm.querySelector('button[type="submit]');
+      const feedback = inlineForm.closest('.product-category-panel')?.querySelector('[data-inline-feedback]');
+      if (button?.disabled) return;
+      if (button) { button.disabled = true; button.dataset.originalText = button.textContent; button.textContent = 'در حال ثبت…'; }
+      if (feedback) feedback.textContent = '';
+      try {
+        const response = await fetch(inlineForm.action, {method:'POST',body:new FormData(inlineForm),headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'ثبت مورد جدید انجام نشد.');
+        const kind = inlineForm.dataset.inlineCreate;
+        const select = kind === 'category' ? form.querySelector('[name="category_id"]') : form.querySelector('[name="tag_ids[]"]');
+        if (select) { const option = new Option(payload.name,payload.id,true,true); select.add(option); option.selected = true; }
+        if (feedback) feedback.textContent = kind === 'category' ? 'دسته ساخته و برای همین محصول انتخاب شد.' : 'برچسب ساخته و به همین محصول اختصاص یافت.';
+        inlineForm.reset();
+      } catch (error) { if (feedback) feedback.textContent = error.message || 'خطا در ارتباط با سرور.'; }
+      finally { if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'ثبت'; } }
+    });
+  });
   form.addEventListener('submit', event => {
     const button = document.getElementById('productSaveButton');
     if (button?.dataset.submitting === '1') {
