@@ -293,7 +293,8 @@
     status.textContent = activeTrack.alignmentQuality === 'phoneme'
       ? 'صوت از پیش آماده · هم‌ترازی واجی واژه‌ها'
       : 'صوت از پیش آماده · زمان‌بندی تقریبی واژه‌ها';
-    progressLabel.textContent = fa(track.timings.length) + (track.granularity === 'segment' ? ' بخش زمانی' : ' نشانگر کلمه‌ای');
+    const totalWordMarks = track.timings.reduce((count, item) => count + item.words.length, 0);
+    progressLabel.textContent = track.granularity === 'word' ? fa(totalWordMarks) + ' نشانگر واژهٔ آماده' : fa(track.timings.length) + ' بخش آماده';
   };
 
   playButton.addEventListener('click', () => {
