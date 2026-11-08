@@ -277,7 +277,7 @@ async def review_product_file(
             "redacted_sensitive_items": chunk_redactions,
         })
         chunk_character_count += len(chunk_text)
-        if chunk_character_count >= 24_000:
+        if chunk_character_count >= 120_000:
             break
 
     # File inspection is advisory. A missing antivirus engine is never reported as clean.
@@ -287,6 +287,9 @@ async def review_product_file(
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
         "content_chunks": safe_chunks,
+        "analysis_batch_count": int(model_review.get("analysis_batch_count", 0)) if model_review else 0,
+        "successful_analysis_batches": int(model_review.get("successful_analysis_batches", 0)) if model_review else 0,
+        "analyzed_characters": int(model_review.get("analyzed_characters", 0)) if model_review else 0,
         "sample_page_numbers": sample_page_numbers,
         "sample_pdf_base64": sample_pdf_base64,
         "provider_status": provider_status,
