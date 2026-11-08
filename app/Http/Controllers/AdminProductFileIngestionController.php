@@ -10,6 +10,7 @@ use App\Models\StoreProductUploadSession;
 use App\Jobs\StudyProductDocument;
 use App\Services\AuditEventService;
 use App\Services\ProductFilePreflightScanner;
+use App\Services\ProductFileStorageSelector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
