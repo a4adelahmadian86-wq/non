@@ -45,6 +45,8 @@ Both review endpoints require `Authorization: Bearer <SUPERVISOR_API_TOKEN>`. Fi
 
 ## Local run
 
+Render and local deployments use Python 3.12.11, pinned in `.python-version` to ensure prebuilt Pydantic Core wheels are available.
+
 ```bash
 python -m venv .venv
 . .venv/bin/activate
