@@ -145,7 +145,7 @@ async def review_product_file(
     warnings = list(inspection.warnings or [])
     visual_report = ""
     transcription = ""
-    provider_status = {"gemini": "not_requested", "groq": "not_requested", "gladia": "disabled"}
+    provider_status = {"gemini": "not_requested", "groq": "not_requested", "groq_vision": "not_requested", "groq_transcription": "not_requested", "gladia": "disabled"}
     groq_successes = 0
     groq_failures = 0
 
@@ -153,33 +153,33 @@ async def review_product_file(
         if os.getenv("GROQ_API_KEY"):
             try:
                 visual_report = await analyze_image_with_groq(inspection.image_bytes, inspection.image_mime or "image/jpeg", {"title": redact_sensitive_content(product_title)[0], "category": redact_sensitive_content(category_name or "")[0], "tags": [redact_sensitive_content(tag)[0] for tag in tags]})
-                groq_successes += 1
+                provider_status["groq_vision"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
-                groq_failures += 1
+                provider_status["groq_vision"] = "unavailable"
                 warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ نتیجه‌ای درباره تصویر فرض نشده است.")
         else:
+            provider_status["groq_vision"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصویر انجام نشد.")
 
     if inspection.audio_bytes:
         if os.getenv("GROQ_API_KEY"):
             try:
                 transcription = await transcribe_audio_with_groq(inspection.audio_bytes, inspection.audio_filename or "upload.audio")
-                groq_successes += 1
+                provider_status["groq_transcription"] = "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError):
-                groq_failures += 1
+                provider_status["groq_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی نشده است.")
         else:
+            provider_status["groq_transcription"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
 
-    if inspection.image_bytes or inspection.audio_bytes:
-        if not os.getenv("GROQ_API_KEY"):
-            provider_status["groq"] = "not_configured"
-        elif groq_successes and groq_failures:
-            provider_status["groq"] = "partial"
-        elif groq_successes:
-            provider_status["groq"] = "completed"
-        else:
-            provider_status["groq"] = "unavailable"
+    groq_statuses = [provider_status["groq_vision"], provider_status["groq_transcription"]]
+    if "completed" in groq_statuses:
+        provider_status["groq"] = "partial" if any(value not in {"completed", "not_requested"} for value in groq_statuses) else "completed"
+    elif "unavailable" in groq_statuses:
+        provider_status["groq"] = "unavailable"
+    elif "not_configured" in groq_statuses:
+        provider_status["groq"] = "not_configured"
 
     extracted, redaction_count = redact_sensitive_content("\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip()))
     model_review = {}
@@ -227,12 +227,54 @@ async def review_product_file(
                 "recommendation": str(item.get("recommendation") or "")[:500],
             })
 
+    content_chunks = []
+    for chunk in inspection.content_chunks or []:
+        if not isinstance(chunk, dict):
+            continue
+        safe_text, _ = redact_sensitive_content(str(chunk.get("text") or ""))
+        if safe_text.strip():
+            content_chunks.append({
+                "chunk_index": len(content_chunks),
+                "content_type": str(chunk.get("content_type") or "text")[:32],
+                "page_number": chunk.get("page_number") if isinstance(chunk.get("page_number"), int) else None,
+                "heading": str(chunk.get("heading") or "")[:500] or None,
+                "text": safe_text[:5000],
+                "source_anchor": chunk.get("source_anchor") if isinstance(chunk.get("source_anchor"), dict) else {},
+            })
+    if visual_report.strip():
+        content_chunks.append({"chunk_index": len(content_chunks), "content_type": "image_analysis", "page_number": None, "heading": "تحلیل تصویر", "text": redact_sensitive_content(visual_report)[0][:5000], "source_anchor": {"asset": "image"}})
+    if transcription.strip():
+        content_chunks.append({"chunk_index": len(content_chunks), "content_type": "audio_transcript", "page_number": None, "heading": "متن صوت استخراج‌شده", "text": redact_sensitive_content(transcription)[0][:5000], "source_anchor": {"asset": "audio"}})
+
+    raw_facts = model_review.get("facts", []) if isinstance(model_review, dict) else []
+    safe_facts = []
+    if isinstance(raw_facts, list):
+        for fact in raw_facts[:100]:
+            if not isinstance(fact, dict):
+                continue
+            value = str(fact.get("value") or "").strip()
+            key = str(fact.get("key") or "").strip()
+            if not key or not value:
+                continue
+            evidence = fact.get("evidence") if isinstance(fact.get("evidence"), dict) else {}
+            safe_facts.append({
+                "key": key[:180],
+                "value": redact_sensitive_content(value)[0][:2000],
+                "confidence": max(0.0, min(1.0, float(fact.get("confidence", 0.0) or 0.0))),
+                "evidence": {
+                    "page": evidence.get("page") if isinstance(evidence.get("page"), int) else None,
+                    "quote": redact_sensitive_content(str(evidence.get("quote") or ""))[0][:500],
+                },
+            })
+
     # File inspection is advisory. A missing antivirus engine is never reported as clean.
     return {
         "review_id": str(uuid.uuid4()),
         "product_id": product_id,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
+        "content_chunks": content_chunks[:150],
+        "facts": safe_facts,
         "provider_status": provider_status,
         "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
         "findings": safe_findings,
