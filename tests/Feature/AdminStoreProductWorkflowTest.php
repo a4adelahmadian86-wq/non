@@ -127,6 +127,29 @@ class AdminStoreProductWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_product_specific_ai_supervisor_policy_is_persisted_without_invoking_an_ai_provider(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+
+        $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
+            'ai_supervisor' => [
+                'enabled' => '1',
+                'mode' => 'review_gate',
+                'instructions' => 'ادعاهای محصول را با محتوای واقعی تطبیق بده.',
+                'checks' => ['content' => '1', 'pricing' => '1', 'policy' => '1'],
+            ],
+        ]))->assertRedirect();
+
+        $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
+        $this->assertTrue(data_get($product->metadata, 'ai_supervisor.enabled'));
+        $this->assertSame('review_gate', data_get($product->metadata, 'ai_supervisor.mode'));
+        $this->assertSame('ادعاهای محصول را با محتوای واقعی تطبیق بده.', data_get($product->metadata, 'ai_supervisor.instructions'));
+        $this->assertTrue(data_get($product->metadata, 'ai_supervisor.checks.content'));
+        $this->assertFalse(data_get($product->metadata, 'ai_supervisor.checks.seo'));
+        $this->assertSame(1, data_get($product->metadata, 'ai_supervisor.configuration_version'));
+    }
+
     public function test_admin_can_create_a_tag_from_the_product_editor(): void
     {
         $this->actingAs($this->admin())

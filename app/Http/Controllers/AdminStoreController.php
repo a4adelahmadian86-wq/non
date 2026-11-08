@@ -534,7 +534,37 @@ class AdminStoreController extends Controller
             'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
             'related_product_ids' => 'sometimes|array|max:12',
             'related_product_ids.*' => 'integer|distinct|exists:store_products,id',
+            'ai_supervisor.enabled' => 'nullable|boolean',
+            'ai_supervisor.mode' => 'nullable|in:suggest,review_gate',
+            'ai_supervisor.checks.content' => 'nullable|boolean',
+            'ai_supervisor.checks.pricing' => 'nullable|boolean',
+            'ai_supervisor.checks.seo' => 'nullable|boolean',
+            'ai_supervisor.checks.media' => 'nullable|boolean',
+            'ai_supervisor.checks.policy' => 'nullable|boolean',
+            'ai_supervisor.checks.course' => 'nullable|boolean',
+            'ai_supervisor.instructions' => 'nullable|string|max:4000',
         ]);
+        $existingMetadata = $product?->metadata ?? [];
+        $data['metadata'] = $existingMetadata;
+        if ($request->has('ai_supervisor')) {
+            $supervisorChecks = [
+                'content' => $request->boolean('ai_supervisor.checks.content'),
+                'pricing' => $request->boolean('ai_supervisor.checks.pricing'),
+                'seo' => $request->boolean('ai_supervisor.checks.seo'),
+                'media' => $request->boolean('ai_supervisor.checks.media'),
+                'policy' => $request->boolean('ai_supervisor.checks.policy'),
+                'course' => $request->boolean('ai_supervisor.checks.course'),
+            ];
+            $data['metadata'] = array_merge($existingMetadata, [
+                'ai_supervisor' => [
+                    'enabled' => $request->boolean('ai_supervisor.enabled'),
+                    'mode' => $request->input('ai_supervisor.mode', 'suggest'),
+                    'checks' => $supervisorChecks,
+                    'instructions' => trim((string) $request->input('ai_supervisor.instructions', '')),
+                    'configuration_version' => 1,
+                ],
+            ]);
+        }
         $data['tag_ids'] = $request->input('tag_ids', []);
         $data['related_product_ids'] = array_values(array_filter($request->input('related_product_ids', []), fn ($id) => ! $product || (int) $id !== (int) $product->id));
         $data['featured'] = $request->boolean('featured');
