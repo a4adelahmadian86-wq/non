@@ -451,4 +451,24 @@ class StoreReaderAccessTest extends TestCase
         $this->assertSame('private-audio', $response->streamedContent());
     }
 
+    public function test_reader_exposes_only_the_audio_route_and_word_timing_manifest(): void
+    {
+        [$product, $preview] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/reader-audio/sample/narration.mp3', 'audio-bytes');
+        $preview->update([
+            'audio_disk' => 'private',
+            'audio_path' => 'store/reader-audio/sample/narration.mp3',
+            'audio_mime' => 'audio/mpeg',
+            'audio_timing' => [['text' => 'سلام', 'start' => 0, 'end' => 0.4, 'page' => 1]],
+        ]);
+
+        $response = $this->get(route('store.reader', $product->slug));
+        $response->assertOk()
+            ->assertSee(route('store.preview.audio', $preview))
+            ->assertSee('data-audio-timing')
+            ->assertSee('farast-reader-audio.js')
+            ->assertSee('سلام')
+            ->assertDontSee('store/reader-audio/sample/narration.mp3');
+    }
+
 }
