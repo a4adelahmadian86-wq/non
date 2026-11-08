@@ -234,9 +234,14 @@ async def review_product_file(
     sample_pdf_base64 = None
     if inspection.detected_type == "pdf" and provider_status.get("gemini") == "completed":
         raw_sample_pages = model_review.get("sample_pages", [])
+        available_pdf_pages = {
+            chunk.get("locator", {}).get("page")
+            for chunk in (inspection.content_chunks or [])
+            if isinstance(chunk, dict) and isinstance(chunk.get("locator"), dict)
+        }
         if isinstance(raw_sample_pages, list):
             for candidate in raw_sample_pages[:3]:
-                if isinstance(candidate, int) and not isinstance(candidate, bool) and inspection.page_count and 1 <= candidate <= inspection.page_count:
+                if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate in available_pdf_pages and inspection.page_count and 1 <= candidate <= inspection.page_count:
                     if candidate not in sample_page_numbers:
                         sample_page_numbers.append(candidate)
         generated_sample = build_pdf_sample(data, sample_page_numbers)
