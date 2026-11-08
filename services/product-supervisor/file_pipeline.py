@@ -40,6 +40,8 @@ class FileInspectionError(ValueError):
 class Inspection:
     detected_type: str
     extracted_text: str = ""
+    content_chunks: list[dict[str, Any]] | None = None
+    page_count: int | None = None
     image_bytes: bytes | None = None
     image_mime: str | None = None
     audio_bytes: bytes | None = None
@@ -54,6 +56,7 @@ class Inspection:
             "detected_type": self.detected_type,
             "upstream_scan_status": self.upstream_scan_status,
             "extracted_characters": len(self.extracted_text),
+            "page_count": self.page_count,
             "archive_entries": (self.archive_entries or [])[:50],
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
@@ -194,6 +197,69 @@ def _extract_pptx(data: bytes) -> str:
         raise FileInspectionError("استخراج امن محتوای PowerPoint انجام نشد.") from None
 
 
+def _extract_pdf_pages(data: bytes) -> list[dict[str, Any]]:
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        if reader.is_encrypted:
+            raise FileInspectionError("PDF رمزگذاری‌شده برای بررسی متنی پشتیبانی نمی‌شود.")
+        if len(reader.pages) > 300:
+            raise FileInspectionError("تعداد صفحات PDF بیش از حد مجاز است.")
+        chunks: list[dict[str, Any]] = []
+        remaining = MAX_EXTRACTED_CHARS
+        for page_number, page in enumerate(reader.pages, start=1):
+            text = (page.extract_text() or "").strip()
+            if not text or remaining <= 0:
+                continue
+            text = text[:remaining]
+            remaining -= len(text)
+            chunks.append({
+                "chunk_index": len(chunks),
+                "content_type": "page_text",
+                "page_number": page_number,
+                "heading": None,
+                "text": text,
+                "source_anchor": {"page": page_number},
+            })
+        return chunks
+    except FileInspectionError:
+        raise
+    except Exception:
+        raise FileInspectionError("ساختار PDF معتبر نیست یا متن آن قابل استخراج نیست.") from None
+
+
+def _chunks_from_text(text: str, content_type: str = "text") -> list[dict[str, Any]]:
+    chunks: list[dict[str, Any]] = []
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n|(?<=\n)", text) if part.strip()]
+    current: list[str] = []
+    current_size = 0
+    for index, paragraph in enumerate(paragraphs):
+        if current and current_size + len(paragraph) > 3000:
+            value = "\n".join(current)
+            chunks.append({
+                "chunk_index": len(chunks),
+                "content_type": content_type,
+                "page_number": None,
+                "heading": None,
+                "text": value,
+                "source_anchor": {"paragraph_start": max(0, index - len(current)), "paragraph_end": index - 1},
+            })
+            current, current_size = [], 0
+        current.append(paragraph[:3000])
+        current_size += len(paragraph[:3000])
+        if len(chunks) >= 100:
+            break
+    if current and len(chunks) < 100:
+        chunks.append({
+            "chunk_index": len(chunks),
+            "content_type": content_type,
+            "page_number": None,
+            "heading": None,
+            "text": "\n".join(current),
+            "source_anchor": {"paragraph_end": len(paragraphs) - 1},
+        })
+    return chunks
+
+
 def _extract_pdf(data: bytes) -> str:
     try:
         reader = PdfReader(io.BytesIO(data), strict=True)
@@ -308,7 +374,12 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
 
     if data.startswith(b"%PDF-"):
         result.detected_type = "pdf"
-        result.extracted_text = _extract_pdf(data)
+        result.content_chunks = _extract_pdf_pages(data)
+        try:
+            result.page_count = len(PdfReader(io.BytesIO(data), strict=True).pages)
+        except Exception:
+            result.page_count = None
+        result.extracted_text = "\n".join(chunk["text"] for chunk in result.content_chunks)
         if not result.extracted_text.strip():
             result.warnings.append("متن قابل استخراجی در PDF پیدا نشد؛ احتمالاً فایل اسکن تصویری است.")
     elif data.startswith(b"PK\x03\x04"):
@@ -355,6 +426,9 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             raise FileInspectionError("فایل متنی باید با UTF-8 ذخیره شده باشد.") from None
     else:
         raise FileInspectionError("نوع فایل پشتیبانی نمی‌شود یا امضای واقعی فایل با پسوند آن تطابق ندارد.")
+
+    if not result.content_chunks and result.extracted_text.strip():
+        result.content_chunks = _chunks_from_text(result.extracted_text, result.detected_type)
 
     if result.antivirus_status != "clean":
         if result.upstream_scan_status == "clean":
@@ -441,7 +515,16 @@ async def analyze_extracted_content(text: str, metadata: dict[str, Any]) -> dict
             "اطلاعات حساس، کلیدها، رمزها و داده شخصی را در خروجی بازنشر نکن؛ فقط وجود احتمالی آن‌ها را هشدار بده.",
             "محتوای کپی‌رایت‌دار، محتوای نامرتبط، محتوای خالی یا ناقص و ناسازگاری با عنوان محصول را مشخص کن.",
             "خروجی را به فارسی و به شکل JSON شامل summary و findings بده.",
+            "برای هر واقعیت قابل اتکا، یک fact با شاهد دقیق از متن و شماره صفحه در صورت وجود ارائه کن؛ اگر شاهد کافی نیست fact نساز.",
+            "اطلاعات facts باید صرفاً بازنویسی کوتاه اطلاعات صریح فایل باشد، نه نتیجه‌گیری حدسی.",
+            "برای نمونه، فقط شماره‌های موجود در metadata.available_pages را انتخاب کن؛ حداکثر سه صفحه نماینده و مفید. اگر شماره صفحه موجود نیست، sample_pages را خالی برگردان.",
         ],
+        "required_output": {
+            "summary": "خلاصه محتوای واقعی فایل",
+            "findings": [{"title": "یافته", "detail": "شرح مستند", "recommendation": "پیشنهاد"}],
+            "facts": [{"key": "شناسه موضوع", "value": "واقعیت صریح", "confidence": 0.0, "evidence": {"page": 1, "quote": "عبارت دقیق منبع"}}],
+            "sample_pages": [1, 4, 7],
+        },
     }
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload = {
