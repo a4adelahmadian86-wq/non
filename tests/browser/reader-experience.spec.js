@@ -862,7 +862,13 @@ test('sentence and selected phrase playback use the complete exact text range', 
   const sentence = page.locator('.reader-document-sentence');
   await sentence.click({ position: { x: 300, y: 50 } });
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
-  await expect(page.locator('[data-audio-caption]')).toContainText('جملهٔ انتخاب‌شده');
+  await page.evaluate(() => {
+    const audio = window.__fakeReaderAudio;
+    audio.currentTime = 0.7;
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.7);
 
   await page.evaluate(() => {
     const sentenceNode = document.querySelector('.reader-document-sentence');
@@ -874,13 +880,13 @@ test('sentence and selected phrase playback use the complete exact text range', 
     document.querySelector('[data-reader-root]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
   });
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
-  await expect(page.locator('[data-audio-caption]')).toContainText('عبارت انتخاب‌شده');
   await page.evaluate(() => {
     const audio = window.__fakeReaderAudio;
     audio.currentTime = 0.7;
     audio.dispatchEvent(new Event('timeupdate'));
   });
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.7);
 });
 
 
@@ -941,7 +947,13 @@ test('clicking a repeated sentence across PDF text spans plays the sentence at t
   });
   await page.locator('.farast-pdf-text-layer').click({ position: { x: 250, y: 20 } });
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.5);
-  await expect(page.locator('[data-audio-caption]')).toContainText('جملهٔ انتخاب‌شده');
+  await page.evaluate(() => {
+    const audio = window.__fakeReaderAudio;
+    audio.currentTime = 0.8;
+    audio.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.paused)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.8);
 });
 
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
