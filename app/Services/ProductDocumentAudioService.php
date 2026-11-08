@@ -29,39 +29,41 @@ class ProductDocumentAudioService
 
         $token = (string) config('services.document_audio.token');
         $voiceId = (string) config('services.document_audio.voice_id', 'farast-document-fa-male-37-v1');
+        if (count($chunks) > 300) {
+            throw new RuntimeException('product_audio_chunk_limit_exceeded');
+        }
+
         $pcm = '';
         $format = null;
         $segments = [];
         $durationMs = 0;
         $maxAudioBytes = 100 * 1024 * 1024;
 
-        if (count($chunks) > 300) {
-            throw new RuntimeException('product_audio_chunk_limit_exceeded');
-        }
-
         foreach ($chunks as $index => $chunk) {
             $text = trim((string) ($chunk['content_text'] ?? ''));
-            if ($text === '') continue;
+            if ($text === '') {
+                continue;
+            }
 
             foreach ($this->splitForSpeech($text) as $speechText) {
                 $response = Http::accept('audio/wav')
-                ->withToken($token)
-                ->asJson()
-                ->connectTimeout(8)
-                ->timeout(90)
-                ->post($url, [
-                    'text' => $speechText,
-                    'language' => 'fa-IR',
-                    'voice_id' => $voiceId,
-                ]);
+                    ->withToken($token)
+                    ->asJson()
+                    ->connectTimeout(8)
+                    ->timeout(90)
+                    ->post($url, [
+                        'text' => $speechText,
+                        'language' => 'fa-IR',
+                        'voice_id' => $voiceId,
+                    ]);
 
                 if (! $response->successful()) {
                     throw new RuntimeException('product_audio_provider_failed');
                 }
 
-                    $currentFormat = $parsed['format'];
-                if ($format === null) { = $parsed['format'];
-            if ($format === null) {
+                $parsed = $this->parseWav($response->body());
+                $currentFormat = $parsed['format'];
+                if ($format === null) {
                     $format = $currentFormat;
                 } elseif ($format !== $currentFormat) {
                     throw new RuntimeException('product_audio_format_changed');
@@ -93,9 +95,8 @@ class ProductDocumentAudioService
             return null;
         }
 
-        $wav = $this->buildWav($pcm, $format);
         return [
-            'audio' => $wav,
+            'audio' => $this->buildWav($pcm, $format),
             'mime' => 'audio/wav',
             'voice_id' => $voiceId,
             'duration_ms' => $durationMs,
