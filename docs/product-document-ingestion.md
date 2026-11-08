@@ -35,9 +35,9 @@ The scheduler starts a bounded `queue:work --stop-when-empty` worker for `docume
 
 ## Content study, samples and reader
 
-- The model returns structured analysis, source-located facts and (for PDF/PPTX) recommended page/slide numbers. It does not return a generated sample file.
+- The model returns structured analysis, source-located facts and sample selectors only: PDF page numbers, PPTX slide numbers, XLSX sheet names, or the single page of an image. It never returns a generated sample file.
 - Laravel validates the recommended page numbers against the source and creates PDF samples locally with the existing FPDI dependency. DOCX is normalized to PDF once by the existing PHPWord/Dompdf path before analysis and sample extraction.
-- For other supported formats, the page builder stores source-located HTML/text sections. Reader preview records link to these database pages; the reader displays the saved representation rather than rebuilding it on each visit.
+- For XLSX, the selected sheets are rendered as source-located HTML/text pages. For a standalone image, the selected image is exposed through an entitlement-checked preview record beside its analyzed text. Other supported formats use stored source-located HTML/text sections. Reader preview records link to these database pages; the reader displays the saved representation rather than rebuilding it on each visit.
 - The full HTML reader pages are created for `reader_only` products. PDF/DOCX use their private PDF representation. Access remains gated by the product's reader entitlement; a successful purchase does not create a direct-download URL when `download_policy=reader_only`.
 - The TTS job generates one combined private WAV after semantic analysis. Timing records map audio segments back to page/slide locators. The reader reuses the same audio asset while navigating document pages.
 - Public assistant context is sample-only until a valid library entitlement exists. Paid document facts and chunks are hash-matched to the active source version and only evidence-backed facts are eligible for factual answers.
