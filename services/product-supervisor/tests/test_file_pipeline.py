@@ -108,6 +108,40 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.content_chunks[1]["locator"]["list_kind"], "bullet")
         self.assertEqual(result.content_chunks[1]["locator"]["list_level"], 3)
 
+    def test_docx_uses_numbering_part_format_for_custom_paragraph_styles(self):
+        from docx.oxml.ns import qn
+
+        document = Document()
+        numbering = document.part.numbering_part.element
+        abstract_formats = {}
+        for abstract in numbering.findall(qn("w:abstractNum")):
+            abstract_id = abstract.get(qn("w:abstractNumId"))
+            first_level = abstract.find(qn("w:lvl"))
+            number_format = first_level.find(qn("w:numFmt")) if first_level is not None else None
+            if abstract_id is not None and number_format is not None:
+                abstract_formats[str(abstract_id)] = str(number_format.get(qn("w:val"), ""))
+
+        decimal_num_id = None
+        for num in numbering.findall(qn("w:num")):
+            abstract = num.find(qn("w:abstractNumId"))
+            if abstract is not None and abstract_formats.get(str(abstract.get(qn("w:val")))) == "decimal":
+                decimal_num_id = int(num.get(qn("w:numId")))
+                break
+        self.assertIsNotNone(decimal_num_id, "the DOCX template should expose a decimal numbering definition")
+
+        paragraph = document.add_paragraph("شماره‌گذاری سفارشی", style="Normal")
+        num_properties = paragraph._p.get_or_add_pPr().get_or_add_numPr()
+        num_properties.get_or_add_numId().val = decimal_num_id
+        num_properties.get_or_add_ilvl().val = 0
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "custom-numbering.docx")
+
+        self.assertEqual(result.content_chunks[0]["chunk_type"], "docx_list_item")
+        self.assertEqual(result.content_chunks[0]["locator"]["list_kind"], "number")
+        self.assertEqual(result.content_chunks[0]["locator"]["list_level"], 1)
+
     def test_zip_path_traversal_is_rejected(self):
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, "w") as archive:
