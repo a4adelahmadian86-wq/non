@@ -265,21 +265,39 @@
       fragment.append(button);
     }
     thumbsHost.append(fragment);
-    // Low-resolution previews are generated in the background to keep the first page responsive.
-    for(let n=1;n<=Math.min(pdfDoc.numPages,80);n++){
-      const button=thumbsHost.querySelector('[data-pdf-page="'+n+'"]');
-      const canvas=button?.querySelector('canvas');
-      if(!canvas)continue;
+    // Render only thumbnails entering the sidebar viewport; never rasterize dozens
+    // of off-screen pages just because a document was opened.
+    const renderThumbnail=async button=>{
+      if(!button||button.dataset.thumbRendered==='1')return;
+      button.dataset.thumbRendered='1';
+      const pageNumber=Number(button.dataset.pdfPage);
+      const canvas=button.querySelector('canvas');
+      if(!canvas)return;
       try{
-        const page=await pdfDoc.getPage(n);
-        const viewport=page.getViewport({scale:Math.min(40/page.getViewport({scale:1}).width,54/page.getViewport({scale:1}).height)});
-        const ctx=canvas.getContext('2d');
+        const page=await pdfDoc.getPage(pageNumber);
+        const base=page.getViewport({scale:1});
+        const viewport=page.getViewport({scale:Math.min(40/base.width,54/base.height)});
+        const ctx=canvas.getContext('2d',{alpha:false});
         canvas.width=Math.max(1,Math.floor(viewport.width));
         canvas.height=Math.max(1,Math.floor(viewport.height));
         await page.render({canvasContext:ctx,viewport}).promise;
-        // Keep thumbnail previews attributable too; they expose the same page content.
         paintPdfWatermark(canvas);
-      }catch(_){}
+      }catch(_){button.dataset.thumbRendered='0';}
+    };
+    if('IntersectionObserver' in window){
+      const observer=new IntersectionObserver(entries=>{
+        entries.forEach(entry=>{
+          if(entry.isIntersecting){
+            observer.unobserve(entry.target);
+            renderThumbnail(entry.target);
+          }
+        });
+      },{root:thumbsHost,rootMargin:'160px 0px'});
+      thumbsHost.querySelectorAll('.farast-reader-thumb[data-pdf-page]').forEach(button=>observer.observe(button));
+    }else{
+      for(const button of [...thumbsHost.querySelectorAll('.farast-reader-thumb[data-pdf-page]')].slice(0,4)){
+        await renderThumbnail(button);
+      }
     }
   };
 
