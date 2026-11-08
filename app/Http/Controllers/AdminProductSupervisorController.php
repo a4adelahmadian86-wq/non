@@ -69,7 +69,7 @@ class AdminProductSupervisorController extends Controller
 
     public function reviewFile(StoreProduct $product, StoreProductFile $file, ProductSupervisorClient $supervisor)
     {
-        abort_unless($file->product_id === $product->id && $file->purpose === 'product_download' && $file->is_active, 404);
+        abort_unless((int) $file->product_id === (int) $product->id && $file->purpose === 'product_download' && $file->is_active, 404);
 
         return $this->reviewStoredAsset(
             $product,
@@ -84,7 +84,7 @@ class AdminProductSupervisorController extends Controller
 
     public function reviewImage(StoreProduct $product, StoreProductImage $image, ProductSupervisorClient $supervisor)
     {
-        abort_unless($image->product_id === $product->id && $image->is_active, 404);
+        abort_unless((int) $image->product_id === (int) $product->id && $image->is_active, 404);
         abort_unless(Str::startsWith((string) $image->path, 'storage/store/product-images/'.$product->id.'/'), 404);
 
         return $this->reviewStoredAsset(
@@ -127,6 +127,7 @@ class AdminProductSupervisorController extends Controller
 
         $storage = Storage::disk($disk);
         abort_unless($storage->exists($path), 404, 'فایل موردنظر در فضای ذخیره‌سازی پیدا نشد.');
+        abort_if($storage->size($path) > 25 * 1024 * 1024, 413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
         $stream = $storage->readStream($path);
         if (! is_resource($stream)) {
             return back()->withErrors(['ai_supervisor' => 'خواندن امن فایل برای بررسی ممکن نشد.']);
