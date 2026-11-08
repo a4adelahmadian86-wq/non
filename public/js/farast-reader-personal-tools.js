@@ -12,13 +12,13 @@
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
     if (saved && typeof saved === 'object') state = { ...defaults, ...saved };
   } catch (_) {}
+  const validInkStroke = stroke => stroke && (stroke.tool === 'pen' || stroke.tool === 'eraser') && Number.isFinite(Number(stroke.page)) && Number(stroke.page) > 0 && Number.isFinite(Number(stroke.width)) && stroke.width >= 1 && stroke.width <= 32 && Array.isArray(stroke.points) && stroke.points.length >= 2 && stroke.points.length <= 2000 && stroke.points.every(point => point && Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1);
   state.light = !!state.light;
   state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';
   state.size = Math.min(160, Math.max(80, Number(state.size) || 100));
   state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.inkStrokes = Array.isArray(state.inkStrokes) ? state.inkStrokes.filter(validInkStroke).slice(-500) : [];
-  const validInkStroke = stroke => stroke && (stroke.tool === 'pen' || stroke.tool === 'eraser') && Number.isFinite(Number(stroke.page)) && Number(stroke.page) > 0 && Number.isFinite(Number(stroke.width)) && stroke.width >= 1 && stroke.width <= 32 && Array.isArray(stroke.points) && stroke.points.length >= 2 && stroke.points.length <= 2000 && stroke.points.every(point => point && Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1);
   const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
   const announce = message => { status.textContent = message; };
   const group = document.createElement('div');
