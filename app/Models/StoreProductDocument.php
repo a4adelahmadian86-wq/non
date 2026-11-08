@@ -11,7 +11,7 @@ class StoreProductDocument extends Model
 {
     protected $fillable = [
         'product_id', 'product_file_id', 'upload_session_id', 'source_sha256', 'original_name', 'detected_mime',
-        'extension', 'size_bytes', 'storage_disk', 'storage_path', 'processing_state',
+        'extension', 'size_bytes', 'storage_disk', 'storage_path', 'reader_asset_disk', 'reader_asset_path', 'reader_asset_mime', 'reader_asset_kind', 'processing_state',
         'page_count', 'duration_seconds', 'content_version', 'technical_metadata',
         'content_manifest', 'content_studied_at',
     ];
