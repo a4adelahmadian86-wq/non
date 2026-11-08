@@ -243,6 +243,19 @@ class StoreCourseLearningTest extends TestCase
         ]);
     }
 
+    public function test_public_course_page_hides_invalid_published_lessons_and_preview_route_rejects_them(): void
+    {
+        [$product, , , $lesson] = $this->makeCourse('public-invalid-lesson', 10000);
+        $lesson->update(['content' => null, 'is_published' => true, 'is_preview' => true]);
+
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertDontSee('جلسه اول');
+
+        $this->get(route('store.course.preview', [$product, $lesson]))
+            ->assertNotFound();
+    }
+
     public function test_enrolled_student_can_open_lesson_and_save_completion(): void
     {
         $user = $this->makeUser();
