@@ -16,6 +16,8 @@ import httpx
 from docx import Document
 from PIL import Image, UnidentifiedImageError
 from pypdf import PdfReader
+from openpyxl import load_workbook
+from pptx import Presentation
 
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 24_000
@@ -106,6 +108,58 @@ def _extract_docx(data: bytes) -> str:
         return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
     except Exception:
         raise FileInspectionError("استخراج امن متن از سند Word انجام نشد.") from None
+
+
+
+def _extract_xlsx(data: bytes) -> str:
+    archive, _ = _validate_archive(data)
+    names = set(archive.namelist())
+    if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
+        raise FileInspectionError("فایل ZIP، سند XLSX معتبر نیست.")
+    try:
+        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
+        parts: list[str] = []
+        for sheet in workbook.worksheets[:20]:
+            parts.append(f"برگه: {sheet.title}")
+            for row in sheet.iter_rows(max_row=300, max_col=30, values_only=True):
+                values = [str(value)[:300] for value in row if value is not None]
+                if values:
+                    parts.append(" | ".join(values))
+                if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
+                    break
+            if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
+                break
+        workbook.close()
+        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+    except Exception:
+        raise FileInspectionError("استخراج امن محتوای Excel انجام نشد.") from None
+
+
+def _extract_pptx(data: bytes) -> str:
+    archive, _ = _validate_archive(data)
+    names = set(archive.namelist())
+    if "[Content_Types].xml" not in names or "ppt/presentation.xml" not in names:
+        raise FileInspectionError("فایل ZIP، سند PPTX معتبر نیست.")
+    try:
+        presentation = Presentation(io.BytesIO(data))
+        parts: list[str] = []
+        for slide_number, slide in enumerate(presentation.slides[:100], start=1):
+            parts.append(f"اسلاید {slide_number}")
+            for shape in slide.shapes:
+                if getattr(shape, "has_text_frame", False):
+                    text = "\n".join(paragraph.text for paragraph in shape.text_frame.paragraphs)
+                    if text.strip():
+                        parts.append(text)
+                if getattr(shape, "has_table", False):
+                    for row in shape.table.rows:
+                        parts.append(" | ".join(cell.text for cell in row.cells))
+                if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
+                    break
+            if sum(map(len, parts)) >= MAX_EXTRACTED_CHARS:
+                break
+        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+    except Exception:
+        raise FileInspectionError("استخراج امن محتوای PowerPoint انجام نشد.") from None
 
 
 def _extract_pdf(data: bytes) -> str:
@@ -227,9 +281,16 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     elif data.startswith(b"PK\x03\x04"):
         archive, entries = _validate_archive(data)
         result.archive_entries = entries
-        if "[Content_Types].xml" in archive.namelist() and "word/document.xml" in archive.namelist():
+        names = set(archive.namelist())
+        if "[Content_Types].xml" in names and "word/document.xml" in names:
             result.detected_type = "docx"
             result.extracted_text = _extract_docx(data)
+        elif "[Content_Types].xml" in names and "xl/workbook.xml" in names:
+            result.detected_type = "xlsx"
+            result.extracted_text = _extract_xlsx(data)
+        elif "[Content_Types].xml" in names and "ppt/presentation.xml" in names:
+            result.detected_type = "pptx"
+            result.extracted_text = _extract_pptx(data)
         else:
             result.detected_type = "zip"
             result.warnings.append("محتوای آرشیو استخراج یا اجرا نشد؛ فقط فهرست ساختاری آن بررسی شد.")
