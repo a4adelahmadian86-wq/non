@@ -44,8 +44,8 @@
       layer.style.overflow = 'visible';
       layer.style.opacity = '1';
       layer.style.pointerEvents = 'auto';
-      layer.style.userSelect = 'none';
-      layer.style.webkitUserSelect = 'none';
+      layer.style.userSelect = 'text';
+      layer.style.webkitUserSelect = 'text';
 
       const speechPage = Math.max(1, Number(payload.page_number || article.dataset.readerPage || 1));
       const appendSpeechText = (element, value) => {
