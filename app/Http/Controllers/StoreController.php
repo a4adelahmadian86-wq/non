@@ -359,7 +359,8 @@ class StoreController extends Controller
                         ->where('artifact_type', 'audio_full_wav')
                         ->where('version', '>=', 2)
                         ->sortByDesc('version')
-                        ->first(static fn ($artifact) => Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
+                        ->first(static fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
+                            && Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
                     $audioArtifactReady = (bool) $audioArtifact;
 
                     $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
@@ -574,7 +575,8 @@ class StoreController extends Controller
             $artifactQuery->where('version', '>=', 2)->orderByDesc('version');
         }
         $artifact = $artifactQuery->get()
-            ->first(static fn ($candidate) => Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
+            ->first(static fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
+                && Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
         abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
         $disk = Storage::disk($artifact->disk ?: 'private');
