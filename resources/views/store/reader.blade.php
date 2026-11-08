@@ -3,7 +3,7 @@
 @php
   $readerWatermark = trim((string) ($readerIdentity ?? ('کاربر #'.auth()->id())));
 @endphp
-<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" data-reader-mode="{{ $readerMode ?? 'sample' }}" data-reader-audio-url="{{ $readerAudioUrl ?? '' }}" @if(($readerMode ?? 'sample') === 'document') @auth data-reader-speech-url="{{ route('store.reader.speech', $product) }}" @endauth @endif @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
+<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" data-reader-mode="{{ $readerMode ?? 'sample' }}" data-reader-audio-url="{{ $readerAudioUrl ?? '' }}" @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
   <header class="farast-reader-header">
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
@@ -177,5 +177,5 @@
 <script src="/js/farast-reader-audio.js?v=20261108precomputed1" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
 <script src="/js/farast-reader-document-audio.js?v=20261108reader-audio2" defer></script>
-<script src="/js/farast-reader-granular-audio.js?v=20261108granular2" defer></script>
+
 @endpush
