@@ -9,7 +9,7 @@ class ProductDocumentAudioService
 {
     public function configured(): bool
     {
-        return filled(config('services.voice_tts.url')) && filled(config('services.voice_tts.token'));
+        return filled(config('services.document_audio.url')) && filled(config('services.document_audio.token'));
     }
 
     /**
@@ -22,78 +22,141 @@ class ProductDocumentAudioService
             return null;
         }
 
-        $url = (string) config('services.voice_tts.url');
+        $url = (string) config('services.document_audio.url');
         if (! str_starts_with($url, 'https://') && ! str_starts_with($url, 'http://127.0.0.1:')) {
             throw new RuntimeException('product_audio_requires_trusted_endpoint');
         }
 
-        $token = (string) config('services.voice_tts.token');
-        $voiceId = (string) config('services.voice_tts.voice_id', 'farast-fa-male-v1');
+        $token = (string) config('services.document_audio.token');
+        $voiceId = (string) config('services.document_audio.voice_id', 'farast-document-fa-male-37-v1');
+        if (count($chunks) > 300) {
+            throw new RuntimeException('product_audio_chunk_limit_exceeded');
+        }
+
         $pcm = '';
         $format = null;
         $segments = [];
         $durationMs = 0;
         $maxAudioBytes = 100 * 1024 * 1024;
 
-        foreach (array_slice($chunks, 0, 300) as $index => $chunk) {
+        foreach ($chunks as $index => $chunk) {
             $text = trim((string) ($chunk['content_text'] ?? ''));
-            if ($text === '') continue;
-
-            $response = Http::accept('audio/wav')
-                ->withToken($token)
-                ->asJson()
-                ->connectTimeout(8)
-                ->timeout(90)
-                ->post($url, [
-                    'text' => mb_substr($text, 0, 6000),
-                    'language' => 'fa-IR',
-                    'voice_id' => $voiceId,
-                ]);
-
-            if (! $response->successful()) {
-                throw new RuntimeException('product_audio_provider_failed');
+            if ($text === '') {
+                continue;
             }
 
-            $parsed = $this->parseWav($response->body());
-            $currentFormat = $parsed['format'];
-            if ($format === null) {
-                $format = $currentFormat;
-            } elseif ($format !== $currentFormat) {
-                throw new RuntimeException('product_audio_format_changed');
+            foreach ($this->splitForSpeech($text) as $speechText) {
+                $response = Http::accept('audio/wav')
+                    ->withToken($token)
+                    ->asJson()
+                    ->connectTimeout(8)
+                    ->timeout(90)
+                    ->post($url, [
+                        'text' => $speechText,
+                        'language' => 'fa-IR',
+                        'voice_id' => $voiceId,
+                    ]);
+
+                if (! $response->successful()) {
+                    throw new RuntimeException('product_audio_provider_failed');
+                }
+
+                $parsed = $this->parseWav($response->body());
+                $currentFormat = $parsed['format'];
+                if ($format === null) {
+                    $format = $currentFormat;
+                } elseif ($format !== $currentFormat) {
+                    throw new RuntimeException('product_audio_format_changed');
+                }
+
+                $segmentBytes = strlen($parsed['pcm']);
+                if ($segmentBytes === 0 || strlen($pcm) + $segmentBytes > $maxAudioBytes) {
+                    throw new RuntimeException('product_audio_size_limit');
+                }
+
+                $startMs = $durationMs;
+                $segmentDuration = (int) round(($segmentBytes / $format['byte_rate']) * 1000);
+                $durationMs += $segmentDuration;
+                $pcm .= $parsed['pcm'];
+
+                $words = preg_split('/\s+/u', trim($speechText), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $weights = array_map(static fn (string $word) => max(1, mb_strlen($word, 'UTF-8')), $words);
+                $totalWeight = max(1, array_sum($weights));
+                $wordCursor = $startMs;
+                $wordTimings = [];
+                foreach ($words as $wordIndex => $word) {
+                    $wordEnd = $wordIndex === array_key_last($words)
+                        ? $durationMs
+                        : $wordCursor + (int) round($segmentDuration * ($weights[$wordIndex] / $totalWeight));
+                    $wordTimings[] = [
+                        'text' => $word,
+                        'start_ms' => $wordCursor,
+                        'end_ms' => max($wordCursor + 1, $wordEnd),
+                    ];
+                    $wordCursor = $wordEnd;
+                }
+
+                $segments[] = [
+                    'chunk_index' => (int) ($chunk['chunk_index'] ?? $index),
+                    'chunk_type' => (string) ($chunk['chunk_type'] ?? 'text'),
+                    'locator' => is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [],
+                    'start_ms' => $startMs,
+                    'end_ms' => $durationMs,
+                    'text' => $speechText,
+                    'words' => $wordTimings,
+                    'text_sha256' => hash('sha256', $speechText),
+                ];
             }
-
-            $segmentBytes = strlen($parsed['pcm']);
-            if ($segmentBytes === 0 || strlen($pcm) + $segmentBytes > $maxAudioBytes) {
-                throw new RuntimeException('product_audio_size_limit');
-            }
-
-            $startMs = $durationMs;
-            $segmentDuration = (int) round(($segmentBytes / $format['byte_rate']) * 1000);
-            $durationMs += $segmentDuration;
-            $pcm .= $parsed['pcm'];
-
-            $segments[] = [
-                'chunk_index' => (int) ($chunk['chunk_index'] ?? $index),
-                'chunk_type' => (string) ($chunk['chunk_type'] ?? 'text'),
-                'locator' => is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [],
-                'start_ms' => $startMs,
-                'end_ms' => $durationMs,
-                'text_sha256' => hash('sha256', $text),
-            ];
         }
 
         if ($pcm === '' || $format === null) {
             return null;
         }
 
-        $wav = $this->buildWav($pcm, $format);
         return [
-            'audio' => $wav,
+            'audio' => $this->buildWav($pcm, $format),
             'mime' => 'audio/wav',
             'voice_id' => $voiceId,
             'duration_ms' => $durationMs,
             'segments' => $segments,
         ];
+    }
+
+    /**
+     * Split at paragraph/sentence boundaries and never silently truncate source text.
+     * The returned pieces are kept in reading order for line-level reader timing.
+     */
+    private function splitForSpeech(string $text): array
+    {
+        // Preserve sentence boundaries so one synthesis request maps to one exact,
+        // reusable interval in the single final document WAV.
+        $sentences = preg_split('/(?<=[.!؟۔؛])\s+|[\r\n]+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [$text];
+        $pieces = [];
+        foreach ($sentences as $sentence) {
+            $sentence = trim($sentence);
+            if ($sentence === '') continue;
+            if (mb_strlen($sentence, 'UTF-8') <= 6000) {
+                $pieces[] = $sentence;
+                continue;
+            }
+            $parts = preg_split('/(?<=[،,])\s*/u', $sentence, -1, PREG_SPLIT_NO_EMPTY) ?: [$sentence];
+            $current = '';
+            foreach ($parts as $part) {
+                if ($current !== '' && mb_strlen($current.' '.$part, 'UTF-8') > 6000) {
+                    $pieces[] = $current;
+                    $current = '';
+                }
+                foreach (mb_str_split($part, 6000, 'UTF-8') as $subpart) {
+                    if ($current !== '' && mb_strlen($current.' '.$subpart, 'UTF-8') > 6000) {
+                        $pieces[] = $current;
+                        $current = '';
+                    }
+                    $current = $current === '' ? $subpart : $current.' '.$subpart;
+                }
+            }
+            if ($current !== '') $pieces[] = $current;
+        }
+        return $pieces;
     }
 
     private function parseWav(string $wav): array

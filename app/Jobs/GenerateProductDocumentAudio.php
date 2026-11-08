@@ -6,6 +6,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Services\ProductDocumentAudioService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -14,12 +15,18 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
-class GenerateProductDocumentAudio implements ShouldQueue
+class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
     public int $timeout = 900;
+    public int $uniqueFor = 1800;
+
+    public function uniqueId(): string
+    {
+        return 'product-document-audio:'.$this->documentId;
+    }
 
     public function __construct(public readonly int $documentId)
     {
@@ -33,11 +40,12 @@ class GenerateProductDocumentAudio implements ShouldQueue
             return;
         }
 
-        $existing = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 1)->first();
+        $existing = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 2)->first();
         if ($existing && Storage::disk($existing->disk ?: 'private')->exists($existing->path)) {
             $this->setAudioState($document, [
                 'status' => 'completed',
                 'artifact_type' => 'audio_full_wav',
+                'engine' => 'farast-document-audio',
                 'sha256' => $existing->sha256,
                 'duration_ms' => (int) data_get($existing->metadata_json, 'duration_ms', 0),
                 'segment_count' => count(data_get($existing->metadata_json, 'segments', [])),
@@ -47,7 +55,7 @@ class GenerateProductDocumentAudio implements ShouldQueue
         }
 
         if (! $audioService->configured()) {
-            $this->setAudioState($document, ['status' => 'awaiting_provider', 'reason' => 'voice_tts_not_configured']);
+            $this->setAudioState($document, ['status' => 'awaiting_provider', 'reason' => 'document_audio_not_configured']);
             return;
         }
 
@@ -67,13 +75,13 @@ class GenerateProductDocumentAudio implements ShouldQueue
 
             $bytes = $generated['audio'];
             $sha256 = hash('sha256', $bytes);
-            $path = 'store/products/'.$document->product_id.'/artifacts/'.$document->source_sha256.'/audio-v1.wav';
+            $path = 'store/products/'.$document->product_id.'/artifacts/'.$document->source_sha256.'/audio-v2.wav';
             if (! Storage::disk('private')->put($path, $bytes)) {
                 throw new \RuntimeException('product_audio_storage_failed');
             }
 
             $artifact = $document->artifacts()->updateOrCreate(
-                ['artifact_type' => 'audio_full_wav', 'version' => 1],
+                ['artifact_type' => 'audio_full_wav', 'version' => 2],
                 [
                     'disk' => 'private',
                     'path' => $path,
@@ -86,6 +94,7 @@ class GenerateProductDocumentAudio implements ShouldQueue
                         'segments' => $generated['segments'],
                         'source_sha256' => $document->source_sha256,
                         'generated_once' => true,
+                        'granularity' => 'sentence_word_index',
                     ],
                 ]
             );
@@ -95,29 +104,41 @@ class GenerateProductDocumentAudio implements ShouldQueue
                 $chunk = $chunkByIndex->get((int) ($segment['chunk_index'] ?? -1));
                 $locator = (array) ($segment['locator'] ?? []);
                 $page = (int) ($locator['reader_page'] ?? $locator['page'] ?? $locator['page_start'] ?? 0);
-                $text = trim((string) ($chunk['content_text'] ?? ''));
+                $text = trim((string) ($segment['text'] ?? $chunk['content_text'] ?? ''));
                 if ($page < 1 || $text === '') return null;
 
                 return [
                     'text' => $text,
+                    'words' => array_map(static fn (array $word) => [
+                        'text' => (string) ($word['text'] ?? ''),
+                        'start' => round(((int) ($word['start_ms'] ?? 0)) / 1000, 3),
+                        'end' => round(((int) ($word['end_ms'] ?? 0)) / 1000, 3),
+                    ], (array) ($segment['words'] ?? [])),
                     'start' => round(((int) ($segment['start_ms'] ?? 0)) / 1000, 3),
                     'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
                     'page' => $page,
                 ];
             })->filter()->values()->all();
 
-            $fullReaderPreview = StoreProductPreview::query()
+            $fullReaderPreviews = StoreProductPreview::query()
                 ->where('product_id', $document->product_id)
                 ->where('access_level', 'full')
                 ->where('is_active', true)
-                ->first();
+                ->get();
 
-            if ($fullReaderPreview && $readerTimings !== []) {
+            foreach ($fullReaderPreviews as $fullReaderPreview) {
+                $timingsForPreview = $fullReaderPreview->kind === 'reader_document'
+                    ? array_values(array_filter(
+                        $readerTimings,
+                        static fn (array $timing) => (int) ($timing['page'] ?? 0) === (int) $fullReaderPreview->page_number
+                    ))
+                    : $readerTimings;
+
                 $fullReaderPreview->update([
                     'audio_disk' => 'private',
                     'audio_path' => $path,
                     'audio_mime' => 'audio/wav',
-                    'audio_timing' => $readerTimings,
+                    'audio_timing' => $timingsForPreview,
                 ]);
             }
 
@@ -128,6 +149,8 @@ class GenerateProductDocumentAudio implements ShouldQueue
                 'duration_ms' => (int) $generated['duration_ms'],
                 'segment_count' => count($generated['segments']),
                 'voice_id' => $generated['voice_id'],
+                'engine' => 'farast-document-audio',
+                'granularity' => 'sentence_word_index',
                 'generated_once' => true,
             ]);
         } catch (Throwable $exception) {

@@ -78,6 +78,7 @@
   let wordMarks = [];
   let raf = 0;
   let lastPageRequest = 0;
+  let rangeEnd = null;
 
   const formatTime = seconds => {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -123,7 +124,7 @@
     const layerRect = layer.getBoundingClientRect();
     items.forEach(item => {
       const words = String(item.text).trim().split(/\s+/u).filter(Boolean);
-      words.forEach(word => {
+      words.forEach((word, wordIndex) => {
         const target = normalize(word);
         if (!target) return;
         let found = null;
@@ -159,11 +160,20 @@
             width: rect.width + 'px',
             height: rect.height + 'px'
           });
-          const jump = () => { audio.currentTime = item.start; if (audio.paused) audio.play().catch(() => {}); };
+          const indexedWord = Array.isArray(item.words) ? item.words[wordIndex] : null;
+          const fallbackStart = item.start + ((item.end - item.start) * (wordIndex / Math.max(1, words.length)));
+          const fallbackEnd = item.start + ((item.end - item.start) * ((wordIndex + 1) / Math.max(1, words.length)));
+          const wordStart = Number.isFinite(Number(indexedWord?.start)) ? Number(indexedWord.start) : fallbackStart;
+          const wordEnd = Number.isFinite(Number(indexedWord?.end)) ? Number(indexedWord.end) : fallbackEnd;
+          mark.dataset.word = word;
+          mark.dataset.page = String(item.page);
+          mark.dataset.start = String(wordStart);
+          mark.dataset.end = String(wordEnd);
+          const jump = () => { rangeEnd = wordEnd; audio.currentTime = wordStart; if (audio.paused) audio.play().catch(() => {}); };
           mark.addEventListener('click', jump);
           mark.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); jump(); } });
           layer.append(mark);
-          wordMarks.push({ element: mark, segment: item.index });
+          wordMarks.push({ element: mark, segment: item.index, start: wordStart, end: wordEnd });
         });
       });
     });
@@ -195,12 +205,13 @@
         if (input) { input.value = String(activePage); input.dispatchEvent(new Event('change', { bubbles: true })); }
       }
     }
+    wordMarks.forEach(mark => {
+      const isCurrent = time >= mark.start && time < mark.end;
+      mark.element.classList.toggle('is-current', isCurrent);
+      mark.element.classList.toggle('is-read', mark.end <= time);
+    });
     if (found !== activeSegment) {
       activeSegment = found;
-      wordMarks.forEach(mark => {
-        mark.element.classList.toggle('is-current', mark.segment === found);
-        mark.element.classList.toggle('is-read', mark.segment < found);
-      });
       if (item) {
         caption.textContent = item.text;
         progressLabel.textContent = (activeTrack.granularity === 'segment' ? 'بخش ' : 'کلمه ') + fa(found + 1) + ' از ' + fa(timings.length);
@@ -258,6 +269,90 @@
   $('[data-audio-volume]').addEventListener('input', event => { audio.volume = Math.max(0, Math.min(1, Number(event.target.value))); });
   $('[data-audio-collapse]').addEventListener('click', event => { const collapsed = dock.classList.toggle('is-collapsed'); event.currentTarget.setAttribute('aria-expanded', String(!collapsed)); });
 
+  const playRange = (start, end, label) => {
+    const from = Math.max(0, Number(start) || 0), to = Number(end);
+    if (!Number.isFinite(to) || to <= from || !activeTrack) return false;
+    rangeEnd = to; audio.currentTime = from;
+    if (label) caption.textContent = String(label).slice(0, 180);
+    audio.play().catch(() => { status.textContent = 'پخش صوت ممکن نشد؛ دسترسی فایل را بررسی کنید.'; });
+    return true;
+  };
+  const tokens = value => String(value || '').toLocaleLowerCase().replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\u064B-\u065F\u0670]/g, '').replace(/[\u200c\u200f\u202a-\u202e]/g, '').match(/[\p{L}\p{N}]+/gu) || [];
+  const findTextRange = (value, page = null) => {
+    const wanted = tokens(value);
+    if (!wanted.length || !activeTrack) return null;
+    const indexedWords = [];
+    for (const item of activeTrack.timings) {
+      if (page !== null && Number(item.page) !== Number(page)) continue;
+      const words = Array.isArray(item.words) && item.words.length
+        ? item.words
+        : String(item.text).trim().split(/\s+/u).map((text, index, all) => ({
+            text,
+            start: item.start + (item.end - item.start) * index / all.length,
+            end: item.start + (item.end - item.start) * (index + 1) / all.length
+          }));
+      words.forEach(word => indexedWords.push({
+        token: tokens(word.text)[0] || '',
+        start: Number(word.start),
+        end: Number(word.end),
+        page: item.page
+      }));
+    }
+    for (let i = 0; i <= indexedWords.length - wanted.length; i++) {
+      if (wanted.every((word, offset) => indexedWords[i + offset].token === word)) {
+        return {
+          start: indexedWords[i].start,
+          end: indexedWords[i + wanted.length - 1].end,
+          page: indexedWords[i].page
+        };
+      }
+    }
+    return null;
+  };
+
+  root.addEventListener('click', event => {
+    if (event.target.closest('.reader-audio-word')) return;
+    const sentence = event.target.closest('.reader-document-sentence');
+    const paragraph = event.target.closest('.reader-document-paragraph');
+    const target = sentence || paragraph;
+    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
+    const pdfLayer = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
+    if (pdfLayer) {
+      const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+      const position = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+      const node = caret?.startContainer || position?.offsetNode;
+      if (node?.nodeType === Node.TEXT_NODE) {
+        const raw = node.nodeValue || '', offset = Number(caret?.startOffset ?? position?.offset ?? 0);
+        const before = raw.slice(0, offset), after = raw.slice(offset);
+        const left = before.search(/[^.!؟۔؛]*$/u);
+        const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
+        const sentenceText = (before.slice(left < 0 ? 0 : left) + (right?.[0] || '')).trim();
+        const page = Number(pdfLayer.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || root.querySelector('#reader-page-number')?.value || 1);
+        const range = findTextRange(sentenceText, page);
+        if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن جملهٔ انتخاب‌شده'); return; }
+      }
+    }
+    const article = event.target.closest('.farast-reader-page-item');
+    if (article && !event.target.closest('button,input,select,a,.farast-pdf-text-layer,.farast-pdf-cont-text,.farast-audio-dock')) {
+      const page = Number(event.target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || article.dataset.readerPage || root.querySelector('#reader-page-number')?.value || article.dataset.index || 1);
+      const pageItems = activeTrack?.timings.filter(item => Number(item.page) === page) || [];
+      if (pageItems.length) playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ انتخاب‌شده');
+    }
+  }, true);
+  root.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph');
+    if (!target) return;
+    const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+    const range = findTextRange(target.textContent, page);
+    if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); }
+  });
+  root.addEventListener('pointerup', () => {
+    const selection = window.getSelection(); if (!selection || selection.isCollapsed) return;
+    const anchor = selection.anchorNode?.parentElement; if (!anchor || !root.contains(anchor)) return;
+    const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+    const range = findTextRange(selection.toString(), page); if (range) playRange(range.start, range.end, 'در حال خواندن عبارت انتخاب‌شده');
+  });
   function startFrameLoop() {
     cancelAnimationFrame(raf);
     const tick = () => { if (audio.paused) return; updateHighlight(audio.currentTime); raf = requestAnimationFrame(tick); };
@@ -282,6 +377,8 @@
   selectSection(Number(initial?.dataset.index || 0));
   window.FarastAudioReader = {
     selectSection,
+    playRange,
+    pause() { rangeEnd = null; audio.pause(); },
     setPage(page) { activePage = Number(page) || 1; buildMarks(activePage); },
     destroy() { audio.pause(); observer.disconnect(); cancelAnimationFrame(raf); clearMarks(); }
   };
