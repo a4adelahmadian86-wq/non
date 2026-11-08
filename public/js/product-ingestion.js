@@ -363,7 +363,33 @@
       cancelButton.textContent = 'بستن';
       cancelButton.disabled = false;
       closeButton.disabled = false;
-      report.insertAdjacentHTML('beforeend', '<div class="product-ingestion-processing-result"><strong>فایل در فضای خصوصی ذخیره شد.</strong><p>مطالعه محتوا، ساخت نمونه و تولید صوت به‌صورت مرحله‌ای در پس‌زمینه انجام می‌شود.</p></div>');
+      const savedMessage = payload.message || 'فایل در فضای خصوصی ذخیره شد.';
+      const republishNotice = payload.product?.requires_republish
+        ? '<p class="product-ingestion-warning">محصول از انتشار خارج شد. پس از آماده‌شدن خوانشگر یا بررسی تازه ناظر، وضعیت انتشار را دوباره تنظیم کنید.</p>'
+        : '';
+      report.insertAdjacentHTML('beforeend',
+        '<div class="product-ingestion-processing-result"><strong>' + escapeHtml(savedMessage) + '</strong>' +
+        '<p>مطالعه محتوا، ساخت نمونه و تولید صوت به‌صورت مرحله‌ای در پس‌زمینه انجام می‌شود.</p>' +
+        republishNotice + '</div>'
+      );
+      if (payload.product?.requires_republish) {
+        const statusSelect = document.querySelector('#productEditorForm [name="status"]');
+        if (statusSelect) statusSelect.value = 'draft';
+        const readinessLabel = document.querySelector('.product-readiness-head strong');
+        if (readinessLabel) {
+          readinessLabel.classList.remove('is-ready');
+          readinessLabel.classList.add('is-pending');
+          readinessLabel.textContent = 'نیازمند تکمیل';
+        }
+        const contentRow = Array.from(document.querySelectorAll('.product-readiness-list > div'))
+          .find((element) => element.textContent.includes('فایل اصلی'));
+        if (contentRow) {
+          contentRow.classList.remove('is-ready', 'is-optional');
+          contentRow.classList.add('is-pending');
+          const detail = contentRow.querySelector('small');
+          if (detail) detail.textContent = 'نیازمند پردازش مجدد';
+        }
+      }
       if (payload.file?.id) {
         await pollProcessing(payload.file.id);
       } else {
