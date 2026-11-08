@@ -69,7 +69,7 @@
     const fontSize=Math.max(16,Math.min(30,Math.round(width/48)));
     context.save();
     context.setTransform(1,0,0,1,0,0);
-    context.globalAlpha=.19;
+    context.globalAlpha=.24;
     context.fillStyle='#26364b';
     context.font='700 '+fontSize+'px Tahoma, Arial, sans-serif';
     context.textAlign='center';
