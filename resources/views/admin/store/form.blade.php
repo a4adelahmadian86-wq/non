@@ -123,7 +123,7 @@
     </form>
 
     @if($isEdit)
-      <div class="store-panel product-files-panel">
+      <div class="store-panel product-files-panel" id="product-media">
         <div class="product-editor-heading"><div><span>رسانه محصول</span><h2>تصویر کاور</h2></div><span class="product-editor-step">حداکثر ۸ مگابایت</span></div>
         @if($product->cover_path)<img src="{{ asset($product->cover_path) }}" alt="کاور {{ $product->title }}" style="display:block;width:min(320px,100%);aspect-ratio:16/9;object-fit:cover;border-radius:12px;margin:12px 0">@else<p>هنوز کاوری ثبت نشده است.</p>@endif
         <form method="post" action="{{ route('admin.store.cover.upload',$product) }}" enctype="multipart/form-data" class="product-file-upload" data-upload-form>@csrf<input type="file" name="cover" accept=".jpg,.jpeg,.png,.webp" required><button type="submit" class="store-outline-btn">بارگذاری کاور و اسکن امنیتی</button><small class="product-selected-file" data-file-name>فایلی انتخاب نشده است.</small></form>
