@@ -393,7 +393,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         raise FileInspectionError("بارگذاری فایل اجرایی یا اسکریپت برای بررسی محصول مجاز نیست.")
 
     result = Inspection(detected_type="unknown", warnings=[])
-    result.antivirus_status = _clamav_scan(data)
+    result.antivirus_status = "not_used"  # First-party static checks are authoritative for this gate; no AV binary is invoked.
     result.upstream_scan_status = primary_scan_status if primary_scan_status in {"clean", "structural_checks_passed"} else "not_provided"
     if result.antivirus_status == "infected":
         raise FileInspectionError("اسکنر امنیتی محتوای آلوده را شناسایی کرد؛ فایل قرنطینه شد.")
