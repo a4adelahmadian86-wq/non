@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\StoreCategory;
 use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
+use App\Models\StoreProductFile;
+use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreWishlist;
@@ -221,14 +223,7 @@ class StoreController extends Controller
                     $readerMode = 'document';
                     $audioArtifact = $document->artifacts
                         ->where('artifact_type', 'audio_full_wav')
-                        ->where('sha256', data_get($structure, 'audio.sha256', data_get($structure, 'audio.sha256')))
                         ->first();
-
-                    if (! $audioArtifact) {
-                        $audioArtifact = $document->artifacts
-                            ->where('artifact_type', 'audio_full_wav')
-                            ->first();
-                    }
 
                     if ($audioArtifact && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path)) {
                         $readerAudioUrl = route('store.reader.audio', [$product, $document]);
@@ -385,7 +380,7 @@ class StoreController extends Controller
         $range = request()->header('Range');
 
         if ($range !== null) {
-            if (! preg_match('/^bytes=(\\d*)-(\\d*)$/', trim($range), $matches) || $size < 1) {
+            if (! preg_match('/^bytes=(\d*)-(\d*)$/', trim($range), $matches) || $size < 1) {
                 return response('', 416, ['Content-Range' => 'bytes */'.$size]);
             }
             if ($matches[1] === '' && $matches[2] !== '') {
