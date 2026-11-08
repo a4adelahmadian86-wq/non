@@ -5,6 +5,14 @@
 
   const articles = [...root.querySelectorAll('.farast-reader-page-item')];
   if (!articles.some(article => article.dataset.audioUrl)) return;
+  articles.forEach((article, index) => {
+    if (!article.hasAttribute('tabindex')) article.tabIndex = 0;
+    if (!article.hasAttribute('aria-label')) {
+      const page = Number(article.dataset.readerPage || index + 1);
+      article.setAttribute('aria-label', 'خواندن صفحه ' + String(page).replace(/\d/g, digit => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]));
+    }
+    article.dataset.readerAudioPageTarget = '1';
+  });
 
   const fa = value => Number(value || 0).toLocaleString('fa-IR');
   const parseTimingJson = raw => {
@@ -76,7 +84,7 @@
     .farast-audio-top,.farast-audio-controls,.farast-audio-foot{display:flex;align-items:center;gap:14px}.farast-audio-top{min-height:34px}.farast-audio-title{display:flex;align-items:center;gap:10px;min-width:150px}.farast-audio-title strong{display:block;font-size:.78rem}.farast-audio-title small{display:block;color:#9db0ca;font-size:.65rem;margin-top:2px}.farast-audio-pulse{width:9px;height:9px;border-radius:50%;background:#60a5fa;box-shadow:0 0 0 4px rgba(96,165,250,.13)}.farast-audio-dock.is-playing .farast-audio-pulse{background:#34d399;animation:farast-audio-pulse 1.5s infinite}
     @keyframes farast-audio-pulse{50%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}
     .farast-audio-caption{flex:1;min-width:0;text-align:center;color:#dce8fa;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.farast-audio-collapse{border:0;background:transparent;color:#9db0ca;cursor:pointer;padding:7px}.farast-audio-controls{margin-top:8px}.farast-audio-play{width:38px;height:38px;border:0;border-radius:50%;background:#3b82f6;color:white;cursor:pointer;flex:0 0 auto}.farast-audio-timeline{flex:1;min-width:100px}.farast-audio-timeline input{width:100%;accent-color:#60a5fa;cursor:pointer}.farast-audio-time{display:flex;justify-content:space-between;color:#9db0ca;font-size:.63rem;font-variant-numeric:tabular-nums}.farast-audio-speed,.farast-audio-volume{display:flex;align-items:center;gap:7px;color:#aebfd7;font-size:.65rem;white-space:nowrap}.farast-audio-speed select{border:1px solid rgba(148,180,225,.22);border-radius:7px;background:#172941;color:#edf4ff;padding:5px}.farast-audio-volume input{width:76px;accent-color:#60a5fa}.farast-audio-foot{justify-content:space-between;margin-top:6px;color:#8298b7;font-size:.6rem}.farast-audio-dock.is-collapsed .farast-audio-controls,.farast-audio-dock.is-collapsed .farast-audio-foot{display:none}.farast-audio-dock.is-collapsed .farast-audio-collapse i{transform:rotate(180deg)}
-    .farast-pdf-text-layer .reader-audio-word,.farast-pdf-cont-text .reader-audio-word{position:absolute;display:block;z-index:8;color:transparent;background:transparent;border:0;border-radius:3px;padding:0;margin:0;cursor:pointer;pointer-events:auto;user-select:none;-webkit-user-select:none;outline-offset:1px}.farast-pdf-text-layer .reader-audio-word.is-current,.farast-pdf-cont-text .reader-audio-word.is-current{background:rgba(250,204,21,.58);box-shadow:0 0 0 1px rgba(217,150,0,.28);border-radius:3px}.farast-pdf-text-layer .reader-audio-word.is-read,.farast-pdf-cont-text .reader-audio-word.is-read{background:rgba(52,211,153,.13)}.farast-audio-dock[hidden]{display:none}
+    .farast-pdf-text-layer .reader-audio-word,.farast-pdf-cont-text .reader-audio-word{position:absolute;display:block;z-index:8;color:transparent;background:transparent;border:0;border-radius:3px;padding:0;margin:0;cursor:pointer;pointer-events:auto;user-select:none;-webkit-user-select:none;outline-offset:1px}.farast-pdf-text-layer .reader-audio-word.is-current,.farast-pdf-cont-text .reader-audio-word.is-current,.reader-document-word.is-current{background:rgba(250,204,21,.58);box-shadow:0 0 0 1px rgba(217,150,0,.28);border-radius:3px}.farast-pdf-text-layer .reader-audio-word.is-read,.farast-pdf-cont-text .reader-audio-word.is-read,.reader-document-word.is-read{background:rgba(52,211,153,.13)}.farast-audio-dock[hidden]{display:none}
     @media(max-width:700px){.farast-audio-top{gap:7px}.farast-audio-title{min-width:112px}.farast-audio-caption{font-size:.68rem}.farast-audio-volume{display:none}.farast-audio-foot span:last-child{display:none}.farast-audio-controls{gap:8px}.farast-audio-speed{font-size:.6rem}}
     @media(prefers-reduced-motion:reduce){.farast-audio-pulse{animation:none!important}}
   `;
@@ -98,6 +106,8 @@
   let activeSegment = -1;
   let activePage = 1;
   let wordMarks = [];
+  let documentWordMarks = [];
+  let activeDocumentWord = null;
   let raf = 0;
   let lastPageRequest = 0;
   let rangeEnd = null;
@@ -124,6 +134,9 @@
   const clearMarks = () => {
     wordMarks.forEach(mark => mark.element.remove());
     wordMarks = [];
+    documentWordMarks.forEach(mark => mark.element.classList.remove('is-current', 'is-read'));
+    documentWordMarks = [];
+    activeDocumentWord = null;
     activeSegment = -1;
   };
   const getTextLayer = page => {
@@ -242,6 +255,23 @@
       mark.element.classList.toggle('is-current', isCurrent);
       mark.element.classList.toggle('is-read', mark.end <= time);
     });
+    let documentLow = 0, documentHigh = documentWordMarks.length - 1, documentFound = -1;
+    while (documentLow <= documentHigh) {
+      const middle = (documentLow + documentHigh) >> 1;
+      if (documentWordMarks[middle].start <= time) { documentFound = middle; documentLow = middle + 1; }
+      else documentHigh = middle - 1;
+    }
+    if (documentFound >= 0 && time >= documentWordMarks[documentFound].end) {
+      const nextWord = documentWordMarks[documentFound + 1];
+      if (nextWord && time >= nextWord.start) documentFound += 1;
+      else documentFound = -1;
+    }
+    const currentDocumentWord = documentFound >= 0 ? documentWordMarks[documentFound].element : null;
+    if (currentDocumentWord !== activeDocumentWord) {
+      activeDocumentWord?.classList.remove('is-current');
+      currentDocumentWord?.classList.add('is-current');
+      activeDocumentWord = currentDocumentWord;
+    }
     if (found !== activeSegment) {
       activeSegment = found;
       if (item) {
@@ -289,6 +319,7 @@
       seek.value = '0';
     }
     buildMarks(activePage);
+    buildDocumentWordMarks(activePage);
     dock.hidden = false;
     status.textContent = activeTrack.alignmentQuality === 'phoneme'
       ? 'صوت از پیش آماده · هم‌ترازی واجی واژه‌ها'
@@ -333,6 +364,44 @@
     return true;
   };
   const tokens = value => String(value || '').trim().split(/\s+/u).map(normalize).filter(Boolean);
+  const buildDocumentWordMarks = page => {
+    documentWordMarks.forEach(mark => mark.element.classList.remove('is-current', 'is-read'));
+    documentWordMarks = [];
+    activeDocumentWord = null;
+    if (!activeTrack) return;
+    const elements = [...root.querySelectorAll('.reader-document-word')].filter(element => {
+      const article = element.closest('.farast-reader-page-item');
+      const elementPage = Number(element.dataset.page || article?.dataset.readerPage || 1);
+      return elementPage === Number(page);
+    });
+    if (!elements.length) return;
+    let cursor = 0;
+    activeTrack.timings.filter(item => Number(item.page) === Number(page)).forEach(item => {
+      const words = Array.isArray(item.words) && item.words.length
+        ? item.words
+        : String(item.text || '').trim().split(/\s+/u).filter(Boolean).map((text, index, all) => ({
+            text,
+            start: item.start + (item.end - item.start) * index / all.length,
+            end: item.start + (item.end - item.start) * (index + 1) / all.length
+          }));
+      words.forEach(word => {
+        const wanted = tokens(word.text)[0] || '';
+        if (!wanted) return;
+        let found = -1;
+        for (let index = cursor; index < elements.length; index += 1) {
+          if ((tokens(elements[index].textContent)[0] || '') === wanted) { found = index; break; }
+        }
+        if (found < 0) return;
+        documentWordMarks.push({
+          element: elements[found],
+          start: Number(word.start),
+          end: Number(word.end)
+        });
+        cursor = found + 1;
+      });
+    });
+    updateHighlight(audio.currentTime || 0);
+  };
   const findTextRange = (value, page = null, occurrence = 0) => {
     const wanted = tokens(value);
     if (!wanted.length || !activeTrack) return null;
@@ -360,7 +429,7 @@
     let matchedOccurrences = 0;
     for (let i = 0; i <= indexedWords.length - wanted.length; i++) {
       if (wanted.every((word, offset) => indexedWords[i + offset].token === word)) {
-        if (wanted.length === 1 && matchedOccurrences++ < Math.max(0, Number(occurrence) || 0)) continue;
+        if (matchedOccurrences++ < Math.max(0, Number(occurrence) || 0)) continue;
         return {
           start: indexedWords[i].start,
           end: indexedWords[i + wanted.length - 1].end,
@@ -371,11 +440,39 @@
     return null;
   };
 
+  const sequenceOccurrenceBefore = (prefixText, selectedText) => {
+    const prefix = tokens(prefixText);
+    const wanted = tokens(selectedText);
+    if (!wanted.length || prefix.length < wanted.length) return 0;
+    let occurrences = 0;
+    for (let index = 0; index <= prefix.length - wanted.length; index += 1) {
+      if (wanted.every((word, offset) => prefix[index + offset] === word)) occurrences += 1;
+    }
+    return occurrences;
+  };
+  const targetOccurrence = (target, selector, value) => {
+    const scope = target.closest('[data-pdf-cont-page]') || target.closest('.farast-reader-page-item') || root;
+    const wanted = tokens(value).join(' ');
+    const matches = [...scope.querySelectorAll(selector)].filter(item =>
+      tokens(item.dataset.readerSpeechText || item.textContent).join(' ') === wanted
+    );
+    return Math.max(0, matches.indexOf(target));
+  };
+  const playPage = article => {
+    if (!article) return false;
+    const section = Math.max(0, Number(article.dataset.index) || 0);
+    selectSection(section);
+    const page = Number(article.dataset.readerPage || article.dataset.index && Number(article.dataset.index) + 1 || activePage || 1);
+    const pageItems = activeTrack?.timings.filter(item => Number(item.page) === page) || [];
+    if (!pageItems.length) return false;
+    return playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ ' + fa(page));
+  };
+
   const rangeForDocumentWord = element => {
     const article = element.closest('.farast-reader-page-item');
     const page = Number(element.dataset.page || article?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
     const token = tokens(element.textContent)[0] || '';
-    const scope = article || root;
+    const scope = element.closest('[data-pdf-cont-page]') || article || root;
     const matches = [...scope.querySelectorAll('.reader-document-word')]
       .filter(item => (tokens(item.textContent)[0] || '') === token);
     return findTextRange(element.textContent, page, Math.max(0, matches.indexOf(element)));
@@ -392,28 +489,63 @@
     const sentence = event.target.closest('.reader-document-sentence');
     const paragraph = event.target.closest('.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
     const target = sentence || paragraph;
-    if (target) { const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1); const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page); if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن پاراگراف انتخاب‌شده'); } return; }
+    if (target) {
+      const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+      const text = target.dataset.readerSpeechText || target.textContent;
+      const selector = target.matches('.reader-document-sentence') ? '.reader-document-sentence'
+        : target.matches('.reader-document-cell') ? '.reader-document-cell'
+          : target.matches('.reader-document-row') ? '.reader-document-row'
+            : target.matches('.reader-document-heading') ? '.reader-document-heading'
+              : '.reader-document-paragraph';
+      const occurrence = targetOccurrence(target, selector, text);
+      const range = findTextRange(text, page, occurrence);
+      if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن محدودهٔ انتخاب‌شده'); return; }
+    }
     const pdfLayer = event.target.closest('.farast-pdf-text-layer,.farast-pdf-cont-text');
     if (pdfLayer) {
       const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
       const position = document.caretPositionFromPoint?.(event.clientX, event.clientY);
       const node = caret?.startContainer || position?.offsetNode;
       if (node?.nodeType === Node.TEXT_NODE) {
-        const raw = node.nodeValue || '', offset = Number(caret?.startOffset ?? position?.offset ?? 0);
-        const before = raw.slice(0, offset), after = raw.slice(offset);
+        const offset = Number(caret?.startOffset ?? position?.offset ?? 0);
+        let before = '', after = '';
+        try {
+          const prefixRange = document.createRange();
+          prefixRange.selectNodeContents(pdfLayer);
+          prefixRange.setEnd(node, offset);
+          before = prefixRange.toString();
+          const suffixRange = document.createRange();
+          suffixRange.selectNodeContents(pdfLayer);
+          suffixRange.setStart(node, offset);
+          after = suffixRange.toString();
+        } catch (_) {
+          const raw = node.nodeValue || '';
+          before = raw.slice(0, offset);
+          after = raw.slice(offset);
+        }
         const left = before.search(/[^.!؟۔؛]*$/u);
+        const sentenceStart = left < 0 ? 0 : left;
         const right = after.match(/^[^.!؟۔؛]*(?:[.!؟۔؛]|$)/u);
-        const sentenceText = (before.slice(left < 0 ? 0 : left) + (right?.[0] || '')).trim();
+        const sentenceText = (before.slice(sentenceStart) + (right?.[0] || '')).trim();
         const page = Number(pdfLayer.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || root.querySelector('#reader-page-number')?.value || 1);
-        const range = findTextRange(sentenceText, page);
+        const occurrence = sequenceOccurrenceBefore(before.slice(0, sentenceStart), sentenceText);
+        const range = findTextRange(sentenceText, page, occurrence);
         if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن جملهٔ انتخاب‌شده'); return; }
       }
     }
     const article = event.target.closest('.farast-reader-page-item');
-    if (article && !event.target.closest('button,input,select,a,.farast-pdf-text-layer,.farast-pdf-cont-text,.farast-audio-dock')) {
-      const page = Number(event.target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || article.dataset.readerPage || root.querySelector('#reader-page-number')?.value || article.dataset.index || 1);
-      const pageItems = activeTrack?.timings.filter(item => Number(item.page) === page) || [];
-      if (pageItems.length) playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ انتخاب‌شده');
+    if (article && !event.target.closest('button,input,select,a,.farast-audio-dock')) {
+      const continuousPage = event.target.closest('[data-pdf-cont-page]');
+      if (continuousPage) {
+        const pageNumber = Number(continuousPage.dataset.pdfContPage || 0);
+        const pageItems = activeTrack?.timings.filter(item => Number(item.page) === pageNumber) || [];
+        if (pageItems.length) {
+          event.preventDefault();
+          playRange(pageItems[0].start, pageItems[pageItems.length - 1].end, 'در حال خواندن صفحهٔ ' + fa(pageNumber));
+        }
+        return;
+      }
+      playPage(article);
     }
   }, true);
   root.addEventListener('keydown', event => {
@@ -424,16 +556,36 @@
       if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن واژهٔ ' + word.textContent); return; }
     }
     const target = event.target.closest('.reader-document-sentence,.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row');
-    if (!target) return;
-    const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(target.dataset.readerSpeechText || target.textContent, page);
-    if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); }
+    if (target) {
+      const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
+      const text = target.dataset.readerSpeechText || target.textContent;
+      const selector = target.matches('.reader-document-sentence') ? '.reader-document-sentence'
+        : target.matches('.reader-document-cell') ? '.reader-document-cell'
+          : target.matches('.reader-document-row') ? '.reader-document-row'
+            : target.matches('.reader-document-heading') ? '.reader-document-heading'
+              : '.reader-document-paragraph';
+      const range = findTextRange(text, page, targetOccurrence(target, selector, text));
+      if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); return; }
+    }
+    const pageArticle = event.target.closest('.farast-reader-page-item[data-reader-audio-page-target="1"]');
+    if (pageArticle && event.target === pageArticle) { event.preventDefault(); playPage(pageArticle); }
   });
   root.addEventListener('pointerup', () => {
     const selection = window.getSelection(); if (!selection || selection.isCollapsed) return;
     const anchor = selection.anchorNode?.parentElement; if (!anchor || !root.contains(anchor)) return;
     const page = Number(anchor.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || anchor.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
-    const range = findTextRange(selection.toString(), page);
+    const selectedText = selection.toString();
+    const selectionRange = selection.getRangeAt(0);
+    const pageScope = anchor.closest('[data-pdf-cont-page]') || anchor.closest('.farast-reader-page-item') || root;
+    let prefixText = '';
+    try {
+      const prefixRange = document.createRange();
+      prefixRange.selectNodeContents(pageScope);
+      prefixRange.setEnd(selectionRange.startContainer, selectionRange.startOffset);
+      prefixText = prefixRange.toString();
+    } catch (_) { prefixText = ''; }
+    const occurrence = sequenceOccurrenceBefore(prefixText, selectedText);
+    const range = findTextRange(selectedText, page, occurrence);
     if (range) {
       suppressNextClick = true;
       window.clearTimeout(selectionSuppressTimer);
@@ -464,12 +616,23 @@
     const page = Number(event.detail?.page || 1);
     activePage = page;
     buildMarks(page);
+    buildDocumentWordMarks(page);
+  });
+  root.addEventListener('farast:reader-page-loaded', event => {
+    const page = Number(event.detail?.page || 0);
+    if (activeTrack && page === activePage) buildDocumentWordMarks(page);
   });
   const observer = new MutationObserver(mutations => {
     const changed = mutations.some(mutation => [...mutation.addedNodes].some(node =>
-      node.nodeType === Node.ELEMENT_NODE && ((node.matches?.('.textLayer span') && !node.classList.contains('reader-audio-word')) || node.querySelector?.('.textLayer span:not(.reader-audio-word)'))
+      node.nodeType === Node.ELEMENT_NODE && (
+        node.matches?.('.reader-document-word,.textLayer span:not(.reader-audio-word)') ||
+        node.querySelector?.('.reader-document-word,.textLayer span:not(.reader-audio-word)')
+      )
     ));
-    if (changed && activeTrack) requestAnimationFrame(() => buildMarks(activePage));
+    if (changed && activeTrack) requestAnimationFrame(() => {
+      buildMarks(activePage);
+      buildDocumentWordMarks(activePage);
+    });
   });
   observer.observe(root, { childList: true, subtree: true });
 
@@ -479,7 +642,7 @@
     selectSection,
     playRange,
     pause() { rangeEnd = null; audio.pause(); },
-    setPage(page) { activePage = Number(page) || 1; buildMarks(activePage); },
+    setPage(page) { activePage = Number(page) || 1; buildMarks(activePage); buildDocumentWordMarks(activePage); },
     destroy() { audio.pause(); observer.disconnect(); cancelAnimationFrame(raf); clearMarks(); }
   };
 })();
