@@ -72,20 +72,28 @@ class Inspection:
         }
 
 
-def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]:
+def _build_content_chunks(text: str, detected_type: str) -> tuple[list[dict[str, Any]], bool]:
     if not text.strip():
-        return []
+        return [], False
 
     chunks: list[dict[str, Any]] = []
+    chunk_limit_hit = False
 
     def add_chunk(chunk_type: str, locator: dict[str, Any], value: str) -> None:
+        nonlocal chunk_limit_hit
         value = value.strip()
-        if value:
-            chunks.append({
-                "chunk_type": chunk_type,
-                "locator": locator,
-                "content_text": value[:1800],
-            })
+        if not value:
+            return
+        if len(chunks) >= 300:
+            chunk_limit_hit = True
+            return
+        if len(value) > 1800:
+            chunk_limit_hit = True
+        chunks.append({
+            "chunk_type": chunk_type,
+            "locator": locator,
+            "content_text": value[:1800],
+        })
 
     if detected_type == "pdf":
         for page_number, segment in enumerate(text.split("\f"), start=1):
@@ -218,7 +226,7 @@ def _build_content_chunks(text: str, detected_type: str) -> list[dict[str, Any]]
             remaining -= len(value)
         if remaining <= 0:
             break
-    return bounded
+    return bounded, chunk_limit_hit or (remaining <= 0 and len(bounded) < len(chunks))
 
 
 def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
@@ -334,7 +342,19 @@ def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tu
             "page_count": child.page_count,
             "extracted_characters": len(child.extracted_text),
         })
-        for child_chunk in (child.content_chunks or _build_content_chunks(child.extracted_text, child.detected_type))[:60]:
+        child_chunks = child.content_chunks
+        if not child_chunks:
+            child_chunks, fallback_truncated = _build_content_chunks(child.extracted_text, child.detected_type)
+            if fallback_truncated:
+                truncated = True
+                warnings.append("استخراج قطعات یکی از اسناد داخلی به سقف ایمنی رسید.")
+        if child.extraction_truncated:
+            truncated = True
+            warnings.append("استخراج محتوای یکی از اسناد داخلی به سقف ایمنی رسید.")
+        if len(child_chunks) > 60:
+            truncated = True
+            warnings.append("تعداد قطعات یکی از اسناد داخلی از سقف ۶۰ قطعه بیشتر بود و بخشی از آن در گزارش آرشیو نمایش داده نشد.")
+        for child_chunk in child_chunks[:60]:
             locator = dict(child_chunk.get("locator") or {})
             locator["archive_entry"] = name[:240]
             chunks.append({
@@ -398,7 +418,7 @@ def _validate_tar_archive(data: bytes) -> tuple[tarfile.TarFile, list[str]]:
     return archive, names[:MAX_ARCHIVE_ENTRIES]
 
 
-def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
+def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]], bool]:
     """Extract bounded Word blocks in document order without rendering source XML or HTML."""
     archive, _ = _validate_archive(data)
     names = set(archive.namelist())
@@ -411,6 +431,7 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
     try:
         from docx.text.paragraph import Paragraph
         from docx.table import Table
+        from docx.oxml.ns import qn
 
         doc = Document(io.BytesIO(data))
         text_parts: list[str] = []
@@ -418,13 +439,91 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
         char_count = 0
         table_count = 0
         block_index = 0
+        truncated = False
+
+        # Resolve Word's numbering definitions instead of guessing every list is
+        # a bullet from its paragraph style name. Numbering may be attached to
+        # the paragraph itself or inherited from its paragraph style.
+        numbering_root = doc.part.numbering_part.element
+        numbering_formats: dict[tuple[str, int], str] = {}
+        abstract_formats: dict[tuple[str, int], str] = {}
+        abstract_by_num_id: dict[str, str] = {}
+        for num in numbering_root.findall(qn("w:num")):
+            # w:numId is an attribute on w:num (not a child element).
+            num_id = str(num.get(qn("w:numId"), ""))
+            abstract_id_node = num.find(qn("w:abstractNumId"))
+            if not num_id or abstract_id_node is None:
+                continue
+            abstract_id = str(abstract_id_node.get(qn("w:val"), ""))
+            abstract_by_num_id[num_id] = abstract_id
+            for override in num.findall(qn("w:lvlOverride")):
+                level_index = int(override.get(qn("w:ilvl"), "0"))
+                level_node = override.find(qn("w:lvl"))
+                format_node = level_node.find(qn("w:numFmt")) if level_node is not None else None
+                if format_node is not None:
+                    numbering_formats[(num_id, level_index)] = str(format_node.get(qn("w:val"), ""))
+        for abstract in numbering_root.findall(qn("w:abstractNum")):
+            # w:abstractNumId is likewise an attribute, not a child element.
+            abstract_id = str(abstract.get(qn("w:abstractNumId"), ""))
+            if not abstract_id:
+                continue
+            for level_node in abstract.findall(qn("w:lvl")):
+                level_index = int(level_node.get(qn("w:ilvl"), "0"))
+                format_node = level_node.find(qn("w:numFmt"))
+                if format_node is not None:
+                    abstract_formats[(abstract_id, level_index)] = str(format_node.get(qn("w:val"), ""))
+
+        def paragraph_list_metadata(paragraph: Paragraph) -> tuple[str, int] | None:
+            paragraph_properties = getattr(paragraph._p, "pPr", None)
+            numbering_properties = getattr(paragraph_properties, "numPr", None)
+            style = paragraph.style
+            style_name = str(getattr(style, "name", "") or "").strip().lower()
+            style_properties = getattr(getattr(style, "element", None), "pPr", None)
+            style_numbering = getattr(style_properties, "numPr", None)
+            if numbering_properties is None:
+                numbering_properties = style_numbering
+
+            level_index = 0
+            num_id = ""
+            if numbering_properties is not None:
+                level_node = getattr(numbering_properties, "ilvl", None)
+                num_node = getattr(numbering_properties, "numId", None)
+                if level_node is not None:
+                    try:
+                        level_index = max(0, min(4, int(level_node.val)))
+                    except (TypeError, ValueError):
+                        level_index = 0
+                if num_node is not None:
+                    num_id = str(num_node.val)
+
+            number_format = numbering_formats.get((num_id, level_index), "")
+            if not number_format and num_id:
+                abstract_id = abstract_by_num_id.get(num_id, "")
+                number_format = abstract_formats.get((abstract_id, level_index), "")
+            if number_format:
+                return ("bullet" if number_format == "bullet" else "number", level_index + 1)
+
+            if "list" in style_name or "bullet" in style_name or "number" in style_name or "ordered" in style_name:
+                list_kind = "number" if any(token in style_name for token in ("number", "ordered")) else "bullet"
+                return (list_kind, level_index + 1)
+            if numbering_properties is not None and (num_id or getattr(numbering_properties, "ilvl", None) is not None):
+                return ("bullet", level_index + 1)
+            return None
 
         def add_block(kind: str, value: str, locator: dict[str, Any]) -> None:
-            nonlocal char_count, block_index
-            value = value.strip()[:1800]
-            if not value or char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+            nonlocal char_count, block_index, truncated
+            value = value.strip()
+            if not value:
                 return
-            value = value[:max(0, MAX_EXTRACTED_CHARS - char_count)]
+            if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                truncated = True
+                return
+            if len(value) > 1800:
+                truncated = True
+            remaining = max(0, MAX_EXTRACTED_CHARS - char_count)
+            if len(value) > remaining:
+                truncated = True
+            value = value[:min(1800, remaining)]
             if not value:
                 return
             block_index += 1
@@ -435,6 +534,7 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
 
         for element in doc.iter_inner_content():
             if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                truncated = True
                 break
             if isinstance(element, Paragraph):
                 paragraph = element
@@ -448,24 +548,35 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
                     add_block("docx_heading", value, {"heading_level": level, "style": "heading"})
                 elif style_name.strip().lower() in {"title", "subtitle"}:
                     add_block("docx_heading", value, {"heading_level": 1 if style_name.lower() == "title" else 2, "style": style_name.lower()})
-                elif "list" in style_name.lower() or getattr(paragraph._p, "pPr", None) is not None and paragraph._p.pPr.numPr is not None:
-                    list_kind = "number" if "number" in style_name.lower() else "bullet"
-                    add_block("docx_list_item", value, {"list_kind": list_kind, "list_level": 1})
+                elif (list_metadata := paragraph_list_metadata(paragraph)) is not None:
+                    list_kind, list_level = list_metadata
+                    add_block("docx_list_item", value, {"list_kind": list_kind, "list_level": list_level})
                 else:
                     add_block("docx_paragraph", value, {})
             elif isinstance(element, Table):
                 table_count += 1
                 if table_count > 100:
+                    truncated = True
                     break
+                if len(element.rows) > 1000:
+                    truncated = True
                 for row_index, row in enumerate(element.rows[:1000], start=1):
                     if char_count >= MAX_EXTRACTED_CHARS or len(chunks) >= 300:
+                        truncated = True
                         break
                     cells: list[str] = []
                     cell_budget = 3000
+                    if len(row.cells) > 50:
+                        truncated = True
                     for cell in row.cells[:50]:
                         if cell_budget <= 0:
+                            truncated = True
                             break
-                        value = cell.text.strip()[:min(500, cell_budget)]
+                        raw_cell_value = cell.text.strip()
+                        cell_limit = min(500, cell_budget)
+                        if len(raw_cell_value) > cell_limit:
+                            truncated = True
+                        value = raw_cell_value[:cell_limit]
                         cells.append(value)
                         cell_budget -= len(value)
                     if not any(cells):
@@ -476,7 +587,7 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
                         {"table_index": table_count, "row_index": row_index, "cells": cells},
                     )
 
-        return "\n".join(text_parts)[:MAX_EXTRACTED_CHARS], chunks
+        return "\n".join(text_parts)[:MAX_EXTRACTED_CHARS], chunks, truncated
     except FileInspectionError:
         raise
     except Exception:
@@ -489,7 +600,7 @@ def _extract_docx(data: bytes) -> str:
 
 
 
-def _extract_xlsx(data: bytes) -> str:
+def _extract_xlsx(data: bytes) -> tuple[str, bool]:
     archive, _ = _validate_archive(data)
     names = set(archive.namelist())
     if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
@@ -500,7 +611,10 @@ def _extract_xlsx(data: bytes) -> str:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
         parts: list[str] = []
         char_count = 0
+        truncated = len(workbook.worksheets) > 20
         for sheet in workbook.worksheets[:20]:
+            if (sheet.max_row or 0) > 300 or (sheet.max_column or 0) > 30:
+                truncated = True
             heading = f"برگه: {sheet.title}"
             parts.append(heading)
             char_count += len(heading)
@@ -511,16 +625,20 @@ def _extract_xlsx(data: bytes) -> str:
                     parts.append(line)
                     char_count += len(line)
                 if char_count >= MAX_EXTRACTED_CHARS:
+                    truncated = True
                     break
             if char_count >= MAX_EXTRACTED_CHARS:
                 break
+        text = "\n".join(parts)
+        if len(text) > MAX_EXTRACTED_CHARS:
+            truncated = True
         workbook.close()
-        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+        return text[:MAX_EXTRACTED_CHARS], truncated
     except Exception:
         raise FileInspectionError("استخراج امن محتوای Excel انجام نشد.") from None
 
 
-def _extract_pptx(data: bytes) -> str:
+def _extract_pptx(data: bytes) -> tuple[str, bool]:
     archive, _ = _validate_archive(data)
     names = set(archive.namelist())
     if "[Content_Types].xml" not in names or "ppt/presentation.xml" not in names:
@@ -531,8 +649,10 @@ def _extract_pptx(data: bytes) -> str:
         presentation = Presentation(io.BytesIO(data))
         parts: list[str] = []
         char_count = 0
+        truncated = len(presentation.slides) > 100
         for slide_number, slide in enumerate(presentation.slides, start=1):
             if slide_number > 100 or char_count >= MAX_EXTRACTED_CHARS:
+                truncated = True
                 break
             heading = f"اسلاید {slide_number}"
             parts.append(heading)
@@ -549,8 +669,12 @@ def _extract_pptx(data: bytes) -> str:
                         parts.append(line)
                         char_count += len(line)
                 if char_count >= MAX_EXTRACTED_CHARS:
+                    truncated = True
                     break
-        return "\n".join(parts)[:MAX_EXTRACTED_CHARS]
+        text = "\n".join(parts)
+        if len(text) > MAX_EXTRACTED_CHARS:
+            truncated = True
+        return text[:MAX_EXTRACTED_CHARS], truncated
     except Exception:
         raise FileInspectionError("استخراج امن محتوای PowerPoint انجام نشد.") from None
 
@@ -701,13 +825,13 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         names = set(archive.namelist())
         if "[Content_Types].xml" in names and "word/document.xml" in names:
             result.detected_type = "docx"
-            result.extracted_text, result.content_chunks = _extract_docx_structured(data)
+            result.extracted_text, result.content_chunks, result.extraction_truncated = _extract_docx_structured(data)
         elif "[Content_Types].xml" in names and "xl/workbook.xml" in names:
             result.detected_type = "xlsx"
-            result.extracted_text = _extract_xlsx(data)
+            result.extracted_text, result.extraction_truncated = _extract_xlsx(data)
         elif "[Content_Types].xml" in names and "ppt/presentation.xml" in names:
             result.detected_type = "pptx"
-            result.extracted_text = _extract_pptx(data)
+            result.extracted_text, result.extraction_truncated = _extract_pptx(data)
             result.page_count = min(100, result.extracted_text.count("اسلاید "))
         else:
             result.detected_type = "zip"
@@ -756,7 +880,11 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.extraction_truncated = True
         result.warnings.append("استخراج متن به سقف پردازش فعلی رسید؛ ممکن است بخشی از سند هنوز تحلیل نشده باشد.")
     if not result.content_chunks:
-        result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
+        result.content_chunks, chunks_truncated = _build_content_chunks(result.extracted_text, result.detected_type)
+        result.extraction_truncated = result.extraction_truncated or chunks_truncated
+
+    if result.extraction_truncated and not any("ممکن است بخشی از سند" in warning for warning in result.warnings):
+        result.warnings.append("استخراج سند به یکی از سقف‌های ایمنی رسید؛ ممکن است بخشی از محتوا در نسخه متنی موجود نباشد.")
 
     if result.antivirus_status != "clean":
         if result.upstream_scan_status == "clean":
