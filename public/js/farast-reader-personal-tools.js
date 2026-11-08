@@ -84,12 +84,40 @@
   fontSelect.addEventListener('change', () => { state.font = fontSelect.value; applyPrefs(); persist(); announce('قلم مطالعه تغییر کرد. قلم‌های نصب‌شدهٔ سیستم قابل استفاده‌اند.'); });
   sizeInput.addEventListener('input', () => { state.size = Number(sizeInput.value); applyPrefs(); persist(); });
   highlightColorSelect.addEventListener('change', () => { state.highlightColor = highlightColorSelect.value; persist(); announce('رنگ هایلایت تغییر کرد.'); });
+  const getPageTextMap = page => {
+    const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT, { acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim() || node.parentElement.closest('button,script,style,textarea,select,.farast-reader-local-highlight,.farast-reader-ink-tools')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }});
+    const nodes = [];
+    const offsets = new Map();
+    let fullText = '';
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      offsets.set(node, fullText.length);
+      nodes.push(node);
+      fullText += node.nodeValue;
+    }
+    return { nodes, offsets, fullText };
+  };
   const getContext = () => {
     const selection = window.getSelection();
-    const text = selection ? selection.toString().trim() : '';
-    if (!text || !root.contains(selection.anchorNode)) return null;
+    if (!selection || !selection.rangeCount || !selection.toString().trim() || !root.contains(selection.anchorNode) || !root.contains(selection.focusNode)) return null;
+    const range = selection.getRangeAt(0);
     const page = selection.anchorNode.parentElement?.closest('.farast-reader-page-item');
-    return { text: text.slice(0, 2000), page: Number(page?.dataset.readerPage || Number(page?.dataset.index || 0) + 1), node: selection.anchorNode };
+    const endPage = selection.focusNode.parentElement?.closest('.farast-reader-page-item');
+    if (!page || page !== endPage) return null;
+    const map = getPageTextMap(page);
+    if (!map.offsets.has(range.startContainer) || !map.offsets.has(range.endContainer)) return null;
+    let start = map.offsets.get(range.startContainer) + range.startOffset;
+    let end = map.offsets.get(range.endContainer) + range.endOffset;
+    if (end < start) [start, end] = [end, start];
+    const raw = map.fullText.slice(start, end);
+    const quote = raw.trim().slice(0, 2000);
+    if (!quote) return null;
+    start += raw.length - raw.trimStart().length;
+    end = start + quote.length;
+    return { text: quote, page: Number(page.dataset.readerPage || Number(page.dataset.index || 0) + 1), startOffset: start, endOffset: end };
   };
   const highlightButton = group.querySelector('[data-reader-highlight]');
   const noteButton = group.querySelector('[data-reader-note]');
@@ -123,7 +151,7 @@
   highlightButton.addEventListener('click', () => {
     const context = getContext();
     if (!context) return announce('ابتدا بخشی از متن قابل انتخاب را انتخاب کنید.');
-    const record = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, color: state.highlightColor, created: Date.now() };
+    const record = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, startOffset: context.startOffset, endOffset: context.endOffset, color: state.highlightColor, created: Date.now() };
     state.highlights.push(record);
     persist(); renderHighlights(); announce('هایلایت در همین مرورگر ذخیره شد.');
     window.getSelection()?.removeAllRanges();
@@ -133,7 +161,7 @@
     if (!context) return announce('برای حاشیه‌نویسی ابتدا متن موردنظر را انتخاب کنید.');
     const note = window.prompt('یادداشت شخصی برای این بخش:');
     if (note === null || !note.trim()) return;
-    state.notes.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, note: note.trim().slice(0, 4000), created: Date.now() });
+    state.notes.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, startOffset: context.startOffset, endOffset: context.endOffset, note: note.trim().slice(0, 4000), created: Date.now() });
     persist(); renderNotes(); notesPanel.hidden = false; notesButton.setAttribute('aria-expanded', 'true'); announce('یادداشت فقط در مرورگر شما ذخیره شد.');
   });
   const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -143,16 +171,14 @@
     const records = state.highlights.slice(-100);
     root.querySelectorAll('.farast-reader-page-item').forEach((page, index) => {
       const pageNo = Number(page.dataset.readerPage || index + 1);
-      const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT, { acceptNode(node) {
-        if (!node.nodeValue.trim() || node.parentElement.closest('button,script,style,textarea,select,.farast-reader-local-highlight')) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      }});
-      const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+      const map = getPageTextMap(page);
+      const nodes = map.nodes;
       records.filter(item => item.page === pageNo).forEach(item => {
-        const fullText = nodes.map(node => node.nodeValue).join('');
-        const start = fullText.indexOf(item.quote);
+        const fullText = map.fullText;
+        const anchored = Number.isInteger(item.startOffset) && Number.isInteger(item.endOffset) && item.startOffset >= 0 && item.endOffset > item.startOffset && fullText.slice(item.startOffset, item.endOffset) === item.quote;
+        const start = anchored ? item.startOffset : fullText.indexOf(item.quote);
         if (start < 0) return;
-        const end = start + item.quote.length;
+        const end = anchored ? item.endOffset : start + item.quote.length;
         let cursor = 0;
         const segments = [];
         nodes.forEach(node => {
