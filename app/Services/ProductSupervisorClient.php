@@ -48,4 +48,44 @@ class ProductSupervisorClient
 
         return $payload;
     }
+
+    public function reviewFile($stream, string $filename, array $metadata): array
+    {
+        if (! $this->configured()) {
+            throw new RuntimeException('product_supervisor_not_configured');
+        }
+        if (! is_resource($stream)) {
+            throw new RuntimeException('product_supervisor_file_stream_unavailable');
+        }
+
+        $baseUrl = rtrim((string) config('services.product_supervisor.url'), '/');
+        if (! str_starts_with($baseUrl, 'https://')) {
+            throw new RuntimeException('product_supervisor_requires_https');
+        }
+
+        $response = Http::acceptJson()
+            ->withToken((string) config('services.product_supervisor.token'))
+            ->connectTimeout(8)
+            ->timeout(max(120, (int) config('services.product_supervisor.timeout', 40)))
+            ->attach('file', $stream, basename($filename))
+            ->post($baseUrl.'/v1/reviews/files', $metadata);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('product_supervisor_file_review_failed');
+        }
+
+        $payload = $response->json();
+        if (! is_array($payload)
+            || ! isset($payload['review_id'], $payload['product_id'], $payload['inspection'], $payload['security_gate'])
+            || (string) $payload['product_id'] !== (string) ($metadata['product_id'] ?? '')
+            || ! is_array($payload['inspection'])
+            || ! in_array($payload['security_gate'], ['blocked', 'manual_scan_required', 'structural_checks_passed'], true)) {
+            throw new RuntimeException('product_supervisor_invalid_file_response');
+        }
+
+        $payload['publication_authorized'] = false;
+
+        return $payload;
+    }
+
 }
