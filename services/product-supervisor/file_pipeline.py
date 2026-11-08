@@ -448,9 +448,50 @@ def _extract_docx_structured(data: bytes) -> tuple[str, list[dict[str, Any]]]:
                     add_block("docx_heading", value, {"heading_level": level, "style": "heading"})
                 elif style_name.strip().lower() in {"title", "subtitle"}:
                     add_block("docx_heading", value, {"heading_level": 1 if style_name.lower() == "title" else 2, "style": style_name.lower()})
-                elif "list" in style_name.lower() or getattr(paragraph._p, "pPr", None) is not None and paragraph._p.pPr.numPr is not None:
-                    list_kind = "number" if "number" in style_name.lower() else "bullet"
-                    add_block("docx_list_item", value, {"list_kind": list_kind, "list_level": 1})
+                else:
+                    paragraph_properties = getattr(paragraph._p, "pPr", None)
+                    numbering_properties = getattr(paragraph_properties, "numPr", None)
+                    is_list_style = "list" in style_name.lower()
+                    has_numbering = numbering_properties is not None
+                    if is_list_style or has_numbering:
+                        style_lower = style_name.strip().lower()
+                        style_level = re.search(r"(?:^|\\s)([1-9])$", style_lower)
+                        numbering_level = getattr(getattr(numbering_properties, "ilvl", None), "val", None)
+                        list_level = (
+                            max(1, min(5, int(numbering_level) + 1))
+                            if numbering_level is not None
+                            else max(1, min(5, int(style_level.group(1)))) if style_level
+                            else 1
+                        )
+                        list_kind = "number" if "number" in style_lower else "bullet"
+                        if has_numbering:
+                            try:
+                                numbering_id = getattr(getattr(numbering_properties, "numId", None), "val", None)
+                                numbering_root = doc.part.numbering_part.element
+                                number_definition = next(
+                                    (item for item in numbering_root.num_lst if int(item.numId) == int(numbering_id)),
+                                    None,
+                                )
+                                abstract_id = int(number_definition.abstractNumId) if number_definition is not None else None
+                                abstract_definition = next(
+                                    (item for item in numbering_root.abstractNum_lst if int(item.abstractNumId) == abstract_id),
+                                    None,
+                                )
+                                level_definition = next(
+                                    (
+                                        item for item in abstract_definition.lvl_lst
+                                        if int(item.ilvl) == (int(numbering_level) if numbering_level is not None else 0)
+                                    ),
+                                    None,
+                                ) if abstract_definition is not None else None
+                                number_format = str(level_definition.numFmt.val).lower() if level_definition is not None else ""
+                                if number_format:
+                                    list_kind = "bullet" if number_format == "bullet" else "number"
+                            except (AttributeError, TypeError, ValueError):
+                                pass
+                        add_block("docx_list_item", value, {"list_kind": list_kind, "list_level": list_level})
+                    else:
+                        add_block("docx_paragraph", value, {})
                 else:
                     add_block("docx_paragraph", value, {})
             elif isinstance(element, Table):
