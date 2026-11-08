@@ -168,7 +168,7 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
 
-    public function test_docx_preview_rejects_external_relationships(): void
+    public function test_reader_rejects_unprepared_docx_assets(): void
     {
         [, $preview] = $this->makePreviewFixture();
 
@@ -199,10 +199,10 @@ class StoreReaderAccessTest extends TestCase
 
         $this->actingAs($this->makeReaderUser())
             ->get(route('store.preview', $preview))
-            ->assertStatus(422);
+            ->assertStatus(409);
     }
 
-    public function test_docx_preview_rejects_invalid_zip_payloads(): void
+    public function test_reader_rejects_invalid_unprepared_docx_assets(): void
     {
         [, $preview] = $this->makePreviewFixture();
         Storage::disk('private')->put('store/previews/sample/invalid.docx', 'not a zip archive');
@@ -254,7 +254,7 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 
-    public function test_xlsx_preview_rejects_external_relationships(): void
+    public function test_reader_rejects_unprepared_xlsx_assets(): void
     {
         [, $preview] = $this->makePreviewFixture();
         $temporary = tempnam(sys_get_temp_dir(), 'farast-xlsx-external-');
@@ -282,7 +282,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_xlsx_preview_rejects_invalid_archive_payloads(): void
+    public function test_reader_rejects_invalid_unprepared_xlsx_assets(): void
     {
         [, $preview] = $this->makePreviewFixture();
         Storage::disk('private')->put('store/previews/sample/invalid.xlsx', 'not a zip archive');
