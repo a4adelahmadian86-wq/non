@@ -5,7 +5,7 @@ import os
 import urllib.request
 from pathlib import Path
 
-MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/opt/render/project/src/models"))
+MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", str(Path(__file__).resolve().parent / "models")) )
 REVISION = "7a6c333ec560f0e688371adc2fbb7bbe105028c6"
 REPOSITORY = "rhasspy/piper-voices"
 MODEL_NAME = "fa_IR-amir-medium"
