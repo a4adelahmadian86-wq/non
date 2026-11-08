@@ -542,8 +542,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     else:
         raise FileInspectionError("نوع فایل پشتیبانی نمی‌شود یا امضای واقعی فایل با پسوند آن تطابق ندارد.")
 
-    if result.extracted_text:
-        if len(result.extracted_text) >= MAX_EXTRACTED_CHARS:
+    if result.extracted_text and len(result.extracted_text) >= MAX_EXTRACTED_CHARS:
         result.extraction_truncated = True
         result.warnings.append("استخراج متن به سقف پردازش فعلی رسید؛ ممکن است بخشی از سند هنوز تحلیل نشده باشد.")
     result.content_chunks = _build_content_chunks(result.extracted_text, result.detected_type)
