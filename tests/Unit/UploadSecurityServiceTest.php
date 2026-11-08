@@ -83,7 +83,7 @@ class UploadSecurityServiceTest extends TestCase
         Storage::disk('private')->put('quarantine/traversal.zip', file_get_contents($temporary));
         @unlink($temporary);
 
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         app(UploadSecurityService::class)->inspect('quarantine/traversal.zip', 'application/zip');
     }
 
