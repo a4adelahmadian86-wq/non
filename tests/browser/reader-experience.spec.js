@@ -669,6 +669,28 @@ test('plays the exact repeated paragraph occurrence and supports blank-page mous
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
 });
 
+
+test('shows pending narration state and checks the protected audio artifact without exposing storage paths', async ({ page }) => {
+  let polls = 0;
+  await page.route('**/store/product/1/reader/audio/2?version=3', async route => {
+    expect(route.request().method()).toBe('HEAD');
+    polls += 1;
+    await route.fulfill({ status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+  });
+  await page.goto('/');
+  await page.setContent(
+    '<section data-reader-root data-reader-audio-status="pending" ' +
+      'data-reader-audio-poll-url="/store/product/1/reader/audio/2?version=3">' +
+      '<div data-reader-audio-pending role="status" aria-live="polite" hidden></div>' +
+    '</section>'
+  );
+  await page.addScriptTag({ url: new URL('/js/farast-reader-document-audio.js', page.url()).href });
+  const status = page.locator('[data-reader-audio-pending]');
+  await expect(status).toBeVisible();
+  await expect(status).toContainText('در حال آماده‌سازی');
+  await expect.poll(() => polls).toBe(1);
+});
+
 test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
