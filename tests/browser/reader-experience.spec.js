@@ -479,7 +479,7 @@ test.describe('FARAST sample reader interactions', () => {
     await expect.poll(() => requests.length).toBe(1);
     expect(requests[0]).toEqual({ text: 'سلام', page: 4 });
 
-    await page.locator('.reader-document-sentence').click({ position: { x: 2, y: 2 } });
+    await page.locator('.reader-document-sentence > span').last().click();
     await expect.poll(() => requests.length).toBe(2);
     expect(requests[1].page).toBe(4);
     expect(requests[1].text).toContain('سلام');
