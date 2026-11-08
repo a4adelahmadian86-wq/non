@@ -153,7 +153,7 @@ class ProcessProductDocument implements ShouldQueue
             fclose($stream);
         }
 
-        $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 120) : [];
+        $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 300) : [];
         $totalCharacters = 0;
         $totalWords = 0;
 
