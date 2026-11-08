@@ -796,6 +796,7 @@ test('highlights the exact active HTML word while the precomputed document audio
   const words = page.locator('.reader-document-word');
   await words.first().click();
   await expect.poll(() => page.evaluate(() => window.__fakeReaderAudio?.currentTime)).toBe(0.1);
+  await page.evaluate(() => window.FarastAudioReader.playRange(0.1, 0.7, 'در حال خواندن جمله'));
   await page.evaluate(() => {
     const audio = window.__fakeReaderAudio;
     audio.currentTime = 0.55;
