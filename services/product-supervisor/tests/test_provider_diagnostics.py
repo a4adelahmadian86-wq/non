@@ -82,6 +82,7 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(call["json"]["model"], "openai/gpt-oss-20b")
 
     async def test_groq_is_blocked_until_zdr_is_confirmed(self):
+        _FakeAsyncClient.calls = []
         with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": ""}, clear=False):
             result = await analyze_extracted_content("متن محرمانه", {})
         self.assertEqual(result["analysis_status"], "privacy_not_confirmed")
