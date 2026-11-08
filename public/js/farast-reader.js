@@ -65,8 +65,8 @@
     const context=canvas.getContext('2d');
     if(!context)return;
     const width=canvas.width,height=canvas.height;
-    const label=identity+' · پیش‌نمایش فراست';
-    const fontSize=Math.max(16,Math.min(30,Math.round(width/48)));
+    const label=identity+' · FARAST';
+    const fontSize=Math.max(20,Math.min(34,Math.round(width/40)));
     context.save();
     context.setTransform(1,0,0,1,0,0);
     context.globalAlpha=.24;
