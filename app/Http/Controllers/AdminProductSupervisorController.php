@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductImage;
+use App\Models\StoreCourseLesson;
 use App\Services\AuditEventService;
 use App\Services\ProductSupervisorClient;
 use App\Services\ProductSupervisorSnapshotBuilder;
@@ -69,7 +70,16 @@ class AdminProductSupervisorController extends Controller
 
     public function reviewFile(StoreProduct $product, StoreProductFile $file, ProductSupervisorClient $supervisor)
     {
-        abort_unless((int) $file->product_id === (int) $product->id && $file->purpose === 'product_download' && $file->is_active, 404);
+        abort_unless((int) $file->product_id === (int) $product->id && $file->is_active, 404);
+        $isDownload = $file->purpose === 'product_download';
+        $isCourseResource = $file->purpose === 'lesson_resource'
+            && $product->type === 'course'
+            && $file->course_lesson_id
+            && StoreCourseLesson::query()
+                ->whereKey($file->course_lesson_id)
+                ->whereHas('section.course', fn ($query) => $query->where('product_id', $product->id))
+                ->exists();
+        abort_unless($isDownload || $isCourseResource, 404);
         abort_unless($file->scan_status === 'clean', 409, 'فقط فایلی که اسکن امنیتی اصلی فروشگاه آن را سالم تأیید کرده است قابل ارسال برای تحلیل هوشمند است.');
 
         return $this->reviewStoredAsset(
