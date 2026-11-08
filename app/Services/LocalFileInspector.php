@@ -24,7 +24,7 @@ class LocalFileInspector
             throw new RuntimeException('intake_size_out_of_range');
         }
 
-        $originalName = trim(str_replace(["\\0", "\\r", "\\n"], '', (string) $upload->getClientOriginalName()));
+        $originalName = trim(str_replace(["\0", "\r", "\n"], '', (string) $upload->getClientOriginalName()));
         $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
         $mime = strtolower((string) (new \\finfo(FILEINFO_MIME_TYPE))->file($path));
         $sha256 = hash_file('sha256', $path);
