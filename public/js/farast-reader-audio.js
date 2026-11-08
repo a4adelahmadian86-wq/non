@@ -431,7 +431,11 @@
     if (target) {
       const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
       const text = target.dataset.readerSpeechText || target.textContent;
-      const selector = sentence ? '.reader-document-sentence' : '.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row';
+      const selector = target.matches('.reader-document-sentence') ? '.reader-document-sentence'
+        : target.matches('.reader-document-cell') ? '.reader-document-cell'
+          : target.matches('.reader-document-row') ? '.reader-document-row'
+            : target.matches('.reader-document-heading') ? '.reader-document-heading'
+              : '.reader-document-paragraph';
       const occurrence = targetOccurrence(target, selector, text);
       const range = findTextRange(text, page, occurrence);
       if (range) { event.preventDefault(); playRange(range.start, range.end, sentence ? 'در حال خواندن جملهٔ انتخاب‌شده' : 'در حال خواندن محدودهٔ انتخاب‌شده'); return; }
@@ -486,7 +490,11 @@
     if (target) {
       const page = Number(target.closest('[data-pdf-cont-page]')?.dataset.pdfContPage || target.closest('.farast-reader-page-item')?.dataset.readerPage || root.querySelector('#reader-page-number')?.value || 1);
       const text = target.dataset.readerSpeechText || target.textContent;
-      const selector = target.matches('.reader-document-sentence') ? '.reader-document-sentence' : '.reader-document-paragraph,.reader-document-heading,.reader-document-cell,.reader-document-row';
+      const selector = target.matches('.reader-document-sentence') ? '.reader-document-sentence'
+        : target.matches('.reader-document-cell') ? '.reader-document-cell'
+          : target.matches('.reader-document-row') ? '.reader-document-row'
+            : target.matches('.reader-document-heading') ? '.reader-document-heading'
+              : '.reader-document-paragraph';
       const range = findTextRange(text, page, targetOccurrence(target, selector, text));
       if (range) { event.preventDefault(); playRange(range.start, range.end, 'در حال خواندن بخش انتخاب‌شده'); return; }
     }
