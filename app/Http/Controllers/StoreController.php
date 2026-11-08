@@ -254,7 +254,7 @@ class StoreController extends Controller
         $track = \\App\\Models\\StoreDocumentAudioTrack::query()
             ->with('document.file')
             ->where('status', 'ready')
-            ->whereHas('document', fn ($query) => $query->where('product_id', $product->id))
+            ->whereHas('document.file', fn ($query) => $query->where('product_id', $product->id)->where('is_primary', true)->where('is_active', true))
             ->orderByDesc('id')
             ->firstOrFail();
         abort_unless(
