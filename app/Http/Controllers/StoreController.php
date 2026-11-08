@@ -183,6 +183,113 @@ class StoreController extends Controller
         return $disk->response($preview->path, null, $headers);
     }
 
+    public function previewAudio(StoreProductPreview $preview)
+    {
+        $preview->load('product');
+        abort_unless(
+            $preview->is_active
+                && $preview->audio_path
+                && $preview->product
+                && $preview->product->status === 'published'
+                && $preview->product->published_at?->lte(now()),
+            404
+        );
+
+        if (($preview->access_level ?? 'sample') === 'full') {
+            $user = request()->user();
+            abort_unless($user && ($preview->product->download_policy ?? 'signed') === 'reader_only', 403);
+            abort_unless(
+                StoreLibraryItem::query()
+                    ->where('user_id', $user->id)
+                    ->where('product_id', $preview->product_id)
+                    ->whereNull('revoked_at')
+                    ->exists(),
+                403
+            );
+        }
+
+        $disk = Storage::disk($preview->audio_disk ?: 'private');
+        abort_unless($disk->exists($preview->audio_path), 404);
+        $size = (int) $disk->size($preview->audio_path);
+        abort_unless($size > 0, 404);
+
+        $start = 0;
+        $end = $size - 1;
+        $status = 200;
+        $range = request()->header('Range');
+        if (is_string($range) && preg_match('/^bytes=/i', $range)) {
+            if (preg_match('/\\Abytes=(\\d*)-(\\d*)\\z/i', trim($range), $matches)) {
+                if ($matches[1] === '' && $matches[2] !== '') {
+                    $suffixLength = (int) $matches[2];
+                    if ($suffixLength <= 0) {
+                        return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                    }
+                    $suffix = min($size, $suffixLength);
+                    $start = $size - $suffix;
+                } elseif ($matches[1] !== '') {
+                    $start = (int) $matches[1];
+                    $end = $matches[2] !== '' ? min($size - 1, (int) $matches[2]) : $end;
+                } else {
+                    return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                }
+
+                if ($start > $end || $start >= $size) {
+                    return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
+                }
+                $status = 206;
+            }
+            // Malformed or multi-range requests are ignored and served as a full response.
+        }
+
+        $length = $end - $start + 1;
+        $headers = [
+            'Content-Type' => $preview->audio_mime ?: 'audio/mpeg',
+            'Content-Disposition' => 'inline; filename="farast-reader-audio"',
+            'Content-Length' => (string) $length,
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
+            'Referrer-Policy' => 'no-referrer',
+        ];
+        if ($status === 206) {
+            $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+        }
+
+        return response()->stream(function () use ($disk, $preview, $start, $length) {
+            $stream = $disk->readStream($preview->audio_path);
+            if (! is_resource($stream)) {
+                return;
+            }
+            try {
+                $remainingSkip = $start;
+                while ($remainingSkip > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(8192, $remainingSkip));
+                    if ($chunk === false || $chunk === '') {
+                        break;
+                    }
+                    $remainingSkip -= strlen($chunk);
+                }
+                $remaining = $length;
+                while ($remaining > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(8192, $remaining));
+                    if ($chunk === false || $chunk === '') {
+                        break;
+                    }
+                    echo $chunk;
+                    $remaining -= strlen($chunk);
+                    if (connection_aborted()) {
+                        break;
+                    }
+                }
+            } finally {
+                fclose($stream);
+            }
+        }, $status, $headers);
+    }
+
     public function reader(string $slug)
     {
         $product = StoreProduct::with(['previews' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')])

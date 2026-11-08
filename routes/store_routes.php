@@ -10,7 +10,13 @@ use App\Http\Controllers\StoreWishlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/store/product/{slug}/reader',[StoreController::class,'reader'])->name('store.reader');
+Route::get('/store/preview/{preview}/audio', [StoreController::class, 'previewAudio'])->middleware('throttle:60,10')->name('store.preview.audio');
 Route::get('/store/product/{product}/lessons/{lesson}/preview',[StoreController::class,'coursePreview'])->name('store.course.preview');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/store/{product}/reader-state', [\App\Http\Controllers\StoreReaderStateController::class, 'show'])->middleware('throttle:120,10')->name('store.reader.state.show');
+    Route::put('/store/{product}/reader-state', [\App\Http\Controllers\StoreReaderStateController::class, 'update'])->middleware('throttle:60,10')->name('store.reader.state.update');
+});
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/my-courses/{product}', [StoreCourseLearningController::class, 'show'])->name('store.course.learn');
@@ -49,6 +55,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/files',[AdminStoreController::class,'uploadFile'])->middleware('throttle:10,10')->name('store.files.upload');
     Route::delete('/store/{product}/files/{file}',[AdminStoreController::class,'deleteFile'])->name('store.files.delete');
     Route::post('/store/{product}/previews',[AdminStoreController::class,'uploadPreview'])->middleware('throttle:10,10')->name('store.previews.upload');
+    Route::post('/store/{product}/previews/{preview}/audio', [AdminStoreController::class, 'uploadPreviewAudio'])->middleware('throttle:10,10')->name('store.previews.audio.upload');
     Route::delete('/store/{product}/previews/{preview}',[AdminStoreController::class,'deletePreview'])->name('store.previews.delete');
 
     Route::get('/store/{product}/course',[AdminCourseController::class,'edit'])->name('store.course.edit');

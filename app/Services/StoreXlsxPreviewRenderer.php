@@ -16,6 +16,7 @@ class StoreXlsxPreviewRenderer
     private const MAX_ROWS = 2000;
     private const MAX_COLUMNS = 40;
     private const MAX_CELLS = 80000;
+    private const MAX_STYLES = 10000;
 
     public function render(string $bytes, string $identity): string
     {
@@ -44,6 +45,7 @@ class StoreXlsxPreviewRenderer
                 $relationships = $this->loadXml($zip, 'xl/_rels/workbook.xml.rels', 2 * 1024 * 1024);
                 $targets = $this->relationshipTargets($relationships);
                 $sharedStrings = $this->readSharedStrings($zip);
+                $styles = $this->readStyles($zip);
                 $sheets = (new DOMXPath($workbook))->query('//*[local-name()="sheets"]/*[local-name()="sheet"]');
 
                 if (!$sheets || $sheets->length < 1 || $sheets->length > self::MAX_SHEETS) {
@@ -74,11 +76,11 @@ class StoreXlsxPreviewRenderer
 
                     $sheetPath = $this->normalizeWorksheetPath($target);
                     $xml = $this->loadXml($zip, $sheetPath, 20 * 1024 * 1024);
-                    $rows = $this->readWorksheet($xml, $sharedStrings, $cellCount);
+                    $sheetData = $this->readWorksheet($xml, $sharedStrings, $styles, $cellCount);
                     $name = $this->escape($sheet->getAttribute('name') ?: 'Sheet '.($sheetIndex + 1));
                     $sheetId = 'sheet-'.($sheetIndex + 1);
                     $tabs[] = '<a href="#'.$sheetId.'">'.$name.'</a>';
-                    $tables[] = '<section class="sheet" id="'.$sheetId.'"><h2>'.($sheetIndex + 1).'. '.$name.'</h2>'.$this->table($rows).'</section>';
+                    $tables[] = '<section class="sheet" id="'.$sheetId.'"><h2>'.($sheetIndex + 1).'. '.$name.'</h2>'.$this->table($sheetData).'</section>';
                 }
 
                 if ($tables === []) {
@@ -276,10 +278,156 @@ class StoreXlsxPreviewRenderer
         return $strings;
     }
 
-    private function readWorksheet(DOMDocument $xml, array $sharedStrings, int &$cellCount): array
+    /**
+     * Read a deliberately small, safe subset of Excel cell formatting.
+     * No workbook-provided CSS or markup is ever copied into the preview.
+     */
+    private function readStyles(ZipArchive $zip): array
+    {
+        $index = $zip->locateName('xl/styles.xml');
+        if ($index === false) {
+            return [];
+        }
+        $contents = $zip->getFromIndex($index);
+        if (!is_string($contents) || strlen($contents) > 4 * 1024 * 1024) {
+            throw new RuntimeException('Workbook styles part is too large.');
+        }
+        $xml = $this->parseXml($contents);
+        $xpath = new DOMXPath($xml);
+        foreach (['numFmts' => 1024, 'fonts' => 1024, 'fills' => 1024, 'borders' => 1024, 'cellXfs' => self::MAX_STYLES] as $collection => $limit) {
+            $nodes = $xpath->query('//*[local-name()="'.$collection.'"]/*');
+            if ($nodes && $nodes->length > $limit) {
+                throw new RuntimeException('Workbook style collection exceeds the supported limit.');
+            }
+        }
+
+        $numberFormats = [];
+        foreach ($xpath->query('//*[local-name()="numFmts"]/*[local-name()="numFmt"]') as $format) {
+            if (!$format instanceof DOMElement) continue;
+            $id = filter_var($format->getAttribute('numFmtId'), FILTER_VALIDATE_INT);
+            $code = $format->getAttribute('formatCode');
+            if ($id !== false && $id >= 164 && strlen($code) <= 128) {
+                $numberFormats[$id] = $code;
+            }
+        }
+
+        $fonts = [];
+        foreach ($xpath->query('//*[local-name()="fonts"]/*[local-name()="font"]') as $font) {
+            $css = [];
+            if ($xpath->query('./*[local-name()="b"]', $font)->length > 0) $css[] = 'font-weight:700';
+            if ($xpath->query('./*[local-name()="i"]', $font)->length > 0) $css[] = 'font-style:italic';
+            $size = $xpath->query('./*[local-name()="sz"]', $font)->item(0)?->getAttribute('val');
+            if (is_numeric($size) && (float) $size >= 6 && (float) $size <= 36) $css[] = 'font-size:'.rtrim(rtrim(number_format((float) $size, 2, '.', ''), '0'), '.').'pt';
+            $color = $xpath->query('./*[local-name()="color"]', $font)->item(0);
+            $hex = $this->xlsxColor($color instanceof DOMElement ? $color->getAttribute('rgb') : '');
+            if ($hex !== null) $css[] = 'color:'.$hex;
+            $fonts[] = $css;
+        }
+
+        $fills = [];
+        foreach ($xpath->query('//*[local-name()="fills"]/*[local-name()="fill"]') as $fill) {
+            $pattern = $xpath->query('./*[local-name()="patternFill"]', $fill)->item(0);
+            if (!$pattern instanceof DOMElement) {
+                $fills[] = [];
+                continue;
+            }
+            $type = $pattern->getAttribute('patternType');
+            $color = $xpath->query('./*[local-name()="fgColor"]', $pattern)->item(0);
+            $hex = $this->xlsxColor($color instanceof DOMElement ? $color->getAttribute('rgb') : '');
+            $fills[] = $type === 'solid' && $hex !== null ? ['background-color:'.$hex] : [];
+        }
+
+        $borders = [];
+        foreach ($xpath->query('//*[local-name()="borders"]/*[local-name()="border"]') as $border) {
+            $css = [];
+            foreach (['left','right','top','bottom'] as $edge) {
+                $node = $xpath->query('./*[local-name()="'.$edge.'"]', $border)->item(0);
+                if (!$node instanceof DOMElement) continue;
+                $line = $node->getAttribute('style');
+                $allowed = ['thin'=>'1px solid','medium'=>'2px solid','thick'=>'3px solid','dashed'=>'1px dashed','dotted'=>'1px dotted','double'=>'3px double','hair'=>'1px solid'];
+                if (!isset($allowed[$line])) continue;
+                $colorNode = $xpath->query('./*[local-name()="color"]', $node)->item(0);
+                $hex = $this->xlsxColor($colorNode instanceof DOMElement ? $colorNode->getAttribute('rgb') : '');
+                $css[] = 'border-'.$edge.':'.$allowed[$line].' '.($hex ?? '#cbd5e1');
+            }
+            $borders[] = $css;
+        }
+
+        $formats = [];
+        foreach ($xpath->query('//*[local-name()="cellXfs"]/*[local-name()="xf"]') as $xf) {
+            if (!$xf instanceof DOMElement) { $formats[] = ['css' => '', 'numFmtId' => 0, 'formatCode' => null]; continue; }
+            $css = [];
+            $fontId = (int) $xf->getAttribute('fontId');
+            $fillId = (int) $xf->getAttribute('fillId');
+            $borderId = (int) $xf->getAttribute('borderId');
+            foreach ($fonts[$fontId] ?? [] as $declaration) $css[] = $declaration;
+            foreach ($fills[$fillId] ?? [] as $declaration) $css[] = $declaration;
+            foreach ($borders[$borderId] ?? [] as $declaration) $css[] = $declaration;
+            $alignment = $xpath->query('./*[local-name()="alignment"]', $xf)->item(0);
+            if ($alignment instanceof DOMElement) {
+                $horizontal = $alignment->getAttribute('horizontal');
+                if (in_array($horizontal, ['left','center','right','justify'], true)) $css[] = 'text-align:'.$horizontal;
+                $vertical = $alignment->getAttribute('vertical');
+                if (in_array($vertical, ['top','center','bottom'], true)) $css[] = 'vertical-align:'.($vertical === 'center' ? 'middle' : $vertical);
+                if ($alignment->getAttribute('wrapText') === '1') $css[] = 'white-space:normal';
+            }
+            $numFmtId = filter_var($xf->getAttribute('numFmtId'), FILTER_VALIDATE_INT);
+            $formats[] = [
+                'css' => implode(';', array_unique($css)),
+                'numFmtId' => $numFmtId !== false ? $numFmtId : 0,
+                'formatCode' => $numberFormats[$numFmtId] ?? null,
+            ];
+        }
+
+        return $formats;
+    }
+
+    private function xlsxColor(string $value): ?string
+    {
+        $value = strtoupper(trim($value));
+        if (preg_match('/^(?:[0-9A-F]{2})?([0-9A-F]{6})$/', $value, $match)) {
+            return '#'.$match[1];
+        }
+
+        return null;
+    }
+
+    private function readWorksheet(DOMDocument $xml, array $sharedStrings, array $styles, int &$cellCount): array
     {
         $rows = [];
+        $widths = [];
+        $heights = [];
+        $merges = [];
+        $covered = [];
         $xpath = new DOMXPath($xml);
+
+        foreach ($xpath->query('//*[local-name()="cols"]/*[local-name()="col"]') as $columnNode) {
+            if (!$columnNode instanceof DOMElement) continue;
+            $min = filter_var($columnNode->getAttribute('min'), FILTER_VALIDATE_INT);
+            $max = filter_var($columnNode->getAttribute('max'), FILTER_VALIDATE_INT);
+            $width = is_numeric($columnNode->getAttribute('width')) ? (float) $columnNode->getAttribute('width') : 0;
+            if ($min === false || $max === false || $min < 1 || $max < $min || $max > self::MAX_COLUMNS || $width <= 0) continue;
+            $pixels = (int) max(30, min(420, round($width * 7 + 5)));
+            for ($column = $min; $column <= $max; $column++) $widths[$column] = $pixels;
+        }
+
+        foreach ($xpath->query('//*[local-name()="mergeCells"]/*[local-name()="mergeCell"]') as $mergeNode) {
+            if (!$mergeNode instanceof DOMElement || !preg_match('/^([A-Z]{1,3})([1-9][0-9]*):([A-Z]{1,3})([1-9][0-9]*)$/i', $mergeNode->getAttribute('ref'), $match)) continue;
+            $startColumn = $this->columnIndex(strtoupper($match[1]));
+            $startRow = (int) $match[2];
+            $endColumn = $this->columnIndex(strtoupper($match[3]));
+            $endRow = (int) $match[4];
+            if ($startColumn < 1 || $startRow < 1 || $endColumn < $startColumn || $endRow < $startRow
+                || $endColumn > self::MAX_COLUMNS || $endRow > self::MAX_ROWS) continue;
+            $key = $startRow.':'.$startColumn;
+            $merges[$key] = ['colspan' => $endColumn - $startColumn + 1, 'rowspan' => $endRow - $startRow + 1];
+            for ($rowNumber = $startRow; $rowNumber <= $endRow; $rowNumber++) {
+                for ($column = $startColumn; $column <= $endColumn; $column++) {
+                    if ($rowNumber !== $startRow || $column !== $startColumn) $covered[$rowNumber.':'.$column] = true;
+                }
+            }
+        }
+
         $rowNodes = $xpath->query('//*[local-name()="sheetData"]/*[local-name()="row"]');
         if (!$rowNodes || $rowNodes->length > self::MAX_ROWS) {
             throw new RuntimeException('Worksheet row count exceeds the limit.');
@@ -293,6 +441,8 @@ class StoreXlsxPreviewRenderer
             if ($rowNumber < 1 || $rowNumber > self::MAX_ROWS) {
                 continue;
             }
+            $height = is_numeric($rowNode->getAttribute('ht')) ? (float) $rowNode->getAttribute('ht') : 0;
+            if ($height > 0 && $rowNode->getAttribute('customHeight') === '1') $heights[$rowNumber] = (int) max(16, min(300, round($height * 1.333)));
             $row = [];
             foreach ($xpath->query('./*[local-name()="c"]', $rowNode) as $cell) {
                 if (!$cell instanceof DOMElement) {
@@ -305,7 +455,8 @@ class StoreXlsxPreviewRenderer
                     continue;
                 }
                 $column = $this->columnIndex($match[1]);
-                if ($column < 1 || $column > self::MAX_COLUMNS || (int) $match[2] > self::MAX_ROWS) {
+                $cellRow = (int) $match[2];
+                if ($column < 1 || $column > self::MAX_COLUMNS || $cellRow > self::MAX_ROWS || isset($covered[$cellRow.':'.$column])) {
                     continue;
                 }
 
@@ -327,16 +478,86 @@ class StoreXlsxPreviewRenderer
                 }
 
                 // Formula nodes are intentionally never evaluated. Only cached <v> is shown.
-                $row[$column] = (string) $value;
+                $styleIndex = filter_var($cell->getAttribute('s'), FILTER_VALIDATE_INT);
+                $style = $styleIndex !== false && $styleIndex >= 0 ? ($styles[$styleIndex] ?? []) : [];
+                $row[$column] = [
+                    'value' => $this->formatCellValue((string) $value, $style),
+                    'style' => (string) ($style['css'] ?? ''),
+                ];
             }
             if ($row !== []) {
                 $rows[$rowNumber] = $row;
             }
         }
 
+        foreach ($merges as $key => $merge) {
+            [$mergeRow] = array_map('intval', explode(':', $key, 2));
+            for ($offset = 1; $offset < (int) ($merge['rowspan'] ?? 1); $offset++) {
+                $rows[$mergeRow + $offset] ??= [];
+            }
+        }
         ksort($rows);
 
-        return $rows;
+        return ['rows' => $rows, 'widths' => $widths, 'heights' => $heights, 'merges' => $merges, 'covered' => $covered];
+    }
+
+    /**
+     * Format a safe subset of Excel's built-in and custom numeric formats.
+     * Unknown formats deliberately fall back to the cached raw value.
+     */
+    private function formatCellValue(string $value, array $style): string
+    {
+        if ($value === '' || !is_numeric($value)) {
+            return $value;
+        }
+
+        $number = (float) $value;
+        $formatId = (int) ($style['numFmtId'] ?? 0);
+        $formatCode = is_string($style['formatCode'] ?? null) ? $style['formatCode'] : '';
+        $builtIn = [
+            9 => '0%', 10 => '0.00%', 14 => 'yyyy-mm-dd',
+            15 => 'd-mmm-yy', 16 => 'd-mmm', 17 => 'mmm-yy',
+            18 => 'h:mm AM/PM', 19 => 'h:mm:ss AM/PM',
+            20 => 'h:mm', 21 => 'h:mm:ss', 22 => 'yyyy-mm-dd h:mm',
+        ];
+        $code = $formatCode !== '' ? $formatCode : ($builtIn[$formatId] ?? '');
+        if ($code === '') {
+            return $value;
+        }
+
+        $section = explode(';', $code, 2)[0];
+        $unquoted = preg_replace('/"[^"]*"|\\\\./', '', $section) ?? $section;
+        if (preg_match('/[ymdhs]/i', $unquoted)) {
+            $days = (int) floor($number);
+            $seconds = (int) round(($number - $days) * 86400);
+            if ($seconds >= 86400) { $days++; $seconds -= 86400; }
+            try {
+                $date = (new \DateTimeImmutable('1899-12-30 00:00:00', new \DateTimeZone('UTC')))
+                    ->modify(($days >= 0 ? '+' : '').$days.' days')
+                    ->modify(($seconds >= 0 ? '+' : '').$seconds.' seconds');
+                if (preg_match('/[hms]/i', $unquoted)) {
+                    return $date->format(preg_match('/s/i', $unquoted) ? 'Y-m-d H:i:s' : 'Y-m-d H:i');
+                }
+                return $date->format('Y-m-d');
+            } catch (\Throwable) {
+                return $value;
+            }
+        }
+
+        if (str_contains($section, '%')) {
+            preg_match('/\\.([0#?]+)/', $section, $decimalMatch);
+            $precision = isset($decimalMatch[1]) ? min(6, strlen($decimalMatch[1])) : 0;
+            return number_format($number * 100, $precision, '.', ',').'%';
+        }
+
+        if (preg_match('/^[^;]*[0#?][^;]*$/', $section)) {
+            preg_match('/\\.([0#?]+)/', $section, $decimalMatch);
+            $precision = isset($decimalMatch[1]) ? min(6, strlen($decimalMatch[1])) : 0;
+            $thousands = str_contains($section, ',');
+            return number_format($number, $precision, '.', $thousands ? ',' : '');
+        }
+
+        return $value;
     }
 
     private function columnIndex(string $letters): int
@@ -349,25 +570,45 @@ class StoreXlsxPreviewRenderer
         return $index;
     }
 
-    private function table(array $rows): string
+    private function table(array $sheetData): string
     {
+        $rows = $sheetData['rows'] ?? [];
         if ($rows === []) {
             return '<p class="notice">این برگه داده قابل‌نمایشی ندارد.</p>';
         }
 
+        $widths = $sheetData['widths'] ?? [];
+        $heights = $sheetData['heights'] ?? [];
+        $merges = $sheetData['merges'] ?? [];
+        $covered = $sheetData['covered'] ?? [];
         $maxColumn = 1;
         foreach ($rows as $row) {
-            $maxColumn = max($maxColumn, max(array_keys($row)));
+            if ($row !== []) $maxColumn = max($maxColumn, max(array_keys($row)));
         }
-        $html = '<div class="table-wrap"><table><thead><tr><th>ردیف</th>';
+        foreach ($merges as $key => $merge) {
+            [, $startColumn] = array_map('intval', explode(':', $key, 2));
+            $maxColumn = max($maxColumn, $startColumn + (int) ($merge['colspan'] ?? 1) - 1);
+        }
+        $html = '<div class="table-wrap"><table><colgroup><col style="width:42px">';
+        for ($column = 1; $column <= $maxColumn; $column++) {
+            $html .= '<col'.(isset($widths[$column]) ? ' style="width:'.(int) $widths[$column].'px"' : '').'>';
+        }
+        $html .= '</colgroup><thead><tr><th>ردیف</th>';
         for ($column = 1; $column <= $maxColumn; $column++) {
             $html .= '<th>'.$this->columnLabel($column).'</th>';
         }
         $html .= '</tr></thead><tbody>';
         foreach ($rows as $number => $row) {
-            $html .= '<tr><td class="rownum">'.$number.'</td>';
+            $html .= '<tr'.(isset($heights[$number]) ? ' style="height:'.(int) $heights[$number].'px"' : '').'><td class="rownum">'.$number.'</td>';
             for ($column = 1; $column <= $maxColumn; $column++) {
-                $html .= '<td>'.$this->escape((string) ($row[$column] ?? '')).'</td>';
+                if (isset($covered[$number.':'.$column])) continue;
+                $cell = $row[$column] ?? ['value' => '', 'style' => ''];
+                $style = (string) ($cell['style'] ?? '');
+                $merge = $merges[$number.':'.$column] ?? [];
+                $span = '';
+                if (($merge['colspan'] ?? 1) > 1) $span .= ' colspan="'.(int) $merge['colspan'].'"';
+                if (($merge['rowspan'] ?? 1) > 1) $span .= ' rowspan="'.(int) $merge['rowspan'].'"';
+                $html .= '<td'.$span.($style !== '' ? ' style="'.$style.'"' : '').'>'.$this->escape((string) ($cell['value'] ?? '')).'</td>';
             }
             $html .= '</tr>';
         }

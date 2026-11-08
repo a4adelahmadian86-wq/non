@@ -2,7 +2,26 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ serviceWorkers: 'block' });
 
-async function mountReader(page, includeExcel = false) {
+test('syncs authenticated reading progress to the account endpoint', async ({ page }) => {
+  let savedState = null;
+  await page.route('**/store/1/reader-state', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ progress: null, bookmarks: [], updated_at: null }) });
+      return;
+    }
+    savedState = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ saved: true }) });
+  });
+
+  await mountReader(page, false, '/store/1/reader-state');
+  await page.locator('#reader-next').click();
+  await expect.poll(() => savedState?.progress?.section).toBe(1);
+  expect(savedState.bookmarks).toEqual([]);
+
+
+});
+
+async function mountReader(page, includeExcel = false, readerStateUrl = '') {
   await page.goto('/');
   const total = includeExcel ? 3 : 2;
   const excelMarkup = includeExcel ? `
@@ -12,7 +31,7 @@ async function mountReader(page, includeExcel = false) {
           <div class="farast-reader-page-item" data-index="2"><div class="farast-reader-page-content"><iframe class="farast-xlsx-frame" sandbox="" srcdoc="&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;Excel&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/body&gt;&lt;/html&gt;"></iframe></div></div>
         ` : '';
   await page.setContent(`
-    <section class="farast-reader" data-reader-root data-theme="dark" data-product-id="reader-fixture">
+    <meta name="csrf-token" content="reader-test-token"><section class="farast-reader" data-reader-root data-theme="dark" data-product-id="reader-fixture" data-reader-state-url="${readerStateUrl}">
       <header><div class="farast-reader-account"><span>09123456789</span></div></header>
       <nav>
         <button id="reader-prev" type="button">قبلی</button>
@@ -289,4 +308,102 @@ test.describe('FARAST sample reader interactions', () => {
     });
     expect(results).toEqual({ copy: true, cut: true, menu: true, drag: true });
   });
+  test('plays a prerecorded track and maps timestamped Persian words onto the PDF text layer', async ({ page }) => {
+    const sampleRate = 8000;
+    const sampleCount = sampleRate * 2;
+    const dataSize = sampleCount * 2;
+    const wav = Buffer.alloc(44 + dataSize);
+    wav.write('RIFF', 0);
+    wav.writeUInt32LE(36 + dataSize, 4);
+    wav.write('WAVE', 8);
+    wav.write('fmt ', 12);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * 2, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36);
+    wav.writeUInt32LE(dataSize, 40);
+
+    await page.goto('/');
+    await page.route('**/reader-audio.wav', route => route.fulfill({
+      status: 200,
+      contentType: 'audio/wav',
+      body: wav,
+    }));
+    const timings = [
+      { text: 'سلام', start: 0, end: 0.7, page: 1 },
+      { text: 'دنیا', start: 0.7, end: 1.4, page: 1 },
+    ];
+    await page.setContent(`
+      <section class="farast-reader" data-reader-root data-product-id="audio-fixture">
+        <nav><label class="reader-page-input"><input id="reader-page-number" value="1"></label></nav>
+        <div id="reader-stage">
+          <article class="farast-reader-page-item is-active" data-index="0"
+            data-audio-url="/reader-audio.wav"
+            data-audio-timing='${JSON.stringify(timings)}'>
+            <div class="farast-pdf-document">
+              <div class="farast-pdf-text-layer" style="position:relative;width:500px;height:120px">
+                <span style="position:relative;display:inline-block;font-size:24px;direction:rtl">سلام دنیا</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    `);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+    await expect(page.locator('.farast-audio-dock')).toBeVisible();
+    await expect.poll(() => page.locator('[data-audio-duration]').textContent()).not.toBe('00:00');
+
+    await page.evaluate(() => window.FarastAudioReader.setPage(1));
+    const marks = page.locator('.farast-pdf-text-layer .reader-audio-word');
+    await expect(marks).toHaveCount(2);
+    await expect(marks.nth(0)).toHaveClass(/is-current/);
+    await expect(page.locator('[data-audio-caption]')).toContainText('سلام');
+  });
+
+  test('uses phrase-level labels when only sentence timestamps are supplied', async ({ page }) => {
+    const sampleRate = 8000;
+    const sampleCount = sampleRate * 2;
+    const dataSize = sampleCount * 2;
+    const wav = Buffer.alloc(44 + dataSize);
+    wav.write('RIFF', 0);
+    wav.writeUInt32LE(36 + dataSize, 4);
+    wav.write('WAVE', 8);
+    wav.write('fmt ', 12);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * 2, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36);
+    wav.writeUInt32LE(dataSize, 40);
+    await page.goto('/');
+    await page.route('**/reader-audio.wav', route => route.fulfill({
+      status: 200,
+      contentType: 'audio/wav',
+      body: wav,
+    }));
+    const timings = [{ text: 'سلام به همه', start: 0, end: 1.2, page: 1 }];
+    await page.setContent(`
+      <section class="farast-reader" data-reader-root>
+        <div id="reader-stage"><article class="farast-reader-page-item is-active" data-index="0"
+          data-audio-url="/reader-audio.wav" data-audio-timing='${JSON.stringify(timings)}'>
+          <div class="farast-pdf-document"><div class="farast-pdf-text-layer" style="position:relative;width:500px;height:120px">
+            <span style="position:relative;display:inline-block;font-size:24px;direction:rtl">سلام به همه</span>
+          </div></div>
+        </article></div>
+      </section>`);
+    await page.addScriptTag({ url: new URL('/js/farast-reader-audio.js', page.url()).href });
+    await expect(page.locator('.farast-audio-dock')).toBeVisible();
+    await expect(page.locator('[data-audio-status]')).toContainText('همگام‌سازی جمله‌ای');
+    await expect(page.locator('[data-audio-progress]')).toContainText('بخش');
+    await expect(page.locator('.reader-audio-word')).toHaveCount(3);
+    await expect(page.locator('.reader-audio-word').first()).toHaveAttribute('aria-label', 'رفتن به بخش سلام');
+  });
+
 });

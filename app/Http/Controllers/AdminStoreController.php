@@ -464,6 +464,98 @@ class AdminStoreController extends Controller
         return back()->with('status', 'پیش‌نمایش آماده و خصوصی ذخیره شد؛ خوانشگر فقط نسخهٔ آماده را نمایش می‌دهد.');
     }
 
+    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview, UploadSecurityService $security)
+    {
+        abort_unless((int) $preview->product_id === (int) $product->id, 404);
+        $data = $request->validate([
+            'audio' => ['required', 'file', 'max:102400', 'mimes:mp3,m4a,wav,ogg,webm'],
+            'timings' => ['required', 'file', 'max:2048', 'mimes:json,txt'],
+        ]);
+
+        $decoded = json_decode(file_get_contents($data['timings']->getRealPath()), true);
+        abort_unless(is_array($decoded) && array_is_list($decoded) && count($decoded) > 0 && count($decoded) <= 100000, 422, 'فایل زمان‌بندی باید آرایه‌ای از قطعه‌های متنی باشد.');
+
+        $timings = [];
+        $previousStart = -1.0;
+        foreach ($decoded as $index => $item) {
+            abort_unless(is_array($item)
+                && isset($item['text'], $item['start'], $item['end'])
+                && is_string($item['text'])
+                && trim($item['text']) !== ''
+                && is_numeric($item['start'])
+                && is_numeric($item['end']), 422, 'ساختار زمان‌بندی در ردیف '.($index + 1).' معتبر نیست.');
+            $start = (float) $item['start'];
+            $end = (float) $item['end'];
+            abort_unless($start >= 0 && $end > $start && $start >= $previousStart, 422, 'زمان‌های شروع و پایان باید معتبر و مرتب باشند.');
+            $timings[] = [
+                'text' => trim($item['text']),
+                'start' => round($start, 3),
+                'end' => round($end, 3),
+                'page' => max(1, (int) ($item['page'] ?? 1)),
+            ];
+            $previousStart = $start;
+        }
+
+        $audio = $data['audio'];
+        $extension = strtolower($audio->getClientOriginalExtension());
+        $mime = $audio->getMimeType() ?: 'application/octet-stream';
+        $quarantinePath = $audio->store('store/quarantine/reader-audio/'.$product->id, 'private');
+        $path = 'store/reader-audio/'.$product->id.'/'.Str::random(40).'.'.$extension;
+        $databaseCommitted = false;
+        try {
+            $inspection = $security->inspect($quarantinePath, $mime, 100 * 1024 * 1024, [
+                'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav',
+                'audio/ogg', 'audio/webm', 'application/ogg',
+            ]);
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن امنیتی صوت آماده نیست؛ فایل ذخیره نشد.');
+            abort_unless(
+                hash_equals((string) $inspection['checksum'], (string) hash_file('sha256', $audio->getRealPath())),
+                409,
+                'محتوای صوت هنگام انتقال تغییر کرده است.'
+            );
+            abort_unless(Storage::disk('private')->copy($quarantinePath, $path), 503, 'ذخیره فایل صوتی ممکن نشد.');
+
+            [$oldDisk, $oldPath] = DB::transaction(function () use ($product, $preview, $path, $mime, $timings) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $lockedPreview = StoreProductPreview::query()
+                    ->whereKey($preview->id)
+                    ->where('product_id', $lockedProduct->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $old = [$lockedPreview->audio_disk ?: 'private', $lockedPreview->audio_path];
+                $lockedPreview->forceFill([
+                    'audio_disk' => 'private',
+                    'audio_path' => $path,
+                    'audio_mime' => $mime,
+                    'audio_timing' => $timings,
+                ])->save();
+                $this->audit('store.product.preview_audio_uploaded', $lockedProduct, [
+                    'preview_id' => $lockedPreview->id,
+                    'timing_segments' => count($timings),
+                    'audio_mime' => $mime,
+                ]);
+
+                return $old;
+            });
+            $databaseCommitted = true;
+            if ($oldPath) {
+                Storage::disk($oldDisk)->delete($oldPath);
+            }
+        } catch (Throwable $exception) {
+            if (! $databaseCommitted) {
+                Storage::disk('private')->delete($path);
+            }
+            if ($exception instanceof ValidationException) {
+                throw $exception;
+            }
+            throw $exception;
+        } finally {
+            Storage::disk('private')->delete($quarantinePath);
+        }
+
+        return back()->with('status', 'صوت و زمان‌بندی همگام‌سازی برای این پیش‌نمایش ذخیره شد.');
+    }
+
     public function uploadCover(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         $request->validate(['cover' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192']);
@@ -607,17 +699,22 @@ class AdminStoreController extends Controller
     public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
     {
         abort_unless($preview->product_id === $product->id, 404);
-        [$disk, $path] = DB::transaction(function () use ($product, $preview) {
+        [$disk, $path, $audioDisk, $audioPath] = DB::transaction(function () use ($product, $preview) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             $lockedPreview = $lockedProduct->previews()->whereKey($preview->id)->lockForUpdate()->firstOrFail();
             $this->audit('store.product.preview_deleted', $lockedProduct, ['preview_id' => $lockedPreview->id]);
             $disk = $lockedPreview->disk ?: 'private';
             $path = $lockedPreview->path;
+            $audioDisk = $lockedPreview->audio_disk ?: 'private';
+            $audioPath = $lockedPreview->audio_path;
             $lockedPreview->delete();
 
-            return [$disk, $path];
+            return [$disk, $path, $audioDisk, $audioPath];
         });
         Storage::disk($disk)->delete($path);
+        if ($audioPath) {
+            Storage::disk($audioDisk)->delete($audioPath);
+        }
 
         return back()->with('status', 'پیش‌نمایش حذف شد.');
     }

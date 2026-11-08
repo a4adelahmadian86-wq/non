@@ -61,7 +61,8 @@ class StoreReaderAccessTest extends TestCase
             '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
             'xl/workbook.xml' => '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="گزارش" sheetId="1" r:id="rId1"/></sheets></workbook>',
             'xl/_rels/workbook.xml.rels' => '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1"><v>42</v></c><c r="C1"><f>1+1</f><v>73</v></c></row></sheetData></worksheet>',
+            'xl/worksheets/sheet1.xml' => '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="22" customWidth="1"/></cols><sheetData><row r="1" ht="30" customHeight="1"><c r="A1" t="inlineStr"><is><t>عنوان</t></is></c><c r="B1" s="1"><v>42</v></c><c r="C1" s="2"><f>1+1</f><v>73</v></c><c r="D1" s="3"><v>0.125</v></c><c r="E1" s="4"><v>45292</v></c></row><row r="2"><c r="F2" t="inlineStr"><is><t>ادغام</t></is></c><c r="G2"><v>9</v></c></row></sheetData><mergeCells count="1"><mergeCell ref="F2:G2"/></mergeCells></worksheet>',
+            'xl/styles.xml' => '<?xml version="1.0"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.0%"/></numFmts><fonts count="3"><font/><font><b/><color rgb="FF1F4E78"/></font><font><color rgb="url(javascript:alert(1))"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="5"><xf/><xf fontId="1" fillId="1" borderId="0" xfId="0"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="2" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164"/><xf numFmtId="14"/></cellXfs></styleSheet>',
         ];
         foreach ($parts as $name => $contents) {
             $archive->addFromString($name, $contents);
@@ -82,6 +83,50 @@ class StoreReaderAccessTest extends TestCase
             'mobile' => '09123456789',
             'password' => 'secret',
         ]);
+    }
+
+    public function test_authenticated_reader_progress_and_bookmarks_sync_across_sessions(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $user = $this->makeReaderUser();
+
+        $this->actingAs($user)
+            ->putJson(route('store.reader.state.update', $product), [
+                'progress' => ['section' => 0, 'page' => 4],
+                'bookmarks' => [
+                    ['section' => 0, 'page' => 2],
+                    ['section' => 0, 'page' => 4],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('saved', true)
+            ->assertJsonPath('progress.page', 4)
+            ->assertJsonCount(2, 'bookmarks');
+
+        $this->actingAs($user)
+            ->getJson(route('store.reader.state.show', $product))
+            ->assertOk()
+            ->assertJsonPath('progress.section', 0)
+            ->assertJsonPath('progress.page', 4)
+            ->assertJsonCount(2, 'bookmarks');
+
+        $this->actingAs($user)
+            ->putJson(route('store.reader.state.update', $product), [
+                'progress' => ['section' => 5, 'page' => 1],
+                'bookmarks' => [],
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_guest_cannot_access_account_reader_state_endpoints(): void
+    {
+        [$product] = $this->makePreviewFixture();
+
+        $this->getJson(route('store.reader.state.show', $product))->assertUnauthorized();
+        $this->putJson(route('store.reader.state.update', $product), [
+            'progress' => ['section' => 0, 'page' => 1],
+            'bookmarks' => [],
+        ])->assertUnauthorized();
     }
 
     public function test_guest_can_read_public_samples_with_ip_watermark(): void
@@ -296,7 +341,16 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringNotContainsString('09123456789', $streamedHtml);
         $this->assertStringContainsString('گزارش', $streamedHtml);
         $this->assertStringContainsString('42', $streamedHtml);
+        $this->assertStringContainsString('font-weight:700;color:#1F4E78;background-color:#D9EAF7;text-align:center;vertical-align:middle;white-space:normal', $streamedHtml);
         $this->assertStringContainsString('73', $streamedHtml);
+        $this->assertStringContainsString('12.5%', $streamedHtml);
+        $this->assertStringContainsString('2024-01-01', $streamedHtml);
+        $this->assertStringContainsString('colspan="2"', $streamedHtml);
+        $this->assertStringContainsString('width:159px', $streamedHtml);
+        $this->assertStringContainsString('height:40px', $streamedHtml);
+        $this->assertStringContainsString('ادغام', $streamedHtml);
+        $this->assertStringNotContainsString('>9</td>', $streamedHtml);
+        $this->assertStringNotContainsString('javascript:', $streamedHtml);
         $this->assertStringNotContainsString('1+1', $streamedHtml);
         $this->assertStringContainsString('فرمول‌ها اجرا نمی‌شوند', $streamedHtml);
         $this->assertStringNotContainsString('<script', $streamedHtml);
@@ -380,4 +434,105 @@ class StoreReaderAccessTest extends TestCase
         $this->assertStringContainsString("frame-ancestors 'self'", (string) $response->headers->get('Content-Security-Policy'));
         $this->assertStringContainsString("default-src 'none'", (string) $response->headers->get('Content-Security-Policy'));
     }
+    public function test_sample_reader_audio_supports_byte_range_seeking(): void
+    {
+        [, $preview] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/reader-audio/sample/narration.mp3', '0123456789');
+        $preview->update([
+            'audio_disk' => 'private',
+            'audio_path' => 'store/reader-audio/sample/narration.mp3',
+            'audio_mime' => 'audio/mpeg',
+            'audio_timing' => [
+                ['text' => 'سلام', 'start' => 0.0, 'end' => 0.4, 'page' => 1],
+                ['text' => 'دنیا', 'start' => 0.4, 'end' => 0.8, 'page' => 1],
+            ],
+        ]);
+
+        $response = $this->withHeader('Range', 'bytes=2-5')
+            ->get(route('store.preview.audio', $preview));
+
+        $response->assertStatus(206)
+            ->assertHeader('Content-Type', 'audio/mpeg')
+            ->assertHeader('Accept-Ranges', 'bytes')
+            ->assertHeader('Content-Range', 'bytes 2-5/10')
+            ->assertHeader('Content-Length', '4');
+        $this->assertSame('2345', $response->streamedContent());
+
+        $this->withHeader('Range', 'bytes=20-30')
+            ->get(route('store.preview.audio', $preview))
+            ->assertStatus(416)
+            ->assertHeader('Content-Range', 'bytes */10');
+
+        $this->withHeader('Range', 'bytes=0-1,4-5')
+            ->get(route('store.preview.audio', $preview))
+            ->assertOk()
+            ->assertHeader('Content-Length', '10');
+    }
+
+    public function test_full_reader_audio_requires_the_same_reader_entitlement_as_the_document(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/reader-audio/sample/full.mp3', 'private-audio');
+        $preview = StoreProductPreview::create([
+            'product_id' => $product->id,
+            'disk' => 'private',
+            'path' => 'store/previews/sample/preview.pdf',
+            'mime' => 'application/pdf',
+            'page_number' => 1,
+            'kind' => 'pdf',
+            'access_level' => 'full',
+            'audio_disk' => 'private',
+            'audio_path' => 'store/reader-audio/sample/full.mp3',
+            'audio_mime' => 'audio/mpeg',
+            'audio_timing' => [['text' => 'محرمانه', 'start' => 0, 'end' => 1, 'page' => 1]],
+            'watermarked' => true,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+        $product->update(['download_policy' => 'reader_only']);
+
+        $this->get(route('store.preview.audio', $preview))->assertForbidden();
+
+        $user = $this->makeReaderUser();
+        $this->actingAs($user)->get(route('store.preview.audio', $preview))->assertForbidden();
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100,
+            'total_rials' => 100,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'granted_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('store.preview.audio', $preview));
+        $response->assertOk();
+        $this->assertSame('private-audio', $response->streamedContent());
+    }
+
+    public function test_reader_exposes_only_the_audio_route_and_word_timing_manifest(): void
+    {
+        [$product, $preview] = $this->makePreviewFixture();
+        Storage::disk('private')->put('store/reader-audio/sample/narration.mp3', 'audio-bytes');
+        $preview->update([
+            'audio_disk' => 'private',
+            'audio_path' => 'store/reader-audio/sample/narration.mp3',
+            'audio_mime' => 'audio/mpeg',
+            'audio_timing' => [['text' => 'سلام', 'start' => 0, 'end' => 0.4, 'page' => 1]],
+        ]);
+
+        $response = $this->get(route('store.reader', $product->slug));
+        $response->assertOk()
+            ->assertSee(route('store.preview.audio', $preview))
+            ->assertSee('data-audio-timing')
+            ->assertSee('farast-reader-audio.js')
+            ->assertSee('سلام')
+            ->assertDontSee('store/reader-audio/sample/narration.mp3');
+    }
+
 }

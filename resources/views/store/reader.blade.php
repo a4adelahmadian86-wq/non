@@ -3,7 +3,7 @@
 @php
   $readerWatermark = trim((string) ($readerIdentity ?? ('کاربر #'.auth()->id())));
 @endphp
-<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}">
+<section class="farast-reader" dir="rtl" data-reader-root data-theme="dark" data-product-id="{{ $product->id }}" @auth data-reader-state-url="{{ route('store.reader.state.show', $product) }}" @endauth>
   <header class="farast-reader-header">
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
@@ -80,7 +80,7 @@
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
       <div class="farast-reader-pages" id="reader-pages">
         @foreach($previews as $i => $preview)
-          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}">
+          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}" @if($preview->audio_path) data-audio-url="{{ route('store.preview.audio',$preview) }}" data-audio-timing="{{ json_encode($preview->audio_timing ?? [], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP) }}" @endif>
             <div class="farast-reader-page-content">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <div class="farast-pdf-document" data-pdf-url="{{ route('store.preview',$preview) }}" aria-label="نمایش سند PDF">
@@ -141,5 +141,6 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261108secure-reader7"></script>
+<script src="/js/farast-reader.js?v=20261108audio3"></script>
+<script src="/js/farast-reader-audio.js?v=20261108audio3" defer></script>
 @endpush
