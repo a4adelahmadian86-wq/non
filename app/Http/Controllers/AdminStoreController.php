@@ -346,7 +346,7 @@ class AdminStoreController extends Controller
                 $directory = 'store/previews/'.$product->id;
                 $filename = Str::random(40).'.'.$extension;
                 $preparedPath = $directory.'/'.$filename;
-                abort_unless(Storage::disk('private')->move($sourcePath, $preparedPath), 503, 'انتقال فایل آماده ممکن نشد.');
+                abort_unless(Storage::disk('private')->put($preparedPath, Storage::disk('private')->get($sourcePath)), 503, 'ذخیره فایل آماده ممکن نشد.');
                 $finalPath = $preparedPath;
             }
 
