@@ -17,7 +17,7 @@
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
   group.setAttribute('aria-label', 'ابزارهای شخصی مطالعه');
-  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button></div>';
+  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-export><i class="fa-solid fa-file-export"></i><span>خروجی یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-import><i class="fa-solid fa-file-import"></i><span>بازیابی</span></button><input type="file" accept="application/json,.json" data-reader-import-file hidden aria-label="انتخاب پشتیبان یادداشت‌ها"></div>';
   const status = document.createElement('span');
   status.className = 'sr-only';
   status.setAttribute('role', 'status');
@@ -50,7 +50,7 @@
     .farast-reader-note{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--reader-line);font-size:.75rem}
     .farast-reader-note blockquote{margin:4px 0;color:var(--reader-muted);border-right:2px solid #60a5fa;padding-right:8px}
     .farast-reader-note button{align-self:start;border:1px solid var(--reader-line);border-radius:6px;background:transparent;color:var(--reader-text);padding:4px 7px;cursor:pointer}
-    .farast-reader-local-highlight{background:rgba(250,204,21,.55);color:inherit;border-radius:2px}
+    .farast-reader-local-highlight{background:rgba(250,204,21,.55);color:inherit;border-radius:2px}\n    .farast-reader-personal-tools [data-reader-import-file]{display:none}
     @media(max-width:760px){.farast-reader-personal-tools{justify-content:center}.reader-personal-label{font-size:.65rem}}
   `;
   document.head.append(css);
@@ -80,6 +80,32 @@
   const highlightButton = group.querySelector('[data-reader-highlight]');
   const noteButton = group.querySelector('[data-reader-note]');
   const notesButton = group.querySelector('[data-reader-notes]');
+  const exportButton = group.querySelector('[data-reader-export]');
+  const importButton = group.querySelector('[data-reader-import]');
+  const importFile = group.querySelector('[data-reader-import-file]');
+  exportButton.addEventListener('click', () => {
+    const payload = { format: 'farast-reader-personal-tools', version: 1, product, exportedAt: new Date().toISOString(), data: state };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = 'farast-reader-notes-' + String(product).replace(/[^a-z0-9_-]/gi, '-') + '.json';
+    document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    announce('نسخهٔ پشتیبان شخصی آماده شد.');
+  });
+  importButton.addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files?.[0]; if (!file) return;
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error('حجم فایل پشتیبان بیش از ۲ مگابایت است.');
+      const payload = JSON.parse(await file.text());
+      if (payload.format !== 'farast-reader-personal-tools' || payload.version !== 1 || !payload.data || typeof payload.data !== 'object') throw new Error('ساختار فایل پشتیبان معتبر نیست.');
+      const incoming = payload.data;
+      if (!Array.isArray(incoming.highlights) || !Array.isArray(incoming.notes) || incoming.highlights.length > 500 || incoming.notes.length > 500) throw new Error('محتوای فایل پشتیبان معتبر نیست.');
+      if (!window.confirm('یادداشت‌ها و هایلایت‌های فعلی با نسخهٔ پشتیبان جایگزین شوند؟')) return;
+      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))) };
+      persist(); applyPrefs(); renderNotes(); renderHighlights(); announce('نسخهٔ پشتیبان در همین مرورگر بازیابی شد.');
+    } catch (error) { announce(error.message || 'بازیابی فایل ناموفق بود.'); }
+    finally { importFile.value = ''; }
+  });
   highlightButton.addEventListener('click', () => {
     const context = getContext();
     if (!context) return announce('ابتدا بخشی از متن قابل انتخاب را انتخاب کنید.');
