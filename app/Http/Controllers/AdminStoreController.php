@@ -9,6 +9,7 @@ use App\Models\StoreProductFile;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
+use App\Services\LocalFileInspector;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
@@ -266,6 +267,189 @@ class AdminStoreController extends Controller
         $product->delete();
 
         return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
+    }
+
+    public function inspectFiles(Request $request, StoreProduct $product, LocalFileInspector $inspector)
+    {
+        abort_unless($product->type !== 'course', 422, 'برای دوره، منابع را در بخش جلسات بارگذاری کنید.');
+        $request->validate([
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => 'required|file|max:51200|mimes:pdf,zip,jpg,jpeg,png,webp,gif,docx,xlsx,pptx,txt,md,csv,mp3,m4a,wav,mp4,webm',
+        ]);
+
+        $createdPaths = [];
+        $intakes = [];
+        try {
+            foreach ($request->file('files', []) as $upload) {
+                $details = $inspector->inspect($upload);
+                $id = (string) Str::uuid();
+                $extension = preg_replace('/[^a-z0-9]+/i', '', (string) $details['extension']) ?: 'bin';
+                $path = $upload->storeAs('store/quarantine/intakes/'.$product->id, $id.'.'.$extension, 'private');
+                if (! $path) {
+                    throw new \\RuntimeException('intake_stage_write_failed');
+                }
+                $createdPaths[] = $path;
+                DB::table('store_file_intakes')->insert([
+                    'id' => $id,
+                    'product_id' => $product->id,
+                    'user_id' => auth()->id(),
+                    'disk' => 'private',
+                    'path' => $path,
+                    'original_name' => $details['original_name'],
+                    'mime' => $details['mime'],
+                    'extension' => $details['extension'],
+                    'size_bytes' => $details['size_bytes'],
+                    'sha256' => $details['sha256'],
+                    'status' => 'awaiting_confirmation',
+                    'inspection_json' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    'expires_at' => now()->addMinutes(30),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $intakes[] = ['id' => $id, 'inspection' => $details];
+            }
+        } catch (\\Throwable $exception) {
+            foreach ($createdPaths as $stagedPath) {
+                Storage::disk('private')->delete($stagedPath);
+            }
+            throw $exception;
+        }
+
+        return response()->json([
+            'ok' => true,
+            'intakes' => $intakes,
+            'message' => 'بررسی اولیه محلی انجام شد. هنوز هیچ فایلی در مخزن نهایی ثبت نشده است.',
+        ]);
+    }
+
+    public function confirmFiles(Request $request, StoreProduct $product, UploadSecurityService $security)
+    {
+        abort_unless($product->type !== 'course', 422);
+        $data = $request->validate([
+            'intake_ids' => 'required|array|min:1|max:10',
+            'intake_ids.*' => 'required|uuid',
+            'is_primary' => 'nullable|boolean',
+        ]);
+
+        $intakes = DB::table('store_file_intakes')
+            ->where('product_id', $product->id)
+            ->where('user_id', auth()->id())
+            ->whereIn('id', $data['intake_ids'])
+            ->where('status', 'awaiting_confirmation')
+            ->where('expires_at', '>', now())
+            ->orderBy('created_at')
+            ->get();
+
+        abort_unless($intakes->count() === count(array_unique($data['intake_ids'])), 409, 'جلسه بررسی منقضی شده یا معتبر نیست.');
+
+        $allowedMimes = [
+            'application/pdf', 'application/zip', 'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'text/plain', 'text/markdown', 'text/csv', 'audio/mpeg', 'audio/mp4', 'audio/wav',
+            'video/mp4', 'video/webm',
+        ];
+
+        $prepared = [];
+        foreach ($intakes as $intake) {
+            $disk = Storage::disk($intake->disk);
+            abort_unless($disk->exists($intake->path), 404, 'یکی از فایل‌های موقت دیگر موجود نیست.');
+            $scan = $security->inspect($intake->path, $intake->mime, 50 * 1024 * 1024, $allowedMimes);
+            abort_unless(($scan['safe'] ?? false) && hash_equals((string) $intake->sha256, (string) $scan['checksum']), 422, 'بررسی امنیتی یکی از فایل‌ها موفق نبود.');
+            $prepared[] = ['intake' => $intake, 'scan' => $scan];
+        }
+
+        $moved = [];
+        $records = [];
+        try {
+            foreach ($prepared as $item) {
+                $intake = $item['intake'];
+                $extension = preg_replace('/[^a-z0-9]+/i', '', (string) $intake->extension) ?: 'bin';
+                $finalPath = 'store/products/'.$product->id.'/'.Str::random(40).'.'.$extension;
+                if (! Storage::disk('private')->move($intake->path, $finalPath)) {
+                    throw new \\RuntimeException('intake_final_storage_move_failed');
+                }
+                $moved[] = $finalPath;
+                $records[] = ['intake' => $intake, 'scan' => $item['scan'], 'path' => $finalPath];
+            }
+
+            $saved = DB::transaction(function () use ($product, $records, $request) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+                $primaryPending = $request->boolean('is_primary');
+                $created = [];
+                if ($primaryPending) {
+                    $lockedProduct->files()->where('purpose', 'product_download')->update(['is_primary' => false]);
+                }
+
+                foreach ($records as $index => $item) {
+                    $intake = $item['intake'];
+                    $scan = $item['scan'];
+                    $file = StoreProductFile::create([
+                        'product_id' => $lockedProduct->id,
+                        'purpose' => 'product_download',
+                        'version' => $lockedProduct->version,
+                        'disk' => 'private',
+                        'path' => $item['path'],
+                        'original_name' => $intake->original_name,
+                        'mime' => $scan['mime'],
+                        'size_bytes' => $scan['size'],
+                        'sha256' => $scan['checksum'],
+                        'is_primary' => $primaryPending && $index === 0,
+                        'is_active' => true,
+                        'scan_status' => 'clean',
+                        'scan_engine' => $scan['scan_engine'] ?? 'farast-static-policy-v1',
+                        'scanned_at' => now(),
+                    ]);
+
+                    DB::table('store_document_records')->insert([
+                        'product_id' => $lockedProduct->id,
+                        'file_id' => $file->id,
+                        'source_sha256' => $file->sha256,
+                        'detected_mime' => $file->mime,
+                        'detected_type' => data_get(json_decode((string) $intake->inspection_json, true), 'detected_type'),
+                        'status' => 'queued',
+                        'content_version' => 1,
+                        'knowledge_version' => 0,
+                        'metadata' => json_encode([
+                            'intake_id' => $intake->id,
+                            'local_inspection' => json_decode((string) $intake->inspection_json, true),
+                            'static_scan_engine' => $scan['scan_engine'] ?? 'farast-static-policy-v1',
+                            'static_scan_findings' => $scan['scan_findings'] ?? [],
+                            'static_scan_disclaimer' => $scan['scan_disclaimer'] ?? null,
+                        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    DB::table('store_file_intakes')->where('id', $intake->id)->update([
+                        'status' => 'stored',
+                        'confirmed_file_id' => $file->id,
+                        'updated_at' => now(),
+                    ]);
+                    $created[] = ['id' => $file->id, 'name' => $file->original_name, 'status' => 'queued'];
+                    $this->audit('store.product.file_uploaded', $lockedProduct, [
+                        'file_id' => $file->id,
+                        'mime' => $file->mime,
+                        'size_bytes' => $file->size_bytes,
+                        'sha256' => $file->sha256,
+                    ]);
+                }
+
+                return $created;
+            });
+        } catch (\\Throwable $exception) {
+            foreach ($moved as $finalPath) {
+                Storage::disk('private')->delete($finalPath);
+            }
+            throw $exception;
+        }
+
+        return response()->json([
+            'ok' => true,
+            'files' => $saved,
+            'message' => 'اسکن داخلی تکمیل شد و فایل‌ها در فضای ذخیره‌سازی امن ثبت شدند. پردازش محتوایی در صف قرار گرفت.',
+        ]);
     }
 
     public function uploadFile(Request $request, StoreProduct $product, UploadSecurityService $security)
