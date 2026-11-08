@@ -403,7 +403,6 @@ class StoreController extends Controller
                             'page_kind' => $page->page_kind,
                             'page_label' => $label,
                             'reader_page_url' => route('store.reader.page', [$product, $page->page_number]),
-                            'audio_timing' => $readerAudioTiming,
                         ];
                     })->values();
                 }
