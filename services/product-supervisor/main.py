@@ -196,6 +196,9 @@ async def review_product(snapshot: ProductSnapshot):
         except Exception:
             continue
 
+    if verdict == "approved" and any(item.severity == "critical" for item in findings):
+        verdict = "needs_changes"
+
     # Deterministic publication blockers are enforced in code, not left to model judgment.
     blockers: list[Finding] = []
     if not snapshot.category_name:
