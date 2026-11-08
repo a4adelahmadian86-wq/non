@@ -452,6 +452,39 @@ test.describe('FARAST sample reader interactions', () => {
 
 });
 
+test('supports PageUp PageDown Home and End shortcuts without hijacking form controls', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section data-reader-root data-product-id="keyboard-shortcuts">
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1"></article>
+      <article class="farast-reader-page-item" data-index="1" data-reader-page="2"></article>
+      <div id="reader-stage"></div>
+      <button id="reader-prev" type="button">previous</button>
+      <button id="reader-next" type="button">next</button>
+      <input id="reader-page-number" value="1">
+      <div class="reader-page-input"><span>1</span><span>/ 2</span></div>
+      <div id="reader-progress"></div>
+      <div class="farast-reader-progress" role="progressbar"></div>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader.js') });
+  await expect(page.locator('.farast-reader-page-item').nth(0)).toHaveClass(/is-active/);
+
+  await page.keyboard.press('PageDown');
+  await expect(page.locator('.farast-reader-page-item').nth(1)).toHaveClass(/is-active/);
+  await page.keyboard.press('Home');
+  await expect(page.locator('.farast-reader-page-item').nth(0)).toHaveClass(/is-active/);
+  await page.keyboard.press('End');
+  await expect(page.locator('.farast-reader-page-item').nth(1)).toHaveClass(/is-active/);
+  await page.keyboard.press('PageUp');
+  await expect(page.locator('.farast-reader-page-item').nth(0)).toHaveClass(/is-active/);
+
+  const pageInput = page.locator('#reader-page-number');
+  await pageInput.focus();
+  await page.keyboard.press('PageDown');
+  await expect(page.locator('.farast-reader-page-item').nth(0)).toHaveClass(/is-active/);
+});
+
 test('renders Word headings lists and tables as safe semantic document blocks', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
