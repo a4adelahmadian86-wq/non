@@ -92,28 +92,33 @@
       if (id !== requestId) return;
       if (!blob.size || blob.size > 8 * 1024 * 1024) throw new Error('اندازه صدای تولیدشده معتبر نیست.');
       activeUrl = URL.createObjectURL(blob);
-      activeAudio = new Audio(activeUrl);
-      activeAudio.preload = 'auto';
-      activeAudio.playbackRate = Number(root.querySelector('[data-audio-speed]')?.value || 1);
-      activeAudio.volume = Number(root.querySelector('[data-audio-volume]')?.value || 1);
+      const player = new Audio(activeUrl);
+      activeAudio = player;
+      player.preload = 'auto';
+      player.playbackRate = Number(root.querySelector('[data-audio-speed]')?.value || 1);
+      player.volume = Number(root.querySelector('[data-audio-volume]')?.value || 1);
       activeElement = element || null;
       activeElement?.classList.add('reader-audio-selection-active');
-      activeAudio.addEventListener('timeupdate', syncSnippetControls);
-      activeAudio.addEventListener('play', syncSnippetControls);
-      activeAudio.addEventListener('pause', syncSnippetControls);
-      activeAudio.addEventListener('ended', () => {
+      player.addEventListener('timeupdate', syncSnippetControls);
+      player.addEventListener('play', syncSnippetControls);
+      player.addEventListener('pause', syncSnippetControls);
+      player.addEventListener('ended', () => {
+        if (id !== requestId || activeAudio !== player) return;
         if (status()) status().textContent = 'پایان صدای انتخاب‌شده';
         stop();
       }, { once: true });
-      activeAudio.addEventListener('error', () => {
+      player.addEventListener('error', () => {
+        if (id !== requestId || activeAudio !== player) return;
         if (status()) status().textContent = 'پخش صدای انتخاب‌شده ناموفق بود.';
         stop();
       }, { once: true });
-      await activeAudio.play();
+      await player.play();
+      if (id !== requestId || activeAudio !== player) return;
       syncSnippetControls();
       if (status()) status().textContent = label || 'در حال خواندن بخش انتخاب‌شده';
     } catch (error) {
-      if (id === requestId && status()) status().textContent = error.message || 'پخش صدای انتخاب‌شده ناموفق بود.';
+      if (id !== requestId) return;
+      if (status()) status().textContent = error.message || 'پخش صدای انتخاب‌شده ناموفق بود.';
       stop();
     }
   };
@@ -180,22 +185,24 @@
         if (!blob.size || blob.size > 8 * 1024 * 1024) throw new Error('اندازه صدای تولیدشده معتبر نیست.');
         if (activeUrl) URL.revokeObjectURL(activeUrl);
         activeUrl = URL.createObjectURL(blob);
-        activeAudio = new Audio(activeUrl);
-        activeAudio.preload = 'auto';
-        activeAudio.playbackRate = Number(root.querySelector('[data-audio-speed]')?.value || 1);
-        activeAudio.volume = Number(root.querySelector('[data-audio-volume]')?.value || 1);
+        const player = new Audio(activeUrl);
+        activeAudio = player;
+        player.preload = 'auto';
+        player.playbackRate = Number(root.querySelector('[data-audio-speed]')?.value || 1);
+        player.volume = Number(root.querySelector('[data-audio-volume]')?.value || 1);
         activeElement = element || null;
         activeElement?.classList.add('reader-audio-selection-active');
-        activeAudio.addEventListener('timeupdate', syncSnippetControls);
-        activeAudio.addEventListener('play', syncSnippetControls);
-        activeAudio.addEventListener('pause', syncSnippetControls);
-        activeAudio.addEventListener('ended', () => {
+        player.addEventListener('timeupdate', syncSnippetControls);
+        player.addEventListener('play', syncSnippetControls);
+        player.addEventListener('pause', syncSnippetControls);
+        player.addEventListener('ended', () => {
+          if (id !== requestId || activeAudio !== player) return;
           activeElement?.classList.remove('reader-audio-selection-active');
           activeElement = null;
           activeAudio = null;
           if (activeUrl) URL.revokeObjectURL(activeUrl);
           activeUrl = null;
-          if (id !== requestId) return;
+          syncSnippetControls();
           if (index + 1 < chunks.length) {
             void playAt(index + 1);
           } else {
@@ -203,15 +210,18 @@
             stop();
           }
         }, { once: true });
-        activeAudio.addEventListener('error', () => {
+        player.addEventListener('error', () => {
+          if (id !== requestId || activeAudio !== player) return;
           if (status()) status().textContent = 'پخش صدای صفحه ناموفق بود.';
           stop();
         }, { once: true });
-        await activeAudio.play();
+        await player.play();
+        if (id !== requestId || activeAudio !== player) return;
         syncSnippetControls();
         if (status()) status().textContent = label || ('در حال خواندن صفحه · بخش ' + (index + 1) + ' از ' + chunks.length);
       } catch (error) {
-        if (id === requestId && status()) status().textContent = error.message || 'پخش صدای صفحه ناموفق بود.';
+        if (id !== requestId) return;
+        if (status()) status().textContent = error.message || 'پخش صدای صفحه ناموفق بود.';
         stop();
       }
     };
