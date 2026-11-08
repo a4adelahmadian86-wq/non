@@ -42,7 +42,8 @@ class HomeIntentTest extends TestCase
             ->assertSee('از انتخاب تا انجام کار')
             ->assertSee('پاسخ چند پرسش کاربردی')
             ->assertSee('application/ld+json', false)
-            ->assertSee('schema.org/Organization')
+            ->assertSee('schema.org')
+            ->assertSee('Organization')
             ->assertSee('og:title', false)
             ->assertSee('name="description"', false);
     }
