@@ -60,4 +60,17 @@ class StoreProductDocumentPageBuilderTest extends TestCase
         $this->assertSame(1, $result['chunk_locators'][0]['reader_page']);
         $this->assertSame(2, $result['chunk_locators'][1]['reader_page']);
     }
+    public function test_reader_html_exposes_sentence_and_paragraph_playback_targets(): void
+    {
+        $result = app(StoreProductDocumentPageBuilder::class)->build([
+            ['chunk_type' => 'text', 'locator' => ['page' => 1], 'content_text' => "سلام. حال شما چطور است؟\n\nاین پاراگراف دوم است."],
+        ], ['detected_type' => 'pdf', 'page_count' => 1]);
+
+        $html = $result['pages'][0]['content_html'];
+        $this->assertStringContainsString('reader-document-paragraph', $html);
+        $this->assertStringContainsString('reader-document-sentence', $html);
+        $this->assertStringContainsString('سلام.', $html);
+        $this->assertStringContainsString('این پاراگراف دوم است.', $html);
+        $this->assertSame("سلام. حال شما چطور است؟\n\nاین پاراگراف دوم است.", $result['pages'][0]['content_text']);
+    }
 }
