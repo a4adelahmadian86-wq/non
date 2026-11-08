@@ -208,8 +208,23 @@ class ProcessProductDocument implements ShouldQueue
             }
 
             $inspection = is_array($payload['inspection'] ?? null) ? $payload['inspection'] : [];
+            $pageBuild = app(\\App\\Services\\StoreProductDocumentPageBuilder::class)->build($chunks, $inspection);
+            $locked->pages()->delete();
+            foreach ($pageBuild['pages'] as $page) {
+                $locked->pages()->create($page);
+            }
+            foreach ($pageBuild['chunk_locators'] as $chunkIndex => $locator) {
+                $locked->chunks()->where('chunk_index', (int) $chunkIndex)->update(['locator_json' => $locator]);
+            }
+
             $structure = (array) ($locked->structure_json ?? []);
             $structure['inspection'] = $inspection;
+            $structure['reader'] = [
+                'ready' => $pageBuild['page_count'] > 0,
+                'page_count' => (int) $pageBuild['page_count'],
+                'representation' => 'server_generated_html',
+                'source_sha256' => $locked->source_sha256,
+            ];
             $structure['analysis_representation'] = $sourceExtension === 'docx' ? 'converted_pdf' : ($inspection['detected_type'] ?? 'unknown');
             $structure['fact_count'] = $storedFactCount;
             $structure['ai_review'] = [
