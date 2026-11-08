@@ -1,10 +1,10 @@
 <?php
 
-namespace Tests\\Unit;
+namespace Tests\Unit;
 
-use App\\Services\\StoreProductDocumentPageBuilder;
+use App\Services\StoreProductDocumentPageBuilder;
 use InvalidArgumentException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class StoreProductDocumentPageBuilderCompletenessTest extends TestCase
 {
