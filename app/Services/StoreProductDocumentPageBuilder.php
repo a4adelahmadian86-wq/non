@@ -113,21 +113,30 @@ class StoreProductDocumentPageBuilder
             }
 
             $contentText = implode("\n\n", $textParts);
-            $htmlLines = [];
-            foreach (preg_split('/\R/u', $contentText) ?: [] as $line) {
-                $safeLine = htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                $htmlLines[] = '<span class="reader-document-line" style="position:relative;display:block;color:#1f2937;white-space:pre-wrap;line-height:1.95;unicode-bidi:plaintext;">'.($safeLine === '' ? '&nbsp;' : $safeLine).'</span>';
+            $htmlParagraphs = [];
+            foreach (preg_split('/(?:\r?\n){2,}/u', $contentText) ?: [] as $paragraph) {
+                $paragraph = trim($paragraph);
+                if ($paragraph === '') continue;
+                $sentenceHtml = [];
+                foreach (preg_split('/(?<=[.!؟۔؛])\s+/u', $paragraph, -1, PREG_SPLIT_NO_EMPTY) ?: [$paragraph] as $sentence) {
+                    $safeSentence = htmlspecialchars(trim($sentence), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                    if ($safeSentence !== '') {
+                        $sentenceHtml[] = '<span class="reader-document-sentence" role="button" tabindex="0">'.$safeSentence.'</span>';
+                    }
+                }
+                if ($sentenceHtml !== []) {
+                    $htmlParagraphs[] = '<p class="reader-document-paragraph" tabindex="0" role="button">'.implode(' ', $sentenceHtml).'</p>';
+                }
             }
-
-            if ($htmlLines === []) {
-                $htmlLines[] = '<p class="reader-document-empty">متن قابل استخراجی برای این بخش موجود نیست؛ محتوای بصری آن هنوز در نسخه خوانش متنی آماده نشده است.</p>';
+            if ($htmlParagraphs === []) {
+                $htmlParagraphs[] = '<p class="reader-document-empty">متن قابل استخراجی برای این بخش موجود نیست؛ محتوای بصری آن هنوز در نسخه خوانش متنی آماده نشده است.</p>';
             }
 
             $safeLabel = htmlspecialchars((string) $group['label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $contentHtml = '<section class="farast-document-html-page" dir="auto">'
                 .'<div class="farast-document-html-heading">'.$safeLabel.'</div>'
                 .'<div class="farast-pdf-text-layer" style="position:relative;display:block;inset:auto;overflow:visible;opacity:1;line-height:1.95;user-select:text;-webkit-user-select:text;">'
-                .implode("\n", $htmlLines)
+                .implode("\n", $htmlParagraphs)
                 .'</div></section>';
 
             $pages[] = [
