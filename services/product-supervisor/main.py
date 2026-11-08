@@ -248,7 +248,7 @@ async def review_product_file(
                 warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ درباره محتوای تصویر ادعایی ثبت نشد.")
         else:
             provider_status["groq_vision"] = "not_configured"
-            warnings.append("کلید Groq تنظیم نشده است؛ تحلیل هوشمند تصاویر انجام نشد.")
+            warnings.append("کلید Groq تنظیم نشده یا تأیید Zero Data Retention فعال نیست؛ هیچ تصویر محصولی به سرویس خارجی ارسال نشد.")
 
     visual_report = "\n".join(
         f"{json.dumps(item['locator'], ensure_ascii=False)}: {item['content_text']}"
@@ -268,7 +268,7 @@ async def review_product_file(
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
         else:
             provider_status["groq_transcription"] = "not_configured"
-            warnings.append("کلید Groq تنظیم نشده است؛ تبدیل صوت به متن انجام نشد.")
+            warnings.append("کلید Groq تنظیم نشده یا تأیید Zero Data Retention فعال نیست؛ هیچ صوتی به سرویس خارجی ارسال نشد.")
 
     groq_statuses = [provider_status["groq_vision"], provider_status["groq_transcription"]]
     if any(status in {"completed", "partial"} for status in groq_statuses):
@@ -304,7 +304,7 @@ async def review_product_file(
                 warnings.append("تمام درخواست‌های تحلیل متنی Groq ناموفق بود؛ گزارش محتوایی قابل اتکا تولید نشد.")
             elif analysis_status == "not_configured":
                 provider_status["groq_text"] = "not_configured"
-                warnings.append("کلید Groq تنظیم نشده است؛ تحلیل متنی فایل انجام نشد.")
+                warnings.append("کلید Groq تنظیم نشده یا تأیید Zero Data Retention فعال نیست؛ هیچ متن فایلی به سرویس خارجی ارسال نشد.")
             else:
                 provider_status["groq_text"] = "unavailable"
                 warnings.append("تحلیل متنی Groq نتیجه معتبر برنگرداند؛ گزارش محتوایی قابل اتکا تولید نشد.")
