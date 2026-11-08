@@ -49,12 +49,14 @@ class Inspection:
     antivirus_status: str = "not_configured"
     upstream_scan_status: str = "not_provided"
     content_chunks: list[dict[str, Any]] = field(default_factory=list)
+    page_count: int | None = None
 
     def public_dict(self) -> dict[str, Any]:
         return {
             "detected_type": self.detected_type,
             "upstream_scan_status": self.upstream_scan_status,
             "extracted_characters": len(self.extracted_text),
+            "page_count": self.page_count,
             "archive_entries": (self.archive_entries or [])[:50],
             "warnings": self.warnings or [],
             "antivirus_status": self.antivirus_status,
@@ -369,6 +371,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
     if data.startswith(b"%PDF-"):
         result.detected_type = "pdf"
         result.extracted_text = _extract_pdf(data)
+        result.page_count = len(PdfReader(io.BytesIO(data), strict=True).pages)
         if not result.extracted_text.strip():
             result.warnings.append("متن قابل استخراجی در PDF پیدا نشد؛ احتمالاً فایل اسکن تصویری است.")
     elif data.startswith(b"PK\x03\x04"):
@@ -384,6 +387,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         elif "[Content_Types].xml" in names and "ppt/presentation.xml" in names:
             result.detected_type = "pptx"
             result.extracted_text = _extract_pptx(data)
+            result.page_count = min(100, result.extracted_text.count("اسلاید "))
         else:
             result.detected_type = "zip"
             result.warnings.append("محتوای آرشیو استخراج یا اجرا نشد؛ فقط فهرست ساختاری آن بررسی شد.")
