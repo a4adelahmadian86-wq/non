@@ -290,8 +290,17 @@
     input.addEventListener('input', render);
     render();
   };
-  bindPreview('[data-seo-title]', '[data-seo-preview-title]', 'عنوان محصول شما');
-  bindPreview('[data-seo-description]', '[data-seo-preview-description]', 'توضیحات محصول شما در این قسمت نمایش داده می‌شود.');
+  const titleInput = form.querySelector('[data-product-title]');
+  const seoTitleInput = form.querySelector('[data-seo-title]');
+  const seoTitleOutput = document.querySelector('[data-seo-preview-title]');
+  bindPreview('[data-seo-title]', '[data-seo-preview-title]', titleInput?.value || 'عنوان محصول شما');
+  if (titleInput && seoTitleInput && seoTitleOutput) {
+    titleInput.addEventListener('input', () => {
+      if (!seoTitleInput.value.trim()) seoTitleOutput.textContent = titleInput.value.trim() || 'عنوان محصول شما';
+    });
+  }
+  const shortDescriptionInput = form.querySelector('[data-product-short-description]');
+  bindPreview('[data-seo-description]', '[data-seo-preview-description]', shortDescriptionInput?.value || 'توضیحات محصول شما در این قسمت نمایش داده می‌شود.');
   const slugInput = form.querySelector('[data-product-slug]');
   const slugOutput = document.querySelector('[data-seo-preview-url]');
   if (slugInput && slugOutput) {
