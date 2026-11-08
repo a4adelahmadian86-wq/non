@@ -33,7 +33,7 @@ Route::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[a-z
 Route::get('/store',[StoreController::class,'index'])->name('store');
 Route::get('/store/category/{slug}',[StoreController::class,'category'])->name('store.category');
 Route::get('/store/product/{slug}',[StoreController::class,'product'])->name('store.product');
-Route::get('/store/preview/{preview}',[StoreController::class,'preview'])->middleware(['auth','throttle:120,10'])->name('store.preview');
+Route::get('/store/preview/{preview}',[StoreController::class,'preview'])->middleware(['throttle:120,10'])->name('store.preview');
 Route::get('/cart',[StoreCartController::class,'index'])->name('cart');
 Route::get('/cart/summary',[StoreCartController::class,'summary'])->middleware('throttle:60,1')->name('cart.summary');
 Route::post('/cart/products/{product}',[StoreCartController::class,'add'])->middleware('throttle:60,10')->name('cart.add');
