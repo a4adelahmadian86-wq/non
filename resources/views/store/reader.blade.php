@@ -13,7 +13,7 @@
     <div class="farast-reader-account"><i class="fa-solid fa-user-shield"></i><span>{{ $readerWatermark }}</span></div>
   </header>
 
-  @if(($readerMode ?? 'sample') === 'document' && filled($readerAudioUrl ?? null) && !empty($readerAudioTiming))
+  @if(($readerMode ?? 'sample') === 'document')
     <section class="farast-reader-audio" data-reader-audio aria-label="پخش صوت کامل سند" hidden>
       <button type="button" data-audio-play aria-label="پخش صوت سند"><i class="fa-solid fa-play"></i></button>
       <input type="range" min="0" max="1000" value="0" step="1" data-audio-seek aria-label="موقعیت پخش صوت سند">
@@ -27,7 +27,9 @@
       </label>
       <span class="farast-reader-audio-status" data-audio-status aria-live="polite">صوت سند آماده است</span>
     </section>
-    <script type="application/json" id="reader-audio-timing">{!! json_encode($readerAudioTiming, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) !!}</script>
+    @if(filled($readerAudioUrl ?? null) && !empty($readerAudioTiming))
+      <script type="application/json" id="reader-audio-timing">{!! json_encode($readerAudioTiming, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) !!}</script>
+    @endif
   @endif
 
   <nav class="farast-reader-toolbar" aria-label="ابزارهای مطالعه">
