@@ -278,10 +278,10 @@
     activeSection = section;
     activeTrack = track;
     activePage = page;
-    rangeEnd = null;
     clearMarks();
 
     if (!sameSource) {
+      rangeEnd = null;
       audio.pause();
       audio.src = track.url;
       audio.load();
