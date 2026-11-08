@@ -22,12 +22,12 @@ class ProductDocumentAudioService
             return null;
         }
 
-        $url = (string) config('services.voice_tts.url');
+        $url = (string) config('services.document_audio.url');
         if (! str_starts_with($url, 'https://') && ! str_starts_with($url, 'http://127.0.0.1:')) {
             throw new RuntimeException('product_audio_requires_trusted_endpoint');
         }
 
-        $token = (string) config('services.voice_tts.token');
+        $token = (string) config('services.document_audio.token');
         $voiceId = (string) config('services.document_audio.voice_id', 'farast-document-fa-male-37-v1');
         $pcm = '';
         $format = null;
@@ -39,13 +39,14 @@ class ProductDocumentAudioService
             $text = trim((string) ($chunk['content_text'] ?? ''));
             if ($text === '') continue;
 
+            foreach ($this->splitForSpeech($text) as $speechText) {
             $response = Http::accept('audio/wav')
                 ->withToken($token)
                 ->asJson()
                 ->connectTimeout(8)
                 ->timeout(90)
                 ->post($url, [
-                    'text' => mb_substr($text, 0, 6000),
+                    'text' => $speechText,
                     'language' => 'fa-IR',
                     'voice_id' => $voiceId,
                 ]);
@@ -78,8 +79,10 @@ class ProductDocumentAudioService
                 'locator' => is_array($chunk['locator'] ?? null) ? $chunk['locator'] : [],
                 'start_ms' => $startMs,
                 'end_ms' => $durationMs,
-                'text_sha256' => hash('sha256', $text),
+                'text' => $speechText,
+                'text_sha256' => hash('sha256', $speechText),
             ];
+            }
         }
 
         if ($pcm === '' || $format === null) {
@@ -94,6 +97,33 @@ class ProductDocumentAudioService
             'duration_ms' => $durationMs,
             'segments' => $segments,
         ];
+    }
+
+    /**
+     * Split at paragraph/sentence boundaries and never silently truncate source text.
+     * The returned pieces are kept in reading order for line-level reader timing.
+     */
+    private function splitForSpeech(string $text): array
+    {
+        $sentences = preg_split('/(?<=[.!؟۔؛])\s+|[\r\n]+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [$text];
+        $pieces = [];
+        $current = '';
+
+        foreach ($sentences as $sentence) {
+            $sentence = trim($sentence);
+            if ($sentence === '') continue;
+
+            foreach (mb_str_split($sentence, 6000, 'UTF-8') as $part) {
+                if ($current !== '' && mb_strlen($current.' '.$part, 'UTF-8') > 6000) {
+                    $pieces[] = $current;
+                    $current = '';
+                }
+                $current = $current === '' ? $part : $current.' '.$part;
+            }
+        }
+
+        if ($current !== '') $pieces[] = $current;
+        return $pieces;
     }
 
     private function parseWav(string $wav): array
