@@ -112,7 +112,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107reader1">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/web/pdf_viewer.css">
+<link rel="stylesheet" href="/vendor/pdfjs/web/pdf_viewer.css?v=6.5.438">
 <style>
 .farast-reader{--reader-bg:#0b1220;--reader-panel:#111d30;--reader-line:rgba(255,255,255,.09);--reader-text:#e8eef8;--reader-muted:#91a4c1;min-height:calc(100vh - 70px);background:var(--reader-bg);color:var(--reader-text);display:flex;flex-direction:column;font-family:inherit}
 .farast-reader[data-theme="light"]{--reader-bg:#e9eef6;--reader-panel:#fff;--reader-line:rgba(20,40,70,.12);--reader-text:#1c2b43;--reader-muted:#64748b}
@@ -135,5 +135,5 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261108secure-reader5"></script>
+<script src="/js/farast-reader.js?v=20261108secure-reader6"></script>
 @endpush
