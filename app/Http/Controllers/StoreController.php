@@ -303,12 +303,7 @@ class StoreController extends Controller
             $font = $renderer->getFontMetrics()->getFont('DejaVu Sans', 'normal');
             $canvas->page_text(260, 820, '{PAGE_NUM} / {PAGE_COUNT}', $font, 8, [0.38, 0.43, 0.52]);
 
-            $pdfHeaders = $headers;
-            $pdfHeaders['Content-Type'] = 'application/pdf';
-            $pdfHeaders['Content-Disposition'] = 'inline; filename="farast-word-preview.pdf"';
-            $pdfHeaders['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
-
-            return response($renderer->output(), 200, $pdfHeaders);
+            return $renderer->output();
         } catch (\Throwable $exception) {
             report($exception);
             abort(422, 'نمایش این فایل Word ممکن نیست. لطفاً فایل DOCX سالم‌تری بارگذاری کنید.');
