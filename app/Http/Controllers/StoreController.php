@@ -7,6 +7,7 @@ use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
 use App\Models\StoreLibraryItem;
+use App\Models\StoreProductDocumentAudio;
 use App\Models\StoreWishlist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -205,7 +206,7 @@ class StoreController extends Controller
             ? $knowledgeService->forAssistant($product, 120000, 500)
             : ['product_id' => (string) $product->id, 'knowledge_available' => false, 'documents' => []];
 
-        $documentAudio = $hasReaderEntitlement
+        $documentAudio = $hasReaderEntitlement && $fullPreviews->isNotEmpty()
             ? StoreProductDocumentAudio::query()
                 ->with('segments')
                 ->where('state', 'ready')
