@@ -501,6 +501,9 @@
       activeArticle()?.style.setProperty('--reader-zoom','1');
     }
     stage?.scrollTo({top:0,behavior:'smooth'});
+    root.dispatchEvent(new CustomEvent('farast:reader-section-change', {
+      detail: { index: itemIndex, page: itemIndex + 1, mode: root.dataset.readerMode || 'sample' }
+    }));
   };
 
   const setZoom=async(next)=>{
