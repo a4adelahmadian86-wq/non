@@ -126,6 +126,8 @@ class AdminProductFileIngestionController extends Controller
         abort_unless($disk->exists($session->quarantine_path), 410, 'فایل موقت دیگر در دسترس نیست؛ دوباره بارگذاری کنید.');
 
         $this->event($session, 'security_scan', 'running', 'اسکن امنیتی اختصاصی فراست', 'در حال بررسی مجدد فایل، امضاها و ساختار داخلی آن.');
+        $finalPath = null;
+        $targetDisk = null;
         try {
             $inspection = $scanner->inspect($disk->path($session->quarantine_path), $session->original_name, $session->detected_mime);
             $actualHash = hash_file('sha256', $disk->path($session->quarantine_path));
@@ -253,6 +255,9 @@ class AdminProductFileIngestionController extends Controller
                 'timeline' => $session->fresh()->events()->get(['stage', 'state', 'title', 'detail', 'created_at']),
             ]);
         } catch (Throwable $exception) {
+            if (is_string($finalPath) && $finalPath !== '' && $targetDisk) {
+                $targetDisk->delete($finalPath);
+            }
             $session->newQuery()->whereKey($session->id)->where('state', 'confirming')->update(['state' => 'failed']);
             $this->event($session, 'security_scan', 'failed', 'فرایند متوقف شد', $this->publicError($exception->getMessage()));
             report($exception);
