@@ -370,7 +370,7 @@ class StoreController extends Controller
                     }
 
                     if ($audioArtifactReady) {
-                        $readerAudioUrl = route('store.reader.audio', [$product, $document]);
+                        $readerAudioUrl = route('store.reader.audio', [$product, $document, 'version' => (int) $audioArtifact->version]);
                         $segments = (array) data_get($audioArtifact->metadata_json, 'segments', []);
                         $chunksByIndex = $document->chunks->keyBy('chunk_index');
                         foreach ($segments as $segment) {
@@ -566,11 +566,14 @@ class StoreController extends Controller
         );
 
         abort_unless((bool) data_get($document->structure_json, 'reader.ready', false), 409);
-        $artifact = $document->artifacts()
-            ->where('artifact_type', 'audio_full_wav')
-            ->where('version', '>=', 2)
-            ->orderByDesc('version')
-            ->get()
+        $artifactQuery = $document->artifacts()->where('artifact_type', 'audio_full_wav');
+        $requestedVersion = (int) request()->query('version', 0);
+        if ($requestedVersion >= 2) {
+            $artifactQuery->where('version', $requestedVersion);
+        } else {
+            $artifactQuery->where('version', '>=', 2)->orderByDesc('version');
+        }
+        $artifact = $artifactQuery->get()
             ->first(static fn ($candidate) => Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
         abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
