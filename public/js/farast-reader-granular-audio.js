@@ -10,6 +10,7 @@
   let activeUrl = null;
   let requestId = 0;
   let activeElement = null;
+  let suppressNextClick = false;
 
   const pageFor = element => {
     const article = element?.closest('.farast-reader-page-item') || root.querySelector('.farast-reader-page-item.is-active');
@@ -150,7 +151,15 @@
     return false;
   };
 
+  root.addEventListener('pointerdown', () => { suppressNextClick = false; }, true);
+
   root.addEventListener('click', event => {
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const word = event.target.closest('.reader-document-word,.reader-audio-word');
     if (word) {
       event.preventDefault();
@@ -244,6 +253,7 @@
     if (!text) return;
     const anchor = selection?.anchorNode?.parentElement;
     if (!anchor || !root.contains(anchor)) return;
+    suppressNextClick = true;
     speak(text, pageFor(anchor), anchor.closest(speechTarget) || anchor, 'در حال خواندن عبارت انتخاب‌شده');
     selection.removeAllRanges();
   });
