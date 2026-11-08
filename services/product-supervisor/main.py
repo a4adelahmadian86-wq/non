@@ -165,7 +165,7 @@ async def review_product(snapshot: ProductSnapshot):
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(35.0, connect=8.0)) as client:
-            response = await client.post(url, params={"key": api_key}, json=payload)
+            response = await client.post(url, headers={"x-goog-api-key": api_key}, json=payload)
             response.raise_for_status()
             envelope = response.json()
             raw = envelope["candidates"][0]["content"]["parts"][0]["text"]
