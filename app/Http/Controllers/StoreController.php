@@ -183,6 +183,46 @@ class StoreController extends Controller
         return $disk->response($preview->path, null, $headers);
     }
 
+    public function previewAudio(StoreProductPreview $preview)
+    {
+        $preview->load('product');
+        abort_unless(
+            $preview->is_active
+                && $preview->audio_path
+                && $preview->product
+                && $preview->product->status === 'published'
+                && $preview->product->published_at?->lte(now()),
+            404
+        );
+
+        if (($preview->access_level ?? 'sample') === 'full') {
+            $user = request()->user();
+            abort_unless($user && ($preview->product->download_policy ?? 'signed') === 'reader_only', 403);
+            abort_unless(
+                StoreLibraryItem::query()
+                    ->where('user_id', $user->id)
+                    ->where('product_id', $preview->product_id)
+                    ->whereNull('revoked_at')
+                    ->exists(),
+                403
+            );
+        }
+
+        $disk = Storage::disk($preview->audio_disk ?: 'private');
+        abort_unless($disk->exists($preview->audio_path), 404);
+
+        return $disk->response($preview->audio_path, null, [
+            'Content-Type' => $preview->audio_mime ?: 'audio/mpeg',
+            'Content-Disposition' => 'inline; filename="farast-reader-audio"',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
+            'Referrer-Policy' => 'no-referrer',
+        ]);
+    }
+
     public function reader(string $slug)
     {
         $product = StoreProduct::with(['previews' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')])
