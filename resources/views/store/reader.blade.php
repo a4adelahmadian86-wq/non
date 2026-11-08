@@ -48,6 +48,13 @@
     </div>
   </nav>
 
+  @if($documentAudio)
+    <section class="farast-reader-audio" aria-label="نسخه صوتی هماهنگ سند">
+      <div><strong><i class="fa-solid fa-headphones"></i> نسخه صوتی مطالعه</strong><span id="reader-audio-pointer" aria-live="polite">آماده پخش · همگام با متن و صفحه</span></div>
+      <audio id="reader-document-audio" controls preload="metadata" controlslist="nodownload noplaybackrate" src="{{ route('store.document.audio',$documentAudio) }}" data-segments='@json($audioSegments)'></audio>
+    </section>
+  @endif
+
   <div class="farast-reader-progress" role="progressbar" aria-label="پیشرفت مطالعه" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="reader-progress"></span></div>
 
   <div class="farast-reader-workspace" id="reader-workspace">
@@ -137,9 +144,11 @@
 @media(max-width:760px){.reader-search-group{order:3;width:100%;justify-content:center}.reader-search-group input{flex:1;max-width:280px}.farast-reader-header{grid-template-columns:auto 1fr;gap:8px}.farast-reader-heading{text-align:right}.farast-reader-account{grid-column:1/-1;justify-content:flex-start;font-size:.68rem}.farast-reader-toolbar{justify-content:center}.reader-tool-wide span{display:none}.farast-reader-workspace{grid-template-columns:1fr}.farast-reader-sidebar{max-height:150px;border-left:0;border-bottom:1px solid var(--reader-line)}.farast-reader-thumbs{display:flex;overflow:auto}.farast-reader-thumb{flex:0 0 112px}.farast-reader-canvas{min-height:60vh;padding:12px 8px 42px}.farast-reader-page-content img,.farast-reader-page-content iframe{min-height:360px;height:70vh}.farast-reader-shortcuts{display:none}.farast-reader-security-note{font-size:.62rem;text-align:center}}
 @media(prefers-reduced-motion:reduce){.farast-reader-progress span{transition:none}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.farast-reader-audio{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--reader-line);background:var(--reader-panel)}.farast-reader-audio>div{display:grid;gap:3px}.farast-reader-audio strong{font-size:.76rem;color:var(--reader-text)}.farast-reader-audio span{font-size:.64rem;color:var(--reader-muted)}.farast-reader-audio audio{width:min(440px,100%);height:36px}
 </style>
 @endpush
 
 @push('scripts')
 <script src="/js/farast-reader.js?v=20261108secure-reader7"></script>
+<script src="/js/reader-audio-sync.js?v=1"></script>
 @endpush
