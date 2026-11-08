@@ -118,7 +118,7 @@ class UploadSecurityServiceTest extends TestCase
         $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-eicar-');
         $archive = new \ZipArchive();
         $this->assertSame(true, $archive->open($temporary, \ZipArchive::CREATE));
-        $archive->addFromString('notes.txt', 'X5O!P%@AP[4\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
+        $archive->addFromString('notes.txt', 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
         $archive->close();
 
         Storage::disk('private')->put('quarantine/eicar.zip', file_get_contents($temporary));
