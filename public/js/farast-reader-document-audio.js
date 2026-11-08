@@ -129,6 +129,7 @@
 
   seek.addEventListener('input', () => {
     seeking = true;
+    rangeEnd = null;
     if (Number.isFinite(audio.duration) && audio.duration > 0) {
       audio.currentTime = (Number(seek.value) / 1000) * audio.duration;
       updateSegment();
@@ -157,6 +158,7 @@
   audio.addEventListener('play', updatePlayButton);
   audio.addEventListener('pause', updatePlayButton);
   audio.addEventListener('ended', () => {
+    rangeEnd = null;
     updatePlayButton();
     clearHighlights();
     if (status) status.textContent = 'پایان نسخه صوتی';
