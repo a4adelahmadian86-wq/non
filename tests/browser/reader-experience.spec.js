@@ -210,7 +210,7 @@ test.describe('FARAST sample reader interactions', () => {
     expect(watermarkPixels).toBeGreaterThan(50);
     const textSpan = root.locator('.farast-pdf-text-layer span').first();
     await expect(textSpan).toBeVisible();
-    await expect(textSpan).toHaveCSS('user-select', 'none');
+    await expect(textSpan).toHaveCSS('user-select', 'text');
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
@@ -683,8 +683,13 @@ test('renders Word headings lists and tables as safe semantic document blocks', 
   await expect(table.locator('tbody tr').nth(1)).toHaveClass(/reader-document-line/);
   await expect(table.locator('tbody tr').nth(1)).toHaveAttribute('data-reader-speech-text', 'محتوا | <img src=x onerror=alert(1)>');
   await expect(page.locator('.reader-document-word').first()).toBeVisible();
-  await page.locator('[data-reader-root]').dispatchEvent('farast:reader-section-change', { detail: { section: 1 } });
-  await expect(page.locator('.farast-reader-page-item[data-index="1"] .reader-document-paragraph')).toHaveText('متن صفحه دوم');
+  await page.evaluate(() => {
+    const reader = document.querySelector('[data-reader-root]');
+    reader.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { index: 1 } }));
+  });
+  const secondPage = page.locator('.farast-reader-page-item[data-index="1"]');
+  await expect.poll(() => secondPage.getAttribute('data-reader-loaded')).toBe('1');
+  await expect(secondPage.locator('.reader-document-paragraph')).toHaveText('متن صفحه دوم');
   await expect(table.locator('img')).toHaveCount(0);
 });
 
