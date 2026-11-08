@@ -384,11 +384,11 @@ class StoreController extends Controller
                             if ($page < 1 || $text === '') continue;
                             $readerAudioTiming[] = [
                                 'text' => $text,
-                                'words' => array_map(static fn (array $word) => [
+                                'words' => array_values(array_map(static fn (array $word) => [
                                     'text' => (string) ($word['text'] ?? ''),
                                     'start' => round(((int) ($word['start_ms'] ?? 0)) / 1000, 3),
                                     'end' => round(((int) ($word['end_ms'] ?? 0)) / 1000, 3),
-                                ], array_filter((array) ($segment['words'] ?? []), 'is_array')),
+                                ], array_filter((array) ($segment['words'] ?? []), 'is_array'))),
                                 'alignment_quality' => (string) ($segment['alignment_quality'] ?? 'estimated'),
                                 'start' => round(((int) ($segment['start_ms'] ?? 0)) / 1000, 3),
                                 'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
