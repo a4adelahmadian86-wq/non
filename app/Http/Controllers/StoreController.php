@@ -153,6 +153,7 @@ class StoreController extends Controller
             $user = request()->user();
             abort_unless($user && ($preview->product->download_policy ?? 'signed') === 'reader_only', 403);
             abort_unless(StoreLibraryItem::query()->where('user_id', $user->id)->where('product_id', $preview->product_id)->whereNull('revoked_at')->exists(), 403);
+            abort(404, 'نسخه کامل فایل از مسیر پیش‌نمایش ارائه نمی‌شود؛ از خوانشگر صفحه‌ای استفاده کنید.');
         }
         $disk = Storage::disk($preview->disk ?: 'private');
         abort_unless($disk->exists($preview->path), 404);
@@ -185,28 +186,110 @@ class StoreController extends Controller
 
     public function reader(string $slug)
     {
-        $product = StoreProduct::with(['previews' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')])
-            ->published()
-            ->where('slug', $slug)
-            ->firstOrFail();
+        $product = StoreProduct::with([
+            'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
+            'files' => fn ($query) => $query->where('purpose', 'product_download')
+                ->where('is_primary', true)->where('is_active', true)->where('scan_status', 'clean'),
+        ])->published()->where('slug', $slug)->firstOrFail();
 
         $user = request()->user();
         $samplePreviews = $product->previews->where('access_level', '!=', 'full')->values();
         $hasReaderEntitlement = $user
             && ($product->download_policy ?? 'signed') === 'reader_only'
-            && StoreLibraryItem::query()->where('user_id', $user->id)->where('product_id', $product->id)->whereNull('revoked_at')->exists();
-        $fullPreviews = $hasReaderEntitlement
-            ? $product->previews->where('access_level', 'full')->values()
-            : collect();
-        $previews = $fullPreviews->isNotEmpty() ? $fullPreviews : $samplePreviews;
-        abort_if($previews->isEmpty(), 404, 'پیش‌نمایش برای این محصول موجود نیست.');
+            && StoreLibraryItem::query()->where('user_id', $user->id)
+                ->where('product_id', $product->id)->whereNull('revoked_at')->exists();
+
+        $readerMode = 'sample';
+        $readerDocument = null;
+        $readerAudioUrl = null;
+        $readerAudioTiming = [];
+        $previews = $samplePreviews;
+
+        if ($hasReaderEntitlement && $product->type === 'digital_file') {
+            $primaryFile = $product->files->first();
+            $document = $primaryFile?->document;
+            if ($document) {
+                $document->loadMissing(['pages', 'chunks', 'artifacts']);
+                $structure = (array) ($document->structure_json ?? []);
+                $sourceMatches = hash_equals((string) $primaryFile->sha256, (string) $document->source_sha256);
+                $readerReady = $sourceMatches
+                    && $document->processing_status === 'completed'
+                    && (bool) data_get($structure, 'reader.ready', false);
+
+                if ($readerReady && $document->pages->isNotEmpty()) {
+                    $readerDocument = $document;
+                    $readerMode = 'document';
+                    $audioArtifact = $document->artifacts
+                        ->where('artifact_type', 'audio_full_wav')
+                        ->where('sha256', data_get($structure, 'audio.sha256', data_get($structure, 'audio.sha256')))
+                        ->first();
+
+                    if (! $audioArtifact) {
+                        $audioArtifact = $document->artifacts
+                            ->where('artifact_type', 'audio_full_wav')
+                            ->first();
+                    }
+
+                    if ($audioArtifact && Storage::disk($audioArtifact->disk ?: 'private')->exists($audioArtifact->path)) {
+                        $readerAudioUrl = route('store.reader.audio', [$product, $document]);
+                        $segments = (array) data_get($audioArtifact->metadata_json, 'segments', []);
+                        $chunksByIndex = $document->chunks->keyBy('chunk_index');
+                        foreach ($segments as $segment) {
+                            if (! is_array($segment)) continue;
+                            $chunk = $chunksByIndex->get((int) ($segment['chunk_index'] ?? -1));
+                            if (! $chunk) continue;
+                            $locator = (array) ($chunk->locator_json ?? []);
+                            $page = (int) ($locator['reader_page'] ?? $locator['page'] ?? 0);
+                            $text = trim((string) $chunk->content_text);
+                            if ($page < 1 || $text === '') continue;
+                            $readerAudioTiming[] = [
+                                'text' => $text,
+                                'start' => round(((int) ($segment['start_ms'] ?? 0)) / 1000, 3),
+                                'end' => round(((int) ($segment['end_ms'] ?? 0)) / 1000, 3),
+                                'page' => $page,
+                            ];
+                        }
+                    }
+
+                    $previews = $document->pages->map(function ($page) use ($product) {
+                        $label = match ($page->page_kind) {
+                            'pdf_page' => 'صفحه '.$page->page_number,
+                            'slide' => 'اسلاید '.$page->page_number,
+                            'sheet' => (string) data_get($page->locator_json, 'sheet', 'برگه '.$page->page_number),
+                            'archive_entry' => (string) data_get($page->locator_json, 'archive_entry', 'فایل داخل آرشیو'),
+                            default => 'بخش '.$page->page_number,
+                        };
+
+                        return (object) [
+                            'id' => $page->id,
+                            'kind' => 'reader_document',
+                            'mime' => 'text/plain',
+                            'page_number' => $page->page_number,
+                            'page_kind' => $page->page_kind,
+                            'page_label' => $label,
+                            'reader_page_url' => route('store.reader.page', [$product, $page->page_number]),
+                        ];
+                    })->values();
+                }
+            }
+        }
+
+        abort_if($previews->isEmpty(), 404, 'پیش‌نمایش یا نسخه آماده خوانش برای این محصول موجود نیست.');
 
         $readerIdentity = $user
             ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
             : (string) request()->ip();
 
         return response()
-            ->view('store.reader', compact('product', 'previews', 'readerIdentity'))
+            ->view('store.reader', compact(
+                'product',
+                'previews',
+                'readerIdentity',
+                'readerMode',
+                'readerDocument',
+                'readerAudioUrl',
+                'readerAudioTiming'
+            ))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('X-Content-Type-Options', 'nosniff')
@@ -215,6 +298,140 @@ class StoreController extends Controller
             ->header('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:")
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
+
+    public function readerPage(StoreProduct $product, int $page)
+    {
+        $user = request()->user();
+        abort_unless(
+            $user
+                && $product->status === 'published'
+                && $product->published_at?->lte(now())
+                && $product->type === 'digital_file'
+                && ($product->download_policy ?? 'signed') === 'reader_only'
+                && StoreLibraryItem::query()->where('user_id', $user->id)
+                    ->where('product_id', $product->id)->whereNull('revoked_at')->exists(),
+            403
+        );
+
+        $file = StoreProductFile::query()
+            ->where('product_id', $product->id)
+            ->where('purpose', 'product_download')
+            ->where('is_primary', true)
+            ->where('is_active', true)
+            ->where('scan_status', 'clean')
+            ->firstOrFail();
+        $document = $file->document;
+        abort_unless(
+            $document
+                && hash_equals((string) $file->sha256, (string) $document->source_sha256)
+                && $document->processing_status === 'completed'
+                && (bool) data_get($document->structure_json, 'reader.ready', false),
+            409,
+            'نسخه خوانش این فایل هنوز آماده یا تأیید نشده است.'
+        );
+
+        $pageRecord = $document->pages()->where('page_number', $page)->firstOrFail();
+
+        return response()->json([
+            'page_number' => (int) $pageRecord->page_number,
+            'page_count' => (int) data_get($document->structure_json, 'reader.page_count', 0),
+            'page_kind' => (string) $pageRecord->page_kind,
+            'label' => (string) data_get($pageRecord->locator_json, 'sheet', data_get($pageRecord->locator_json, 'archive_entry', 'بخش '.$pageRecord->page_number)),
+            'content_text' => (string) $pageRecord->content_text,
+            'has_extracted_text' => (bool) $pageRecord->has_extracted_text,
+            'content_sha256' => (string) $pageRecord->content_sha256,
+        ])->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
+            ->header('X-Content-Type-Options', 'nosniff')
+            ->header('X-Robots-Tag', 'noindex, nofollow, noarchive')
+            ->header('Cross-Origin-Resource-Policy', 'same-origin');
+    }
+
+    public function readerAudio(StoreProduct $product, StoreProductDocument $document)
+    {
+        $user = request()->user();
+        abort_unless(
+            $user
+                && $product->status === 'published'
+                && $product->published_at?->lte(now())
+                && $product->type === 'digital_file'
+                && ($product->download_policy ?? 'signed') === 'reader_only'
+                && StoreLibraryItem::query()->where('user_id', $user->id)
+                    ->where('product_id', $product->id)->whereNull('revoked_at')->exists(),
+            403
+        );
+
+        $file = StoreProductFile::query()
+            ->where('product_id', $product->id)
+            ->where('purpose', 'product_download')
+            ->where('is_primary', true)
+            ->where('is_active', true)
+            ->where('scan_status', 'clean')
+            ->firstOrFail();
+        abort_unless(
+            (int) $document->product_id === (int) $product->id
+                && (int) $document->product_file_id === (int) $file->id
+                && hash_equals((string) $file->sha256, (string) $document->source_sha256)
+                && $document->processing_status === 'completed',
+            404
+        );
+
+        $artifact = $document->artifacts()->where('artifact_type', 'audio_full_wav')->where('version', 1)->firstOrFail();
+        $disk = Storage::disk($artifact->disk ?: 'private');
+        abort_unless($disk->exists($artifact->path), 404);
+        $size = (int) $disk->size($artifact->path);
+        $start = 0;
+        $end = max(0, $size - 1);
+        $status = 200;
+        $range = request()->header('Range');
+
+        if ($range !== null) {
+            if (! preg_match('/^bytes=(\\d*)-(\\d*)$/', trim($range), $matches) || $size < 1) {
+                return response('', 416, ['Content-Range' => 'bytes */'.$size]);
+            }
+            if ($matches[1] === '' && $matches[2] !== '') {
+                $suffixLength = (int) $matches[2];
+                $start = max(0, $size - $suffixLength);
+            } else {
+                $start = (int) $matches[1];
+                if ($matches[2] !== '') $end = min($end, (int) $matches[2]);
+            }
+            if ($start > $end || $start >= $size) {
+                return response('', 416, ['Content-Range' => 'bytes */'.$size]);
+            }
+            $status = 206;
+        }
+
+        $length = max(0, $end - $start + 1);
+        $stream = $disk->readStream($artifact->path);
+        abort_unless(is_resource($stream), 404);
+
+        $headers = [
+            'Content-Type' => $artifact->mime ?: 'audio/wav',
+            'Content-Length' => (string) $length,
+            'Accept-Ranges' => 'bytes',
+            'Content-Disposition' => 'inline; filename="farast-reader-audio.wav"',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
+        ];
+        if ($status === 206) $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+
+        return response()->stream(function () use ($stream, $start, $length) {
+            if ($start > 0) fseek($stream, $start);
+            $remaining = $length;
+            while ($remaining > 0 && ! feof($stream)) {
+                $chunk = fread($stream, min(8192, $remaining));
+                if (! is_string($chunk) || $chunk === '') break;
+                echo $chunk;
+                $remaining -= strlen($chunk);
+                flush();
+            }
+            fclose($stream);
+        }, $status, $headers);
+    }
+
     /**
      * Convert an uploaded DOCX preview to a read-only, sanitized HTML document.
      * The source document is never exposed through a public storage URL.
