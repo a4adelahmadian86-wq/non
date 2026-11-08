@@ -122,11 +122,20 @@ async function mountPdfReader(page) {
 }
 
 test.describe('FARAST sample reader interactions', () => {
-  test('loads a real PDF page with PDF.js, account watermark and text search', async ({ page }) => {
+  test('loads a real PDF page with same-origin PDF.js, account watermark and text search', async ({ page }) => {
+    const pdfjsRequests = [];
+    const externalPdfjsRequests = [];
+    page.on('request', request => {
+      if (request.url().includes('/vendor/pdfjs/')) pdfjsRequests.push(request.url());
+      if (request.url().includes('cdn.jsdelivr.net/npm/pdfjs-dist')) externalPdfjsRequests.push(request.url());
+    });
     await mountPdfReader(page);
     const root = page.locator('[data-reader-root]');
     const canvas = root.locator('.farast-pdf-canvas');
     await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+    await expect.poll(() => pdfjsRequests.some(url => url.endsWith('/pdf.mjs'))).toBe(true);
+    await expect.poll(() => pdfjsRequests.some(url => url.endsWith('/pdf.worker.mjs'))).toBe(true);
+    expect(externalPdfjsRequests).toHaveLength(0);
     await expect.poll(() => canvas.evaluate(element => element.width)).toBeGreaterThan(0);
     await expect.poll(() => canvas.evaluate(element => element.height)).toBeGreaterThan(0);
     // The watermark must be painted into the page bitmap, not merely placed as removable HTML.
@@ -149,12 +158,26 @@ test.describe('FARAST sample reader interactions', () => {
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
+    await expect(root.locator('.farast-pdf-text-layer .reader-search-hit')).toHaveCount(1);
+    await root.locator('#reader-search-input').fill('');
+    await root.locator('#reader-search').click();
+    await expect(root.locator('#reader-search-count')).toBeEmpty();
+    await expect(root.locator('.farast-pdf-text-layer .reader-search-hit')).toHaveCount(0);
     await root.locator('#reader-zoom-in').click();
     await expect(root.locator('#reader-zoom-label')).toContainText('۱۱۰');
     await root.locator('#reader-scroll-mode').click();
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page canvas')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page')).toHaveAttribute('data-rendered', '1');
+    // Page-number navigation in continuous mode must scroll the matching page into view.
+    const continuousPage = root.locator('.farast-pdf-cont-page').first();
+    await continuousPage.evaluate(element => {
+      element.dataset.scrollCalls = '0';
+      element.scrollIntoView = () => { element.dataset.scrollCalls = String(Number(element.dataset.scrollCalls) + 1); };
+    });
+    await root.locator('#reader-page-number').fill('1');
+    await root.locator('#reader-page-number').dispatchEvent('change');
+    await expect(continuousPage).toHaveAttribute('data-scroll-calls', '1');
     // Continuous rendering must not lock the rest of the reading toolbar.
     await expect(root.locator('#reader-zoom-in')).toBeEnabled();
     await root.locator('#reader-zoom-in').click();

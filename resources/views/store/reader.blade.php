@@ -8,7 +8,7 @@
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
       <strong>{{ $product->title }}</strong>
-      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} صفحه</span>
+      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} بخش</span>
     </div>
     <div class="farast-reader-account"><i class="fa-solid fa-user-shield"></i><span>{{ $readerWatermark }}</span></div>
   </header>
@@ -46,10 +46,10 @@
 
   <div class="farast-reader-workspace" id="reader-workspace">
     <aside class="farast-reader-sidebar" id="reader-sidebar" aria-label="فهرست صفحات">
-      <div class="farast-reader-sidebar-head"><strong>فهرست اسناد</strong><span>{{ $previews->count() }} مورد</span></div>
+      <div class="farast-reader-sidebar-head"><strong>فهرست اسناد</strong><span>{{ $previews->count() }} بخش</span></div>
       <div class="farast-reader-thumbs">
         @foreach($previews as $i => $preview)
-          <button type="button" class="farast-reader-thumb {{ $i===0 ? 'is-active' : '' }}" data-goto="{{ $i }}" aria-label="رفتن به صفحه {{ $i+1 }}" aria-current="{{ $i===0 ? 'page' : 'false' }}">
+          <button type="button" class="farast-reader-thumb {{ $i===0 ? 'is-active' : '' }}" data-goto="{{ $i }}" aria-label="رفتن به بخش {{ $i+1 }}" aria-current="{{ $i===0 ? 'page' : 'false' }}">
             <span class="farast-reader-thumb-preview">
               @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
                 <i class="fa-solid fa-file-pdf"></i><small>PDF</small>
@@ -61,7 +61,7 @@
                 <img src="{{ route('store.preview',$preview) }}" alt="" loading="lazy">
               @endif
             </span>
-            <span>صفحه {{ $preview->page_number ?: $i+1 }}</span>
+            <span>بخش {{ $preview->page_number ?: $i+1 }}</span>
           </button>
         @endforeach
       </div>
@@ -112,7 +112,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261107reader1">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/web/pdf_viewer.css">
+<link rel="stylesheet" href="/vendor/pdfjs/web/pdf_viewer.css?v=6.5.438">
 <style>
 .farast-reader{--reader-bg:#0b1220;--reader-panel:#111d30;--reader-line:rgba(255,255,255,.09);--reader-text:#e8eef8;--reader-muted:#91a4c1;min-height:calc(100vh - 70px);background:var(--reader-bg);color:var(--reader-text);display:flex;flex-direction:column;font-family:inherit}
 .farast-reader[data-theme="light"]{--reader-bg:#e9eef6;--reader-panel:#fff;--reader-line:rgba(20,40,70,.12);--reader-text:#1c2b43;--reader-muted:#64748b}
@@ -135,5 +135,5 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261108secure-reader3"></script>
+<script src="/js/farast-reader.js?v=20261108secure-reader6"></script>
 @endpush

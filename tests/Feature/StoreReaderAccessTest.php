@@ -364,7 +364,8 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('farast-reader.js')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
-            ->assertHeader('Referrer-Policy', 'no-referrer');
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:");
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
 
