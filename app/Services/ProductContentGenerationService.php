@@ -111,7 +111,12 @@ class ProductContentGenerationService
         ]);
 
         $result = is_array($ai['result'] ?? null) ? $ai['result'] : $ai;
-        $clean = $this->normalizeResult($result, $categories, $factIds, $sourceIds);
+        $factSourceMap = collect($knowledge['sources'])
+            ->flatMap(fn (array $source) => collect($source['facts'])->mapWithKeys(
+                fn (array $fact) => [(int) $fact['id'] => (string) $source['source_id']]
+            ))
+            ->all();
+        $clean = $this->normalizeResult($result, $categories, $factIds, $sourceIds, $factSourceMap);
         $clean = $this->privacy->sanitize($clean);
         $clean['slug'] = Str::slug((string) $clean['title']) ?: 'product-'.$product->id;
         $usedFacts = $clean['used_fact_ids'];
@@ -191,7 +196,7 @@ class ProductContentGenerationService
         return $stored !== $fingerprints;
     }
 
-    private function normalizeResult(array $result, array $categories, array $validFactIds, array $validSourceIds): array
+    private function normalizeResult(array $result, array $categories, array $validFactIds, array $validSourceIds, array $factSourceMap): array
     {
         $string = static fn ($key, $max) => mb_substr(trim(strip_tags((string) ($result[$key] ?? ''))), 0, $max);
         $list = static function ($key, $maxItems, $maxLength) use ($result) {
@@ -217,14 +222,21 @@ class ProductContentGenerationService
             if (! is_array($entry)) continue;
             $field = trim((string) ($entry['field'] ?? ''));
             if (! in_array($field, $allowedEvidenceFields, true) || isset($fieldEvidence[$field])) continue;
-            $factIdsForField = collect(is_array($entry['fact_ids'] ?? null) ? $entry['fact_ids'] : [])
-                ->map(fn ($id) => (int) $id)
-                ->filter(fn ($id) => in_array($id, $validFactIds, true))
-                ->unique()->values()->all();
             $sourceIdsForField = collect(is_array($entry['source_ids'] ?? null) ? $entry['source_ids'] : [])
                 ->map(fn ($id) => trim((string) $id))
                 ->filter(fn ($id) => in_array($id, $validSourceIds, true))
                 ->unique()->values()->all();
+            $factIdsForField = collect(is_array($entry['fact_ids'] ?? null) ? $entry['fact_ids'] : [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => in_array($id, $validFactIds, true)
+                    && isset($factSourceMap[$id])
+                    && ($sourceIdsForField === [] || in_array((string) $factSourceMap[$id], $sourceIdsForField, true)))
+                ->unique()->values()->all();
+            if ($sourceIdsForField === [] && $factIdsForField !== []) {
+                $sourceIdsForField = collect($factIdsForField)
+                    ->map(fn ($id) => (string) $factSourceMap[$id])
+                    ->unique()->values()->all();
+            }
             if ($factIdsForField !== [] || $sourceIdsForField !== []) {
                 $fieldEvidence[$field] = [
                     'fact_ids' => $factIdsForField,
