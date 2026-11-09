@@ -62,20 +62,30 @@
   const findQuoteRange=(container,quote)=>{
     if(!container||!quote)return null;
     const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT);
-    const nodes=[];let text='';let node;
+    const chars=[];const positions=[];let node;
     while((node=walker.nextNode())){
-      nodes.push({node,start:text.length,end:text.length+node.nodeValue.length});
-      text+=node.nodeValue;
+      const value=node.nodeValue||'';
+      for(let offset=0;offset<value.length;offset++){
+        const character=value[offset];
+        if(/\s/.test(character)){
+          if(!chars.length||chars[chars.length-1]===' ')continue;
+          chars.push(' ');positions.push({node,offset});
+        }else{
+          chars.push(character);positions.push({node,offset});
+        }
+      }
     }
-    const index=text.indexOf(quote);
-    if(index<0)return null;
-    const start=nodes.find(item=>item.start<=index&&item.end>index);
-    const endOffset=index+quote.length;
-    const end=nodes.find(item=>item.start<endOffset&&item.end>=endOffset);
+    const normalized=chars.join('').trim();
+    const leading=chars.findIndex(character=>character!==' ');
+    const normalizedQuote=String(quote).replace(/\s+/g,' ').trim();
+    const index=normalized.indexOf(normalizedQuote);
+    if(index<0||leading<0)return null;
+    const start=positions[leading+index];
+    const end=positions[leading+index+normalizedQuote.length-1];
     if(!start||!end)return null;
     const range=document.createRange();
-    range.setStart(start.node,index-start.start);
-    range.setEnd(end.node,endOffset-end.start);
+    range.setStart(start.node,start.offset);
+    range.setEnd(end.node,end.offset+1);
     return range;
   };
   document.querySelectorAll('[data-reader-jump]').forEach(button=>{
