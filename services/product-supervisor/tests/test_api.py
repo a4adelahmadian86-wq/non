@@ -151,8 +151,8 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         with patch.dict(os.environ, {
             "GROQ_API_KEY": "test-groq-key",
             "GROQ_ZDR_CONFIRMED": "true",
-        }, clear=False), patch("main.analyze_image_with_groq", new_callable=AsyncMock) as vision, patch(
-            "main.analyze_extracted_content", new_callable=AsyncMock, return_value=review
+        }, clear=False), patch("file_pipeline.analyze_image_with_groq", new_callable=AsyncMock) as vision, patch(
+            "file_pipeline.analyze_extracted_content", new_callable=AsyncMock, return_value=review
         ):
             vision.return_value = "روی تصویر شماره تماس 09121234567 درج شده است."
             response = self.client.post(
