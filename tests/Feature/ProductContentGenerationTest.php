@@ -212,8 +212,8 @@ class ProductContentGenerationTest extends TestCase
     public function test_generation_rejects_required_fields_without_field_level_evidence(): void
     {
         $service = app(ProductContentGenerationService::class);
-        $method = new \\ReflectionMethod(ProductContentGenerationService::class, 'normalizeResult');
-        $this->expectException(\\RuntimeException::class);
+        $method = new \ReflectionMethod(ProductContentGenerationService::class, 'normalizeResult');
+        $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('ai_product_content_invalid');
 
         $method->invoke($service, [
