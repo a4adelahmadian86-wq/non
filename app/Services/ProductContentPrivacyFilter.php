@@ -44,6 +44,9 @@ class ProductContentPrivacyFilter
         $patterns = [
             '/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\\s\\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u',
             '/(?i)\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/u',
+            '/(?i)\\bBasic\\s+[A-Za-z0-9+\\/]{12,}={0,2}/u',
+            '/(?i)((?:password|passwd|passcode|secret|api[_ -]?key|client[_ -]?secret|access[_ -]?token|refresh[_ -]?token|رمز\\s*عبور|گذرواژه|کلمه\\s*عبور|رمز\\s*ورود|کلید\\s*محرمانه|توکن)\\s*[:=：]\\s*)[^\\s,;]{4,}/u',
+            '/(?i)\\b(?:postgres(?:ql)?|mysql|mongodb(?:\\+srv)?|redis):\\/\\/[^\\s:@]+:[^@\\s\/]+@[^\\s\/]+/u',
             '/\\b(?:sk-[A-Za-z0-9_-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{25,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16})\\b/u',
             '/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/iu',
             '/(?<![\\p{L}\\p{N}])(?:\\+|00)(?:[0-9۰-۹٠-٩][\\s().-]*){8,15}(?![\\p{L}\\p{N}])/u',
