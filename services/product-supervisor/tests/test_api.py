@@ -129,6 +129,53 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         vision.assert_not_awaited()
         text_review.assert_not_awaited()
 
+    def test_visual_report_is_redacted_before_persistence_and_content_generation(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (32, 32), "white").save(image_stream, format="PNG")
+        document = Document()
+        document.add_paragraph("متن راهنمای محصول")
+        document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(1))
+        source = io.BytesIO()
+        document.save(source)
+
+        review = {
+            "analysis_status": "completed",
+            "analysis_batch_count": 1,
+            "successful_batches": 1,
+            "failed_batches": 0,
+            "summary": "راهنمای محصول با بسته‌بندی مشخص",
+            "findings": [],
+            "facts": [],
+            "sample_pages": [],
+        }
+        with patch.dict(os.environ, {
+            "GROQ_API_KEY": "test-groq-key",
+            "GROQ_ZDR_CONFIRMED": "true",
+        }, clear=False), patch("main.analyze_image_with_groq", new_callable=AsyncMock) as vision, patch(
+            "main.analyze_extracted_content", new_callable=AsyncMock, return_value=review
+        ):
+            vision.return_value = "روی تصویر شماره تماس 09121234567 درج شده است."
+            response = self.client.post(
+                "/v1/reviews/files",
+                headers={"Authorization": "Bearer test-token"},
+                data={
+                    "product_id": "p-visual-redaction",
+                    "product_title": "عنوان آزمایشی",
+                    "product_type": "digital_file",
+                    "primary_scan_status": "clean",
+                },
+                files={"file": ("visual-guide.docx", source.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["provider_status"]["gemini"], "not_requested")
+        self.assertNotIn("09121234567", body["media_reports"]["visual"])
+        self.assertIn("[REDACTED]", body["media_reports"]["visual"])
+        self.assertNotIn("09121234567", str(body["content_chunks"]))
+        self.assertIn("[REDACTED]", str(body["content_chunks"]))
+        vision.assert_awaited_once()
+
     def test_gemini_knowledge_payload_excludes_raw_document_chunks(self):
         from main import minimize_document_knowledge_for_gemini
         report = minimize_document_knowledge_for_gemini({
