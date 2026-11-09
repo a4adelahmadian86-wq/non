@@ -282,7 +282,7 @@ class ContentDiscussionTest extends TestCase {
  }
  public function test_notification_visit_rejects_external_redirect_targets(): void {
   $owner=$this->user('09123456954');
-  $notification=\\App\\Models\\FarastNotification::create(['user_id'=>$owner->id,'type'=>'discussion_approved','title'=>'اعلان','body'=>'متن','data'=>['url'=>'https://evil.example/phishing']]);
+  $notification=\App\Models\FarastNotification::create(['user_id'=>$owner->id,'type'=>'discussion_approved','title'=>'اعلان','body'=>'متن','data'=>['url'=>'https://evil.example/phishing']]);
   $this->actingAs($owner)->get(route('platform.notifications.visit',$notification->id))->assertRedirect(route('platform.notifications'));
   $this->assertDatabaseMissing('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
  }
