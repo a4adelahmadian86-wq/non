@@ -288,7 +288,10 @@
   };
   const renderNotes = () => {
     notesPanel.replaceChildren();
-    if (!state.notes.length) { const empty = document.createElement('p'); empty.textContent = 'هنوز یادداشتی ثبت نشده است.'; notesPanel.append(empty); return; }
+    if (!state.notes.length && !state.highlights.length) { const empty = document.createElement('p'); empty.textContent = 'هنوز یادداشت یا هایلایتی ثبت نشده است.'; notesPanel.append(empty); return; }
+    if (state.notes.length) {
+      const heading = document.createElement('h4'); heading.textContent = 'یادداشت‌ها'; notesPanel.append(heading);
+    }
     state.notes.forEach(item => {
       const row = document.createElement('article'); row.className = 'farast-reader-note';
       const content = document.createElement('div');
@@ -306,6 +309,23 @@
       actions.append(jump, remove);
       row.append(content, actions); notesPanel.append(row);
     });
+    if (state.highlights.length) {
+      const heading = document.createElement('h4'); heading.textContent = 'هایلایت‌ها'; notesPanel.append(heading);
+      state.highlights.slice().reverse().forEach(item => {
+        const row = document.createElement('article'); row.className = 'farast-reader-note farast-reader-highlight-entry';
+        const content = document.createElement('div');
+        const quote = document.createElement('blockquote'); quote.textContent = '«' + item.quote + '»';
+        const meta = document.createElement('small'); meta.textContent = 'صفحه ' + item.page + ' · هایلایت شخصی';
+        content.append(quote, meta);
+        const actions = document.createElement('div'); actions.className = 'farast-reader-note-actions';
+        const jump = document.createElement('button'); jump.type = 'button'; jump.textContent = 'رفتن به متن';
+        jump.addEventListener('click', () => jumpToRecord(item));
+        const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'حذف';
+        remove.setAttribute('aria-label', 'حذف هایلایت صفحه ' + item.page);
+        remove.addEventListener('click', () => { state.highlights = state.highlights.filter(highlight => highlight.id !== item.id); persist(); renderNotes(); renderHighlights(); });
+        actions.append(jump, remove); row.append(content, actions); notesPanel.append(row);
+      });
+    }
   };
   notesButton.addEventListener('click', () => {
     notesPanel.hidden = !notesPanel.hidden;
