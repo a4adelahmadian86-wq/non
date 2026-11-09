@@ -28,13 +28,23 @@
       </section>
     @endif
 
+    <section class="product-editor-progress" data-product-progress aria-label="پیشرفت تکمیل فرم">
+      <div class="product-editor-progress-head">
+        <strong>تکمیل اطلاعات محصول</strong>
+        <span data-product-progress-label aria-live="polite">در حال محاسبه…</span>
+      </div>
+      <div class="product-editor-progress-track" role="progressbar" aria-label="درصد تکمیل فیلدهای ضروری" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span data-product-progress-bar></span>
+      </div>
+      <small>این شاخص فقط فیلدهای ضروری فرم را می‌سنجد؛ آمادگی انتشار در بخش کنترل پیش از انتشار جداگانه بررسی می‌شود.</small>
+    </section>
     <div class="product-workflow {{ $isEdit ? 'has-media' : '' }}" aria-label="مراحل آماده‌سازی محصول">
-      <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
-      <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
-      <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
-      @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه و فایل</b><small>کاور و دارایی‌ها</small></a>@endif
-      <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۴' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
-      <a href="#product-ai-supervisor"><span>{{ $isEdit ? '۶' : '۵' }}</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
+      <a href="#product-identity" data-product-step-link aria-current="step"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
+      <a href="#product-pricing" data-product-step-link><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
+      <a href="#product-content" data-product-step-link><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
+      @if($isEdit)<a href="#product-media" data-product-step-link><span>۴</span><b>رسانه و فایل</b><small>کاور و دارایی‌ها</small></a>@endif
+      <a href="#product-discovery" data-product-step-link><span>{{ $isEdit ? '۵' : '۴' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
+      <a href="#product-ai-supervisor" data-product-step-link><span>{{ $isEdit ? '۶' : '۵' }}</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
@@ -348,9 +358,18 @@
 .product-readiness>p{margin:12px 0 0;color:var(--st-muted);font-size:.65rem}
 @media(max-width:760px){.product-readiness-list{grid-template-columns:repeat(2,minmax(0,1fr))}.product-readiness{padding:14px}}
 
+.product-editor-progress{display:grid;gap:8px;padding:12px 14px;margin:0 0 12px;border:1px solid #dfe8f4;border-radius:14px;background:#fff;box-shadow:0 4px 16px rgba(15,35,70,.035)}
+.product-editor-progress-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.product-editor-progress-head strong{font-size:.75rem;color:var(--st-ink)}.product-editor-progress-head span{font-size:.68rem;color:var(--st-blue);font-weight:800;font-variant-numeric:tabular-nums}
+.product-editor-progress-track{height:7px;overflow:hidden;border-radius:99px;background:#edf2f8}.product-editor-progress-track>span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#4c86d5,#2e69bd);transition:width .2s ease}
+.product-editor-progress>small{font-size:.63rem;color:var(--st-muted);line-height:1.7}
 .product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}.product-workflow.has-media{grid-template-columns:repeat(6,minmax(0,1fr))}
 .product-workflow a{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;align-items:center;gap:2px 10px;padding:13px;border:1px solid var(--st-line);border-radius:14px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,box-shadow .18s}
 .product-workflow a:hover,.product-workflow a:focus-visible{border-color:#9bb9e7;box-shadow:0 5px 18px rgba(35,91,170,.08);outline:none}
+.product-workflow{position:sticky;top:10px;z-index:12;padding:7px;border:1px solid #e1e9f4;border-radius:16px;background:rgba(248,250,253,.94);backdrop-filter:blur(12px)}
+.product-workflow a.is-active{border-color:#8db0e4;background:#f1f6ff;box-shadow:0 5px 18px rgba(35,91,170,.08)}
+.product-workflow a.is-active>span{background:#2868c8;color:#fff}
+#product-identity,#product-pricing,#product-content,#product-media,#product-discovery,#product-ai-supervisor{scroll-margin-top:125px}
+
 .product-workflow a>span{grid-row:span 2;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#edf4ff;color:#2868c8;font-weight:900}
 .product-workflow b{font-size:.75rem}.product-workflow small{font-size:.64rem;color:var(--st-muted)}
 .product-editor-subhead{grid-column:1/-1;display:grid;gap:3px;padding:12px 14px;margin-top:4px;border:1px solid #e5edf7;border-radius:12px;background:linear-gradient(100deg,#f7faff,#fff)}
@@ -365,7 +384,7 @@
 .product-editor-form [aria-invalid=true]{border-color:#c84b4b!important;background:#fffafa!important}
 .product-editor-actions{position:sticky;bottom:12px;z-index:5;padding:12px;border:1px solid #dfe8f4;border-radius:14px;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);box-shadow:0 8px 28px rgba(15,35,70,.1)}
 .product-editor-actions button{min-height:44px}
-@media(max-width:760px){.product-workflow,.product-workflow.has-media{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.product-workflow a{padding:10px}.product-editor-actions{bottom:6px}.product-editor-actions button{width:100%}}
+@media(max-width:760px){.product-workflow,.product-workflow.has-media{display:flex;grid-template-columns:none;overflow-x:auto;gap:7px;scroll-snap-type:x mandatory;overscroll-behavior-inline:contain}.product-workflow a{flex:0 0 155px;scroll-snap-align:start;padding:10px}.product-editor-progress{padding:11px}.product-editor-actions{bottom:6px}.product-editor-actions button{width:100%}}
 @media(max-width:420px){.product-workflow a{grid-template-columns:29px 1fr;gap:2px 7px}.product-workflow a>span{width:29px;height:29px}}
 
 
@@ -436,119 +455,5 @@
 @endpush
 
 @push('scripts')
-<script>
-(() => {
-  const form = document.getElementById('productEditorForm');
-  if (!form) return;
-  const typeSelect = form.querySelector('[data-product-type]');
-  const deliveryPolicyField = form.querySelector('[data-download-policy-field]');
-  const deliveryPolicySelect = form.querySelector('[data-download-policy]');
-  const syncDeliveryPolicy = () => {
-    if (!deliveryPolicyField || !deliveryPolicySelect) return;
-    const isDigitalFile = typeSelect?.value === 'digital_file';
-    deliveryPolicyField.hidden = !isDigitalFile;
-    deliveryPolicySelect.disabled = !isDigitalFile;
-  };
-  typeSelect?.addEventListener('change', syncDeliveryPolicy);
-  syncDeliveryPolicy();
-
-  const price = form.querySelector('[name="price_rials"]');
-  const pricePreview = form.querySelector('[data-price-preview]');
-  const updatePrice = () => {
-    if (!pricePreview || !price) return;
-    const raw = Number(price.value || 0);
-    const toman = Math.floor(raw / 10);
-    const formatter = new Intl.NumberFormat('fa-IR');
-    let label = 'معادل ' + formatter.format(toman) + ' تومان';
-    const compare = Number(form.querySelector('[name="compare_at_price_rials"]')?.value || 0);
-    if (compare > raw && raw >= 0) {
-      const saving = Math.floor((compare - raw) / 10);
-      const percent = Math.round(((compare - raw) / compare) * 100);
-      label += ' · ' + formatter.format(percent) + '٪ تخفیف · ' + formatter.format(saving) + ' تومان صرفه‌جویی';
-    }
-    pricePreview.textContent = label;
-  };
-  price?.addEventListener('input', updatePrice);
-  form.querySelector('[name="compare_at_price_rials"]')?.addEventListener('input', updatePrice);
-  updatePrice();
-
-  document.querySelectorAll('input[type="file"]').forEach(input => {
-    input.addEventListener('change', () => {
-      const output = input.closest('form')?.querySelector('[data-file-name]');
-      if (!output) return;
-      const file = input.files?.[0];
-      output.textContent = file
-        ? file.name + ' · ' + new Intl.NumberFormat('fa-IR').format(Math.ceil(file.size / 1024)) + ' کیلوبایت'
-        : 'فایلی انتخاب نشده است.';
-    });
-  });
-
-  const bindPreview = (selector, outputSelector, fallback) => {
-    const input = form.querySelector(selector);
-    const output = document.querySelector(outputSelector);
-    if (!input || !output) return;
-    const render = () => { output.textContent = input.value.trim() || fallback; };
-    input.addEventListener('input', render);
-    render();
-  };
-  const titleInput = form.querySelector('[data-product-title]');
-  const seoTitleInput = form.querySelector('[data-seo-title]');
-  const seoTitleOutput = document.querySelector('[data-seo-preview-title]');
-  bindPreview('[data-seo-title]', '[data-seo-preview-title]', titleInput?.value || 'عنوان محصول شما');
-  if (titleInput && seoTitleInput && seoTitleOutput) {
-    titleInput.addEventListener('input', () => {
-      if (!seoTitleInput.value.trim()) seoTitleOutput.textContent = titleInput.value.trim() || 'عنوان محصول شما';
-    });
-  }
-  const shortDescriptionInput = form.querySelector('[data-product-short-description]');
-  bindPreview('[data-seo-description]', '[data-seo-preview-description]', shortDescriptionInput?.value || 'توضیحات محصول شما در این قسمت نمایش داده می‌شود.');
-  const slugInput = form.querySelector('[data-product-slug]');
-  const slugOutput = document.querySelector('[data-seo-preview-url]');
-  if (slugInput && slugOutput) {
-    const renderSlug = () => { slugOutput.textContent = window.location.origin + '/store/product/' + (slugInput.value.trim() || 'product-url'); };
-    slugInput.addEventListener('input', renderSlug);
-    renderSlug();
-  }
-  const shortDescription = form.querySelector('[data-product-short-description]');
-  const seoDescription = form.querySelector('[data-seo-description]');
-  if (shortDescription && seoDescription) shortDescription.addEventListener('input', () => {
-    if (!seoDescription.value.trim()) { const output = document.querySelector('[data-seo-preview-description]'); if (output) output.textContent = shortDescription.value.trim() || 'توضیحات محصول شما در این قسمت نمایش داده می‌شود.'; }
-  });
-  document.querySelectorAll('[data-inline-create]').forEach(inlineForm => {
-    inlineForm.addEventListener('submit', async event => {
-      event.preventDefault();
-      const button = inlineForm.querySelector('button[type="submit"]');
-      const feedback = inlineForm.closest('.product-category-panel')?.querySelector('[data-inline-feedback]');
-      if (button?.disabled) return;
-      if (button) { button.disabled = true; button.dataset.originalText = button.textContent; button.textContent = 'در حال ثبت…'; }
-      if (feedback) feedback.textContent = '';
-      try {
-        const response = await fetch(inlineForm.action, {method:'POST',body:new FormData(inlineForm),headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'ثبت مورد جدید انجام نشد.');
-        const kind = inlineForm.dataset.inlineCreate;
-        const select = kind === 'category' ? form.querySelector('[name="category_id"]') : form.querySelector('[name="tag_ids[]"]');
-        if (select) { const option = new Option(payload.name,payload.id,true,true); select.add(option); option.selected = true; }
-        if (feedback) feedback.textContent = kind === 'category' ? 'دسته ساخته و برای همین محصول انتخاب شد.' : 'برچسب ساخته و به همین محصول اختصاص یافت.';
-        inlineForm.reset();
-      } catch (error) { if (feedback) feedback.textContent = error.message || 'خطا در ارتباط با سرور.'; }
-      finally { if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'ثبت'; } }
-    });
-  });
-  form.addEventListener('submit', event => {
-    const button = document.getElementById('productSaveButton');
-    if (button?.dataset.submitting === '1') {
-      event.preventDefault();
-      return;
-    }
-    if (!form.reportValidity()) return;
-    if (button) {
-      button.dataset.submitting = '1';
-      button.disabled = true;
-      button.setAttribute('aria-busy', 'true');
-      button.textContent = 'در حال ذخیره اطلاعات…';
-    }
-  });
-})();
-</script>
+<script src="{{ asset('js/admin-store-product-editor.js') }}" defer></script>
 @endpush

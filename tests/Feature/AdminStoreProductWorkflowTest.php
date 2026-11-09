@@ -547,6 +547,8 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->get(route('admin.store.create'))
             ->assertOk()
             ->assertSee('name="download_policy"', false)
+            ->assertSee('data-product-progress', false)
+            ->assertSee('data-product-step-link', false)
             ->assertSee('فقط مطالعه آنلاین');
 
         $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
