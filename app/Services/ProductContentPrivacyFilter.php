@@ -61,6 +61,7 @@ class ProductContentPrivacyFilter
             '/(?<![\\p{L}\\p{N}])(?:\\+|00)(?:[0-9۰-۹٠-٩][\\s().-]*){8,15}(?![\\p{L}\\p{N}])/u',
             '/(?<![\\p{L}\\p{N}])0[0-9۰-۹٠-٩]{9,10}(?![\\p{L}\\p{N}])/u',
             '/\\b[A-Z]{2}[0-9]{2}(?:\\s?[A-Z0-9]){11,30}\\b/iu',
+            '/https?:\/\/[^\s<>]*(?:[?&](?:x-amz-signature|x-goog-signature|signature|sig|token|access_token|api_key|key|secret|password|auth)=)[^\s<>]*/iu',
             '/([?&](?:token|access_token|api_key|key|secret|password|auth)=)[^&\\s]+/iu',
             '/((?:کد\\s*ملی|شماره\\s*حساب|شماره\\s*کارت|national\\s*id|account\\s*(?:no|number)|card\\s*number)\\s*[:：]?\\s*)[0-9۰-۹٠-٩]{8,24}/iu',
         ];
