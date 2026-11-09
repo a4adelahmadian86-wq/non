@@ -172,6 +172,10 @@ class ProductKnowledgeService
 
         $reasons = [];
         $tagIds = $product->tags->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $tagFingerprint = $product->tags->map(fn ($tag) => [
+            'id' => (int) $tag->id,
+            'name' => (string) $tag->name,
+        ])->sortBy('id')->values()->all();
         $productContentFingerprint = [
             'title' => (string) $product->title,
             'slug' => (string) $product->slug,
@@ -179,10 +183,13 @@ class ProductKnowledgeService
             'type' => (string) $product->type,
             'status' => (string) $product->status,
             'price_rials' => (int) $product->price_rials,
+            'compare_at_price_rials' => (int) ($product->compare_at_price_rials ?? 0),
             'discount_percent' => (int) ($product->discount_percent ?? 0),
             'version' => (string) ($product->version ?? ''),
             'category_id' => (int) ($product->category_id ?? 0),
+            'category_name' => (string) ($product->category?->name ?? ''),
             'tag_ids' => $tagIds,
+            'tags' => $tagFingerprint,
             'short_description' => (string) ($product->short_description ?? ''),
             'description' => (string) ($product->description ?? ''),
             'seo_title' => (string) ($product->seo_title ?? ''),
