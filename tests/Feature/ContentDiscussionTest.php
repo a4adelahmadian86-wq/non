@@ -275,6 +275,7 @@ class ContentDiscussionTest extends TestCase {
   $p=$this->product();$author=$this->user('09123456951');$responder=$this->user('09123456952');$admin=$this->user('09123456953','admin');
   $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
   $parent=ContentDiscussion::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
   $this->assertDatabaseHas('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
   $this->actingAs($author)->post(route('discussions.follow',$parent))->assertRedirect();
   $this->assertDatabaseMissing('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
