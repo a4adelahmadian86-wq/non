@@ -29,8 +29,9 @@ MAX_ARCHIVE_DOCUMENTS = 12
 MAX_ARCHIVE_MEMBER_BYTES = 5 * 1024 * 1024
 MAX_ARCHIVE_DOCUMENT_BYTES = 20 * 1024 * 1024
 MAX_IMAGE_PIXELS = 50_000_000
-MAX_VISUAL_ASSETS = 6
+MAX_VISUAL_ASSETS = 4
 MAX_IMAGE_ASSET_BYTES = 8 * 1024 * 1024
+MAX_EMBEDDED_IMAGE_PIXELS = 16_000_000
 SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 ALLOWED_TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
 EXECUTABLE_EXTENSIONS = {
@@ -761,6 +762,18 @@ def _inspect_image(data: bytes) -> tuple[bytes, str]:
 
 
 
+def _inspect_embedded_image(data: bytes) -> tuple[bytes, str]:
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if image.width * image.height > MAX_EMBEDDED_IMAGE_PIXELS:
+                raise FileInspectionError("تصویر جاسازی‌شده بزرگ‌تر از سقف امن پردازش است.")
+    except FileInspectionError:
+        raise
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError):
+        raise FileInspectionError("تصویر جاسازی‌شده قابل بررسی نیست.") from None
+    return _inspect_image(data)
+
+
 def _extract_archive_image_assets(
     archive: zipfile.ZipFile,
     media_prefix: str,
@@ -775,6 +788,17 @@ def _extract_archive_image_assets(
         total = len(names)
         assets: list[dict[str, Any]] = []
         truncated = total > limit
+        external_image_links = False
+        for relationship_name in archive.namelist():
+            if not relationship_name.endswith(".rels"):
+                continue
+            try:
+                relationship_xml = archive.read(relationship_name).lower()
+                if b"external" in relationship_xml and b"/image" in relationship_xml:
+                    external_image_links = True
+            except (KeyError, OSError, RuntimeError, zipfile.BadZipFile):
+                external_image_links = True
+                truncated = True
 
         for name in names[:limit]:
             suffix = PurePosixPath(name).suffix.lower()
@@ -790,7 +814,7 @@ def _extract_archive_image_assets(
                 if len(raw) > MAX_IMAGE_ASSET_BYTES:
                     truncated = True
                     continue
-                image_bytes, mime = _inspect_image(raw)
+                image_bytes, mime = _inspect_embedded_image(raw)
                 assets.append({
                     "image_bytes": image_bytes,
                     "mime": mime,
@@ -799,9 +823,9 @@ def _extract_archive_image_assets(
             except (KeyError, OSError, RuntimeError, FileInspectionError, zipfile.BadZipFile):
                 truncated = True
 
-        if len(assets) < total:
+        if len(assets) < total or external_image_links:
             truncated = True
-        return assets, total, truncated, True
+        return assets, total, truncated, not external_image_links
     except (OSError, RuntimeError, zipfile.BadZipFile):
         return [], 0, True, False
 
@@ -835,7 +859,7 @@ def _extract_pdf_image_assets(
                     truncated = True
                     continue
                 try:
-                    image_bytes, mime = _inspect_image(raw)
+                    image_bytes, mime = _inspect_embedded_image(raw)
                 except FileInspectionError:
                     truncated = True
                     continue
