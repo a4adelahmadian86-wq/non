@@ -200,6 +200,10 @@ class AdminStoreController extends Controller
                 }
             }
             if ($provenance !== null) {
+                StoreProductFile::query()
+                    ->where('product_id', $lockedProduct->id)
+                    ->lockForUpdate()
+                    ->get(['id']);
                 \App\Models\StoreProductDocument::query()
                     ->where('product_id', $lockedProduct->id)
                     ->lockForUpdate()
