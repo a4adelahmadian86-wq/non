@@ -20,6 +20,7 @@ class AiOperationRegistry
         'selection.explain' => ['aliases' => [], 'scope' => 'selection', 'max_chars' => 30000, 'cost' => 'medium', 'result' => 'text'],
         'selection.translate' => ['aliases' => [], 'scope' => 'selection', 'max_chars' => 30000, 'cost' => 'medium', 'result' => 'text', 'required_context' => ['target_language']],
         'text.generate' => ['aliases' => [], 'scope' => 'prompt', 'max_chars' => 12000, 'cost' => 'medium', 'result' => 'text'],
+        'product.content.generate' => ['aliases' => [], 'scope' => 'document', 'max_chars' => 40000, 'cost' => 'high', 'result' => 'product_content'],
         'text.continue' => ['aliases' => [], 'scope' => 'cursor', 'max_chars' => 30000, 'cost' => 'medium', 'result' => 'text'],
         'text.title' => ['aliases' => [], 'scope' => 'selection', 'max_chars' => 30000, 'cost' => 'low', 'result' => 'titles'],
         'text.outline' => ['aliases' => [], 'scope' => 'selection', 'max_chars' => 30000, 'cost' => 'medium', 'result' => 'outline'],
