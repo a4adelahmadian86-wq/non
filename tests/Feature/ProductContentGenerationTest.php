@@ -182,4 +182,22 @@ class ProductContentGenerationTest extends TestCase
         app(ProductContentGenerationService::class)->generate($data['admin'], $data['product']);
     }
 
+
+    public function test_concurrent_product_content_edit_invalidates_generated_provenance(): void
+    {
+        $data = $this->productWithKnowledge();
+        $service = app(ProductContentGenerationService::class);
+        $readiness = $service->readiness($data['product']);
+
+        $this->assertArrayHasKey('product:content', $readiness['source_fingerprints']);
+        $data['product']->update(['title' => 'عنوانی که همکار هم‌زمان تغییر داده است']);
+
+        $this->expectException(ValidationException::class);
+        $service->assertFreshProvenance(
+            $data['product']->fresh(),
+            json_encode($readiness['source_fingerprints']),
+            $readiness['source_signature']
+        );
+    }
+
 }
