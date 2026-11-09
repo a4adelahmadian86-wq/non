@@ -1,6 +1,26 @@
 name: Product AI content checks
 
 on:
+  push:
+    branches:
+      - 'work/product-ai-content-*'
+    paths:
+      - 'app/Http/Controllers/AdminCourseController.php'
+      - 'app/Http/Controllers/AdminProductContentController.php'
+      - 'app/Http/Controllers/AdminStoreController.php'
+      - 'app/Jobs/ProcessProductDocument.php'
+      - 'app/Services/AI/AiOperationRegistry.php'
+      - 'app/Services/AI/Providers/GeminiEditorProvider.php'
+      - 'app/Services/ProductContentGenerationService.php'
+      - 'app/Services/ProductDocumentProcessingState.php'
+      - 'app/Services/ProductKnowledgeService.php'
+      - 'public/js/admin-store-product-ai.js'
+      - 'resources/views/admin/store/form.blade.php'
+      - 'routes/store_routes.php'
+      - 'tests/Feature/AdminStoreProductWorkflowTest.php'
+      - 'tests/Feature/ProductContentGenerationTest.php'
+      - 'tests/Unit/ProductDocumentProcessingStateTest.php'
+      - '.github/workflows/product-ai-content.yml'
   pull_request:
     branches:
       - main
