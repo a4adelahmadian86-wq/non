@@ -301,7 +301,7 @@ class ProductKnowledgeService
                         'title' => mb_substr((string) $lesson->title, 0, 180),
                         'type' => (string) $lesson->lesson_type,
                         'summary' => mb_substr($lessonSummary, 0, 700),
-                        'content' => mb_substr($lessonText, 0, 1200),
+                        'content' => mb_substr($lessonText, 0, 700),
                         'published' => (bool) $lesson->is_published,
                     ];
                 }
