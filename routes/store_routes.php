@@ -49,6 +49,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/ai-supervisor/cover/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewCover'])->middleware('throttle:5,10')->name('store.ai-supervisor.cover.review');
     Route::post('/store/{product}/ai-content/generate', [\App\Http\Controllers\AdminProductContentController::class, 'generate'])->middleware('throttle:3,10')->name('store.ai-content.generate');
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
+    Route::post('/store/bulk-archive', [AdminStoreController::class, 'bulkArchive'])->middleware('throttle:10,10')->name('store.bulk-archive');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
