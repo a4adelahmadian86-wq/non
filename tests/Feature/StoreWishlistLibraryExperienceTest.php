@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreWishlist;
+use App\Models\StoreLibraryItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -71,6 +73,39 @@ class StoreWishlistLibraryExperienceTest extends TestCase
             'name' => 'Library QA',
             'mobile' => '09123456788',
             'password' => 'secret',
+        ]);
+        $category = StoreCategory::create([
+            'name' => 'دسته کتابخانه',
+            'slug' => 'library-search-test',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'فایل کتابخانه آزمایشی',
+            'slug' => 'library-search-product',
+            'sku' => 'LIBRARY-SEARCH-001',
+            'type' => 'digital_file',
+            'price_rials' => 50000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 50000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 50000,
+            'status' => 'paid',
+            'pricing_snapshot' => ['kind' => 'store'],
+            'paid_at' => now(),
+        ]);
+        StoreLibraryItem::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'product_file_id' => null,
+            'granted_at' => now(),
         ]);
 
         $this->actingAs($user)
