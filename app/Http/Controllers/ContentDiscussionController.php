@@ -185,18 +185,27 @@ class ContentDiscussionController extends Controller {
  }
  public function moderateReport(Request $request, DiscussionReport $report) {
   $data=$request->validate(['action'=>['required','in:dismiss,remove_content']]);
-  DB::transaction(function() use($request,$report,$data) {
+  $removed=DB::transaction(function() use($request,$report,$data) {
    $locked=DiscussionReport::query()->whereKey($report->id)->lockForUpdate()->firstOrFail();
    $discussion=ContentDiscussion::query()->whereKey($locked->discussion_id)->lockForUpdate()->firstOrFail();
+   $wasRemoved=false;
    if($data['action']==='remove_content') {
-    $discussion->forceFill(['status'=>'rejected','moderator_id'=>$request->user()->id,'moderated_at'=>now()])->save();
+    if($discussion->status!=='rejected') {
+     $previous=$discussion->status;
+     $note='محتوا پس از بررسی گزارش کاربران از انتشار خارج شد.';
+     $discussion->forceFill(['status'=>'rejected','moderator_id'=>$request->user()->id,'moderated_at'=>now(),'moderation_note'=>$note])->save();
+     \\App\\Models\\DiscussionModerationEvent::create(['discussion_id'=>$discussion->id,'moderator_id'=>$request->user()->id,'from_status'=>$previous,'to_status'=>'rejected','note'=>$note]);
+     $wasRemoved=true;
+    }
     $locked->status='resolved';
    } else { $locked->status='dismissed'; }
    $locked->reviewed_by=$request->user()->id;
    $locked->reviewed_at=now();
    $locked->save();
+   return $wasRemoved ? $discussion : null;
   });
-  return back()->with('status',$data['action']==='remove_content'?'محتوا از سایت برداشته و گزارش رسیدگی شد.':'گزارش بررسی و مختومه شد.');
+  if($removed) $this->notifyModerationDecision($removed,'rejected');
+  return back()->with('status',$data['action']==='remove_content'?'محتوا از سایت برداشته شد؛ سابقه رسیدگی ثبت و نتیجه به نویسنده اطلاع داده شد.':'گزارش بررسی و مختومه شد.');
  }
  public function adminIndex(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'pending';
@@ -205,7 +214,7 @@ class ContentDiscussionController extends Controller {
   $search=mb_substr(trim((string)$request->query('q','')),0,100);
   $base=ContentDiscussion::query();
   $stats=['pending'=>(clone $base)->where('status','pending')->count(),'approved'=>(clone $base)->where('status','approved')->count(),'rejected'=>(clone $base)->where('status','rejected')->count()];
-  $discussions=(clone $base)->with(['user','parent.user'])->withCount('reports')->where('status',$status)
+  $discussions=(clone $base)->with(['user','parent.user','moderationEvents.moderator'])->withCount('reports')->where('status',$status)
    ->when($targetType!=='',fn($q)=>$q->where('target_type',$targetType))
    ->when($kind!=='',fn($q)=>$q->where('kind',$kind))
    ->when($search!=='',fn($q)=>$q->where(function($w) use($search){$w->where('body','like','%'.$search.'%')->orWhere('title','like','%'.$search.'%')->orWhereHas('user',fn($u)=>$u->where('name','like','%'.$search.'%'));}))

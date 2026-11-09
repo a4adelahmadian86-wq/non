@@ -229,6 +229,7 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$item),['status'=>'rejected'])->assertRedirect();
   $this->assertDatabaseCount('discussion_moderation_events',1);
   $this->assertDatabaseCount('farast_notifications',1);
+  $this->actingAs($admin)->get(route('admin.discussions.index',['status'=>'rejected']))->assertOk()->assertSee('سوابق رسیدگی')->assertSee('پرسش را دقیق‌تر');
  }
  public function test_admin_discussion_queue_can_filter_by_kind_and_search_author_or_text(): void {
   $p=$this->product();$author=$this->user('09123456933');$admin=$this->user('09123456934','admin');
