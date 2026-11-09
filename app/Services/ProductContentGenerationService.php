@@ -111,11 +111,12 @@ class ProductContentGenerationService
         ]);
 
         $result = is_array($ai['result'] ?? null) ? $ai['result'] : $ai;
-        $factSourceMap = collect($knowledge['sources'])
-            ->flatMap(fn (array $source) => collect($source['facts'])->mapWithKeys(
-                fn (array $fact) => [(int) $fact['id'] => (string) $source['source_id']]
-            ))
-            ->all();
+        $factSourceMap = [];
+        foreach ($knowledge['sources'] as $source) {
+            foreach ($source['facts'] as $fact) {
+                $factSourceMap[(int) $fact['id']] = (string) $source['source_id'];
+            }
+        }
         $clean = $this->normalizeResult($result, $categories, $factIds, $sourceIds, $factSourceMap);
         $clean = $this->privacy->sanitize($clean);
         $clean['slug'] = Str::slug((string) $clean['title']) ?: 'product-'.$product->id;
@@ -199,11 +200,12 @@ class ProductContentGenerationService
         }
 
         $validSourceIds = collect($knowledge['sources'])->pluck('source_id')->map(fn ($id) => (string) $id)->all();
-        $factSourceMap = collect($knowledge['sources'])
-            ->flatMap(fn (array $source) => collect($source['facts'])->mapWithKeys(
-                fn (array $fact) => [(int) $fact['id'] => (string) $source['source_id']]
-            ))
-            ->all();
+        $factSourceMap = [];
+        foreach ($knowledge['sources'] as $source) {
+            foreach ($source['facts'] as $fact) {
+                $factSourceMap[(int) $fact['id']] = (string) $source['source_id'];
+            }
+        }
         $allowedFields = [
             'title', 'short_description', 'description', 'seo_title', 'seo_description',
             'focus_keyword', 'secondary_keywords', 'tags', 'category', 'selling_points',
