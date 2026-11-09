@@ -27,9 +27,9 @@
         <img src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1000&q=85" alt="قفسه کتاب‌ها و منابع دیجیتال" fetchpriority="high">
         <div class="store-hero-visual-caption"><i class="fa-solid fa-sparkles"></i><span><strong>کتابخانه‌ای برای کشف</strong><small>دانلود و مطالعه در فضای شخصی شما</small></span></div>
         <div class="store-hero-stats">
-          <div><strong>{{ $products->total() }}</strong><span>محصول</span></div>
+          <div><strong>{{ $catalogCount }}</strong><span>محصول</span></div>
           <div><strong>{{ $categories->count() }}</strong><span>دسته</span></div>
-          <div><strong>{{ $free->count() }}</strong><span>رایگان</span></div>
+          <div><strong>{{ $freeCount }}</strong><span>رایگان</span></div>
         </div>
       </div>
     </div>
@@ -46,20 +46,21 @@
     @endif
 
     <nav class="store-chips" aria-label="دسته‌بندی محصولات">
-      <a class="{{ !$category ? 'active' : '' }}" href="{{ route('store', request()->only(['q','sort','price'])) }}">همه</a>
+      <a class="{{ !$category ? 'active' : '' }}" href="{{ route('store', request()->only(['q','sort','price','type'])) }}">همه</a>
       @foreach($categories as $cat)
         <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', array_merge(request()->only(['q','sort','price']), ['category'=>$cat->slug])) }}">{{ $cat->name }}</a>
       @endforeach
     </nav>
 
     @php($activeCategoryName = $categories->firstWhere('slug', $category)?->name)
-    @if($q !== '' || $category || $price !== 'all')
+    @if($q !== '' || $category || $price !== 'all' || $type !== 'all')
       <section class="store-active-filters" aria-label="فیلترهای فعال">
         <div class="store-active-filters__summary"><i class="fa-solid fa-sliders" aria-hidden="true"></i><strong>فیلترهای انتخاب‌شده</strong></div>
         <div class="store-active-filters__chips">
           @if($q !== '')<span><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> {{ $q }}</span>@endif
           @if($activeCategoryName)<span><i class="fa-solid fa-folder" aria-hidden="true"></i> {{ $activeCategoryName }}</span>@endif
           @if($price === 'free')<span><i class="fa-solid fa-gift" aria-hidden="true"></i> فقط رایگان</span>@elseif($price === 'paid')<span><i class="fa-solid fa-tag" aria-hidden="true"></i> فقط پولی</span>@endif
+          @if($type === 'course')<span><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i> دوره‌های آموزشی</span>@elseif($type === 'digital')<span><i class="fa-solid fa-file-lines" aria-hidden="true"></i> فایل‌های دیجیتال</span>@endif
         </div>
         <a href="{{ route('store') }}">پاک‌کردن فیلترها <i class="fa-solid fa-xmark" aria-hidden="true"></i></a>
       </section>
@@ -83,6 +84,13 @@
             <option value="all" @selected(($price??'all')==='all')>همه</option>
             <option value="free" @selected(($price??'')==='free')>فقط رایگان</option>
             <option value="paid" @selected(($price??'')==='paid')>فقط پولی</option>
+          </select>
+        </label>
+        <label class="store-filter-label">نوع محصول
+          <select name="type" onchange="this.form.submit()" class="store-filter-select">
+            <option value="all" @selected(($type??'all')==='all')>همه انواع</option>
+            <option value="digital" @selected(($type??'')==='digital')>فایل دیجیتال</option>
+            <option value="course" @selected(($type??'')==='course')>دوره آموزشی</option>
           </select>
         </label>
         <span class="store-results-total">{{ $products->total() }} مورد</span>
