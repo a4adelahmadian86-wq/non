@@ -191,6 +191,62 @@ class FilePipelineTests(unittest.TestCase):
         self.assertIn("متن داخل آرشیو TAR", result.extracted_text)
         self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "docs/chapter.txt")
 
+    def test_generic_zip_extracts_and_inventories_raster_images(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 30), "navy").save(image_stream, format="PNG")
+        archive_stream = io.BytesIO()
+        with zipfile.ZipFile(archive_stream, "w") as archive:
+            archive.writestr("images/cover.png", image_stream.getvalue())
+
+        result = inspect_file(archive_stream.getvalue(), "image-package.zip")
+
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertFalse(result.extraction_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertEqual(result.image_assets[0]["locator"]["archive_entry"], "images/cover.png")
+
+    def test_tar_archive_extracts_and_inventories_raster_images(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 30), "teal").save(image_stream, format="PNG")
+        image_bytes = image_stream.getvalue()
+        archive_stream = io.BytesIO()
+        with tarfile.open(fileobj=archive_stream, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+            info = tarfile.TarInfo("images/cover.png")
+            info.size = len(image_bytes)
+            archive.addfile(info, io.BytesIO(image_bytes))
+
+        result = inspect_file(archive_stream.getvalue(), "image-package.tar")
+
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertFalse(result.extraction_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_archive_propagates_embedded_images_from_nested_docx(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 30), "orange").save(image_stream, format="PNG")
+        document = Document()
+        document.add_paragraph("متن راهنمای داخل سند")
+        document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(0.5))
+        docx_stream = io.BytesIO()
+        document.save(docx_stream)
+
+        archive_stream = io.BytesIO()
+        with zipfile.ZipFile(archive_stream, "w") as archive:
+            archive.writestr("lessons/guide.docx", docx_stream.getvalue())
+
+        result = inspect_file(archive_stream.getvalue(), "lesson-package.zip")
+
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertEqual(result.image_assets[0]["locator"]["archive_entry"], "lessons/guide.docx")
+        self.assertIn("متن راهنمای داخل سند", result.extracted_text)
+
     def test_tar_gzip_archive_is_inspected_without_extracting_to_disk(self):
         stream = io.BytesIO()
         content = b"Compressed TAR content"
