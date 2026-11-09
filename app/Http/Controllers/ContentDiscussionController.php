@@ -53,9 +53,16 @@ class ContentDiscussionController extends Controller {
  }
  public function store(Request $request) {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body'),'title'=>is_string($request->input('title'))?trim($request->input('title')):$request->input('title')]);
-  $data=$request->validate(['target_type'=>['required','in:product,article'],'target_key'=>['required','string','max:240'],'kind'=>['required','in:review,question,comment'],'title'=>['nullable','string','max:180'],'body'=>['required','string','min:10','max:5000'],'rating'=>['nullable','integer','min:1','max:5']]);
+  $data=$request->validate(['target_type'=>['required','in:product,article,reader'],'target_key'=>['required','string','max:240'],'kind'=>['required','in:review,question,comment'],'title'=>['nullable','string','max:180'],'body'=>['required','string','min:10','max:5000'],'rating'=>['nullable','integer','min:1','max:5'],'anchor_page'=>['required_if:target_type,reader','nullable','integer','min:1','max:100000'],'anchor_quote'=>['required_if:target_type,reader','nullable','string','min:1','max:500'],'anchor_start'=>['nullable','integer','min:0','max:10000000'],'anchor_end'=>['nullable','integer','min:0','max:10000000'],'anchor_context'=>['nullable','string','max:500']]);
   $product=null;
-  if($data['target_type']==='product') {
+  if($data['target_type']==='reader') {
+   $product=StoreProduct::published()->findOrFail((int)$data['target_key']);
+   if($data['kind']==='review') throw ValidationException::withMessages(['kind'=>'برای بخش مشخصی از فایل فقط دیدگاه یا پرسش ثبت می‌شود.']);
+   $data['rating']=null;
+   if(isset($data['anchor_start'],$data['anchor_end']) && $data['anchor_end']<$data['anchor_start']) throw ValidationException::withMessages(['anchor_end'=>'محدوده انتخاب‌شده معتبر نیست.']);
+   $key=(string)$product->id;
+   $redirect=route('store.reader',$product->slug).'#reader-discussions';
+  } elseif($data['target_type']==='product') {
    $product=StoreProduct::published()->findOrFail((int)$data['target_key']);
    if(!in_array($data['kind'],['review','question'],true)) throw ValidationException::withMessages(['kind'=>'برای محصول فقط دیدگاه یا پرسش مجاز است.']);
    if($data['kind']==='review' && !($data['rating'] ?? null)) throw ValidationException::withMessages(['rating'=>'برای ثبت دیدگاه، امتیاز یک تا پنج را انتخاب کنید.']);
@@ -74,7 +81,7 @@ class ContentDiscussionController extends Controller {
      throw ValidationException::withMessages(['body'=>'برای این محصول قبلاً دیدگاه ثبت کرده‌اید.']);
     }
    }
-   $item=ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
+   $item=ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'anchor_page'=>$data['target_type']==='reader'?(int)$data['anchor_page']:null,'anchor_quote'=>$data['target_type']==='reader'?trim((string)$data['anchor_quote']):null,'anchor_start'=>$data['target_type']==='reader'?($data['anchor_start']??null):null,'anchor_end'=>$data['target_type']==='reader'?($data['anchor_end']??null):null,'anchor_context'=>$data['target_type']==='reader'?trim((string)($data['anchor_context']??''))?:null:null,'status'=>'pending']);
    DiscussionSubscription::firstOrCreate(['discussion_id'=>$item->id,'user_id'=>$request->user()->id]);
    return $item;
   });
@@ -314,9 +321,10 @@ class ContentDiscussionController extends Controller {
   return view('admin.discussions.index',compact('discussions','stats','status','targetType','kind','search'));
  }
  private function discussionPublicUrl(ContentDiscussion $discussion): ?string {
-  if($discussion->target_type==='product') {
+  if(in_array($discussion->target_type,['product','reader'],true)) {
    $product=StoreProduct::find((int)$discussion->target_key);
-   $base=$product?route('store.product',$product->slug):null;
+   $base=$product?route($discussion->target_type==='reader'?'store.reader':'store.product',$product->slug):null;
+   if($base && $discussion->target_type==='reader') $base.='#reader-discussions';
   } else {
    $base=BlogController::articleExists($discussion->target_key)?route('blog.show',$discussion->target_key):null;
   }
