@@ -196,7 +196,7 @@ class SupportNotificationService
             $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind);
             try {
                 if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body);
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_warning');
                 }
             } catch (\Throwable) {
             }
@@ -230,7 +230,7 @@ class SupportNotificationService
             $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind);
             try {
                 if ($staff->email) {
-                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body);
+                    $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body, 'ticket_sla_breach');
                 }
             } catch (\Throwable) {
             }
