@@ -1236,6 +1236,7 @@ def redact_sensitive_content(value: str) -> tuple[str, int]:
         r"\b(?:sk-[A-Za-z0-9_-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{25,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16})\b",
         r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
         r"\b[A-Z]{2}[0-9]{2}(?:\s?[A-Z0-9]){11,30}\b",
+        r"(?i)https?://[^\s<>\"']*(?:[?&](?:x-amz-signature|x-goog-signature|signature|sig|token|access_token|api_key|key|secret|password|auth)=)[^\s<>\"']*",
         r"(?i)(?:[?&](?:token|access_token|api_key|key|secret|password|auth)=)[^&\s]+",
         r"(?i)((?:national\s*id|account\s*(?:no|number)|card\s*number|کد\s*ملی|شماره\s*حساب|شماره\s*کارت)\s*[:：]?\s*)[0-9۰-۹٠-٩]{8,24}",
         r"(?<![\w\d])(?:\+|00)(?:[0-9۰-۹٠-٩][\d .()/-]{6,}[0-9۰-۹٠-٩])(?![\w\d])",
