@@ -1607,6 +1607,37 @@ test('reader ink exposes keyboard guidance and discards cancelled pointer stroke
   await expect(canvas).toHaveCSS('touch-action', 'auto');
 });
 
+test('saved reader highlights can be navigated to and removed from the personal panel', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="highlight-panel-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>متن آغازین و عبارت برجسته برای مدیریت هایلایت</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await page.evaluate(() => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const start = text.nodeValue.indexOf('عبارت برجسته');
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + 'عبارت برجسته'.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await page.locator('[data-reader-highlight]').click();
+  await page.locator('[data-reader-notes]').click();
+  await expect(page.locator('.farast-reader-highlight-entry')).toHaveCount(1);
+  await page.locator('.farast-reader-highlight-entry button').first().click();
+  await expect.poll(() => page.evaluate(() => window.getSelection().toString())).toBe('عبارت برجسته');
+  await page.locator('.farast-reader-highlight-entry [aria-label^="حذف هایلایت"]').click();
+  await expect(page.locator('.farast-reader-highlight-entry')).toHaveCount(0);
+  await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(0);
+});
+
 test('saved reader notes navigate back to their exact anchored text', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
