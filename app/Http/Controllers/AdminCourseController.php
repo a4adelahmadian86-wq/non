@@ -210,6 +210,7 @@ class AdminCourseController extends Controller
             abort(503, 'بارگذاری به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
         }
 
+        $dispatchFailed = false;
         if ($documentId && $processingStatus === 'queued') {
             try {
                 ProcessProductDocument::dispatch((int) $documentId);
@@ -220,12 +221,15 @@ class AdminCourseController extends Controller
                     'updated_at' => now(),
                 ]);
                 report($exception);
+                $dispatchFailed = true;
             }
         }
 
-        return back()->with('status', $processingStatus === 'queued'
-            ? 'منبع آموزشی پس از اسکن امنیتی ذخیره شد و پردازش دانش آن در صف قرار گرفت.'
-            : 'منبع آموزشی ذخیره شد؛ به دلیل عبور از سقف پردازش فعلی، تحلیل کامل تا فراهم‌شدن مسیر مناسب فعال نیست.');
+        return back()->with('status', $dispatchFailed
+            ? 'منبع آموزشی ذخیره شد، اما صف پردازش در دسترس نبود؛ وضعیت پردازش برای بررسی ثبت شده است.'
+            : ($processingStatus === 'queued'
+                ? 'منبع آموزشی پس از اسکن امنیتی ذخیره شد و پردازش دانش آن در صف قرار گرفت.'
+                : 'منبع آموزشی ذخیره شد؛ به دلیل عبور از سقف پردازش فعلی، تحلیل کامل تا فراهم‌شدن مسیر مناسب فعال نیست.'));
     }
 
     public function deleteResource(StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
