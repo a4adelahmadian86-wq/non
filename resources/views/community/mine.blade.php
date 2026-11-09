@@ -33,6 +33,7 @@
     </div>
     @if($item->title)<h2>{{ $item->title }}</h2>@endif
     <p>{{ $item->body }}</p>
+    @if($item->status==='rejected' && $item->moderation_note)<div class="community-mine-moderation-note"><strong>توضیح تیم بررسی:</strong> {{ $item->moderation_note }}</div>@endif
     <div class="community-mine-item-foot">
      <span>{{ $item->target_label }} · {{ $item->target_type==='product'?'فروشگاه':'مقالات' }}</span>
      <div>
