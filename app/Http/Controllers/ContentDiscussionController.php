@@ -28,6 +28,23 @@ class ContentDiscussionController extends Controller {
   $base=ContentDiscussion::query()->whereNull('parent_id');
   $stats=['pending'=>(clone $base)->where('status','pending')->count(),'approved'=>(clone $base)->where('status','approved')->count(),'rejected'=>(clone $base)->where('status','rejected')->count()];
   $discussions=(clone $base)->with('user')->where('status',$status)->when($targetType!=='',fn($q)=>$q->where('target_type',$targetType))->latest()->paginate(25)->withQueryString();
+  $items=$discussions->getCollection();
+  $productIds=$items->where('target_type','product')->pluck('target_key')->map(fn($key)=>(int)$key)->filter()->unique()->values();
+  $products=$productIds->isNotEmpty()
+   ? StoreProduct::query()->whereIn('id',$productIds)->get(['id','title','slug'])->keyBy(fn($product)=>(string)$product->id)
+   : collect();
+  $articles=collect(BlogController::articles());
+  $items->each(function($item) use ($products,$articles) {
+   if($item->target_type==='product') {
+    $product=$products->get((string)$item->target_key);
+    $item->setAttribute('target_label',$product?->title ?: 'محصول حذف‌شده');
+    $item->setAttribute('target_url',$product?->slug ? route('store.product',$product->slug) : null);
+   } else {
+    $article=$articles->get($item->target_key);
+    $item->setAttribute('target_label',$article['title'] ?? 'مقاله ناموجود');
+    $item->setAttribute('target_url',$article ? route('blog.show',$item->target_key) : null);
+   }
+  });
   return view('admin.discussions.index',compact('discussions','stats','status','targetType'));
  }
  public function moderate(Request $request,ContentDiscussion $discussion) {
