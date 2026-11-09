@@ -1,8 +1,8 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\SiteSetting;
+use App\Models\SiteSetting;
 use RuntimeException;
 
 class MailConfigService
@@ -131,7 +131,7 @@ class MailConfigService
             return false;
         }
 
-        return DIRECTORY_SEPARATOR === '\\'
+        return DIRECTORY_SEPARATOR === '\'
             ? is_file($binary)
             : (is_file($binary) && is_executable($binary));
     }
