@@ -175,7 +175,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             foreach ($aiTagNames as $tagName) {
                 $tagName = trim((string) $tagName);
@@ -293,6 +293,13 @@ class AdminStoreController extends Controller
             }
             $lockedProduct->update($data);
             $lockedProduct->tags()->sync($tagIds);
+            if ($provenance !== null) {
+                $lockedProduct->refresh();
+                $freshFingerprints = $contentGenerator->currentSourceFingerprints($lockedProduct);
+                $freshMetadata = (array) ($lockedProduct->metadata ?? []);
+                $freshMetadata['ai_content']['source_fingerprints'] = $freshFingerprints;
+                $lockedProduct->update(['metadata' => $freshMetadata]);
+            }
             $lockedProduct->related()->sync($relatedIds);
             $this->audit('store.product.updated', $lockedProduct, [
                 'type' => $lockedProduct->type,
