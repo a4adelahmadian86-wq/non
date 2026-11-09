@@ -35,7 +35,7 @@ class ContentDiscussionController extends Controller {
    if($reaction) { $reaction->type=$data['type']; $reaction->save(); return; }
    \App\Models\DiscussionReaction::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id,'type'=>$data['type']]);
   });
-  return back()->with('discussion_status','واکنش شما ثبت شد.');
+  return redirect()->to(url()->previous().'#store-discussions')->with('discussion_status','واکنش شما ثبت شد.');
  }
  public function adminIndex(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'pending';
