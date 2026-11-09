@@ -90,7 +90,7 @@
 
       generated = payload;
       const suggestions = payload.suggestions || {};
-      ['title', 'slug', 'short_description', 'description', 'seo_title', 'seo_description', 'focus_keyword'].forEach(name => {
+      ['title', 'slug', 'short_description', 'description', 'seo_title', 'seo_description', 'focus_keyword', 'version', 'license_type'].forEach(name => {
         const target = field(name);
         if (target) target.value = suggestions[name] || '';
       });
@@ -130,6 +130,7 @@
       const fieldLabels = {
         title: 'عنوان', short_description: 'معرفی کوتاه', description: 'توضیحات',
         seo_title: 'عنوان SEO', seo_description: 'توضیح SEO', focus_keyword: 'کلیدواژه کانونی',
+        version: 'نسخه', license_type: 'نوع مجوز',
         secondary_keywords: 'کلیدواژه‌های فرعی', tags: 'برچسب‌ها', category: 'دسته‌بندی',
         selling_points: 'نکات فروش'
       };
@@ -206,6 +207,8 @@
         seo_title: '[name="seo_title"]',
         seo_description: '[name="seo_description"]',
         focus_keyword: '[name="seo_focus_keyword"]',
+        version: '[name="version"]',
+        license_type: '[name="license_type"]',
         secondary_keywords: '[name="seo_secondary_keywords"]'
       };
       Object.entries(fields).forEach(([name, selector]) => {
