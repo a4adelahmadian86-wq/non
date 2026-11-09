@@ -93,6 +93,29 @@ class ProductDocumentProcessingStateTest extends TestCase
     }
 
 
+    public function test_complete_image_only_archive_can_finish_knowledge_without_text_chunks(): void
+    {
+        $state = app(ProductDocumentProcessingState::class)->derive(
+            [
+                'detected_type' => 'zip',
+                'extraction_truncated' => false,
+                'extracted_characters' => 0,
+                'embedded_image_count' => 2,
+                'visual_inventory_complete' => true,
+                'visual_review_truncated' => false,
+            ],
+            ['groq_vision' => 'completed', 'groq_text' => 'not_requested'],
+            0,
+            0,
+            false,
+            0,
+        );
+
+        $this->assertSame('completed', $state['status']);
+        $this->assertFalse($state['reader_ready']);
+        $this->assertTrue($state['completeness']['semantic_review_complete']);
+    }
+
     public function test_mixed_text_and_embedded_images_require_both_review_paths(): void
     {
         $inspection = [
