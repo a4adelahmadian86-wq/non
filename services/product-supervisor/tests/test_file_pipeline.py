@@ -11,7 +11,14 @@ from pptx import Presentation
 from pptx.util import Inches
 from PIL import Image
 
-from file_pipeline import FileInspectionError, build_pdf_sample, inspect_file, redact_sensitive_content
+from file_pipeline import (
+    MAX_EXTRACTED_CHARS,
+    FileInspectionError,
+    _bounded_transcription,
+    build_pdf_sample,
+    inspect_file,
+    redact_sensitive_content,
+)
 from pypdf import PdfReader, PdfWriter
 
 
@@ -304,6 +311,92 @@ class FilePipelineTests(unittest.TestCase):
         result = inspect_file(stream.getvalue(), "course.pptx")
         self.assertEqual(result.detected_type, "pptx")
         self.assertIn("جلسه اول دوره", result.extracted_text)
+
+    def test_docx_embedded_images_are_inventoried(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 40), "white").save(image_stream, format="PNG")
+        document = Document()
+        document.add_paragraph("متن همراه تصویر")
+        document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(1))
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "mixed.docx")
+
+        self.assertEqual(result.detected_type, "docx")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertTrue(result.image_assets[0]["image_bytes"])
+
+    def test_pptx_embedded_images_are_inventoried(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 40), "white").save(image_stream, format="PNG")
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        slide.shapes.add_picture(io.BytesIO(image_stream.getvalue()), Inches(1), Inches(1))
+        stream = io.BytesIO()
+        presentation.save(stream)
+
+        result = inspect_file(stream.getvalue(), "mixed.pptx")
+
+        self.assertEqual(result.detected_type, "pptx")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_xlsx_embedded_images_are_inventoried(self):
+        from openpyxl.drawing.image import Image as XLImage
+
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 40), "white").save(image_stream, format="PNG")
+        workbook = Workbook()
+        workbook.active.add_image(XLImage(io.BytesIO(image_stream.getvalue())), "A1")
+        stream = io.BytesIO()
+        workbook.save(stream)
+
+        result = inspect_file(stream.getvalue(), "mixed.xlsx")
+
+        self.assertEqual(result.detected_type, "xlsx")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_pdf_image_inventory_detects_embedded_raster_images(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (48, 48), "white").save(image_stream, format="PDF")
+
+        result = inspect_file(image_stream.getvalue(), "image-page.pdf")
+
+        self.assertEqual(result.detected_type, "pdf")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_text_only_pdf_has_a_complete_empty_visual_inventory(self):
+        writer = PdfWriter()
+        writer.add_blank_page(width=200, height=300)
+        stream = io.BytesIO()
+        writer.write(stream)
+
+        result = inspect_file(stream.getvalue(), "text-only.pdf")
+
+        self.assertEqual(result.embedded_image_count, 0)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+
+    def test_transcription_limit_is_explicitly_reported(self):
+        complete_text, complete = _bounded_transcription("متن کوتاه")
+        truncated_text, truncated = _bounded_transcription("x" * (MAX_EXTRACTED_CHARS + 1))
+
+        self.assertEqual(complete_text, "متن کوتاه")
+        self.assertFalse(complete)
+        self.assertEqual(len(truncated_text), MAX_EXTRACTED_CHARS)
+        self.assertTrue(truncated)
 
     def test_wav_is_not_misclassified_as_image(self):
         wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + b"0" * 16 + b"data" + b"0" * 4
