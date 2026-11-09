@@ -168,4 +168,18 @@ class ProductContentGenerationTest extends TestCase
             $readiness['source_signature']
         );
     }
+
+    public function test_generation_is_blocked_until_document_processing_is_complete(): void
+    {
+        $data = $this->productWithKnowledge();
+        $data['document']->update(['processing_status' => 'extracted']);
+
+        $this->mock(EditorAiAssistService::class, function ($mock) {
+            $mock->shouldNotReceive('assist');
+        });
+        $this->expectException(ValidationException::class);
+
+        app(ProductContentGenerationService::class)->generate($data['admin'], $data['product']);
+    }
+
 }
