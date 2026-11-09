@@ -100,6 +100,15 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(audio_result, ("", False))
         self.assertEqual(_FakeAsyncClient.calls, [])
 
+    async def test_audio_provider_receives_generic_filename_not_user_filename(self):
+        _FakeAsyncClient.responses = [_FakeResponse(200, {"text": "رونویسی آزمایشی"})]
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                result = await transcribe_audio_with_groq(b"audio-bytes", "private-customer-name.wav")
+
+        self.assertEqual(result, ("رونویسی آزمایشی", False))
+        self.assertEqual(_FakeAsyncClient.calls[0]["files"]["file"][0], "upload.audio")
+
     async def test_all_provider_batches_failing_is_not_silent_success(self):
         _FakeAsyncClient.responses = [_FakeResponse(429), _FakeResponse(503)]
         with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
