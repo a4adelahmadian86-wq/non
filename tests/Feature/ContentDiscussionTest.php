@@ -81,7 +81,7 @@ class ContentDiscussionTest extends TestCase {
   $this->assertDatabaseHas('discussion_reports',['discussion_id'=>$d->id,'reporter_id'=>$reporter->id,'reason'=>'spam','status'=>'pending']);
   $this->actingAs($reporter)->post(route('discussions.report',$d),['reason'=>'abuse'])->assertRedirect();
   $this->assertDatabaseCount('discussion_reports',1);
-  $report=\\App\\Models\\DiscussionReport::firstOrFail();
+  $report=\App\Models\DiscussionReport::firstOrFail();
   $this->actingAs($admin)->patch(route('admin.discussion-reports.moderate',$report),['action'=>'remove_content'])->assertRedirect();
   $this->assertDatabaseHas('content_discussions',['id'=>$d->id,'status'=>'rejected']);
   $this->assertDatabaseHas('discussion_reports',['id'=>$report->id,'status'=>'resolved','reviewed_by'=>$admin->id]);
@@ -98,6 +98,6 @@ class ContentDiscussionTest extends TestCase {
   $p=$this->product();$u=$this->user('09123456806');
   $this->actingAs($u)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
   $d=ContentDiscussion::firstOrFail();$admin=$this->user('09123456807','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
-  $this->get(route('store.product',$p->slug,['discussion_sort'=>'helpful']))->assertOk()->assertSee('discussion-sort');
+  $this->get(route('store.product',['slug'=>$p->slug,'discussion_sort'=>'helpful']))->assertOk()->assertSee('discussion-sort');
  }
 }
