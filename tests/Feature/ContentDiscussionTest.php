@@ -99,6 +99,8 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($u)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
   $d=ContentDiscussion::firstOrFail();$admin=$this->user('09123456807','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
   $this->get(route('store.product',['slug'=>$p->slug,'discussion_sort'=>'helpful']))->assertOk()->assertSee('discussion-sort');
+  $this->get(route('store.product',['slug'=>$p->slug,'discussion_sort'=>'most_replied']))->assertOk()->assertSee('most_replied');
+  $this->get(route('blog.show',['slug'=>'workflow-writing','discussion_sort'=>'most_replied']))->assertOk()->assertSee('most_replied');
  }
 
  public function test_user_replies_are_moderated_and_appear_as_member_replies(): void {

@@ -140,3 +140,5 @@
 .discussion-follow-form button{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:6px 11px;border:1px solid #d9e5f4;border-radius:9px;background:#f5f8fd;color:#315f9d;font:inherit;font-size:.64rem;font-weight:850;cursor:pointer}
 .discussion-follow-form button.is-following{border-color:#c8dfd2;background:#f0f8f3;color:#34724c}
 .discussion-follow-form small{color:#8a98aa;font-size:.59rem}
+
+.discussion-reply-count{padding:3px 7px;border-radius:7px;background:#f1f5fa;color:#75869b;font-size:.58rem}
