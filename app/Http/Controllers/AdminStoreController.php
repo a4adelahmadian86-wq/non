@@ -142,16 +142,21 @@ class AdminStoreController extends Controller
         $provenance = null;
         $submittedFingerprints = null;
         $submittedSignature = null;
+        $submittedFieldEvidence = null;
+        $fieldEvidence = null;
         if ($request->filled('ai_content_source_fingerprints') || $request->filled('ai_content_signature')) {
             $request->validate([
                 'ai_content_source_fingerprints' => 'required|string|max:12000',
                 'ai_content_signature' => 'required|string|size:64',
                 'ai_content_request_id' => 'nullable|string|max:64',
                 'ai_content_model' => 'nullable|string|max:120',
+                'ai_content_field_evidence' => 'required|string|max:12000',
             ]);
             $submittedFingerprints = (string) $request->input('ai_content_source_fingerprints');
             $submittedSignature = (string) $request->input('ai_content_signature');
+            $submittedFieldEvidence = (string) $request->input('ai_content_field_evidence');
             $provenance = $contentGenerator->assertFreshProvenance($product, $submittedFingerprints, $submittedSignature);
+            $fieldEvidence = $contentGenerator->validateFieldEvidence($product, $submittedFieldEvidence);
         }
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
@@ -160,7 +165,7 @@ class AdminStoreController extends Controller
             'ai_content_tag_names' => 'nullable|array|max:10',
             'ai_content_tag_names.*' => 'required|string|max:80',
         ])['ai_content_tag_names'] ?? [];
-        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model']);
+        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
         if ($provenance !== null) {
             $metadata = $data['metadata'] ?? $product->metadata ?? [];
             $metadata['ai_content'] = [
@@ -168,6 +173,7 @@ class AdminStoreController extends Controller
                 'generated_at' => now()->toISOString(),
                 'request_id' => (string) $request->input('ai_content_request_id', ''),
                 'model' => (string) $request->input('ai_content_model', ''),
+                'field_evidence' => $fieldEvidence,
             ];
             $data['metadata'] = $metadata;
         }
@@ -175,7 +181,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -199,6 +205,10 @@ class AdminStoreController extends Controller
                     ->lockForUpdate()
                     ->get(['id']);
                 $contentGenerator->assertFreshProvenance($lockedProduct, (string) $submittedFingerprints, (string) $submittedSignature);
+                $fieldEvidence = $contentGenerator->validateFieldEvidence($lockedProduct, (string) $submittedFieldEvidence);
+                $metadataWithEvidence = (array) ($data['metadata'] ?? $lockedProduct->metadata ?? []);
+                $metadataWithEvidence['ai_content']['field_evidence'] = $fieldEvidence;
+                $data['metadata'] = $metadataWithEvidence;
             }
             foreach ($aiTagNames as $tagName) {
                 $tagName = trim((string) $tagName);
@@ -1156,6 +1166,7 @@ class AdminStoreController extends Controller
             'ai_content_signature' => 'nullable|string|size:64',
             'ai_content_request_id' => 'nullable|string|max:64',
             'ai_content_model' => 'nullable|string|max:120',
+            'ai_content_field_evidence' => 'nullable|string|max:12000',
             'tag_ids' => 'sometimes|array|max:30',
             'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
             'related_product_ids' => 'sometimes|array|max:12',
