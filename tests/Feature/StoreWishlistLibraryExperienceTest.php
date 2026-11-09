@@ -1,13 +1,13 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\StoreCategory;
-use App\\Models\\StoreProduct;
-use App\\Models\\StoreWishlist;
-use App\\Models\\User;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Tests\\TestCase;
+use App\Models\StoreCategory;
+use App\Models\StoreProduct;
+use App\Models\StoreWishlist;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class StoreWishlistLibraryExperienceTest extends TestCase
 {
@@ -52,7 +52,7 @@ class StoreWishlistLibraryExperienceTest extends TestCase
             ->get(route('wishlist', ['type' => 'later']))
             ->assertOk()
             ->assertSee('بعداً می‌خرم')
-            ->assertSee('فهرست خالی است');
+            ->assertSee('هنوز محصولی برای بعداً ذخیره نکرده‌اید');
 
         $this->actingAs($user)
             ->delete(route('wishlist.destroy', $product), ['list_type' => 'wishlist'])
