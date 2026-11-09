@@ -124,7 +124,7 @@ class StoreController extends Controller
         $hasPreview = $showPreviews->isNotEmpty();
         $title = $product->seo_title ?: $product->title;
         if (Schema::hasTable('content_discussions')) {
-            $discussions = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->whereNull('parent_id')->where('status', 'approved')->with(['user', 'replies' => fn ($q) => $q->where('status', 'approved')->with('user')->oldest()])->latest()->limit(30)->get();
+            $discussions = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->whereNull('parent_id')->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($q) => $q->where('type', 'like'), 'reactions as dislikes_count' => fn ($q) => $q->where('type', 'dislike')])->with(['user', 'reactions' => fn ($q) => $q->where('user_id', auth()->id()), 'replies' => fn ($q) => $q->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($r) => $r->where('type', 'like'), 'reactions as dislikes_count' => fn ($r) => $r->where('type', 'dislike')])->with(['user', 'reactions' => fn ($r) => $r->where('user_id', auth()->id())])->oldest()])->latest()->limit(30)->get();
             $discussionCounts = [
                 'reviews' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->whereNull('parent_id')->where('status', 'approved')->count(),
                 'questions' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),

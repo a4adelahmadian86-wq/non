@@ -96,3 +96,16 @@
 @media(prefers-reduced-motion:reduce){.farast-discussions *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 .discussion-rating-stars.is-empty{color:#cbd4df}
+
+.discussion-reactions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px solid #edf1f6}
+.discussion-reaction-form{display:inline-flex;margin:0}
+.discussion-reaction-button{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:6px 11px;border:1px solid #e2e9f2;border-radius:10px;background:#fbfcfe;color:#71839a;font:inherit;font-size:.65rem;font-weight:800;cursor:pointer;transition:background .18s,border-color .18s,color .18s,transform .18s}
+.discussion-reaction-button:hover{transform:translateY(-1px);border-color:#c6d6ea;background:#f4f8fe;color:#315f9b}
+.discussion-reaction-button[aria-pressed="true"]{border-color:#a9c5e8;background:#edf5ff;color:#245fa9;box-shadow:inset 0 0 0 1px #d9e8fa}
+.discussion-reaction-button.is-dislike[aria-pressed="true"]{border-color:#e6c4c4;background:#fff3f2;color:#a64e4e;box-shadow:inset 0 0 0 1px #f6dfde}
+.discussion-reaction-button i{font-size:.76rem}
+.discussion-reaction-button:focus-visible{outline:3px solid #b8d0f1;outline-offset:2px}
+.discussion-reaction-login,.discussion-reaction-own{color:#96a2b1;font-size:.59rem}
+.discussion-reaction-login a{color:#326db8;font-weight:850;text-decoration:none}
+.discussion-reaction-login a:hover{text-decoration:underline}
+.discussion-reply .discussion-reactions{margin-top:10px}

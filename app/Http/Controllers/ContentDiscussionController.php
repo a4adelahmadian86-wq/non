@@ -4,6 +4,7 @@ use App\Models\ContentDiscussion;
 use App\Models\StoreProduct;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 class ContentDiscussionController extends Controller {
  public function store(Request $request) {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body'),'title'=>is_string($request->input('title'))?trim($request->input('title')):$request->input('title')]);
@@ -22,6 +23,19 @@ class ContentDiscussionController extends Controller {
   }
   ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
   return redirect($redirect)->with('discussion_status','پیام شما ثبت شد و پس از بررسی مدیر در همین صفحه نمایش داده می‌شود.');
+ }
+ public function react(Request $request, ContentDiscussion $discussion) {
+  $data=$request->validate(['type'=>['required','in:like,dislike']]);
+  abort_unless($discussion->status==='approved',404);
+  abort_if((int)$discussion->user_id===(int)$request->user()->id,403);
+  DB::transaction(function() use ($discussion,$request,$data) {
+   ContentDiscussion::query()->whereKey($discussion->id)->lockForUpdate()->firstOrFail();
+   $reaction=\\App\\Models\\DiscussionReaction::query()->where('discussion_id',$discussion->id)->where('user_id',$request->user()->id)->lockForUpdate()->first();
+   if($reaction && $reaction->type===$data['type']) { $reaction->delete(); return; }
+   if($reaction) { $reaction->type=$data['type']; $reaction->save(); return; }
+   \\App\\Models\\DiscussionReaction::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id,'type'=>$data['type']]);
+  });
+  return back()->with('discussion_status','واکنش شما ثبت شد.');
  }
  public function adminIndex(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'pending';

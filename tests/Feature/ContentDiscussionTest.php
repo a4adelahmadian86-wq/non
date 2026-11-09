@@ -48,4 +48,27 @@ class ContentDiscussionTest extends TestCase {
   $this->get(route('blog.show','workflow-writing'))->assertOk()->assertSee('پروژه‌های تیمی')->assertSee('پرسش');
  }
 
+
+ public function test_discussion_reactions_can_be_added_changed_and_removed_once_per_user(): void {
+  $p=$this->product();$author=$this->user('09123456790');$voter=$this->user('09123456791');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $d=ContentDiscussion::firstOrFail();$admin=$this->user('09123456792','admin');
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($voter)->post(route('discussions.reaction',$d),['type'=>'like'])->assertRedirect();
+  $this->assertDatabaseHas('discussion_reactions',['discussion_id'=>$d->id,'user_id'=>$voter->id,'type'=>'like']);
+  $this->actingAs($voter)->post(route('discussions.reaction',$d),['type'=>'dislike'])->assertRedirect();
+  $this->assertDatabaseHas('discussion_reactions',['discussion_id'=>$d->id,'user_id'=>$voter->id,'type'=>'dislike']);
+  $this->assertDatabaseCount('discussion_reactions',1);
+  $this->actingAs($voter)->post(route('discussions.reaction',$d),['type'=>'dislike'])->assertRedirect();
+  $this->assertDatabaseMissing('discussion_reactions',['discussion_id'=>$d->id,'user_id'=>$voter->id]);
+ }
+ public function test_guests_cannot_react_and_users_cannot_react_to_own_or_pending_content(): void {
+  $p=$this->product();$author=$this->user('09123456793');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا امکان دریافت نسخه قابل ویرایش این فایل وجود دارد؟'])->assertRedirect();
+  $d=ContentDiscussion::firstOrFail();
+  $this->post(route('discussions.reaction',$d),['type'=>'like'])->assertRedirect(route('login'));
+  $this->actingAs($author)->post(route('discussions.reaction',$d),['type'=>'like'])->assertNotFound();
+  $admin=$this->user('09123456794','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($author)->post(route('discussions.reaction',$d),['type'=>'like'])->assertForbidden();
+ }
 }

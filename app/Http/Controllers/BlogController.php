@@ -159,7 +159,7 @@ class BlogController extends Controller
             ->values();
 
         if (Schema::hasTable('content_discussions')) {
-            $discussions = ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->whereNull('parent_id')->where('status', 'approved')->with(['user', 'replies' => fn ($q) => $q->where('status', 'approved')->with('user')->oldest()])->latest()->limit(30)->get();
+            $discussions = ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->whereNull('parent_id')->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($q) => $q->where('type', 'like'), 'reactions as dislikes_count' => fn ($q) => $q->where('type', 'dislike')])->with(['user', 'reactions' => fn ($q) => $q->where('user_id', auth()->id()), 'replies' => fn ($q) => $q->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($r) => $r->where('type', 'like'), 'reactions as dislikes_count' => fn ($r) => $r->where('type', 'dislike')])->with(['user', 'reactions' => fn ($r) => $r->where('user_id', auth()->id())])->oldest()])->latest()->limit(30)->get();
             $discussionCounts = [
                 'comments' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'comment')->whereNull('parent_id')->where('status', 'approved')->count(),
                 'questions' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),

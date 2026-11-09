@@ -68,12 +68,14 @@
                 </div>
                 @if($entry->title)<h3>{{ $entry->title }}</h3>@endif
                 <p class="discussion-body">{{ $entry->body }}</p>
+                @include('shared.discussion-reactions', ['discussionItem' => $entry])
                 @if($entry->replies->isNotEmpty())
                     <div class="discussion-replies">
                         @foreach($entry->replies as $reply)
                             <div class="discussion-reply">
                                 <div class="discussion-reply-heading"><i class="fa-solid fa-reply" aria-hidden="true"></i><strong>پاسخ مدیریت</strong><small>{{ $reply->created_at?->translatedFormat('d F Y') }}</small></div>
                                 <p>{{ $reply->body }}</p>
+                                @include('shared.discussion-reactions', ['discussionItem' => $reply])
                             </div>
                         @endforeach
                     </div>
