@@ -91,6 +91,13 @@ class MailConfigService
     {
         $provider = $this->currentProvider();
         $available = $this->providerConfigured($provider);
+        $from = (string) SiteSetting::read('mail_from_address', env('MAIL_FROM_ADDRESS', 'noreply@localhost'));
+        $domain = str_contains($from, '@') ? strtolower(substr(strrchr($from, '@'), 1)) : '';
+        $mx = $domain !== '' && function_exists('dns_get_record') ? @dns_get_record($domain, DNS_MX) : [];
+        $txt = $domain !== '' && function_exists('dns_get_record') ? @dns_get_record($domain, DNS_TXT) : [];
+        $dmarc = $domain !== '' && function_exists('dns_get_record') ? @dns_get_record('_dmarc.'.$domain, DNS_TXT) : [];
+        $spfReady = collect(is_array($txt) ? $txt : [])->contains(fn ($record) => str_starts_with(strtolower((string) ($record['txt'] ?? '')), 'v=spf1'));
+        $dmarcReady = collect(is_array($dmarc) ? $dmarc : [])->contains(fn ($record) => str_starts_with(strtolower((string) ($record['txt'] ?? '')), 'v=dmarc1'));
 
         return [
             'provider' => $provider,
@@ -99,6 +106,10 @@ class MailConfigService
             'queue' => (string) config('queue.default', 'sync'),
             'local_mta' => $this->localMtaAvailable(),
             'sendmail' => $this->sendmailBinaryAvailable(),
+            'sender_domain' => $domain ?: 'نامشخص',
+            'mx_ready' => is_array($mx) && count($mx) > 0,
+            'spf_ready' => $spfReady,
+            'dmarc_ready' => $dmarcReady,
             'meaning' => $provider === 'log'
                 ? 'حالت آزمایش: فقط در گزارش داخلی ثبت می‌شود و به صندوق مقصد نمی‌رسد.'
                 : 'پذیرش توسط عامل ارسال محلی ثبت می‌شود؛ تحویل نهایی صندوق مقصد از این میزبان قابل تضمین نیست.',
