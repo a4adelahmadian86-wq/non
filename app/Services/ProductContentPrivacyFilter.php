@@ -13,6 +13,10 @@ class ProductContentPrivacyFilter
         if (is_array($value)) {
             $privateMetadataKeys = [
                 'file_name',
+                'filename',
+                'client_filename',
+                'upload_name',
+                'source_file_name',
                 'original_name',
                 'source_sha256',
                 'storage_path',
