@@ -107,9 +107,24 @@ class ProductContentGenerationTest extends TestCase
         return compact('admin', 'category', 'product', 'file', 'document', 'fact');
     }
 
-    public function test_ai_receives_only_stored_knowledge_report_not_raw_document_chunks(): void
+    public function test_ai_receives_only_redacted_stored_knowledge_report_not_raw_document_chunks(): void
     {
         $data = $this->productWithKnowledge();
+        $data['product']->update(['description' => 'توضیح محصول؛ ایمیل مالک owner@example.com']);
+        $data['file']->update(['original_name' => 'owner@example.com-private.pdf']);
+        $structure = (array) $data['document']->structure_json;
+        $structure['ai_review']['summary'] .= ' تماس 09121234567';
+        $structure['ai_review']['findings'] = [[
+            'severity' => 'warning',
+            'title' => 'کلید API sk-abcdefghijklmnopqrstuvwxyz123456',
+            'detail' => 'شماره شبا DE89370400440532013000 در متن دیده شد.',
+        ]];
+        $data['document']->update(['structure_json' => $structure]);
+        $data['fact']->update([
+            'fact_value' => 'راهنمای نصب مرحله‌به‌مرحله؛ شبا DE89370400440532013000',
+            'evidence_text' => 'در صفحه نخست راهنما آمده است؛ کلید sk-abcdefghijklmnopqrstuvwxyz123456',
+        ]);
+
         $this->mock(EditorAiAssistService::class, function ($mock) use ($data) {
             $mock->shouldReceive('assist')
                 ->once()
@@ -119,6 +134,11 @@ class ProductContentGenerationTest extends TestCase
                     $this->assertStringContainsString('راهنمای نصب مرحله‌به‌مرحله', $text);
                     $this->assertStringNotContainsString('RAW_PRIVATE_CHUNK_SENTINEL', $text);
                     $this->assertStringNotContainsString('private-file-bytes', $text);
+                    $this->assertStringNotContainsString('owner@example.com', $text);
+                    $this->assertStringNotContainsString('09121234567', $text);
+                    $this->assertStringNotContainsString('sk-abcdefghijklmnopqrstuvwxyz123456', $text);
+                    $this->assertStringNotContainsString('DE89370400440532013000', $text);
+                    $this->assertStringContainsString('[REDACTED]', $text);
                     $this->assertSame('gemini', $context['provider']);
                     $this->assertSame('external', $context['processing_mode']);
 
