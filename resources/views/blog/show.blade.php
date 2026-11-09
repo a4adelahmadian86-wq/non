@@ -64,7 +64,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{ asset('css/blog.css') }}?v=20261107b">
-<link rel="stylesheet" href="{{ asset('css/content-discussions.css') }}?v=20261109discussion1">
+<link rel="stylesheet" href="{{ asset('css/content-discussions.css') }}?v=20261109discussion2">
 @endpush
 @push('scripts')
 <script src="{{ asset('js/blog.js') }}?v=20261107a" defer></script>

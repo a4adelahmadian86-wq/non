@@ -187,7 +187,7 @@
 @endsection
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261109product4">
-<link rel="stylesheet" href="/css/content-discussions.css?v=20261109discussion1">
+<link rel="stylesheet" href="/css/content-discussions.css?v=20261109discussion2">
 <style>
 
 
