@@ -296,10 +296,10 @@ class ProductKnowledgeService
                 continue;
             }
 
-            $summary = trim((string) ($review['summary'] ?? ''));
+            $textSummary = trim((string) ($review['summary'] ?? ''));
             $visualReport = trim((string) data_get($review, 'media_reports.visual', ''));
-            if ($summary === '' || str_contains($summary, 'بررسی ساختاری') && $visualReport !== '') {
-                $summary = $visualReport;
+            if ($textSummary === '' || str_starts_with($textSummary, 'بررسی ساختاری فایل انجام شد')) {
+                $textSummary = '';
             }
 
             $sourceFacts = [];
@@ -321,10 +321,14 @@ class ProductKnowledgeService
                 $factsIncluded++;
             }
 
-            if ($summary === '' && $sourceFacts === []) {
-                $reasons[] = ['code' => 'knowledge_report_empty', 'message' => 'گزارش قابل اتکایی برای تولید محتوای این فایل ثبت نشده است.'];
+            $extractedCharacters = (int) ($inspection['extracted_characters'] ?? 0);
+            $hasTextEvidence = $textSummary !== '' || $sourceFacts !== [];
+            $hasVisualOnlyEvidence = $extractedCharacters === 0 && $visualReport !== '' && $visualReviewComplete;
+            if (! $hasTextEvidence && ! $hasVisualOnlyEvidence) {
+                $reasons[] = ['code' => 'knowledge_report_empty', 'message' => 'گزارش متنیِ معتبر یا گزارش تصویریِ کامل برای تولید محتوای این فایل ثبت نشده است.'];
                 continue;
             }
+            $summary = $textSummary !== '' ? $textSummary : $visualReport;
 
             $sourceFindings = collect($review['findings'] ?? [])->take(8)->map(fn ($finding) => [
                 'severity' => (string) data_get($finding, 'severity', ''),
