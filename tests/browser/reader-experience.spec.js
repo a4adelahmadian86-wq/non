@@ -131,6 +131,7 @@ async function mountPdfReader(page, pageCount = 1) {
         '<button id="reader-next" type="button">بعدی</button>' +
         '<button id="reader-zoom-out" type="button">کوچک</button><output id="reader-zoom-label"></output>' +
         '<button id="reader-zoom-in" type="button">بزرگ</button><button id="reader-fit" type="button">تناسب عرض</button>' +
+        '<button id="reader-fit-page" type="button">تناسب صفحه</button>' +
         '<button id="reader-rotate" type="button">چرخش</button><button id="reader-scroll-mode" type="button">پیوسته</button>' +
         '<div class="reader-search-group"><input id="reader-search-input" type="search">' +
           '<button id="reader-search" type="button">جست‌وجو</button><button id="reader-search-prev" type="button">قبلی</button>' +
