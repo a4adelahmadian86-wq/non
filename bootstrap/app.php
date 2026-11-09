@@ -27,5 +27,13 @@ return Application::configure(basePath:dirname(__DIR__))
     })
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
-        $exceptions->context(fn()=>['farast_request_id'=>request()?->header('X-Request-Id'),'farast_correlation_id'=>request()?->header('X-Correlation-Id')]);
+        $exceptions->context(function (): array {
+            // CLI commands (including Composer's package:discover) may have no HTTP request bound.
+            $request = app()->bound('request') ? app('request') : null;
+
+            return [
+                'farast_request_id' => $request?->header('X-Request-Id'),
+                'farast_correlation_id' => $request?->header('X-Correlation-Id'),
+            ];
+        });
     })->create();
