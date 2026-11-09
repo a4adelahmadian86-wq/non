@@ -375,6 +375,7 @@ async def review_product_file(
                 "recommendation": safe_recommendation[:500],
             })
 
+    safe_visual_report, _ = redact_sensitive_content(visual_report)
     source_chunks = []
     for chunk in (inspection.content_chunks or [])[:300]:
         if not isinstance(chunk, dict):
@@ -385,10 +386,10 @@ async def review_product_file(
                 "locator": chunk.get("locator") if isinstance(chunk.get("locator"), dict) else {},
                 "content_text": source_text[:1800],
             })
-    if visual_report.strip():
+    if safe_visual_report.strip():
         source_chunks.append({
             "locator": {"kind": "visual_analysis_report"},
-            "content_text": visual_report[:12000],
+            "content_text": safe_visual_report[:12000],
         })
     if transcription.strip():
         safe_transcription, _ = redact_sensitive_content(transcription)
@@ -433,8 +434,8 @@ async def review_product_file(
                 warnings.append("ساخت فایل نمونه PDF از صفحات انتخاب‌شده انجام نشد؛ فایل اصلی بدون تغییر باقی ماند.")
 
     raw_chunks = list(inspection.content_chunks or [])
-    if visual_report.strip():
-        raw_chunks.append({"chunk_type": "visual_analysis", "locator": {"media": "image"}, "content_text": visual_report})
+    if safe_visual_report.strip():
+        raw_chunks.append({"chunk_type": "visual_analysis", "locator": {"media": "image"}, "content_text": safe_visual_report})
     if transcription.strip():
         raw_chunks.append({"chunk_type": "audio_transcript", "locator": {"media": "audio", "time_start_seconds": 0}, "content_text": transcription})
 
@@ -470,7 +471,7 @@ async def review_product_file(
         "product_id": product_id,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
-        "media_reports": {"visual": visual_report[:12000]} if visual_report else {},
+        "media_reports": {"visual": safe_visual_report[:12000]} if safe_visual_report else {},
         "content_chunks": safe_chunks,
         "analysis_batch_count": int(model_review.get("analysis_batch_count", 0)) if model_review else 0,
         "successful_analysis_batches": int(model_review.get("successful_analysis_batches", 0)) if model_review else 0,
