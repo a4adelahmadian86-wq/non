@@ -56,6 +56,13 @@
         </span>
       </div>
 
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0">
+        <div class="count-pill">در صف: {{ $emailStats['queued'] ?? 0 }}</div>
+        <div class="count-pill">پذیرفته‌شده محلی: {{ $emailStats['accepted'] ?? 0 }}</div>
+        <div class="count-pill">ثبت داخلی: {{ $emailStats['logged'] ?? 0 }}</div>
+        <div class="count-pill">ناموفق: {{ $emailStats['failed'] ?? 0 }}</div>
+      </div>
+
       <form method="post" action="{{ route('admin.emails.settings') }}" class="settings-grid">
         @csrf
 
