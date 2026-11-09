@@ -25,11 +25,15 @@ class AdminStoreController extends Controller
 {
     public function index(Request $request)
     {
-        $q = trim((string) $request->query('q', ''));
+        $q = mb_substr(trim((string) $request->query('q', '')), 0, 120);
         $type = in_array($request->query('type'), ['digital_file', 'course'], true) ? $request->query('type') : '';
         $status = in_array($request->query('status'), ['draft', 'published', 'archived'], true) ? $request->query('status') : '';
+        $categoryId = filter_var($request->query('category_id'), FILTER_VALIDATE_INT) ?: null;
+        $sort = in_array($request->query('sort'), ['newest', 'oldest', 'title_asc', 'price_asc', 'price_desc', 'updated'], true)
+            ? $request->query('sort')
+            : 'newest';
 
-        $products = StoreProduct::query()
+        $productsQuery = StoreProduct::query()
             ->with(['category', 'files', 'images', 'tags'])
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
                 $inner->where('title', 'like', '%'.$q.'%')
@@ -38,19 +42,110 @@ class AdminStoreController extends Controller
             }))
             ->when($type !== '', fn ($query) => $query->where('type', $type))
             ->when($status !== '', fn ($query) => $query->where('status', $status))
-            ->orderByDesc('id')
-            ->paginate(30)
-            ->withQueryString();
+            ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId));
 
+        match ($sort) {
+            'oldest' => $productsQuery->orderBy('id'),
+            'title_asc' => $productsQuery->orderBy('title')->orderByDesc('id'),
+            'price_asc' => $productsQuery->orderBy('price_rials')->orderByDesc('id'),
+            'price_desc' => $productsQuery->orderByDesc('price_rials')->orderByDesc('id'),
+            'updated' => $productsQuery->orderByDesc('updated_at')->orderByDesc('id'),
+            default => $productsQuery->orderByDesc('id'),
+        };
+
+        $products = $productsQuery->paginate(30)->withQueryString();
+        $categories = StoreCategory::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'is_active']);
         $stats = [
             'total' => StoreProduct::count(),
             'published' => StoreProduct::where('status', 'published')->count(),
             'drafts' => StoreProduct::where('status', 'draft')->count(),
+            'archived' => StoreProduct::where('status', 'archived')->count(),
             'courses' => StoreProduct::where('type', 'course')->count(),
             'files' => StoreProduct::where('type', 'digital_file')->count(),
         ];
 
-        return view('admin.store.index', compact('products', 'q', 'type', 'status', 'stats'));
+        $processingStats = array_fill_keys(['pending', 'processing', 'completed', 'extracted', 'failed', 'awaiting_provider', 'stale'], 0);
+        foreach (DB::table('store_product_documents')
+            ->select('processing_status', DB::raw('COUNT(*) as aggregate'))
+            ->groupBy('processing_status')
+            ->get() as $row) {
+            if (array_key_exists($row->processing_status, $processingStats)) {
+                $processingStats[$row->processing_status] = (int) $row->aggregate;
+            }
+        }
+
+        $ingestionStats = array_fill_keys(['inspected', 'uploaded', 'expired'], 0);
+        foreach (DB::table('store_product_ingestions')
+            ->select('status', DB::raw('COUNT(*) as aggregate'))
+            ->groupBy('status')
+            ->get() as $row) {
+            if (array_key_exists($row->status, $ingestionStats)) {
+                $ingestionStats[$row->status] = (int) $row->aggregate;
+            }
+        }
+
+        $queueStats = [
+            'pending' => \Illuminate\Support\Facades\Schema::hasTable('jobs')
+                ? DB::table('jobs')->where('queue', 'documents')->count()
+                : null,
+            'failed' => \Illuminate\Support\Facades\Schema::hasTable('failed_jobs')
+                ? DB::table('failed_jobs')->where('queue', 'documents')->count()
+                : null,
+        ];
+
+        $stalePendingBefore = now()->subMinutes(30);
+        $staleProcessingBefore = now()->subMinutes(15);
+        $attentionQuery = \App\Models\StoreProductDocument::query()
+            ->with(['product:id,title,slug', 'file:id,product_id,size_bytes,scan_status'])
+            ->where(function ($query) use ($stalePendingBefore, $staleProcessingBefore) {
+                $query->whereIn('processing_status', ['failed', 'stale', 'awaiting_provider'])
+                    ->orWhere(fn ($pending) => $pending->where('processing_status', 'pending')->where('updated_at', '<', $stalePendingBefore))
+                    ->orWhere(fn ($processing) => $processing->where('processing_status', 'processing')->where('updated_at', '<', $staleProcessingBefore));
+            });
+        $attentionCount = (clone $attentionQuery)->count();
+        $attentionDocuments = $attentionQuery->orderByDesc('updated_at')->limit(8)->get();
+        $supervisorConfigured = app(\App\Services\ProductSupervisorClient::class)->configured();
+
+        return view('admin.store.index', compact(
+            'products', 'categories', 'q', 'type', 'status', 'categoryId', 'sort', 'stats',
+            'processingStats', 'ingestionStats', 'queueStats', 'attentionCount', 'attentionDocuments',
+            'supervisorConfigured'
+        ));
+    }
+
+    public function bulkArchive(Request $request)
+    {
+        $data = $request->validate([
+            'product_ids' => 'required|array|min:1|max:50',
+            'product_ids.*' => 'required|integer|distinct|exists:store_products,id',
+        ]);
+
+        $archivedCount = DB::transaction(function () use ($data): int {
+            $products = StoreProduct::query()
+                ->whereIn('id', $data['product_ids'])
+                ->lockForUpdate()
+                ->get();
+
+            $count = 0;
+            foreach ($products as $product) {
+                if ($product->status === 'archived') {
+                    continue;
+                }
+
+                $product->update(['status' => 'archived', 'published_at' => null]);
+                $this->audit('store.product.archived', $product, [
+                    'reason' => 'bulk_admin_action',
+                    'had_orders' => $product->orderItems()->exists(),
+                    'had_entitlements' => $product->libraryItems()->exists(),
+                ]);
+                $count++;
+            }
+
+            return $count;
+        }, 3);
+
+        return redirect()->route('admin.store.index')
+            ->with('status', $archivedCount.' محصول با موفقیت به بایگانی منتقل شد.');
     }
 
     public function create()
