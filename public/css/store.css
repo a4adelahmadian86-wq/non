@@ -403,3 +403,44 @@
 .library-product-card[hidden]{display:none!important}
 @media(max-width:760px){.wishlist-heading{align-items:flex-start}.wishlist-heading>.store-primary-btn{width:100%;justify-content:center}.wishlist-tabs{gap:5px}.wishlist-tabs a{flex:1;justify-content:center;padding:9px 8px}.wishlist-total{flex:0 0 100%;margin:0;text-align:center}.library-toolbar{align-items:stretch;flex-wrap:wrap}.library-toolbar label{flex:0 0 100%}.library-toolbar input{flex:1 1 100%}}
 @media(prefers-reduced-motion:reduce){.wishlist-tabs a,.wishlist-remove-form button{transition:none}}
+
+
+/* Store catalog: accessible active filters and product-type controls */
+.store-active-filters{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  margin:0 0 14px;padding:12px 15px;border:1px solid #dce7f5;border-radius:14px;
+  background:linear-gradient(100deg,#fff,#f5f8fe)
+}
+.store-active-filters__summary{display:flex;align-items:center;gap:8px;color:#294568;font-size:.75rem}
+.store-active-filters__summary i{color:var(--st-blue)}
+.store-active-filters__chips{display:flex;align-items:center;gap:7px;flex:1;flex-wrap:wrap}
+.store-active-filters__chips span{
+  display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;
+  background:#eaf1fc;color:#3c5c86;font-size:.68rem;font-weight:700;max-width:100%;overflow-wrap:anywhere
+}
+.store-active-filters__chips i{color:#4778bd}
+.store-active-filters>a{display:inline-flex;align-items:center;gap:6px;color:#526d91;font-size:.69rem;font-weight:800;text-decoration:none;white-space:nowrap}
+.store-active-filters>a:hover{color:var(--st-danger)}
+.store-toolbar-controls{row-gap:10px}
+.store-filter-label{font-weight:700}
+.store-filter-select{cursor:pointer;min-height:38px}
+.store-filter-select:hover{border-color:#b9cce7;background:#fff}
+.store-results-total{font-weight:800;font-variant-numeric:tabular-nums}
+.store-search input:focus-visible,.store-search button:focus-visible,
+.store-filter-select:focus-visible,.store-chips a:focus-visible{
+  outline:3px solid rgba(48,108,202,.28);outline-offset:2px
+}
+.store-product-card:focus-within{border-color:#8fb2e5;box-shadow:0 0 0 3px rgba(48,108,202,.1)}
+@media(max-width:700px){
+  .store-active-filters{align-items:flex-start}
+  .store-active-filters__chips{order:3;flex-basis:100%}
+  .store-active-filters>a{margin-inline-start:auto}
+  .store-toolbar-controls{align-items:stretch}
+  .store-filter-label{flex:1;min-width:calc(50% - 8px);align-items:flex-start;flex-direction:column;gap:5px}
+  .store-filter-select{width:100%}
+  .store-results-total{width:100%;margin:0;text-align:start}
+}
+@media(prefers-reduced-motion:reduce){
+  .store-product-card,.store-product-cover img,.store-feature{transition:none!important}
+  .store-product-card:hover,.store-feature:hover{transform:none}
+}
