@@ -193,7 +193,7 @@ class SupportNotificationService
         $body = $label.' حدود '.$minutesLeft.' دقیقه دیگر به پایان می‌رسد. موضوع: '.$ticket->subject;
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true);
+            $this->pushInApp($staff->id, 'ticket_sla_warning', $title, $body, $ticket, staff: true, dedupeScope: $kind);
             try {
                 if ($staff->email) {
                     $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body);
@@ -227,7 +227,7 @@ class SupportNotificationService
         $body = $label.' برای این تیکت به پایان رسیده است. موضوع: '.$ticket->subject;
 
         foreach ($this->staffTargets($ticket) as $staff) {
-            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true);
+            $this->pushInApp($staff->id, 'ticket_sla_breach', $title, $body, $ticket, staff: true, dedupeScope: $kind);
             try {
                 if ($staff->email) {
                     $this->email->sendTicketSlaAlert($staff, $ticket, $title, $body);
@@ -259,7 +259,7 @@ class SupportNotificationService
         return $this->staffUsers();
     }
 
-    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false): void
+    protected function pushInApp(int $userId, string $type, string $title, string $body, Ticket $ticket, bool $staff = false, ?string $dedupeScope = null): void
     {
         try {
             $url = $staff
@@ -277,7 +277,7 @@ class SupportNotificationService
                     'url' => $url,
                 ],
                 false,
-                'support:ticket:'.$ticket->id.':event:'.$type.':user:'.$userId,
+                'support:ticket:'.$ticket->id.':event:'.($dedupeScope ? $type.':'.$dedupeScope : $type).':user:'.$userId,
             );
         } catch (\Throwable $e) {
             Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
