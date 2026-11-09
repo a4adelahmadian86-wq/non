@@ -153,6 +153,8 @@ class PaymentController extends Controller
                     $free->consume(auth()->user(), $freeApplied, $this->freePagesSetting());
                 }
 
+                app(\\App\\Services\\StoreCouponRedemptionService::class)->redeem($locked);
+
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
@@ -200,6 +202,9 @@ class PaymentController extends Controller
                 if ($locked->isPaid()) {
                     $paidOrder = $locked->fresh();
                     return;
+                }
+                if ($locked->status !== 'pending') {
+                    throw new \\RuntimeException('این سفارش منقضی شده یا دیگر قابل پرداخت نیست.');
                 }
 
                 $items = $locked->storeItems()->with(['product.files'])->lockForUpdate()->get();
