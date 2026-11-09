@@ -178,7 +178,7 @@ class CrmMarketingController extends Controller
             ]);
 
             $sent = 0;
-            $audience->chunkById(200, function ($users) use ($record, $campaign, &$sent) {
+            $audience->chunkById(200, function ($users) use ($record, $campaign, &$sent, $notifications) {
                 foreach ($users as $user) {
                     $recipientId = DB::table('crm_campaign_recipients')->insertOrIgnore([
                         'campaign_id' => $campaign,
