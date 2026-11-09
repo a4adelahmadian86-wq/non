@@ -14,7 +14,6 @@ on:
       - 'app/Services/ProductContentGenerationService.php'
       - 'app/Services/ProductDocumentProcessingState.php'
       - 'app/Services/ProductKnowledgeService.php'
-      - 'bootstrap/app.php'
       - 'public/js/admin-store-product-ai.js'
       - 'resources/views/admin/store/form.blade.php'
       - 'routes/store_routes.php'
@@ -48,7 +47,7 @@ permissions:
 
 jobs:
   regression:
-    if: startsWith(github.head_ref, 'work/product-ai-content-')
+    if: startsWith(github.ref_name, 'work/product-ai-content-') || startsWith(github.head_ref, 'work/product-ai-content-')
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -61,15 +60,22 @@ jobs:
           extensions: bcmath, ctype, curl, dom, fileinfo, gd, intl, mbstring, pdo_sqlite, sqlite3, xml, zip
           coverage: none
 
-      - name: Configure test application key
-        run: echo "APP_KEY=base64:$(php -r 'echo base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
+      - name: Prepare Laravel runtime directories
+        run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Configure isolated SQLite test environment
+        run: |
+          printf '%s\\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+          php artisan key:generate
+          touch database/database.sqlite
+          php artisan migrate --force
+
       - name: Check PHP syntax for changed runtime files
         run: |
-          find app/Http/Controllers/AdminCourseController.php app/Http/Controllers/AdminProductContentController.php app/Http/Controllers/AdminStoreController.php app/Jobs/ProcessProductDocument.php app/Services/AI/AiOperationRegistry.php app/Services/AI/Providers/GeminiEditorProvider.php app/Services/ProductContentGenerationService.php app/Services/ProductDocumentProcessingState.php app/Services/ProductKnowledgeService.php bootstrap/app.php -type f -print0 | xargs -0 -n1 php -l
+          find app/Http/Controllers/AdminCourseController.php app/Http/Controllers/AdminProductContentController.php app/Http/Controllers/AdminStoreController.php app/Jobs/ProcessProductDocument.php app/Services/AI/AiOperationRegistry.php app/Services/AI/Providers/GeminiEditorProvider.php app/Services/ProductContentGenerationService.php app/Services/ProductDocumentProcessingState.php app/Services/ProductKnowledgeService.php -type f -print0 | xargs -0 -n1 php -l
 
       - name: Check smart-fill JavaScript syntax
         run: node --check public/js/admin-store-product-ai.js
