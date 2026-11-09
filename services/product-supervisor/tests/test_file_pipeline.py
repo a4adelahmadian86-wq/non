@@ -50,7 +50,7 @@ class FilePipelineTests(unittest.TestCase):
             "Contact person@example.com, Bearer abcdefghijklmnopqrstuvwxyz, "
             "mobile 09121234567, IBAN DE89370400440532013000, "
             "card 4111111111111111, Persian card ۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱, "
-            "and token sk-abcdefghijklmnopqrstuvwxyz123456; password: mySecret123; "
+            f"and token sk-{'a' * 32}; password: mySecret123; "
             "Authorization: Basic dXNlcjpwYXNz; postgres://user:supersecret@db.example.com/app"
         )
         self.assertGreaterEqual(count, 6)
