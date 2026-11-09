@@ -222,16 +222,25 @@ class ProductContentGenerationService
             if (! is_array($entry)) continue;
             $field = trim((string) ($entry['field'] ?? ''));
             if (! in_array($field, $allowedEvidenceFields, true) || isset($fieldEvidence[$field])) continue;
-            $sourceIdsForField = collect(is_array($entry['source_ids'] ?? null) ? $entry['source_ids'] : [])
-                ->map(fn ($id) => trim((string) $id))
+            $rawFactIds = collect(is_array($entry['fact_ids'] ?? null) ? $entry['fact_ids'] : [])
+                ->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $rawSourceIds = collect(is_array($entry['source_ids'] ?? null) ? $entry['source_ids'] : [])
+                ->map(fn ($id) => trim((string) $id))->unique()->values()->all();
+            $sourceIdsForField = collect($rawSourceIds)
                 ->filter(fn ($id) => in_array($id, $validSourceIds, true))
-                ->unique()->values()->all();
-            $factIdsForField = collect(is_array($entry['fact_ids'] ?? null) ? $entry['fact_ids'] : [])
-                ->map(fn ($id) => (int) $id)
-                ->filter(fn ($id) => in_array($id, $validFactIds, true)
-                    && isset($factSourceMap[$id])
-                    && ($sourceIdsForField === [] || in_array((string) $factSourceMap[$id], $sourceIdsForField, true)))
-                ->unique()->values()->all();
+                ->values()->all();
+            $hasInvalidFact = collect($rawFactIds)->contains(
+                fn ($id) => ! in_array($id, $validFactIds, true) || ! isset($factSourceMap[$id])
+            );
+            $hasMismatchedSource = $rawFactIds !== [] && $sourceIdsForField !== []
+                && collect($rawFactIds)->contains(
+                    fn ($id) => isset($factSourceMap[$id])
+                        && ! in_array((string) $factSourceMap[$id], $sourceIdsForField, true)
+                );
+            if ($hasInvalidFact || $hasMismatchedSource || count($sourceIdsForField) !== count($rawSourceIds)) {
+                continue;
+            }
+            $factIdsForField = $rawFactIds;
             if ($sourceIdsForField === [] && $factIdsForField !== []) {
                 $sourceIdsForField = collect($factIdsForField)
                     ->map(fn ($id) => (string) $factSourceMap[$id])
