@@ -84,4 +84,20 @@ class ProductDocumentProcessingStateTest extends TestCase
         $this->assertTrue($state['completeness']['analysis_batches_complete']);
     }
 
+
+    public function test_visual_review_alone_does_not_complete_a_document_with_unreviewed_text(): void
+    {
+        $state = app(ProductDocumentProcessingState::class)->derive(
+            ['extraction_truncated' => false, 'extracted_characters' => 2400],
+            ['groq_vision' => 'completed', 'groq_text' => 'not_configured'],
+            0,
+            0,
+            true,
+            0,
+        );
+
+        $this->assertSame('extracted', $state['status']);
+        $this->assertFalse($state['completeness']['semantic_review_complete']);
+    }
+
 }
