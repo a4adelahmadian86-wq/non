@@ -94,6 +94,12 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertDontSee('محصول ب')
             ->assertSee('name="category_id"', false)
             ->assertSee('name="sort"', false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.index', ['category_id' => $secondCategory->id]))
+            ->assertOk()
+            ->assertSee('محصول ب')
+            ->assertSee('دسته دوم (غیرفعال)');
     }
 
     public function test_bulk_archive_unpublishes_products_without_deleting_the_product_records(): void
