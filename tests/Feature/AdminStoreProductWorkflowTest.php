@@ -66,7 +66,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         $secondCategory = StoreCategory::create([
             'name' => 'دسته دوم',
             'slug' => 'second-test-category',
-            'is_active' => true,
+            'is_active' => false,
         ]);
         StoreProduct::create([
             'category_id' => $firstCategory->id,
@@ -96,7 +96,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('name="sort"', false);
     }
 
-    public function test_bulk_archive_removes_products_from_publication_without_deleting_customer_history(): void
+    public function test_bulk_archive_unpublishes_products_without_deleting_the_product_records(): void
     {
         $admin = $this->admin();
         $category = $this->category();

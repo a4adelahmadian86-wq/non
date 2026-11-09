@@ -25,7 +25,7 @@ class AdminStoreController extends Controller
 {
     public function index(Request $request)
     {
-        $q = trim((string) $request->query('q', ''));
+        $q = mb_substr(trim((string) $request->query('q', '')), 0, 120);
         $type = in_array($request->query('type'), ['digital_file', 'course'], true) ? $request->query('type') : '';
         $status = in_array($request->query('status'), ['draft', 'published', 'archived'], true) ? $request->query('status') : '';
         $categoryId = filter_var($request->query('category_id'), FILTER_VALIDATE_INT) ?: null;
@@ -54,7 +54,7 @@ class AdminStoreController extends Controller
         };
 
         $products = $productsQuery->paginate(30)->withQueryString();
-        $categories = StoreCategory::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
+        $categories = StoreCategory::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'is_active']);
         $stats = [
             'total' => StoreProduct::count(),
             'published' => StoreProduct::where('status', 'published')->count(),
