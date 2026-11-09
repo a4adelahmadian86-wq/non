@@ -70,7 +70,15 @@ class ProductDocumentProcessingStateTest extends TestCase
     public function test_complete_image_only_visual_review_can_finish_knowledge_without_reader_pages(): void
     {
         $state = app(ProductDocumentProcessingState::class)->derive(
-            ['extraction_truncated' => false],
+            [
+                'detected_type' => 'image',
+                'extraction_truncated' => false,
+                'extracted_characters' => 0,
+                'embedded_image_count' => 1,
+                'visual_inventory_complete' => true,
+                'visual_review_truncated' => false,
+                'transcription_truncated' => false,
+            ],
             ['groq_vision' => 'completed', 'groq_text' => 'not_requested'],
             0,
             0,
@@ -84,6 +92,103 @@ class ProductDocumentProcessingStateTest extends TestCase
         $this->assertTrue($state['completeness']['analysis_batches_complete']);
     }
 
+
+    public function test_mixed_text_and_embedded_images_require_both_review_paths(): void
+    {
+        $inspection = [
+            'detected_type' => 'docx',
+            'extraction_truncated' => false,
+            'transcription_truncated' => false,
+            'extracted_characters' => 2400,
+            'embedded_image_count' => 1,
+            'visual_inventory_complete' => true,
+            'visual_review_truncated' => false,
+        ];
+
+        $textOnlyReview = app(ProductDocumentProcessingState::class)->derive(
+            $inspection,
+            ['groq_text' => 'completed', 'groq_vision' => 'not_configured'],
+            1,
+            1,
+            true,
+            2,
+        );
+        $this->assertSame('extracted', $textOnlyReview['status']);
+        $this->assertFalse($textOnlyReview['completeness']['semantic_review_complete']);
+
+        $completeReview = app(ProductDocumentProcessingState::class)->derive(
+            $inspection,
+            ['groq_text' => 'completed', 'groq_vision' => 'completed'],
+            1,
+            1,
+            true,
+            2,
+        );
+        $this->assertSame('completed', $completeReview['status']);
+        $this->assertTrue($completeReview['completeness']['semantic_review_complete']);
+    }
+
+    public function test_visual_truncation_and_unknown_inventory_block_semantic_completion(): void
+    {
+        $state = app(ProductDocumentProcessingState::class)->derive(
+            [
+                'detected_type' => 'pdf',
+                'extraction_truncated' => false,
+                'extracted_characters' => 2400,
+                'embedded_image_count' => 7,
+                'visual_inventory_complete' => true,
+                'visual_review_truncated' => true,
+            ],
+            ['groq_text' => 'completed', 'groq_vision' => 'partial'],
+            1,
+            1,
+            true,
+            2,
+        );
+        $this->assertSame('extracted', $state['status']);
+        $this->assertFalse($state['completeness']['semantic_review_complete']);
+
+        $legacy = app(ProductDocumentProcessingState::class)->derive(
+            ['detected_type' => 'pdf', 'extraction_truncated' => false, 'extracted_characters' => 2400],
+            ['groq_text' => 'completed'],
+            1,
+            1,
+            true,
+            2,
+        );
+        $this->assertSame('extracted', $legacy['status']);
+        $this->assertFalse($legacy['completeness']['semantic_review_complete']);
+    }
+
+    public function test_truncated_or_unverified_audio_transcription_blocks_completion(): void
+    {
+        $truncated = app(ProductDocumentProcessingState::class)->derive(
+            [
+                'detected_type' => 'audio',
+                'extraction_truncated' => false,
+                'transcription_truncated' => true,
+                'visual_inventory_complete' => true,
+            ],
+            ['groq_text' => 'completed'],
+            1,
+            1,
+            true,
+            1,
+        );
+        $this->assertSame('partial', $truncated['status']);
+        $this->assertFalse($truncated['completeness']['extraction_complete']);
+
+        $unknown = app(ProductDocumentProcessingState::class)->derive(
+            ['detected_type' => 'audio', 'extraction_truncated' => false],
+            ['groq_text' => 'completed'],
+            1,
+            1,
+            true,
+            1,
+        );
+        $this->assertSame('partial', $unknown['status']);
+        $this->assertFalse($unknown['completeness']['extraction_complete']);
+    }
 
     public function test_visual_review_alone_does_not_complete_a_document_with_unreviewed_text(): void
     {
