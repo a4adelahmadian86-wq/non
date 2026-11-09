@@ -61,7 +61,7 @@
             <article class="discussion-entry" id="discussion-{{ $entry->id }}" data-kind="{{ $entry->kind }}">
                 <div class="discussion-entry-top">
                     <span class="discussion-avatar" aria-hidden="true">{{ $entry->user?->name ? mb_substr($entry->user->name, 0, 1) : '؟' }}</span>
-                    <div class="discussion-author"><strong>{{ $entry->user?->name ?: 'حساب حذف‌شده' }}</strong><small>{{ $entry->created_at?->translatedFormat('d F Y') }}</small></div>
+                    <div class="discussion-author">@if($entry->user)<a href="{{ route('community.member',$entry->user) }}"><strong>{{ $entry->user->name ?: 'کاربر' }}</strong></a>@else<strong>حساب حذف‌شده</strong>@endif<small>{{ $entry->created_at?->translatedFormat('d F Y') }}</small></div>
                     <span class="discussion-kind discussion-kind-{{ $entry->kind }}">{{ ['review'=>'تجربه محصول','question'=>'پرسش','comment'=>'دیدگاه'][$entry->kind] ?? 'گفت‌وگو' }}</span>
                     @if($entry->rating)
                         <span class="discussion-entry-rating" role="img" aria-label="امتیاز {{ $entry->rating }} از ۵">{{ str_repeat('★', (int) $entry->rating) }}{{ str_repeat('☆', 5 - (int) $entry->rating) }}</span>
@@ -94,7 +94,7 @@
                     <div class="discussion-replies">
                         @foreach($entry->replies as $reply)
                             <div class="discussion-reply" id="discussion-{{ $reply->id }}">
-                                <div class="discussion-reply-heading"><i class="fa-solid fa-reply" aria-hidden="true"></i><strong>{{ $reply->user?->isAdmin() ? 'پاسخ رسمی فراست' : ($reply->user?->name ?: 'کاربر') }}</strong><small>{{ $reply->created_at?->translatedFormat('d F Y') }}</small></div>
+                                <div class="discussion-reply-heading"><i class="fa-solid fa-reply" aria-hidden="true"></i><strong>@if($reply->user?->isAdmin())پاسخ رسمی فراست @elseif($reply->user)<a href="{{ route('community.member',$reply->user) }}">{{ $reply->user->name ?: 'کاربر' }}</a>@else کاربر @endif</strong><small>{{ $reply->created_at?->translatedFormat('d F Y') }}</small></div>
                                 <p>{{ $reply->body }}</p>
                                 @include('shared.discussion-reactions', ['discussionItem' => $reply])
                                 @include('shared.discussion-report', ['discussionItem' => $reply])

@@ -148,4 +148,13 @@ class ContentDiscussionTest extends TestCase {
   $this->assertDatabaseHas('farast_notifications',['user_id'=>$author->id,'type'=>'discussion_reply']);
   $this->assertDatabaseMissing('farast_notifications',['user_id'=>$responder->id,'type'=>'discussion_reply']);
  }
+
+ public function test_public_member_profile_shows_only_approved_community_activity(): void {
+  $p=$this->product();$author=$this->user('09123456831');$admin=$this->user('09123456832','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $discussion=ContentDiscussion::firstOrFail();
+  $this->get(route('community.member',$author))->assertNotFound();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$discussion),['status'=>'approved'])->assertRedirect();
+  $this->get(route('community.member',$author))->assertOk()->assertSee('کاربر آزمایشی')->assertSee('مشارکت‌های منتشرشده')->assertSee('آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟')->assertDontSee('09123456831');
+ }
 }

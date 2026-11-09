@@ -5,6 +5,7 @@ use App\Models\DiscussionReport;
 use App\Models\DiscussionSubscription;
 use App\Services\NotificationService;
 use App\Models\StoreProduct;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
@@ -85,6 +86,30 @@ class ContentDiscussionController extends Controller {
    'status'=>'pending',
   ]);
   return back()->with('discussion_status','پاسخ شما ثبت شد و پس از بررسی مدیر منتشر می‌شود.');
+ }
+
+ public function member(User $user) {
+  $approved=ContentDiscussion::query()->where('user_id',$user->id)->where('status','approved');
+  $stats=[
+   'contributions'=>(clone $approved)->count(),
+   'reviews'=>(clone $approved)->where('kind','review')->count(),
+   'questions'=>(clone $approved)->where('kind','question')->count(),
+   'replies'=>(clone $approved)->where('kind','reply')->count(),
+   'helpful'=>DB::table('discussion_reactions')->join('content_discussions','content_discussions.id','=','discussion_reactions.discussion_id')->where('content_discussions.user_id',$user->id)->where('content_discussions.status','approved')->where('discussion_reactions.type','like')->count(),
+  ];
+  abort_unless($stats['contributions']>0,404);
+  $activity=(clone $approved)->latest()->limit(12)->get();
+  $activity->each(function($item){
+   if($item->target_type==='product'){
+    $product=StoreProduct::find((int)$item->target_key);
+    $item->setAttribute('target_url',$product?route('store.product',$product->slug):null);
+    $item->setAttribute('target_label',$product?->title ?: 'محصول');
+   }else{
+    $item->setAttribute('target_url',BlogController::articleExists($item->target_key)?route('blog.show',$item->target_key):null);
+    $item->setAttribute('target_label','مقاله');
+   }
+  });
+  return view('community.member',compact('user','stats','activity'));
  }
  public function adminReports(Request $request) {
   $status=in_array($request->query('status'),['pending','resolved','dismissed'],true)?$request->query('status'):'pending';
