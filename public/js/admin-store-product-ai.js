@@ -122,6 +122,10 @@
           : (suggestions.category_reason || 'دسته مشخصی پیشنهاد نشد.');
       }
 
+      renderList(modal?.querySelector('[data-ai-content-sources]'), (payload.sources || []).map(source => {
+        const details = [source.type, source.pages ? source.pages + ' صفحه' : '', source.facts_total ? source.facts_total + ' شاهد' : ''].filter(Boolean).join(' · ');
+        return String(source.name || 'منبع') + (details ? ' — ' + details : '');
+      }));
       renderList(modal?.querySelector('[data-ai-content-points]'), suggestions.selling_points || []);
       renderList(modal?.querySelector('[data-ai-content-unknowns]'), suggestions.unknowns || []);
       const evidence = modal?.querySelector('[data-ai-content-evidence]');
