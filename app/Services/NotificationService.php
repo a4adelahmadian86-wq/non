@@ -59,6 +59,23 @@ class NotificationService
 
             return FarastNotification::create($attributes);
         } catch (Throwable $e) {
+            // A concurrent request may have inserted the same unique key after
+            // firstOrCreate performed its initial lookup. Resolve that race as a
+            // successful idempotent delivery instead of reporting a false failure.
+            if ($dedupeKey !== null && trim($dedupeKey) !== '' && Schema::hasTable('farast_notifications')) {
+                $existing = FarastNotification::query()
+                    ->where('dedupe_key', mb_substr(trim($dedupeKey), 0, 191))
+                    ->first();
+
+                if ($existing) {
+                    if ((int) $existing->user_id !== $userId) {
+                        throw new RuntimeException('کلید یکتای اعلان قبلاً برای کاربر دیگری استفاده شده است.');
+                    }
+
+                    return $existing;
+                }
+            }
+
             Log::warning('farast.notification.push_failed', [
                 'user_id' => $userId,
                 'type' => $type,
