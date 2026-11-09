@@ -30,7 +30,7 @@
       <button type="button" id="reader-zoom-out" class="reader-tool" title="کوچک‌نمایی" aria-label="کوچک‌نمایی"><i class="fa-solid fa-minus"></i></button>
       <output id="reader-zoom-label" class="reader-zoom-label">۱۰۰٪</output>
       <button type="button" id="reader-zoom-in" class="reader-tool" title="بزرگ‌نمایی" aria-label="بزرگ‌نمایی"><i class="fa-solid fa-plus"></i></button>
-      <button type="button" id="reader-fit" class="reader-tool reader-tool-wide"><i class="fa-solid fa-arrows-left-right-to-line"></i><span>تناسب عرض</span></button>
+      <button type="button" id="reader-fit" class="reader-tool reader-tool-wide"><i class="fa-solid fa-arrows-left-right-to-line"></i><span>تناسب عرض</span></button><button type="button" id="reader-fit-page" class="reader-tool reader-tool-wide" title="تناسب صفحه"><i class="fa-solid fa-expand"></i><span>تناسب صفحه</span></button>
       <button type="button" id="reader-rotate" class="reader-tool" title="چرخش صفحه" aria-label="چرخش صفحه"><i class="fa-solid fa-rotate"></i></button>
       <button type="button" id="reader-scroll-mode" class="reader-tool reader-tool-wide" aria-pressed="false" title="پیمایش پیوسته"><i class="fa-solid fa-scroll"></i><span>پیوسته</span></button>
     </div>
@@ -156,7 +156,7 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261109searchstatus2"></script>
+<script src="/js/farast-reader.js?v=20261109fitpage2"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261108personal1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>

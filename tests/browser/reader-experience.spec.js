@@ -44,7 +44,7 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
         <button id="reader-zoom-out" type="button">کوچک</button>
         <output id="reader-zoom-label"></output>
         <button id="reader-zoom-in" type="button">بزرگ</button>
-        <button id="reader-fit" type="button">تناسب عرض</button>
+        <button id="reader-fit" type="button">تناسب عرض</button><button id="reader-fit-page" type="button">تناسب صفحه</button>
         <button id="reader-rotate" type="button">چرخش</button>
         <button id="reader-scroll-mode" type="button">پیوسته</button>
         <div class="reader-search-group">
@@ -194,6 +194,11 @@ test.describe('FARAST sample reader interactions', () => {
     expect(externalPdfjsRequests).toHaveLength(0);
     await expect.poll(() => canvas.evaluate(element => element.width)).toBeGreaterThan(0);
     await expect.poll(() => canvas.evaluate(element => element.height)).toBeGreaterThan(0);
+    await root.locator('#reader-fit-page').click();
+    await expect(root.locator('#reader-zoom-label')).toHaveText('تناسب صفحه');
+    await expect.poll(() => canvas.evaluate(element => parseFloat(element.style.height))).toBeLessThan(600);
+    await root.locator('#reader-fit').click();
+    await expect(root.locator('#reader-zoom-label')).toHaveText('تناسب عرض');
     // The watermark must be painted into the page bitmap, not merely placed as removable HTML.
     const watermarkPixels = await canvas.evaluate(element => {
       const context = element.getContext('2d');
@@ -211,6 +216,7 @@ test.describe('FARAST sample reader interactions', () => {
     const textSpan = root.locator('.farast-pdf-text-layer span').first();
     await expect(textSpan).toBeVisible();
     await expect(textSpan).toHaveCSS('user-select', 'text');
+    await expect(textSpan).toHaveCSS('pointer-events', 'auto');
     await expect(root.locator('.farast-pdf-text-layer')).toHaveCSS('pointer-events', 'auto');
     await page.keyboard.press('Control+f');
     await expect(root.locator('#reader-search-input')).toBeFocused();
@@ -246,6 +252,7 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('.farast-pdf-cont-text')).toHaveCSS('pointer-events', 'auto');
     const continuousTextSpan = root.locator('.farast-pdf-cont-text span').first();
     await expect(continuousTextSpan).toHaveCSS('user-select', 'text');
+    await expect(continuousTextSpan).toHaveCSS('pointer-events', 'auto');
     const continuousTextBox = await continuousTextSpan.boundingBox();
     expect(continuousTextBox?.width).toBeGreaterThan(20);
     await page.mouse.move(continuousTextBox.x + 1, continuousTextBox.y + continuousTextBox.height / 2);

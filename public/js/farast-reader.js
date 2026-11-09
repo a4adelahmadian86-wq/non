@@ -185,7 +185,7 @@
   };
 
   const setZoomLabel=()=>{
-    if(zoomLabel)zoomLabel.textContent=zoom===0?'خودکار':faNumber(Math.round(zoom*100))+'٪';
+    if(zoomLabel)zoomLabel.textContent=zoom===0?'تناسب عرض':zoom===-1?'تناسب صفحه':faNumber(Math.round(zoom*100))+'٪';
   };
 
   // Paint the account mark into the rendered page bitmap, not only as removable HTML.
@@ -226,7 +226,8 @@
     if(request!==pdfRenderSequence)return;
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
-    const scale=zoom===0?Math.min(1.5,available/base.width):zoom;
+    const availableHeight=Math.max(280,(stage?.clientHeight||700)-80);
+    const scale=zoom===0?Math.min(1.5,available/base.width):zoom===-1?Math.min(1.5,available/base.width,availableHeight/base.height):zoom;
     const viewport=page.getViewport({scale,rotation});
     const ratio=Math.min(window.devicePixelRatio||1,2);
     const context=pdfCanvas.getContext('2d',{alpha:false});
@@ -257,11 +258,12 @@
       if(request!==pdfRenderSequence)return;
       textLayer.replaceChildren(...stagingLayer.childNodes);
       textLayer.classList.add('textLayer');
+      textLayer.style.pointerEvents='auto';textLayer.style.userSelect='text';textLayer.style.webkitUserSelect='text';
       textLayer.style.width=viewport.width+'px';
       textLayer.style.height=viewport.height+'px';
       const query=(searchInput?.value||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
-        span.style.userSelect='text';span.style.webkitUserSelect='text';
+        span.style.pointerEvents='auto';span.style.userSelect='text';span.style.webkitUserSelect='text';
         const spanText=span.textContent.replace(/\s+/g,' ').trim().toLocaleLowerCase();
         span.classList.toggle('reader-search-hit',Boolean(query)&&spanText.includes(query));
       });
@@ -305,7 +307,8 @@
     const page=await pdfDoc.getPage(number);
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
-    const scale=zoom===0?Math.min(1.5,available/base.width):zoom;
+    const availableHeight=Math.max(280,(stage?.clientHeight||700)-80);
+    const scale=zoom===0?Math.min(1.5,available/base.width):zoom===-1?Math.min(1.5,available/base.width,availableHeight/base.height):zoom;
     const viewport=page.getViewport({scale,rotation});
     const ratio=Math.min(window.devicePixelRatio||1,2);
     canvas.width=Math.floor(viewport.width*ratio);
@@ -325,12 +328,13 @@
       textLayer.innerHTML='';
       textLayer.style.width=viewport.width+'px';
       textLayer.style.height=viewport.height+'px';
+      textLayer.style.pointerEvents='auto';textLayer.style.userSelect='text';textLayer.style.webkitUserSelect='text';
       const textContent=await page.getTextContent();
       const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:textLayer,viewport});
       await layer.render();
       const query=(searchInput?.value||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
-        span.style.userSelect='text';span.style.webkitUserSelect='text';
+        span.style.pointerEvents='auto';span.style.userSelect='text';span.style.webkitUserSelect='text';
         const spanText=span.textContent.replace(/\s+/g,' ').trim().toLocaleLowerCase();
         span.classList.toggle('reader-search-hit',Boolean(query)&&spanText.includes(query));
       });
@@ -629,6 +633,13 @@
     else setZoom(1);
   };
 
+  const fitPage=async()=>{
+    zoom=-1;
+    setZoomLabel();
+    if(isPdf()&&pdfDoc){if(continuousMode)await refreshContinuousVisiblePages();else await renderPdfPage(pdfPage);}
+    else setZoom(1);
+  };
+
   const updateSearchCount=()=>{
     if(!searchCount)return;
     if(!pdfMatches.length){searchCount.textContent=searchTotalMatches?'بدون نتیجه':'';return;}
@@ -685,9 +696,10 @@
     if(isPdf()&&pdfDoc)navigatePdfPage(value).catch(showPdfError);
     else showItem(value-1);
   });
-  root.querySelector('#reader-zoom-in')?.addEventListener('click',()=>setZoom(zoom===0?1.1:zoom+.1).catch(showPdfError));
-  root.querySelector('#reader-zoom-out')?.addEventListener('click',()=>setZoom(zoom===0?.9:zoom-.1).catch(showPdfError));
+  root.querySelector('#reader-zoom-in')?.addEventListener('click',()=>setZoom(zoom<=0?1.1:zoom+.1).catch(showPdfError));
+  root.querySelector('#reader-zoom-out')?.addEventListener('click',()=>setZoom(zoom<=0?.9:zoom-.1).catch(showPdfError));
   root.querySelector('#reader-fit')?.addEventListener('click',()=>fitWidth().catch(showPdfError));
+  root.querySelector('#reader-fit-page')?.addEventListener('click',()=>fitPage().catch(showPdfError));
   root.querySelector('#reader-rotate')?.addEventListener('click',()=>{rotation=(rotation+90)%360;if(isPdf()&&pdfDoc){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}else activeArticle()?.querySelector('img')?.style.setProperty('transform','rotate('+rotation+'deg) scale('+zoom+')');});
   scrollModeButton?.addEventListener('click',async()=>{
     if(!isPdf()||!pdfDoc||scrollModeButton.disabled)return;
@@ -779,7 +791,7 @@
   root.addEventListener('paste',e=>{if(!isEditableTarget(e.target))e.preventDefault();});
   root.addEventListener('selectstart',e=>{if(!isEditableTarget(e.target)&&!isReaderSpeechTarget(e.target))e.preventDefault();});
   root.addEventListener('dragstart',e=>e.preventDefault());
-  window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom===0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
+  window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom<=0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
   setZoomLabel();
   renderBookmarks();
   refreshBookmarkButton();
