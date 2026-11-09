@@ -1034,7 +1034,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.extraction_truncated = archive_truncated
         if archive_chunks:
             result.extracted_text = "\n".join(
-                f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
+                str(chunk.get("content_text") or "")
                 for chunk in archive_chunks
             )[:MAX_EXTRACTED_CHARS]
             if sum(len(str(chunk.get("content_text") or "")) for chunk in archive_chunks) > MAX_EXTRACTED_CHARS:
@@ -1084,7 +1084,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             result.extraction_truncated = archive_truncated
             if archive_chunks:
                 result.extracted_text = "\n".join(
-                    f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
+                    str(chunk.get("content_text") or "")
                     for chunk in archive_chunks
                 )[:MAX_EXTRACTED_CHARS]
                 if sum(len(str(chunk.get("content_text") or "")) for chunk in archive_chunks) > MAX_EXTRACTED_CHARS:
