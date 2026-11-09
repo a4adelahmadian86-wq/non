@@ -71,6 +71,7 @@
                 <p class="discussion-body">{{ $entry->body }}</p>
                 @include('shared.discussion-reactions', ['discussionItem' => $entry])
                 @include('shared.discussion-report', ['discussionItem' => $entry])
+                <a class="discussion-permalink" href="{{ url()->current() }}#discussion-{{ $entry->id }}" aria-label="پیوند مستقیم به این گفت‌وگو"><i class="fa-solid fa-link" aria-hidden="true"></i> پیوند مستقیم</a>
                 @auth
                     <form method="post" action="{{ route('discussions.follow', $entry) }}" class="discussion-follow-form">
                         @csrf
@@ -78,7 +79,7 @@
                             <i class="fa-{{ $entry->is_following ? 'solid' : 'regular' }} fa-bell" aria-hidden="true"></i>
                             {{ $entry->is_following ? 'دنبال می‌کنید · لغو اعلان' : 'دنبال‌کردن پاسخ‌ها' }}
                         </button>
-                        <small>با انتشار پاسخ جدید، اعلان داخل فراست دریافت می‌کنید.</small>
+                        <small>{{ number_format((int)($entry->followers_count ?? 0)) }} دنبال‌کننده · با پاسخ جدید اعلان می‌گیرید.</small>
                     </form>
                 @endauth
 
@@ -98,6 +99,7 @@
                                 <p>{{ $reply->body }}</p>
                                 @include('shared.discussion-reactions', ['discussionItem' => $reply])
                                 @include('shared.discussion-report', ['discussionItem' => $reply])
+                                <a class="discussion-permalink" href="{{ url()->current() }}#discussion-{{ $reply->id }}" aria-label="پیوند مستقیم به این پاسخ"><i class="fa-solid fa-link" aria-hidden="true"></i> پیوند مستقیم</a>
                             </div>
                         @endforeach
                     </div>

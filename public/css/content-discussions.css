@@ -142,3 +142,6 @@
 .discussion-follow-form small{color:#8a98aa;font-size:.59rem}
 
 .discussion-reply-count{padding:3px 7px;border-radius:7px;background:#f1f5fa;color:#75869b;font-size:.58rem}
+
+.discussion-permalink{display:inline-flex;align-items:center;gap:6px;margin:5px 0;color:#74869d;font-size:.61rem;font-weight:750;text-decoration:none}
+.discussion-permalink:hover{color:#2868b8;text-decoration:underline}
