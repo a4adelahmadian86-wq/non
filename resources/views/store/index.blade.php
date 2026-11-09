@@ -11,6 +11,9 @@
         <form method="get" action="{{ route('store') }}" class="store-search">
           <input name="q" value="{{ $q }}" placeholder="جستجوی عنوان، موضوع یا فایل…" aria-label="جستجوی فروشگاه">
           @if($category)<input type="hidden" name="category" value="{{ $category }}">@endif
+          @if($sort !== 'newest')<input type="hidden" name="sort" value="{{ $sort }}">@endif
+          @if($price !== 'all')<input type="hidden" name="price" value="{{ $price }}">@endif
+          @if($type !== 'all')<input type="hidden" name="type" value="{{ $type }}">@endif
           <button type="submit"><i class="fa-solid fa-magnifying-glass"></i> جستجو</button>
         </form>
         <div class="store-hero-links">
