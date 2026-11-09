@@ -177,6 +177,22 @@ class AdminStoreController extends Controller
 
         DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            if ($provenance !== null && $lockedProduct->type === 'course') {
+                $course = $lockedProduct->course()->lockForUpdate()->first();
+                if ($course) {
+                    $sectionIds = \App\Models\StoreCourseSection::query()
+                        ->where('course_id', $course->id)
+                        ->lockForUpdate()
+                        ->pluck('id')
+                        ->all();
+                    if ($sectionIds) {
+                        \App\Models\StoreCourseLesson::query()
+                            ->whereIn('section_id', $sectionIds)
+                            ->lockForUpdate()
+                            ->get(['id']);
+                    }
+                }
+            }
             if ($provenance !== null) {
                 $contentGenerator->assertFreshProvenance($lockedProduct, (string) $submittedFingerprints, (string) $submittedSignature);
             }
