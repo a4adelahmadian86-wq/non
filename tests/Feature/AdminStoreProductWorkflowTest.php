@@ -727,4 +727,43 @@ class AdminStoreProductWorkflowTest extends TestCase
         Queue::assertPushed(ProcessProductDocument::class);
     }
 
+
+    public function test_ai_suggested_tags_are_created_only_during_product_save_and_seo_keywords_are_persisted(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول برای تکمیل هوشمند',
+            'slug' => 'smart-fill-product',
+            'sku' => 'SMART-FILL-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => 'محصول راهنمای نصب',
+                'sku' => 'SMART-FILL-001',
+                'ai_content_tag_names' => ['راهنمای نصب', 'آموزش کاربردی'],
+                'seo_focus_keyword' => 'راهنمای نصب محصول',
+                'seo_secondary_keywords' => 'آموزش نصب، راهنمای کاربردی',
+            ]))
+            ->assertRedirect(route('admin.store.edit', $product));
+
+        $saved = $product->fresh();
+        $this->assertDatabaseHas('store_tags', ['name' => 'راهنمای نصب']);
+        $this->assertDatabaseHas('store_tags', ['name' => 'آموزش کاربردی']);
+        $this->assertSame('راهنمای نصب محصول', data_get($saved->metadata, 'seo.focus_keyword'));
+        $this->assertSame(
+            ['آموزش نصب', 'راهنمای کاربردی'],
+            data_get($saved->metadata, 'seo.secondary_keywords')
+        );
+        $this->assertSame(
+            2,
+            $saved->tags()->whereIn('name', ['راهنمای نصب', 'آموزش کاربردی'])->count()
+        );
+    }
+
 }
