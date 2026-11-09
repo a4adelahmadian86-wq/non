@@ -265,8 +265,24 @@
     if (!page) return announce('صفحهٔ مربوط به این یادداشت در سند فعلی پیدا نشد.');
     const pageIndex = Number(page.dataset.index || Math.max(0, Number(record.page) - 1));
     const pageButton = root.querySelector('[data-goto="' + pageIndex + '"]');
-    if (pageButton && !page.classList.contains('is-active')) pageButton.click();
-    window.setTimeout(() => {
+    const needsNavigation = Boolean(pageButton && !page.classList.contains('is-active'));
+    const pageReady = needsNavigation ? new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        root.removeEventListener('farast:reader-page-change', onPageChange);
+        window.clearTimeout(fallback);
+        resolve();
+      };
+      const onPageChange = event => {
+        if (!event.detail?.page || Number(event.detail.page) === Number(record.page)) finish();
+      };
+      const fallback = window.setTimeout(finish, 2500);
+      root.addEventListener('farast:reader-page-change', onPageChange);
+      pageButton.click();
+    }) : Promise.resolve();
+    pageReady.then(() => {
       const map = getPageTextMap(page);
       const anchored = Number.isInteger(record.startOffset) && Number.isInteger(record.endOffset)
         && record.startOffset >= 0 && record.endOffset > record.startOffset
@@ -290,7 +306,7 @@
       selection?.removeAllRanges();
       selection?.addRange(range);
       announce('به محل یادداشت در سند رفتید.');
-    }, pageButton ? 80 : 0);
+    });
   };
   const renderNotes = () => {
     notesPanel.replaceChildren();
