@@ -1104,20 +1104,49 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> tuple[str, b
 
 
 
+def _luhn_valid(digits: str) -> bool:
+    if not 13 <= len(digits) <= 19 or not digits.isdigit():
+        return False
+    total = 0
+    double = False
+    for character in reversed(digits):
+        digit = int(character)
+        if double:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+        double = not double
+    return total % 10 == 0
+
+
 def redact_sensitive_content(value: str) -> tuple[str, int]:
     patterns = [
         r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
         r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*",
         r"\b(?:sk-[A-Za-z0-9_-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{25,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16})\b",
         r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
-        r"(?<!\d)(?:\+?\d[\d .()/-]{8,}\d)(?!\d)",
+        r"\b[A-Z]{2}[0-9]{2}(?:\s?[A-Z0-9]){11,30}\b",
+        r"(?i)(?:[?&](?:token|access_token|api_key|key|secret|password|auth)=)[^&\s]+",
+        r"(?i)((?:national\s*id|account\s*(?:no|number)|card\s*number|کد\s*ملی|شماره\s*حساب|شماره\s*کارت)\s*[:：]?\s*)[0-9۰-۹٠-٩]{8,24}",
+        r"(?<![\w\d])(?:\+|00)(?:[0-9۰-۹٠-٩][\d .()/-]{6,}[0-9۰-۹٠-٩])(?![\w\d])",
+        r"(?<![\w\d])0[0-9۰-۹٠-٩]{9,10}(?![\w\d])",
     ]
     count = 0
     for pattern in patterns:
         value, replaced = re.subn(pattern, "[REDACTED]", value)
         count += replaced
-    return value, count
 
+    def redact_card(match: re.Match[str]) -> str:
+        nonlocal count
+        digits = re.sub(r"[^0-9]", "", match.group(0))
+        if _luhn_valid(digits):
+            count += 1
+            return "[REDACTED]"
+        return match.group(0)
+
+    value = re.sub(r"(?<![0-9])(?:[0-9][ -]?){13,19}(?![0-9])", redact_card, value)
+    return value, count
 
 def groq_provider_ready() -> bool:
     """Fail closed unless the operator explicitly confirms Groq account-level ZDR."""
