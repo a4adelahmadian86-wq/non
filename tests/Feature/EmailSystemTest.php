@@ -1,18 +1,18 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Jobs\\DeliverFarastEmail;
-use App\\Mail\\TestMail;
-use App\\Models\\EmailLog;
-use App\\Models\\SiteSetting;
-use App\\Models\\User;
-use App\\Services\\EmailService;
-use App\\Services\\MailConfigService;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\Mail;
-use Illuminate\\Support\\Facades\\Queue;
-use Tests\\TestCase;
+use App\Jobs\DeliverFarastEmail;
+use App\Mail\TestMail;
+use App\Models\EmailLog;
+use App\Models\SiteSetting;
+use App\Models\User;
+use App\Services\EmailService;
+use App\Services\MailConfigService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
+use Tests\TestCase;
 
 class EmailSystemTest extends TestCase
 {
