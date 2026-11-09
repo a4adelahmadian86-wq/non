@@ -196,6 +196,9 @@ class ProductKnowledgeService
             'seo_title' => (string) ($product->seo_title ?? ''),
             'seo_description' => (string) ($product->seo_description ?? ''),
             'seo' => (array) data_get($product->metadata, 'seo', []),
+            'course_subtitle' => (string) ($product->course?->subtitle ?? ''),
+            'course_level' => (string) ($product->course?->level ?? ''),
+            'course_language' => (string) ($product->course?->language ?? ''),
         ];
         $sources = [];
         $fingerprints = [
