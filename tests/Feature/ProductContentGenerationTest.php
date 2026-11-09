@@ -233,7 +233,7 @@ class ProductContentGenerationTest extends TestCase
             'used_source_ids' => [],
             'field_evidence' => [],
             'unknowns' => [],
-        ], [], [], []);
+        ], [], [], [], []);
     }
 
     public function test_privacy_filter_removes_private_file_metadata_and_signed_urls(): void
