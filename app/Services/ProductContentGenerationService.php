@@ -208,7 +208,7 @@ class ProductContentGenerationService
         }
         $allowedFields = [
             'title', 'short_description', 'description', 'seo_title', 'seo_description',
-            'focus_keyword', 'secondary_keywords', 'tags', 'category', 'selling_points',
+            'focus_keyword', 'version', 'license_type', 'secondary_keywords', 'tags', 'category', 'selling_points',
         ];
         $normalized = [];
 
@@ -291,7 +291,7 @@ class ProductContentGenerationService
 
         $allowedEvidenceFields = [
             'title', 'short_description', 'description', 'seo_title', 'seo_description',
-            'focus_keyword', 'secondary_keywords', 'tags', 'category', 'selling_points',
+            'focus_keyword', 'version', 'license_type', 'secondary_keywords', 'tags', 'category', 'selling_points',
         ];
         $fieldEvidence = [];
         foreach (is_array($result['field_evidence'] ?? null) ? $result['field_evidence'] : [] as $entry) {
@@ -339,6 +339,8 @@ class ProductContentGenerationService
             'seo_title' => $string('seo_title', 220),
             'seo_description' => $string('seo_description', 320),
             'focus_keyword' => $string('focus_keyword', 120),
+            'version' => $string('version', 60),
+            'license_type' => $string('license_type', 60),
             'secondary_keywords' => $list('secondary_keywords', 10, 80),
             'tags' => $list('tags', 10, 80),
             'category_id' => $categoryId,
@@ -358,6 +360,8 @@ class ProductContentGenerationService
 
         foreach ([
             'focus_keyword' => 'focus_keyword',
+            'version' => 'version',
+            'license_type' => 'license_type',
             'secondary_keywords' => 'secondary_keywords',
             'tags' => 'tags',
             'selling_points' => 'selling_points',
