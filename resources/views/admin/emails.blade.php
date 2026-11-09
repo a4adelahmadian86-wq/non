@@ -86,6 +86,8 @@
             <span>صف فعلی: {{ $diagnostics['queue'] }}</span>
             <span>عامل SMTP محلی 127.0.0.1:25: {{ $diagnostics['local_mta'] ? 'در دسترس' : 'در دسترس نیست' }}</span>
             <span>Sendmail محلی: {{ $diagnostics['sendmail'] ? 'موجود' : 'موجود نیست' }}</span>
+            <span>دامنه فرستنده: {{ $diagnostics['sender_domain'] }}</span>
+            <span>DNS MX: {{ $diagnostics['mx_ready'] ? 'ثبت شده' : 'یافت نشد' }} · SPF: {{ $diagnostics['spf_ready'] ? 'ثبت شده' : 'یافت نشد' }} · DMARC: {{ $diagnostics['dmarc_ready'] ? 'ثبت شده' : 'یافت نشد' }}</span>
             <span style="color:{{ $diagnostics['available'] ? '#86efac' : '#fca5a5' }}">{{ $diagnostics['available'] ? 'روش انتخابی از نظر محلی آماده است.' : 'روش انتخابی هنوز روی میزبان قابل استفاده نیست.' }}</span>
             <small>{{ $diagnostics['meaning'] }}</small>
           </div>
