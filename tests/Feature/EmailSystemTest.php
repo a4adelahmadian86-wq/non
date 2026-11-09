@@ -62,6 +62,23 @@ class EmailSystemTest extends TestCase
         ]);
     }
 
+    public function test_email_otp_is_not_claimed_when_delivery_is_disabled(): void
+    {
+        SiteSetting::write('email_enabled', '0');
+        User::create([
+            'name' => 'Email OTP QA',
+            'mobile' => '09150000992',
+            'email' => 'otp-disabled@example.test',
+            'password' => 'secret',
+        ]);
+
+        $this->postJson('/login/email', ['email' => 'otp-disabled@example.test'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('email');
+
+        $this->assertDatabaseCount('email_otp_challenges', 0);
+    }
+
     public function test_legacy_third_party_provider_settings_fall_back_to_internal_log_mode(): void
     {
         SiteSetting::write('mail_provider', 'resend');
