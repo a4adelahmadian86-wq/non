@@ -5,33 +5,36 @@
 <meta property="og:description" content="{{ $product->seo_description ?: $product->short_description }}">
 <meta property="og:type" content="product">
 <meta property="og:url" content="{{ request()->url() }}">
-@php($ratingCount = array_sum($ratingBreakdown))
-<script type="application/ld+json">
-@json([
-    '@context' => 'https://schema.org',
-    '@type' => 'Product',
-    'name' => $product->title,
-    'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description), 300),
-    'image' => $product->cover_path ? [asset($product->cover_path)] : [],
-    'sku' => $product->sku,
-    'url' => request()->url(),
-    'offers' => [
-        '@type' => 'Offer',
+@php
+    $ratingCount = array_sum($ratingBreakdown);
+    $productStructuredData = [
+        '@context' => 'https://schema.org',
+        '@type' => 'Product',
+        'name' => $product->title,
+        'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description), 300),
+        'image' => $product->cover_path ? [asset($product->cover_path)] : [],
+        'sku' => $product->sku,
         'url' => request()->url(),
-        'priceCurrency' => 'IRR',
-        'price' => (int) $product->price_rials,
-        'availability' => 'https://schema.org/InStock',
-        'itemCondition' => 'https://schema.org/NewCondition',
-    ],
-    'aggregateRating' => $ratingCount > 0 && $averageRating !== null ? [
-        '@type' => 'AggregateRating',
-        'ratingValue' => round((float) $averageRating, 1),
-        'reviewCount' => $ratingCount,
-        'bestRating' => 5,
-        'worstRating' => 1,
-    ] : null,
-])
-</script>
+        'offers' => [
+            '@type' => 'Offer',
+            'url' => request()->url(),
+            'priceCurrency' => 'IRR',
+            'price' => (int) $product->price_rials,
+            'availability' => 'https://schema.org/InStock',
+            'itemCondition' => 'https://schema.org/NewCondition',
+        ],
+    ];
+    if ($ratingCount > 0 && $averageRating !== null) {
+        $productStructuredData['aggregateRating'] = [
+            '@type' => 'AggregateRating',
+            'ratingValue' => round((float) $averageRating, 1),
+            'reviewCount' => $ratingCount,
+            'bestRating' => 5,
+            'worstRating' => 1,
+        ];
+    }
+@endphp
+<script type="application/ld+json">@json($productStructuredData)</script>
 @endpush
 
 @section('content')
