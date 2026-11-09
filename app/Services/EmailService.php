@@ -265,14 +265,19 @@ class EmailService
         );
     }
 
-    public function sendTicketSlaAlert(User $staff, Ticket $ticket, string $headline, string $body): void
-    {
-        if (! $staff->email || ! $this->isEnabled('ticket_sla_warning')) {
+    public function sendTicketSlaAlert(
+        User $staff,
+        Ticket $ticket,
+        string $headline,
+        string $body,
+        string $type = 'ticket_sla_warning',
+    ): void {
+        if (! $staff->email || ! in_array($type, ['ticket_sla_warning', 'ticket_sla_breach'], true) || ! $this->isEnabled($type)) {
             return;
         }
 
         $this->sendSupportMail(
-            type: 'ticket_sla_warning',
+            type: $type,
             to: $staff->email,
             user: $staff,
             ticket: $ticket,
