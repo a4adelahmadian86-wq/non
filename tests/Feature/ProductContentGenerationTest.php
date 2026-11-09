@@ -148,6 +148,7 @@ class ProductContentGenerationTest extends TestCase
                     $this->assertStringContainsString('گزارش بینایی: بسته‌بندی آبی', $text);
                     $this->assertStringNotContainsString('RAW_PRIVATE_CHUNK_SENTINEL', $text);
                     $this->assertStringNotContainsString('private-file-bytes', $text);
+                    $this->assertStringNotContainsString('private.pdf', $text);
                     $this->assertStringNotContainsString('owner@example.com', $text);
                     $this->assertStringNotContainsString('09121234567', $text);
                     $this->assertStringNotContainsString('sk-abcdefghijklmnopqrstuvwxyz123456', $text);
