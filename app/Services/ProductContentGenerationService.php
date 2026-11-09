@@ -377,15 +377,13 @@ class ProductContentGenerationService
             }
         }
 
-        foreach ([
-            'focus_keyword' => 'focus_keyword',
-            'version' => 'version',
-            'license_type' => 'license_type',
-            'secondary_keywords' => 'secondary_keywords',
-            'tags' => 'tags',
-            'selling_points' => 'selling_points',
-        ] as $outputField => $evidenceField) {
-            if ($normalized[$outputField] !== [] && ! isset($fieldEvidence[$evidenceField])) {
+        foreach (['focus_keyword', 'version', 'license_type'] as $outputField) {
+            if ($normalized[$outputField] !== '' && ! isset($fieldEvidence[$outputField])) {
+                $normalized[$outputField] = '';
+            }
+        }
+        foreach (['secondary_keywords', 'tags', 'selling_points'] as $outputField) {
+            if ($normalized[$outputField] !== [] && ! isset($fieldEvidence[$outputField])) {
                 $normalized[$outputField] = [];
             }
         }
