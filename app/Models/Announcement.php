@@ -21,6 +21,7 @@ class Announcement extends Model
         'starts_at',
         'ends_at',
         'notified_at',
+        'broadcast_revision',
         'archived_at',
         'created_by',
     ];
@@ -35,6 +36,7 @@ class Announcement extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'notified_at' => 'datetime',
+            'broadcast_revision' => 'integer',
             'archived_at' => 'datetime',
         ];
     }
