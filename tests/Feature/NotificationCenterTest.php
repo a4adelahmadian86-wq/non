@@ -172,7 +172,18 @@ class NotificationCenterTest extends TestCase
         $this->assertDatabaseHas('farast_notifications', [
             'user_id' => $user->id,
             'type' => 'announcement_info',
-            'dedupe_key' => 'announcement:'.$announcement->id.':user:'.$user->id,
+            'dedupe_key' => 'announcement:'.$announcement->id.':revision:1:user:'.$user->id,
+        ]);
+
+        // An explicit admin rebroadcast is a new delivery, unlike an automatic retry.
+        $announcement->forceFill(['broadcast_revision' => 2])->saveQuietly();
+        $this->assertSame(1, $service->broadcast($announcement->fresh()));
+
+        $this->assertDatabaseCount('farast_notifications', 2);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $user->id,
+            'type' => 'announcement_info',
+            'dedupe_key' => 'announcement:'.$announcement->id.':revision:2:user:'.$user->id,
         ]);
     }
 
