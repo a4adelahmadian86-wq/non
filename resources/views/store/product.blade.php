@@ -23,6 +23,12 @@
       <div><span class="store-product-overview-kicker">انتخاب هوشمندانه با فراست</span><strong>جزئیات را ببینید، نمونه را بررسی کنید، با اطمینان انتخاب کنید.</strong></div>
       @if($hasPreview)<span class="store-product-preview-pill"><i class="fa-solid fa-eye"></i> پیش‌نمایش فعال</span>@endif
     </div>
+    <nav class="store-product-jump" aria-label="دسترسی سریع به بخش‌های محصول">
+      <a href="#store-product-preview"><i class="fa-solid fa-eye" aria-hidden="true"></i> پیش‌نمایش</a>
+      <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
+      @if($product->type === 'course' && $product->course)<a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>@endif
+      <a href="#store-buy-card"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> قیمت و خرید</a>
+    </nav>
     <div class="store-detail-grid">
       <section>
         <div class="store-detail-cover">
@@ -36,12 +42,12 @@
         @if($galleryImages->isNotEmpty())
           <div class="store-product-gallery" aria-label="گالری تصاویر محصول">
             @foreach($galleryImages as $image)
-              <figure><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy"></figure>
+              <button type="button" class="store-gallery-open" data-gallery-src="{{ asset($image->path) }}" data-gallery-alt="{{ $image->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر {{ $loop->iteration }}"><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy"><span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی</span></button>
             @endforeach
           </div>
         @endif
 
-        <div class="store-panel">
+        <div class="store-panel" id="store-product-preview">
           <div class="store-panel-head">
             <h2>نمونه رایگان / پیش‌نمایش</h2>
             @if($hasPreview)
@@ -72,12 +78,12 @@
           @endif
         </div>
 
-        <article class="store-panel">
+        <article class="store-panel" id="store-product-description">
           <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
           <div class="body">{!! nl2br(e($product->description ?: $product->short_description ?: 'توضیحی ثبت نشده است.')) !!}</div>
         </article>
         @if($product->type === 'course' && $product->course)
-          <div class="store-panel course-public-curriculum">
+          <div class="store-panel course-public-curriculum" id="store-product-curriculum">
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
             <div class="course-public-meta">
               @if($product->course->instructor_name)<span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>@endif
@@ -99,7 +105,7 @@
         @endif
       </section>
 
-      <aside class="store-buy-card">
+      <aside class="store-buy-card" id="store-buy-card">
         <small>{{ $product->type === 'course' ? 'دوره آموزشی' : ($product->category?->name ?? 'فایل دیجیتال') }}</small>
         <h1>{{ $product->title }}</h1>
         <p class="lead">{{ $product->short_description }}</p>
@@ -123,6 +129,7 @@
           {{ (int)$product->price_rials===0 ? 'افزودن (رایگان)' : 'افزودن به سبد' }}
         </button>
         <a class="store-outline-btn" href="{{ route('cart') }}" style="margin-top:8px;justify-content:center;width:100%">مشاهده سبد خرید</a>
+        <button type="button" class="store-share-product" data-share-product><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> اشتراک‌گذاری محصول</button>
 
         @auth
           <div class="store-buy-actions">
@@ -170,10 +177,14 @@
       </section>
     @endif
   </div>
+  <dialog class="store-gallery-dialog" aria-label="نمایش بزرگ تصویر محصول">
+    <form method="dialog"><button class="store-gallery-close" aria-label="بستن تصویر"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></form>
+    <img src="" alt="" data-gallery-dialog-image>
+  </dialog>
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261107premium1">
+<link rel="stylesheet" href="/css/store.css?v=20261109product3">
 <style>
 
 
@@ -191,6 +202,24 @@
 <script>
 (()=>{
   const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';
+  const galleryDialog=document.querySelector('.store-gallery-dialog');
+  const galleryDialogImage=galleryDialog?.querySelector('[data-gallery-dialog-image]');
+  document.querySelectorAll('.store-gallery-open').forEach(button=>button.addEventListener('click',()=>{
+    if(!galleryDialog||!galleryDialogImage)return;
+    galleryDialogImage.src=button.dataset.gallerySrc||'';
+    galleryDialogImage.alt=button.dataset.galleryAlt||'';
+    if(typeof galleryDialog.showModal==='function')galleryDialog.showModal();
+  }));
+  galleryDialog?.addEventListener('click',event=>{if(event.target===galleryDialog)galleryDialog.close();});
+  document.querySelector('[data-share-product]')?.addEventListener('click',async event=>{
+    const button=event.currentTarget;
+    const shareData={title:document.querySelector('.store-buy-card h1')?.textContent?.trim()||document.title,text:document.querySelector('.store-buy-card .lead')?.textContent?.trim()||'',url:window.location.href};
+    try{
+      if(navigator.share){await navigator.share(shareData);}
+      else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(shareData.url);button.innerHTML='<i class="fa-solid fa-check" aria-hidden="true"></i> پیوند کپی شد';}
+      else{window.prompt('پیوند محصول را کپی کنید:',shareData.url);}
+    }catch(error){if(error?.name!=='AbortError')window.prompt('پیوند محصول را کپی کنید:',shareData.url);}
+  });
   document.querySelectorAll('.add-to-cart').forEach(b=>b.addEventListener('click',async()=>{
     b.disabled=true;
     try{
