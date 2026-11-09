@@ -58,6 +58,151 @@ class AdminStoreProductWorkflowTest extends TestCase
         ], $overrides);
     }
 
+    public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
+    {
+        $admin = $this->admin();
+        $firstCategory = $this->category();
+        $secondCategory = StoreCategory::create([
+            'name' => 'دسته دوم',
+            'slug' => 'second-test-category',
+            'is_active' => false,
+        ]);
+        StoreProduct::create([
+            'category_id' => $firstCategory->id,
+            'title' => 'محصول الف',
+            'slug' => 'product-alpha',
+            'sku' => 'PRODUCT-ALPHA-001',
+            'type' => 'digital_file',
+            'price_rials' => 200000,
+            'status' => 'draft',
+        ]);
+        StoreProduct::create([
+            'category_id' => $firstCategory->id,
+            'title' => 'محصول ارزان',
+            'slug' => 'product-cheap',
+            'sku' => 'PRODUCT-CHEAP-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        StoreProduct::create([
+            'category_id' => $secondCategory->id,
+            'title' => 'محصول ب',
+            'slug' => 'product-beta',
+            'sku' => 'PRODUCT-BETA-001',
+            'type' => 'digital_file',
+            'price_rials' => 150000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.index', ['category_id' => $firstCategory->id, 'sort' => 'price_asc']))
+            ->assertOk()
+            ->assertSeeInOrder(['محصول ارزان', 'محصول الف'])
+            ->assertDontSee('محصول ب')
+            ->assertSee('name="category_id"', false)
+            ->assertSee('name="sort"', false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.index', ['category_id' => $secondCategory->id]))
+            ->assertOk()
+            ->assertSee('محصول ب')
+            ->assertSee('دسته دوم (غیرفعال)');
+    }
+
+    public function test_bulk_archive_unpublishes_products_without_deleting_the_product_records(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $published = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول منتشرشده برای بایگانی گروهی',
+            'slug' => 'bulk-archive-published',
+            'sku' => 'BULK-ARCHIVE-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $draft = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'پیش‌نویس برای بایگانی گروهی',
+            'slug' => 'bulk-archive-draft',
+            'sku' => 'BULK-ARCHIVE-002',
+            'type' => 'digital_file',
+            'price_rials' => 50000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.store.bulk-archive'), [
+                'product_ids' => [$published->id, $draft->id],
+            ])
+            ->assertRedirect(route('admin.store.index'))
+            ->assertSessionHas('status');
+
+        $this->assertSame('archived', $published->fresh()->status);
+        $this->assertNull($published->fresh()->published_at);
+        $this->assertSame('archived', $draft->fresh()->status);
+        $this->assertDatabaseHas('store_products', ['id' => $published->id]);
+        $this->assertDatabaseHas('store_products', ['id' => $draft->id]);
+    }
+
+    public function test_bulk_archive_requires_a_bounded_non_empty_selection(): void
+    {
+        $this->actingAs($this->admin())
+            ->from(route('admin.store.index'))
+            ->post(route('admin.store.bulk-archive'), ['product_ids' => []])
+            ->assertRedirect(route('admin.store.index'))
+            ->assertSessionHasErrors('product_ids');
+    }
+
+    public function test_product_catalog_exposes_document_pipeline_and_queue_health_without_source_content(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول دارای سند ناموفق',
+            'slug' => 'product-with-failed-document',
+            'sku' => 'PRODUCT-FAILED-DOC-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => 1,
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/source.pdf',
+            'original_name' => 'private-customer-file.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 1024,
+            'sha256' => str_repeat('a', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $file->sha256,
+            'processing_status' => 'failed',
+            'failure_code' => 'document_processing_failed',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.index'))
+            ->assertOk()
+            ->assertSee('وضعیت زیرساخت پردازش محصولات')
+            ->assertSee('نیازمند بررسی')
+            ->assertSee('محصول دارای سند ناموفق')
+            ->assertDontSee('private-customer-file.pdf');
+    }
+
     public function test_new_products_are_always_created_as_private_drafts_and_cover_path_is_not_mass_assignable(): void
     {
         $admin = $this->admin();
