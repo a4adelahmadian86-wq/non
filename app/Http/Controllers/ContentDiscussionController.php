@@ -227,28 +227,29 @@ class ContentDiscussionController extends Controller {
   return view('admin.discussion-reports.index',compact('reports','stats','status'));
  }
  public function moderateReport(Request $request, DiscussionReport $report) {
-  $data=$request->validate(['action'=>['required','in:dismiss,remove_content']]);
-  $removed=DB::transaction(function() use($request,$report,$data) {
+  $data=$request->validate(['action'=>['required','in:dismiss,remove_content'],'review_note'=>['nullable','string','max:1000']]);
+  $result=DB::transaction(function() use($request,$report,$data) {
    $locked=DiscussionReport::query()->whereKey($report->id)->lockForUpdate()->firstOrFail();
+   abort_unless($locked->status==='pending',409,'این گزارش قبلاً رسیدگی شده است.');
    $discussion=ContentDiscussion::query()->whereKey($locked->discussion_id)->lockForUpdate()->firstOrFail();
-   $wasRemoved=false;
+   $reviewNote=trim((string)($data['review_note']??'')) ?: null;
+   $reviewedAt=now(); $wasRemoved=false;
    if($data['action']==='remove_content') {
     if($discussion->status!=='rejected') {
      $previous=$discussion->status;
-     $note='محتوا پس از بررسی گزارش کاربران از انتشار خارج شد.';
-     $discussion->forceFill(['status'=>'rejected','moderator_id'=>$request->user()->id,'moderated_at'=>now(),'moderation_note'=>$note])->save();
-     \App\Models\DiscussionModerationEvent::create(['discussion_id'=>$discussion->id,'moderator_id'=>$request->user()->id,'from_status'=>$previous,'to_status'=>'rejected','note'=>$note]);
+     $moderationNote=$reviewNote ?: 'محتوا پس از بررسی گزارش کاربران از انتشار خارج شد.';
+     $discussion->forceFill(['status'=>'rejected','moderator_id'=>$request->user()->id,'moderated_at'=>$reviewedAt,'moderation_note'=>$moderationNote])->save();
+     \App\Models\DiscussionModerationEvent::create(['discussion_id'=>$discussion->id,'moderator_id'=>$request->user()->id,'from_status'=>$previous,'to_status'=>'rejected','note'=>$moderationNote]);
      $wasRemoved=true;
     }
-    $locked->status='resolved';
-   } else { $locked->status='dismissed'; }
-   $locked->reviewed_by=$request->user()->id;
-   $locked->reviewed_at=now();
-   $locked->save();
-   return $wasRemoved ? $discussion : null;
+    DiscussionReport::query()->where('discussion_id',$discussion->id)->where('status','pending')->update(['status'=>'resolved','reviewed_by'=>$request->user()->id,'reviewed_at'=>$reviewedAt,'review_note'=>$reviewNote]);
+   } else {
+    $locked->forceFill(['status'=>'dismissed','reviewed_by'=>$request->user()->id,'reviewed_at'=>$reviewedAt,'review_note'=>$reviewNote])->save();
+   }
+   return ['removed'=>$wasRemoved?$discussion:null];
   });
-  if($removed) $this->notifyModerationDecision($removed,'rejected');
-  return back()->with('status',$data['action']==='remove_content'?'محتوا از سایت برداشته شد؛ سابقه رسیدگی ثبت و نتیجه به نویسنده اطلاع داده شد.':'گزارش بررسی و مختومه شد.');
+  if($result['removed']) $this->notifyModerationDecision($result['removed'],'rejected');
+  return back()->with('status',$data['action']==='remove_content'?'محتوا از سایت برداشته شد؛ همه گزارش‌های باز مرتبط نیز مختومه و سوابق رسیدگی ثبت شدند.':'گزارش بررسی و مختومه شد؛ یادداشت رسیدگی ثبت شد.');
  }
  public function adminIndex(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'pending';

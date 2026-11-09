@@ -11,11 +11,12 @@
    <div class="discussion-report-context"><strong>{{ $report->discussion?->user?->name ?: 'نویسنده نامشخص' }}</strong><p>{{ $report->discussion?->body ?: 'محتوا دیگر در دسترس نیست.' }}</p>@if($report->details)<small>توضیح گزارش‌دهنده: {{ $report->details }}</small>@endif</div>
    @if($status==='pending' && $report->discussion)
     <div class="discussion-report-admin-actions">
-     <form method="post" action="{{ route('admin.discussion-reports.moderate',$report) }}">@csrf @method('PATCH')<input type="hidden" name="action" value="dismiss"><button class="discussion-report-dismiss">رد گزارش؛ حفظ محتوا</button></form>
-     <form method="post" action="{{ route('admin.discussion-reports.moderate',$report) }}" onsubmit="return confirm('محتوا از سایت برداشته شود؟')">@csrf @method('PATCH')<input type="hidden" name="action" value="remove_content"><button class="discussion-report-remove">تأیید تخلف و حذف محتوا</button></form>
+     <form method="post" action="{{ route('admin.discussion-reports.moderate',$report) }}">@csrf @method('PATCH')<input type="hidden" name="action" value="dismiss"><textarea name="review_note" rows="2" maxlength="1000" placeholder="یادداشت رسیدگی (اختیاری)"></textarea><button class="discussion-report-dismiss">رد گزارش؛ حفظ محتوا</button></form>
+     <form method="post" action="{{ route('admin.discussion-reports.moderate',$report) }}" onsubmit="return confirm('محتوا از سایت برداشته شود و همه گزارش‌های باز آن مختومه شوند؟')">@csrf @method('PATCH')<input type="hidden" name="action" value="remove_content"><textarea name="review_note" rows="2" maxlength="1000" placeholder="دلیل تصمیم؛ برای سابقه نظارت ثبت می‌شود"></textarea><button class="discussion-report-remove">تأیید تخلف و حذف محتوا</button></form>
     </div>
    @else
-    <small>وضعیت: {{ $report->status==='resolved'?'رسیدگی‌شده':'ردشده' }} @if($report->reviewer) · بررسی توسط {{ $report->reviewer->name }} @endif</small>
+    <small>وضعیت: {{ $report->status==='resolved'?'رسیدگی‌شده':'ردشده' }} @if($report->reviewer) · بررسی توسط {{ $report->reviewer->name }} @endif @if($report->reviewed_at) · {{ $report->reviewed_at->format('Y/m/d H:i') }} @endif</small>
+   @if($report->review_note)<div class="discussion-report-review-note"><strong>یادداشت رسیدگی:</strong> {{ $report->review_note }}</div>@endif
    @endif
   </article>
  @empty <div class="store-empty-state"><h2>گزارشی در این فهرست نیست</h2></div> @endforelse

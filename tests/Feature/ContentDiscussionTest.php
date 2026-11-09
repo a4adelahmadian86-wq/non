@@ -303,4 +303,28 @@ class ContentDiscussionTest extends TestCase {
   $this->assertSame(1,substr_count($response->getContent(),'discussion-verified-purchase'));
  }
 
+
+ public function test_removing_reported_content_closes_all_open_reports_and_records_review_note(): void {
+  $p=$this->product();$author=$this->user('09123456971');$reporterOne=$this->user('09123456972');$reporterTwo=$this->user('09123456973');$admin=$this->user('09123456974','admin');
+  $discussion=ContentDiscussion::create(['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','user_id'=>$author->id,'body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟','status'=>'approved']);
+  $first=\App\Models\DiscussionReport::create(['discussion_id'=>$discussion->id,'reporter_id'=>$reporterOne->id,'reason'=>'spam','status'=>'pending']);
+  \App\Models\DiscussionReport::create(['discussion_id'=>$discussion->id,'reporter_id'=>$reporterTwo->id,'reason'=>'abuse','status'=>'pending']);
+  $this->actingAs($admin)->patch(route('admin.discussion-reports.moderate',$first),['action'=>'remove_content','review_note'=>'بررسی شد؛ محتوای تبلیغاتی نامرتبط است.'])->assertRedirect();
+  $this->assertDatabaseHas('content_discussions',['id'=>$discussion->id,'status'=>'rejected','moderation_note'=>'بررسی شد؛ محتوای تبلیغاتی نامرتبط است.']);
+  $this->assertDatabaseHas('discussion_reports',['discussion_id'=>$discussion->id,'status'=>'resolved','reviewed_by'=>$admin->id,'review_note'=>'بررسی شد؛ محتوای تبلیغاتی نامرتبط است.']);
+  $this->assertDatabaseCount('discussion_reports',2);
+  $this->assertDatabaseCount('discussion_moderation_events',1);
+  $this->actingAs($admin)->get(route('admin.discussion-reports.index',['status'=>'resolved']))->assertOk()->assertSee('یادداشت رسیدگی')->assertSee('محتوای تبلیغاتی نامرتبط');
+ }
+
+ public function test_dismissing_a_report_keeps_approved_content_and_stores_the_review_note(): void {
+  $p=$this->product();$author=$this->user('09123456975');$reporter=$this->user('09123456976');$admin=$this->user('09123456977','admin');
+  $discussion=ContentDiscussion::create(['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','user_id'=>$author->id,'body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟','status'=>'approved']);
+  $report=\App\Models\DiscussionReport::create(['discussion_id'=>$discussion->id,'reporter_id'=>$reporter->id,'reason'=>'other','status'=>'pending']);
+  $this->actingAs($admin)->patch(route('admin.discussion-reports.moderate',$report),['action'=>'dismiss','review_note'=>'مورد گزارش‌شده تخلف محسوب نمی‌شود.'])->assertRedirect();
+  $this->assertDatabaseHas('content_discussions',['id'=>$discussion->id,'status'=>'approved']);
+  $this->assertDatabaseHas('discussion_reports',['id'=>$report->id,'status'=>'dismissed','review_note'=>'مورد گزارش‌شده تخلف محسوب نمی‌شود.']);
+  $this->actingAs($admin)->get(route('admin.discussion-reports.index',['status'=>'dismissed']))->assertOk()->assertSee('یادداشت رسیدگی')->assertSee('تخلف محسوب نمی‌شود');
+ }
+
 }
