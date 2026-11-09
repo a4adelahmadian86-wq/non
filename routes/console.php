@@ -8,6 +8,11 @@ Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
 Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->withoutOverlapping();
 
+// Recover abandoned document jobs only after the worker lease has safely expired.
+Schedule::command('farast:recover-product-documents --limit=50')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(30);
+
 // Process document ingestion and the default queue on cron-only/shared hosting.
 // The worker exits when idle and is protected from overlapping scheduler launches.
 Schedule::command('queue:work --queue=documents,documents-audio,default --stop-when-empty --max-time=900 --timeout=900 --tries=3')
