@@ -85,17 +85,17 @@ class AdminStoreController extends Controller
         }
 
         $queueStats = [
-            'pending' => \\Illuminate\\Support\\Facades\\Schema::hasTable('jobs')
+            'pending' => \Illuminate\Support\Facades\Schema::hasTable('jobs')
                 ? DB::table('jobs')->where('queue', 'documents')->count()
                 : null,
-            'failed' => \\Illuminate\\Support\\Facades\\Schema::hasTable('failed_jobs')
+            'failed' => \Illuminate\Support\Facades\Schema::hasTable('failed_jobs')
                 ? DB::table('failed_jobs')->where('queue', 'documents')->count()
                 : null,
         ];
 
         $stalePendingBefore = now()->subMinutes(30);
         $staleProcessingBefore = now()->subMinutes(15);
-        $attentionQuery = \\App\\Models\\StoreProductDocument::query()
+        $attentionQuery = \App\Models\StoreProductDocument::query()
             ->with(['product:id,title,slug', 'file:id,product_id,size_bytes,scan_status'])
             ->where(function ($query) use ($stalePendingBefore, $staleProcessingBefore) {
                 $query->whereIn('processing_status', ['failed', 'stale', 'awaiting_provider'])
@@ -104,7 +104,7 @@ class AdminStoreController extends Controller
             });
         $attentionCount = (clone $attentionQuery)->count();
         $attentionDocuments = $attentionQuery->orderByDesc('updated_at')->limit(8)->get();
-        $supervisorConfigured = app(\\App\\Services\\ProductSupervisorClient::class)->configured();
+        $supervisorConfigured = app(\App\Services\ProductSupervisorClient::class)->configured();
 
         return view('admin.store.index', compact(
             'products', 'categories', 'q', 'type', 'status', 'categoryId', 'sort', 'stats',
