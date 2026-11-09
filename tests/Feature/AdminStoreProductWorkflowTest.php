@@ -742,7 +742,8 @@ class AdminStoreProductWorkflowTest extends TestCase
             'status' => 'draft',
         ]);
 
-        $this->actingAs($admin)
+        $this->from(route('admin.store.edit', $product))
+            ->actingAs($admin)
             ->put(route('admin.store.update', $product), $this->payload($category, [
                 'title' => 'محصول راهنمای نصب',
                 'sku' => 'SMART-FILL-001',
