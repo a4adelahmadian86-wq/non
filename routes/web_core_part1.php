@@ -61,6 +61,7 @@ Route::get('/blog', [BlogController::class, 'index'])->name('blog');
 Route::post('/discussions', [ContentDiscussionController::class, 'store'])->middleware(['auth', 'throttle:5,10'])->name('discussions.store');
 Route::post('/discussions/{discussion}/reaction', [ContentDiscussionController::class, 'react'])->middleware(['auth', 'throttle:30,10'])->name('discussions.reaction');
 Route::post('/discussions/{discussion}/report', [ContentDiscussionController::class, 'report'])->middleware(['auth', 'throttle:5,10'])->name('discussions.report');
+Route::post('/discussions/{discussion}/reply', [ContentDiscussionController::class, 'publicReply'])->middleware(['auth', 'throttle:5,10'])->name('discussions.public-reply');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('blog.show');
 Route::get('/store',[StoreController::class,'index'])->name('store');
 Route::get('/store/category/{slug}',[StoreController::class,'category'])->name('store.category');

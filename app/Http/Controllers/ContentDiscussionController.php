@@ -48,6 +48,21 @@ class ContentDiscussionController extends Controller {
   );
   return back()->with('discussion_status',$report->wasRecentlyCreated?'گزارش شما برای بررسی به تیم مدیریت ارسال شد.':'گزارش قبلی شما برای این محتوا ثبت شده است.');
  }
+ public function publicReply(Request $request, ContentDiscussion $discussion) {
+  abort_unless($discussion->parent_id===null && $discussion->status==='approved',404);
+  $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body')]);
+  $data=$request->validate(['body'=>['required','string','min:2','max:3000']]);
+  ContentDiscussion::create([
+   'target_type'=>$discussion->target_type,
+   'target_key'=>$discussion->target_key,
+   'kind'=>'reply',
+   'parent_id'=>$discussion->id,
+   'user_id'=>$request->user()->id,
+   'body'=>trim($data['body']),
+   'status'=>'pending',
+  ]);
+  return back()->with('discussion_status','پاسخ شما ثبت شد و پس از بررسی مدیر منتشر می‌شود.');
+ }
  public function adminReports(Request $request) {
   $status=in_array($request->query('status'),['pending','resolved','dismissed'],true)?$request->query('status'):'pending';
   $base=DiscussionReport::query();
@@ -73,9 +88,9 @@ class ContentDiscussionController extends Controller {
  public function adminIndex(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'pending';
   $targetType=in_array($request->query('target_type'),['product','article'],true)?$request->query('target_type'):'';
-  $base=ContentDiscussion::query()->whereNull('parent_id');
+  $base=ContentDiscussion::query();
   $stats=['pending'=>(clone $base)->where('status','pending')->count(),'approved'=>(clone $base)->where('status','approved')->count(),'rejected'=>(clone $base)->where('status','rejected')->count()];
-  $discussions=(clone $base)->with('user')->where('status',$status)->when($targetType!=='',fn($q)=>$q->where('target_type',$targetType))->latest()->paginate(25)->withQueryString();
+  $discussions=(clone $base)->with(['user','parent.user'])->where('status',$status)->when($targetType!=='',fn($q)=>$q->where('target_type',$targetType))->latest()->paginate(25)->withQueryString();
   $items=$discussions->getCollection();
   $productIds=$items->where('target_type','product')->pluck('target_key')->map(fn($key)=>(int)$key)->filter()->unique()->values();
   $products=$productIds->isNotEmpty()
@@ -96,7 +111,7 @@ class ContentDiscussionController extends Controller {
   return view('admin.discussions.index',compact('discussions','stats','status','targetType'));
  }
  public function moderate(Request $request,ContentDiscussion $discussion) {
-  abort_unless($discussion->parent_id===null,404);$data=$request->validate(['status'=>['required','in:approved,rejected']]);
+  $data=$request->validate(['status'=>['required','in:approved,rejected']]);
   $discussion->forceFill(['status'=>$data['status'],'moderator_id'=>$request->user()->id,'moderated_at'=>now()])->save();
   return back()->with('status',$data['status']==='approved'?'محتوا منتشر شد.':'محتوا رد شد و در سایت نمایش داده نمی‌شود.');
  }

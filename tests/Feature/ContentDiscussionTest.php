@@ -100,4 +100,27 @@ class ContentDiscussionTest extends TestCase {
   $d=ContentDiscussion::firstOrFail();$admin=$this->user('09123456807','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
   $this->get(route('store.product',['slug'=>$p->slug,'discussion_sort'=>'helpful']))->assertOk()->assertSee('discussion-sort');
  }
+
+ public function test_user_replies_are_moderated_and_appear_as_member_replies(): void {
+  $p=$this->product();$author=$this->user('09123456811');$responder=$this->user('09123456812');$admin=$this->user('09123456813','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $parent=ContentDiscussion::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($responder)->post(route('discussions.public-reply',$parent),['body'=>'بله، برای استفاده در کلاس آموزشی قابل استفاده است.'])->assertRedirect();
+  $reply=ContentDiscussion::where('parent_id',$parent->id)->firstOrFail();
+  $this->assertSame('pending',$reply->status);
+  $this->get(route('store.product',$p->slug))->assertDontSee('برای استفاده در کلاس آموزشی قابل استفاده است.');
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$reply),['status'=>'approved'])->assertRedirect();
+  $this->get(route('store.product',$p->slug))->assertOk()->assertSee('برای استفاده در کلاس آموزشی قابل استفاده است.');
+ }
+ public function test_users_cannot_reply_to_unapproved_or_nested_discussions(): void {
+  $p=$this->product();$u=$this->user('09123456814');
+  $this->actingAs($u)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $parent=ContentDiscussion::firstOrFail();
+  $this->actingAs($u)->post(route('discussions.public-reply',$parent),['body'=>'پاسخ زودهنگام'])->assertNotFound();
+  $admin=$this->user('09123456815','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($u)->post(route('discussions.public-reply',$parent),['body'=>'پاسخ معتبر برای این پرسش'])->assertRedirect();
+  $reply=ContentDiscussion::where('parent_id',$parent->id)->firstOrFail();
+  $this->actingAs($u)->post(route('discussions.public-reply',$reply),['body'=>'پاسخ تو در تو'])->assertNotFound();
+ }
 }

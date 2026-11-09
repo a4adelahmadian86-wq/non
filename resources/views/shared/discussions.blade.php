@@ -71,11 +71,20 @@
                 <p class="discussion-body">{{ $entry->body }}</p>
                 @include('shared.discussion-reactions', ['discussionItem' => $entry])
                 @include('shared.discussion-report', ['discussionItem' => $entry])
+
+                @auth
+                    <form method="post" action="{{ route('discussions.public-reply', $entry) }}" class="discussion-public-reply">
+                        @csrf
+                        <label for="discussion-reply-{{ $entry->id }}">پاسخ شما به این گفت‌وگو</label>
+                        <textarea id="discussion-reply-{{ $entry->id }}" name="body" rows="2" minlength="2" maxlength="3000" required placeholder="پاسخ محترمانه و مرتبط بنویسید..."></textarea>
+                        <div class="discussion-form-foot"><small>پاسخ پس از بررسی مدیر منتشر می‌شود.</small><button type="submit">ارسال پاسخ <i class="fa-solid fa-reply" aria-hidden="true"></i></button></div>
+                    </form>
+                @endauth
                 @if($entry->replies->isNotEmpty())
                     <div class="discussion-replies">
                         @foreach($entry->replies as $reply)
                             <div class="discussion-reply" id="discussion-{{ $reply->id }}">
-                                <div class="discussion-reply-heading"><i class="fa-solid fa-reply" aria-hidden="true"></i><strong>پاسخ مدیریت</strong><small>{{ $reply->created_at?->translatedFormat('d F Y') }}</small></div>
+                                <div class="discussion-reply-heading"><i class="fa-solid fa-reply" aria-hidden="true"></i><strong>{{ $reply->user?->isAdmin() ? 'پاسخ رسمی فراست' : ($reply->user?->name ?: 'کاربر') }}</strong><small>{{ $reply->created_at?->translatedFormat('d F Y') }}</small></div>
                                 <p>{{ $reply->body }}</p>
                                 @include('shared.discussion-reactions', ['discussionItem' => $reply])
                                 @include('shared.discussion-report', ['discussionItem' => $reply])
