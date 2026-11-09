@@ -1607,6 +1607,34 @@ test('reader ink exposes keyboard guidance and discards cancelled pointer stroke
   await expect(canvas).toHaveCSS('touch-action', 'auto');
 });
 
+test('saved reader notes navigate back to their exact anchored text', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="note-navigation-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>عبارت نخست و عبارت دوم برای بازگشت دقیق</p></div>
+      </article>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await page.evaluate(() => { window.prompt = () => 'یادداشت برای عبارت دوم'; });
+  await page.evaluate(() => {
+    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const start = text.nodeValue.lastIndexOf('عبارت دوم');
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + 'عبارت دوم'.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await page.locator('[data-reader-note]').click();
+  await page.locator('[data-reader-notes]').click();
+  await page.locator('.farast-reader-note [aria-label^="رفتن به محل یادداشت"]').click();
+  await expect.poll(() => page.evaluate(() => window.getSelection().toString())).toBe('عبارت دوم');
+});
+
 test('reader notes preserve the exact selected occurrence offset', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
