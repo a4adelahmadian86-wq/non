@@ -97,7 +97,7 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
                 audio_result = await transcribe_audio_with_groq(b"audio-bytes", "sample.wav")
 
         self.assertEqual(image_result, "")
-        self.assertEqual(audio_result, "")
+        self.assertEqual(audio_result, ("", False))
         self.assertEqual(_FakeAsyncClient.calls, [])
 
     async def test_all_provider_batches_failing_is_not_silent_success(self):
