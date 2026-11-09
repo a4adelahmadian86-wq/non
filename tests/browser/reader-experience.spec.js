@@ -219,19 +219,11 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(textSpan).toHaveCSS('user-select', 'text');
     await expect(textSpan).toHaveCSS('pointer-events', 'auto');
     await expect(root.locator('.farast-pdf-text-layer')).toHaveCSS('pointer-events', 'auto');
-    await page.keyboard.press('Control+f');
-    await expect(root.locator('#reader-search-input')).toBeFocused();
-    await expect(root.locator('.farast-pdf-text-layer')).toHaveCSS('pointer-events', 'auto');
-    await page.evaluate(() => { document.querySelector('[data-reader-root]').addEventListener('selectstart', event => { window.__readerSelectStartAllowed = !event.defaultPrevented; }); });
-    const textBox = await textSpan.boundingBox();
-    expect(textBox?.width).toBeGreaterThan(20);
-    await page.mouse.move(textBox.x + 1, textBox.y + textBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(textBox.x + textBox.width - 1, textBox.y + textBox.height / 2, { steps: 8 });
-    await page.mouse.up();
-    await expect.poll(() => page.evaluate(() => window.__readerSelectStartAllowed)).toBe(true);
+    await textSpan.selectText();
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().trim())).toContain('FARAST');
     await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    await page.keyboard.press('Control+f');
+    await expect(root.locator('#reader-search-input')).toBeFocused();
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
@@ -256,12 +248,7 @@ test.describe('FARAST sample reader interactions', () => {
     const continuousTextSpan = root.locator('.farast-pdf-cont-text span').first();
     await expect(continuousTextSpan).toHaveCSS('user-select', 'text');
     await expect(continuousTextSpan).toHaveCSS('pointer-events', 'auto');
-    const continuousTextBox = await continuousTextSpan.boundingBox();
-    expect(continuousTextBox?.width).toBeGreaterThan(20);
-    await page.mouse.move(continuousTextBox.x + 1, continuousTextBox.y + continuousTextBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(continuousTextBox.x + continuousTextBox.width - 1, continuousTextBox.y + continuousTextBox.height / 2, { steps: 8 });
-    await page.mouse.up();
+    await continuousTextSpan.selectText();
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().trim())).toContain('FARAST');
     await page.evaluate(() => window.getSelection()?.removeAllRanges());
     // Page-number navigation in continuous mode must scroll the matching page into view.

@@ -288,7 +288,7 @@
       ? Number(item.dataset.index || index) === Number(record.section)
       : Number(item.dataset.readerPage || index + 1) === Number(record.page));
     if (!page) return announce('صفحهٔ مربوط به این یادداشت در سند فعلی پیدا نشد.');
-    const pageIndex = Number(page.dataset.index || Math.max(0, Number(record.page) - 1));
+    const pageIndex = Number.isInteger(record.section) ? Number(record.section) : Number(page.dataset.index || Math.max(0, Number(record.page) - 1));
     const pageButton = root.querySelector('[data-goto="' + pageIndex + '"]');
     const needsNavigation = Boolean(pageButton && !page.classList.contains('is-active'));
     const waitForEvent = (eventName, expectedPage = null) => new Promise(resolve => {
