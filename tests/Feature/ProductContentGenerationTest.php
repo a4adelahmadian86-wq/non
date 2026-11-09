@@ -236,6 +236,42 @@ class ProductContentGenerationTest extends TestCase
         ], [], [], [], []);
     }
 
+    public function test_generation_rejects_fact_citations_attributed_to_another_source(): void
+    {
+        $service = app(ProductContentGenerationService::class);
+        $method = new \\ReflectionMethod(ProductContentGenerationService::class, 'normalizeResult');
+        $factIds = [41];
+        $sourceIds = ['file:2'];
+        $fieldEvidence = [];
+        foreach (['title', 'short_description', 'description', 'seo_title', 'seo_description'] as $field) {
+            $fieldEvidence[] = [
+                'field' => $field,
+                'fact_ids' => [41],
+                'source_ids' => ['file:2'],
+            ];
+        }
+
+        $this->expectException(\\RuntimeException::class);
+        $this->expectExceptionMessage('ai_product_content_invalid');
+        $method->invoke($service, [
+            'title' => 'عنوان',
+            'short_description' => 'معرفی',
+            'description' => 'توضیحات',
+            'seo_title' => 'عنوان SEO',
+            'seo_description' => 'توضیح SEO',
+            'focus_keyword' => '',
+            'secondary_keywords' => [],
+            'tags' => [],
+            'category_id' => '',
+            'category_reason' => '',
+            'selling_points' => [],
+            'used_fact_ids' => $factIds,
+            'used_source_ids' => $sourceIds,
+            'field_evidence' => $fieldEvidence,
+            'unknowns' => [],
+        ], [], $factIds, $sourceIds, [41 => 'file:1']);
+    }
+
     public function test_privacy_filter_removes_private_file_metadata_and_signed_urls(): void
     {
         $payload = app(ProductContentPrivacyFilter::class)->sanitize([
