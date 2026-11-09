@@ -86,7 +86,7 @@ class StoreCartController extends Controller
         return back()->with('status', 'کد تخفیف حذف شد.');
     }
 
-    public function checkout(Request $request, StoreCartService $cart, \\App\\Services\\StoreCouponRedemptionService $couponRedemptions)
+    public function checkout(Request $request, StoreCartService $cart, \App\Services\StoreCouponRedemptionService $couponRedemptions)
     {
         $request->validate(['accept_terms' => ['accepted']]);
         abort_unless($request->user(), 401);
@@ -95,7 +95,8 @@ class StoreCartController extends Controller
         $payload = $cart->payload($current, $request);
         abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
 
-        try {\n            $order = DB::transaction(function () use ($request, $current, $payload, $couponRedemptions) {
+        try {
+            $order = DB::transaction(function () use ($request, $current, $payload, $couponRedemptions) {
             $taxRate = max(0, (float) SiteSetting::read('tax_rate_percent', 10));
             $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $subtotal = (int) $payload['subtotal_rials'];
@@ -201,7 +202,7 @@ class StoreCartController extends Controller
 
             return $order->fresh();
             });
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             return back()->withErrors(['checkout' => $exception->getMessage()]);
         }
 
