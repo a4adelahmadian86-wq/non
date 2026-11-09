@@ -210,7 +210,9 @@ class ProductKnowledgeService
                 && $successful >= $expected
                 && ($providers['groq_text'] ?? null) === 'completed'
                 && (bool) ($completeness['analysis_batches_complete'] ?? false);
-            $visualReviewComplete = $expected === 0 && ($providers['groq_vision'] ?? null) === 'completed';
+            $visualReviewComplete = $expected === 0
+                && ($providers['groq_vision'] ?? null) === 'completed'
+                && (int) data_get($structure, 'inspection.extracted_characters', 0) === 0;
             $semanticReviewComplete = $textReviewComplete || $visualReviewComplete;
 
             if ($document->processing_status !== 'completed' || ! $extractionComplete || ! $semanticReviewComplete) {
