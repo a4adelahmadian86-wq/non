@@ -246,6 +246,7 @@ class ProcessProductDocument implements ShouldQueue
                 'findings' => $payload['findings'] ?? [],
                 'warnings' => $payload['warnings'] ?? [],
                 'provider_status' => $payload['provider_status'] ?? [],
+                'media_reports' => (array) ($payload['media_reports'] ?? []),
                 'analysis_batch_count' => (int) ($payload['analysis_batch_count'] ?? 0),
                 'successful_analysis_batches' => (int) ($payload['successful_analysis_batches'] ?? 0),
                 'analyzed_characters' => (int) ($payload['analyzed_characters'] ?? 0),
