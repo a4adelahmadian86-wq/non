@@ -171,6 +171,8 @@ class ProductContentGenerationTest extends TestCase
                         'seo_title' => 'راهنمای نصب محصول',
                         'seo_description' => 'راهنمای نصب محصول با مراحل روشن و گام‌به‌گام.',
                         'focus_keyword' => 'راهنمای نصب محصول',
+                        'version' => '',
+                        'license_type' => '',
                         'secondary_keywords' => ['آموزش نصب'],
                         'tags' => ['راهنما'],
                         'category_id' => (string) $data['category']->id,
