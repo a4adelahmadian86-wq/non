@@ -45,12 +45,25 @@
       <div class="store-alert success"><i class="fa-solid fa-circle-check"></i>{{ session('status') }}</div>
     @endif
 
-    <div class="store-chips">
+    <nav class="store-chips" aria-label="دسته‌بندی محصولات">
       <a class="{{ !$category ? 'active' : '' }}" href="{{ route('store', request()->only(['q','sort','price'])) }}">همه</a>
       @foreach($categories as $cat)
         <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', array_merge(request()->only(['q','sort','price']), ['category'=>$cat->slug])) }}">{{ $cat->name }}</a>
       @endforeach
-    </div>
+    </nav>
+
+    @php($activeCategoryName = $categories->firstWhere('slug', $category)?->name)
+    @if($q !== '' || $category || $price !== 'all')
+      <section class="store-active-filters" aria-label="فیلترهای فعال">
+        <div class="store-active-filters__summary"><i class="fa-solid fa-sliders" aria-hidden="true"></i><strong>فیلترهای انتخاب‌شده</strong></div>
+        <div class="store-active-filters__chips">
+          @if($q !== '')<span><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> {{ $q }}</span>@endif
+          @if($activeCategoryName)<span><i class="fa-solid fa-folder" aria-hidden="true"></i> {{ $activeCategoryName }}</span>@endif
+          @if($price === 'free')<span><i class="fa-solid fa-gift" aria-hidden="true"></i> فقط رایگان</span>@elseif($price === 'paid')<span><i class="fa-solid fa-tag" aria-hidden="true"></i> فقط پولی</span>@endif
+        </div>
+        <a href="{{ route('store') }}">پاک‌کردن فیلترها <i class="fa-solid fa-xmark" aria-hidden="true"></i></a>
+      </section>
+    @endif
 
     <form method="get" action="{{ route('store') }}" class="store-toolbar store-toolbar--premium">
       @if($q)<input type="hidden" name="q" value="{{ $q }}">@endif
@@ -146,7 +159,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261107premium1">
+<link rel="stylesheet" href="/css/store.css?v=20261109catalog2">
 @endpush
 @push('scripts')
 <script>

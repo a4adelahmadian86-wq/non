@@ -13,7 +13,8 @@ class TrustCenterTest extends TestCase
         $response->assertOk()
             ->assertSee('اعتبار و نمادهای اعتماد فراست')
             ->assertSee('نمادها و مجوزهای رسمی')
-            ->assertSee('هنوز تصویر یا اطلاعات قابل‌استعلامی')
+            ->assertSee('هنوز نمادی ثبت نشده')
+            ->assertSee('هیچ نشان نمونه یا غیرواقعی در این صفحه قرار نگرفته است.')
             ->assertSee('farast-footer-trust', false)
             ->assertSee('مشاهده همه نمادها و مجوزها')
             ->assertDontSee('نماد اعتماد الکترونیکی فعال');

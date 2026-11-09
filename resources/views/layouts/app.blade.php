@@ -12,7 +12,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @endphp
 <link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1">
-@if(!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261109chrome1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css">
+@if(!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261109chrome2">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css">
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
 @if($isDashboard)<link rel="stylesheet" href="/css/dashboard-navigation.css">@endif
 @if($isEditor)
@@ -121,8 +121,8 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
   </div>
   <div class="footer-bottom farast-footer-bottom">
     <section class="farast-footer-trust" aria-labelledby="farast-footer-trust-title">
-      <div class="farast-footer-trust__heading"><span class="farast-footer-trust__icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span><div><strong id="farast-footer-trust-title">اعتبار و نمادهای اعتماد</strong><small>اطلاعات رسمی و راه‌های استعلام فراست</small></div></div>
-      <a class="farast-footer-trust__link" href="{{ route('trust') }}">مشاهده همه نمادها و مجوزها <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+      <div class="farast-footer-trust__heading"><span class="farast-footer-trust__icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span><div><strong id="farast-footer-trust-title">اعتبار و نمادهای اعتماد</strong><small>در حال حاضر نماد رسمی ثبت‌شده‌ای برای نمایش نداریم</small></div></div>
+      <a class="farast-footer-trust__link" href="{{ route('trust') }}">مشاهده وضعیت نمادها و اطلاعات شفافیت <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
     </section>
     <div class="farast-footer-bottom__meta">
       <span>© {{ now()->year }} فراست — تمامی حقوق محفوظ است.</span>
