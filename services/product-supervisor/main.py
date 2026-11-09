@@ -292,7 +292,7 @@ async def review_product_file(
             try:
                 transcription, transcription_truncated = await transcribe_audio_with_groq(
                     inspection.audio_bytes,
-                    inspection.audio_filename or "upload.audio",
+                    "upload.audio",  # Never transmit the user's original filename to the provider.
                 )
                 inspection.transcription_truncated = transcription_truncated
                 if transcription_truncated:
