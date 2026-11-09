@@ -1687,7 +1687,6 @@ test('saved reader notes navigate back to their exact anchored text', async ({ p
     selection.addRange(range);
   });
   await page.locator('[data-reader-note]').click();
-  await page.locator('[data-reader-notes]').click();
   await expect(page.locator('.farast-reader-local-notes')).toBeVisible();
   await page.locator('.farast-reader-note:not(.farast-reader-highlight-entry) [aria-label^="رفتن به محل یادداشت"]').click({ force: true });
   await expect.poll(() => page.evaluate(() => window.getSelection().toString())).toBe('عبارت دوم');

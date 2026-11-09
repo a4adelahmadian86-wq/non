@@ -31,7 +31,7 @@
     return pdfjsPromise;
   };
 
-  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
+  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -219,9 +219,11 @@
 
   const renderPdfPage=async(number)=>{
     if(!pdfDoc||!pdfCanvas)return;
+    const request=++pdfRenderSequence;
     pdfPage=clamp(Number(number)||1,1,pdfDoc.numPages);
     if(renderTask){try{renderTask.cancel();}catch(_){}}
     const page=await pdfDoc.getPage(pdfPage);
+    if(request!==pdfRenderSequence)return;
     const base=page.getViewport({scale:1,rotation});
     const available=Math.max(280,(stage?.clientWidth||900)-64);
     const scale=zoom===0?Math.min(1.5,available/base.width):zoom;
@@ -235,24 +237,35 @@
     if(pdfSurface){pdfSurface.style.width=viewport.width+'px';pdfSurface.style.minHeight=viewport.height+'px';}
     context.setTransform(ratio,0,0,ratio,0,0);
     renderTask=page.render({canvasContext:context,viewport});
-    try{await renderTask.promise;}catch(error){if(error?.name!=='RenderingCancelledException')throw error;}
+    try{await renderTask.promise;}catch(error){
+      if(error?.name==='RenderingCancelledException')return;
+      throw error;
+    }
+    if(request!==pdfRenderSequence)return;
     paintPdfWatermark(pdfCanvas);
 
     const textLayer=activeArticle()?.querySelector('.farast-pdf-text-layer');
     if(textLayer&&window.pdfjsLib?.TextLayer){
-      textLayer.innerHTML='';
+      const textContent=await page.getTextContent();
+      if(request!==pdfRenderSequence)return;
+      const stagingLayer=document.createElement('div');
+      stagingLayer.className='textLayer';
+      stagingLayer.style.width=viewport.width+'px';
+      stagingLayer.style.height=viewport.height+'px';
+      const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:stagingLayer,viewport});
+      await layer.render();
+      if(request!==pdfRenderSequence)return;
+      textLayer.replaceChildren(...stagingLayer.childNodes);
       textLayer.classList.add('textLayer');
       textLayer.style.width=viewport.width+'px';
       textLayer.style.height=viewport.height+'px';
-      const textContent=await page.getTextContent();
-      const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:textLayer,viewport});
-      await layer.render();
       const query=(searchInput?.value||'').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
         span.style.userSelect='text';span.style.webkitUserSelect='text';
         span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
       });
     }
+    if(request!==pdfRenderSequence)return;
     if(pdfLoading){pdfLoading.hidden=true;pdfLoading.style.display='none';}
     setPageControls(pdfPage,pdfDoc.numPages);
   };

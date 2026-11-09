@@ -37,7 +37,7 @@
     const range=selection.getRangeAt(0),before=document.createRange();
     before.selectNodeContents(container);before.setEnd(range.startContainer,range.startOffset);
     const start=before.toString().length,end=start+range.toString().length;
-    const fullText=(container.innerText||container.textContent||'').replace(/\s+/g,' ');
+    const fullText=container.textContent||'';
     const section=Math.max(0,Number(page.dataset.index)||0);
     const pageNumber=Math.max(1,Number(readerPageInput?.value)||section+1);
     quoteInput.value=quote;pageInput.value=String(pageNumber);sectionInput.value=String(section);
