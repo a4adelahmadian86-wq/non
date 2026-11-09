@@ -171,8 +171,8 @@ class ProductContentGenerationTest extends TestCase
                         'seo_title' => 'راهنمای نصب محصول',
                         'seo_description' => 'راهنمای نصب محصول با مراحل روشن و گام‌به‌گام.',
                         'focus_keyword' => 'راهنمای نصب محصول',
-                        'version' => '',
-                        'license_type' => '',
+                        'version' => '99.0',
+                        'license_type' => 'مجوز تجاری',
                         'secondary_keywords' => ['آموزش نصب'],
                         'tags' => ['راهنما'],
                         'category_id' => (string) $data['category']->id,
@@ -203,6 +203,8 @@ class ProductContentGenerationTest extends TestCase
         $result = app(ProductContentGenerationService::class)->generate($data['admin'], $data['product']);
 
         $this->assertSame('راهنمای نصب محصول', $result['suggestions']['title']);
+        $this->assertSame('', $result['suggestions']['version']);
+        $this->assertSame('', $result['suggestions']['license_type']);
         $this->assertStringNotContainsString('09121234567', $result['suggestions']['description']);
         $this->assertStringContainsString('[REDACTED]', $result['suggestions']['description']);
         $this->assertSame((string) $data['category']->id, $result['suggestions']['category_id']);
