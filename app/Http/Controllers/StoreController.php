@@ -130,13 +130,15 @@ class StoreController extends Controller
                 'questions' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
             ];
             $averageRating = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->where('status', 'approved')->whereNotNull('rating')->avg('rating');
+            $ratingBreakdown = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->where('status', 'approved')->whereNotNull('rating')->selectRaw('rating, COUNT(*) as aggregate')->groupBy('rating')->pluck('aggregate', 'rating')->all();
         } else {
             $discussions = collect();
             $discussionCounts = ['reviews' => 0, 'questions' => 0];
             $averageRating = null;
+            $ratingBreakdown = [];
         }
 
-        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating'));
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating', 'ratingBreakdown'));
     }
 
     public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)

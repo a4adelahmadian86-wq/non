@@ -51,7 +51,7 @@
             </article>
         </div>
 
-        @include('shared.discussions', ['context' => 'article', 'targetKey' => $article['slug'], 'entries' => $discussions, 'counts' => $discussionCounts, 'averageRating' => null])
+        @include('shared.discussions', ['context' => 'article', 'targetKey' => $article['slug'], 'entries' => $discussions, 'counts' => $discussionCounts, 'averageRating' => null, 'ratingBreakdown' => []])
 
         @if($related->isNotEmpty())
             <section class="blog-related"><div class="blog-section-heading"><div><span class="blog-eyebrow">ادامه مسیر</span><h2>شاید این‌ها هم به کارتان بیاید</h2></div><a href="{{ route('blog') }}">همه مقاله‌ها <i class="fa-solid fa-arrow-left"></i></a></div>
@@ -64,7 +64,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{ asset('css/blog.css') }}?v=20261107b">
-<link rel="stylesheet" href="{{ asset('css/content-discussions.css') }}?v=20261109discussion2">
+<link rel="stylesheet" href="{{ asset('css/content-discussions.css') }}?v=20261109discussion3">
 @endpush
 @push('scripts')
 <script src="{{ asset('js/blog.js') }}?v=20261107a" defer></script>

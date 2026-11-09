@@ -104,7 +104,7 @@
             @endforelse
           </div>
         @endif
-        @include('shared.discussions', ['context' => 'product', 'targetKey' => (string) $product->id, 'entries' => $discussions, 'counts' => $discussionCounts, 'averageRating' => $averageRating])
+        @include('shared.discussions', ['context' => 'product', 'targetKey' => (string) $product->id, 'entries' => $discussions, 'counts' => $discussionCounts, 'averageRating' => $averageRating, 'ratingBreakdown' => $ratingBreakdown])
       </section>
 
       <aside class="store-buy-card" id="store-buy-card">
@@ -187,7 +187,7 @@
 @endsection
 @push('styles')
 <link rel="stylesheet" href="/css/store.css?v=20261109product4">
-<link rel="stylesheet" href="/css/content-discussions.css?v=20261109discussion2">
+<link rel="stylesheet" href="/css/content-discussions.css?v=20261109discussion3">
 <style>
 
 
