@@ -51,7 +51,8 @@ class FilePipelineTests(unittest.TestCase):
             "mobile 09121234567, IBAN DE89370400440532013000, "
             "card 4111111111111111, Persian card ۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱, "
             f"and token sk-{'a' * 32}; password: mySecret123; "
-            "Authorization: Basic dXNlcjpwYXNz; postgres://user:supersecret@db.example.com/app"
+            "Authorization: Basic dXNlcjpwYXNz; postgres://user:supersecret@db.example.com/app; "
+            "signed URL https://bucket.example.test/file?X-Amz-Signature=private-signature-value"
         )
         self.assertGreaterEqual(count, 6)
         self.assertNotIn("person@example.com", text)
@@ -60,6 +61,8 @@ class FilePipelineTests(unittest.TestCase):
         self.assertNotIn("DE89370400440532013000", text)
         self.assertNotIn("4111111111111111", text)
         self.assertNotIn("۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱", text)
+        self.assertNotIn("private-signature-value", text)
+        self.assertNotIn("X-Amz-Signature", text)
         self.assertNotIn("mySecret123", text)
         self.assertNotIn("dXNlcjpwYXNz", text)
         self.assertNotIn("supersecret", text)
