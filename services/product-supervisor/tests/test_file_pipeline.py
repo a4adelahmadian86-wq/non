@@ -52,7 +52,8 @@ class FilePipelineTests(unittest.TestCase):
             "card 4111111111111111, Persian card ۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱, "
             f"and token sk-{'a' * 32}; password: mySecret123; "
             "Authorization: Basic dXNlcjpwYXNz; postgres://user:supersecret@db.example.com/app; "
-            "signed URL https://bucket.example.test/file?X-Amz-Signature=private-signature-value"
+            "signed URL https://bucket.example.test/file?X-Amz-Signature=private-signature-value, "
+            "Iranian national ID 0012345679 and Persian ID ۰۰۱۲۳۴۵۶۷۹"
         )
         self.assertGreaterEqual(count, 6)
         self.assertNotIn("person@example.com", text)
@@ -66,6 +67,8 @@ class FilePipelineTests(unittest.TestCase):
         self.assertNotIn("mySecret123", text)
         self.assertNotIn("dXNlcjpwYXNz", text)
         self.assertNotIn("supersecret", text)
+        self.assertNotIn("0012345679", text)
+        self.assertNotIn("۰۰۱۲۳۴۵۶۷۹", text)
 
     def test_executable_extension_is_rejected(self):
         with self.assertRaises(FileInspectionError):
