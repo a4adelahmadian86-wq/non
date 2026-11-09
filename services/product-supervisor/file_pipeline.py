@@ -29,6 +29,9 @@ MAX_ARCHIVE_DOCUMENTS = 12
 MAX_ARCHIVE_MEMBER_BYTES = 5 * 1024 * 1024
 MAX_ARCHIVE_DOCUMENT_BYTES = 20 * 1024 * 1024
 MAX_IMAGE_PIXELS = 50_000_000
+MAX_VISUAL_ASSETS = 6
+MAX_IMAGE_ASSET_BYTES = 8 * 1024 * 1024
+SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 ALLOWED_TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
 EXECUTABLE_EXTENSIONS = {
     ".exe", ".dll", ".so", ".dylib", ".msi", ".bat", ".cmd", ".ps1",
@@ -57,6 +60,11 @@ class Inspection:
     content_chunks: list[dict[str, Any]] = field(default_factory=list)
     page_count: int | None = None
     extraction_truncated: bool = False
+    image_assets: list[dict[str, Any]] = field(default_factory=list)
+    embedded_image_count: int = 0
+    visual_inventory_complete: bool = False
+    visual_review_truncated: bool = False
+    transcription_truncated: bool = False
 
     def public_dict(self) -> dict[str, Any]:
         return {
@@ -65,6 +73,11 @@ class Inspection:
             "extracted_characters": len(self.extracted_text),
             "page_count": self.page_count,
             "extraction_truncated": self.extraction_truncated,
+            "embedded_image_count": self.embedded_image_count,
+            "visual_review_required": self.embedded_image_count > 0,
+            "visual_inventory_complete": self.visual_inventory_complete,
+            "visual_review_truncated": self.visual_review_truncated,
+            "transcription_truncated": self.transcription_truncated,
             "archive_entries": (self.archive_entries or [])[:50],
             "embedded_documents": (self.embedded_documents or [])[:12],
             "warnings": self.warnings or [],
@@ -746,6 +759,104 @@ def _inspect_image(data: bytes) -> tuple[bytes, str]:
         raise FileInspectionError("فایل تصویر خراب یا نامعتبر است.") from None
 
 
+
+
+def _extract_archive_image_assets(
+    archive: zipfile.ZipFile,
+    media_prefix: str,
+    locator_kind: str,
+    limit: int = MAX_VISUAL_ASSETS,
+) -> tuple[list[dict[str, Any]], int, bool, bool]:
+    try:
+        names = sorted(
+            name for name in archive.namelist()
+            if name.startswith(media_prefix) and not name.endswith("/")
+        )
+        total = len(names)
+        assets: list[dict[str, Any]] = []
+        truncated = total > limit
+
+        for name in names[:limit]:
+            suffix = PurePosixPath(name).suffix.lower()
+            if suffix not in SUPPORTED_IMAGE_SUFFIXES:
+                truncated = True
+                continue
+            try:
+                info = archive.getinfo(name)
+                if info.file_size <= 0 or info.file_size > MAX_IMAGE_ASSET_BYTES:
+                    truncated = True
+                    continue
+                raw = archive.read(name)
+                if len(raw) > MAX_IMAGE_ASSET_BYTES:
+                    truncated = True
+                    continue
+                image_bytes, mime = _inspect_image(raw)
+                assets.append({
+                    "image_bytes": image_bytes,
+                    "mime": mime,
+                    "locator": {"kind": locator_kind, "path": name[:180]},
+                })
+            except (KeyError, OSError, RuntimeError, FileInspectionError, zipfile.BadZipFile):
+                truncated = True
+
+        if len(assets) < total:
+            truncated = True
+        return assets, total, truncated, True
+    except (OSError, RuntimeError, zipfile.BadZipFile):
+        return [], 0, True, False
+
+
+def _extract_pdf_image_assets(
+    data: bytes,
+    limit: int = MAX_VISUAL_ASSETS,
+) -> tuple[list[dict[str, Any]], int, bool, bool]:
+    assets: list[dict[str, Any]] = []
+    total = 0
+    truncated = False
+    inventory_complete = True
+
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        for page_index, page in enumerate(reader.pages):
+            try:
+                page_images = list(page.images)
+            except Exception:
+                inventory_complete = False
+                truncated = True
+                continue
+
+            for image in page_images:
+                total += 1
+                if len(assets) >= limit:
+                    truncated = True
+                    continue
+                raw = getattr(image, "data", None)
+                if not isinstance(raw, bytes) or not raw or len(raw) > MAX_IMAGE_ASSET_BYTES:
+                    truncated = True
+                    continue
+                try:
+                    image_bytes, mime = _inspect_image(raw)
+                except FileInspectionError:
+                    truncated = True
+                    continue
+                assets.append({
+                    "image_bytes": image_bytes,
+                    "mime": mime,
+                    "locator": {
+                        "kind": "pdf_page_image",
+                        "page": page_index + 1,
+                        "name": str(getattr(image, "name", ""))[:100],
+                    },
+                })
+    except Exception:
+        inventory_complete = False
+        truncated = True
+
+    if len(assets) < total:
+        truncated = True
+    return assets, total, truncated, inventory_complete
+
+
 def _extract_video_tracks(data: bytes) -> tuple[bytes | None, bytes | None]:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -798,6 +909,12 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.detected_type = "pdf"
         result.extracted_text = _extract_pdf(data)
         result.page_count = len(PdfReader(io.BytesIO(data), strict=True).pages)
+        (
+            result.image_assets,
+            result.embedded_image_count,
+            result.visual_review_truncated,
+            result.visual_inventory_complete,
+        ) = _extract_pdf_image_assets(data)
         if not result.extracted_text.strip():
             result.warnings.append("متن قابل استخراجی در PDF پیدا نشد؛ احتمالاً فایل اسکن تصویری است.")
     elif filename.lower().endswith((".tar", ".tar.gz", ".tar.bz2")):
@@ -812,6 +929,8 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.embedded_documents = embedded
         result.warnings.extend(archive_warnings)
         result.extraction_truncated = archive_truncated
+        result.visual_inventory_complete = not archive_truncated
+        result.visual_review_truncated = archive_truncated
         if archive_chunks:
             result.extracted_text = "\n".join(
                 f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
@@ -826,13 +945,31 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         if "[Content_Types].xml" in names and "word/document.xml" in names:
             result.detected_type = "docx"
             result.extracted_text, result.content_chunks, result.extraction_truncated = _extract_docx_structured(data)
+            (
+                result.image_assets,
+                result.embedded_image_count,
+                result.visual_review_truncated,
+                result.visual_inventory_complete,
+            ) = _extract_archive_image_assets(archive, "word/media/", "docx_embedded_image")
         elif "[Content_Types].xml" in names and "xl/workbook.xml" in names:
             result.detected_type = "xlsx"
             result.extracted_text, result.extraction_truncated = _extract_xlsx(data)
+            (
+                result.image_assets,
+                result.embedded_image_count,
+                result.visual_review_truncated,
+                result.visual_inventory_complete,
+            ) = _extract_archive_image_assets(archive, "xl/media/", "xlsx_embedded_image")
         elif "[Content_Types].xml" in names and "ppt/presentation.xml" in names:
             result.detected_type = "pptx"
             result.extracted_text, result.extraction_truncated = _extract_pptx(data)
             result.page_count = min(100, result.extracted_text.count("اسلاید "))
+            (
+                result.image_assets,
+                result.embedded_image_count,
+                result.visual_review_truncated,
+                result.visual_inventory_complete,
+            ) = _extract_archive_image_assets(archive, "ppt/media/", "pptx_embedded_image")
         else:
             result.detected_type = "zip"
             archive_chunks, embedded, archive_warnings, archive_truncated = _extract_archive_documents(archive)
@@ -840,6 +977,8 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             result.embedded_documents = embedded
             result.warnings.extend(archive_warnings)
             result.extraction_truncated = archive_truncated
+            result.visual_inventory_complete = not archive_truncated
+            result.visual_review_truncated = archive_truncated
             if archive_chunks:
                 result.extracted_text = "\n".join(
                     f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
@@ -852,6 +991,13 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.detected_type = "image"
         result.image_bytes = image_bytes
         result.image_mime = mime
+        result.image_assets = [{
+            "image_bytes": image_bytes,
+            "mime": mime,
+            "locator": {"kind": "standalone_image"},
+        }]
+        result.embedded_image_count = 1
+        result.visual_inventory_complete = True
     elif (len(data) >= 12 and data[4:8] == b"ftyp" and suffix not in {".m4a", ".m4b", ".m4p"}) or data.startswith(b"\x1a\x45\xdf\xa3") or (data.startswith(b"RIFF") and data[8:12] == b"AVI "):
         result.detected_type = "video"
         video_audio, video_frame = _extract_video_tracks(data)
@@ -861,16 +1007,26 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         if video_frame:
             result.image_bytes = video_frame
             result.image_mime = "image/jpeg"
+            result.image_assets = [{
+                "image_bytes": video_frame,
+                "mime": "image/jpeg",
+                "locator": {"kind": "video_sample_frame"},
+            }]
+            result.embedded_image_count = 1
+            result.visual_inventory_complete = True
+            result.visual_review_truncated = True
         if not video_audio and not video_frame:
             result.warnings.append("استخراج صوت یا تصویر از ویدئو ممکن نشد؛ ffmpeg نصب نیست یا فایل پشتیبانی نمی‌شود.")
     elif data.startswith(b"ID3") or data.startswith(b"OggS") or data.startswith(b"fLaC") or (data.startswith(b"RIFF") and data[8:12] == b"WAVE") or (len(data) >= 12 and data[4:8] == b"ftyp" and suffix == ".m4a") or (len(data) >= 2 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0):
         result.detected_type = "audio"
         result.audio_bytes = data
         result.audio_filename = re.sub(r"[^a-zA-Z0-9._-]", "_", filename)[:120] or "upload.audio"
+        result.visual_inventory_complete = True
     elif suffix in ALLOWED_TEXT_EXTENSIONS:
         try:
             result.extracted_text = data.decode("utf-8-sig")[:MAX_EXTRACTED_CHARS]
             result.detected_type = "text"
+            result.visual_inventory_complete = True
         except UnicodeDecodeError:
             raise FileInspectionError("فایل متنی باید با UTF-8 ذخیره شده باشد.") from None
     else:
@@ -926,10 +1082,10 @@ async def analyze_image_with_groq(image_bytes: bytes, mime: str, context: dict[s
         return str(body["choices"][0]["message"]["content"])[:5000]
 
 
-async def transcribe_audio_with_groq(data: bytes, filename: str) -> str:
+async def transcribe_audio_with_groq(data: bytes, filename: str) -> tuple[str, bool]:
     key = _groq_api_key()
     if not key:
-        return ""
+        return "", False
     model = os.getenv("GROQ_AUDIO_MODEL", "whisper-large-v3-turbo").strip()
     async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as client:
         response = await client.post(
@@ -939,7 +1095,8 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> str:
             files={"file": (filename, data, "application/octet-stream")},
         )
         response.raise_for_status()
-        return str(response.json().get("text", ""))[:MAX_EXTRACTED_CHARS]
+        raw_text = str(response.json().get("text", ""))
+        return raw_text[:MAX_EXTRACTED_CHARS], len(raw_text) > MAX_EXTRACTED_CHARS
 
 
 
