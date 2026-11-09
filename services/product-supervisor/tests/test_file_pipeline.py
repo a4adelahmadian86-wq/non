@@ -11,7 +11,14 @@ from pptx import Presentation
 from pptx.util import Inches
 from PIL import Image
 
-from file_pipeline import FileInspectionError, build_pdf_sample, inspect_file, redact_sensitive_content
+from file_pipeline import (
+    MAX_EXTRACTED_CHARS,
+    FileInspectionError,
+    _bounded_transcription,
+    build_pdf_sample,
+    inspect_file,
+    redact_sensitive_content,
+)
 from pypdf import PdfReader, PdfWriter
 
 
@@ -39,10 +46,29 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(len(PdfReader(io.BytesIO(sample_bytes)).pages), 2)
 
     def test_sensitive_values_are_redacted(self):
-        text, count = redact_sensitive_content("Contact person@example.com or Bearer abcdefghijklmnopqrstuvwxyz")
-        self.assertGreaterEqual(count, 2)
+        text, count = redact_sensitive_content(
+            "Contact person@example.com, Bearer abcdefghijklmnopqrstuvwxyz, "
+            "mobile 09121234567, IBAN DE89370400440532013000, "
+            "card 4111111111111111, Persian card ۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱, "
+            f"and token sk-{'a' * 32}; password: mySecret123; "
+            "Authorization: Basic dXNlcjpwYXNz; postgres://user:supersecret@db.example.com/app; "
+            "signed URL https://bucket.example.test/file?X-Amz-Signature=private-signature-value, "
+            "Iranian national ID 0012345679 and Persian ID ۰۰۱۲۳۴۵۶۷۹"
+        )
+        self.assertGreaterEqual(count, 6)
         self.assertNotIn("person@example.com", text)
-        self.assertNotIn("abcdefghijklmnopqrstuvwxyz", text)
+        self.assertNotIn("sk-" + ("a" * 32), text)
+        self.assertNotIn("09121234567", text)
+        self.assertNotIn("DE89370400440532013000", text)
+        self.assertNotIn("4111111111111111", text)
+        self.assertNotIn("۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱", text)
+        self.assertNotIn("private-signature-value", text)
+        self.assertNotIn("X-Amz-Signature", text)
+        self.assertNotIn("mySecret123", text)
+        self.assertNotIn("dXNlcjpwYXNz", text)
+        self.assertNotIn("supersecret", text)
+        self.assertNotIn("0012345679", text)
+        self.assertNotIn("۰۰۱۲۳۴۵۶۷۹", text)
 
     def test_executable_extension_is_rejected(self):
         with self.assertRaises(FileInspectionError):
@@ -158,6 +184,7 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "zip")
         self.assertEqual(result.archive_entries, ["chapters/readme.txt", "ignored.bin"])
         self.assertIn("متن فصل اول", result.extracted_text)
+        self.assertNotIn("chapters/readme.txt", result.extracted_text)
         self.assertEqual(result.embedded_documents[0]["name"], "chapters/readme.txt")
         self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "chapters/readme.txt")
 
@@ -173,7 +200,65 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "tar")
         self.assertIn("docs/chapter.txt", result.archive_entries)
         self.assertIn("متن داخل آرشیو TAR", result.extracted_text)
+        self.assertNotIn("docs/chapter.txt", result.extracted_text)
         self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "docs/chapter.txt")
+
+    def test_generic_zip_extracts_and_inventories_raster_images(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 30), "navy").save(image_stream, format="PNG")
+        archive_stream = io.BytesIO()
+        with zipfile.ZipFile(archive_stream, "w") as archive:
+            archive.writestr("images/cover.png", image_stream.getvalue())
+
+        result = inspect_file(archive_stream.getvalue(), "image-package.zip")
+
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertFalse(result.extraction_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertEqual(result.image_assets[0]["locator"]["archive_entry"], "images/cover.png")
+
+    def test_tar_archive_extracts_and_inventories_raster_images(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 30), "teal").save(image_stream, format="PNG")
+        image_bytes = image_stream.getvalue()
+        archive_stream = io.BytesIO()
+        with tarfile.open(fileobj=archive_stream, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+            info = tarfile.TarInfo("images/cover.png")
+            info.size = len(image_bytes)
+            archive.addfile(info, io.BytesIO(image_bytes))
+
+        result = inspect_file(archive_stream.getvalue(), "image-package.tar")
+
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertFalse(result.extraction_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_archive_propagates_embedded_images_from_nested_docx(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 30), "orange").save(image_stream, format="PNG")
+        document = Document()
+        document.add_paragraph("متن راهنمای داخل سند")
+        document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(0.5))
+        docx_stream = io.BytesIO()
+        document.save(docx_stream)
+
+        archive_stream = io.BytesIO()
+        with zipfile.ZipFile(archive_stream, "w") as archive:
+            archive.writestr("lessons/guide.docx", docx_stream.getvalue())
+
+        result = inspect_file(archive_stream.getvalue(), "lesson-package.zip")
+
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertEqual(result.image_assets[0]["locator"]["archive_entry"], "lessons/guide.docx")
+        self.assertIn("متن راهنمای داخل سند", result.extracted_text)
+        self.assertNotIn("lessons/guide.docx", result.extracted_text)
 
     def test_tar_gzip_archive_is_inspected_without_extracting_to_disk(self):
         stream = io.BytesIO()
@@ -304,6 +389,108 @@ class FilePipelineTests(unittest.TestCase):
         result = inspect_file(stream.getvalue(), "course.pptx")
         self.assertEqual(result.detected_type, "pptx")
         self.assertIn("جلسه اول دوره", result.extracted_text)
+
+    def test_docx_embedded_images_are_inventoried(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 40), "white").save(image_stream, format="PNG")
+        document = Document()
+        document.add_paragraph("متن همراه تصویر")
+        document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(1))
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "mixed.docx")
+
+        self.assertEqual(result.detected_type, "docx")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+        self.assertTrue(result.image_assets[0]["image_bytes"])
+
+    def test_pptx_embedded_images_are_inventoried(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 40), "white").save(image_stream, format="PNG")
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        slide.shapes.add_picture(io.BytesIO(image_stream.getvalue()), Inches(1), Inches(1))
+        stream = io.BytesIO()
+        presentation.save(stream)
+
+        result = inspect_file(stream.getvalue(), "mixed.pptx")
+
+        self.assertEqual(result.detected_type, "pptx")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_xlsx_embedded_images_are_inventoried(self):
+        from openpyxl.drawing.image import Image as XLImage
+
+        image_stream = io.BytesIO()
+        Image.new("RGB", (40, 40), "white").save(image_stream, format="PNG")
+        workbook = Workbook()
+        workbook.active.add_image(XLImage(io.BytesIO(image_stream.getvalue())), "A1")
+        stream = io.BytesIO()
+        workbook.save(stream)
+
+        result = inspect_file(stream.getvalue(), "mixed.xlsx")
+
+        self.assertEqual(result.detected_type, "xlsx")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_docx_over_visual_image_limit_is_marked_incomplete(self):
+        document = Document()
+        for index in range(5):
+            image_stream = io.BytesIO()
+            Image.new("RGB", (24, 24), (index * 35, 80, 120)).save(image_stream, format="PNG")
+            document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(0.5))
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "many-images.docx")
+
+        self.assertEqual(result.embedded_image_count, 5)
+        self.assertEqual(len(result.image_assets), 4)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertTrue(result.visual_review_truncated)
+
+    def test_pdf_image_inventory_detects_embedded_raster_images(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (48, 48), "white").save(image_stream, format="PDF")
+
+        result = inspect_file(image_stream.getvalue(), "image-page.pdf")
+
+        self.assertEqual(result.detected_type, "pdf")
+        self.assertEqual(result.embedded_image_count, 1)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+        self.assertEqual(len(result.image_assets), 1)
+
+    def test_text_only_pdf_has_a_complete_empty_visual_inventory(self):
+        writer = PdfWriter()
+        writer.add_blank_page(width=200, height=300)
+        stream = io.BytesIO()
+        writer.write(stream)
+
+        result = inspect_file(stream.getvalue(), "text-only.pdf")
+
+        self.assertEqual(result.embedded_image_count, 0)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertFalse(result.visual_review_truncated)
+
+    def test_transcription_limit_is_explicitly_reported(self):
+        complete_text, complete = _bounded_transcription("متن کوتاه")
+        truncated_text, truncated = _bounded_transcription("x" * (MAX_EXTRACTED_CHARS + 1))
+
+        self.assertEqual(complete_text, "متن کوتاه")
+        self.assertFalse(complete)
+        self.assertEqual(len(truncated_text), MAX_EXTRACTED_CHARS)
+        self.assertTrue(truncated)
 
     def test_wav_is_not_misclassified_as_image(self):
         wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + b"0" * 16 + b"data" + b"0" * 4

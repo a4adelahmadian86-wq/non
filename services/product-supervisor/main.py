@@ -168,6 +168,8 @@ async def review_product_file(
 ):
     from file_pipeline import (
         FileInspectionError,
+        MAX_EXTRACTED_CHARS,
+        MAX_VISUAL_ASSETS,
         analyze_extracted_content,
         analyze_image_with_groq,
         build_pdf_sample,
@@ -217,6 +219,7 @@ async def review_product_file(
         warnings.extend(pdf_inspection.warnings or [])
     visual_report = ""
     transcription = ""
+    transcription_truncated = False
     provider_status = {
         "gemini": "not_requested",
         "groq": "not_requested",
@@ -226,34 +229,75 @@ async def review_product_file(
         "gladia": "disabled",
     }
 
-    if inspection.image_bytes:
+    image_assets = list(inspection.image_assets or [])
+    if not image_assets and inspection.image_bytes:
+        image_assets = [{
+            "image_bytes": inspection.image_bytes,
+            "mime": inspection.image_mime or "image/jpeg",
+            "locator": {"kind": "legacy_image_asset"},
+        }]
+        inspection.embedded_image_count = max(1, inspection.embedded_image_count)
+
+    if inspection.embedded_image_count > 0:
         if groq_provider_ready():
-            try:
-                visual_report = await analyze_image_with_groq(
-                    inspection.image_bytes,
-                    inspection.image_mime or "image/jpeg",
-                    {
-                        "title": redact_sensitive_content(product_title)[0],
-                        "category": redact_sensitive_content(category_name or "")[0],
-                        "tags": [redact_sensitive_content(tag)[0] for tag in tags],
-                    },
-                )
+            visual_parts = []
+            successful_images = 0
+            for index, asset in enumerate(image_assets[:MAX_VISUAL_ASSETS]):
+                image_data = asset.get("image_bytes")
+                if not isinstance(image_data, bytes) or not image_data:
+                    continue
+                try:
+                    report = await analyze_image_with_groq(
+                        image_data,
+                        str(asset.get("mime") or "image/jpeg"),
+                        {
+                            "title": redact_sensitive_content(product_title)[0],
+                            "category": redact_sensitive_content(category_name or "")[0],
+                            "tags": [redact_sensitive_content(tag)[0] for tag in tags],
+                        },
+                    )
+                    report, _ = redact_sensitive_content(report)
+                    if report.strip():
+                        locator = asset.get("locator") if isinstance(asset.get("locator"), dict) else {}
+                        page_number = locator.get("page")
+                        label = f"تصویر {index + 1}" + (f" صفحه {page_number}" if page_number else "")
+                        visual_parts.append(f"{label}: {report}")
+                        successful_images += 1
+                except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+                    warnings.append(f"تحلیل تصویر شماره {index + 1} انجام نشد.")
+            visual_report = "\n".join(visual_parts)
+            if (
+                successful_images == inspection.embedded_image_count
+                and not inspection.visual_review_truncated
+                and inspection.visual_inventory_complete
+            ):
                 provider_status["groq_vision"] = "completed"
-            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+            elif successful_images > 0:
+                provider_status["groq_vision"] = "partial"
+                warnings.append("فقط بخشی از تصاویر فایل بررسی شد؛ تحلیل تصویری کامل نیست.")
+            else:
                 provider_status["groq_vision"] = "unavailable"
-                warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ درباره محتوای تصویر ادعایی ثبت نشد.")
+                warnings.append("تصاویر فایل به‌طور کامل بررسی نشدند.")
         else:
             provider_status["groq_vision"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده یا تأیید Zero Data Retention فعال نیست؛ هیچ تصویر محصولی به سرویس خارجی ارسال نشد.")
 
+    if not inspection.visual_inventory_complete:
+        warnings.append("فهرست‌برداری از تصاویر جاسازی‌شده کامل نشد؛ تولید محتوای هوشمند تا بررسی کامل غیرفعال می‌ماند.")
+    if inspection.visual_review_truncated:
+        warnings.append("تعداد یا قالب تصاویر از سقف بررسی کامل بیشتر است؛ سند به‌عنوان بررسی‌نشده علامت می‌خورد.")
+
     if inspection.audio_bytes:
         if groq_provider_ready():
             try:
-                transcription = await transcribe_audio_with_groq(
+                transcription, transcription_truncated = await transcribe_audio_with_groq(
                     inspection.audio_bytes,
-                    inspection.audio_filename or "upload.audio",
+                    "upload.audio",  # Never transmit the user's original filename to the provider.
                 )
-                provider_status["groq_transcription"] = "completed"
+                inspection.transcription_truncated = transcription_truncated
+                if transcription_truncated:
+                    warnings.append("رونویسی صوت از سقف استخراج عبور کرده و ناقص است؛ تولید محتوا غیرفعال می‌ماند.")
+                provider_status["groq_transcription"] = "partial" if transcription_truncated else "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
                 provider_status["groq_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
@@ -269,9 +313,12 @@ async def review_product_file(
     elif "not_configured" in groq_statuses:
         provider_status["groq"] = "not_configured"
 
-    extracted, redaction_count = redact_sensitive_content(
-        "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
-    )
+    combined_extracted = "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
+    if len(combined_extracted) > MAX_EXTRACTED_CHARS:
+        inspection.extraction_truncated = True
+        warnings.append("ترکیب متن و گزارش تصویری از سقف استخراج عبور کرده است؛ بررسی کامل نیست.")
+        combined_extracted = combined_extracted[:MAX_EXTRACTED_CHARS]
+    extracted, redaction_count = redact_sensitive_content(combined_extracted)
     model_review: dict[str, Any] = {}
     if extracted.strip() and groq_provider_ready():
         try:
@@ -316,14 +363,19 @@ async def review_product_file(
             severity_value = item.get("severity")
             area = area_value if isinstance(area_value, str) and area_value in allowed_areas else "general"
             severity = severity_value if isinstance(severity_value, str) and severity_value in allowed_severities else "warning"
+            safe_title, title_redactions = redact_sensitive_content(str(item.get("title") or "نکته قابل بررسی"))
+            safe_detail, detail_redactions = redact_sensitive_content(str(item.get("detail") or ""))
+            safe_recommendation, recommendation_redactions = redact_sensitive_content(str(item.get("recommendation") or ""))
+            redaction_count += title_redactions + detail_redactions + recommendation_redactions
             safe_findings.append({
                 "area": area,
                 "severity": severity,
-                "title": str(item.get("title") or "نکته قابل بررسی")[:140],
-                "detail": str(item.get("detail") or "")[:700],
-                "recommendation": str(item.get("recommendation") or "")[:500],
+                "title": safe_title[:140],
+                "detail": safe_detail[:700],
+                "recommendation": safe_recommendation[:500],
             })
 
+    safe_visual_report, _ = redact_sensitive_content(visual_report)
     source_chunks = []
     for chunk in (inspection.content_chunks or [])[:300]:
         if not isinstance(chunk, dict):
@@ -334,6 +386,17 @@ async def review_product_file(
                 "locator": chunk.get("locator") if isinstance(chunk.get("locator"), dict) else {},
                 "content_text": source_text[:1800],
             })
+    if safe_visual_report.strip():
+        source_chunks.append({
+            "locator": {"kind": "visual_analysis_report"},
+            "content_text": safe_visual_report[:12000],
+        })
+    if transcription.strip():
+        safe_transcription, _ = redact_sensitive_content(transcription)
+        source_chunks.append({
+            "locator": {"kind": "audio_transcription"},
+            "content_text": safe_transcription[:MAX_EXTRACTED_CHARS],
+        })
     safe_facts = validate_evidence_facts(model_review.get("facts", []), source_chunks)
 
     sample_page_numbers: list[int] = []
@@ -371,8 +434,8 @@ async def review_product_file(
                 warnings.append("ساخت فایل نمونه PDF از صفحات انتخاب‌شده انجام نشد؛ فایل اصلی بدون تغییر باقی ماند.")
 
     raw_chunks = list(inspection.content_chunks or [])
-    if visual_report.strip():
-        raw_chunks.append({"chunk_type": "visual_analysis", "locator": {"media": "image"}, "content_text": visual_report})
+    if safe_visual_report.strip():
+        raw_chunks.append({"chunk_type": "visual_analysis", "locator": {"media": "image"}, "content_text": safe_visual_report})
     if transcription.strip():
         raw_chunks.append({"chunk_type": "audio_transcript", "locator": {"media": "audio", "time_start_seconds": 0}, "content_text": transcription})
 
@@ -398,11 +461,17 @@ async def review_product_file(
             break
 
     # File inspection is advisory. A missing antivirus engine is never reported as clean.
+    safe_summary, summary_redactions = redact_sensitive_content(
+        str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")
+    )
+    redaction_count += summary_redactions
+
     return {
         "review_id": str(uuid.uuid4()),
         "product_id": product_id,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
+        "media_reports": {"visual": safe_visual_report[:12000]} if safe_visual_report else {},
         "content_chunks": safe_chunks,
         "analysis_batch_count": int(model_review.get("analysis_batch_count", 0)) if model_review else 0,
         "successful_analysis_batches": int(model_review.get("successful_analysis_batches", 0)) if model_review else 0,
@@ -412,7 +481,7 @@ async def review_product_file(
         "sample_page_numbers": sample_page_numbers,
         "sample_pdf_base64": sample_pdf_base64,
         "provider_status": provider_status,
-        "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
+        "summary": safe_summary[:700],
         "findings": safe_findings,
         "facts": safe_facts[:100],
         "warnings": [str(item)[:400] for item in warnings[:20]],
@@ -512,18 +581,28 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
                     if not isinstance(fact, dict) or fact.get("verification_status") != "evidence_backed":
                         continue
                     locator = fact.get("locator") if isinstance(fact.get("locator"), dict) else {}
+                    safe_locator = {}
+                    for key, value in list(locator.items())[:16]:
+                        if key in {"kind", "media"} and isinstance(value, str):
+                            safe_locator[key] = value[:32]
+                        elif key in {
+                            "page", "page_start", "page_end", "row_start", "row_end",
+                            "slide", "paragraph", "block_index", "character_start",
+                            "character_end", "time_start_seconds", "time_end_seconds", "lesson_id",
+                        } and isinstance(value, (int, float)) and not isinstance(value, bool):
+                            safe_locator[key] = value
+                        elif key == "pages" and isinstance(value, list):
+                            safe_locator[key] = [item for item in value[:12] if isinstance(item, int) and not isinstance(item, bool)]
                     facts.append({
                         "type": str(fact.get("type") or "other")[:32],
                         "key": redact(str(fact.get("key") or ""))[0][:120],
                         "value": redact(str(fact.get("value") or ""))[0][:350],
                         "evidence": redact(str(fact.get("evidence") or ""))[0][:240],
-                        "locator": {str(k)[:40]: v for k, v in list(locator.items())[:8] if isinstance(v, (str, int, float, bool))},
+                        "locator": safe_locator,
                         "verification_status": "evidence_backed",
                     })
 
             safe_sources.append({
-                "source_file_id": source.get("source_file_id"),
-                "source_sha256": str(source.get("source_sha256") or "")[:64],
                 "source_type": str(source.get("source_type") or "")[:80],
                 "processing_status": str(source.get("processing_status") or "unknown")[:32],
                 "semantic_review_complete": bool(source.get("semantic_review_complete")),

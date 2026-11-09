@@ -65,8 +65,9 @@ class ProductSupervisorClient
 
         $request = Http::acceptJson()
             ->withToken((string) config('services.product_supervisor.token'))
-            ->connectTimeout(8)
-            ->timeout(max(300, (int) config('services.product_supervisor.timeout', 40)))
+            // Free Render services can take roughly a minute to wake after idle suspension.
+            ->connectTimeout(90)
+            ->timeout(max(300, (int) config('services.product_supervisor.file_timeout', 540)))
             ->attach('file', $stream, basename($filename));
 
         if (is_resource($readerSourceStream) && filled($readerSourceFilename)) {
