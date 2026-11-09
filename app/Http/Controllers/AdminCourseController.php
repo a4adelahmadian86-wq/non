@@ -159,11 +159,12 @@ class AdminCourseController extends Controller
             $documentId = null;
             $processingStatus = ((int) $inspection['size'] <= 25 * 1024 * 1024) ? 'queued' : 'awaiting_provider';
             DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path, &$documentId, $processingStatus) {
+                $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $resource = StoreProductFile::create([
-                    'product_id' => $product->id,
+                    'product_id' => $lockedProduct->id,
                     'course_lesson_id' => $lesson->id,
                     'purpose' => 'lesson_resource',
-                    'version' => $product->version,
+                    'version' => $lockedProduct->version,
                     'disk' => 'private',
                     'path' => $path,
                     'original_name' => $upload->getClientOriginalName(),
