@@ -1725,3 +1725,41 @@ test('reader notes preserve the exact selected occurrence offset', async ({ page
   expect(stored.notes[0].endOffset).toBe(expected + phrase.length);
   await expect(page.locator('[data-reader-notes]')).toHaveAttribute('aria-expanded', 'true');
 });
+test('captures a selected reader passage and jumps back to its anchored discussion', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section data-reader-root>
+      <input id="reader-page-number" value="1">
+      <article class="farast-reader-page-item is-active" data-index="0">
+        <div class="farast-pdf-text-layer"><span>متن نمونه برای عبارت مهم در این فایل</span></div>
+      </article>
+      <form id="reader-discussion-form">
+        <input id="reader-discussion-quote">
+        <input id="reader-discussion-page">
+        <input id="reader-discussion-start">
+        <input id="reader-discussion-end">
+        <input id="reader-discussion-context">
+        <textarea id="reader-discussion-body">دیدگاه آزمایشی درباره این بخش از فایل</textarea>
+      </form>
+      <div id="reader-discussion-selection"></div>
+      <button type="button" data-reader-jump data-page="1" data-quote="عبارت مهم">رفتن به متن</button>
+    </section>
+  `);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-discussions.js') });
+  await page.evaluate(() => {
+    const text = document.querySelector('.farast-pdf-text-layer span').firstChild;
+    const start = text.textContent.indexOf('عبارت مهم');
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + 'عبارت مهم'.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await expect(page.locator('#reader-discussion-quote')).toHaveValue('عبارت مهم');
+  await expect(page.locator('#reader-discussion-page')).toHaveValue('1');
+  await page.locator('[data-reader-jump]').click();
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('عبارت مهم');
+});
+
