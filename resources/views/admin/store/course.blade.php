@@ -76,6 +76,10 @@
                     @php($resourceReview = $assetReviews['lesson-resource:'.$resource->id] ?? null)
                     <div class="course-resource-row">
                       <span><i class="fa-solid fa-paperclip"></i> {{ $resource->original_name }} <small>{{ number_format($resource->size_bytes/1024,1) }} KB · {{ $resource->scan_status==='clean'?'اسکن سالم':'وضعیت بررسی نامشخص' }}</small>
+                        @php($resourceProcessing = $resource->document?->processing_status ?? 'queued')
+                        <small class="course-resource-processing" data-resource-processing-status="{{ $resourceProcessing }}">
+                          {{ match($resourceProcessing) { 'completed' => 'دانش کامل آماده', 'processing' => 'در حال تحلیل', 'queued' => 'در صف تحلیل', 'extracted' => 'استخراج انجام شد؛ تحلیل ناقص', 'partial' => 'پردازش ناقص', 'awaiting_provider' => 'در انتظار سرویس پردازش', 'failed' => 'پردازش ناموفق', default => 'در انتظار تحلیل' } }}
+                        </small>
                       </span>
                       @if($resourceReview && hash_equals((string) ($resourceReview['sha256'] ?? ''), (string) $resource->sha256))
                         @include('admin.store.partials.asset-review', ['assetReview' => $resourceReview, 'label' => 'گزارش ناظر منبع درس'])

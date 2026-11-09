@@ -77,6 +77,13 @@ return [
             ],
         ],
         [
+            'key' => 'store', 'label' => 'فروشگاه و محصولات', 'icon' => 'fa-store',
+            'items' => [
+                ['key' => 'store.products', 'label' => 'مدیریت محصولات و دوره‌ها', 'icon' => 'fa-boxes-stacked', 'route' => 'admin.store.index', 'admin_only' => true],
+                ['key' => 'store.add', 'label' => 'افزودن محصول', 'icon' => 'fa-circle-plus', 'route' => 'admin.store.create', 'admin_only' => true],
+            ],
+        ],
+        [
             'key' => 'reports', 'label' => 'گزارش‌ها و تحلیل‌ها', 'icon' => 'fa-chart-line',
             'items' => [
                 ['key' => 'reports.overview', 'label' => 'نمای گزارش‌ها', 'icon' => 'fa-chart-pie', 'route' => 'admin.analytics', 'permission' => 'reports.team', 'scope' => 'team'],

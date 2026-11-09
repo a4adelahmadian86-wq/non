@@ -56,6 +56,38 @@ class ProductDocumentProcessingStateTest extends TestCase
         $this->assertTrue($state['completeness']['semantic_review_complete']);
     }
 
+    public function test_complete_image_only_visual_review_can_finish_knowledge_without_reader_pages(): void
+    {
+        $state = app(ProductDocumentProcessingState::class)->derive(
+            ['extraction_truncated' => false],
+            ['groq_vision' => 'completed', 'groq_text' => 'not_requested'],
+            0,
+            0,
+            true,
+            0,
+        );
+
+        $this->assertSame('completed', $state['status']);
+        $this->assertFalse($state['reader_ready']);
+        $this->assertTrue($state['completeness']['semantic_review_complete']);
+    }
+
+    public function test_sampled_video_review_remains_partial_even_when_media_providers_finish(): void
+    {
+        $state = app(ProductDocumentProcessingState::class)->derive(
+            ['extraction_truncated' => true],
+            ['groq_vision' => 'completed', 'groq_transcription' => 'completed'],
+            0,
+            0,
+            true,
+            1,
+        );
+
+        $this->assertSame('partial', $state['status']);
+        $this->assertFalse($state['reader_ready']);
+        $this->assertFalse($state['completeness']['extraction_complete']);
+    }
+
     public function test_empty_or_page_less_extraction_does_not_enable_reader(): void
     {
         $empty = app(ProductDocumentProcessingState::class)->derive([], [], 0, 0, false, 4);

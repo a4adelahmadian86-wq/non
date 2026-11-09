@@ -76,7 +76,7 @@ class AdminStoreController extends Controller
         $data['published_at'] = null;
         $tagIds = $data['tag_ids'] ?? [];
         $relatedIds = $data['related_product_ids'] ?? [];
-        unset($data['tag_ids'], $data['related_product_ids']);
+        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model']);
         $product = DB::transaction(function () use ($data, $tagIds, $relatedIds) {
             $product = StoreProduct::create($data);
             if ($product->type === 'course') {
@@ -96,13 +96,14 @@ class AdminStoreController extends Controller
         return redirect()->route('admin.store.edit', $product)->with('status', 'محصول ایجاد شد؛ فایل اصلی را بارگذاری کنید.');
     }
 
-    public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness)
+    public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
     {
         $product->load(['files.document', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
 
+        $aiContentReadiness = $contentGenerator->readiness($product);
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
             && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
         $hasReadyReaderDocument = ($product->download_policy ?? 'signed') === 'reader_only'
@@ -133,12 +134,37 @@ class AdminStoreController extends Controller
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh'));
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness'));
     }
 
-    public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness)
+    public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
     {
+        $provenance = null;
+        if ($request->filled('ai_content_source_fingerprints') || $request->filled('ai_content_signature')) {
+            $request->validate([
+                'ai_content_source_fingerprints' => 'required|string|max:12000',
+                'ai_content_signature' => 'required|string|size:64',
+                'ai_content_request_id' => 'nullable|string|max:64',
+                'ai_content_model' => 'nullable|string|max:120',
+            ]);
+            $provenance = $contentGenerator->assertFreshProvenance(
+                $product,
+                (string) $request->input('ai_content_source_fingerprints'),
+                (string) $request->input('ai_content_signature')
+            );
+        }
         $data = $this->validated($request, $product);
+        unset($data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model']);
+        if ($provenance !== null) {
+            $metadata = $data['metadata'] ?? $product->metadata ?? [];
+            $metadata['ai_content'] = [
+                'source_fingerprints' => $provenance,
+                'generated_at' => now()->toISOString(),
+                'request_id' => (string) $request->input('ai_content_request_id', ''),
+                'model' => (string) $request->input('ai_content_model', ''),
+            ];
+            $data['metadata'] = $metadata;
+        }
         $tagIds = $data['tag_ids'] ?? [];
         $relatedIds = $data['related_product_ids'] ?? [];
         unset($data['tag_ids'], $data['related_product_ids']);
@@ -167,7 +193,7 @@ class AdminStoreController extends Controller
                     $reviewInputsChanged = collect($reviewFields)->contains(
                         fn ($field) => array_key_exists($field, $data)
                             && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
-                    );
+                    ) || (data_get($data, 'metadata.seo') !== data_get($lockedProduct->metadata, 'seo'));
                     $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
                     $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
                     if (! $snapshotMatches || $reviewInputsChanged || $currentTagIds !== $submittedTagIds || ($lastReview['verdict'] ?? null) !== 'approved') {
@@ -219,7 +245,7 @@ class AdminStoreController extends Controller
             $reviewInputsChanged = collect($reviewFields)->contains(
                 fn ($field) => array_key_exists($field, $data)
                     && (string) ($data[$field] ?? '') !== (string) ($lockedProduct->getAttribute($field) ?? '')
-            );
+            ) || (data_get($data, 'metadata.seo') !== data_get($lockedProduct->metadata, 'seo'));
             $currentTagIds = $lockedProduct->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
             $submittedTagIds = collect($tagIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
             $reviewPolicyChanged = collect(['enabled', 'mode', 'checks', 'instructions'])->contains(
@@ -1004,19 +1030,22 @@ class AdminStoreController extends Controller
             'name' => 'required|string|max:100',
             'slug' => 'nullable|string|max:120',
         ]);
-        $base = Str::slug($data['slug'] ?: $data['name']) ?: 'tag-'.Str::random(6);
-        $slug = $base;
-        $suffix = 1;
-        while (StoreTag::query()->where('slug', $slug)->exists()) {
-            $slug = $base.'-'.$suffix++;
+        $name = trim($data['name']);
+        $normalizedName = mb_strtolower($name);
+        $tag = StoreTag::query()->whereRaw('LOWER(name) = ?', [$normalizedName])->first();
+
+        if (! $tag) {
+            $base = Str::slug($data['slug'] ?: $name) ?: 'tag-'.substr(hash('sha256', $normalizedName), 0, 16);
+            $slug = $base;
+            $suffix = 1;
+            while (StoreTag::query()->where('slug', $slug)->where('name', '!=', $name)->exists()) {
+                $slug = $base.'-'.$suffix++;
+            }
+            $tag = StoreTag::firstOrCreate(['slug' => $slug], ['name' => $name]);
         }
-        $tag = StoreTag::firstOrCreate(
-            ['slug' => $slug],
-            ['name' => $data['name']]
-        );
 
         if ($request->expectsJson()) {
-            return response()->json(['id' => $tag->id, 'name' => $tag->name], 201);
+            return response()->json(['id' => $tag->id, 'name' => $tag->name], 200);
         }
 
         return back()->with('status', 'برچسب ذخیره شد؛ اکنون می‌توانید آن را به محصول اختصاص دهید.');
@@ -1075,6 +1104,12 @@ class AdminStoreController extends Controller
             'version' => 'nullable|string|max:60',
             'seo_title' => 'nullable|string|max:220',
             'seo_description' => 'nullable|string|max:320',
+            'seo_focus_keyword' => 'nullable|string|max:120',
+            'seo_secondary_keywords' => 'nullable|string|max:1000',
+            'ai_content_source_fingerprints' => 'nullable|string|max:12000',
+            'ai_content_signature' => 'nullable|string|size:64',
+            'ai_content_request_id' => 'nullable|string|max:64',
+            'ai_content_model' => 'nullable|string|max:120',
             'tag_ids' => 'sometimes|array|max:30',
             'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
             'related_product_ids' => 'sometimes|array|max:12',
@@ -1091,6 +1126,22 @@ class AdminStoreController extends Controller
         ]);
         $existingMetadata = $product?->metadata ?? [];
         $data['metadata'] = $existingMetadata;
+        if ($request->has('seo_focus_keyword') || $request->has('seo_secondary_keywords')) {
+            $seo = (array) data_get($existingMetadata, 'seo', []);
+            if ($request->has('seo_focus_keyword')) {
+                $seo['focus_keyword'] = trim((string) $request->input('seo_focus_keyword', ''));
+            }
+            if ($request->has('seo_secondary_keywords')) {
+                $seo['secondary_keywords'] = collect(preg_split('/[,،\\n]+/u', (string) $request->input('seo_secondary_keywords', '')) ?: [])
+                    ->map(fn ($keyword) => trim($keyword))
+                    ->filter()
+                    ->unique(fn ($keyword) => mb_strtolower($keyword))
+                    ->take(10)
+                    ->values()
+                    ->all();
+            }
+            $data['metadata'] = array_merge($existingMetadata, ['seo' => $seo]);
+        }
         if ($request->has('ai_supervisor')) {
             $supervisorChecks = [
                 'content' => $request->boolean('ai_supervisor.checks.content'),
@@ -1100,7 +1151,7 @@ class AdminStoreController extends Controller
                 'policy' => $request->boolean('ai_supervisor.checks.policy'),
                 'course' => $request->boolean('ai_supervisor.checks.course'),
             ];
-            $data['metadata'] = array_merge($existingMetadata, [
+            $data['metadata'] = array_merge($data['metadata'] ?? $existingMetadata, [
                 'ai_supervisor' => [
                     'enabled' => $request->boolean('ai_supervisor.enabled'),
                     'mode' => $request->input('ai_supervisor.mode', 'suggest'),
