@@ -1332,6 +1332,13 @@ test('personal reading light, font preferences, highlights and annotations stay 
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font', 'serif');
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font-size', '125');
   await expect(page.locator('.farast-reader-document')).toHaveCSS('font-family', /Georgia/);
+  await page.locator('[data-reader-line-height]').selectOption('2.1');
+  await page.locator('[data-reader-measure]').selectOption('narrow');
+  await page.locator('[data-reader-paragraph-spacing]').selectOption('1.5');
+  await page.locator('[data-reader-focus]').click();
+  await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-measure', 'narrow');
+  await expect(page.locator('[data-reader-focus]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-reader-root]')).toHaveClass(/is-reader-focus/);
 
   await page.evaluate(() => {
     const paragraph = document.querySelector('.farast-reader-document p');
@@ -1389,6 +1396,10 @@ test('personal reading light, font preferences, highlights and annotations stay 
   expect(saved.light).toBe(true);
   expect(saved.font).toBe('serif');
   expect(saved.size).toBe(125);
+  expect(saved.lineHeight).toBe(2.1);
+  expect(saved.measure).toBe('narrow');
+  expect(saved.paragraphSpacing).toBe(1.5);
+  expect(saved.focusMode).toBe(true);
   expect(saved.highlights).toHaveLength(1);
   expect(saved.notes).toHaveLength(1);
 });
