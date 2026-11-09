@@ -1,6 +1,8 @@
 <article class="store-product-card">
   <a class="store-product-cover" href="{{ route('store.product',$product->slug) }}">
     @if((int)$product->price_rials===0)<span class="store-badge free">رایگان</span>
+    @elseif($product->compare_at_price_rials && $product->compare_at_price_rials > $product->price_rials)
+      <span class="store-badge store-badge--discount">{{ (int) round((1 - ($product->price_rials / $product->compare_at_price_rials)) * 100) }}٪ تخفیف</span>
     @elseif($product->featured)<span class="store-badge">ویژه</span>@endif
     @php($cardImage = $product->cover_path ?: $product->images->where('is_active', true)->first()?->path)
     @if($cardImage)
