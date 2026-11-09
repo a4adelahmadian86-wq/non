@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessProductDocument;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseLesson;
 use App\Models\StoreCourseSection;
@@ -155,25 +156,51 @@ class AdminCourseController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 256 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
-            DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path) {
+            $documentId = null;
+            $processingStatus = ((int) $inspection['size'] <= 25 * 1024 * 1024) ? 'queued' : 'awaiting_provider';
+            DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path, &$documentId, $processingStatus) {
                 $resource = StoreProductFile::create([
-                'product_id' => $product->id,
-                'course_lesson_id' => $lesson->id,
-                'purpose' => 'lesson_resource',
-                'version' => $product->version,
-                'disk' => 'private',
-                'path' => $path,
-                'original_name' => $upload->getClientOriginalName(),
-                'mime' => $inspection['mime'],
-                'size_bytes' => $inspection['size'],
-                'sha256' => $inspection['checksum'],
-                'is_primary' => false,
-                'is_active' => true,
-                'scan_status' => 'clean',
-                'scan_engine' => $inspection['scan'],
-                'scanned_at' => now(),
+                    'product_id' => $product->id,
+                    'course_lesson_id' => $lesson->id,
+                    'purpose' => 'lesson_resource',
+                    'version' => $product->version,
+                    'disk' => 'private',
+                    'path' => $path,
+                    'original_name' => $upload->getClientOriginalName(),
+                    'mime' => $inspection['mime'],
+                    'size_bytes' => $inspection['size'],
+                    'sha256' => $inspection['checksum'],
+                    'is_primary' => false,
+                    'is_active' => true,
+                    'scan_status' => 'clean',
+                    'scan_engine' => $inspection['scan'],
+                    'scanned_at' => now(),
                 ]);
-                $this->audit('store.course.resource_uploaded', $product, ['lesson_id' => $lesson->id, 'file_id' => $resource->id, 'mime' => $resource->mime, 'size_bytes' => $resource->size_bytes, 'sha256' => $resource->sha256]);
+                $documentId = DB::table('store_product_documents')->insertGetId([
+                    'product_id' => $product->id,
+                    'product_file_id' => $resource->id,
+                    'source_sha256' => $resource->sha256,
+                    'processing_status' => $processingStatus,
+                    'detected_type' => null,
+                    'page_count' => null,
+                    'character_count' => 0,
+                    'word_count' => 0,
+                    'structure_json' => json_encode([
+                        'preflight' => ['mime' => $resource->mime, 'size_bytes' => $resource->size_bytes],
+                        'audio' => ['status' => 'not_applicable'],
+                    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $this->audit('store.course.resource_uploaded', $product, [
+                    'lesson_id' => $lesson->id,
+                    'file_id' => $resource->id,
+                    'document_id' => $documentId,
+                    'mime' => $resource->mime,
+                    'size_bytes' => $resource->size_bytes,
+                    'sha256' => $resource->sha256,
+                    'processing_status' => $processingStatus,
+                ]);
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
@@ -183,7 +210,22 @@ class AdminCourseController extends Controller
             abort(503, 'بارگذاری به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
         }
 
-        return back()->with('status', 'منبع آموزشی پس از اسکن امنیتی ذخیره شد.');
+        if ($documentId && $processingStatus === 'queued') {
+            try {
+                ProcessProductDocument::dispatch((int) $documentId);
+            } catch (Throwable $exception) {
+                DB::table('store_product_documents')->where('id', $documentId)->update([
+                    'processing_status' => 'failed',
+                    'failure_code' => 'queue_dispatch_failed',
+                    'updated_at' => now(),
+                ]);
+                report($exception);
+            }
+        }
+
+        return back()->with('status', $processingStatus === 'queued'
+            ? 'منبع آموزشی پس از اسکن امنیتی ذخیره شد و پردازش دانش آن در صف قرار گرفت.'
+            : 'منبع آموزشی ذخیره شد؛ به دلیل عبور از سقف پردازش فعلی، تحلیل کامل تا فراهم‌شدن مسیر مناسب فعال نیست.');
     }
 
     public function deleteResource(StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
@@ -192,6 +234,7 @@ class AdminCourseController extends Controller
         abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
         abort_unless($file->product_id === $product->id && $file->course_lesson_id === $lesson->id && $file->purpose === 'lesson_resource', 404);
         $this->audit('store.course.resource_deleted', $product, ['lesson_id' => $lesson->id, 'file_id' => $file->id]);
+        $this->deleteDocumentForFile($file);
         Storage::disk($file->disk ?: 'private')->delete($file->path);
         $file->delete();
 
@@ -245,8 +288,26 @@ class AdminCourseController extends Controller
             ->whereIn('course_lesson_id', $lessonIds)
             ->get();
         foreach ($files as $file) {
+            $this->deleteDocumentForFile($file);
             Storage::disk($file->disk ?: 'private')->delete($file->path);
             $file->delete();
         }
+    }
+
+    private function deleteDocumentForFile(StoreProductFile $file): void
+    {
+        $document = $file->document()->with('artifacts')->first();
+        if (! $document) return;
+
+        foreach ($document->artifacts as $artifact) {
+            if (filled($artifact->path)) {
+                Storage::disk($artifact->disk ?: 'private')->delete($artifact->path);
+            }
+        }
+        $document->chunks()->delete();
+        $document->facts()->delete();
+        $document->pages()->delete();
+        $document->artifacts()->delete();
+        $document->delete();
     }
 }
