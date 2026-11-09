@@ -66,7 +66,7 @@ class ProductSupervisorClient
         $request = Http::acceptJson()
             ->withToken((string) config('services.product_supervisor.token'))
             ->connectTimeout(8)
-            ->timeout(max(300, (int) config('services.product_supervisor.timeout', 40)))
+            ->timeout(max(300, (int) config('services.product_supervisor.file_timeout', 540)))
             ->attach('file', $stream, basename($filename));
 
         if (is_resource($readerSourceStream) && filled($readerSourceFilename)) {
