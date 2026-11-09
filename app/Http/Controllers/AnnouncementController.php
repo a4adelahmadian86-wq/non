@@ -137,7 +137,10 @@ class AnnouncementController extends Controller
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
 
-        $announcement->forceFill(['notified_at' => null])->saveQuietly();
+        $announcement->forceFill([
+            'notified_at' => null,
+            'broadcast_revision' => (int) ($announcement->broadcast_revision ?? 1) + 1,
+        ])->saveQuietly();
         $sent = $this->announcements->broadcast($announcement->fresh());
 
         return back()->with('status', "اعلان مجدداً ارسال شد ({$sent} اعلان درون‌برنامه).");
