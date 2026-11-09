@@ -120,6 +120,7 @@
       <div class="farast-reader-shortcuts"><kbd>←</kbd><kbd>→</kbd> جابه‌جایی صفحه <span>·</span> <kbd>+</kbd><kbd>−</kbd> بزرگ‌نمایی <span>·</span> <kbd>F</kbd> تمام‌صفحه <span>·</span> <kbd>B</kbd> نشانک</div>
     </main>
   </div>
+  @include('shared.reader-discussions', ['readerDiscussions' => $readerDiscussions, 'product' => $product])
   <div class="farast-reader-security-note"><i class="fa-solid fa-lock"></i><span>شناسهٔ حساب یا IP بازدیدکننده به‌صورت شناور روی محتوای مطالعه نمایش داده می‌شود؛ فایل ذخیره‌شده تغییر نمی‌کند.</span></div>
   <div class="farast-reader-print-block" hidden role="status">این پیش‌نمایش فقط برای مطالعهٔ آنلاین ارائه شده است؛ چاپ و ذخیره‌سازی از محیط خوانشگر غیرفعال است.</div>
 </section>
