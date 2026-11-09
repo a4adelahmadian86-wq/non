@@ -186,7 +186,7 @@ class AuthController extends Controller
         $request->session()->put('email_login.email', $email);
         try {
             $emailService->sendOtp($email, $code, $user);
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             EmailOtpChallenge::where('email', $email)->whereNull('consumed_at')->delete();
             $request->session()->forget('email_login.email');
 
