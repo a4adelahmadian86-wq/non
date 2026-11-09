@@ -347,13 +347,14 @@ def _extract_archive_documents(
             continue
 
         if suffix in media_suffixes:
-            if suffix not in SUPPORTED_IMAGE_SUFFIXES:
-                embedded_image_count += 1 if suffix in {
-                    ".svg", ".avif", ".heic", ".heif", ".emf", ".wmf", ".eps", ".psd",
-                } else 0
-                if embedded_image_count:
-                    visual_review_truncated = True
-                warnings.append("رسانه یا قالب تصویری پشتیبانی‌نشده داخل آرشیو شناسایی شد.")
+            if suffix in {
+                ".svg", ".avif", ".heic", ".heif", ".emf", ".wmf", ".eps", ".psd",
+            }:
+                embedded_image_count += 1
+                visual_review_truncated = True
+                warnings.append("قالب تصویری پشتیبانی‌نشده داخل آرشیو شناسایی شد.")
+            elif suffix in {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".mp4", ".mov", ".webm"}:
+                warnings.append("رسانه صوتی یا ویدئویی داخل آرشیو در این مسیر پردازش نمی‌شود.")
                 truncated = True
             continue
 
@@ -1020,7 +1021,7 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.detected_type = "tar"
         result.archive_entries = entries
         try:
-                (
+            (
                 archive_chunks, embedded, archive_warnings, archive_truncated,
                 result.image_assets, result.embedded_image_count,
                 result.visual_review_truncated, result.visual_inventory_complete,
