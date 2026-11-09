@@ -242,7 +242,8 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($author)->get(route('community.mine',['status'=>'rejected']))->assertOk()->assertSee('توضیح تیم بررسی')->assertSee('پرسش را دقیق‌تر');
   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$item),['status'=>'rejected'])->assertRedirect();
   $this->assertDatabaseCount('discussion_moderation_events',1);
-  $this->assertDatabaseCount('farast_notifications',1);
+  $this->assertDatabaseHas('farast_notifications',['user_id'=>$admin->id,'type'=>'discussion_moderation_pending']);
+  $this->assertDatabaseHas('farast_notifications',['user_id'=>$author->id,'type'=>'discussion_rejected']);
   $this->actingAs($admin)->get(route('admin.discussions.index',['status'=>'rejected']))->assertOk()->assertSee('سوابق رسیدگی')->assertSee('پرسش را دقیق‌تر');
  }
  public function test_admin_discussion_queue_can_filter_by_kind_and_search_author_or_text(): void {
