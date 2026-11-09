@@ -580,18 +580,27 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
                     if not isinstance(fact, dict) or fact.get("verification_status") != "evidence_backed":
                         continue
                     locator = fact.get("locator") if isinstance(fact.get("locator"), dict) else {}
+                    safe_locator_keys = {
+                        "kind", "media", "page", "page_start", "page_end", "pages",
+                        "sheet", "row_start", "row_end", "slide", "paragraph",
+                        "block_index", "character_start", "character_end",
+                        "time_start_seconds", "time_end_seconds", "section", "lesson_id",
+                    }
+                    safe_locator = {
+                        str(key): value
+                        for key, value in list(locator.items())[:16]
+                        if str(key) in safe_locator_keys and isinstance(value, (str, int, float, bool, list))
+                    }
                     facts.append({
                         "type": str(fact.get("type") or "other")[:32],
                         "key": redact(str(fact.get("key") or ""))[0][:120],
                         "value": redact(str(fact.get("value") or ""))[0][:350],
                         "evidence": redact(str(fact.get("evidence") or ""))[0][:240],
-                        "locator": {str(k)[:40]: v for k, v in list(locator.items())[:8] if isinstance(v, (str, int, float, bool))},
+                        "locator": safe_locator,
                         "verification_status": "evidence_backed",
                     })
 
             safe_sources.append({
-                "source_file_id": source.get("source_file_id"),
-                "source_sha256": str(source.get("source_sha256") or "")[:64],
                 "source_type": str(source.get("source_type") or "")[:80],
                 "processing_status": str(source.get("processing_status") or "unknown")[:32],
                 "semantic_review_complete": bool(source.get("semantic_review_complete")),
