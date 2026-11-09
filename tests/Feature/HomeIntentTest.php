@@ -37,7 +37,7 @@ class HomeIntentTest extends TestCase
             ->assertSee('خدمات هوشمند فراست')
             ->assertSee('دوره‌های آموزشی')
             ->assertSee('خروجی Word و PDF')
-            ->assertSee('شروع یک کار جدید')
+            ->assertSee('شروع کار با فایل')
             ->assertSee('ورود به فروشگاه')
             ->assertSee('homeStoreSearch', false)
             ->assertSee('name="q"', false)
