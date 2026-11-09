@@ -88,6 +88,22 @@ Route::view('/terms','legal.terms')->name('terms');
 Route::view('/refund-policy','legal.refunds')->name('refunds');
 Route::view('/privacy','legal.privacy')->name('privacy');
 
+Route::get('/trust', function () {
+    $rawBadges = \App\Models\SiteSetting::read('trust_badges', '[]');
+    $decodedBadges = json_decode((string) $rawBadges, true);
+    $trustBadges = is_array($decodedBadges) ? collect($decodedBadges)->filter(function ($badge) {
+        if (!is_array($badge) || empty($badge['name'])) return false;
+        $image = (string) ($badge['image'] ?? '');
+        $verifyUrl = (string) ($badge['verify_url'] ?? '');
+        $validImage = str_starts_with($image, '/storage/') || (filter_var($image, FILTER_VALIDATE_URL) && parse_url($image, PHP_URL_SCHEME) === 'https');
+        $validVerifyUrl = $verifyUrl === '' || (filter_var($verifyUrl, FILTER_VALIDATE_URL) && parse_url($verifyUrl, PHP_URL_SCHEME) === 'https');
+        return $validImage && $validVerifyUrl;
+    })->values() : collect();
+
+    return view('legal.trust', compact('trustBadges'));
+})->name('trust');
+
+
 // Guest / public support chat widget endpoint
 Route::post('/api/support/guest-message', [SupportController::class, 'guestMessage'])
     ->middleware('throttle:20,10')

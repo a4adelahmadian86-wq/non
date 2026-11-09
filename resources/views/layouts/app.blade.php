@@ -117,9 +117,19 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
     </div>
     <div class="footer-column"><h3>محصول</h3><a href="{{ route('store') }}">فروشگاه فایل</a><a href="{{ route('editor') }}">تایپ و خدمات</a><a href="{{ route('pricing') }}">قیمت‌گذاری</a><a href="{{ route('cart') }}">سبد خرید</a></div>
     <div class="footer-column"><h3>دانش و راهنما</h3><a href="{{ route('blog') }}">مجله فراست</a><a href="/announcements">تازه‌ها و اطلاعیه‌ها</a><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a></div>
-    <div class="footer-column footer-column--account"><h3>حساب و پشتیبانی</h3><a href="{{ route('dashboard') }}">فضای کاربری</a><a href="/wallet">کیف پول</a><a href="/wishlist">علاقه‌مندی‌ها</a><a href="/support">مرکز پشتیبانی</a><a href="#" data-open-support>گفت‌وگو با پشتیبانی</a><div class="footer-trust"><i class="fa-solid fa-shield-halved"></i><span>شفافیت در خرید، دسترسی آسان به فایل‌ها و پشتیبانی در مسیر استفاده</span></div></div>
+    <div class="footer-column footer-column--account"><h3>حساب و پشتیبانی</h3><a href="{{ route('dashboard') }}">فضای کاربری</a><a href="/wallet">کیف پول</a><a href="/wishlist">علاقه‌مندی‌ها</a><a href="/support">مرکز پشتیبانی</a><a href="#" data-open-support>گفت‌وگو با پشتیبانی</a><div class="footer-trust-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>اطلاعات شفاف، مسیرهای ارتباطی روشن و دسترسی به شرایط خدمات</span></div></div>
   </div>
-  <div class="footer-bottom"><span>© {{ now()->year }} فراست — تمامی حقوق محفوظ است.</span><div><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a><a href="/refund-policy">شرایط بازگشت وجه</a><a href="{{ route('blog') }}">مجله</a></div><a class="footer-back-top" href="#app-main"><i class="fa-solid fa-arrow-up"></i> بازگشت به بالا</a></div>
+  <div class="footer-bottom farast-footer-bottom">
+    <section class="farast-footer-trust" aria-labelledby="farast-footer-trust-title">
+      <div class="farast-footer-trust__heading"><span class="farast-footer-trust__icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span><div><strong id="farast-footer-trust-title">اعتبار و نمادهای اعتماد</strong><small>اطلاعات رسمی و راه‌های استعلام فراست</small></div></div>
+      <a class="farast-footer-trust__link" href="{{ route('trust') }}">مشاهده همه نمادها و مجوزها <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+    </section>
+    <div class="farast-footer-bottom__meta">
+      <span>© {{ now()->year }} فراست — تمامی حقوق محفوظ است.</span>
+      <div><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a><a href="/refund-policy">شرایط بازگشت وجه</a><a href="{{ route('blog') }}">مجله</a></div>
+      <a class="footer-back-top" href="#app-main"><i class="fa-solid fa-arrow-up"></i> بازگشت به بالا</a>
+    </div>
+  </div>
 </footer>@endif
 <button type="button" id="farastInstallApp" class="farast-install-app" aria-label="نصب اپلیکیشن فراست" hidden><i class="fa-solid fa-download" aria-hidden="true"></i><span>نصب فراست</span></button>
 <div id="farastPwaHelp" class="farast-pwa-help" role="dialog" aria-modal="false" aria-labelledby="farastPwaHelpTitle" hidden><button type="button" class="farast-pwa-help__close" aria-label="بستن">×</button><strong id="farastPwaHelpTitle">افزودن فراست به صفحه اصلی</strong><p>در نوار پایین مرورگر روی «اشتراک‌گذاری» بزنید و سپس «افزودن به صفحه اصلی» را انتخاب کنید.</p></div>
