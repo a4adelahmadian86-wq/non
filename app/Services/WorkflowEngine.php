@@ -32,11 +32,11 @@ class WorkflowEngine
 
         try {
             DB::transaction(function () use ($steps, $context, $workflow, $runId, $eventWorkflowId): void {
-                foreach ($steps as $step) {
+                foreach ($steps as $stepIndex => $step) {
                     if (! is_array($step)) {
                         throw new \InvalidArgumentException('Workflow step must be an object.');
                     }
-                    $this->step($step, $context, (int) $workflow->user_id);
+                    $this->step($step, $context, (int) $workflow->user_id, $runId, (int) $stepIndex);
                 }
 
                 // Commit side effects and the event-workflow completion marker together.
@@ -289,7 +289,7 @@ class WorkflowEngine
         return $completedNow;
     }
 
-    private function step(array $step, array $context, int $ownerId): void
+    private function step(array $step, array $context, int $ownerId, int $runId, int $stepIndex): void
     {
         $action = (string) ($step['action'] ?? '');
         if (! in_array($action, self::SUPPORTED_ACTIONS, true)) {
@@ -306,8 +306,9 @@ class WorkflowEngine
                 'workflow',
                 mb_substr((string) ($step['title'] ?? 'اجرای گردش‌کار'), 0, 180),
                 mb_substr((string) ($step['message'] ?? 'گردش‌کار اجرا شد.'), 0, 5000),
-                ['url' => route('platform.workflows')],
+                ['url' => route('platform.workflows'), 'workflow_run_id' => $runId, 'step_index' => $stepIndex],
                 true,
+                'workflow:run:'.$runId.':step:'.$stepIndex.':user:'.$targetUserId,
             );
             if (! $notification) {
                 throw new \RuntimeException('ثبت اعلان گردش‌کار انجام نشد.');
