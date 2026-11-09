@@ -191,6 +191,7 @@ trait PaysWithZarinpal
                     'سفارش فروشگاه شماره '.$locked->id.' از طریق زرین‌پال پرداخت شد و محتوای خریداری‌شده در کتابخانه شما قرار گرفت.',
                     ['order_id' => $locked->id, 'amount_rials' => (int) $locked->total_rials, 'url' => route('library')],
                     true,
+                    'order:'.$locked->id.':paid:user:'.$locked->user_id,
                 );
                 $paymentProcessed = true;
             });
