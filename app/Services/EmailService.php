@@ -10,16 +10,14 @@ use App\Mail\SupportTicketMail;
 use App\Mail\TestMail;
 use App\Mail\TicketReplyMail;
 use App\Mail\WelcomeMail;
+use App\Jobs\DeliverFarastEmail;
 use App\Models\Announcement;
 use App\Models\EmailLog;
 use App\Models\Order;
 use App\Models\SiteSetting;
 use App\Models\Ticket;
 use App\Models\User;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\View;
 use Throwable;
 
 class EmailService
