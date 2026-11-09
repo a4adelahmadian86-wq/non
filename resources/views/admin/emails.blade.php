@@ -103,7 +103,7 @@
         <label class="toggle-card">
           <span><i class="fa-solid fa-bolt"></i> ارسال همزمان (فقط در صورت نیاز؛ پیش‌فرض صف)</span>
           <input type="hidden" name="email_sync" value="0">
-          <input type="checkbox" name="email_sync" value="1" {{ filter_var(\App\Models\SiteSetting::read('email_sync', true), FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+          <input type="checkbox" name="email_sync" value="1" {{ filter_var(\App\Models\SiteSetting::read('email_sync', false), FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
           <b></b>
         </label>
 
