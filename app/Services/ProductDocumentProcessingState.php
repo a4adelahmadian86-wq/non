@@ -18,9 +18,13 @@ class ProductDocumentProcessingState
         int $readerPageCount,
     ): array {
         $extractionComplete = ! (bool) ($inspection['extraction_truncated'] ?? false);
-        $analysisBatchesComplete = $expectedBatches > 0 && $successfulBatches >= $expectedBatches;
-        $semanticReviewComplete = ($providers['groq_text'] ?? null) === 'completed'
-            && $analysisBatchesComplete;
+        $visualOnlyReviewComplete = $expectedBatches === 0 && ($providers['groq_vision'] ?? null) === 'completed';
+        $analysisBatchesComplete = $expectedBatches > 0
+            ? $successfulBatches >= $expectedBatches
+            : $visualOnlyReviewComplete;
+        $semanticReviewComplete = (
+            ($providers['groq_text'] ?? null) === 'completed' && $analysisBatchesComplete
+        ) || $visualOnlyReviewComplete;
 
         $status = ! $hasChunks || ! $extractionComplete
             ? 'partial'
