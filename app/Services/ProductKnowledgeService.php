@@ -225,22 +225,61 @@ class ProductKnowledgeService
             }
 
             $structure = (array) ($document->structure_json ?? []);
+            $inspection = (array) data_get($structure, 'inspection', []);
             $completeness = (array) data_get($structure, 'completeness', []);
             $review = (array) data_get($structure, 'ai_review', []);
             $providers = (array) data_get($review, 'provider_status', []);
             $expected = (int) ($completeness['analysis_batch_count'] ?? $review['analysis_batch_count'] ?? 0);
             $successful = (int) ($completeness['successful_analysis_batches'] ?? $review['successful_analysis_batches'] ?? 0);
+            $detectedType = (string) ($inspection['detected_type'] ?? $document->detected_type ?? '');
+            $transcriptionKnown = array_key_exists('transcription_truncated', $inspection);
+            $transcriptionComplete = $detectedType !== 'audio'
+                || ($transcriptionKnown && ! (bool) $inspection['transcription_truncated']);
             $extractionComplete = (bool) ($completeness['extraction_complete'] ?? false)
-                && ! (bool) data_get($structure, 'inspection.extraction_truncated', false)
-                && ! (bool) data_get($structure, 'inspection.transcription_truncated', false);
+                && ! (bool) ($inspection['extraction_truncated'] ?? false)
+                && $transcriptionComplete;
+
+            $imageCapableTypes = ['pdf', 'docx', 'pptx', 'xlsx'];
+            $inventoryKnown = array_key_exists('visual_inventory_complete', $inspection);
+            $visualInventoryComplete = $inventoryKnown
+                ? (bool) $inspection['visual_inventory_complete']
+                : (! in_array($detectedType, $imageCapableTypes, true)
+                    && ! ($detectedType === 'audio' && ! $transcriptionKnown));
+            if ($detectedType === 'image' && ($providers['groq_vision'] ?? null) === 'completed') {
+                $visualInventoryComplete = true;
+            }
+
+            $visualReviewRequired = (int) ($inspection['embedded_image_count'] ?? 0) > 0
+                || $detectedType === 'image';
+            $visualReviewComplete = ! $visualReviewRequired
+                || (
+                    ($providers['groq_vision'] ?? null) === 'completed'
+                    && $visualInventoryComplete
+                    && ! (bool) ($inspection['visual_review_truncated'] ?? false)
+                );
             $textReviewComplete = $expected > 0
                 && $successful >= $expected
                 && ($providers['groq_text'] ?? null) === 'completed'
                 && (bool) ($completeness['analysis_batches_complete'] ?? false);
-            $visualReviewComplete = $expected === 0
-                && ($providers['groq_vision'] ?? null) === 'completed'
-                && (int) data_get($structure, 'inspection.extracted_characters', 0) === 0;
-            $semanticReviewComplete = $textReviewComplete || $visualReviewComplete;
+            $visualOnlyReviewComplete = $expected === 0
+                && $visualReviewRequired
+                && $visualReviewComplete
+                && (int) ($inspection['extracted_characters'] ?? 0) === 0;
+            $semanticReviewComplete = $visualInventoryComplete
+                && (
+                    ($textReviewComplete && $visualReviewComplete)
+                    || $visualOnlyReviewComplete
+                );
+
+            if (! $visualInventoryComplete) {
+                $reasons[] = ['code' => 'visual_inventory_incomplete', 'message' => 'بررسی وجود و وضعیت تصاویر جاسازی‌شده در یکی از فایل‌ها کامل نیست.'];
+            }
+            if (! $transcriptionComplete) {
+                $reasons[] = ['code' => 'audio_transcription_incomplete', 'message' => 'کامل‌بودن رونویسی صوت تأیید نشده است.'];
+            }
+            if ($visualReviewRequired && ! $visualReviewComplete) {
+                $reasons[] = ['code' => 'visual_review_incomplete', 'message' => 'تمام تصاویر یکی از فایل‌ها با موفقیت بررسی نشده‌اند.'];
+            }
 
             if ($document->processing_status !== 'completed' || ! $extractionComplete || ! $semanticReviewComplete) {
                 $reasons[] = [
@@ -309,6 +348,9 @@ class ProductKnowledgeService
                     'extracted_characters' => (int) data_get($structure, 'inspection.extracted_characters', 0),
                     'extraction_truncated' => (bool) data_get($structure, 'inspection.extraction_truncated', false),
                     'transcription_truncated' => (bool) data_get($structure, 'inspection.transcription_truncated', false),
+                    'embedded_image_count' => (int) data_get($structure, 'inspection.embedded_image_count', 0),
+                    'visual_inventory_complete' => $visualInventoryComplete,
+                    'visual_review_truncated' => (bool) data_get($structure, 'inspection.visual_review_truncated', false),
                 ],
                 'review' => [
                     'summary' => $summary,
