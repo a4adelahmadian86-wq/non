@@ -69,6 +69,15 @@ class ProductContentGenerationTest extends TestCase
             'word_count' => 800,
             'character_count' => 5000,
             'structure_json' => [
+                'inspection' => [
+                    'detected_type' => 'pdf',
+                    'extracted_characters' => 5000,
+                    'extraction_truncated' => false,
+                    'transcription_truncated' => false,
+                    'embedded_image_count' => 0,
+                    'visual_inventory_complete' => true,
+                    'visual_review_truncated' => false,
+                ],
                 'completeness' => [
                     'extraction_complete' => true,
                     'analysis_batches_complete' => true,
