@@ -11,7 +11,22 @@ class ProductContentPrivacyFilter
         }
 
         if (is_array($value)) {
+            $privateMetadataKeys = [
+                'file_name',
+                'original_name',
+                'source_sha256',
+                'storage_path',
+                'file_path',
+                'absolute_path',
+                'private_path',
+                'path',
+                'disk',
+            ];
             foreach ($value as $key => $item) {
+                if (is_string($key) && in_array(strtolower($key), $privateMetadataKeys, true)) {
+                    unset($value[$key]);
+                    continue;
+                }
                 $value[$key] = $this->sanitize($item);
             }
         }
