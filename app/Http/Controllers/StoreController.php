@@ -470,7 +470,14 @@ class StoreController extends Controller
             }
             $readerDiscussions = $discussionQuery
                 ->whereNull('parent_id')
-                ->where('status', 'approved')
+                ->where(function ($visibility) use ($user) {
+                    $visibility->where('status', 'approved');
+                    if ($user) {
+                        $visibility->orWhere(fn ($pending) => $pending
+                            ->where('status', 'pending')
+                            ->where('user_id', $user->id));
+                    }
+                })
                 ->withCount([
                     'replies as replies_count' => fn ($query) => $query->where('status', 'approved'),
                     'reactions as likes_count' => fn ($query) => $query->where('type', 'like'),

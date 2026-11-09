@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ContentDiscussion;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductPreview;
@@ -712,5 +713,50 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee('__FARAST_READER_IDENTITY__');
     }
 
+
+    public function test_reader_shows_approved_discussions_publicly_and_pending_edits_only_to_their_author(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $author = $this->makeReaderUser();
+        $other = User::create([
+            'name' => 'Reader Other',
+            'mobile' => '09123456790',
+            'password' => 'secret',
+        ]);
+
+        $pending = ContentDiscussion::create([
+            'target_type' => 'reader',
+            'target_key' => (string) $product->id,
+            'kind' => 'comment',
+            'user_id' => $author->id,
+            'body' => 'این مشارکت هنوز در صف بررسی است و باید خصوصی بماند.',
+            'status' => 'pending',
+            'anchor_page' => 1,
+            'anchor_section' => 0,
+            'anchor_quote' => 'عبارت انتخاب‌شده',
+        ]);
+        $approved = ContentDiscussion::create([
+            'target_type' => 'reader',
+            'target_key' => (string) $product->id,
+            'kind' => 'comment',
+            'user_id' => $other->id,
+            'body' => 'این دیدگاه تأییدشده برای همه خوانندگان قابل مشاهده است.',
+            'status' => 'approved',
+            'anchor_page' => 1,
+            'anchor_section' => 0,
+            'anchor_quote' => 'عبارت عمومی',
+        ]);
+        $url = route('store.reader', $product->slug);
+
+        $this->get($url)->assertOk()->assertSee($approved->body)->assertDontSee($pending->body);
+        $this->actingAs($other)->get($url)->assertOk()->assertSee($approved->body)->assertDontSee($pending->body)->assertDontSee('ویرایش مشارکت');
+        $this->actingAs($author)->get($url)->assertOk()->assertSee($approved->body)->assertSee($pending->body)->assertSee('ویرایش مشارکت')->assertSee('لغو مشارکت');
+
+        $updatedBody = 'نسخه اصلاح‌شده مشارکت در انتظار بررسی است.';
+        $this->actingAs($author)->put(route('community.mine.update', $pending), ['body' => $updatedBody])->assertRedirect();
+        $this->assertDatabaseHas('content_discussions', ['id' => $pending->id, 'body' => $updatedBody, 'status' => 'pending']);
+        $this->actingAs($author)->delete(route('community.mine.withdraw', $pending))->assertRedirect();
+        $this->assertDatabaseMissing('content_discussions', ['id' => $pending->id]);
+    }
 
 }
