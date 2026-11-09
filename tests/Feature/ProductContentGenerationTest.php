@@ -324,14 +324,18 @@ class ProductContentGenerationTest extends TestCase
                 'original_name' => 'private-customer.pdf',
                 'storage_path' => 'private/customer/123/file.pdf',
                 'signed_url' => 'https://storage.example.test/file?token=secret-value',
-                'facts' => [['value' => 'راهنمای نصب معتبر']],
+                'facts' => [[
+                    'value' => 'راهنمای نصب معتبر؛ https://bucket.example.test/file?X-Amz-Signature=private-signature-value',
+                ]],
             ],
         ]);
 
         $this->assertArrayNotHasKey('original_name', $payload['source']);
         $this->assertArrayNotHasKey('storage_path', $payload['source']);
         $this->assertArrayNotHasKey('signed_url', $payload['source']);
-        $this->assertSame('راهنمای نصب معتبر', $payload['source']['facts'][0]['value']);
+        $this->assertStringContainsString('راهنمای نصب معتبر', $payload['source']['facts'][0]['value']);
+        $this->assertStringNotContainsString('private-signature-value', $payload['source']['facts'][0]['value']);
+        $this->assertStringNotContainsString('X-Amz-Signature', $payload['source']['facts'][0]['value']);
     }
 
     public function test_text_document_without_text_summary_or_facts_is_not_ready_even_if_visual_report_exists(): void
