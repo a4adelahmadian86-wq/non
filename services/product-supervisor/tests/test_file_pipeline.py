@@ -174,6 +174,7 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "zip")
         self.assertEqual(result.archive_entries, ["chapters/readme.txt", "ignored.bin"])
         self.assertIn("متن فصل اول", result.extracted_text)
+        self.assertNotIn("chapters/readme.txt", result.extracted_text)
         self.assertEqual(result.embedded_documents[0]["name"], "chapters/readme.txt")
         self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "chapters/readme.txt")
 
@@ -189,6 +190,7 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(result.detected_type, "tar")
         self.assertIn("docs/chapter.txt", result.archive_entries)
         self.assertIn("متن داخل آرشیو TAR", result.extracted_text)
+        self.assertNotIn("docs/chapter.txt", result.extracted_text)
         self.assertEqual(result.content_chunks[0]["locator"]["archive_entry"], "docs/chapter.txt")
 
     def test_generic_zip_extracts_and_inventories_raster_images(self):
@@ -246,6 +248,7 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(len(result.image_assets), 1)
         self.assertEqual(result.image_assets[0]["locator"]["archive_entry"], "lessons/guide.docx")
         self.assertIn("متن راهنمای داخل سند", result.extracted_text)
+        self.assertNotIn("lessons/guide.docx", result.extracted_text)
 
     def test_tar_gzip_archive_is_inspected_without_extracting_to_disk(self):
         stream = io.BytesIO()
