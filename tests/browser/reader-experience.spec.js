@@ -1733,7 +1733,7 @@ test('captures a selected reader passage and jumps back to its anchored discussi
       <button type="button" class="farast-reader-thumb" data-goto="0">بخش اول</button>
       <button type="button" class="farast-reader-thumb" data-goto="1">بخش دوم</button>
       <article class="farast-reader-page-item is-active" data-index="0">
-        <div class="farast-pdf-text-layer"><span>متن نمونه برای عبارت مهم در این فایل</span></div>
+        <div class="farast-pdf-text-layer"><span>متن نمونه برای عبارت مهم و سپس عبارت مهم در این فایل</span></div>
       </article>
       <article class="farast-reader-page-item" data-index="1">
         <div class="farast-pdf-text-layer"><span>متن بخش دوم با عبارت مهم دوم</span></div>
@@ -1748,8 +1748,8 @@ test('captures a selected reader passage and jumps back to its anchored discussi
         <textarea id="reader-discussion-body">دیدگاه آزمایشی درباره این بخش از فایل</textarea>
       </form>
       <div id="reader-discussion-selection"></div>
-      <button type="button" data-reader-jump data-section="0" data-page="1" data-quote="عبارت مهم">رفتن به متن</button>
-      <button type="button" data-reader-jump data-section="1" data-page="1" data-quote="عبارت مهم دوم">رفتن به متن بخش دوم</button>
+      <button type="button" data-reader-jump data-section="0" data-page="1" data-start="" data-quote="عبارت مهم">رفتن به متن</button>
+      <button type="button" data-reader-jump data-section="1" data-page="1" data-start="" data-quote="عبارت مهم دوم">رفتن به متن بخش دوم</button>
     </section>
   `);
   await page.evaluate(() => {
@@ -1766,7 +1766,8 @@ test('captures a selected reader passage and jumps back to its anchored discussi
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-discussions.js') });
   await page.evaluate(() => {
     const text = document.querySelector('.farast-pdf-text-layer span').firstChild;
-    const start = text.textContent.indexOf('عبارت مهم');
+    const start = text.textContent.lastIndexOf('عبارت مهم');
+    document.querySelector('[data-reader-jump][data-section="0"]').dataset.start = String(start);
     const range = document.createRange();
     range.setStart(text, start);
     range.setEnd(text, start + 'عبارت مهم'.length);
@@ -1780,6 +1781,20 @@ test('captures a selected reader passage and jumps back to its anchored discussi
   await expect(page.locator('#reader-discussion-section')).toHaveValue('0');
   await page.locator('[data-reader-jump][data-section="0"]').click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('عبارت مهم');
+  const jumpedOffset = await page.evaluate(() => {
+    const container = document.querySelector('.farast-pdf-text-layer');
+    const range = document.createRange();
+    range.selectNodeContents(container);
+    range.setEnd(window.getSelection().getRangeAt(0).startContainer, window.getSelection().getRangeAt(0).startOffset);
+    return range.toString().length;
+  });
+  expect(jumpedOffset).toBe(Number(await page.locator('[data-reader-jump][data-section="0"]').getAttribute('data-start')));
+  await page.evaluate(() => {
+    document.querySelector('[data-reader-root]').dispatchEvent(new CustomEvent('farast:reader-page-change', { detail: { page: 2 } }));
+  });
+  await expect(page.locator('#reader-discussion-quote')).toHaveValue('');
+  await expect(page.locator('#reader-discussion-page')).toHaveValue('2');
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('');
   await page.locator('[data-reader-jump][data-section="1"]').click();
   await expect(page.locator('#reader-page-number')).toHaveValue('2');
   await expect(page.locator('#reader-discussion-section')).toHaveValue('1');

@@ -54,7 +54,7 @@
                 <header><strong>{{ $entry->user?->name ?: 'کاربر' }}</strong><span>بخش {{ number_format((int) ($entry->anchor_section ?? 0) + 1) }} · صفحه {{ number_format((int) $entry->anchor_page) }}</span>@if($entry->status === 'pending')<span class="reader-discussion-status">در انتظار بررسی</span>@endif<time>{{ $entry->created_at?->translatedFormat('d F Y') }}</time></header>
                 @if($entry->anchor_quote)
                     <blockquote>«{{ $entry->anchor_quote }}»</blockquote>
-                    <button type="button" class="reader-discussion-jump" data-reader-jump data-section="{{ (int) ($entry->anchor_section ?? 0) }}" data-page="{{ (int) $entry->anchor_page }}" data-quote="{{ $entry->anchor_quote }}">رفتن به محل این دیدگاه در فایل</button>
+                    <button type="button" class="reader-discussion-jump" data-reader-jump data-section="{{ (int) ($entry->anchor_section ?? 0) }}" data-page="{{ (int) $entry->anchor_page }}" data-start="{{ $entry->anchor_start ?? '' }}" data-quote="{{ $entry->anchor_quote }}">رفتن به محل این دیدگاه در فایل</button>
                 @endif
                 <p>{{ $entry->body }}</p>
                 @if($entry->status === 'pending')
@@ -99,6 +99,6 @@
 </style>
 @endpush
 @push('scripts')
-<script src="/js/farast-reader-discussions.js?v=20261109anchor2" defer></script>
+<script src="/js/farast-reader-discussions.js?v=20261109anchor3" defer></script>
 @endpush
 @endonce

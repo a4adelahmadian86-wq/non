@@ -49,10 +49,14 @@
   root.addEventListener('mouseup',()=>window.setTimeout(syncSelection,0));
   root.addEventListener('touchend',()=>window.setTimeout(syncSelection,0),{passive:true});
   root.addEventListener('farast:reader-page-change',event=>{
-    if(window.getSelection()?.isCollapsed!==false){
-      const page=activePage(),section=Math.max(0,Number(page?.dataset.index)||0);
-      pageInput.value=String(Math.max(1,Number(event.detail?.page)||section+1));
-      sectionInput.value=String(section);clearAnchor();
+    const page=activePage(),section=Math.max(0,Number(page?.dataset.index)||0);
+    const nextPage=Math.max(1,Number(event.detail?.page)||section+1);
+    const currentPage=Number(pageInput?.value)||0;
+    if(pageInput&&currentPage!==nextPage){
+      pageInput.value=String(nextPage);
+      if(sectionInput)sectionInput.value=String(section);
+      clearAnchor();
+      window.getSelection()?.removeAllRanges();
     }
     updatePdfTextSelection();
   });
@@ -61,23 +65,33 @@
     if(sectionInput.value!==String(section)){sectionInput.value=String(section);clearAnchor();window.getSelection()?.removeAllRanges();}
     window.setTimeout(updatePdfTextSelection,0);
   });
-  const findQuoteRange=(container,quote)=>{
+  const findQuoteRange=(container,quote,expectedStart=null)=>{
     if(!container||!quote)return null;
-    const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT),chars=[],positions=[];let node;
+    const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT),chars=[],positions=[];let node,rawOffset=0;
     while((node=walker.nextNode())){
       const value=node.nodeValue||'';
       for(let offset=0;offset<value.length;offset++){
-        const character=value[offset];
-        if(/\s/.test(character)){if(!chars.length||chars[chars.length-1]===' ')continue;chars.push(' ');positions.push({node,offset});}
-        else{chars.push(character);positions.push({node,offset});}
+        const character=value[offset],position={node,offset,rawOffset:rawOffset+offset};
+        if(/\s/.test(character)){
+          if(!chars.length||chars[chars.length-1]===' ')continue;
+          chars.push(' ');positions.push(position);
+        }else{chars.push(character);positions.push(position);}
       }
+      rawOffset+=value.length;
     }
-    const normalized=chars.join('').trim(),leading=chars.findIndex(character=>character!==' ');
-    const normalizedQuote=String(quote).replace(/\s+/g,' ').trim(),index=normalized.indexOf(normalizedQuote);
-    if(index<0||leading<0)return null;
-    const start=positions[leading+index],end=positions[leading+index+normalizedQuote.length-1];
-    if(!start||!end)return null;
-    const range=document.createRange();range.setStart(start.node,start.offset);range.setEnd(end.node,end.offset+1);return range;
+    const leading=chars.findIndex(character=>character!==' '),normalized=chars.join('').trim();
+    const normalizedQuote=String(quote).replace(/\s+/g,' ').trim();
+    if(leading<0||!normalizedQuote)return null;
+    const candidates=[];let from=0,index;
+    while((index=normalized.indexOf(normalizedQuote,from))!==-1){
+      const start=positions[leading+index],end=positions[leading+index+normalizedQuote.length-1];
+      if(start&&end)candidates.push({start,end,distance:Number.isFinite(Number(expectedStart))?Math.abs(start.rawOffset-Number(expectedStart)):candidates.length});
+      from=index+1;
+    }
+    if(!candidates.length)return null;
+    candidates.sort((a,b)=>a.distance-b.distance);
+    const {start,end}=candidates[0],range=document.createRange();
+    range.setStart(start.node,start.offset);range.setEnd(end.node,end.offset+1);return range;
   };
   const waitForReaderEvent=(name,predicate)=>new Promise((resolve,reject)=>{
     const timer=window.setTimeout(()=>{root.removeEventListener(name,listener);reject(new Error('Reader navigation timed out'));},10000);
@@ -102,7 +116,7 @@
         const changed=waitForReaderEvent('farast:reader-page-change',event=>Number(event.detail?.page)===targetPage);
         readerPageInput.value=String(targetPage);readerPageInput.dispatchEvent(new Event('change',{bubbles:true}));await changed;
       }
-      const active=activePage(),range=findQuoteRange(getTextContainer(active),button.dataset.quote||'');
+      const active=activePage(),range=findQuoteRange(getTextContainer(active),button.dataset.quote||'',button.dataset.start===''||button.dataset.start===undefined?null:Number(button.dataset.start));
       if(range){const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);range.startContainer.parentElement?.scrollIntoView({behavior:'smooth',block:'center'});}
       else{active?.scrollIntoView({behavior:'smooth',block:'start'});if(preview)preview.textContent='بخش مربوط باز شد، اما نقل‌قول در متن فعلی پیدا نشد.';}
     }finally{button.disabled=false;button.removeAttribute('aria-busy');}
