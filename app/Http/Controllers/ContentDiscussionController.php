@@ -88,6 +88,18 @@ class ContentDiscussionController extends Controller {
   return back()->with('discussion_status','پاسخ شما ثبت شد و پس از بررسی مدیر منتشر می‌شود.');
  }
 
+
+ public function communityIndex() {
+  $members=User::query()->select('users.id','users.name','users.created_at')
+   ->join('content_discussions','content_discussions.user_id','=','users.id')
+   ->where('content_discussions.status','approved')
+   ->groupBy('users.id','users.name','users.created_at')
+   ->selectRaw('COUNT(content_discussions.id) as contributions')
+   ->selectSub(DB::table('discussion_reactions')->join('content_discussions as dc','dc.id','=','discussion_reactions.discussion_id')->selectRaw('COUNT(*)')->whereColumn('dc.user_id','users.id')->where('dc.status','approved')->where('discussion_reactions.type','like'),'helpful')
+   ->orderByDesc('helpful')->orderByDesc('contributions')->orderBy('users.name')
+   ->paginate(24);
+  return view('community.index',compact('members'));
+ }
  public function member(User $user) {
   $approved=ContentDiscussion::query()->where('user_id',$user->id)->where('status','approved');
   $stats=[

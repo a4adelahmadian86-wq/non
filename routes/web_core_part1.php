@@ -58,6 +58,7 @@ Route::get('/', function () {
     return view('home', compact('recentProjects', 'homeProducts', 'homeCategories'));
 })->name('home');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog');
+Route::get('/community', [ContentDiscussionController::class, 'communityIndex'])->name('community.index');
 Route::get('/community/members/{user}', [ContentDiscussionController::class, 'member'])->whereNumber('user')->name('community.member');
 Route::post('/discussions', [ContentDiscussionController::class, 'store'])->middleware(['auth', 'throttle:5,10'])->name('discussions.store');
 Route::post('/discussions/{discussion}/reaction', [ContentDiscussionController::class, 'react'])->middleware(['auth', 'throttle:30,10'])->name('discussions.reaction');

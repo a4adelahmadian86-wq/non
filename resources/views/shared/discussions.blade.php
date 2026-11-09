@@ -9,7 +9,7 @@
     <header class="discussion-hero">
         <div class="discussion-hero-copy">
             <span class="discussion-eyebrow"><i class="fa-regular fa-comments" aria-hidden="true"></i> تجربه‌ها و گفت‌وگوها</span>
-            <h2 id="discussion-heading">{{ $isProduct ? 'تجربه خریداران و پاسخ به پرسش‌ها' : 'دیدگاه خوانندگان و گفت‌وگوی تخصصی' }}</h2>
+            <h2 id="discussion-heading">{{ $isProduct ? 'تجربه خریداران و پاسخ به پرسش‌ها' : 'دیدگاه خوانندگان و گفت‌وگوی تخصصی' }}</h2><a class="discussion-community-link" href="{{ route('community.index') }}">اعضای جامعه فراست <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
             <p>{{ $isProduct ? 'پیش از انتخاب، تجربه‌های ثبت‌شده را بخوانید یا پرسش خود را مطرح کنید.' : 'نظر و پرسش خود را درباره محتوای این مقاله با دیگر خوانندگان به اشتراک بگذارید.' }}</p>
             <div class="discussion-hero-stats">
                 <span><i class="fa-regular fa-message" aria-hidden="true"></i>{{ number_format($primaryCount) }} {{ $isProduct ? 'دیدگاه' : 'نظر' }}</span>

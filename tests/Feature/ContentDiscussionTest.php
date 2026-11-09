@@ -157,4 +157,14 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$discussion),['status'=>'approved'])->assertRedirect();
   $this->get(route('community.member',$author))->assertOk()->assertSee('کاربر آزمایشی')->assertSee('مشارکت‌های منتشرشده')->assertSee('آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟')->assertDontSee('09123456831');
  }
+
+ public function test_community_directory_lists_only_members_with_approved_contributions(): void {
+  $p=$this->product();$author=$this->user('09123456841');$pending=$this->user('09123456842');$admin=$this->user('09123456843','admin');
+  foreach([[$author,'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'],[$pending,'آیا نسخه دیگری از این فایل نیز ارائه می‌شود؟']] as [$member,$body]){
+   $this->actingAs($member)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>$body])->assertRedirect();
+  }
+  $items=ContentDiscussion::orderBy('id')->get();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$items[0]),['status'=>'approved'])->assertRedirect();
+  $this->get(route('community.index'))->assertOk()->assertSee('کاربر آزمایشی')->assertSee('مشارکت‌کننده‌های جامعه')->assertDontSee('09123456842');
+ }
 }
