@@ -14,6 +14,7 @@ use App\Models\StoreLibraryItem;
 use App\Models\StoreWishlist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 
 class StoreController extends Controller
 {
@@ -122,12 +123,18 @@ class StoreController extends Controller
             ->values();
         $hasPreview = $showPreviews->isNotEmpty();
         $title = $product->seo_title ?: $product->title;
-        $discussions = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->whereNull('parent_id')->where('status', 'approved')->with(['user', 'replies' => fn ($q) => $q->where('status', 'approved')->with('user')->oldest()])->latest()->limit(30)->get();
-        $discussionCounts = [
-            'reviews' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->whereNull('parent_id')->where('status', 'approved')->count(),
-            'questions' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
-        ];
-        $averageRating = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->where('status', 'approved')->whereNotNull('rating')->avg('rating');
+        if (Schema::hasTable('content_discussions')) {
+            $discussions = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->whereNull('parent_id')->where('status', 'approved')->with(['user', 'replies' => fn ($q) => $q->where('status', 'approved')->with('user')->oldest()])->latest()->limit(30)->get();
+            $discussionCounts = [
+                'reviews' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->whereNull('parent_id')->where('status', 'approved')->count(),
+                'questions' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
+            ];
+            $averageRating = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->where('status', 'approved')->whereNotNull('rating')->avg('rating');
+        } else {
+            $discussions = collect();
+            $discussionCounts = ['reviews' => 0, 'questions' => 0];
+            $averageRating = null;
+        }
 
         return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating'));
     }

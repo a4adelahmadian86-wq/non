@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ContentDiscussion;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class BlogController extends Controller
 {
@@ -157,11 +158,16 @@ class BlogController extends Controller
             ->take(3)
             ->values();
 
-        $discussions = ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->whereNull('parent_id')->where('status', 'approved')->with(['user', 'replies' => fn ($q) => $q->where('status', 'approved')->with('user')->oldest()])->latest()->limit(30)->get();
-        $discussionCounts = [
-            'comments' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'comment')->whereNull('parent_id')->where('status', 'approved')->count(),
-            'questions' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
-        ];
+        if (Schema::hasTable('content_discussions')) {
+            $discussions = ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->whereNull('parent_id')->where('status', 'approved')->with(['user', 'replies' => fn ($q) => $q->where('status', 'approved')->with('user')->oldest()])->latest()->limit(30)->get();
+            $discussionCounts = [
+                'comments' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'comment')->whereNull('parent_id')->where('status', 'approved')->count(),
+                'questions' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
+            ];
+        } else {
+            $discussions = collect();
+            $discussionCounts = ['comments' => 0, 'questions' => 0];
+        }
         return view('blog.show', compact('article', 'related', 'discussions', 'discussionCounts'));
     }
 }

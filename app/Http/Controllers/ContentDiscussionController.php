@@ -10,7 +10,7 @@ class ContentDiscussionController extends Controller {
   if($data['target_type']==='product') {
    $product=StoreProduct::published()->findOrFail((int)$data['target_key']);
    if(!in_array($data['kind'],['review','question'],true)) throw ValidationException::withMessages(['kind'=>'برای محصول فقط دیدگاه یا پرسش مجاز است.']);
-   if($data['kind']==='review' && !$data['rating']) throw ValidationException::withMessages(['rating'=>'برای ثبت دیدگاه، امتیاز یک تا پنج را انتخاب کنید.']);
+   if($data['kind']==='review' && !($data['rating'] ?? null)) throw ValidationException::withMessages(['rating'=>'برای ثبت دیدگاه، امتیاز یک تا پنج را انتخاب کنید.']);
    if($data['kind']!=='review') $data['rating']=null;
    if($data['kind']==='review' && ContentDiscussion::where('target_type','product')->where('target_key',(string)$product->id)->where('kind','review')->where('user_id',$request->user()->id)->where('status','!=','rejected')->exists()) throw ValidationException::withMessages(['body'=>'برای این محصول قبلاً دیدگاه ثبت کرده‌اید.']);
    $key=(string)$product->id;$redirect=route('store.product',$product->slug).'#store-discussions';
@@ -19,7 +19,7 @@ class ContentDiscussionController extends Controller {
    if($data['kind']==='review') throw ValidationException::withMessages(['kind'=>'امتیازدهی فقط برای محصولات فعال است.']);
    $data['rating']=null;$key=$data['target_key'];$redirect=route('blog.show',$key).'#store-discussions';
   }
-  ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>$data['title']?:null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
+  ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
   return redirect($redirect)->with('discussion_status','پیام شما ثبت شد و پس از بررسی مدیر در همین صفحه نمایش داده می‌شود.');
  }
  public function adminIndex(Request $request) {
