@@ -370,6 +370,7 @@ class ProductKnowledgeService
                 'word_count' => $document->word_count,
                 'character_count' => $document->character_count,
                 'summary' => mb_substr($summary, 0, 2200),
+                'visual_report' => mb_substr($visualReport, 0, 1800),
                 'findings' => $sourceFindings,
                 'facts' => $sourceFacts,
                 'facts_total' => $factsTotal,
