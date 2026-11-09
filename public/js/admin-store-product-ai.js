@@ -89,7 +89,7 @@
 
       generated = payload;
       const suggestions = payload.suggestions || {};
-      ['title', 'short_description', 'description', 'seo_title', 'seo_description', 'focus_keyword'].forEach(name => {
+      ['title', 'slug', 'short_description', 'description', 'seo_title', 'seo_description', 'focus_keyword'].forEach(name => {
         const target = field(name);
         if (target) target.value = suggestions[name] || '';
       });
@@ -154,6 +154,7 @@
     try {
       const fields = {
         title: '[name="title"]',
+        slug: '[name="slug"]',
         short_description: '[name="short_description"]',
         description: '[name="description"]',
         seo_title: '[name="seo_title"]',
