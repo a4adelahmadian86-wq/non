@@ -324,7 +324,6 @@ class ContentDiscussionController extends Controller {
   if(in_array($discussion->target_type,['product','reader'],true)) {
    $product=StoreProduct::find((int)$discussion->target_key);
    $base=$product?route($discussion->target_type==='reader'?'store.reader':'store.product',$product->slug):null;
-   if($base && $discussion->target_type==='reader') $base.='#reader-discussions';
   } else {
    $base=BlogController::articleExists($discussion->target_key)?route('blog.show',$discussion->target_key):null;
   }
