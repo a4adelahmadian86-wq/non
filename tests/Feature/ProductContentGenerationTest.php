@@ -194,6 +194,25 @@ class ProductContentGenerationTest extends TestCase
         $this->assertSame('available', app(ProductContentGenerationService::class)->readiness($data['product'])['status']);
     }
 
+    public function test_text_document_without_text_summary_or_facts_is_not_ready_even_if_visual_report_exists(): void
+    {
+        $data = $this->productWithKnowledge();
+        $data['fact']->delete();
+        $structure = (array) $data['document']->structure_json;
+        $structure['ai_review']['summary'] = 'بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.';
+        $structure['ai_review']['media_reports']['visual'] = 'گزارش بینایی: بسته‌بندی آبی';
+        $structure['ai_review']['provider_status']['groq_vision'] = 'completed';
+        $structure['inspection']['embedded_image_count'] = 1;
+        $structure['inspection']['visual_inventory_complete'] = true;
+        $structure['inspection']['visual_review_truncated'] = false;
+        $data['document']->update(['structure_json' => $structure]);
+
+        $readiness = app(ProductContentGenerationService::class)->readiness($data['product']->fresh());
+
+        $this->assertNotSame('available', $readiness['status']);
+        $this->assertContains('knowledge_report_empty', collect($readiness['reasons'])->pluck('code')->all());
+    }
+
     public function test_generation_rejects_a_document_whose_source_hash_is_stale(): void
     {
         $data = $this->productWithKnowledge();
