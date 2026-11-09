@@ -76,11 +76,21 @@ class AnnouncementService
 
     public function broadcast(Announcement $announcement): int
     {
-        if (! Schema::hasTable('farast_notifications')) {
-            return 0;
+        $sent = 0;
+        $failed = false;
+        $notificationsAvailable = Schema::hasTable('farast_notifications');
+        $sendInApp = (bool) ($announcement->notify_in_app ?? true);
+        $sendEmail = (bool) ($announcement->notify_email ?? false);
+
+        // A missing in-app ledger must not suppress an independently enabled email
+        // channel. Keep the announcement pending so the scheduled broadcaster can retry.
+        if ($sendInApp && ! $notificationsAvailable) {
+            $failed = true;
+            Log::warning('farast.announcement.notification_table_missing', [
+                'announcement_id' => $announcement->id,
+            ]);
         }
 
-        $sent = 0;
         $url = route('announcements');
         if (filled($announcement->link_url)) {
             $candidate = (string) $announcement->link_url;
@@ -106,10 +116,10 @@ class AnnouncementService
             default => null,
         };
 
-        $query->orderBy('id')->chunkById(200, function ($users) use ($announcement, $type, $url, &$sent) {
+        $query->orderBy('id')->chunkById(200, function ($users) use ($announcement, $type, $url, $sendInApp, $sendEmail, $notificationsAvailable, &$sent, &$failed) {
             foreach ($users as $user) {
-                if ($announcement->notify_in_app ?? true) {
-                    $this->notifications->push(
+                if ($sendInApp && $notificationsAvailable) {
+                    $notification = $this->notifications->push(
                         $user->id,
                         $type,
                         $announcement->title,
@@ -120,13 +130,23 @@ class AnnouncementService
                             'announcement_type' => $announcement->type,
                         ],
                     );
-                    $sent++;
+
+                    if ($notification) {
+                        $sent++;
+                    } else {
+                        $failed = true;
+                        Log::warning('farast.announcement.in_app_delivery_failed', [
+                            'user_id' => $user->id,
+                            'announcement_id' => $announcement->id,
+                        ]);
+                    }
                 }
 
-                if (($announcement->notify_email ?? false) && $user->email) {
+                if ($sendEmail && $user->email) {
                     try {
                         $this->email->sendSystemAnnouncement($user, $announcement);
-                    } catch (\Throwable $e) {
+                    } catch (\\Throwable $e) {
+                        $failed = true;
                         Log::warning('farast.announcement.email_failed', [
                             'user_id' => $user->id,
                             'announcement_id' => $announcement->id,
@@ -137,7 +157,10 @@ class AnnouncementService
             }
         });
 
-        if (Schema::hasColumn('announcements', 'notified_at')) {
+        // Never mark a partially delivered announcement as complete. The due
+        // broadcaster can retry it; successful in-app deliveries are counted only
+        // when the central notification service confirms persistence.
+        if (! $failed && Schema::hasColumn('announcements', 'notified_at')) {
             $announcement->update(['notified_at' => now()]);
         }
 
@@ -145,6 +168,7 @@ class AnnouncementService
             'announcement_id' => $announcement->id,
             'audience' => $announcement->audience ?? 'all',
             'sent' => $sent,
+            'failed' => $failed,
         ]);
 
         return $sent;
