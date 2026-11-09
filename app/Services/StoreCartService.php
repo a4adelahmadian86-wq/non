@@ -97,7 +97,7 @@ class StoreCartService
         if (! $coupon) {
             throw new \RuntimeException('کد تخفیف معتبر نیست.');
         }
-        if ($coupon->max_uses !== null && $coupon->used_count >= $coupon->max_uses) {
+        if ($coupon->max_uses !== null && ((int) $coupon->used_count + (int) $coupon->reserved_count) >= $coupon->max_uses) {
             throw new \RuntimeException('ظرفیت استفاده از این کد تمام شده است.');
         }
 
@@ -145,16 +145,22 @@ class StoreCartService
         if ($request) {
             $couponCode = $request->session()->get('store_coupon_code');
             if ($couponCode) {
-                $coupon = StoreCoupon::where('code', $couponCode)->where('is_active', true)->first();
-                if ($coupon && $subtotal > 0) {
+                $coupon = StoreCoupon::query()
+                    ->where('code', $couponCode)
+                    ->where('is_active', true)
+                    ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                    ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))
+                    ->first();
+
+                $capacityAvailable = $coupon && ($coupon->max_uses === null
+                    || ((int) $coupon->used_count + (int) $coupon->reserved_count) < (int) $coupon->max_uses);
+
+                if ($coupon && $capacityAvailable && $subtotal > 0
+                    && $subtotal >= (int) ($coupon->min_subtotal_rials ?? 0)) {
                     if ($coupon->type === 'percent') {
                         $discount = (int) floor($subtotal * min(100, max(0, (int) $coupon->value)) / 100);
                     } else {
                         $discount = min($subtotal, max(0, (int) $coupon->value));
-                    }
-                    if ($coupon->min_subtotal_rials && $subtotal < $coupon->min_subtotal_rials) {
-                        $discount = 0;
-                        $couponCode = null;
                     }
                 } else {
                     $couponCode = null;
