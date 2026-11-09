@@ -266,11 +266,19 @@ class SupportNotificationService
                 ? route('admin.support.management', ['ticket' => $ticket->id])
                 : route('support.show', $ticket);
 
-            $this->notifications->push($userId, $type, $title, $body, [
-                'ticket_id' => $ticket->id,
-                'ticket_code' => $ticket->ticket_code,
-                'url' => $url,
-            ]);
+            $this->notifications->push(
+                $userId,
+                $type,
+                $title,
+                $body,
+                [
+                    'ticket_id' => $ticket->id,
+                    'ticket_code' => $ticket->ticket_code,
+                    'url' => $url,
+                ],
+                false,
+                'support:ticket:'.$ticket->id.':event:'.$type.':user:'.$userId,
+            );
         } catch (\Throwable $e) {
             Log::warning('farast.support.notification_failed', ['error' => $e->getMessage()]);
         }
