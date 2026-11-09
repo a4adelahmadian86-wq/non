@@ -357,10 +357,12 @@ class ProductKnowledgeService
                 }
                 $lessonFingerprintData[] = [
                     'id' => (int) $lesson->id,
+                    'section' => (string) $lesson->section?->title,
                     'title' => (string) $lesson->title,
                     'type' => (string) $lesson->lesson_type,
                     'summary' => $lessonSummary,
                     'content_hash' => hash('sha256', $lessonText),
+                    'published' => (bool) $lesson->is_published,
                     'video_url_present' => filled($lesson->video_url),
                 ];
             }
