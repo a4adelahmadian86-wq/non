@@ -97,6 +97,20 @@ class NotificationCenterTest extends TestCase
             ->assertOk()->assertJsonPath('count', 1)->assertJsonMissing(['title' => 'اعلان بایگانی'])->assertJsonMissing(['title' => 'اعلان کاربر دیگر']);
     }
 
+    public function test_duplicate_delivery_keys_return_the_existing_notification(): void
+    {
+        $user = $this->user('09150000111');
+        $service = app(NotificationService::class);
+
+        $first = $service->push($user->id, 'ticket_reply', 'پاسخ جدید', 'پاسخ ثبت شد.', [], false, 'support:ticket:45:event:ticket_reply:user:'.$user->id);
+        $second = $service->push($user->id, 'ticket_reply', 'پاسخ جدید', 'پاسخ ثبت شد.', [], false, 'support:ticket:45:event:ticket_reply:user:'.$user->id);
+
+        $this->assertNotNull($first);
+        $this->assertNotNull($second);
+        $this->assertSame($first->id, $second->id);
+        $this->assertDatabaseCount('farast_notifications', 1);
+    }
+
     public function test_failed_announcement_delivery_is_not_marked_as_broadcasted(): void
     {
         $user = $this->user('09150000108');
