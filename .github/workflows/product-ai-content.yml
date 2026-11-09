@@ -38,6 +38,7 @@ on:
       - 'app/Services/AI/AiOperationRegistry.php'
       - 'app/Services/AI/Providers/GeminiEditorProvider.php'
       - 'app/Services/ProductContentGenerationService.php'
+      - 'app/Services/ProductContentPrivacyFilter.php'
       - 'app/Services/ProductDocumentProcessingState.php'
       - 'app/Services/ProductKnowledgeService.php'
       - 'public/js/admin-store-product-ai.js'
@@ -46,6 +47,12 @@ on:
       - 'tests/Feature/AdminStoreProductWorkflowTest.php'
       - 'tests/Feature/ProductContentGenerationTest.php'
       - 'tests/Unit/ProductDocumentProcessingStateTest.php'
+      - 'services/product-supervisor/file_pipeline.py'
+      - 'services/product-supervisor/main.py'
+      - 'services/product-supervisor/requirements.txt'
+      - 'services/product-supervisor/tests/test_file_pipeline.py'
+      - 'services/product-supervisor/tests/test_provider_diagnostics.py'
+      - 'services/product-supervisor/tests/test_api.py'
       - '.github/workflows/product-ai-content.yml'
 
 permissions:
