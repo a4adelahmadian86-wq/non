@@ -122,13 +122,24 @@ class ProductContentGenerationService
 
         return [
             'suggestions' => $clean,
-            'sources' => collect($knowledge['sources'])->map(fn ($source) => [
-                'name' => $source['file_name'],
-                'type' => $source['file_type'],
-                'pages' => $source['page_count'],
-                'facts_total' => $source['facts_total'],
-            ])->values()->all(),
+            'sources' => collect($knowledge['sources'])->map(function (array $source) use ($usedFacts): array {
+                $usedSourceFacts = collect($source['facts'])
+                    ->filter(fn (array $fact) => in_array((int) $fact['id'], $usedFacts, true))
+                    ->values()
+                    ->all();
+
+                return [
+                    'source_id' => $source['source_id'],
+                    'name' => $source['file_name'],
+                    'file_name' => $source['file_name'],
+                    'type' => $source['file_type'],
+                    'pages' => $source['page_count'],
+                    'facts_total' => $source['facts_total'],
+                    'facts' => $usedSourceFacts,
+                ];
+            })->values()->all(),
             'course_lesson_count' => count($knowledge['course_lessons']),
+            'course_lessons' => $knowledge['course_lessons'],
             'source_fingerprints' => $knowledge['source_fingerprints'],
             'source_signature' => $this->signature($product, $knowledge['source_fingerprints']),
             'ai' => $ai['ai'] ?? null,
