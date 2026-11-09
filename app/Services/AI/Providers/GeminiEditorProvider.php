@@ -202,7 +202,7 @@ class GeminiEditorProvider implements AiProvider
             'keywords' => isset($json['keywords']) && is_array($json['keywords']),
             'outline' => isset($json['sections']) && is_array($json['sections']),
             'document_review' => isset($json['summary'],$json['suggestions']) && is_array($json['suggestions']),
-            'product_content' => isset($json['title'],$json['short_description'],$json['description'],$json['seo_title'],$json['seo_description'],$json['focus_keyword'],$json['secondary_keywords'],$json['tags'],$json['category_id'],$json['category_reason'],$json['selling_points'],$json['used_fact_ids'],$json['used_source_ids'],$json['unknowns']) && is_array($json['secondary_keywords']) && is_array($json['tags']) && is_array($json['selling_points']) && is_array($json['used_fact_ids']) && is_array($json['used_source_ids']) && is_array($json['field_evidence']) && is_array($json['unknowns']),
+            'product_content' => isset($json['title'],$json['short_description'],$json['description'],$json['seo_title'],$json['seo_description'],$json['focus_keyword'],$json['version'],$json['license_type'],$json['secondary_keywords'],$json['tags'],$json['category_id'],$json['category_reason'],$json['selling_points'],$json['used_fact_ids'],$json['used_source_ids'],$json['unknowns']) && is_array($json['secondary_keywords']) && is_array($json['tags']) && is_array($json['selling_points']) && is_array($json['used_fact_ids']) && is_array($json['used_source_ids']) && is_array($json['field_evidence']) && is_array($json['unknowns']),
             default => isset($json['text']) && is_string($json['text']),
         };
         if (! $valid) throw new RuntimeException('ai_provider_invalid_shape');
