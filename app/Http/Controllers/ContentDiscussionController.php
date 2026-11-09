@@ -22,6 +22,35 @@ class ContentDiscussionController extends Controller {
  private function safeDiscussionRedirect(ContentDiscussion $discussion) {
   return redirect()->to($this->discussionPublicUrl($discussion) ?: route('community.index'));
  }
+ /**
+  * Notify the moderation team when a new contribution enters the review queue.
+  */
+ private function notifyModeratorsOfPendingDiscussion(ContentDiscussion $discussion): void {
+  $url=route('admin.discussions.index',['status'=>'pending']);
+  $kindLabel=match($discussion->kind) {
+   'review'=>'دیدگاه محصول','question'=>'پرسش','comment'=>'دیدگاه مقاله','reply'=>'پاسخ',
+   default=>'مشارکت جدید',
+  };
+  foreach(User::query()->where('role',User::ROLE_ADMIN)->where('is_blocked',false)->limit(30)->get() as $admin) {
+   app(NotificationService::class)->push(
+    (int)$admin->id,'discussion_moderation_pending','مشارکت تازه در انتظار بررسی',
+    $kindLabel.' — '.mb_substr(trim((string)$discussion->body),0,180),
+    ['url'=>$url,'discussion_id'=>$discussion->id,'kind'=>$discussion->kind],
+    false,'discussion:pending:'.$discussion->id.':admin:'.$admin->id
+   );
+  }
+ }
+ private function notifyModeratorsOfReport(DiscussionReport $report, ContentDiscussion $discussion): void {
+  $url=route('admin.discussion-reports.index');
+  foreach(User::query()->where('role',User::ROLE_ADMIN)->where('is_blocked',false)->limit(30)->get() as $admin) {
+   app(NotificationService::class)->push(
+    (int)$admin->id,'discussion_report_received','گزارش تازه برای بررسی',
+    'یک مشارکت در بخش گفت‌وگوها گزارش شده است. دلیل: '.$report->reason,
+    ['url'=>$url,'report_id'=>$report->id,'discussion_id'=>$discussion->id],
+    false,'discussion:report:'.$report->id.':admin:'.$admin->id
+   );
+  }
+ }
  public function store(Request $request) {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body'),'title'=>is_string($request->input('title'))?trim($request->input('title')):$request->input('title')]);
   $data=$request->validate(['target_type'=>['required','in:product,article'],'target_key'=>['required','string','max:240'],'kind'=>['required','in:review,question,comment'],'title'=>['nullable','string','max:180'],'body'=>['required','string','min:10','max:5000'],'rating'=>['nullable','integer','min:1','max:5']]);
@@ -49,6 +78,7 @@ class ContentDiscussionController extends Controller {
    DiscussionSubscription::firstOrCreate(['discussion_id'=>$item->id,'user_id'=>$request->user()->id]);
    return $item;
   });
+  $this->notifyModeratorsOfPendingDiscussion($discussion);
   return redirect($redirect)->with('discussion_status','پیام شما ثبت شد و پس از بررسی مدیر در همین صفحه نمایش داده می‌شود.');
  }
  public function react(Request $request, ContentDiscussion $discussion) {
@@ -72,6 +102,7 @@ class ContentDiscussionController extends Controller {
    ['discussion_id'=>$discussion->id,'reporter_id'=>$request->user()->id],
    ['reason'=>$data['reason'],'details'=>trim((string)($data['details']??'')) ?: null,'status'=>'pending']
   );
+  if($report->wasRecentlyCreated) $this->notifyModeratorsOfReport($report,$discussion);
   return $this->safeDiscussionRedirect($discussion)->with('discussion_status',$report->wasRecentlyCreated?'گزارش شما برای بررسی به تیم مدیریت ارسال شد.':'گزارش قبلی شما برای این محتوا ثبت شده است.');
  }
  public function toggleFollow(Request $request, ContentDiscussion $discussion) {
@@ -99,7 +130,7 @@ class ContentDiscussionController extends Controller {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body')]);
   $data=$request->validate(['body'=>['required','string','min:2','max:3000']]);
   $this->rejectDiscussionSpam($request,$discussion->target_type,$discussion->target_key,trim($data['body']));
-  ContentDiscussion::create([
+  $reply=ContentDiscussion::create([
    'target_type'=>$discussion->target_type,
    'target_key'=>$discussion->target_key,
    'kind'=>'reply',
@@ -108,6 +139,7 @@ class ContentDiscussionController extends Controller {
    'body'=>trim($data['body']),
    'status'=>'pending',
   ]);
+  $this->notifyModeratorsOfPendingDiscussion($reply);
   return $this->safeDiscussionRedirect($discussion)->with('discussion_status','پاسخ شما ثبت شد و پس از بررسی مدیر منتشر می‌شود.');
  }
 
