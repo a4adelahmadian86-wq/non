@@ -43,6 +43,7 @@
         <input type="hidden" name="ai_content_signature" data-ai-content-signature>
         <input type="hidden" name="ai_content_request_id" data-ai-content-request>
         <input type="hidden" name="ai_content_model" data-ai-content-model>
+        <input type="hidden" name="ai_content_field_evidence" data-ai-content-field-evidence>
         <div data-ai-content-tag-inputs hidden></div>
       @endif
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
