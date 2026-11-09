@@ -127,6 +127,8 @@
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="seo_description" checked> توضیحات سئو</span><textarea rows="3" data-ai-content-field="seo_description"></textarea></label>
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="slug" checked> نشانی پیشنهادی (Slug)</span><input data-ai-content-field="slug"></label>
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="focus_keyword" checked> کلیدواژه کانونی</span><input data-ai-content-field="focus_keyword"></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="version" checked> نسخه محصول</span><input data-ai-content-field="version" maxlength="60" placeholder="فقط در صورت وجود شاهد"></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="license_type" checked> نوع مجوز استفاده</span><input data-ai-content-field="license_type" maxlength="60" placeholder="فقط در صورت وجود شاهد"></label>
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="secondary_keywords" checked> کلیدواژه‌های فرعی</span><textarea rows="2" data-ai-content-field="secondary_keywords"></textarea></label>
             </div>
             <div class="product-ai-content-suggestions">
