@@ -156,6 +156,7 @@
     applyButton.textContent = 'در حال اعمال فیلدهای انتخاب‌شده…';
 
     try {
+      let appliedCount = 0;
       const fields = {
         title: '[name="title"]',
         slug: '[name="slug"]',
@@ -169,7 +170,7 @@
       Object.entries(fields).forEach(([name, selector]) => {
         if (!accepted(name)) return;
         const value = field(name)?.value ?? '';
-        setFormValue(selector, value);
+        if (setFormValue(selector, value)) appliedCount += 1;
       });
 
       if (accepted('category') && suggestions.category_id) {
@@ -179,6 +180,7 @@
           if (match) {
             categorySelect.value = match.value;
             categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+            appliedCount += 1;
           }
         }
       }
@@ -188,13 +190,20 @@
         const selectedNames = [...(modal?.querySelectorAll('[data-ai-tag-name]:checked') || [])]
           .map(input => String(input.dataset.aiTagName || '').trim())
           .filter(Boolean);
-        [...new Set(selectedNames)].slice(0, 10).forEach(name => {
+        const uniqueSelectedNames = [...new Set(selectedNames)].slice(0, 10);
+        uniqueSelectedNames.forEach(name => {
           const input = document.createElement('input');
           input.type = 'hidden';
           input.name = 'ai_content_tag_names[]';
           input.value = name;
           tagInputs.append(input);
         });
+        appliedCount += uniqueSelectedNames.length ? 1 : 0;
+      }
+
+      if (appliedCount === 0) {
+        if (statusNode) statusNode.textContent = 'هیچ فیلدی اعمال نشد؛ انتخاب فیلدها یا گزینه «فقط فیلدهای خالی» را بررسی کن.';
+        return;
       }
 
       if (provenance.fingerprints) provenance.fingerprints.value = JSON.stringify(generated.source_fingerprints || {});
