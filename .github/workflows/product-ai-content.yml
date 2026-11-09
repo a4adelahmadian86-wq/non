@@ -1,0 +1,120 @@
+name: Product AI content checks
+
+on:
+  push:
+    branches:
+      - 'work/product-ai-content-*'
+    paths:
+      - 'app/Http/Controllers/AdminCourseController.php'
+      - 'app/Http/Controllers/AdminProductContentController.php'
+      - 'app/Http/Controllers/AdminStoreController.php'
+      - 'app/Jobs/ProcessProductDocument.php'
+      - 'app/Services/AI/AiOperationRegistry.php'
+      - 'app/Services/AI/Providers/GeminiEditorProvider.php'
+      - 'app/Services/ProductContentGenerationService.php'
+      - 'app/Services/ProductContentPrivacyFilter.php'
+      - 'app/Services/ProductDocumentProcessingState.php'
+      - 'app/Services/ProductSupervisorClient.php'
+      - 'config/services.php'
+      - 'docs/product-ai-content-generation.md'
+      - 'app/Services/ProductKnowledgeService.php'
+      - 'public/js/admin-store-product-ai.js'
+      - 'resources/views/admin/store/form.blade.php'
+      - 'routes/store_routes.php'
+      - 'tests/Feature/AdminStoreProductWorkflowTest.php'
+      - 'tests/Feature/ProductContentGenerationTest.php'
+      - 'tests/Unit/ProductDocumentProcessingStateTest.php'
+      - 'services/product-supervisor/file_pipeline.py'
+      - 'services/product-supervisor/main.py'
+      - 'services/product-supervisor/requirements.txt'
+      - 'services/product-supervisor/tests/test_file_pipeline.py'
+      - 'services/product-supervisor/tests/test_provider_diagnostics.py'
+      - 'services/product-supervisor/tests/test_api.py'
+      - '.github/workflows/product-ai-content.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/Http/Controllers/AdminCourseController.php'
+      - 'app/Http/Controllers/AdminProductContentController.php'
+      - 'app/Http/Controllers/AdminStoreController.php'
+      - 'app/Jobs/ProcessProductDocument.php'
+      - 'app/Services/AI/AiOperationRegistry.php'
+      - 'app/Services/AI/Providers/GeminiEditorProvider.php'
+      - 'app/Services/ProductContentGenerationService.php'
+      - 'app/Services/ProductContentPrivacyFilter.php'
+      - 'app/Services/ProductDocumentProcessingState.php'
+      - 'app/Services/ProductSupervisorClient.php'
+      - 'config/services.php'
+      - 'docs/product-ai-content-generation.md'
+      - 'app/Services/ProductKnowledgeService.php'
+      - 'public/js/admin-store-product-ai.js'
+      - 'resources/views/admin/store/form.blade.php'
+      - 'routes/store_routes.php'
+      - 'tests/Feature/AdminStoreProductWorkflowTest.php'
+      - 'tests/Feature/ProductContentGenerationTest.php'
+      - 'tests/Unit/ProductDocumentProcessingStateTest.php'
+      - 'services/product-supervisor/file_pipeline.py'
+      - 'services/product-supervisor/main.py'
+      - 'services/product-supervisor/requirements.txt'
+      - 'services/product-supervisor/tests/test_file_pipeline.py'
+      - 'services/product-supervisor/tests/test_provider_diagnostics.py'
+      - 'services/product-supervisor/tests/test_api.py'
+      - '.github/workflows/product-ai-content.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    if: startsWith(github.ref_name, 'work/product-ai-content-') || startsWith(github.head_ref, 'work/product-ai-content-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: bcmath, ctype, curl, dom, fileinfo, gd, intl, mbstring, pdo_sqlite, sqlite3, xml, zip
+          coverage: none
+
+      - name: Prepare Laravel runtime directories
+        run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Configure isolated SQLite test environment
+        run: |
+          printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+          php artisan key:generate
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Check PHP syntax for changed runtime files
+        run: |
+          find app/Http/Controllers/AdminCourseController.php app/Http/Controllers/AdminProductContentController.php app/Http/Controllers/AdminStoreController.php app/Jobs/ProcessProductDocument.php app/Services/AI/AiOperationRegistry.php app/Services/AI/Providers/GeminiEditorProvider.php app/Services/ProductContentGenerationService.php app/Services/ProductContentPrivacyFilter.php app/Services/ProductDocumentProcessingState.php app/Services/ProductKnowledgeService.php app/Services/ProductSupervisorClient.php config/services.php -type f -print0 | xargs -0 -n1 php -l
+
+      - name: Check smart-fill JavaScript syntax
+        run: node --check public/js/admin-store-product-ai.js
+
+      - name: Run focused product workflow tests
+        run: php artisan test tests/Feature/ProductContentGenerationTest.php tests/Feature/AdminStoreProductWorkflowTest.php tests/Unit/ProductDocumentProcessingStateTest.php
+
+      - name: Set up Python for the private document supervisor
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install document supervisor dependencies
+        run: pip install --no-cache-dir -r services/product-supervisor/requirements.txt
+
+      - name: Compile document supervisor
+        run: python -m compileall -q .
+        working-directory: services/product-supervisor
+
+      - name: Run document supervisor tests
+        run: python -m unittest discover -s tests -v
+        working-directory: services/product-supervisor

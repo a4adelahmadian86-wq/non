@@ -97,8 +97,34 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
                 audio_result = await transcribe_audio_with_groq(b"audio-bytes", "sample.wav")
 
         self.assertEqual(image_result, "")
-        self.assertEqual(audio_result, "")
+        self.assertEqual(audio_result, ("", False))
         self.assertEqual(_FakeAsyncClient.calls, [])
+
+    async def test_image_context_is_redacted_before_provider_submission(self):
+        _FakeAsyncClient.responses = [
+            _FakeResponse(200, {"choices": [{"message": {"content": "تصویر آزمایشی"}}]})
+        ]
+        context = {
+            "product_title": "محصول آزمایشی با تماس 09121234567",
+            "category": "person@example.com",
+        }
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                await analyze_image_with_groq(b"fake-image-bytes", "image/png", context)
+
+        provider_text = _FakeAsyncClient.calls[0]["json"]["messages"][0]["content"][0]["text"]
+        self.assertNotIn("09121234567", provider_text)
+        self.assertNotIn("person@example.com", provider_text)
+        self.assertIn("[REDACTED]", provider_text)
+
+    async def test_audio_provider_receives_generic_filename_not_user_filename(self):
+        _FakeAsyncClient.responses = [_FakeResponse(200, {"text": "رونویسی آزمایشی"})]
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                result = await transcribe_audio_with_groq(b"audio-bytes", "private-customer-name.wav")
+
+        self.assertEqual(result, ("رونویسی آزمایشی", False))
+        self.assertEqual(_FakeAsyncClient.calls[0]["files"]["file"][0], "upload.audio")
 
     async def test_all_provider_batches_failing_is_not_silent_success(self):
         _FakeAsyncClient.responses = [_FakeResponse(429), _FakeResponse(503)]
