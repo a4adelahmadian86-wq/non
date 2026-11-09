@@ -16,7 +16,8 @@
     fingerprints: form.querySelector('[data-ai-content-provenance]'),
     signature: form.querySelector('[data-ai-content-signature]'),
     request: form.querySelector('[data-ai-content-request]'),
-    model: form.querySelector('[data-ai-content-model]')
+    model: form.querySelector('[data-ai-content-model]'),
+    evidence: form.querySelector('[data-ai-content-field-evidence]')
   };
   let generated = null;
 
@@ -250,6 +251,7 @@
       if (provenance.signature) provenance.signature.value = generated.source_signature || '';
       if (provenance.request) provenance.request.value = generated.ai?.request_id || '';
       if (provenance.model) provenance.model.value = generated.ai?.model || '';
+      if (provenance.evidence) provenance.evidence.value = JSON.stringify(suggestions.field_evidence || {});
 
       closeModal();
       if (statusNode) statusNode.textContent = 'فیلدهای انتخاب‌شده در فرم قرار گرفتند؛ برای ذخیره آن‌ها دکمه ذخیره محصول را بزن. برچسب‌های جدید فقط همراه ذخیره محصول ثبت می‌شوند.';
