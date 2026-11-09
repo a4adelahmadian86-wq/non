@@ -1,6 +1,8 @@
 <?php
 namespace Tests\Feature;
 use App\Models\ContentDiscussion;
+use App\Models\Order;
+use App\Models\StoreOrderItem;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\User;
@@ -130,6 +132,7 @@ class ContentDiscussionTest extends TestCase {
   $p=$this->product();$author=$this->user('09123456821');$follower=$this->user('09123456822');$admin=$this->user('09123456823','admin');
   $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
   $parent=ContentDiscussion::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
   $this->assertDatabaseHas('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
   $this->actingAs($follower)->post(route('discussions.follow',$parent))->assertRedirect();
