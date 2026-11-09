@@ -69,6 +69,10 @@ class EmailService
             viewData: ['code' => $code],
             meta: ['code_length' => strlen($code)],
         );
+
+        if ($this->mailConfig->currentProvider() === 'log') {
+            throw new \\RuntimeException('ارسال واقعی ایمیل فعال نیست؛ حالت لاگ داخلی فقط برای آزمایش است.');
+        }
     }
 
     public function sendWelcome(User $user): void
