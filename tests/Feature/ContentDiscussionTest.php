@@ -20,7 +20,7 @@ class ContentDiscussionTest extends TestCase {
 
   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$discussion),['status'=>'approved'])->assertRedirect();
   $this->actingAs($reporter)->post(route('discussions.report',$discussion),['reason'=>'spam','details'=>'گزارش آزمایشی برای بررسی مدیر'])->assertRedirect();
-  $report=\\App\\Models\\DiscussionReport::firstOrFail();
+  $report=\App\Models\DiscussionReport::firstOrFail();
   $this->assertDatabaseHas('farast_notifications',['user_id'=>$admin->id,'type'=>'discussion_report_received','dedupe_key'=>'discussion:report:'.$report->id.':admin:'.$admin->id]);
  }
  public function test_product_question_moderation_and_admin_reply(): void {
