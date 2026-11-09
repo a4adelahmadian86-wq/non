@@ -129,6 +129,8 @@ class AnnouncementService
                             'announcement_id' => $announcement->id,
                             'announcement_type' => $announcement->type,
                         ],
+                        false,
+                        'announcement:'.$announcement->id.':user:'.$user->id,
                     );
 
                     if ($notification) {

@@ -116,7 +116,9 @@ class NotificationCenterTest extends TestCase
             'announcement_warning',
             'اختلال آزمایشی ارسال',
             'این اعلان باید در صف تلاش مجدد باقی بماند.',
-            \Mockery::type('array')
+            \Mockery::type('array'),
+            false,
+            \Mockery::type('string')
         )->andReturn(null);
 
         $email = \Mockery::mock(EmailService::class);
@@ -146,6 +148,32 @@ class NotificationCenterTest extends TestCase
 
         $this->assertSame(1, $service->broadcast($announcement));
         $this->assertNotNull($announcement->fresh()->notified_at);
+    }
+
+
+    public function test_retried_announcement_broadcast_does_not_duplicate_in_app_notifications(): void
+    {
+        $user = $this->user('09150000110');
+        $announcement = Announcement::create([
+            'title' => 'ارسال قابل تکرار',
+            'body' => 'اعلان باید در تلاش مجدد تکراری نشود.',
+            'type' => 'info',
+            'audience' => 'all',
+            'is_active' => true,
+            'notify_in_app' => true,
+            'notify_email' => false,
+        ]);
+
+        $service = app(AnnouncementService::class);
+        $this->assertSame(1, $service->broadcast($announcement));
+        $this->assertSame(1, $service->broadcast($announcement));
+
+        $this->assertDatabaseCount('farast_notifications', 1);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $user->id,
+            'type' => 'announcement_info',
+            'dedupe_key' => 'announcement:'.$announcement->id.':user:'.$user->id,
+        ]);
     }
 
     public function test_notifications_center_uses_the_workspace_shell_and_bell_is_available_on_public_pages(): void

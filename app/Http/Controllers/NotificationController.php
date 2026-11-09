@@ -111,6 +111,7 @@ class NotificationController extends Controller
                 'category' => $notification->category(),
                 'category_label' => $notification->categoryLabel(),
                 'icon' => $notification->icon(),
+                'url' => $notification->url(),
                 'visit_url' => route('platform.notifications.visit', $notification->id),
                 'read' => $notification->isRead(),
                 'time' => $notification->created_at?->timezone(config('app.timezone'))->diffForHumans(),

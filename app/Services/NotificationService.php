@@ -24,6 +24,7 @@ class NotificationService
         ?string $body = null,
         array $data = [],
         bool $throwOnFailure = false,
+        ?string $dedupeKey = null,
     ): ?FarastNotification {
         if (! Schema::hasTable('farast_notifications')) {
             if ($throwOnFailure) {
@@ -34,13 +35,29 @@ class NotificationService
         }
 
         try {
-            return FarastNotification::create([
+            $attributes = [
                 'user_id' => $userId,
                 'type' => mb_substr(trim($type), 0, 100),
                 'title' => mb_substr(trim($title), 0, 180),
                 'body' => $body === null ? null : mb_substr($body, 0, 5000),
                 'data' => $data ?: null,
-            ]);
+            ];
+
+            if ($dedupeKey !== null && trim($dedupeKey) !== '') {
+                $key = mb_substr(trim($dedupeKey), 0, 191);
+                $notification = FarastNotification::firstOrCreate(
+                    ['dedupe_key' => $key],
+                    $attributes + ['dedupe_key' => $key],
+                );
+
+                if ((int) $notification->user_id !== $userId) {
+                    throw new RuntimeException('کلید یکتای اعلان قبلاً برای کاربر دیگری استفاده شده است.');
+                }
+
+                return $notification;
+            }
+
+            return FarastNotification::create($attributes);
         } catch (Throwable $e) {
             Log::warning('farast.notification.push_failed', [
                 'user_id' => $userId,
@@ -63,8 +80,9 @@ class NotificationService
         ?string $body = null,
         array $data = [],
         bool $throwOnFailure = false,
+        ?string $dedupeKey = null,
     ): ?FarastNotification {
-        return $this->push($user->id, $type, $title, $body, $data, $throwOnFailure);
+        return $this->push($user->id, $type, $title, $body, $data, $throwOnFailure, $dedupeKey);
     }
 
     public function unreadCount(int $userId): int
