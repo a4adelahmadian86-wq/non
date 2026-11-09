@@ -580,17 +580,18 @@ def minimize_document_knowledge_for_gemini(knowledge: Any, redact) -> dict[str, 
                     if not isinstance(fact, dict) or fact.get("verification_status") != "evidence_backed":
                         continue
                     locator = fact.get("locator") if isinstance(fact.get("locator"), dict) else {}
-                    safe_locator_keys = {
-                        "kind", "media", "page", "page_start", "page_end", "pages",
-                        "sheet", "row_start", "row_end", "slide", "paragraph",
-                        "block_index", "character_start", "character_end",
-                        "time_start_seconds", "time_end_seconds", "section", "lesson_id",
-                    }
-                    safe_locator = {
-                        str(key): value
-                        for key, value in list(locator.items())[:16]
-                        if str(key) in safe_locator_keys and isinstance(value, (str, int, float, bool, list))
-                    }
+                    safe_locator = {}
+                    for key, value in list(locator.items())[:16]:
+                        if key in {"kind", "media"} and isinstance(value, str):
+                            safe_locator[key] = value[:32]
+                        elif key in {
+                            "page", "page_start", "page_end", "row_start", "row_end",
+                            "slide", "paragraph", "block_index", "character_start",
+                            "character_end", "time_start_seconds", "time_end_seconds", "lesson_id",
+                        } and isinstance(value, (int, float)) and not isinstance(value, bool):
+                            safe_locator[key] = value
+                        elif key == "pages" and isinstance(value, list):
+                            safe_locator[key] = [item for item in value[:12] if isinstance(item, int) and not isinstance(item, bool)]
                     facts.append({
                         "type": str(fact.get("type") or "other")[:32],
                         "key": redact(str(fact.get("key") or ""))[0][:120],
