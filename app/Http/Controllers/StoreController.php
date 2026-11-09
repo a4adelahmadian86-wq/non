@@ -130,7 +130,7 @@ class StoreController extends Controller
                 ->when($discussionSort==='most_replied', fn($q)=>$q->orderByDesc('replies_count')->orderByDesc('created_at'))
                 ->when($discussionSort==='highest_rated', fn($q)=>$q->orderByDesc('rating')->orderByDesc('created_at'))
                 ->when($discussionSort==='newest', fn($q)=>$q->latest())
-                ->limit(30)->get();
+                ->paginate(15)->withQueryString();
             $discussionCounts = [
                 'reviews' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->whereNull('parent_id')->where('status', 'approved')->count(),
                 'questions' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),

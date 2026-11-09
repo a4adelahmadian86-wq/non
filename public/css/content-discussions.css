@@ -145,3 +145,5 @@
 
 .discussion-permalink{display:inline-flex;align-items:center;gap:6px;margin:5px 0;color:#74869d;font-size:.61rem;font-weight:750;text-decoration:none}
 .discussion-permalink:hover{color:#2868b8;text-decoration:underline}
+
+.discussion-pagination{display:flex;justify-content:center;margin:18px 0 4px;padding:10px}.discussion-pagination nav{display:flex;justify-content:center}.discussion-pagination svg{width:16px;height:16px}.discussion-pagination a,.discussion-pagination span{display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:34px;margin:2px;padding:6px 10px;border:1px solid #e2eaf4;border-radius:9px;background:#fff;color:#456789;font-size:.67rem;text-decoration:none}.discussion-pagination [aria-current=page] span{border-color:#2868b8;background:#2868b8;color:#fff}

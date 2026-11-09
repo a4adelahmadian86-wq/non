@@ -203,4 +203,16 @@ class ContentDiscussionTest extends TestCase {
   $this->get(route('community.index',['sort'=>'active']))->assertOk()->assertSee('فعال‌ترین اعضا');
  }
 
+
+ public function test_product_discussions_are_paginated_beyond_the_first_thirty_items(): void {
+  $p=$this->product();$author=$this->user('09123456921');$admin=$this->user('09123456922','admin');
+  for($i=1;$i<=16;$i++){
+   $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'پرسش شماره '.$i.' درباره جزئیات این محصول چیست؟'])->assertRedirect();
+   $item=ContentDiscussion::latest('id')->firstOrFail();
+   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$item),['status'=>'approved'])->assertRedirect();
+  }
+  $this->get(route('store.product',$p->slug))->assertOk()->assertSee('discussion-pagination')->assertSee('پرسش شماره 16');
+  $this->get(route('store.product',['slug'=>$p->slug,'page'=>2]))->assertOk()->assertSee('پرسش شماره 1')->assertDontSee('پرسش شماره 16');
+ }
+
 }

@@ -113,6 +113,9 @@
             </div>
         @endforelse
     </div>
+    @if($entries instanceof \\Illuminate\\Contracts\\Pagination\\Paginator || $entries instanceof \\Illuminate\\Contracts\\Pagination\\LengthAwarePaginator)
+        <nav class="discussion-pagination" aria-label="صفحه‌بندی گفت‌وگوها">{{ $entries->withQueryString()->links() }}</nav>
+    @endif
 
     <div class="discussion-compose" id="discussion-compose">
         <div class="discussion-compose-heading"><div><span class="discussion-eyebrow">مشارکت شما</span><h3>{{ $isProduct ? 'در انتخاب بهتر به دیگران کمک کنید' : 'به گفت‌وگوی این مقاله بپیوندید' }}</h3></div><span class="discussion-compose-note"><i class="fa-solid fa-lock" aria-hidden="true"></i> ثبت با حساب کاربری</span></div>
