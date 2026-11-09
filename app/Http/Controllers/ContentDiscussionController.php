@@ -28,7 +28,7 @@ class ContentDiscussionController extends Controller {
  private function notifyModeratorsOfPendingDiscussion(ContentDiscussion $discussion): void {
   $url=route('admin.discussions.index',['status'=>'pending']);
   $kindLabel=match($discussion->kind) {
-   'review'=>'دیدگاه محصول','question'=>'پرسش','comment'=>'دیدگاه مقاله','reply'=>'پاسخ',
+   'review'=>'دیدگاه محصول','question'=>'پرسش','comment'=>'دیدگاه','reply'=>'پاسخ',
    default=>'مشارکت جدید',
   };
   foreach(User::query()->where('role',User::ROLE_ADMIN)->where('is_blocked',false)->limit(30)->get() as $admin) {
@@ -123,8 +123,8 @@ class ContentDiscussionController extends Controller {
   if(!$reply->parent_id) return;
   $parent=ContentDiscussion::query()->with('subscriptions')->find($reply->parent_id);
   if(!$parent) return;
-  $url=$parent->target_type==='product'
-   ? (($product=StoreProduct::find((int)$parent->target_key)) ? route('store.product',$product->slug) : null)
+  $url=in_array($parent->target_type,['product','reader'],true)
+   ? (($product=StoreProduct::find((int)$parent->target_key)) ? route($parent->target_type==='reader'?'store.reader':'store.product',$product->slug) : null)
    : route('blog.show',$parent->target_key);
   if(!$url) return;
   $recipients=$parent->subscriptions->pluck('user_id')->filter()->unique()->reject(fn($id)=>(int)$id===(int)$reply->user_id);
@@ -171,9 +171,9 @@ class ContentDiscussionController extends Controller {
    ->when($search!=='',fn($q)=>$q->where(function($w) use($search){$w->where('body','like','%'.$search.'%')->orWhere('title','like','%'.$search.'%');}))
    ->latest()->paginate(15)->withQueryString();
   $discussions->getCollection()->each(function($item){
-   if($item->target_type==='product'){
+   if(in_array($item->target_type,['product','reader'],true)){
     $product=StoreProduct::find((int)$item->target_key);
-    $item->setAttribute('target_url',$product?route('store.product',$product->slug):null);
+    $item->setAttribute('target_url',$product?route($item->target_type==='reader'?'store.reader':'store.product',$product->slug):null);
     $item->setAttribute('target_label',$product?->title ?: 'محصول حذف‌شده');
    }else{
     $item->setAttribute('target_url',BlogController::articleExists($item->target_key)?route('blog.show',$item->target_key):null);
@@ -247,9 +247,9 @@ class ContentDiscussionController extends Controller {
   abort_unless($stats['contributions']>0,404);
   $activity=(clone $approved)->latest()->limit(12)->get();
   $activity->each(function($item){
-   if($item->target_type==='product'){
+   if(in_array($item->target_type,['product','reader'],true)){
     $product=StoreProduct::find((int)$item->target_key);
-    $item->setAttribute('target_url',$product?route('store.product',$product->slug):null);
+    $item->setAttribute('target_url',$product?route($item->target_type==='reader'?'store.reader':'store.product',$product->slug):null);
     $item->setAttribute('target_label',$product?->title ?: 'محصول');
    }else{
     $item->setAttribute('target_url',BlogController::articleExists($item->target_key)?route('blog.show',$item->target_key):null);
