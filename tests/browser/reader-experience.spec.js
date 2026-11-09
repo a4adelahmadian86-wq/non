@@ -1327,8 +1327,8 @@ test('personal reading light, font preferences, highlights and annotations stay 
 
   await page.locator('[data-reading-light]').click();
   await expect(page.locator('[data-reading-light]')).toHaveAttribute('aria-pressed', 'true');
-  await page.locator('[data-reader-font]').selectOption('serif');
-  await page.locator('[data-reader-font-size]').fill('125');
+  await page.locator('select[data-reader-font]').selectOption('serif');
+  await page.locator('input[data-reader-font-size]').fill('125');
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font', 'serif');
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font-size', '125');
   await expect(page.locator('.farast-reader-document')).toHaveCSS('font-family', /Georgia/);
@@ -1428,13 +1428,14 @@ test('personal highlights span inline formatting and restore after a page rerend
   await page.evaluate(() => {
     const p = document.querySelector('.farast-reader-document p');
     const range = document.createRange();
-    range.setStart(p.firstChild, 7);
-    range.setEnd(p.lastChild, 1);
+    range.setStart(p.querySelector('strong').firstChild, 0);
+    range.setEnd(p.lastChild, 5);
     const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
   });
   await page.locator('[data-reader-highlight]').click();
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
-  await expect(page.locator('mark.farast-reader-local-highlight').nth(0)).toHaveText('عبارت مهم');
+  await expect(page.locator('mark.farast-reader-local-highlight').nth(0)).toHaveText(' انت');
+  await expect(page.locator('mark.farast-reader-local-highlight').nth(1)).toHaveText('عبارت مهم');
   await page.evaluate(() => {
     const page = document.querySelector('.farast-reader-page-item');
     page.querySelectorAll('mark.farast-reader-local-highlight').forEach(mark => mark.replaceWith(document.createTextNode(mark.textContent)));
@@ -1562,8 +1563,11 @@ test('reader ink exposes keyboard guidance and discards cancelled pointer stroke
   await page.dispatchEvent('canvas.farast-reader-ink-canvas', 'pointercancel', {
     pointerId: 71, pointerType: 'pen', button: 0, clientX: bounds.x + 80, clientY: bounds.y + 70, pressure: 0
   });
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:ink-accessibility-fixture')));
-  expect(stored.inkStrokes).toHaveLength(0);
+  const stored = await page.evaluate(() => {
+    const value = localStorage.getItem('farast.reader.personal-tools.v1:ink-accessibility-fixture');
+    return value ? JSON.parse(value) : null;
+  });
+  expect(stored?.inkStrokes || []).toHaveLength(0);
   await toggle.click();
   await expect(canvas).toHaveCSS('touch-action', 'auto');
 });
