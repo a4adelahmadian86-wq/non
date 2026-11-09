@@ -16,7 +16,7 @@ class ContentDiscussionController extends Controller {
   $duplicate=ContentDiscussion::query()->where('user_id',$request->user()->id)
    ->where('target_type',$targetType)->where('target_key',$targetKey)
    ->where('body',$body)->where('created_at','>=',now()->subMinutes(10))
-   ->when($exceptId!==null,fn($q)=>$q->whereKeyNot($exceptId))->exists();
+   ->when($exceptId!==null,fn($q)=>$q->where('id','!=',$exceptId))->exists();
   if($duplicate) throw ValidationException::withMessages(['body'=>'این متن را به‌تازگی در همین گفت‌وگو فرستاده‌اید؛ از ارسال تکراری خودداری کنید.']);
  }
  private function safeDiscussionRedirect(ContentDiscussion $discussion) {
@@ -25,6 +25,7 @@ class ContentDiscussionController extends Controller {
  public function store(Request $request) {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body'),'title'=>is_string($request->input('title'))?trim($request->input('title')):$request->input('title')]);
   $data=$request->validate(['target_type'=>['required','in:product,article'],'target_key'=>['required','string','max:240'],'kind'=>['required','in:review,question,comment'],'title'=>['nullable','string','max:180'],'body'=>['required','string','min:10','max:5000'],'rating'=>['nullable','integer','min:1','max:5']]);
+  $product=null;
   if($data['target_type']==='product') {
    $product=StoreProduct::published()->findOrFail((int)$data['target_key']);
    if(!in_array($data['kind'],['review','question'],true)) throw ValidationException::withMessages(['kind'=>'برای محصول فقط دیدگاه یا پرسش مجاز است.']);
