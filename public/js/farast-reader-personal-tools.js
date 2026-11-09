@@ -203,7 +203,7 @@
     if (!context) return announce('ابتدا بخشی از متن قابل انتخاب را انتخاب کنید.');
     const record = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, startOffset: context.startOffset, endOffset: context.endOffset, color: state.highlightColor, created: Date.now() };
     state.highlights.push(record);
-    persist(); renderHighlights(); announce('هایلایت در همین مرورگر ذخیره شد.');
+    persist(); renderHighlights(); if (!notesPanel.hidden) renderNotes(); announce('هایلایت در همین مرورگر ذخیره شد.');
     window.getSelection()?.removeAllRanges();
   });
   noteButton.addEventListener('click', () => {
@@ -258,7 +258,7 @@
     if (!mark) return;
     const id = mark.dataset.highlightId;
     state.highlights = state.highlights.filter(item => item.id !== id);
-    persist(); renderHighlights(); announce('هایلایت حذف شد.');
+    persist(); renderHighlights(); if (!notesPanel.hidden) renderNotes(); announce('هایلایت حذف شد.');
   });
   const jumpToRecord = record => {
     const page = [...root.querySelectorAll('.farast-reader-page-item')].find((item, index) => Number(item.dataset.readerPage || index + 1) === Number(record.page));
