@@ -194,7 +194,7 @@ class ContentDiscussionController extends Controller {
      $previous=$discussion->status;
      $note='محتوا پس از بررسی گزارش کاربران از انتشار خارج شد.';
      $discussion->forceFill(['status'=>'rejected','moderator_id'=>$request->user()->id,'moderated_at'=>now(),'moderation_note'=>$note])->save();
-     \\App\\Models\\DiscussionModerationEvent::create(['discussion_id'=>$discussion->id,'moderator_id'=>$request->user()->id,'from_status'=>$previous,'to_status'=>'rejected','note'=>$note]);
+     \App\Models\DiscussionModerationEvent::create(['discussion_id'=>$discussion->id,'moderator_id'=>$request->user()->id,'from_status'=>$previous,'to_status'=>'rejected','note'=>$note]);
      $wasRemoved=true;
     }
     $locked->status='resolved';
