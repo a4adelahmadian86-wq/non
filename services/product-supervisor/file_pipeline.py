@@ -278,15 +278,36 @@ def _validate_archive(data: bytes) -> tuple[zipfile.ZipFile, list[str]]:
     return archive, names[:MAX_ARCHIVE_ENTRIES]
 
 
-def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], bool]:
-    """Read bounded supported document members in memory; never extract to disk or execute members."""
+def _extract_archive_documents(
+    archive: zipfile.ZipFile | tarfile.TarFile,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], bool, list[dict[str, Any]], int, bool, bool]:
+    """Inspect bounded archive members in memory; never extract to disk or execute members."""
     chunks: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
     warnings: list[str] = []
+    image_assets: list[dict[str, Any]] = []
+    embedded_image_count = 0
+    visual_review_truncated = False
+    visual_inventory_complete = True
     total_read = 0
     truncated = False
     supported = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".csv"}
+    media_suffixes = {
+        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff",
+        ".svg", ".avif", ".heic", ".heif", ".emf", ".wmf", ".eps", ".psd",
+        ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".mp4", ".mov", ".webm",
+    }
     members = archive.infolist() if isinstance(archive, zipfile.ZipFile) else archive.getmembers()
+
+    def read_member(info: Any, maximum: int) -> bytes:
+        if isinstance(archive, zipfile.ZipFile):
+            with archive.open(info, "r") as member:
+                return member.read(maximum + 1)
+        member = archive.extractfile(info)
+        if member is None:
+            raise OSError("archive member stream missing")
+        with member:
+            return member.read(maximum + 1)
 
     for info in members:
         is_directory = info.is_dir() if isinstance(archive, zipfile.ZipFile) else info.isdir()
@@ -296,14 +317,47 @@ def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tu
         name = name.replace("\\", "/")
         suffix = PurePosixPath(name).suffix.lower()
         size = int(info.file_size if isinstance(archive, zipfile.ZipFile) else info.size)
+
         if suffix in {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"}:
             warnings.append("آرشیو تو در تو فقط فهرست شده است و برای جلوگیری از استخراج بازگشتی پردازش نشد.")
             truncated = True
+            visual_inventory_complete = False
+            visual_review_truncated = True
             continue
-        if suffix not in supported:
-            if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".mp4", ".mov", ".webm"}:
-                warnings.append("رسانه داخل آرشیو شناسایی شد؛ در این مرحله فقط اسناد متنی داخلی استخراج شدند.")
+
+        if suffix in SUPPORTED_IMAGE_SUFFIXES:
+            embedded_image_count += 1
+            if size < 1 or size > MAX_IMAGE_ASSET_BYTES or len(image_assets) >= MAX_VISUAL_ASSETS:
+                visual_review_truncated = True
+                warnings.append("یکی از تصاویر داخل آرشیو از سقف اندازه یا تعداد بررسی تصویری عبور کرد.")
+                continue
+            try:
+                raw = read_member(info, MAX_IMAGE_ASSET_BYTES)
+                if len(raw) != size or len(raw) > MAX_IMAGE_ASSET_BYTES:
+                    raise FileInspectionError("archive image size mismatch")
+                image_bytes, mime = _inspect_embedded_image(raw)
+                image_assets.append({
+                    "image_bytes": image_bytes,
+                    "mime": mime,
+                    "locator": {"kind": "archive_image", "archive_entry": name[:240]},
+                })
+            except (OSError, RuntimeError, zipfile.BadZipFile, tarfile.TarError, FileInspectionError):
+                visual_review_truncated = True
+                warnings.append("یکی از تصاویر داخل آرشیو قابل بررسی نبود.")
+            continue
+
+        if suffix in media_suffixes:
+            if suffix not in SUPPORTED_IMAGE_SUFFIXES:
+                embedded_image_count += 1 if suffix in {
+                    ".svg", ".avif", ".heic", ".heif", ".emf", ".wmf", ".eps", ".psd",
+                } else 0
+                if embedded_image_count:
+                    visual_review_truncated = True
+                warnings.append("رسانه یا قالب تصویری پشتیبانی‌نشده داخل آرشیو شناسایی شد.")
                 truncated = True
+            continue
+
+        if suffix not in supported:
             continue
         if size < 1:
             continue
@@ -317,15 +371,7 @@ def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tu
             break
 
         try:
-            if isinstance(archive, zipfile.ZipFile):
-                with archive.open(info, "r") as member:
-                    member_bytes = member.read(MAX_ARCHIVE_MEMBER_BYTES + 1)
-            else:
-                member = archive.extractfile(info)
-                if member is None:
-                    raise OSError("tar member stream missing")
-                with member:
-                    member_bytes = member.read(MAX_ARCHIVE_MEMBER_BYTES + 1)
+            member_bytes = read_member(info, MAX_ARCHIVE_MEMBER_BYTES)
         except (OSError, RuntimeError, zipfile.BadZipFile, tarfile.TarError):
             warnings.append("خواندن یکی از اعضای آرشیو ناموفق بود؛ محتوای آن قابل تأیید نیست.")
             truncated = True
@@ -346,7 +392,29 @@ def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tu
         if child.detected_type in {"zip", "tar", "archive"}:
             warnings.append("آرشیو تو در تو فقط فهرست شد و محتوای آن باز نشد.")
             truncated = True
+            visual_inventory_complete = False
+            visual_review_truncated = True
             continue
+
+        if not child.visual_inventory_complete:
+            visual_inventory_complete = False
+        if child.visual_review_truncated:
+            visual_review_truncated = True
+        if child.embedded_image_count:
+            embedded_image_count += child.embedded_image_count
+            if child.embedded_image_count > len(child.image_assets or []):
+                visual_review_truncated = True
+            for asset in child.image_assets or []:
+                if len(image_assets) >= MAX_VISUAL_ASSETS:
+                    visual_review_truncated = True
+                    continue
+                locator = dict(asset.get("locator") or {})
+                locator["archive_entry"] = name[:240]
+                image_assets.append({
+                    "image_bytes": asset.get("image_bytes"),
+                    "mime": asset.get("mime"),
+                    "locator": locator,
+                })
 
         total_read += len(member_bytes)
         summaries.append({
@@ -355,6 +423,7 @@ def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tu
             "size_bytes": len(member_bytes),
             "page_count": child.page_count,
             "extracted_characters": len(child.extracted_text),
+            "embedded_image_count": child.embedded_image_count,
         })
         child_chunks = child.content_chunks
         if not child_chunks:
@@ -379,13 +448,18 @@ def _extract_archive_documents(archive: zipfile.ZipFile | tarfile.TarFile) -> tu
             if len(chunks) >= 300:
                 warnings.append("تعداد قطعات محتوایی آرشیو به سقف پردازش رسید.")
                 truncated = True
-                return chunks, summaries, warnings, truncated
+                return (
+                    chunks, summaries, warnings, truncated, image_assets,
+                    embedded_image_count, visual_review_truncated, visual_inventory_complete,
+                )
 
-    if not summaries and not warnings:
+    if not summaries and not warnings and embedded_image_count == 0:
         warnings.append("آرشیو فقط شامل فایل‌هایی بود که خوانشگر محتوایی فعلاً پشتیبانی نمی‌کند.")
         truncated = True
-    return chunks, summaries, warnings, truncated
-
+    return (
+        chunks, summaries, warnings, truncated, image_assets,
+        embedded_image_count, visual_review_truncated, visual_inventory_complete,
+    )
 
 def _validate_tar_archive(data: bytes) -> tuple[tarfile.TarFile, list[str]]:
     try:
@@ -946,15 +1020,17 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
         result.detected_type = "tar"
         result.archive_entries = entries
         try:
-            archive_chunks, embedded, archive_warnings, archive_truncated = _extract_archive_documents(archive)
+                (
+                archive_chunks, embedded, archive_warnings, archive_truncated,
+                result.image_assets, result.embedded_image_count,
+                result.visual_review_truncated, result.visual_inventory_complete,
+            ) = _extract_archive_documents(archive)
         finally:
             archive.close()
         result.content_chunks = archive_chunks
         result.embedded_documents = embedded
         result.warnings.extend(archive_warnings)
         result.extraction_truncated = archive_truncated
-        result.visual_inventory_complete = not archive_truncated
-        result.visual_review_truncated = archive_truncated
         if archive_chunks:
             result.extracted_text = "\n".join(
                 f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
@@ -996,13 +1072,15 @@ def inspect_file(data: bytes, filename: str, declared_content_type: str | None =
             ) = _extract_archive_image_assets(archive, "ppt/media/", "pptx_embedded_image")
         else:
             result.detected_type = "zip"
-            archive_chunks, embedded, archive_warnings, archive_truncated = _extract_archive_documents(archive)
+            (
+                archive_chunks, embedded, archive_warnings, archive_truncated,
+                result.image_assets, result.embedded_image_count,
+                result.visual_review_truncated, result.visual_inventory_complete,
+            ) = _extract_archive_documents(archive)
             result.content_chunks = archive_chunks
             result.embedded_documents = embedded
             result.warnings.extend(archive_warnings)
             result.extraction_truncated = archive_truncated
-            result.visual_inventory_complete = not archive_truncated
-            result.visual_review_truncated = archive_truncated
             if archive_chunks:
                 result.extracted_text = "\n".join(
                     f"{chunk.get('locator', {}).get('archive_entry', 'فایل داخل آرشیو')}: {chunk.get('content_text', '')}"
