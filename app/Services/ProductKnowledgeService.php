@@ -199,9 +199,6 @@ class ProductKnowledgeService
             'course_subtitle' => (string) ($product->course?->subtitle ?? ''),
             'course_level' => (string) ($product->course?->level ?? ''),
             'course_language' => (string) ($product->course?->language ?? ''),
-            'course_subtitle' => (string) ($product->course?->subtitle ?? ''),
-            'course_level' => (string) ($product->course?->level ?? ''),
-            'course_language' => (string) ($product->course?->language ?? ''),
         ];
         $sources = [];
         $fingerprints = [
