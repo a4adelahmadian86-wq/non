@@ -214,6 +214,41 @@ class ProductContentGenerationTest extends TestCase
     }
 
 
+    public function test_generation_is_blocked_when_mixed_document_images_are_not_reviewed(): void
+    {
+        $data = $this->productWithKnowledge();
+        $structure = (array) $data['document']->structure_json;
+        $structure['inspection']['embedded_image_count'] = 1;
+        $structure['inspection']['visual_review_required'] = true;
+        $structure['ai_review']['provider_status']['groq_vision'] = 'not_configured';
+        $data['document']->update(['structure_json' => $structure]);
+
+        $this->mock(EditorAiAssistService::class, function ($mock) {
+            $mock->shouldNotReceive('assist');
+        });
+        $this->expectException(ValidationException::class);
+
+        app(ProductContentGenerationService::class)->generate($data['admin'], $data['product']);
+    }
+
+    public function test_generation_is_blocked_when_audio_transcription_was_truncated(): void
+    {
+        $data = $this->productWithKnowledge();
+        $data['document']->update(['detected_type' => 'audio']);
+        $structure = (array) $data['document']->structure_json;
+        $structure['inspection']['detected_type'] = 'audio';
+        $structure['inspection']['transcription_truncated'] = true;
+        $structure['ai_review']['provider_status']['groq_text'] = 'completed';
+        $data['document']->update(['structure_json' => $structure]);
+
+        $this->mock(EditorAiAssistService::class, function ($mock) {
+            $mock->shouldNotReceive('assist');
+        });
+        $this->expectException(ValidationException::class);
+
+        app(ProductContentGenerationService::class)->generate($data['admin'], $data['product']);
+    }
+
     public function test_concurrent_product_content_edit_invalidates_generated_provenance(): void
     {
         $data = $this->productWithKnowledge();
