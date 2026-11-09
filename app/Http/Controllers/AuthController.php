@@ -184,7 +184,16 @@ class AuthController extends Controller
         EmailOtpChallenge::where('email', $email)->whereNull('consumed_at')->update(['consumed_at' => now()]);
         EmailOtpChallenge::create(['email' => $email, 'code_hash' => Hash::make($code), 'expires_at' => now()->addMinutes(3)]);
         $request->session()->put('email_login.email', $email);
-        $emailService->sendOtp($email, $code, $user);
+        try {
+            $emailService->sendOtp($email, $code, $user);
+        } catch (\\Throwable) {
+            EmailOtpChallenge::where('email', $email)->whereNull('consumed_at')->delete();
+            $request->session()->forget('email_login.email');
+
+            throw ValidationException::withMessages([
+                'email' => 'ارسال واقعی ایمیل از زیرساخت فعلی ممکن نیست. تنظیم عامل ایمیل محلی را بررسی کنید.',
+            ]);
+        }
 
         return response()->json(['ok' => true, 'message' => 'کد تأیید به ایمیل شما ارسال شد.']);
     }
