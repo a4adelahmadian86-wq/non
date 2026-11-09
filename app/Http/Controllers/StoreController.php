@@ -23,9 +23,18 @@ class StoreController extends Controller
         $q = trim((string) $request->query('q', ''));
         $category = $request->query('category');
         $sort = (string) $request->query('sort', 'newest');
-        $price = (string) $request->query('price', 'all');
+        $price = in_array((string) $request->query('price', 'all'), ['all', 'free', 'paid'], true)
+            ? (string) $request->query('price', 'all')
+            : 'all';
+        $type = in_array((string) $request->query('type', 'all'), ['all', 'course', 'digital'], true)
+            ? (string) $request->query('type', 'all')
+            : 'all';
 
         $base = StoreProduct::query()->with(['category', 'images'])->published();
+        $catalogCount = (clone $base)->count();
+        $freeCount = (clone $base)->where('price_rials', 0)->count();
+        $courseCount = (clone $base)->where('type', 'course')->count();
+        $digitalCount = max(0, $catalogCount - $courseCount);
 
         $productsQuery = (clone $base)
             ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
@@ -36,7 +45,9 @@ class StoreController extends Controller
             }))
             ->when($category, fn ($query) => $query->whereHas('category', fn ($cat) => $cat->where('slug', $category)->where('is_active', true)))
             ->when($price === 'free', fn ($query) => $query->where('price_rials', 0))
-            ->when($price === 'paid', fn ($query) => $query->where('price_rials', '>', 0));
+            ->when($price === 'paid', fn ($query) => $query->where('price_rials', '>', 0))
+            ->when($type === 'course', fn ($query) => $query->where('type', 'course'))
+            ->when($type === 'digital', fn ($query) => $query->where('type', '!=', 'course'));
 
         $productsQuery = match ($sort) {
             'price_asc' => $productsQuery->orderBy('price_rials')->orderBy('title'),
@@ -58,10 +69,11 @@ class StoreController extends Controller
             ? StoreProduct::with(['category', 'images'])->published()->whereIn('id', $recentIds)->get()->sortBy(fn ($p) => array_search($p->id, $recentIds))->values()
             : collect();
 
-        $isBrowsing = $q !== '' || $category || $price !== 'all' || $sort !== 'newest';
+        $isBrowsing = $q !== '' || $category || $price !== 'all' || $type !== 'all' || $sort !== 'newest';
 
         return view('store.index', compact(
-            'products', 'categories', 'q', 'category', 'featured', 'free', 'latest', 'recent', 'isBrowsing', 'sort', 'price'
+            'products', 'categories', 'q', 'category', 'featured', 'free', 'latest', 'recent',
+            'isBrowsing', 'sort', 'price', 'type', 'catalogCount', 'freeCount', 'courseCount', 'digitalCount'
         ));
     }
 
