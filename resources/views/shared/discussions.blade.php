@@ -63,6 +63,7 @@
                     <span class="discussion-avatar" aria-hidden="true">{{ $entry->user?->name ? mb_substr($entry->user->name, 0, 1) : '؟' }}</span>
                     <div class="discussion-author">@if($entry->user)<a href="{{ route('community.member',$entry->user) }}"><strong>{{ $entry->user->name ?: 'کاربر' }}</strong></a>@else<strong>حساب حذف‌شده</strong>@endif<small>{{ $entry->created_at?->translatedFormat('d F Y') }}</small><small class="discussion-reply-count">{{ number_format((int)($entry->replies_count ?? 0)) }} پاسخ</small></div>
                     <span class="discussion-kind discussion-kind-{{ $entry->kind }}">{{ ['review'=>'تجربه محصول','question'=>'پرسش','comment'=>'دیدگاه'][$entry->kind] ?? 'گفت‌وگو' }}</span>
+                    @if($entry->kind==='review' && $entry->is_verified_purchase)<span class="discussion-verified-purchase" title="سفارش پرداخت‌شده این کاربر شامل همین محصول است"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> خرید تأییدشده</span>@endif
                     @if($entry->rating)
                         <span class="discussion-entry-rating" role="img" aria-label="امتیاز {{ $entry->rating }} از ۵">{{ str_repeat('★', (int) $entry->rating) }}{{ str_repeat('☆', 5 - (int) $entry->rating) }}</span>
                     @endif

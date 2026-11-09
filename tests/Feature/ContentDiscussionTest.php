@@ -287,4 +287,16 @@ class ContentDiscussionTest extends TestCase {
   $this->assertDatabaseMissing('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
  }
 
+
+ public function test_product_review_marks_only_paid_order_owners_as_verified_purchasers(): void {
+  $p=$this->product();$verified=$this->user('09123456961');$unverified=$this->user('09123456962');
+  $order=Order::create(['user_id'=>$verified->id,'subtotal_rials'=>100000,'total_rials'=>100000,'status'=>'paid','paid_at'=>now()]);
+  StoreOrderItem::create(['order_id'=>$order->id,'product_id'=>$p->id,'title_snapshot'=>$p->title,'quantity'=>1,'unit_price_rials'=>100000,'total_rials'=>100000]);
+  foreach([[$verified,'تجربه خریدار واقعی و تأییدشده'],[$unverified,'تجربه کاربر بدون سفارش']] as [$author,$body]){
+   ContentDiscussion::create(['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'review','user_id'=>$author->id,'body'=>$body,'rating'=>5,'status'=>'approved']);
+  }
+  $response=$this->get(route('store.product',$p->slug))->assertOk()->assertSee('تجربه خریدار واقعی و تأییدشده')->assertSee('تجربه کاربر بدون سفارش')->assertSee('خرید تأییدشده');
+  $this->assertSame(1,substr_count($response->getContent(),'discussion-verified-purchase'));
+ }
+
 }
