@@ -38,6 +38,13 @@
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
+      @if($isEdit)
+        <input type="hidden" name="ai_content_source_fingerprints" data-ai-content-provenance>
+        <input type="hidden" name="ai_content_signature" data-ai-content-signature>
+        <input type="hidden" name="ai_content_request_id" data-ai-content-request>
+        <input type="hidden" name="ai_content_model" data-ai-content-model>
+        <div data-ai-content-tag-inputs hidden></div>
+      @endif
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
@@ -67,6 +74,71 @@
         <label class="product-field product-field-check"><input type="checkbox" name="featured" value="1" @checked(old('featured',$product->featured))> نمایش به‌عنوان محصول ویژه</label>
       </div>
       <div class="product-editor-subhead" id="product-content"><span>گام سوم</span><strong>محتوا و معرفی محصول</strong><small>به مشتری کمک کنید پیش از خرید ارزش محصول را دقیق بشناسد.</small></div>
+      @if($isEdit)
+        <section class="product-ai-content" data-product-ai-content
+          data-generate-url="{{ route('admin.store.ai-content.generate', $product) }}"
+          data-knowledge-status="{{ $aiContentReadiness['status'] }}"
+          aria-labelledby="product-ai-content-title">
+          <div class="product-ai-content-head">
+            <div>
+              <span>تکمیل محتوا از پایگاه دانش محصول</span>
+              <h3 id="product-ai-content-title">تولید هوشمند عنوان، توضیحات و سئو</h3>
+              <p>مدل فقط گزارش‌های ذخیره‌شده و واقعیت‌های دارای شاهد را دریافت می‌کند؛ فایل خام و مسیر ذخیره‌سازی ارسال نمی‌شود.</p>
+            </div>
+            <button type="button" class="store-primary-btn" data-ai-content-generate @disabled($aiContentReadiness['status'] !== 'available')>
+              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> تکمیل خودکار با هوش مصنوعی
+            </button>
+          </div>
+          <div class="product-ai-content-status {{ $aiContentReadiness['status'] === 'available' ? 'is-ready' : 'is-pending' }}" data-ai-content-status role="status" aria-live="polite">
+            @if($aiContentReadiness['stored_content_stale'])
+              پیشنهادهای قبلی با نسخه فعلی فایل یا درس‌ها هم‌خوان نیستند؛ پس از تکمیل پردازش، پیشنهاد تازه بساز.
+            @elseif($aiContentReadiness['status'] === 'available')
+              دانش آماده است · {{ number_format($aiContentReadiness['source_count']) }} منبع فایل · {{ number_format($aiContentReadiness['lesson_count']) }} درس · {{ number_format($aiContentReadiness['facts_included']) }} واقعیت دارای شاهد
+            @else
+              {{ collect($aiContentReadiness['reasons'])->pluck('message')->filter()->unique()->implode(' ') ?: 'برای فعال شدن این قابلیت، ابتدا فایل یا محتوای دوره باید کامل پردازش شود.' }}
+            @endif
+          </div>
+          <div class="product-ai-content-options">
+            <label class="product-field">لحن محتوا
+              <select data-ai-content-tone><option value="professional">حرفه‌ای و قابل اعتماد</option><option value="friendly">صمیمی و روان</option><option value="technical">تخصصی و فنی</option></select>
+            </label>
+            <label class="product-field">کلیدواژه کانونی (اختیاری)
+              <input data-ai-content-focus-keyword maxlength="120" placeholder="عبارت اصلی مورد نظر برای سئو">
+            </label>
+            <label class="product-field product-field-wide">راهنمای تکمیلی (اختیاری)
+              <textarea data-ai-content-instructions rows="2" maxlength="500" placeholder="مثلاً مخاطب هدف یا نکته‌ای که باید برجسته شود؛ مدل اجازه ساختن اطلاعات بدون شاهد را ندارد."></textarea>
+            </label>
+          </div>
+          <small class="product-ai-content-foot">پیشنهادها ابتدا در پیش‌نمایش می‌آیند. تولید از سهمیه هوش مصنوعی استفاده می‌کند و در صورت فعال بودن تعرفه مصرفی ممکن است اعتبار هم مصرف شود. هیچ فیلدی بدون تأیید شما تغییر نمی‌کند.</small>
+        </section>
+        <div class="product-ai-content-modal" data-ai-content-modal hidden>
+          <div class="product-ai-content-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-content-dialog-title">
+            <div class="product-ai-content-dialog-head">
+              <div><span>پیش‌نمایش و انتخاب فیلدها</span><h3 id="ai-content-dialog-title">محتوای پیشنهادی محصول</h3></div>
+              <button type="button" data-ai-content-close aria-label="بستن">×</button>
+            </div>
+            <p class="product-ai-content-evidence" data-ai-content-evidence></p>
+            <div class="product-ai-content-preview-grid">
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="title" checked> عنوان محصول</span><textarea rows="2" data-ai-content-field="title"></textarea></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="short_description" checked> معرفی کوتاه</span><textarea rows="3" data-ai-content-field="short_description"></textarea></label>
+              <label class="product-field product-field-wide"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="description" checked> توضیحات کامل</span><textarea rows="10" data-ai-content-field="description"></textarea></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="seo_title" checked> عنوان سئو</span><textarea rows="2" data-ai-content-field="seo_title"></textarea></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="seo_description" checked> توضیحات سئو</span><textarea rows="3" data-ai-content-field="seo_description"></textarea></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="focus_keyword" checked> کلیدواژه کانونی</span><input data-ai-content-field="focus_keyword"></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="secondary_keywords" checked> کلیدواژه‌های فرعی</span><textarea rows="2" data-ai-content-field="secondary_keywords"></textarea></label>
+            </div>
+            <div class="product-ai-content-suggestions">
+              <div><strong><label><input type="checkbox" data-ai-content-accept="tags" checked> برچسب‌های پیشنهادی</label></strong><div data-ai-content-tags></div></div>
+              <div><strong><label><input type="checkbox" data-ai-content-accept="category" checked> دسته‌بندی پیشنهادی</label></strong><p data-ai-content-category>—</p></div>
+              <div><strong>نکات برجسته</strong><ul data-ai-content-points></ul></div>
+              <div><strong>موارد فاقد منبع کافی</strong><ul data-ai-content-unknowns></ul></div>
+            </div>
+            <label class="product-ai-content-overwrite"><input type="checkbox" data-ai-content-only-empty checked> فقط فیلدهای خالی را پر کن و مقادیر فعلی را حفظ کن</label>
+            <div class="product-ai-content-actions"><button type="button" class="store-primary-btn" data-ai-content-apply>اعمال فیلدهای انتخاب‌شده در فرم</button><button type="button" class="store-outline-btn" data-ai-content-close>بازگشت و ویرایش دستی</button></div>
+          </div>
+        </div>
+      @endif
+
       <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" data-product-short-description rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
       <label class="product-field product-field-wide">توضیحات کامل<textarea name="description" rows="6" maxlength="20000" placeholder="شرح کامل محتوا، کاربردها، پیش‌نیازها و آنچه خریدار دریافت می‌کند.">{{ old('description',$product->description) }}</textarea></label>
 
@@ -74,6 +146,8 @@
       <div class="product-editor-subhead" id="product-discovery"><span>گام {{ $isEdit ? "پنجم" : "چهارم" }}</span><strong>نمایش در فروشگاه و موتورهای جست‌وجو</strong><small>در صورت خالی بودن، عنوان و توضیحات اصلی می‌توانند مبنای نمایش قرار گیرند.</small></div>
       <label class="product-field product-field-wide">عنوان سئو<input name="seo_title" data-seo-title value="{{ old('seo_title',$product->seo_title) }}" maxlength="220" placeholder="عنوان مناسب برای موتورهای جستجو"></label>
       <label class="product-field product-field-wide">توضیحات سئو<textarea name="seo_description" data-seo-description rows="2" maxlength="320" placeholder="خلاصه جذاب و دقیق برای نتیجه جستجو">{{ old('seo_description',$product->seo_description) }}</textarea></label>
+      <label class="product-field">کلیدواژه کانونی سئو<input name="seo_focus_keyword" value="{{ old('seo_focus_keyword', data_get($product->metadata, 'seo.focus_keyword')) }}" maxlength="120" placeholder="عبارت اصلی جستجو"></label>
+      <label class="product-field product-field-wide">کلیدواژه‌های فرعی سئو<input name="seo_secondary_keywords" value="{{ old('seo_secondary_keywords', implode('، ', (array) data_get($product->metadata, 'seo.secondary_keywords', []))) }}" maxlength="1000" placeholder="با ویرگول جدا کنید"></label>
       <section class="product-search-preview" aria-label="پیش‌نمایش نتیجه جست‌وجو">
         <span>پیش‌نمایش زنده نتیجه جست‌وجو</span>
         <strong data-seo-preview-title>{{ old('seo_title', $product->seo_title ?: $product->title ?: 'عنوان محصول شما') }}</strong>
@@ -298,8 +372,28 @@
 @endsection
 @push('scripts')
 <script src="{{ asset('js/product-ingestion.js') }}" defer></script>
+@if($isEdit)<script src="{{ asset('js/admin-store-product-ai.js') }}" defer></script>@endif
 @endpush
 @push('styles')
+
+
+.product-ai-content{display:grid;gap:14px;padding:18px;border:1px solid #d7e4f4;border-radius:16px;background:linear-gradient(145deg,#f6faff,#fff)}
+.product-ai-content-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.product-ai-content-head>div{min-width:0}.product-ai-content-head>div>span{font-size:.66rem;font-weight:900;color:#3474c7}.product-ai-content-head h3{margin:4px 0;font-size:.95rem;color:#263f5f}.product-ai-content-head p{margin:0;font-size:.7rem;line-height:1.8;color:#71839b}
+.product-ai-content-status{padding:10px 12px;border-radius:10px;font-size:.7rem;line-height:1.8}.product-ai-content-status.is-ready{background:#edf8f1;color:#246b43}.product-ai-content-status.is-pending{background:#fff7e9;color:#875d1d}
+.product-ai-content-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.product-ai-content-options .product-field-wide{grid-column:1/-1}
+.product-ai-content-foot{font-size:.65rem;line-height:1.8;color:#74849a}
+.product-ai-content-modal{position:fixed;inset:0;z-index:10001;display:grid;place-items:center;padding:16px;background:rgba(12,24,42,.62);backdrop-filter:blur(7px)}
+.product-ai-content-modal[hidden]{display:none}.product-ai-content-dialog{width:min(900px,100%);max-height:90vh;overflow:auto;padding:20px;border:1px solid #dce7f4;border-radius:18px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+.product-ai-content-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.product-ai-content-dialog-head span{font-size:.65rem;color:#3474c7;font-weight:900}.product-ai-content-dialog-head h3{margin:3px 0;font-size:1rem}.product-ai-content-dialog-head button{width:34px;height:34px;border:0;border-radius:9px;background:#f1f4f8;font-size:1.3rem;cursor:pointer}
+.product-ai-content-evidence{margin:12px 0;padding:10px 12px;border-radius:10px;background:#f2f7fd;color:#526b88;font-size:.68rem;line-height:1.8}
+.product-ai-content-preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.product-ai-content-preview-grid .product-field-wide{grid-column:1/-1}
+.product-ai-content-field-title{display:flex;align-items:center;gap:7px;font-size:.72rem;font-weight:800}.product-ai-content-field-title input,.product-ai-content-suggestions input[type=checkbox]{accent-color:#2868c8}
+.product-ai-content-suggestions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.product-ai-content-suggestions>div{padding:12px;border:1px solid #e3eaf3;border-radius:11px}.product-ai-content-suggestions strong{font-size:.72rem;color:#405875}.product-ai-content-suggestions p,.product-ai-content-suggestions li{font-size:.68rem;line-height:1.8;color:#64758c}.product-ai-content-suggestions ul{margin:7px 0 0;padding-right:18px}
+.product-ai-content-tag-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.product-ai-content-tag-list label{display:flex;align-items:center;gap:5px;padding:6px 9px;border:1px solid #e3eaf3;border-radius:99px;font-size:.66rem;color:#4b607c}
+.product-ai-content-overwrite{display:flex;align-items:center;gap:8px;margin:14px 0;font-size:.7rem;color:#4c617c}.product-ai-content-overwrite input{accent-color:#2868c8}
+.product-ai-content-actions{display:flex;gap:9px;flex-wrap:wrap}.product-ai-content-actions button{font:inherit;font-size:.72rem}
+@media(max-width:700px){.product-ai-content-head{align-items:stretch;flex-direction:column}.product-ai-content-head button{width:100%}.product-ai-content-options,.product-ai-content-preview-grid,.product-ai-content-suggestions{grid-template-columns:1fr}.product-ai-content-options .product-field-wide,.product-ai-content-preview-grid .product-field-wide{grid-column:auto}.product-ai-content-dialog{padding:14px}}
 
 .product-ingestion{display:grid;gap:10px;margin-top:14px}
 .product-ingestion-dropzone{min-height:178px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;border:2px dashed #9db7d8;border-radius:18px;background:linear-gradient(145deg,#f7faff,#fff);text-align:center;cursor:pointer;transition:border-color .2s,background .2s,transform .2s}
