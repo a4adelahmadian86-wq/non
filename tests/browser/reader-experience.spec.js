@@ -1334,10 +1334,16 @@ test('personal reading light, font preferences, highlights and annotations stay 
   await expect(page.locator('.farast-reader-document')).toHaveCSS('font-family', /Georgia/);
 
   await page.evaluate(() => {
-    const text = document.querySelector('.farast-reader-document p').firstChild;
+    const paragraph = document.querySelector('.farast-reader-document p');
+    const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+    let text = null;
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeValue.includes('متن')) { text = walker.currentNode; break; }
+    }
+    const start = text.nodeValue.indexOf('متن');
     const range = document.createRange();
-    range.setStart(text, 4);
-    range.setEnd(text, 8);
+    range.setStart(text, start);
+    range.setEnd(text, start + 'متن'.length);
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
@@ -1349,8 +1355,16 @@ test('personal reading light, font preferences, highlights and annotations stay 
   await page.locator('mark.farast-reader-local-highlight').click();
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(0);
   await page.evaluate(() => {
-    const text = document.querySelector('.farast-reader-document p').firstChild;
-    const range = document.createRange(); range.setStart(text, 4); range.setEnd(text, 8);
+    const paragraph = document.querySelector('.farast-reader-document p');
+    const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+    let text = null;
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeValue.includes('متن')) { text = walker.currentNode; break; }
+    }
+    const start = text.nodeValue.indexOf('متن');
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + 'متن'.length);
     const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
   });
   await page.locator('[data-reader-highlight]').click();
@@ -1434,8 +1448,8 @@ test('personal highlights span inline formatting and restore after a page rerend
   });
   await page.locator('[data-reader-highlight]').click();
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
-  await expect(page.locator('mark.farast-reader-local-highlight').nth(0)).toHaveText(' انته');
-  await expect(page.locator('mark.farast-reader-local-highlight').nth(1)).toHaveText('عبارت مهم');
+  await expect(page.locator('mark.farast-reader-local-highlight').nth(0)).toHaveText('عبارت مهم');
+  await expect(page.locator('mark.farast-reader-local-highlight').nth(1)).toHaveText(' انته');
   await page.evaluate(() => {
     const page = document.querySelector('.farast-reader-page-item');
     page.querySelectorAll('mark.farast-reader-local-highlight').forEach(mark => mark.replaceWith(document.createTextNode(mark.textContent)));
