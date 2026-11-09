@@ -3,7 +3,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 class ContentDiscussion extends Model {
  protected $fillable=['target_type','target_key','kind','parent_id','user_id','title','body','rating','status','moderator_id','moderated_at'];
  protected $casts=['rating'=>'integer','moderated_at'=>'datetime'];
