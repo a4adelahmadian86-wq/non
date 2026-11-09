@@ -76,7 +76,7 @@ class AdminStoreController extends Controller
         $data['published_at'] = null;
         $tagIds = $data['tag_ids'] ?? [];
         $relatedIds = $data['related_product_ids'] ?? [];
-        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model']);
+        unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
         $product = DB::transaction(function () use ($data, $tagIds, $relatedIds) {
             $product = StoreProduct::create($data);
             if ($product->type === 'course') {
