@@ -125,7 +125,7 @@ class ProductContentGenerationTest extends TestCase
         $structure['ai_review']['summary'] .= ' تماس 09121234567';
         $structure['ai_review']['findings'] = [[
             'severity' => 'warning',
-            'title' => 'کلید API sk-abcdefghijklmnopqrstuvwxyz123456',
+            'title' => 'کلید API '.'sk-'.str_repeat('a', 32),
             'detail' => 'شماره شبا DE89370400440532013000 در متن دیده شد.',
         ]];
         $structure['inspection']['embedded_image_count'] = 1;
@@ -135,7 +135,7 @@ class ProductContentGenerationTest extends TestCase
         $data['document']->update(['structure_json' => $structure]);
         $data['fact']->update([
             'fact_value' => 'راهنمای نصب مرحله‌به‌مرحله؛ شبا DE89370400440532013000؛ کارت 4111111111111111؛ کارت فارسی '.'۴'.str_repeat('۱', 15).'; pass'.'word: demo1234; postgres'.'://user:demo@db.example.com/app',
-            'evidence_text' => 'در صفحه نخست راهنما آمده است؛ کلید sk-abcdefghijklmnopqrstuvwxyz123456',
+            'evidence_text' => 'در صفحه نخست راهنما آمده است؛ کلید '.'sk-'.str_repeat('a', 32),
         ]);
 
         $this->mock(EditorAiAssistService::class, function ($mock) use ($data) {
@@ -151,7 +151,7 @@ class ProductContentGenerationTest extends TestCase
                     $this->assertStringNotContainsString('private.pdf', $text);
                     $this->assertStringNotContainsString('owner@example.com', $text);
                     $this->assertStringNotContainsString('09121234567', $text);
-                    $this->assertStringNotContainsString('sk-abcdefghijklmnopqrstuvwxyz123456', $text);
+                    $this->assertStringNotContainsString('sk-'.str_repeat('a', 32), $text);
                     $this->assertStringNotContainsString('DE89370400440532013000', $text);
                     $this->assertStringNotContainsString('4111111111111111', $text);
                     $this->assertStringNotContainsString('۴'.str_repeat('۱', 15), $text);
