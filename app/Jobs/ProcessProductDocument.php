@@ -372,12 +372,17 @@ class ProcessProductDocument implements ShouldQueue
 
         $processedDocument = $document->fresh();
         if ($processedDocument
+            && $file->purpose === 'product_download'
             && (bool) data_get($processedDocument->structure_json, 'reader.ready', false)
             && $processedDocument->chunks()->exists()) {
             GenerateProductDocumentAudio::dispatch($processedDocument->id);
-        } elseif ($processedDocument && $processedDocument->chunks()->exists()) {
+        } elseif ($processedDocument && $file->purpose === 'product_download' && $processedDocument->chunks()->exists()) {
             $structure = (array) ($processedDocument->structure_json ?? []);
             $structure['audio'] = ['status' => 'awaiting_extraction_completion'];
+            $processedDocument->update(['structure_json' => $structure]);
+        } elseif ($processedDocument) {
+            $structure = (array) ($processedDocument->structure_json ?? []);
+            $structure['audio'] = ['status' => 'not_applicable'];
             $processedDocument->update(['structure_json' => $structure]);
         }
     }
