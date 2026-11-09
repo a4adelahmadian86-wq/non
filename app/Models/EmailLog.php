@@ -13,9 +13,13 @@ class EmailLog extends Model
         'user_id',
         'subject',
         'status',
+        'attempts',
         'error',
         'meta',
         'sent_at',
+        'queued_at',
+        'last_attempt_at',
+        'accepted_at',
     ];
 
     protected function casts(): array
@@ -23,6 +27,9 @@ class EmailLog extends Model
         return [
             'meta' => 'array',
             'sent_at' => 'datetime',
+            'queued_at' => 'datetime',
+            'last_attempt_at' => 'datetime',
+            'accepted_at' => 'datetime',
         ];
     }
 
