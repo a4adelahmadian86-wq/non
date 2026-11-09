@@ -140,6 +140,20 @@
             <div class="product-ai-content-actions"><button type="button" class="store-primary-btn" data-ai-content-apply>اعمال فیلدهای انتخاب‌شده در فرم</button><button type="button" class="store-outline-btn" data-ai-content-close>بازگشت و ویرایش دستی</button></div>
           </div>
         </div>
+      @else
+        <section class="product-ai-content product-ai-content-pending" aria-label="تکمیل هوشمند محتوای محصول">
+          <div class="product-ai-content-head">
+            <div>
+              <span>تکمیل محتوا از پایگاه دانش محصول</span>
+              <h3>تولید هوشمند عنوان، توضیحات و سئو</h3>
+              <p>برای جلوگیری از حدس، ابتدا محصول را به‌صورت پیش‌نویس ذخیره و فایل‌های آن را بارگذاری کن؛ پس از تکمیل بررسی و ثبت گزارش دانش، این دکمه فعال می‌شود.</p>
+            </div>
+            <button type="button" class="store-primary-btn" disabled>
+              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> تکمیل خودکار با هوش مصنوعی
+            </button>
+          </div>
+          <div class="product-ai-content-status is-pending" role="status">ابتدا پیش‌نویس را ذخیره کن؛ تولید محتوا پیش از بررسی کامل منابع مجاز نیست.</div>
+        </section>
       @endif
 
       <label class="product-field product-field-wide">معرفی کوتاه<textarea name="short_description" data-product-short-description rows="2" maxlength="2000" placeholder="در یک یا دو جمله بگویید این محصول چه ارزشی برای مشتری ایجاد می‌کند.">{{ old('short_description',$product->short_description) }}</textarea></label>
