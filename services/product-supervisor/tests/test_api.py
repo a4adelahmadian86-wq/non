@@ -3,10 +3,12 @@ from __future__ import annotations
 import io
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from docx import Document
+from docx.shared import Inches
+from PIL import Image
 from pypdf import PdfWriter
 
 from main import app, validate_evidence_facts
@@ -86,6 +88,46 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertEqual(body["analysis_batch_count"], 0)
         self.assertEqual(body["failed_analysis_batches"], 0)
 
+
+    def test_mixed_document_images_fail_closed_without_groq_zdr_and_never_use_gemini(self):
+        image_stream = io.BytesIO()
+        Image.new("RGB", (32, 32), "white").save(image_stream, format="PNG")
+        document = Document()
+        document.add_paragraph("متن راهنمای محصول")
+        document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(1))
+        source = io.BytesIO()
+        document.save(source)
+
+        with patch.dict(os.environ, {
+            "GEMINI_API_KEY": "AIza-test-only-not-a-real-key",
+            "GROQ_API_KEY": "test-groq-key",
+            "GROQ_ZDR_CONFIRMED": "",
+        }, clear=False), patch("file_pipeline.analyze_image_with_groq", new_callable=AsyncMock) as vision, patch(
+            "file_pipeline.analyze_extracted_content", new_callable=AsyncMock
+        ) as text_review:
+            response = self.client.post(
+                "/v1/reviews/files",
+                headers={"Authorization": "Bearer test-token"},
+                data={
+                    "product_id": "p-mixed",
+                    "product_title": "عنوان آزمایشی",
+                    "product_type": "digital_file",
+                    "primary_scan_status": "clean",
+                },
+                files={"file": ("mixed.docx", source.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["provider_status"]["gemini"], "not_requested")
+        self.assertEqual(body["provider_status"]["groq_vision"], "not_configured")
+        self.assertEqual(body["provider_status"]["groq_text"], "not_configured")
+        self.assertEqual(body["inspection"]["embedded_image_count"], 1)
+        self.assertTrue(body["inspection"]["visual_review_required"])
+        self.assertTrue(body["inspection"]["visual_inventory_complete"])
+        self.assertFalse(body["publication_authorized"])
+        vision.assert_not_awaited()
+        text_review.assert_not_awaited()
 
     def test_gemini_knowledge_payload_excludes_raw_document_chunks(self):
         from main import minimize_document_knowledge_for_gemini
