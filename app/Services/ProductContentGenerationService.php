@@ -388,7 +388,7 @@ class ProductContentGenerationService
             }
         }
 
-        if ($normalized['category_id'] !== '' && ! isset($fieldEvidence['category'])) {
+        if (! isset($fieldEvidence['category'])) {
             $normalized['category_id'] = '';
             $normalized['category_reason'] = '';
         }
