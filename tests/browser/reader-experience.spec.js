@@ -1339,6 +1339,11 @@ test('personal reading light, font preferences, highlights and annotations stay 
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-measure', 'narrow');
   await expect(page.locator('[data-reader-focus]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-reader-root]')).toHaveClass(/is-reader-focus/);
+  await page.locator('[data-reader-ruler]').click();
+  await expect(page.locator('[data-reader-ruler]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.farast-reader-reading-ruler')).toBeVisible();
+  await page.locator('[data-reader-ruler]').press('Alt+Shift+r');
+  await expect(page.locator('[data-reader-ruler]')).toHaveAttribute('aria-pressed', 'false');
 
   await page.evaluate(() => {
     const paragraph = document.querySelector('.farast-reader-document p');
@@ -1400,6 +1405,7 @@ test('personal reading light, font preferences, highlights and annotations stay 
   expect(saved.measure).toBe('narrow');
   expect(saved.paragraphSpacing).toBe(1.5);
   expect(saved.focusMode).toBe(true);
+  expect(saved.readingRuler).toBe(false);
   expect(saved.highlights).toHaveLength(1);
   expect(saved.notes).toHaveLength(1);
 });
