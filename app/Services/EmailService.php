@@ -56,7 +56,7 @@ class EmailService
         if (! $this->isEnabled('otp')) {
             Log::info('farast.email.otp_skipped_disabled', ['email_hash' => $this->hash($email)]);
 
-            throw new \\RuntimeException('ارسال ایمیل کد تأیید در تنظیمات سایت غیرفعال است.');
+            throw new \RuntimeException('ارسال ایمیل کد تأیید در تنظیمات سایت غیرفعال است.');
         }
 
         $this->dispatch(
@@ -71,7 +71,7 @@ class EmailService
         );
 
         if ($this->mailConfig->currentProvider() === 'log') {
-            throw new \\RuntimeException('ارسال واقعی ایمیل فعال نیست؛ حالت لاگ داخلی فقط برای آزمایش است.');
+            throw new \RuntimeException('ارسال واقعی ایمیل فعال نیست؛ حالت لاگ داخلی فقط برای آزمایش است.');
         }
     }
 
