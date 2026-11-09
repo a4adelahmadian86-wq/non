@@ -420,7 +420,7 @@ class EmailService
         string $to,
         ?User $user,
         string $subject,
-        object $mailable,
+        \Illuminate\Mail\Mailable $mailable,
         string $htmlView,
         array $viewData = [],
         array $meta = [],
@@ -464,7 +464,7 @@ class EmailService
             ]);
 
             if ($type === 'test' || $type === 'otp') {
-                throw new \\RuntimeException($message, 0, $e);
+                throw new \RuntimeException($message, 0, $e);
             }
         }
     }
