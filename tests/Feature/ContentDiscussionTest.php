@@ -338,4 +338,47 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($admin)->get(route('admin.discussion-reports.index',['status'=>'dismissed']))->assertOk()->assertSee('یادداشت رسیدگی')->assertSee('تخلف محسوب نمی‌شود');
  }
 
+ public function test_reader_comments_are_anchored_to_selected_text_and_support_public_replies_and_reactions(): void {
+  $product=$this->product();
+  $author=$this->user('09123456981');
+  $responder=$this->user('09123456982');
+  $admin=$this->user('09123456983','admin');
+
+  $this->actingAs($author)->post(route('discussions.store'),[
+   'target_type'=>'reader',
+   'target_key'=>(string)$product->id,
+   'kind'=>'comment',
+   'body'=>'این توضیح درباره همین بند بسیار مفید است.',
+   'anchor_page'=>3,
+   'anchor_quote'=>'عبارت مهم داخل فایل',
+   'anchor_start'=>120,
+   'anchor_end'=>138,
+   'anchor_context'=>'متن قبل از عبارت مهم داخل فایل و ادامه متن',
+  ])->assertRedirect(route('store.reader',$product->slug).'#reader-discussions');
+
+  $discussion=ContentDiscussion::where('target_type','reader')->firstOrFail();
+  $this->assertDatabaseHas('content_discussions',[
+   'id'=>$discussion->id,
+   'target_key'=>(string)$product->id,
+   'anchor_page'=>3,
+   'anchor_quote'=>'عبارت مهم داخل فایل',
+   'anchor_start'=>120,
+   'anchor_end'=>138,
+   'status'=>'pending',
+  ]);
+
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$discussion),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($responder)->post(route('discussions.reaction',$discussion),['type'=>'like'])->assertRedirect();
+  $this->assertDatabaseHas('discussion_reactions',['discussion_id'=>$discussion->id,'user_id'=>$responder->id,'type'=>'like']);
+
+  $this->actingAs($responder)->post(route('discussions.public-reply',$discussion),[
+   'body'=>'با این برداشت موافقم و این نکته را تکمیل می‌کنم.',
+  ])->assertRedirect();
+  $reply=ContentDiscussion::where('parent_id',$discussion->id)->firstOrFail();
+  $this->assertSame('reader',$reply->target_type);
+  $this->assertSame((string)$product->id,$reply->target_key);
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$reply),['status'=>'approved'])->assertRedirect();
+  $this->assertDatabaseHas('content_discussions',['id'=>$reply->id,'status'=>'approved']);
+ }
+
 }
