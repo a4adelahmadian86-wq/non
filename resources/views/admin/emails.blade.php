@@ -21,7 +21,7 @@
       <div>
         <span class="admin-kicker">EMAIL SYSTEM</span>
         <h1>سیستم ایمیل حرفه‌ای</h1>
-        <p>اولویت: لاگ داخلی یا خود سرور (رایگان). کنترل انواع ایمیل، تست و لاگ از یک پنل.</p>
+        <p>هسته ارسال و صف در خود FARAST است؛ فقط عامل محلی میزبان برای تحویل واقعی لازم است.</p>
       </div>
       <div class="admin-profile">
         <div class="profile-avatar">م</div>
@@ -48,7 +48,7 @@
           <span class="section-icon"><i class="fa-solid fa-server"></i></span>
           <div>
             <h2>سرویس‌دهنده ایمیل</h2>
-            <p>اولویت: «لاگ داخلی» برای تست رایگان بدون خطا. Sendmail فقط روی لینوکس. سرویس‌های بیرونی اختیاری‌اند.</p>
+            <p>فقط سه حالت داخلی وجود دارد؛ هیچ API یا سرویس ارسال ثالثی در این سامانه فعال نیست.</p>
           </div>
         </div>
         <span class="configured-pill {{ $providerConfigured ? '' : 'offline' }}">
@@ -60,76 +60,36 @@
         @csrf
 
         <div class="field">
-          <label>سرویس‌دهنده</label>
+          <label>روش ارسال داخلی</label>
           <select name="mail_provider">
             @foreach($providers as $key => $label)
               <option value="{{ $key }}" @selected($mailer === $key)>{{ $label }}</option>
             @endforeach
           </select>
-          <small>
-            <b>لاگ داخلی</b>: همیشه کار می‌کند (بدون mailpit/sendmail) ·
-            <b>Sendmail</b>: فقط لینوکس با Postfix ·
-            <b>SMTP محلی</b>: 127.0.0.1 ·
-            بیرونی‌ها اختیاری
-          </small>
+          <small>«عامل محلی» به MTA نصب‌شده روی همان میزبان وصل می‌شود. «لاگ داخلی» فقط برای آزمایش است و ایمیل را به مقصد نمی‌رساند.</small>
         </div>
 
         <div class="field">
-          <label>آدرس فرستنده (From)</label>
-          <input type="email" name="mail_from_address" value="{{ $mailFrom }}" placeholder="noreply@localhost">
+          <label>آدرس فرستنده</label>
+          <input type="email" name="mail_from_address" required value="{{ $mailFrom }}" placeholder="noreply@example.com">
         </div>
 
         <div class="field">
           <label>نام فرستنده</label>
-          <input name="mail_from_name" value="{{ $mailFromName }}" placeholder="FARAST">
+          <input name="mail_from_name" required value="{{ $mailFromName }}" placeholder="FARAST">
         </div>
 
-        <div class="field secret-field">
-          <label>کلید Resend API (اختیاری)</label>
-          <input type="password" name="resend_api_key" placeholder="{{ ($hasResendKey ?? false) ? 'تنظیم شده — برای تغییر وارد کنید' : 're_...' }}" autocomplete="new-password">
-          <small>فقط اگر سرویس بیرونی می‌خواهید.</small>
+        <div class="field" style="grid-column:1/-1">
+          <div style="padding:16px;border:1px solid #2a3d66;border-radius:14px;background:#101a30;display:grid;gap:8px">
+            <b><i class="fa-solid fa-stethoscope"></i> وضعیت زیرساخت موجود</b>
+            <span>روش انتخابی: {{ $diagnostics['label'] }}</span>
+            <span>صف فعلی: {{ $diagnostics['queue'] }}</span>
+            <span>عامل SMTP محلی 127.0.0.1:25: {{ $diagnostics['local_mta'] ? 'در دسترس' : 'در دسترس نیست' }}</span>
+            <span>Sendmail محلی: {{ $diagnostics['sendmail'] ? 'موجود' : 'موجود نیست' }}</span>
+            <span style="color:{{ $diagnostics['available'] ? '#86efac' : '#fca5a5' }}">{{ $diagnostics['available'] ? 'روش انتخابی از نظر محلی آماده است.' : 'روش انتخابی هنوز روی میزبان قابل استفاده نیست.' }}</span>
+            <small>{{ $diagnostics['meaning'] }}</small>
+          </div>
         </div>
-
-        <div class="field secret-field">
-          <label>کلید / رمز Brevo (اختیاری)</label>
-          <input type="password" name="brevo_api_key" placeholder="{{ ($hasBrevoKey ?? false) ? 'تنظیم شده — برای تغییر وارد کنید' : 'کلید SMTP Brevo' }}" autocomplete="new-password">
-        </div>
-
-        <div class="field">
-          <label>SMTP Host</label>
-          <input name="mail_host" value="{{ $mailHost }}" placeholder="127.0.0.1">
-        </div>
-
-        <div class="field">
-          <label>SMTP Port</label>
-          <input type="number" name="mail_port" value="{{ $mailPort }}" min="1" placeholder="25">
-        </div>
-
-        <div class="field">
-          <label>SMTP Username</label>
-          <input name="mail_username" value="{{ $mailUsername }}" autocomplete="off">
-        </div>
-
-        <div class="field secret-field">
-          <label>SMTP Password</label>
-          <input type="password" name="mail_password" placeholder="{{ ($hasSmtpPassword ?? false) ? 'تنظیم شده — برای تغییر وارد کنید' : 'رمز SMTP' }}" autocomplete="new-password">
-        </div>
-
-        <div class="field">
-          <label>Encryption</label>
-          <select name="mail_encryption">
-            <option value="tls" @selected(($mailEncryption ?: '') === 'tls')>TLS</option>
-            <option value="ssl" @selected($mailEncryption === 'ssl')>SSL</option>
-            <option value="null" @selected($mailEncryption === '' || $mailEncryption === null)>بدون</option>
-          </select>
-        </div>
-
-        <label class="toggle-card">
-          <span><i class="fa-solid fa-power-off"></i> فعال بودن کل سیستم ایمیل</span>
-          <input type="hidden" name="email_enabled" value="0">
-          <input type="checkbox" name="email_enabled" value="1" {{ $flags['email_enabled'] ? 'checked' : '' }}>
-          <b></b>
-        </label>
 
         @foreach($types as $key => $label)
           <label class="toggle-card">
@@ -141,7 +101,7 @@
         @endforeach
 
         <label class="toggle-card">
-          <span><i class="fa-solid fa-bolt"></i> ارسال همزمان (بدون Queue)</span>
+          <span><i class="fa-solid fa-bolt"></i> ارسال همزمان (فقط در صورت نیاز؛ پیش‌فرض صف)</span>
           <input type="hidden" name="email_sync" value="0">
           <input type="checkbox" name="email_sync" value="1" {{ filter_var(\App\Models\SiteSetting::read('email_sync', true), FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
           <b></b>
@@ -159,7 +119,7 @@
           <span class="section-icon green-bg"><i class="fa-solid fa-paper-plane"></i></span>
           <div>
             <h2>ارسال ایمیل آزمایشی</h2>
-            <p>بعد از ذخیره سرویس‌دهنده، اینجا تست کنید. برای تست بدون خطا از «لاگ داخلی» استفاده کنید.</p>
+            <p>بعد از ذخیره سرویس‌دهنده، اینجا تست کنید. در حالت لاگ داخلی فقط ثبت انجام می‌شود؛ برای تحویل واقعی باید عامل محلی فعال باشد.</p>
           </div>
         </div>
       </div>
@@ -240,7 +200,10 @@
               </div>
             </div>
             <div class="user-badges">
-              <span class="badge {{ $log->status === 'sent' ? 'ok' : ($log->status === 'failed' ? 'danger' : '') }}">{{ $log->status }}</span>
+              <span class="badge {{ in_array($log->status, ['accepted', 'sent'], true) ? 'ok' : ($log->status === 'failed' ? 'danger' : '') }}">
+                {{ match($log->status) { 'accepted' => 'پذیرفته‌شده توسط عامل محلی', 'sent' => 'ارسال‌شده (قدیمی)', 'logged' => 'ثبت داخلی؛ ارسال نشده', 'queued' => 'در صف', 'failed' => 'ناموفق', default => $log->status } }}
+              </span>
+              <span class="badge">{{ $log->attempts ?? 0 }} تلاش</span>
               <span class="badge">{{ $log->created_at?->format('Y/m/d H:i') }}</span>
             </div>
             @if($log->error)
