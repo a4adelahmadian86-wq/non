@@ -86,6 +86,7 @@
   const focusButton = group.querySelector('[data-reader-focus]');
   const rulerButton = group.querySelector('[data-reader-ruler]');
   const highlightColorSelect = group.querySelector('[data-reader-highlight-color]');
+  let ruler = null;
   const highlightColors = { yellow: 'rgba(250,204,21,.55)', green: 'rgba(74,222,128,.38)', blue: 'rgba(96,165,250,.42)', pink: 'rgba(244,114,182,.4)' };
   const applyPrefs = () => {
     root.classList.toggle('is-reading-light', !!state.light);
@@ -99,6 +100,7 @@
     root.classList.toggle('is-reader-focus', state.focusMode);
     root.classList.toggle('has-reading-ruler', state.readingRuler);
     rulerButton.setAttribute('aria-pressed', String(state.readingRuler));
+    if (ruler) ruler.hidden = !state.readingRuler;
     lineHeightSelect.value = String(state.lineHeight);
     measureSelect.value = state.measure;
     paragraphSpacingSelect.value = String(state.paragraphSpacing);
@@ -117,7 +119,7 @@
   measureSelect.addEventListener('change', () => { state.measure = measureSelect.value; applyPrefs(); persist(); announce('عرض ستون مطالعه تغییر کرد.'); });
   paragraphSpacingSelect.addEventListener('change', () => { state.paragraphSpacing = Number(paragraphSpacingSelect.value); applyPrefs(); persist(); announce('فاصلهٔ بندها تغییر کرد.'); });
   focusButton.addEventListener('click', () => { state.focusMode = !state.focusMode; applyPrefs(); persist(); announce(state.focusMode ? 'حالت تمرکز روشن شد.' : 'حالت تمرکز خاموش شد.'); });
-  const ruler = document.createElement('div');
+  ruler = document.createElement('div');
   ruler.className = 'farast-reader-reading-ruler';
   ruler.setAttribute('aria-hidden', 'true');
   document.body.append(ruler);
