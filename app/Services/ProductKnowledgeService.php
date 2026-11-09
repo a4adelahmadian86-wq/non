@@ -171,8 +171,28 @@ class ProductKnowledgeService
             ->values();
 
         $reasons = [];
+        $tagIds = $product->tags->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $productContentFingerprint = [
+            'title' => (string) $product->title,
+            'slug' => (string) $product->slug,
+            'sku' => (string) $product->sku,
+            'type' => (string) $product->type,
+            'status' => (string) $product->status,
+            'price_rials' => (int) $product->price_rials,
+            'discount_percent' => (int) ($product->discount_percent ?? 0),
+            'version' => (string) ($product->version ?? ''),
+            'category_id' => (int) ($product->category_id ?? 0),
+            'tag_ids' => $tagIds,
+            'short_description' => (string) ($product->short_description ?? ''),
+            'description' => (string) ($product->description ?? ''),
+            'seo_title' => (string) ($product->seo_title ?? ''),
+            'seo_description' => (string) ($product->seo_description ?? ''),
+            'seo' => (array) data_get($product->metadata, 'seo', []),
+        ];
         $sources = [];
-        $fingerprints = [];
+        $fingerprints = [
+            'product:content' => hash('sha256', json_encode($productContentFingerprint, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)),
+        ];
         $factsIncluded = 0;
         $factLimit = 40;
 
