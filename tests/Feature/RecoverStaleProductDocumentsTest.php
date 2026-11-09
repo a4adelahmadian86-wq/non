@@ -114,4 +114,12 @@ class RecoverStaleProductDocumentsTest extends TestCase
         $this->assertSame('pending', $pending->fresh()->processing_status);
         Queue::assertNothingPushed();
     }
+
+    public function test_recovery_command_is_registered_on_the_shared_hosting_scheduler(): void
+    {
+        $this->artisan('schedule:list')
+            ->expectsOutputToContain('farast:recover-product-documents --limit=50')
+            ->assertExitCode(0);
+    }
+
 }
