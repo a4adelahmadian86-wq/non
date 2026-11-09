@@ -89,6 +89,49 @@ class ContentDiscussionController extends Controller {
  }
 
 
+ public function myDiscussions(Request $request) {
+  $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'all';
+  $kind=in_array($request->query('kind'),['review','question','comment','reply'],true)?$request->query('kind'):'';
+  $targetType=in_array($request->query('target_type'),['product','article'],true)?$request->query('target_type'):'';
+  $search=trim((string)$request->query('q',''));
+  $search=mb_substr($search,0,100);
+  $base=ContentDiscussion::query()->where('user_id',$request->user()->id);
+  $stats=[
+   'all'=>(clone $base)->count(),
+   'pending'=>(clone $base)->where('status','pending')->count(),
+   'approved'=>(clone $base)->where('status','approved')->count(),
+   'rejected'=>(clone $base)->where('status','rejected')->count(),
+  ];
+  $discussions=(clone $base)->with('parent')
+   ->when($status!=='all',fn($q)=>$q->where('status',$status))
+   ->when($kind!=='',fn($q)=>$q->where('kind',$kind))
+   ->when($targetType!=='',fn($q)=>$q->where('target_type',$targetType))
+   ->when($search!=='',fn($q)=>$q->where(function($w) use($search){$w->where('body','like','%'.$search.'%')->orWhere('title','like','%'.$search.'%');}))
+   ->latest()->paginate(15)->withQueryString();
+  $discussions->getCollection()->each(function($item){
+   if($item->target_type==='product'){
+    $product=StoreProduct::find((int)$item->target_key);
+    $item->setAttribute('target_url',$product?route('store.product',$product->slug):null);
+    $item->setAttribute('target_label',$product?->title ?: 'محصول حذف‌شده');
+   }else{
+    $item->setAttribute('target_url',BlogController::articleExists($item->target_key)?route('blog.show',$item->target_key):null);
+    $item->setAttribute('target_label','مقاله');
+   }
+   $anchor=$item->parent_id ? $item->parent_id : $item->id;
+   $item->setAttribute('discussion_url',$item->target_url ? $item->target_url.'#discussion-'.$item->id : null);
+   $item->setAttribute('parent_url',$item->target_url ? $item->target_url.'#discussion-'.$anchor : null);
+  });
+  return view('community.mine',compact('discussions','stats','status','kind','targetType','search'));
+ }
+ public function withdrawOwn(Request $request, ContentDiscussion $discussion) {
+  DB::transaction(function() use($request,$discussion){
+   $locked=ContentDiscussion::query()->whereKey($discussion->id)->lockForUpdate()->firstOrFail();
+   abort_unless((int)$locked->user_id===(int)$request->user()->id,404);
+   abort_unless($locked->status==='pending',409,'فقط مشارکت‌های در انتظار بررسی قابل لغو هستند.');
+   $locked->delete();
+  });
+  return back()->with('discussion_status','مشارکت در انتظار بررسی شما لغو شد.');
+ }
  public function communityIndex() {
   $members=User::query()->select('users.id','users.name','users.created_at')
    ->join('content_discussions','content_discussions.user_id','=','users.id')

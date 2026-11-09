@@ -169,4 +169,26 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$items[0]),['status'=>'approved'])->assertRedirect();
   $this->get(route('community.index'))->assertOk()->assertSee('کاربر آزمایشی')->assertSee('مشارکت‌کننده‌های جامعه')->assertDontSee('09123456842');
  }
+
+ public function test_members_can_manage_only_their_own_discussions_and_withdraw_pending_items(): void {
+  $p=$this->product();$author=$this->user('09123456901');$other=$this->user('09123456902');$admin=$this->user('09123456903','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $pending=ContentDiscussion::firstOrFail();
+  $this->actingAs($other)->get(route('community.mine'))->assertOk()->assertDontSee('آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟');
+  $this->actingAs($author)->get(route('community.mine',['status'=>'pending']))->assertOk()->assertSee('آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟')->assertSee('لغو مشارکت');
+  $this->actingAs($other)->delete(route('community.mine.withdraw',$pending))->assertNotFound();
+  $this->actingAs($author)->delete(route('community.mine.withdraw',$pending))->assertRedirect();
+  $this->assertDatabaseMissing('content_discussions',['id'=>$pending->id]);
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا نسخه دیگری از این فایل نیز ارائه می‌شود؟'])->assertRedirect();
+  $approved=ContentDiscussion::latest('id')->firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$approved),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($author)->delete(route('community.mine.withdraw',$approved))->assertStatus(409);
+  $this->assertDatabaseHas('content_discussions',['id'=>$approved->id,'status'=>'approved']);
+ }
+ public function test_community_notification_filter_is_available_in_notifications_page(): void {
+  $user=$this->user('09123456904');
+  \\App\\Models\\FarastNotification::create(['user_id'=>$user->id,'type'=>'discussion_reply','title'=>'پاسخ جدید','body'=>'پاسخ تازه‌ای منتشر شد.','data'=>['url'=>'/community']]);
+  $this->actingAs($user)->get(route('platform.notifications',['filter'=>'community']))->assertOk()->assertSee('پاسخ جدید')->assertSee('گفت‌وگوها');
+ }
+
 }

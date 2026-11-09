@@ -8,6 +8,9 @@
   <span>FARAST COMMUNITY</span>
   <h1>مشارکت‌کننده‌های جامعه فراست</h1>
   <p>اعضایی که با تجربه‌ها، پرسش‌ها و پاسخ‌های تأییدشده به انتخاب و یادگیری بهتر دیگران کمک کرده‌اند. رتبه‌بندی بر پایه واکنش‌های مفید واقعی و تعداد مشارکت‌های منتشرشده است.</p>
+   @auth
+   <a class="community-mine-link" href="{{ route('community.mine') }}"><i class="fa-solid fa-user-pen" aria-hidden="true"></i> مشارکت‌های من</a>
+  @endauth
  </header>
  <section class="community-directory-list" aria-label="فهرست مشارکت‌کنندگان">
   @forelse($members as $member)
