@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Announcement;
 use App\Models\FarastNotification;
 use App\Models\User;
+use App\Services\AnnouncementService;
+use App\Services\EmailService;
 use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -107,16 +110,16 @@ class NotificationCenterTest extends TestCase
             'notify_email' => false,
         ]);
 
-        $notifications = \\Mockery::mock(NotificationService::class);
+        $notifications = \Mockery::mock(NotificationService::class);
         $notifications->shouldReceive('push')->once()->with(
             $user->id,
             'announcement_warning',
             'اختلال آزمایشی ارسال',
             'این اعلان باید در صف تلاش مجدد باقی بماند.',
-            \\Mockery::type('array')
+            \Mockery::type('array')
         )->andReturn(null);
 
-        $email = \\Mockery::mock(EmailService::class);
+        $email = \Mockery::mock(EmailService::class);
         $service = new AnnouncementService($notifications, $email);
 
         $this->assertSame(0, $service->broadcast($announcement));
@@ -136,9 +139,9 @@ class NotificationCenterTest extends TestCase
             'notify_email' => false,
         ]);
 
-        $notifications = \\Mockery::mock(NotificationService::class);
+        $notifications = \Mockery::mock(NotificationService::class);
         $notifications->shouldReceive('push')->once()->andReturn(new FarastNotification());
-        $email = \\Mockery::mock(EmailService::class);
+        $email = \Mockery::mock(EmailService::class);
         $service = new AnnouncementService($notifications, $email);
 
         $this->assertSame(1, $service->broadcast($announcement));
