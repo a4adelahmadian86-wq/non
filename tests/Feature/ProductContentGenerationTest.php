@@ -188,6 +188,8 @@ class ProductContentGenerationTest extends TestCase
         $this->assertSame('راهنمای نصب محصول', $result['suggestions']['title']);
         $this->assertSame((string) $data['category']->id, $result['suggestions']['category_id']);
         $this->assertSame([$data['fact']->id], $result['suggestions']['used_fact_ids']);
+        $this->assertSame($data['fact']->id, $result['sources'][0]['facts'][0]['id']);
+        $this->assertNotEmpty($result['sources'][0]['file_name']);
         $this->assertSame('available', app(ProductContentGenerationService::class)->readiness($data['product'])['status']);
     }
 
