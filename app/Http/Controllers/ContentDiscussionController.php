@@ -30,10 +30,10 @@ class ContentDiscussionController extends Controller {
   abort_if((int)$discussion->user_id===(int)$request->user()->id,403);
   DB::transaction(function() use ($discussion,$request,$data) {
    ContentDiscussion::query()->whereKey($discussion->id)->lockForUpdate()->firstOrFail();
-   $reaction=\\App\\Models\\DiscussionReaction::query()->where('discussion_id',$discussion->id)->where('user_id',$request->user()->id)->lockForUpdate()->first();
+   $reaction=\App\Models\DiscussionReaction::query()->where('discussion_id',$discussion->id)->where('user_id',$request->user()->id)->lockForUpdate()->first();
    if($reaction && $reaction->type===$data['type']) { $reaction->delete(); return; }
    if($reaction) { $reaction->type=$data['type']; $reaction->save(); return; }
-   \\App\\Models\\DiscussionReaction::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id,'type'=>$data['type']]);
+   \App\Models\DiscussionReaction::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id,'type'=>$data['type']]);
   });
   return back()->with('discussion_status','واکنش شما ثبت شد.');
  }
