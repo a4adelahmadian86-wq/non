@@ -82,7 +82,7 @@ class ProductDocumentProcessingStateTest extends TestCase
             ['groq_vision' => 'completed', 'groq_text' => 'not_requested'],
             0,
             0,
-            true,
+            false,
             0,
         );
 
