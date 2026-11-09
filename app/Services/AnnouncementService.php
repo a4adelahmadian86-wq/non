@@ -130,7 +130,7 @@ class AnnouncementService
                             'announcement_type' => $announcement->type,
                         ],
                         false,
-                        'announcement:'.$announcement->id.':user:'.$user->id,
+                        'announcement:'.$announcement->id.':revision:'.(int) ($announcement->broadcast_revision ?? 1).':user:'.$user->id,
                     );
 
                     if ($notification) {
