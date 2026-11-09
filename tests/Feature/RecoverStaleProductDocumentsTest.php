@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ProcessProductDocument;
+use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductFile;
@@ -24,7 +25,13 @@ class RecoverStaleProductDocumentsTest extends TestCase
 
     private function document(string $status, string $contents, int $minutesOld = 40): StoreProductDocument
     {
+        $category = StoreCategory::create([
+            'name' => 'Recovery category',
+            'slug' => 'recovery-category-'.uniqid(),
+            'is_active' => true,
+        ]);
         $product = StoreProduct::create([
+            'category_id' => $category->id,
             'title' => 'Recovery product',
             'slug' => 'recovery-product-'.uniqid(),
             'sku' => 'RECOVERY-'.uniqid(),
