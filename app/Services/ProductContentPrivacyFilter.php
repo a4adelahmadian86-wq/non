@@ -61,9 +61,9 @@ class ProductContentPrivacyFilter
         }
 
         $value = preg_replace_callback(
-            '/(?<!\\p{Nd})(?:\\p{Nd}[ -]?){13,19}(?!\\p{Nd})/u',
+            '/(?<![0-9۰-۹٠-٩])(?:[0-9۰-۹٠-٩][ -]?){13,19}(?![0-9۰-۹٠-٩])/u',
             function (array $match): string {
-                $digits = preg_replace('/[^\\p{Nd}]/u', '', $match[0]) ?? '';
+                $digits = preg_replace('/[^0-9۰-۹٠-٩]/u', '', $match[0]) ?? '';
                 return $this->passesLuhn($digits) ? '[REDACTED]' : $match[0];
             },
             $value
