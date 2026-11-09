@@ -154,7 +154,7 @@ class ContentDiscussionController extends Controller {
  public function myDiscussions(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'all';
   $kind=in_array($request->query('kind'),['review','question','comment','reply'],true)?$request->query('kind'):'';
-  $targetType=in_array($request->query('target_type'),['product','article'],true)?$request->query('target_type'):'';
+  $targetType=in_array($request->query('target_type'),['product','article','reader'],true)?$request->query('target_type'):'';
   $search=trim((string)$request->query('q',''));
   $search=mb_substr($search,0,100);
   $base=ContentDiscussion::query()->where('user_id',$request->user()->id);
