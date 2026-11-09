@@ -126,6 +126,17 @@
         const details = [source.type, source.pages ? source.pages + ' صفحه' : '', source.facts_total ? source.facts_total + ' شاهد' : ''].filter(Boolean).join(' · ');
         return String(source.name || 'منبع') + (details ? ' — ' + details : '');
       }));
+      const usedFactIds = new Set((suggestions.used_fact_ids || []).map(id => String(id)));
+      const usedEvidence = (payload.sources || []).flatMap(source => (source.facts || [])
+        .filter(fact => usedFactIds.has(String(fact.id)))
+        .map(fact => {
+          const locator = fact.locator && (fact.locator.page || fact.locator.section)
+            ? ' (' + [fact.locator.page ? 'صفحه ' + fact.locator.page : '', fact.locator.section || ''].filter(Boolean).join('، ') + ')'
+            : '';
+          return String(source.file_name || 'منبع') + ' — ' + String(fact.key || fact.type || 'واقعیت')
+            + ': ' + String(fact.value || '') + '؛ شاهد: ' + String(fact.evidence || '') + locator;
+        }));
+      renderList(modal?.querySelector('[data-ai-content-used-facts]'), usedEvidence.length ? usedEvidence : ['شاهد مشخصی در خروجی مدل ارجاع نشده است.']);
       renderList(modal?.querySelector('[data-ai-content-points]'), suggestions.selling_points || []);
       renderList(modal?.querySelector('[data-ai-content-unknowns]'), suggestions.unknowns || []);
       const evidence = modal?.querySelector('[data-ai-content-evidence]');
