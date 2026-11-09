@@ -187,7 +187,7 @@ class ContentDiscussionTest extends TestCase {
  }
  public function test_community_notification_filter_is_available_in_notifications_page(): void {
   $user=$this->user('09123456904');
-  \\App\\Models\\FarastNotification::create(['user_id'=>$user->id,'type'=>'discussion_reply','title'=>'پاسخ جدید','body'=>'پاسخ تازه‌ای منتشر شد.','data'=>['url'=>'/community']]);
+  \App\Models\FarastNotification::create(['user_id'=>$user->id,'type'=>'discussion_reply','title'=>'پاسخ جدید','body'=>'پاسخ تازه‌ای منتشر شد.','data'=>['url'=>'/community']]);
   $this->actingAs($user)->get(route('platform.notifications',['filter'=>'community']))->assertOk()->assertSee('پاسخ جدید')->assertSee('گفت‌وگوها');
  }
 
