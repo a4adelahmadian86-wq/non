@@ -16,6 +16,7 @@ class FarastNotification extends Model
         'body',
         'data',
         'read_at',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -23,6 +24,7 @@ class FarastNotification extends Model
         return [
             'data' => 'array',
             'read_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -36,32 +38,29 @@ class FarastNotification extends Model
         return $this->read_at !== null;
     }
 
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
     public function url(): ?string
     {
         $data = $this->data ?? [];
+        $url = is_array($data) ? ($data['url'] ?? null) : null;
 
-        return is_array($data) ? ($data['url'] ?? null) : null;
+        return is_string($url) && trim($url) !== '' ? $url : null;
     }
 
     public function category(): string
     {
         $type = (string) $this->type;
 
-        if (str_starts_with($type, 'discussion_')) {
-            return 'community';
-        }
-        if (str_starts_with($type, 'ticket_')) {
-            return 'support';
-        }
-        if (str_starts_with($type, 'order_') || str_starts_with($type, 'wallet_') || str_starts_with($type, 'billing_')) {
-            return 'finance';
-        }
-        if (str_starts_with($type, 'security_')) {
-            return 'security';
-        }
-        if (str_starts_with($type, 'announcement_')) {
-            return 'announcement';
-        }
+        if (str_starts_with($type, 'discussion_')) return 'community';
+        if (str_starts_with($type, 'ticket_')) return 'support';
+        if (str_starts_with($type, 'order_') || str_starts_with($type, 'wallet_') || str_starts_with($type, 'billing_')) return 'finance';
+        if (str_starts_with($type, 'security_')) return 'security';
+        if ($type === 'announcement_campaign' || str_starts_with($type, 'marketing_')) return 'marketing';
+        if (str_starts_with($type, 'announcement_')) return 'announcement';
 
         return 'system';
     }
@@ -73,6 +72,7 @@ class FarastNotification extends Model
             'finance' => 'fa-wallet',
             'security' => 'fa-shield-halved',
             'announcement' => 'fa-bullhorn',
+            'marketing' => 'fa-bullhorn',
             'community' => 'fa-comments',
             default => 'fa-bell',
         };
@@ -84,7 +84,8 @@ class FarastNotification extends Model
             'support' => 'پشتیبانی',
             'finance' => 'مالی',
             'security' => 'امنیت',
-            'announcement' => 'اعلان',
+            'announcement' => 'اطلاعیه رسمی',
+            'marketing' => 'پیام بازاریابی',
             'community' => 'گفت‌وگوها',
             default => 'سیستم',
         };

@@ -5,11 +5,15 @@ namespace App\Services;
 use App\Models\FarastNotification;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
+use Throwable;
 
 /**
- * سرویس مرکزی اعلان‌های درون‌برنامه (هماهنگ با پشتیبانی، مالی، اعلان عمومی، سیستم).
+ * تنها درگاه ثبت و خواندن اعلان‌های درون‌برنامه‌ای FARAST.
+ * ماژول‌ها باید برای ثبت اعلان از همین سرویس استفاده کنند.
  */
 class NotificationService
 {
@@ -19,25 +23,34 @@ class NotificationService
         string $title,
         ?string $body = null,
         array $data = [],
+        bool $throwOnFailure = false,
     ): ?FarastNotification {
         if (! Schema::hasTable('farast_notifications')) {
+            if ($throwOnFailure) {
+                throw new RuntimeException('جدول اعلان‌های فراست در دسترس نیست.');
+            }
+
             return null;
         }
 
         try {
             return FarastNotification::create([
                 'user_id' => $userId,
-                'type' => $type,
-                'title' => $title,
-                'body' => $body,
+                'type' => mb_substr(trim($type), 0, 100),
+                'title' => mb_substr(trim($title), 0, 180),
+                'body' => $body === null ? null : mb_substr($body, 0, 5000),
                 'data' => $data ?: null,
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::warning('farast.notification.push_failed', [
                 'user_id' => $userId,
                 'type' => $type,
                 'error' => $e->getMessage(),
             ]);
+
+            if ($throwOnFailure) {
+                throw $e;
+            }
 
             return null;
         }
@@ -49,65 +62,93 @@ class NotificationService
         string $title,
         ?string $body = null,
         array $data = [],
+        bool $throwOnFailure = false,
     ): ?FarastNotification {
-        return $this->push($user->id, $type, $title, $body, $data);
+        return $this->push($user->id, $type, $title, $body, $data, $throwOnFailure);
     }
 
     public function unreadCount(int $userId): int
     {
-        if (! Schema::hasTable('farast_notifications')) {
-            return 0;
-        }
+        if (! Schema::hasTable('farast_notifications')) return 0;
 
         return FarastNotification::query()
             ->where('user_id', $userId)
+            ->whereNull('archived_at')
             ->whereNull('read_at')
             ->count();
     }
 
     public function latest(int $userId, int $limit = 8)
     {
-        if (! Schema::hasTable('farast_notifications')) {
-            return collect();
-        }
+        if (! Schema::hasTable('farast_notifications')) return collect();
 
         return FarastNotification::query()
             ->where('user_id', $userId)
+            ->whereNull('archived_at')
             ->orderByDesc('created_at')
-            ->limit($limit)
+            ->orderByDesc('id')
+            ->limit(max(1, min($limit, 30)))
             ->get();
     }
 
-    public function paginateForUser(int $userId, ?string $filter = null, int $perPage = 20): LengthAwarePaginator
-    {
-        $q = FarastNotification::query()
-            ->where('user_id', $userId)
-            ->orderByDesc('created_at');
+    public function paginateForUser(
+        int $userId,
+        ?string $filter = null,
+        int $perPage = 20,
+        ?string $search = null,
+    ): LengthAwarePaginator {
+        $q = FarastNotification::query()->where('user_id', $userId);
 
-        if ($filter === 'unread') {
-            $q->whereNull('read_at');
-        } elseif ($filter === 'support') {
-            $q->where('type', 'like', 'ticket_%');
-        } elseif ($filter === 'finance') {
-            $q->where(function ($w) {
+        if ($filter === 'archived') {
+            $q->whereNotNull('archived_at');
+        } else {
+            $q->whereNull('archived_at');
+            if ($filter === 'unread') {
+                $q->whereNull('read_at');
+            } elseif (in_array($filter, ['support', 'finance', 'announcement', 'community', 'security', 'marketing', 'system'], true)) {
+                $this->applyCategoryFilter($q, $filter);
+            }
+        }
+
+        $term = trim((string) $search);
+        if ($term !== '') {
+            $q->where(function (Builder $w) use ($term) {
+                $w->where('title', 'like', '%'.$term.'%')
+                    ->orWhere('body', 'like', '%'.$term.'%');
+            });
+        }
+
+        return $q->orderByDesc('created_at')->orderByDesc('id')->paginate($perPage)->withQueryString();
+    }
+
+    private function applyCategoryFilter(Builder $query, string $filter): void
+    {
+        match ($filter) {
+            'support' => $query->where('type', 'like', 'ticket_%'),
+            'finance' => $query->where(function (Builder $w) {
                 $w->where('type', 'like', 'order_%')
                     ->orWhere('type', 'like', 'wallet_%')
                     ->orWhere('type', 'like', 'billing_%');
-            });
-        } elseif ($filter === 'community') {
-            $q->where('type', 'like', 'discussion_%');
-        } elseif ($filter === 'announcement') {
-            $q->where('type', 'like', 'announcement_%');
-        } elseif ($filter === 'system') {
-            $q->where('type', 'not like', 'discussion_%');
-            $q->where('type', 'not like', 'ticket_%')
+            }),
+            'community' => $query->where('type', 'like', 'discussion_%'),
+            'security' => $query->where('type', 'like', 'security_%'),
+            'announcement' => $query->where('type', 'like', 'announcement_%')->where('type', '!=', 'announcement_campaign'),
+            'marketing' => $query->where(function (Builder $w) {
+                $w->where('type', 'announcement_campaign')
+                    ->orWhere('type', 'like', 'marketing_%');
+            }),
+            'system' => $query
+                ->where('type', 'not like', 'discussion_%')
+                ->where('type', 'not like', 'ticket_%')
                 ->where('type', 'not like', 'order_%')
                 ->where('type', 'not like', 'wallet_%')
                 ->where('type', 'not like', 'billing_%')
-                ->where('type', 'not like', 'announcement_%');
-        }
-
-        return $q->paginate($perPage)->withQueryString();
+                ->where('type', 'not like', 'security_%')
+                ->where('type', 'not like', 'announcement_%')
+                ->where('type', 'not like', 'marketing_%')
+                ->where('type', '!=', 'announcement_campaign'),
+            default => null,
+        };
     }
 
     public function markRead(int $userId, int $id): bool
@@ -123,35 +164,55 @@ class NotificationService
     {
         return FarastNotification::query()
             ->where('user_id', $userId)
+            ->whereNull('archived_at')
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
+    }
+
+    public function archive(int $userId, int $id): bool
+    {
+        return FarastNotification::query()
+            ->where('user_id', $userId)
+            ->where('id', $id)
+            ->whereNull('archived_at')
+            ->update(['archived_at' => now(), 'read_at' => now()]) > 0;
+    }
+
+    public function restore(int $userId, int $id): bool
+    {
+        return FarastNotification::query()
+            ->where('user_id', $userId)
+            ->where('id', $id)
+            ->whereNotNull('archived_at')
+            ->update(['archived_at' => null]) > 0;
     }
 
     public function countsByCategory(int $userId): array
     {
         if (! Schema::hasTable('farast_notifications')) {
-            return ['all' => 0, 'unread' => 0, 'support' => 0, 'finance' => 0, 'announcement' => 0, 'community' => 0, 'system' => 0];
+            return array_fill_keys(['all', 'unread', 'archived', 'support', 'finance', 'announcement', 'community', 'security', 'marketing', 'system'], 0);
         }
 
         $base = FarastNotification::query()->where('user_id', $userId);
+        $active = (clone $base)->whereNull('archived_at');
+
+        $count = function (string $category) use ($active): int {
+            $query = clone $active;
+            $this->applyCategoryFilter($query, $category);
+            return $query->count();
+        };
 
         return [
-            'all' => (clone $base)->count(),
-            'unread' => (clone $base)->whereNull('read_at')->count(),
-            'support' => (clone $base)->where('type', 'like', 'ticket_%')->count(),
-            'finance' => (clone $base)->where(function ($w) {
-                $w->where('type', 'like', 'order_%')
-                    ->orWhere('type', 'like', 'wallet_%')
-                    ->orWhere('type', 'like', 'billing_%');
-            })->count(),
-            'announcement' => (clone $base)->where('type', 'like', 'announcement_%')->count(),
-            'community' => (clone $base)->where('type', 'like', 'discussion_%')->count(),
-            'system' => (clone $base)->where('type', 'not like', 'discussion_%')->where('type', 'not like', 'ticket_%')
-                ->where('type', 'not like', 'order_%')
-                ->where('type', 'not like', 'wallet_%')
-                ->where('type', 'not like', 'billing_%')
-                ->where('type', 'not like', 'announcement_%')
-                ->count(),
+            'all' => (clone $active)->count(),
+            'unread' => (clone $active)->whereNull('read_at')->count(),
+            'archived' => (clone $base)->whereNotNull('archived_at')->count(),
+            'support' => $count('support'),
+            'finance' => $count('finance'),
+            'announcement' => $count('announcement'),
+            'community' => $count('community'),
+            'security' => $count('security'),
+            'marketing' => $count('marketing'),
+            'system' => $count('system'),
         ];
     }
 }

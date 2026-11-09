@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\FarastNotification;
 use App\Services\AdminConsoleService;
 use App\Services\AuditLogService;
 use App\Services\CrmAudienceService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -156,12 +156,12 @@ class CrmMarketingController extends Controller
         return response()->json(['ok' => true, 'id' => $id, 'status' => 'draft', 'audience_count' => $count], 201);
     }
 
-    public function sendCampaign(Request $request, int $campaign, AdminConsoleService $console, CrmAudienceService $audiences)
+    public function sendCampaign(Request $request, int $campaign, AdminConsoleService $console, CrmAudienceService $audiences, NotificationService $notifications)
     {
         $visibleIds = $this->scope($request, $console);
         $ownerIds = $this->ownerScope($request, $console);
 
-        $sentCount = DB::transaction(function () use ($campaign, $request, $visibleIds, $ownerIds, $audiences) {
+        $sentCount = DB::transaction(function () use ($campaign, $request, $visibleIds, $ownerIds, $audiences, $notifications) {
             $record = DB::table('crm_marketing_campaigns')->where('id', $campaign)->lockForUpdate()->first();
             abort_unless($record && ($ownerIds === null || in_array((int) $record->created_by, $ownerIds, true)), 404);
             abort_unless($record->status === 'draft', 409, 'این کمپین قبلاً ارسال یا پردازش شده است.');
@@ -191,13 +191,20 @@ class CrmMarketingController extends Controller
                         continue;
                     }
 
-                    $notification = FarastNotification::create([
-                        'user_id' => $user->id,
-                        'type' => 'announcement_campaign',
-                        'title' => $record->title,
-                        'body' => $record->body,
-                        'data' => ['campaign_id' => $campaign, 'url' => '/workspace/notifications'],
-                    ]);
+                    $notification = $notifications->push(
+                        (int) $user->id,
+                        'announcement_campaign',
+                        $record->title,
+                        $record->body,
+                        [
+                            'campaign_id' => $campaign,
+                            'url' => route('platform.notifications', ['filter' => 'marketing']),
+                        ],
+                        true,
+                    );
+                    if (! $notification) {
+                        throw new \RuntimeException('ثبت اعلان کمپین بازاریابی انجام نشد.');
+                    }
 
                     DB::table('crm_campaign_recipients')->where('campaign_id', $campaign)
                         ->where('user_id', $user->id)->update([

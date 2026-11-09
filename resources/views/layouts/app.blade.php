@@ -5,7 +5,7 @@
 <title>{{ $title ?? 'فراست' }}</title>
 @stack('head')
 @php
-$isEditor=request()->is('editor'); $isAdmin=request()->is('admin*'); $isDashboard=request()->routeIs('dashboard')||request()->routeIs('admin.*')||request()->routeIs('support')||request()->routeIs('support.*'); $isAuthPage=request()->is('login*')||request()->is('register')||request()->is('forgot-password*');
+$isEditor=request()->is('editor'); $isAdmin=request()->is('admin*'); $isDashboard=request()->routeIs('dashboard')||request()->routeIs('admin.*')||request()->routeIs('support')||request()->routeIs('support.*')||request()->routeIs('platform.notifications'); $isAuthPage=request()->is('login*')||request()->is('register')||request()->is('forgot-password*');
 $footerSocial=[]; $farastCapabilities=null;
 if($isEditor&&auth()->check()){$farastCapabilities=app(\App\Services\CapabilityService::class)->forUser(auth()->user());}
 if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::hasTable('site_settings')){$footerRaw=\App\Models\SiteSetting::read('social_links','[]');$decodedSocial=json_decode((string)$footerRaw,true);if(is_array($decodedSocial)){$footerSocial=array_values(array_filter($decodedSocial,static fn($item)=>is_array($item)&&filter_var($item['url']??'',FILTER_VALIDATE_URL)));}}}
@@ -54,6 +54,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
       @endauth
     </nav>
     <div class="header-actions">
+      @auth @include('components.notification-bell') @endauth
       <button type="button" class="mobile-nav-toggle" data-mobile-nav-toggle aria-expanded="false" aria-controls="primaryNavigation" aria-label="باز کردن منوی سایت"><i class="fa-solid fa-bars"></i></button>
       <button type="button" class="header-icon-button" id="farastCartButton" aria-label="سبد خرید"><i class="fa-solid fa-bag-shopping"></i><b id="farastCartCount">0</b></button>
       <a class="header-cta" href="{{ route('store') }}"><i class="fa-solid fa-store"></i><span>فروشگاه</span></a>

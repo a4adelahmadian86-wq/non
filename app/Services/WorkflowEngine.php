@@ -301,13 +301,17 @@ class WorkflowEngine
             if ($targetUserId !== $ownerId) {
                 throw new \RuntimeException('Workflow notification target must be its owner.');
             }
-            DB::table('farast_notifications')->insert([
-                'user_id' => $targetUserId, 'type' => 'workflow',
-                'title' => mb_substr((string) ($step['title'] ?? 'اجرای گردش‌کار'), 0, 255),
-                'body' => mb_substr((string) ($step['message'] ?? 'گردش‌کار اجرا شد.'), 0, 5000),
-                'data' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'created_at' => now(), 'updated_at' => now(),
-            ]);
+            $notification = app(NotificationService::class)->push(
+                $targetUserId,
+                'workflow',
+                mb_substr((string) ($step['title'] ?? 'اجرای گردش‌کار'), 0, 180),
+                mb_substr((string) ($step['message'] ?? 'گردش‌کار اجرا شد.'), 0, 5000),
+                ['url' => route('platform.workflows')],
+                true,
+            );
+            if (! $notification) {
+                throw new \RuntimeException('ثبت اعلان گردش‌کار انجام نشد.');
+            }
             return;
         }
 

@@ -9,6 +9,7 @@
                 <p>محیط مدیریت یکپارچه · همه عملیات از یک مرکز</p>
             </div>
             <div class="farast-admin-top-actions">
+                @include('components.notification-bell')
                 <a href="{{ route('admin.index') }}" class="admin-ghost"><i class="fa-solid fa-grid-2"></i> مرکز عملیات</a>
                 <a href="{{ route('home') }}" target="_blank" rel="noopener" class="admin-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده سایت</a>
                 <div class="farast-admin-user">

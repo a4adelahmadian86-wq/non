@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FarastNotification;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 
@@ -14,46 +15,64 @@ class NotificationController extends Controller
     public function index(Request $request)
     {
         $filter = $request->string('filter')->toString() ?: 'all';
-        if (! in_array($filter, ['all', 'unread', 'support', 'finance', 'announcement', 'community', 'system'], true)) {
-            $filter = 'all';
-        }
+        $allowed = ['all', 'unread', 'support', 'finance', 'announcement', 'community', 'security', 'marketing', 'system', 'archived'];
+        if (! in_array($filter, $allowed, true)) $filter = 'all';
 
-        $items = $this->notifications->paginateForUser(auth()->id(), $filter === 'all' ? null : $filter, 20);
-        $counts = $this->notifications->countsByCategory(auth()->id());
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
+        $search = trim((string) ($validated['q'] ?? ''));
 
-        return view('platform.notifications', compact('items', 'filter', 'counts'));
+        $items = $this->notifications->paginateForUser(
+            (int) $request->user()->id,
+            $filter === 'all' ? null : $filter,
+            20,
+            $search,
+        );
+        $counts = $this->notifications->countsByCategory((int) $request->user()->id);
+
+        return view('platform.notifications', compact('items', 'filter', 'counts', 'search'));
     }
 
     public function read(Request $request, int $id)
     {
-        $this->notifications->markRead(auth()->id(), $id);
+        $this->notifications->markRead((int) $request->user()->id, $id);
 
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json(['ok' => true]);
-        }
+        if ($request->wantsJson() || $request->ajax()) return response()->json(['ok' => true]);
 
         return back();
     }
 
     public function readAll(Request $request)
     {
-        $n = $this->notifications->markAllRead(auth()->id());
+        $count = $this->notifications->markAllRead((int) $request->user()->id);
 
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json(['ok' => true, 'marked' => $n]);
-        }
+        if ($request->wantsJson() || $request->ajax()) return response()->json(['ok' => true, 'marked' => $count]);
 
-        return back()->with('status', $n ? $n.' اعلان خوانده شد.' : 'اعلان خوانده‌نشده‌ای نبود.');
+        return back()->with('status', $count ? $count.' اعلان خوانده شد.' : 'اعلان خوانده‌نشده‌ای نبود.');
+    }
+
+    public function archive(Request $request, int $id)
+    {
+        abort_unless($this->notifications->archive((int) $request->user()->id, $id), 404);
+
+        return back()->with('status', 'اعلان به بایگانی شخصی منتقل شد.');
+    }
+
+    public function restore(Request $request, int $id)
+    {
+        abort_unless($this->notifications->restore((int) $request->user()->id, $id), 404);
+
+        return back()->with('status', 'اعلان به فهرست اصلی بازگردانده شد.');
     }
 
     public function visit(Request $request, int $id)
     {
-        $notification = \App\Models\FarastNotification::query()
+        $notification = FarastNotification::query()
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
         $target = $notification->url();
-        if (! is_string($target) || trim($target) === '') {
-            $this->notifications->markRead($request->user()->id, $notification->id);
+
+        if (! $target) {
+            $this->notifications->markRead((int) $request->user()->id, $notification->id);
             return redirect()->route('platform.notifications');
         }
 
@@ -66,42 +85,41 @@ class NotificationController extends Controller
             && is_string($targetHost) && is_string($appHost)
             && hash_equals(strtolower($appHost), strtolower($targetHost));
 
-        if (! $safeRelative && ! $safeAbsolute) {
-            $this->notifications->markRead($request->user()->id, $notification->id);
-            return redirect()->route('platform.notifications');
-        }
+        $this->notifications->markRead((int) $request->user()->id, $notification->id);
 
-        $this->notifications->markRead($request->user()->id, $notification->id);
+        if (! $safeRelative && ! $safeAbsolute) return redirect()->route('platform.notifications');
+
         return redirect()->to($target);
     }
 
-    public function unreadCount()
+    public function unreadCount(Request $request)
     {
         return response()->json([
             'ok' => true,
-            'count' => $this->notifications->unreadCount(auth()->id()),
+            'count' => $this->notifications->unreadCount((int) $request->user()->id),
         ]);
     }
 
-    public function latest()
+    public function latest(Request $request)
     {
-        $items = $this->notifications->latest(auth()->id(), 8)->map(function ($n) {
+        $items = $this->notifications->latest((int) $request->user()->id, 8)->map(function ($notification) {
             return [
-                'id' => $n->id,
-                'title' => $n->title,
-                'body' => $n->body,
-                'type' => $n->type,
-                'category' => $n->category(),
-                'icon' => $n->icon(),
-                'url' => $n->url(),
-                'read' => $n->isRead(),
-                'time' => $n->created_at?->timezone(config('app.timezone'))->diffForHumans(),
+                'id' => $notification->id,
+                'title' => $notification->title,
+                'body' => $notification->body,
+                'type' => $notification->type,
+                'category' => $notification->category(),
+                'category_label' => $notification->categoryLabel(),
+                'icon' => $notification->icon(),
+                'visit_url' => route('platform.notifications.visit', $notification->id),
+                'read' => $notification->isRead(),
+                'time' => $notification->created_at?->timezone(config('app.timezone'))->diffForHumans(),
             ];
         });
 
         return response()->json([
             'ok' => true,
-            'count' => $this->notifications->unreadCount(auth()->id()),
+            'count' => $this->notifications->unreadCount((int) $request->user()->id),
             'items' => $items,
         ]);
     }

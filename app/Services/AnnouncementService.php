@@ -81,7 +81,21 @@ class AnnouncementService
         }
 
         $sent = 0;
-        $url = $announcement->link_url ?: route('announcements');
+        $url = route('announcements');
+        if (filled($announcement->link_url)) {
+            $candidate = (string) $announcement->link_url;
+            $parts = parse_url($candidate);
+            $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+            $candidateHost = is_array($parts) ? ($parts['host'] ?? null) : null;
+            $scheme = is_array($parts) ? ($parts['scheme'] ?? null) : null;
+            $relative = str_starts_with($candidate, '/') && ! str_starts_with($candidate, '//');
+            $sameHost = in_array($scheme, ['http', 'https'], true)
+                && is_string($candidateHost) && is_string($appHost)
+                && hash_equals(strtolower($appHost), strtolower($candidateHost));
+            if ($relative || $sameHost) {
+                $url = $candidate;
+            }
+        }
         $type = 'announcement_'.$announcement->type;
 
         $query = User::query()->where('is_blocked', false);
