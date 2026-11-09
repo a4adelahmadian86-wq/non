@@ -1,6 +1,8 @@
 <?php
 namespace Tests\Feature;
 use App\Models\ContentDiscussion;
+use App\Models\Order;
+use App\Models\StoreOrderItem;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\User;
@@ -130,6 +132,7 @@ class ContentDiscussionTest extends TestCase {
   $p=$this->product();$author=$this->user('09123456821');$follower=$this->user('09123456822');$admin=$this->user('09123456823','admin');
   $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
   $parent=ContentDiscussion::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
   $this->assertDatabaseHas('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
   $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
   $this->actingAs($follower)->post(route('discussions.follow',$parent))->assertRedirect();
@@ -265,6 +268,39 @@ class ContentDiscussionTest extends TestCase {
   $this->assertDatabaseHas('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
   $this->actingAs($owner)->get(route('platform.notifications.visit',$notification->id))->assertRedirect('/community');
   $this->assertDatabaseMissing('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
+ }
+
+
+ public function test_author_can_unfollow_their_own_discussion_and_stop_reply_notifications(): void {
+  $p=$this->product();$author=$this->user('09123456951');$responder=$this->user('09123456952');$admin=$this->user('09123456953','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $parent=ContentDiscussion::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
+  $this->assertDatabaseHas('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
+  $this->actingAs($author)->post(route('discussions.follow',$parent))->assertRedirect();
+  $this->assertDatabaseMissing('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
+  $this->actingAs($responder)->post(route('discussions.public-reply',$parent),['body'=>'بله، برای استفاده در کلاس آموزشی قابل استفاده است.'])->assertRedirect();
+  $reply=ContentDiscussion::where('parent_id',$parent->id)->firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$reply),['status'=>'approved'])->assertRedirect();
+  $this->assertDatabaseMissing('farast_notifications',['user_id'=>$author->id,'type'=>'discussion_reply']);
+ }
+ public function test_notification_visit_rejects_external_redirect_targets(): void {
+  $owner=$this->user('09123456954');
+  $notification=\App\Models\FarastNotification::create(['user_id'=>$owner->id,'type'=>'discussion_approved','title'=>'اعلان','body'=>'متن','data'=>['url'=>'https://evil.example/phishing']]);
+  $this->actingAs($owner)->get(route('platform.notifications.visit',$notification->id))->assertRedirect(route('platform.notifications'));
+  $this->assertDatabaseMissing('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
+ }
+
+
+ public function test_product_review_marks_only_paid_order_owners_as_verified_purchasers(): void {
+  $p=$this->product();$verified=$this->user('09123456961');$unverified=$this->user('09123456962');
+  $order=Order::create(['user_id'=>$verified->id,'subtotal_rials'=>100000,'total_rials'=>100000,'status'=>'paid','paid_at'=>now()]);
+  StoreOrderItem::create(['order_id'=>$order->id,'product_id'=>$p->id,'title_snapshot'=>$p->title,'quantity'=>1,'unit_price_rials'=>100000,'total_rials'=>100000]);
+  foreach([[$verified,'تجربه خریدار واقعی و تأییدشده'],[$unverified,'تجربه کاربر بدون سفارش']] as [$author,$body]){
+   ContentDiscussion::create(['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'review','user_id'=>$author->id,'body'=>$body,'rating'=>5,'status'=>'approved']);
+  }
+  $response=$this->get(route('store.product',$p->slug))->assertOk()->assertSee('تجربه خریدار واقعی و تأییدشده')->assertSee('تجربه کاربر بدون سفارش')->assertSee('خرید تأییدشده');
+  $this->assertSame(1,substr_count($response->getContent(),'discussion-verified-purchase'));
  }
 
 }
