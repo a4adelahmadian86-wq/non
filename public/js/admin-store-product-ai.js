@@ -231,18 +231,23 @@
 
       if (accepted('tags') && tagInputs) {
         tagInputs.replaceChildren();
-        const selectedNames = [...(modal?.querySelectorAll('[data-ai-tag-name]:checked') || [])]
-          .map(input => String(input.dataset.aiTagName || '').trim())
-          .filter(Boolean);
-        const uniqueSelectedNames = [...new Set(selectedNames)].slice(0, 10);
-        uniqueSelectedNames.forEach(name => {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = 'ai_content_tag_names[]';
-          input.value = name;
-          tagInputs.append(input);
-        });
-        appliedCount += uniqueSelectedNames.length ? 1 : 0;
+        const existingTagSelect = form.querySelector('[name="tag_ids[]"]');
+        const hasExistingTags = [...(existingTagSelect?.options || [])]
+          .some(option => option.selected && String(option.value || '').trim() !== '');
+        if (!onlyEmpty?.checked || !hasExistingTags) {
+          const selectedNames = [...(modal?.querySelectorAll('[data-ai-tag-name]:checked') || [])]
+            .map(input => String(input.dataset.aiTagName || '').trim())
+            .filter(Boolean);
+          const uniqueSelectedNames = [...new Set(selectedNames)].slice(0, 10);
+          uniqueSelectedNames.forEach(name => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'ai_content_tag_names[]';
+            input.value = name;
+            tagInputs.append(input);
+          });
+          appliedCount += uniqueSelectedNames.length ? 1 : 0;
+        }
       }
 
       if (appliedCount === 0) {
