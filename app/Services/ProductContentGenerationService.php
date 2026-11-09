@@ -14,6 +14,7 @@ class ProductContentGenerationService
     public function __construct(
         private readonly ProductKnowledgeService $knowledge,
         private readonly EditorAiAssistService $ai,
+        private readonly ProductContentPrivacyFilter $privacy,
     ) {}
 
     public function readiness(StoreProduct $product): array
@@ -63,7 +64,10 @@ class ProductContentGenerationService
             'allowed_source_ids' => $sourceIds,
             'allowed_fact_ids' => $factIds,
             'knowledge_report' => [
-                'sources' => $knowledge['sources'],
+                'sources' => collect($knowledge['sources'])->map(function (array $source): array {
+                    unset($source['file_name'], $source['source_sha256'], $source['storage_path'], $source['path']);
+                    return $source;
+                })->values()->all(),
                 'course_lessons' => $knowledge['course_lessons'],
                 'grounding_instruction' => $knowledge['grounding_instruction'],
             ],
@@ -80,6 +84,8 @@ class ProductContentGenerationService
             ],
         ];
 
+        // Defense in depth: the external model receives only a redacted, bounded report.
+        $report = $this->privacy->sanitize($report);
         $text = json_encode($report, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (! is_string($text) || mb_strlen($text) > 39000) {
             throw ValidationException::withMessages([
@@ -94,6 +100,7 @@ class ProductContentGenerationService
         $instruction = 'لحن: '.$tone.'. ';
         if ($focusKeyword !== '') $instruction .= 'کلیدواژه کانونی درخواستی: '.$focusKeyword.'. ';
         if ($extra !== '') $instruction .= 'راهنمای تکمیلی کاربر (فقط در صورت سازگاری با شواهد): '.$extra;
+        $instruction = $this->privacy->sanitizeText($instruction);
 
         $ai = $this->ai->assist('product.content.generate', $text, [
             'user' => $user,
@@ -105,7 +112,8 @@ class ProductContentGenerationService
 
         $result = is_array($ai['result'] ?? null) ? $ai['result'] : $ai;
         $clean = $this->normalizeResult($result, $categories, $factIds, $sourceIds);
-        $clean['slug'] = Str::slug($clean['title']) ?: 'product-'.$product->id;
+        $clean = $this->privacy->sanitize($clean);
+        $clean['slug'] = Str::slug((string) $clean['title']) ?: 'product-'.$product->id;
         $usedFacts = $clean['used_fact_ids'];
         $usedSources = $clean['used_source_ids'];
         if ($usedFacts === [] && $usedSources === []) {
