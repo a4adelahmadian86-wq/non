@@ -351,13 +351,34 @@ class ContentDiscussionTest extends TestCase {
    'kind'=>'comment',
    'body'=>'این توضیح درباره همین بند بسیار مفید است.',
    'anchor_page'=>3,
+   'anchor_section'=>0,
    'anchor_quote'=>'عبارت مهم داخل فایل',
    'anchor_start'=>120,
    'anchor_end'=>138,
    'anchor_context'=>'متن قبل از عبارت مهم داخل فایل و ادامه متن',
   ])->assertRedirect(route('store.reader',$product->slug).'#reader-discussions');
 
-  $discussion=ContentDiscussion::where('target_type','reader')->firstOrFail();
+  $this->actingAs($author)->post(route('discussions.store'),[
+   'target_type'=>'reader',
+   'target_key'=>(string)$product->id,
+   'kind'=>'comment',
+   'body'=>'این توضیح درباره همان شماره صفحه در بخش دوم است.',
+   'anchor_page'=>3,
+   'anchor_section'=>1,
+   'anchor_quote'=>'عبارت مهم داخل فایل',
+   'anchor_start'=>120,
+   'anchor_end'=>138,
+   'anchor_context'=>'متن قبل از عبارت مهم داخل فایل و ادامه متن',
+  ])->assertRedirect(route('store.reader',$product->slug).'#reader-discussions');
+
+  $discussion=ContentDiscussion::where('target_type','reader')->where('anchor_section',0)->firstOrFail();
+  $this->assertDatabaseHas('content_discussions',[
+   'target_key'=>(string)$product->id,
+   'anchor_page'=>3,
+   'anchor_section'=>1,
+   'anchor_quote'=>'عبارت مهم داخل فایل',
+   'status'=>'pending',
+  ]);
   $this->assertDatabaseHas('content_discussions',[
    'id'=>$discussion->id,
    'target_key'=>(string)$product->id,

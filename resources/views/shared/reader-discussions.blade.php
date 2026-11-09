@@ -1,8 +1,22 @@
 <section class="reader-discussions" id="reader-discussions" dir="rtl" aria-labelledby="reader-discussions-title">
     <header class="reader-discussions-head">
         <div><span class="reader-discussions-eyebrow">گفت‌وگوی صفحه‌ای</span><h2 id="reader-discussions-title">نظرها درباره بخش‌های این فایل</h2><p>متن دلخواه را در خوانشگر انتخاب کنید تا دیدگاه شما به همان قسمت پیوند بخورد. دیگر خوانندگان می‌توانند پاسخ دهند و واکنش ثبت کنند.</p></div>
-        <span class="reader-discussions-count">{{ number_format($readerDiscussions->count()) }} گفت‌وگو</span>
+        <span class="reader-discussions-count">{{ number_format(method_exists($readerDiscussions, 'total') ? $readerDiscussions->total() : $readerDiscussions->count()) }} گفت‌وگو</span>
     </header>
+
+    <form method="get" action="{{ route('store.reader', $product->slug) }}" class="reader-discussion-filter">
+        <label for="reader-discussion-filter-section">نمایش گفت‌وگوهای بخش</label>
+        <select id="reader-discussion-filter-section" name="discussion_section">
+            <option value="">همه بخش‌ها</option>
+            @foreach($previews as $sectionIndex => $section)
+                <option value="{{ $sectionIndex }}" @selected((string) ($discussionSection ?? '') === (string) $sectionIndex)>{{ $section->page_label ?? ('بخش '.($sectionIndex + 1)) }}</option>
+            @endforeach
+        </select>
+        <button type="submit">اعمال فیلتر</button>
+        @if(($discussionSection ?? null) !== null)
+            <a href="{{ route('store.reader', $product->slug) }}">پاک‌کردن فیلتر</a>
+        @endif
+    </form>
 
     @if(session('discussion_status'))
         <div class="reader-discussions-flash" role="status">{{ session('discussion_status') }}</div>
@@ -19,6 +33,7 @@
                 <input type="hidden" name="target_key" value="{{ $product->id }}">
                 <input type="hidden" name="kind" value="comment">
                 <input type="hidden" name="anchor_page" id="reader-discussion-page" value="1">
+                <input type="hidden" name="anchor_section" id="reader-discussion-section" value="0">
                 <input type="hidden" name="anchor_quote" id="reader-discussion-quote" value="">
                 <input type="hidden" name="anchor_start" id="reader-discussion-start" value="">
                 <input type="hidden" name="anchor_end" id="reader-discussion-end" value="">
@@ -36,10 +51,10 @@
     <div class="reader-discussion-list">
         @forelse($readerDiscussions as $entry)
             <article class="reader-discussion-entry" id="discussion-{{ $entry->id }}">
-                <header><strong>{{ $entry->user?->name ?: 'کاربر' }}</strong><span>بخش {{ number_format((int) $entry->anchor_page) }}</span><time>{{ $entry->created_at?->translatedFormat('d F Y') }}</time></header>
+                <header><strong>{{ $entry->user?->name ?: 'کاربر' }}</strong><span>بخش {{ number_format((int) ($entry->anchor_section ?? 0) + 1) }} · صفحه {{ number_format((int) $entry->anchor_page) }}</span><time>{{ $entry->created_at?->translatedFormat('d F Y') }}</time></header>
                 @if($entry->anchor_quote)
                     <blockquote>«{{ $entry->anchor_quote }}»</blockquote>
-                    <button type="button" class="reader-discussion-jump" data-reader-jump data-page="{{ (int) $entry->anchor_page }}" data-quote="{{ $entry->anchor_quote }}">رفتن به محل این دیدگاه در فایل</button>
+                    <button type="button" class="reader-discussion-jump" data-reader-jump data-section="{{ (int) ($entry->anchor_section ?? 0) }}" data-page="{{ (int) $entry->anchor_page }}" data-quote="{{ $entry->anchor_quote }}">رفتن به محل این دیدگاه در فایل</button>
                 @endif
                 <p>{{ $entry->body }}</p>
                 @include('shared.discussion-reactions', ['discussionItem' => $entry])

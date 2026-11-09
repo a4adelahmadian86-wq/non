@@ -456,10 +456,19 @@ class StoreController extends Controller
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش یا نسخه آماده خوانش برای این محصول موجود نیست.');
 
         $readerDiscussions = collect();
+        $discussionSection = null;
         if (Schema::hasTable('content_discussions')) {
-            $readerDiscussions = ContentDiscussion::query()
+            $discussionSection = filter_var(request()->query('discussion_section'), FILTER_VALIDATE_INT);
+            if ($discussionSection === false || $discussionSection === null || $discussionSection < 0 || $discussionSection >= $previews->count()) {
+                $discussionSection = null;
+            }
+            $discussionQuery = ContentDiscussion::query()
                 ->where('target_type', 'reader')
-                ->where('target_key', (string) $product->id)
+                ->where('target_key', (string) $product->id);
+            if ($discussionSection !== null) {
+                $discussionQuery->where('anchor_section', $discussionSection);
+            }
+            $readerDiscussions = $discussionQuery
                 ->whereNull('parent_id')
                 ->where('status', 'approved')
                 ->withCount([
@@ -501,7 +510,8 @@ class StoreController extends Controller
                 'readerAudioTiming',
                 'readerAudioPollUrl',
                 'readerAudioStatus',
-                'readerDiscussions'
+                'readerDiscussions',
+                'discussionSection'
             ))
             ->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
