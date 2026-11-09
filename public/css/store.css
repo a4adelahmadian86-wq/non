@@ -450,3 +450,5 @@
   padding:0 5px;border-radius:999px;background:#edf2f9;color:#60748f;font-size:.62rem;font-weight:800
 }
 .store-chips a.active small,.store-chips a:hover small{background:rgba(255,255,255,.2);color:#fff}
+
+.store-badge--discount{background:#fff0ed;color:#c44735;border:1px solid #ffd8d1}
