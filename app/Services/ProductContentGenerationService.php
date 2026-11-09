@@ -127,6 +127,11 @@ class ProductContentGenerationService
         ];
     }
 
+    public function currentSourceFingerprints(StoreProduct $product): array
+    {
+        return $this->knowledge->contentGenerationContext($product)['source_fingerprints'];
+    }
+
     public function signature(StoreProduct $product, array $fingerprints): string
     {
         ksort($fingerprints);
