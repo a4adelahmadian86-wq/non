@@ -111,6 +111,21 @@ class NotificationCenterTest extends TestCase
         $this->assertDatabaseCount('farast_notifications', 1);
     }
 
+    public function test_dedupe_keys_cannot_be_reused_across_users(): void
+    {
+        $owner = $this->user('09150000112');
+        $other = $this->user('09150000113');
+        $service = app(NotificationService::class);
+
+        $service->push($owner->id, 'ticket_reply', 'پاسخ خصوصی', 'متن خصوصی', [], false, 'support:ticket:46:event:ticket_reply:user:'.$owner->id);
+        $conflict = $service->push($other->id, 'ticket_reply', 'نباید تحویل شود', 'نباید به کاربر دیگر برسد', [], false, 'support:ticket:46:event:ticket_reply:user:'.$owner->id);
+
+        $this->assertNull($conflict);
+        $this->assertDatabaseCount('farast_notifications', 1);
+        $this->assertDatabaseHas('farast_notifications', ['user_id' => $owner->id, 'title' => 'پاسخ خصوصی']);
+        $this->assertDatabaseMissing('farast_notifications', ['user_id' => $other->id]);
+    }
+
     public function test_failed_announcement_delivery_is_not_marked_as_broadcasted(): void
     {
         $user = $this->user('09150000108');
