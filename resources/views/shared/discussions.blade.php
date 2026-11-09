@@ -113,7 +113,7 @@
             </div>
         @endforelse
     </div>
-    @if($entries instanceof \\Illuminate\\Contracts\\Pagination\\Paginator || $entries instanceof \\Illuminate\\Contracts\\Pagination\\LengthAwarePaginator)
+    @if(is_object($entries) && method_exists($entries, 'links'))
         <nav class="discussion-pagination" aria-label="صفحه‌بندی گفت‌وگوها">{{ $entries->withQueryString()->links() }}</nav>
     @endif
 
