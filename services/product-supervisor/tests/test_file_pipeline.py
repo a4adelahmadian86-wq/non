@@ -46,10 +46,17 @@ class FilePipelineTests(unittest.TestCase):
         self.assertEqual(len(PdfReader(io.BytesIO(sample_bytes)).pages), 2)
 
     def test_sensitive_values_are_redacted(self):
-        text, count = redact_sensitive_content("Contact person@example.com or Bearer abcdefghijklmnopqrstuvwxyz")
-        self.assertGreaterEqual(count, 2)
+        text, count = redact_sensitive_content(
+            "Contact person@example.com, Bearer abcdefghijklmnopqrstuvwxyz, "
+            "mobile 09121234567, IBAN DE89370400440532013000, "
+            "card 4111111111111111, and token sk-abcdefghijklmnopqrstuvwxyz123456"
+        )
+        self.assertGreaterEqual(count, 6)
         self.assertNotIn("person@example.com", text)
         self.assertNotIn("abcdefghijklmnopqrstuvwxyz", text)
+        self.assertNotIn("09121234567", text)
+        self.assertNotIn("DE89370400440532013000", text)
+        self.assertNotIn("4111111111111111", text)
 
     def test_executable_extension_is_rejected(self):
         with self.assertRaises(FileInspectionError):
