@@ -239,7 +239,7 @@ class ProductContentGenerationTest extends TestCase
     public function test_generation_rejects_fact_citations_attributed_to_another_source(): void
     {
         $service = app(ProductContentGenerationService::class);
-        $method = new \\ReflectionMethod(ProductContentGenerationService::class, 'normalizeResult');
+        $method = new \ReflectionMethod(ProductContentGenerationService::class, 'normalizeResult');
         $factIds = [41];
         $sourceIds = ['file:2'];
         $fieldEvidence = [];
@@ -251,7 +251,7 @@ class ProductContentGenerationTest extends TestCase
             ];
         }
 
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('ai_product_content_invalid');
         $method->invoke($service, [
             'title' => 'عنوان',
