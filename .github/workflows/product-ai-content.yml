@@ -12,6 +12,7 @@ on:
       - 'app/Services/AI/AiOperationRegistry.php'
       - 'app/Services/AI/Providers/GeminiEditorProvider.php'
       - 'app/Services/ProductContentGenerationService.php'
+      - 'app/Services/ProductContentPrivacyFilter.php'
       - 'app/Services/ProductDocumentProcessingState.php'
       - 'app/Services/ProductKnowledgeService.php'
       - 'public/js/admin-store-product-ai.js'
@@ -20,6 +21,11 @@ on:
       - 'tests/Feature/AdminStoreProductWorkflowTest.php'
       - 'tests/Feature/ProductContentGenerationTest.php'
       - 'tests/Unit/ProductDocumentProcessingStateTest.php'
+      - 'services/product-supervisor/file_pipeline.py'
+      - 'services/product-supervisor/main.py'
+      - 'services/product-supervisor/requirements.txt'
+      - 'services/product-supervisor/tests/test_file_pipeline.py'
+      - 'services/product-supervisor/tests/test_api.py'
       - '.github/workflows/product-ai-content.yml'
   pull_request:
     branches:
@@ -82,3 +88,19 @@ jobs:
 
       - name: Run focused product workflow tests
         run: php artisan test tests/Feature/ProductContentGenerationTest.php tests/Feature/AdminStoreProductWorkflowTest.php tests/Unit/ProductDocumentProcessingStateTest.php
+
+      - name: Set up Python for the private document supervisor
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install document supervisor dependencies
+        run: pip install --no-cache-dir -r services/product-supervisor/requirements.txt
+
+      - name: Compile document supervisor
+        run: python -m compileall -q .
+        working-directory: services/product-supervisor
+
+      - name: Run document supervisor tests
+        run: python -m unittest discover -s tests -v
+        working-directory: services/product-supervisor
