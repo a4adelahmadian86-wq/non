@@ -1130,6 +1130,7 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> tuple[str, b
 
 
 def _luhn_valid(digits: str) -> bool:
+    digits = "".join(str(int(character)) for character in digits if character.isdigit())
     if not 13 <= len(digits) <= 19 or not digits.isdigit():
         return False
     total = 0
@@ -1164,13 +1165,13 @@ def redact_sensitive_content(value: str) -> tuple[str, int]:
 
     def redact_card(match: re.Match[str]) -> str:
         nonlocal count
-        digits = re.sub(r"[^0-9]", "", match.group(0))
+        digits = "".join(str(int(character)) for character in match.group(0) if character.isdigit())
         if _luhn_valid(digits):
             count += 1
             return "[REDACTED]"
         return match.group(0)
 
-    value = re.sub(r"(?<![0-9])(?:[0-9][ -]?){13,19}(?![0-9])", redact_card, value)
+    value = re.sub(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)", redact_card, value)
     return value, count
 
 def groq_provider_ready() -> bool:
