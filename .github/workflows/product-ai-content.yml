@@ -14,6 +14,8 @@ on:
       - 'app/Services/ProductContentGenerationService.php'
       - 'app/Services/ProductContentPrivacyFilter.php'
       - 'app/Services/ProductDocumentProcessingState.php'
+      - 'app/Services/ProductSupervisorClient.php'
+      - 'config/services.php'
       - 'app/Services/ProductKnowledgeService.php'
       - 'public/js/admin-store-product-ai.js'
       - 'resources/views/admin/store/form.blade.php'
