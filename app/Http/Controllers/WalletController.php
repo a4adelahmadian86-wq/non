@@ -207,6 +207,7 @@ class WalletController extends Controller
                     'مبلغ '.number_format((int) $lockedPayment->amount_rials).' ریال به موجودی کیف پول شما اضافه شد.',
                     ['order_id' => $lockedOrder->id, 'amount_rials' => (int) $lockedPayment->amount_rials, 'url' => route('wallet')],
                     true,
+                    'wallet:topup:'.$lockedOrder->id.':paid:user:'.$lockedOrder->user_id,
                 );
                 $credited = true;
             });
