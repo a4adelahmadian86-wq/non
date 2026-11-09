@@ -21,7 +21,7 @@
             <div class="discussion-rating-panel">
                 <div class="discussion-rating-main">
                     <strong>{{ $averageRating !== null ? number_format((float) $averageRating, 1) : '—' }}</strong>
-                    <span class="discussion-rating-stars" aria-label="{{ $averageRating !== null ? 'میانگین امتیاز از پنج' : 'هنوز امتیازی ثبت نشده' }}">★★★★★</span>
+                    <span class="discussion-rating-stars {{ $averageRating !== null ? '' : 'is-empty' }}" aria-label="{{ $averageRating !== null ? 'میانگین امتیاز از پنج' : 'هنوز امتیازی ثبت نشده' }}">★★★★★</span>
                     <small>میانگین امتیاز کاربران</small>
                 </div>
                 <div class="discussion-rating-bars" aria-label="توزیع امتیازها">
