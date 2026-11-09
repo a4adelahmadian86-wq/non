@@ -272,6 +272,44 @@ class ProductContentGenerationTest extends TestCase
         ], [], $factIds, $sourceIds, [41 => 'file:1']);
     }
 
+    public function test_saved_field_evidence_is_validated_against_the_current_knowledge_store(): void
+    {
+        $data = $this->productWithKnowledge();
+        $fields = [];
+        foreach (['title', 'short_description', 'description', 'seo_title', 'seo_description'] as $field) {
+            $fields[$field] = [
+                'fact_ids' => [$data['fact']->id],
+                'source_ids' => ['file:'.$data['file']->id],
+            ];
+        }
+
+        $validated = app(ProductContentGenerationService::class)->validateFieldEvidence(
+            $data['product'],
+            json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+
+        $this->assertSame([$data['fact']->id], $validated['description']['fact_ids']);
+        $this->assertSame(['file:'.$data['file']->id], $validated['description']['source_ids']);
+    }
+
+    public function test_saved_field_evidence_rejects_a_source_that_does_not_own_the_fact(): void
+    {
+        $data = $this->productWithKnowledge();
+        $fields = [];
+        foreach (['title', 'short_description', 'description', 'seo_title', 'seo_description'] as $field) {
+            $fields[$field] = [
+                'fact_ids' => [$data['fact']->id],
+                'source_ids' => ['file:999999'],
+            ];
+        }
+
+        $this->expectException(ValidationException::class);
+        app(ProductContentGenerationService::class)->validateFieldEvidence(
+            $data['product'],
+            json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+    }
+
     public function test_privacy_filter_removes_private_file_metadata_and_signed_urls(): void
     {
         $payload = app(ProductContentPrivacyFilter::class)->sanitize([
