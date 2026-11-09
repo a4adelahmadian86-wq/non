@@ -455,6 +455,36 @@ class StoreController extends Controller
 
         abort_if($previews->isEmpty(), 404, 'پیش‌نمایش یا نسخه آماده خوانش برای این محصول موجود نیست.');
 
+        $readerDiscussions = collect();
+        if (Schema::hasTable('content_discussions')) {
+            $readerDiscussions = ContentDiscussion::query()
+                ->where('target_type', 'reader')
+                ->where('target_key', (string) $product->id)
+                ->whereNull('parent_id')
+                ->where('status', 'approved')
+                ->withCount([
+                    'replies as replies_count' => fn ($query) => $query->where('status', 'approved'),
+                    'reactions as likes_count' => fn ($query) => $query->where('type', 'like'),
+                    'reactions as dislikes_count' => fn ($query) => $query->where('type', 'dislike'),
+                    'subscriptions as followers_count',
+                ])
+                ->with([
+                    'user',
+                    'reactions' => fn ($query) => $query->where('user_id', $user?->id ?? 0),
+                    'subscriptions' => fn ($query) => $query->where('user_id', $user?->id ?? 0),
+                    'replies' => fn ($query) => $query->where('status', 'approved')
+                        ->withCount([
+                            'reactions as likes_count' => fn ($reaction) => $reaction->where('type', 'like'),
+                            'reactions as dislikes_count' => fn ($reaction) => $reaction->where('type', 'dislike'),
+                        ])
+                        ->with(['user', 'reactions' => fn ($reaction) => $reaction->where('user_id', $user?->id ?? 0)])
+                        ->oldest(),
+                ])
+                ->latest()
+                ->paginate(20)
+                ->withQueryString();
+        }
+
         $readerIdentity = $user
             ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
             : (string) request()->ip();
