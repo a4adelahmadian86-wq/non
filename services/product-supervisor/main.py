@@ -168,6 +168,7 @@ async def review_product_file(
 ):
     from file_pipeline import (
         FileInspectionError,
+        MAX_EXTRACTED_CHARS,
         MAX_VISUAL_ASSETS,
         analyze_extracted_content,
         analyze_image_with_groq,
@@ -312,9 +313,12 @@ async def review_product_file(
     elif "not_configured" in groq_statuses:
         provider_status["groq"] = "not_configured"
 
-    extracted, redaction_count = redact_sensitive_content(
-        "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
-    )
+    combined_extracted = "\n".join(part for part in [inspection.extracted_text, visual_report, transcription] if part.strip())
+    if len(combined_extracted) > MAX_EXTRACTED_CHARS:
+        inspection.extraction_truncated = True
+        warnings.append("ترکیب متن و گزارش تصویری از سقف استخراج عبور کرده است؛ بررسی کامل نیست.")
+        combined_extracted = combined_extracted[:MAX_EXTRACTED_CHARS]
+    extracted, redaction_count = redact_sensitive_content(combined_extracted)
     model_review: dict[str, Any] = {}
     if extracted.strip() and groq_provider_ready():
         try:
@@ -381,6 +385,17 @@ async def review_product_file(
                 "locator": chunk.get("locator") if isinstance(chunk.get("locator"), dict) else {},
                 "content_text": source_text[:1800],
             })
+    if visual_report.strip():
+        source_chunks.append({
+            "locator": {"kind": "visual_analysis_report"},
+            "content_text": visual_report[:12000],
+        })
+    if transcription.strip():
+        safe_transcription, _ = redact_sensitive_content(transcription)
+        source_chunks.append({
+            "locator": {"kind": "audio_transcription"},
+            "content_text": safe_transcription[:MAX_EXTRACTED_CHARS],
+        })
     safe_facts = validate_evidence_facts(model_review.get("facts", []), source_chunks)
 
     sample_page_numbers: list[int] = []
@@ -455,6 +470,7 @@ async def review_product_file(
         "product_id": product_id,
         "filename": (file.filename or "upload.bin")[:180],
         "inspection": inspection.public_dict(),
+        "media_reports": {"visual": visual_report[:12000]} if visual_report else {},
         "content_chunks": safe_chunks,
         "analysis_batch_count": int(model_review.get("analysis_batch_count", 0)) if model_review else 0,
         "successful_analysis_batches": int(model_review.get("successful_analysis_batches", 0)) if model_review else 0,
