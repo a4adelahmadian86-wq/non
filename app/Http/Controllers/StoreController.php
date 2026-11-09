@@ -20,15 +20,17 @@ class StoreController extends Controller
 {
     public function index(Request $request)
     {
-        $q = trim((string) $request->query('q', ''));
-        $category = $request->query('category');
-        $sort = (string) $request->query('sort', 'newest');
-        $price = in_array((string) $request->query('price', 'all'), ['all', 'free', 'paid'], true)
-            ? (string) $request->query('price', 'all')
-            : 'all';
-        $type = in_array((string) $request->query('type', 'all'), ['all', 'course', 'digital'], true)
-            ? (string) $request->query('type', 'all')
-            : 'all';
+        $rawQuery = $request->query('q', '');
+        $q = is_string($rawQuery) ? mb_substr(trim($rawQuery), 0, 120) : '';
+        $rawCategory = $request->query('category');
+        $category = is_string($rawCategory) && $rawCategory !== '' ? mb_substr($rawCategory, 0, 100) : null;
+        $allowedSorts = ['newest', 'price_asc', 'price_desc', 'title', 'featured'];
+        $rawSort = $request->query('sort', 'newest');
+        $sort = is_string($rawSort) && in_array($rawSort, $allowedSorts, true) ? $rawSort : 'newest';
+        $rawPrice = $request->query('price', 'all');
+        $price = is_string($rawPrice) && in_array($rawPrice, ['all', 'free', 'paid'], true) ? $rawPrice : 'all';
+        $rawType = $request->query('type', 'all');
+        $type = is_string($rawType) && in_array($rawType, ['all', 'course', 'digital'], true) ? $rawType : 'all';
 
         $base = StoreProduct::query()->with(['category', 'images'])->published();
         $catalogCount = (clone $base)->count();
