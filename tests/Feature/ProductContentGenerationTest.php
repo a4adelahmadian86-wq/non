@@ -209,6 +209,32 @@ class ProductContentGenerationTest extends TestCase
         $this->assertSame('available', app(ProductContentGenerationService::class)->readiness($data['product'])['status']);
     }
 
+    public function test_generation_rejects_required_fields_without_field_level_evidence(): void
+    {
+        $service = app(ProductContentGenerationService::class);
+        $method = new \\ReflectionMethod(ProductContentGenerationService::class, 'normalizeResult');
+        $this->expectException(\\RuntimeException::class);
+        $this->expectExceptionMessage('ai_product_content_invalid');
+
+        $method->invoke($service, [
+            'title' => 'عنوان بدون شاهد',
+            'short_description' => 'معرفی بدون شاهد',
+            'description' => 'توضیحات بدون شاهد',
+            'seo_title' => 'عنوان SEO بدون شاهد',
+            'seo_description' => 'توضیح SEO بدون شاهد',
+            'focus_keyword' => 'کلیدواژه',
+            'secondary_keywords' => [],
+            'tags' => [],
+            'category_id' => '',
+            'category_reason' => '',
+            'selling_points' => [],
+            'used_fact_ids' => [],
+            'used_source_ids' => [],
+            'field_evidence' => [],
+            'unknowns' => [],
+        ], [], [], []);
+    }
+
     public function test_text_document_without_text_summary_or_facts_is_not_ready_even_if_visual_report_exists(): void
     {
         $data = $this->productWithKnowledge();
