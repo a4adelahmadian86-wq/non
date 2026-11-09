@@ -59,7 +59,12 @@ class StoreController extends Controller
 
         $products = $productsQuery->paginate(24)->withQueryString();
 
-        $categories = StoreCategory::query()->where('is_active', true)->orderBy('sort_order')->get();
+        $categories = StoreCategory::query()
+            ->where('is_active', true)
+            ->whereHas('products', fn ($query) => $query->published())
+            ->withCount(['products as published_products_count' => fn ($query) => $query->published()])
+            ->orderBy('sort_order')
+            ->get();
         $featured = (clone $base)->where('featured', true)->orderBy('sort_order')->limit(12)->get();
         $free = (clone $base)->where('price_rials', 0)->orderBy('sort_order')->limit(12)->get();
         $latest = (clone $base)->latest('published_at')->limit(12)->get();
