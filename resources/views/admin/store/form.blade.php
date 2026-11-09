@@ -124,6 +124,7 @@
               <label class="product-field product-field-wide"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="description" checked> توضیحات کامل</span><textarea rows="10" data-ai-content-field="description"></textarea></label>
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="seo_title" checked> عنوان سئو</span><textarea rows="2" data-ai-content-field="seo_title"></textarea></label>
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="seo_description" checked> توضیحات سئو</span><textarea rows="3" data-ai-content-field="seo_description"></textarea></label>
+              <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="slug" checked> نشانی پیشنهادی (Slug)</span><input data-ai-content-field="slug"></label>
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="focus_keyword" checked> کلیدواژه کانونی</span><input data-ai-content-field="focus_keyword"></label>
               <label class="product-field"><span class="product-ai-content-field-title"><input type="checkbox" data-ai-content-accept="secondary_keywords" checked> کلیدواژه‌های فرعی</span><textarea rows="2" data-ai-content-field="secondary_keywords"></textarea></label>
             </div>
