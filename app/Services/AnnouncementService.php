@@ -145,7 +145,7 @@ class AnnouncementService
                 if ($sendEmail && $user->email) {
                     try {
                         $this->email->sendSystemAnnouncement($user, $announcement);
-                    } catch (\\Throwable $e) {
+                    } catch (\Throwable $e) {
                         $failed = true;
                         Log::warning('farast.announcement.email_failed', [
                             'user_id' => $user->id,
