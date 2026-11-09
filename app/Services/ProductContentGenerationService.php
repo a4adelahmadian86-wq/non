@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\User;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -104,6 +105,7 @@ class ProductContentGenerationService
 
         $result = is_array($ai['result'] ?? null) ? $ai['result'] : $ai;
         $clean = $this->normalizeResult($result, $categories, $factIds, $sourceIds);
+        $clean['slug'] = Str::slug($clean['title']) ?: 'product-'.$product->id;
         $usedFacts = $clean['used_fact_ids'];
         $usedSources = $clean['used_source_ids'];
         if ($usedFacts === [] && $usedSources === []) {
