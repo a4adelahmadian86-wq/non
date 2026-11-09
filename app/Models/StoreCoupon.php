@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class StoreCoupon extends Model
 {
     protected $fillable = [
-        'code', 'type', 'value', 'min_subtotal_rials', 'max_uses', 'used_count',
+        'code', 'type', 'value', 'min_subtotal_rials', 'max_uses', 'used_count', 'reserved_count',
         'is_active', 'starts_at', 'ends_at', 'description',
     ];
 
@@ -16,6 +16,7 @@ class StoreCoupon extends Model
         'min_subtotal_rials' => 'integer',
         'max_uses' => 'integer',
         'used_count' => 'integer',
+        'reserved_count' => 'integer',
         'is_active' => 'boolean',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
