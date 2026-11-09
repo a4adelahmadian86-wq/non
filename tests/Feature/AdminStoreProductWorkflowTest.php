@@ -14,6 +14,7 @@ use App\Models\StoreTag;
 use App\Models\User;
 use App\Services\UploadSecurityService;
 use App\Services\ProductKnowledgeService;
+use App\Services\ProductContentGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Queue;
@@ -767,6 +768,48 @@ class AdminStoreProductWorkflowTest extends TestCase
         );
     }
 
+
+    public function test_accepted_ai_field_evidence_is_persisted_with_refreshed_provenance(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول دارای شواهد',
+            'slug' => 'evidence-backed-product',
+            'sku' => 'EVIDENCE-BACKED-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $fieldEvidence = [];
+        foreach (['title', 'short_description', 'description', 'seo_title', 'seo_description'] as $field) {
+            $fieldEvidence[$field] = ['fact_ids' => [], 'source_ids' => ['file:1']];
+        }
+        $this->mock(ProductContentGenerationService::class, function ($mock) use ($fieldEvidence) {
+            $mock->shouldReceive('assertFreshProvenance')->twice()->andReturn(['file:1' => 'source-fingerprint']);
+            $mock->shouldReceive('validateFieldEvidence')->twice()->andReturn($fieldEvidence);
+            $mock->shouldReceive('currentSourceFingerprints')->once()->andReturn([
+                'file:1' => 'source-fingerprint',
+                'product:content' => 'saved-product-fingerprint',
+            ]);
+        });
+
+        $this->actingAs($admin)
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => 'محصول دارای شواهد معتبر',
+                'ai_content_source_fingerprints' => json_encode(['file:1' => 'source-fingerprint']),
+                'ai_content_signature' => str_repeat('a', 64),
+                'ai_content_request_id' => 'request-evidence-1',
+                'ai_content_model' => 'gemini-test',
+                'ai_content_field_evidence' => json_encode($fieldEvidence),
+            ]))
+            ->assertRedirect(route('admin.store.edit', $product));
+
+        $metadata = (array) $product->fresh()->metadata;
+        $this->assertSame($fieldEvidence, data_get($metadata, 'ai_content.field_evidence'));
+        $this->assertSame('saved-product-fingerprint', data_get($metadata, 'ai_content.source_fingerprints.product:content'));
+    }
 
     public function test_course_lesson_resource_is_saved_with_product_document_and_queued_for_knowledge_processing(): void
     {
