@@ -128,6 +128,10 @@ class ProductContentGenerationTest extends TestCase
             'title' => 'کلید API sk-abcdefghijklmnopqrstuvwxyz123456',
             'detail' => 'شماره شبا DE89370400440532013000 در متن دیده شد.',
         ]];
+        $structure['inspection']['embedded_image_count'] = 1;
+        $structure['inspection']['visual_review_required'] = true;
+        $structure['ai_review']['provider_status']['groq_vision'] = 'completed';
+        $structure['ai_review']['media_reports']['visual'] = 'گزارش بینایی: بسته‌بندی آبی؛ تماس 09121234567';
         $data['document']->update(['structure_json' => $structure]);
         $data['fact']->update([
             'fact_value' => 'راهنمای نصب مرحله‌به‌مرحله؛ شبا DE89370400440532013000؛ کارت 4111111111111111',
@@ -141,6 +145,7 @@ class ProductContentGenerationTest extends TestCase
                     $this->assertSame('product.content.generate', $operation);
                     $this->assertStringContainsString('این فایل شامل راهنمای نصب', $text);
                     $this->assertStringContainsString('راهنمای نصب مرحله‌به‌مرحله', $text);
+                    $this->assertStringContainsString('گزارش بینایی: بسته‌بندی آبی', $text);
                     $this->assertStringNotContainsString('RAW_PRIVATE_CHUNK_SENTINEL', $text);
                     $this->assertStringNotContainsString('private-file-bytes', $text);
                     $this->assertStringNotContainsString('owner@example.com', $text);
