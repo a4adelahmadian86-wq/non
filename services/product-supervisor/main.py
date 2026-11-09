@@ -168,6 +168,7 @@ async def review_product_file(
 ):
     from file_pipeline import (
         FileInspectionError,
+        MAX_VISUAL_ASSETS,
         analyze_extracted_content,
         analyze_image_with_groq,
         build_pdf_sample,
@@ -263,7 +264,7 @@ async def review_product_file(
                         successful_images += 1
                 except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
                     warnings.append(f"تحلیل تصویر شماره {index + 1} انجام نشد.")
-            visual_report = "\\n".join(visual_parts)
+            visual_report = "\n".join(visual_parts)
             if (
                 successful_images == inspection.embedded_image_count
                 and not inspection.visual_review_truncated
