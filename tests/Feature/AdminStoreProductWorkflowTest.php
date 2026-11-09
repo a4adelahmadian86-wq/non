@@ -766,4 +766,64 @@ class AdminStoreProductWorkflowTest extends TestCase
         );
     }
 
+
+    public function test_course_lesson_resource_is_saved_with_product_document_and_queued_for_knowledge_processing(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'دوره منابع آموزشی',
+            'slug' => 'course-resources',
+            'sku' => 'COURSE-RESOURCE-001',
+            'type' => 'course',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $course = \App\Models\StoreCourse::create(['product_id' => $product->id]);
+        $section = \App\Models\StoreCourseSection::create([
+            'course_id' => $course->id,
+            'title' => 'بخش نخست',
+            'sort_order' => 1,
+        ]);
+        $lesson = \App\Models\StoreCourseLesson::create([
+            'section_id' => $section->id,
+            'title' => 'درس راهنما',
+            'slug' => 'lesson-guide',
+            'lesson_type' => 'file',
+            'is_published' => true,
+            'sort_order' => 1,
+        ]);
+
+        Storage::fake('private');
+        Queue::fake();
+        $checksum = hash('sha256', 'course-resource-pdf');
+        $this->mock(UploadSecurityService::class, function ($mock) use ($checksum) {
+            $mock->shouldReceive('inspect')->once()->andReturn([
+                'safe' => true,
+                'mime' => 'application/pdf',
+                'size' => 1024,
+                'checksum' => $checksum,
+                'scan' => 'test-clean',
+            ]);
+        });
+
+        $this->actingAs($admin)
+            ->post(route('admin.store.course.resources.upload', [$product, $lesson]), [
+                'file' => UploadedFile::fake()->create('lesson-guide.pdf', 1024, 'application/pdf'),
+            ])
+            ->assertRedirect();
+
+        $file = StoreProductFile::query()
+            ->where('product_id', $product->id)
+            ->where('purpose', 'lesson_resource')
+            ->firstOrFail();
+        $document = StoreProductDocument::query()->where('product_file_id', $file->id)->firstOrFail();
+
+        $this->assertSame($product->id, $document->product_id);
+        $this->assertSame($file->sha256, $document->source_sha256);
+        $this->assertSame('queued', $document->processing_status);
+        Queue::assertPushed(ProcessProductDocument::class, fn ($job) => $job->documentId === $document->id);
+    }
+
 }
