@@ -71,7 +71,7 @@
     .farast-reader-local-notes[hidden]{display:none}
     .farast-reader-note{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--reader-line);font-size:.75rem}
     .farast-reader-note blockquote{margin:4px 0;color:var(--reader-muted);border-right:2px solid #60a5fa;padding-right:8px}
-    .farast-reader-note button{align-self:start;border:1px solid var(--reader-line);border-radius:6px;background:transparent;color:var(--reader-text);padding:4px 7px;cursor:pointer}
+    .farast-reader-note-actions{display:flex;gap:5px;align-items:start}.farast-reader-note button{align-self:start;border:1px solid var(--reader-line);border-radius:6px;background:transparent;color:var(--reader-text);padding:4px 7px;cursor:pointer}
     .farast-reader-local-highlight{color:inherit;border-radius:2px;cursor:pointer}
     .farast-reader-personal-tools [data-reader-import-file]{display:none}
     @media(max-width:760px){.farast-reader-personal-tools{justify-content:center}.reader-personal-label{font-size:.65rem}}
@@ -254,6 +254,38 @@
     state.highlights = state.highlights.filter(item => item.id !== id);
     persist(); renderHighlights(); announce('هایلایت حذف شد.');
   });
+  const jumpToRecord = record => {
+    const page = [...root.querySelectorAll('.farast-reader-page-item')].find((item, index) => Number(item.dataset.readerPage || index + 1) === Number(record.page));
+    if (!page) return announce('صفحهٔ مربوط به این یادداشت در سند فعلی پیدا نشد.');
+    const pageIndex = Number(page.dataset.index || Math.max(0, Number(record.page) - 1));
+    const pageButton = root.querySelector('[data-goto="' + pageIndex + '"]');
+    if (pageButton && !page.classList.contains('is-active')) pageButton.click();
+    window.setTimeout(() => {
+      const map = getPageTextMap(page);
+      const anchored = Number.isInteger(record.startOffset) && Number.isInteger(record.endOffset)
+        && record.startOffset >= 0 && record.endOffset > record.startOffset
+        && map.fullText.slice(record.startOffset, record.endOffset) === record.quote;
+      const start = anchored ? record.startOffset : map.fullText.indexOf(record.quote);
+      if (start < 0) return announce('متن این یادداشت در نسخهٔ فعلی سند پیدا نشد.');
+      const end = start + record.quote.length;
+      let cursor = 0, first = null, last = null;
+      map.nodes.forEach(node => {
+        const nodeStart = cursor, nodeEnd = cursor + node.nodeValue.length;
+        cursor = nodeEnd;
+        if (start >= nodeStart && start < nodeEnd) first = { node, offset: start - nodeStart };
+        if (end > nodeStart && end <= nodeEnd) last = { node, offset: end - nodeStart };
+      });
+      if (!first || !last) return announce('محدودهٔ متن این یادداشت قابل بازیابی نیست.');
+      const range = document.createRange();
+      range.setStart(first.node, first.offset);
+      range.setEnd(last.node, last.offset);
+      page.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      announce('به محل یادداشت در سند رفتید.');
+    }, pageButton ? 80 : 0);
+  };
   const renderNotes = () => {
     notesPanel.replaceChildren();
     if (!state.notes.length) { const empty = document.createElement('p'); empty.textContent = 'هنوز یادداشتی ثبت نشده است.'; notesPanel.append(empty); return; }
@@ -264,10 +296,15 @@
       const body = document.createElement('p'); body.textContent = item.note;
       const meta = document.createElement('small'); meta.textContent = 'صفحه ' + item.page + ' · ذخیره‌شده در این مرورگر';
       content.append(quote, body, meta);
+      const actions = document.createElement('div'); actions.className = 'farast-reader-note-actions';
+      const jump = document.createElement('button'); jump.type = 'button'; jump.textContent = 'رفتن به متن';
+      jump.setAttribute('aria-label', 'رفتن به محل یادداشت صفحه ' + item.page);
+      jump.addEventListener('click', () => jumpToRecord(item));
       const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'حذف';
       remove.setAttribute('aria-label', 'حذف یادداشت صفحه ' + item.page);
       remove.addEventListener('click', () => { state.notes = state.notes.filter(note => note.id !== item.id); persist(); renderNotes(); });
-      row.append(content, remove); notesPanel.append(row);
+      actions.append(jump, remove);
+      row.append(content, actions); notesPanel.append(row);
     });
   };
   notesButton.addEventListener('click', () => {
