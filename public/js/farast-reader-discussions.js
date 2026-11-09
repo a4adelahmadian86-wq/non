@@ -12,9 +12,9 @@
   const textArea=form.querySelector('#reader-discussion-body');
   const clampText=value=>String(value||'').replace(/\s+/g,' ').trim().slice(0,500);
   const activePage=()=>root.querySelector('.farast-reader-page-item.is-active');
-  const getTextContainer=page=>page?.querySelector('.farast-pdf-text-layer,[data-reader-text-layer],.farast-reader-page-content');
+  const getTextContainer=page=>page?.querySelector('.farast-pdf-text-layer,.farast-pdf-cont-text,[data-reader-text-layer],.farast-reader-page-content');
   const updatePdfTextSelection=()=>{
-    root.querySelectorAll('.farast-pdf-text-layer').forEach(layer=>{
+    root.querySelectorAll('.farast-pdf-text-layer,.farast-pdf-cont-text').forEach(layer=>{
       layer.style.pointerEvents='auto';
       layer.querySelectorAll('span').forEach(span=>{
         span.style.pointerEvents='auto';
