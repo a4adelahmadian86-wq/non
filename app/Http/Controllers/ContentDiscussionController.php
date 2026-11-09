@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 class ContentDiscussionController extends Controller {
  public function store(Request $request) {
+  $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body'),'title'=>is_string($request->input('title'))?trim($request->input('title')):$request->input('title')]);
   $data=$request->validate(['target_type'=>['required','in:product,article'],'target_key'=>['required','string','max:240'],'kind'=>['required','in:review,question,comment'],'title'=>['nullable','string','max:180'],'body'=>['required','string','min:10','max:5000'],'rating'=>['nullable','integer','min:1','max:5']]);
   if($data['target_type']==='product') {
    $product=StoreProduct::published()->findOrFail((int)$data['target_key']);
@@ -53,6 +54,7 @@ class ContentDiscussionController extends Controller {
   return back()->with('status',$data['status']==='approved'?'محتوا منتشر شد.':'محتوا رد شد و در سایت نمایش داده نمی‌شود.');
  }
  public function reply(Request $request,ContentDiscussion $discussion) {
+  $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body')]);
   abort_unless($discussion->parent_id===null && $discussion->status==='approved',404);$data=$request->validate(['body'=>['required','string','min:2','max:3000']]);
   ContentDiscussion::create(['target_type'=>$discussion->target_type,'target_key'=>$discussion->target_key,'kind'=>'reply','parent_id'=>$discussion->id,'user_id'=>$request->user()->id,'body'=>trim($data['body']),'status'=>'approved','moderator_id'=>$request->user()->id,'moderated_at'=>now()]);
   return back()->with('status','پاسخ شما ثبت و منتشر شد.');
