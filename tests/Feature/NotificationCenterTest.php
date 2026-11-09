@@ -94,6 +94,57 @@ class NotificationCenterTest extends TestCase
             ->assertOk()->assertJsonPath('count', 1)->assertJsonMissing(['title' => 'اعلان بایگانی'])->assertJsonMissing(['title' => 'اعلان کاربر دیگر']);
     }
 
+    public function test_failed_announcement_delivery_is_not_marked_as_broadcasted(): void
+    {
+        $user = $this->user('09150000108');
+        $announcement = Announcement::create([
+            'title' => 'اختلال آزمایشی ارسال',
+            'body' => 'این اعلان باید در صف تلاش مجدد باقی بماند.',
+            'type' => 'warning',
+            'audience' => 'all',
+            'is_active' => true,
+            'notify_in_app' => true,
+            'notify_email' => false,
+        ]);
+
+        $notifications = \\Mockery::mock(NotificationService::class);
+        $notifications->shouldReceive('push')->once()->with(
+            $user->id,
+            'announcement_warning',
+            'اختلال آزمایشی ارسال',
+            'این اعلان باید در صف تلاش مجدد باقی بماند.',
+            \\Mockery::type('array')
+        )->andReturn(null);
+
+        $email = \\Mockery::mock(EmailService::class);
+        $service = new AnnouncementService($notifications, $email);
+
+        $this->assertSame(0, $service->broadcast($announcement));
+        $this->assertNull($announcement->fresh()->notified_at);
+    }
+
+    public function test_successful_announcement_delivery_is_counted_and_marked_complete(): void
+    {
+        $user = $this->user('09150000109');
+        $announcement = Announcement::create([
+            'title' => 'انتشار موفق',
+            'body' => 'این اعلان با موفقیت ثبت می‌شود.',
+            'type' => 'info',
+            'audience' => 'all',
+            'is_active' => true,
+            'notify_in_app' => true,
+            'notify_email' => false,
+        ]);
+
+        $notifications = \\Mockery::mock(NotificationService::class);
+        $notifications->shouldReceive('push')->once()->andReturn(new FarastNotification());
+        $email = \\Mockery::mock(EmailService::class);
+        $service = new AnnouncementService($notifications, $email);
+
+        $this->assertSame(1, $service->broadcast($announcement));
+        $this->assertNotNull($announcement->fresh()->notified_at);
+    }
+
     public function test_notifications_center_uses_the_workspace_shell_and_bell_is_available_on_public_pages(): void
     {
         $user = $this->user('09150000107');
