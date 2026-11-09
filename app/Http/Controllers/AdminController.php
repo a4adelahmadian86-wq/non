@@ -786,13 +786,9 @@ class AdminController extends Controller
             $flags[$key] = filter_var(SiteSetting::read($key, $default), FILTER_VALIDATE_BOOLEAN);
         }
 
-        $logs = Schema::hasTable('email_logs') ? EmailLog::latest()->limit(80)->get() : collect();
+        $logs = Schema::hasTable('email_logs') ? EmailLog::latest()->limit(100)->get() : collect();
         $tickets = Schema::hasTable('tickets') ? Ticket::with('user')->latest()->limit(30)->get() : collect();
         $provider = $mailConfig->currentProvider();
-        $mailHost = SiteSetting::read('mail_host', env('MAIL_HOST'));
-        if (is_string($mailHost) && str_contains(strtolower($mailHost), 'mailpit')) {
-            $mailHost = '127.0.0.1';
-        }
 
         return view('admin.emails', [
             'flags' => $flags,
@@ -804,84 +800,41 @@ class AdminController extends Controller
             'mailer' => $provider,
             'providers' => MailConfigService::PROVIDERS,
             'providerConfigured' => $mailConfig->providerConfigured($provider),
-            'mailHost' => $mailHost,
-            'mailPort' => SiteSetting::read('mail_port', env('MAIL_PORT', 25)),
-            'mailUsername' => SiteSetting::read('mail_username', env('MAIL_USERNAME')),
-            'mailEncryption' => SiteSetting::read('mail_encryption', env('MAIL_ENCRYPTION')),
-            'hasResendKey' => filled(SiteSetting::read('resend_api_key', env('RESEND_API_KEY'))),
-            'hasBrevoKey' => filled(SiteSetting::read('brevo_api_key', env('BREVO_API_KEY'))),
-            'hasSmtpPassword' => filled(SiteSetting::read('mail_password', env('MAIL_PASSWORD'))),
+            'diagnostics' => $mailConfig->diagnostics(),
         ]);
     }
 
     public function updateEmailSettings(Request $request)
     {
-        SiteSetting::write('email_enabled', $request->boolean('email_enabled') ? '1' : '0');
+        $data = $request->validate([
+            'mail_provider' => ['required', 'in:log,sendmail,local'],
+            'mail_from_address' => ['required', 'email', 'max:255'],
+            'mail_from_name' => ['required', 'string', 'max:120'],
+            'email_enabled' => ['nullable', 'boolean'],
+            'email_sync' => ['nullable', 'boolean'],
+        ]);
 
+        SiteSetting::write('email_enabled', $request->boolean('email_enabled') ? '1' : '0');
         foreach (array_keys(EmailService::TYPES) as $type) {
             $key = 'email_'.$type.'_enabled';
             SiteSetting::write($key, $request->boolean($key) ? '1' : '0');
         }
 
+        // Transactional messages use the existing database queue by default.
         SiteSetting::write('email_sync', $request->boolean('email_sync') ? '1' : '0');
-
-        $data = $request->validate([
-            'mail_provider' => ['required', 'in:log,sendmail,local,smtp,mailtrap,brevo,resend'],
-            'mail_from_address' => ['nullable', 'email', 'max:255'],
-            'mail_from_name' => ['nullable', 'string', 'max:120'],
-            'mail_host' => ['nullable', 'string', 'max:200'],
-            'mail_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'mail_username' => ['nullable', 'string', 'max:200'],
-            'mail_password' => ['nullable', 'string', 'max:500'],
-            'mail_encryption' => ['nullable', 'in:tls,ssl,null'],
-            'resend_api_key' => ['nullable', 'string', 'max:500'],
-            'brevo_api_key' => ['nullable', 'string', 'max:500'],
-        ]);
-
         SiteSetting::write('mail_provider', $data['mail_provider']);
+        SiteSetting::write('mail_from_address', trim($data['mail_from_address']));
+        SiteSetting::write('mail_from_name', trim($data['mail_from_name']));
 
-        if (isset($data['mail_host']) && is_string($data['mail_host']) && str_contains(strtolower($data['mail_host']), 'mailpit')) {
-            $data['mail_host'] = '127.0.0.1';
-        }
-
-        if (filled($data['mail_from_address'] ?? null)) {
-            SiteSetting::write('mail_from_address', trim($data['mail_from_address']));
-        }
-        if (filled($data['mail_from_name'] ?? null)) {
-            SiteSetting::write('mail_from_name', trim($data['mail_from_name']));
-        }
-        if (array_key_exists('mail_host', $data) && $data['mail_host'] !== null) {
-            SiteSetting::write('mail_host', trim((string) $data['mail_host']));
-        }
-        if (array_key_exists('mail_port', $data) && $data['mail_port'] !== null) {
-            SiteSetting::write('mail_port', (string) $data['mail_port']);
-        }
-        if (array_key_exists('mail_username', $data) && $data['mail_username'] !== null) {
-            SiteSetting::write('mail_username', trim((string) $data['mail_username']));
-        }
-        if (filled($data['mail_password'] ?? null)) {
-            SiteSetting::write('mail_password', trim($data['mail_password']), true);
-        }
-        if (array_key_exists('mail_encryption', $data)) {
-            $enc = $data['mail_encryption'] === 'null' ? '' : ($data['mail_encryption'] ?? 'tls');
-            SiteSetting::write('mail_encryption', $enc);
-        }
-        if (filled($data['resend_api_key'] ?? null)) {
-            SiteSetting::write('resend_api_key', trim($data['resend_api_key']), true);
-        }
-        if (filled($data['brevo_api_key'] ?? null)) {
-            SiteSetting::write('brevo_api_key', trim($data['brevo_api_key']), true);
-        }
-
-        return back()->with('status', 'تنظیمات ایمیل ذخیره شد.');
+        return back()->with('status', 'تنظیمات سامانه ایمیل اختصاصی ذخیره شد. سرویس ثالثی در مسیر ارسال فعال نیست.');
     }
 
     public function sendTestEmail(Request $request, EmailService $emailService)
     {
-        $data = $request->validate(['to' => ['required', 'email', 'max:255']]);
+        $data = $request->validate(['test_email' => ['required', 'email', 'max:255']]);
 
         try {
-            $emailService->sendTest($data['to']);
+            $emailService->sendTest($data['test_email']);
 
             return back()->with('status', 'ایمیل آزمایشی ارسال شد.');
         } catch (\Throwable $e) {
