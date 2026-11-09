@@ -19,7 +19,7 @@
  <form class="community-mine-filters" method="get" action="{{ route('community.mine') }}">
   <label>جست‌وجو<input type="search" name="q" maxlength="100" value="{{ $search }}" placeholder="جست‌وجو در عنوان و متن مشارکت"></label>
   <label>نوع مشارکت<select name="kind"><option value="">همه انواع</option><option value="review" @selected($kind==='review')>تجربه محصول</option><option value="question" @selected($kind==='question')>پرسش</option><option value="comment" @selected($kind==='comment')>دیدگاه</option><option value="reply" @selected($kind==='reply')>پاسخ</option></select></label>
-  <label>بخش محتوا<select name="target_type"><option value="">همه بخش‌ها</option><option value="product" @selected($targetType==='product')>محصول</option><option value="article" @selected($targetType==='article')>مقاله</option></select></label>
+  <label>بخش محتوا<select name="target_type"><option value="">همه بخش‌ها</option><option value="product" @selected($targetType==='product')>محصول</option><option value="article" @selected($targetType==='article')>مقاله</option><option value="reader" @selected($targetType==='reader')>خوانشگر فایل</option></select></label>
   <button type="submit"><i class="fa-solid fa-filter" aria-hidden="true"></i> اعمال فیلتر</button>
   @if($search!==''||$kind!==''||$targetType!=='')<a href="{{ route('community.mine',['status'=>$status]) }}">پاک‌کردن فیلترها</a>@endif
  </form>
@@ -35,7 +35,7 @@
     <p>{{ $item->body }}</p>
     @if($item->status==='rejected' && $item->moderation_note)<div class="community-mine-moderation-note"><strong>توضیح تیم بررسی:</strong> {{ $item->moderation_note }}</div>@endif
     <div class="community-mine-item-foot">
-     <span>{{ $item->target_label }} · {{ $item->target_type==='product'?'فروشگاه':'مقالات' }}</span>
+     <span>{{ $item->target_label }} · {{ $item->target_type==='product'?'فروشگاه':($item->target_type==='reader'?'خوانشگر فایل':'مقالات') }}</span>
      <div>
       @if($item->parent_url)<a href="{{ $item->discussion_url }}">مشاهده در محتوا <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>@elseif($item->target_url)<a href="{{ $item->target_url }}#discussion-{{ $item->id }}">مشاهده در محتوا <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>@endif
       @if($item->status==='pending')
