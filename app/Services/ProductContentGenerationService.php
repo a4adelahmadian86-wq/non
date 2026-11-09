@@ -186,6 +186,80 @@ class ProductContentGenerationService
         return $submitted;
     }
 
+    public function validateFieldEvidence(StoreProduct $product, string $encodedEvidence): array
+    {
+        $decoded = json_decode($encodedEvidence, true);
+        if (! is_array($decoded) || $decoded === [] || count($decoded) > 10) {
+            throw ValidationException::withMessages(['ai_content_field_evidence' => 'ارجاع شواهد پیشنهاد هوشمند معتبر نیست. دوباره محتوا را تولید کن.']);
+        }
+
+        $knowledge = $this->knowledge->contentGenerationContext($product);
+        if ($knowledge['knowledge_status'] !== 'available') {
+            throw ValidationException::withMessages(['ai_content_field_evidence' => 'دانش محصول تغییر کرده است؛ ابتدا پیشنهاد تازه بساز.']);
+        }
+
+        $validSourceIds = collect($knowledge['sources'])->pluck('source_id')->map(fn ($id) => (string) $id)->all();
+        $factSourceMap = collect($knowledge['sources'])
+            ->flatMap(fn (array $source) => collect($source['facts'])->mapWithKeys(
+                fn (array $fact) => [(int) $fact['id'] => (string) $source['source_id']]
+            ))
+            ->all();
+        $allowedFields = [
+            'title', 'short_description', 'description', 'seo_title', 'seo_description',
+            'focus_keyword', 'secondary_keywords', 'tags', 'category', 'selling_points',
+        ];
+        $normalized = [];
+
+        foreach ($decoded as $field => $entry) {
+            if (! is_string($field) || ! in_array($field, $allowedFields, true) || ! is_array($entry)) {
+                throw ValidationException::withMessages(['ai_content_field_evidence' => 'ساختار ارجاع شواهد معتبر نیست.']);
+            }
+
+            $rawFactIds = is_array($entry['fact_ids'] ?? null) ? $entry['fact_ids'] : [];
+            $rawSourceIds = is_array($entry['source_ids'] ?? null) ? $entry['source_ids'] : [];
+            if (count($rawFactIds) > 40 || count($rawSourceIds) > 20) {
+                throw ValidationException::withMessages(['ai_content_field_evidence' => 'تعداد ارجاع‌های شواهد از سقف مجاز بیشتر است.']);
+            }
+
+            $factIds = collect($rawFactIds)
+                ->filter(fn ($id) => (is_int($id) || (is_string($id) && ctype_digit($id))) && isset($factSourceMap[(int) $id]))
+                ->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $sourceIds = collect($rawSourceIds)
+                ->filter(fn ($id) => is_string($id) && in_array($id, $validSourceIds, true))
+                ->unique()->values()->all();
+
+            if (count($factIds) !== count($rawFactIds) || count($sourceIds) !== count($rawSourceIds)) {
+                throw ValidationException::withMessages(['ai_content_field_evidence' => 'یکی از شناسه‌های منبع یا واقعیت دیگر معتبر نیست. دوباره پیشنهاد بساز.']);
+            }
+
+            if ($factIds !== [] && $sourceIds !== [] && collect($factIds)->contains(
+                fn ($id) => ! in_array((string) $factSourceMap[$id], $sourceIds, true)
+            )) {
+                throw ValidationException::withMessages(['ai_content_field_evidence' => 'یک واقعیت به منبع اشتباه نسبت داده شده است. پیشنهاد را دوباره تولید کن.']);
+            }
+
+            if ($sourceIds === [] && $factIds !== []) {
+                $sourceIds = collect($factIds)
+                    ->map(fn ($id) => (string) $factSourceMap[$id])
+                    ->unique()->values()->all();
+            }
+
+            if ($factIds === [] && $sourceIds === []) {
+                throw ValidationException::withMessages(['ai_content_field_evidence' => 'ارجاع بدون منبع معتبر پذیرفته نمی‌شود.']);
+            }
+
+            $normalized[$field] = ['fact_ids' => $factIds, 'source_ids' => $sourceIds];
+        }
+
+        foreach (['title', 'short_description', 'description', 'seo_title', 'seo_description'] as $requiredField) {
+            if (! isset($normalized[$requiredField])) {
+                throw ValidationException::withMessages(['ai_content_field_evidence' => 'برای همه فیلدهای اصلی باید شاهد معتبر ثبت شده باشد.']);
+            }
+        }
+
+        return $normalized;
+    }
+
     private function storedContentIsStale(StoreProduct $product, array $fingerprints): bool
     {
         $stored = (array) data_get($product->metadata, 'ai_content.source_fingerprints', []);
