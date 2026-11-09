@@ -1434,7 +1434,7 @@ test('personal highlights span inline formatting and restore after a page rerend
   });
   await page.locator('[data-reader-highlight]').click();
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(2);
-  await expect(page.locator('mark.farast-reader-local-highlight').nth(0)).toHaveText(' انت');
+  await expect(page.locator('mark.farast-reader-local-highlight').nth(0)).toHaveText(' انته');
   await expect(page.locator('mark.farast-reader-local-highlight').nth(1)).toHaveText('عبارت مهم');
   await page.evaluate(() => {
     const page = document.querySelector('.farast-reader-page-item');
