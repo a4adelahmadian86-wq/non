@@ -157,7 +157,16 @@
     const page = selection.anchorNode.parentElement?.closest('.farast-reader-page-item');
     const endPage = selection.focusNode.parentElement?.closest('.farast-reader-page-item');
     if (!page || page !== endPage) return null;
-    const map = getPageTextMap(page);
+    const startElement = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
+    const endElement = range.endContainer instanceof Element ? range.endContainer : range.endContainer.parentElement;
+    const startContinuousPage = startElement?.closest('.farast-pdf-cont-page');
+    const endContinuousPage = endElement?.closest('.farast-pdf-cont-page');
+    if (startContinuousPage !== endContinuousPage) return null;
+    const pdfSurface = page.querySelector('.farast-pdf-document:not([data-reader-document-page])');
+    const pdfTextLayer = startElement?.closest('.farast-pdf-text-layer');
+    const isPdfText = Boolean(pdfSurface && (startContinuousPage || pdfTextLayer));
+    const mapRoot = isPdfText ? (startContinuousPage || pdfTextLayer) : page;
+    const map = getPageTextMap(mapRoot);
     if (!map.offsets.has(range.startContainer) || !map.offsets.has(range.endContainer)) return null;
     let start = map.offsets.get(range.startContainer) + range.startOffset;
     let end = map.offsets.get(range.endContainer) + range.endOffset;
@@ -167,7 +176,10 @@
     if (!quote) return null;
     start += raw.length - raw.trimStart().length;
     end = start + quote.length;
-    return { text: quote, page: Number(page.dataset.readerPage || Number(page.dataset.index || 0) + 1), startOffset: start, endOffset: end };
+    const pageNumber = isPdfText
+      ? Number(startContinuousPage?.dataset.pdfContPage || page.dataset.pdfPage || 1)
+      : Number(page.dataset.readerPage || Number(page.dataset.index || 0) + 1);
+    return { text: quote, page: pageNumber, section: Number(page.dataset.index || 0), startOffset: start, endOffset: end };
   };
   const highlightButton = group.querySelector('[data-reader-highlight]');
   const noteButton = group.querySelector('[data-reader-note]');
@@ -201,7 +213,7 @@
   highlightButton.addEventListener('click', () => {
     const context = getContext();
     if (!context) return announce('ابتدا بخشی از متن قابل انتخاب را انتخاب کنید.');
-    const record = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, startOffset: context.startOffset, endOffset: context.endOffset, color: state.highlightColor, created: Date.now() };
+    const record = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, section: context.section, startOffset: context.startOffset, endOffset: context.endOffset, color: state.highlightColor, created: Date.now() };
     state.highlights.push(record);
     persist(); renderHighlights(); if (!notesPanel.hidden) renderNotes(); announce('هایلایت در همین مرورگر ذخیره شد.');
     window.getSelection()?.removeAllRanges();
@@ -211,7 +223,7 @@
     if (!context) return announce('برای حاشیه‌نویسی ابتدا متن موردنظر را انتخاب کنید.');
     const note = window.prompt('یادداشت شخصی برای این بخش:');
     if (note === null || !note.trim()) return;
-    state.notes.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, startOffset: context.startOffset, endOffset: context.endOffset, note: note.trim().slice(0, 4000), created: Date.now() });
+    state.notes.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), quote: context.text, page: context.page, section: context.section, startOffset: context.startOffset, endOffset: context.endOffset, note: note.trim().slice(0, 4000), created: Date.now() });
     persist(); renderNotes(); notesPanel.hidden = false; notesButton.setAttribute('aria-expanded', 'true'); announce('یادداشت فقط در مرورگر شما ذخیره شد.');
   });
   const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -221,8 +233,19 @@
     const records = state.highlights.slice(-100);
     root.querySelectorAll('.farast-reader-page-item').forEach((page, index) => {
       const pageNo = Number(page.dataset.readerPage || index + 1);
-      records.filter(item => item.page === pageNo).forEach(item => {
-        const map = getPageTextMap(page);
+      const section = Number(page.dataset.index || index);
+      records.filter(item => Number.isInteger(item.section) ? item.section === section : item.page === pageNo).forEach(item => {
+        const pdfSurface = page.querySelector('.farast-pdf-document:not([data-reader-document-page])');
+        let mapRoot = page;
+        if (pdfSurface && Number.isInteger(item.section)) {
+          const continuousPage = page.querySelector('.farast-pdf-cont-page[data-pdf-cont-page="' + item.page + '"]');
+          if (continuousPage) mapRoot = continuousPage;
+          else {
+            if (Number(page.dataset.pdfPage || 1) !== Number(item.page)) return;
+            mapRoot = page.querySelector('.farast-pdf-text-layer') || page;
+          }
+        }
+        const map = getPageTextMap(mapRoot);
         const nodes = map.nodes;
         const fullText = map.fullText;
         const anchored = Number.isInteger(item.startOffset) && Number.isInteger(item.endOffset) && item.startOffset >= 0 && item.endOffset > item.startOffset && fullText.slice(item.startOffset, item.endOffset) === item.quote;
@@ -261,29 +284,61 @@
     persist(); renderHighlights(); if (!notesPanel.hidden) renderNotes(); announce('هایلایت حذف شد.');
   });
   const jumpToRecord = record => {
-    const page = [...root.querySelectorAll('.farast-reader-page-item')].find((item, index) => Number(item.dataset.readerPage || index + 1) === Number(record.page));
+    const page = [...root.querySelectorAll('.farast-reader-page-item')].find((item, index) => Number.isInteger(record.section)
+      ? Number(item.dataset.index || index) === Number(record.section)
+      : Number(item.dataset.readerPage || index + 1) === Number(record.page));
     if (!page) return announce('صفحهٔ مربوط به این یادداشت در سند فعلی پیدا نشد.');
     const pageIndex = Number(page.dataset.index || Math.max(0, Number(record.page) - 1));
     const pageButton = root.querySelector('[data-goto="' + pageIndex + '"]');
     const needsNavigation = Boolean(pageButton && !page.classList.contains('is-active'));
-    const pageReady = needsNavigation ? new Promise(resolve => {
+    const waitForEvent = (eventName, expectedPage = null) => new Promise(resolve => {
       let settled = false;
       const finish = () => {
         if (settled) return;
         settled = true;
-        root.removeEventListener('farast:reader-page-change', onPageChange);
+        root.removeEventListener(eventName, onEvent);
         window.clearTimeout(fallback);
         resolve();
       };
-      const onPageChange = event => {
-        if (!event.detail?.page || Number(event.detail.page) === Number(record.page)) finish();
+      const onEvent = event => {
+        if (expectedPage === null || Number(event.detail?.page) === Number(expectedPage)) finish();
       };
-      const fallback = window.setTimeout(finish, 2500);
-      root.addEventListener('farast:reader-page-change', onPageChange);
-      pageButton.click();
-    }) : Promise.resolve();
-    pageReady.then(() => {
-      const map = getPageTextMap(page);
+      const fallback = window.setTimeout(finish, 10000);
+      root.addEventListener(eventName, onEvent);
+    });
+    const pdfSurfaceBeforeNavigation = page.querySelector('.farast-pdf-document:not([data-reader-document-page])');
+    const sectionPdfReady = needsNavigation && pdfSurfaceBeforeNavigation
+      ? waitForEvent('farast:reader-page-loaded', 1)
+      : Promise.resolve();
+    const sectionReady = needsNavigation ? waitForEvent('farast:reader-section-change', null) : Promise.resolve();
+    if (needsNavigation) pageButton.click();
+    sectionReady.then(async () => {
+      await sectionPdfReady;
+      const pdfSurface = page.querySelector('.farast-pdf-document:not([data-reader-document-page])');
+      if (pdfSurface && Number.isInteger(record.section)) {
+        const pageInput = root.querySelector('#reader-page-number');
+        const continuousPage = page.querySelector('.farast-pdf-cont-page[data-pdf-cont-page="' + record.page + '"]');
+        const currentPdfPage = Number(pageInput?.value || page.dataset.pdfPage || 1);
+        const needsRender = continuousPage
+          ? continuousPage.dataset.rendered !== '1'
+          : currentPdfPage !== Number(record.page);
+        if (needsRender) {
+          const pageReady = waitForEvent('farast:reader-page-loaded', record.page);
+          if (pageInput) {
+            pageInput.value = String(record.page);
+            pageInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          await pageReady;
+        } else if (pageInput && currentPdfPage !== Number(record.page)) {
+          pageInput.value = String(record.page);
+          pageInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+      const continuousPage = pdfSurface && Number.isInteger(record.section)
+        ? page.querySelector('.farast-pdf-cont-page[data-pdf-cont-page="' + record.page + '"]')
+        : null;
+      const mapRoot = continuousPage || (pdfSurface ? page.querySelector('.farast-pdf-text-layer') : page);
+      const map = getPageTextMap(mapRoot || page);
       const anchored = Number.isInteger(record.startOffset) && Number.isInteger(record.endOffset)
         && record.startOffset >= 0 && record.endOffset > record.startOffset
         && map.fullText.slice(record.startOffset, record.endOffset) === record.quote;
@@ -301,7 +356,7 @@
       const range = document.createRange();
       range.setStart(first.node, first.offset);
       range.setEnd(last.node, last.offset);
-      page.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (mapRoot || page).scrollIntoView({ behavior: 'smooth', block: 'center' });
       const selection = window.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(range);

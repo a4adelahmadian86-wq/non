@@ -126,7 +126,7 @@ async function mountPdfReader(page, pageCount = 1) {
   await page.setContent(
     '<section class="farast-reader" data-reader-root data-theme="dark">' +
       '<header><div class="farast-reader-account"><span>09123456789</span></div></header>' +
-      '<nav><button id="reader-prev" type="button">قبلی</button>' +
+      '<nav class="farast-reader-toolbar"><button id="reader-prev" type="button">قبلی</button>' +
         '<label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ ' + pageCount + '</span></label>' +
         '<button id="reader-next" type="button">بعدی</button>' +
         '<button id="reader-zoom-out" type="button">کوچک</button><output id="reader-zoom-label"></output>' +
@@ -1701,6 +1701,38 @@ test('saved reader highlights can be navigated to and removed from the personal 
   await page.locator('.farast-reader-highlight-entry [aria-label^="حذف هایلایت"]').click();
   await expect(page.locator('.farast-reader-highlight-entry')).toHaveCount(0);
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveCount(0);
+});
+
+test('PDF reader notes preserve their internal page and jump to the selected passage', async ({ page }) => {
+  await mountPdfReader(page, 2);
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  await root.locator('#reader-scroll-mode').click();
+  await root.locator('#reader-page-number').fill('2');
+  await root.locator('#reader-page-number').dispatchEvent('change');
+  const secondPage = root.locator('.farast-pdf-cont-page[data-pdf-cont-page="2"]');
+  await expect(secondPage).toHaveAttribute('data-rendered', '1');
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  const textSpan = secondPage.locator('.farast-pdf-cont-text span').first();
+  await textSpan.evaluate(span => {
+    const range = document.createRange();
+    range.selectNodeContents(span);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  page.once('dialog', dialog => dialog.accept('یادداشت صفحه دوم'));
+  await page.locator('[data-reader-note]').click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:/reader-fixture.html')));
+  expect(saved.notes[0].page).toBe(2);
+  expect(saved.notes[0].section).toBe(0);
+  expect(saved.notes[0].quote).toContain('FARAST PDF PAGE 2');
+  await root.locator('#reader-page-number').fill('1');
+  await root.locator('#reader-page-number').dispatchEvent('change');
+  await expect(root.locator('#reader-page-number')).toHaveValue('1');
+  await root.locator('.farast-reader-note:not(.farast-reader-highlight-entry) button').first().click();
+  await expect(root.locator('#reader-page-number')).toHaveValue('2');
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain('FARAST PDF PAGE 2');
 });
 
 test('saved reader notes navigate back to their exact anchored text', async ({ page }) => {

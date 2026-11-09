@@ -171,6 +171,7 @@
   };
 
   const setPageControls=(current,total)=>{
+    if(isPdf())activeArticle()?.setAttribute('data-pdf-page',String(current));
     if(pageInput){pageInput.max=String(total);pageInput.value=String(current);}
     if(pageTotal)pageTotal.textContent='/ '+faNumber(total);
     updateProgress(current,total);
@@ -271,6 +272,7 @@
     if(request!==pdfRenderSequence)return;
     if(pdfLoading){pdfLoading.hidden=true;pdfLoading.style.display='none';}
     setPageControls(pdfPage,pdfDoc.numPages);
+    root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:pdfPage}}));
   };
 
   const releaseContinuousPage=wrapper=>{
@@ -340,6 +342,7 @@
       });
     }
     wrapper.dataset.rendered='1';
+    root.dispatchEvent(new CustomEvent('farast:reader-page-loaded',{detail:{page:number}}));
     }finally{
       const rerender=wrapper.dataset.rerenderAfterRender==='1'&&wrapper.dataset.keepRendered==='1';
       delete wrapper.dataset.rerenderAfterRender;
