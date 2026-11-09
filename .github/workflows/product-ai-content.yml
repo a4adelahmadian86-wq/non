@@ -25,6 +25,7 @@ on:
       - 'services/product-supervisor/main.py'
       - 'services/product-supervisor/requirements.txt'
       - 'services/product-supervisor/tests/test_file_pipeline.py'
+      - 'services/product-supervisor/tests/test_provider_diagnostics.py'
       - 'services/product-supervisor/tests/test_api.py'
       - '.github/workflows/product-ai-content.yml'
   pull_request:
