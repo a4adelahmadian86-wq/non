@@ -8,6 +8,7 @@ use App\Models\SiteSetting;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -67,7 +68,7 @@ class WalletTopUpTest extends TestCase
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'paid']);
         $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'paid']);
         $this->assertDatabaseHas('farast_notifications', ['user_id' => $user->id, 'type' => 'wallet_topup_paid']);
-        $this->assertSame(1, \\Illuminate\\Support\\Facades\\DB::table('farast_notifications')->where('user_id', $user->id)->where('type', 'wallet_topup_paid')->count());
+        $this->assertSame(1, DB::table('farast_notifications')->where('user_id', $user->id)->where('type', 'wallet_topup_paid')->count());
         $this->assertDatabaseHas('wallet_transactions', [
             'wallet_id' => Wallet::query()->where('user_id', $user->id)->value('id'),
             'type' => 'credit',
@@ -80,7 +81,7 @@ class WalletTopUpTest extends TestCase
 
         $this->assertSame(250000, (int) Wallet::query()->where('user_id', $user->id)->value('balance_rials'));
         $this->assertDatabaseCount('wallet_transactions', 1);
-        $this->assertSame(1, \\Illuminate\\Support\\Facades\\DB::table('farast_notifications')->where('user_id', $user->id)->where('type', 'wallet_topup_paid')->count());
+        $this->assertSame(1, DB::table('farast_notifications')->where('user_id', $user->id)->where('type', 'wallet_topup_paid')->count());
     }
 
     public function test_untrusted_cancel_callback_never_credits_or_mutates_pending_payment(): void
