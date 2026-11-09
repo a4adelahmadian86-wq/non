@@ -835,8 +835,11 @@ class AdminController extends Controller
 
         try {
             $emailService->sendTest($data['test_email']);
+            $provider = app(MailConfigService::class)->currentProvider();
 
-            return back()->with('status', 'ایمیل آزمایشی ارسال شد.');
+            return back()->with('status', $provider === 'log'
+                ? 'آزمون در لاگ داخلی ثبت شد؛ هیچ ایمیلی به صندوق مقصد ارسال نشده است.'
+                : 'پیام آزمایشی به عامل ارسال محلی تحویل شد؛ تحویل نهایی را از لاگ و صندوق مقصد بررسی کنید.');
         } catch (\Throwable $e) {
             return back()->withErrors(['test_email' => 'ارسال ناموفق: '.$e->getMessage()]);
         }
