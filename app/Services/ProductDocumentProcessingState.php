@@ -58,7 +58,8 @@ class ProductDocumentProcessingState
                 || $visualOnlyReviewComplete
             );
 
-        $status = ! $hasChunks || ! $extractionComplete
+        $hasUsableKnowledge = $hasChunks || $visualOnlyReviewComplete;
+        $status = ! $hasUsableKnowledge || ! $extractionComplete
             ? 'partial'
             : ($semanticReviewComplete ? 'completed' : 'extracted');
 
