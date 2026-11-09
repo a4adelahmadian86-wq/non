@@ -11,6 +11,7 @@ use App\Models\StoreProductFile;
 use App\Models\User;
 use App\Services\EditorAiAssistService;
 use App\Services\ProductContentGenerationService;
+use App\Services\ProductContentPrivacyFilter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -233,6 +234,23 @@ class ProductContentGenerationTest extends TestCase
             'field_evidence' => [],
             'unknowns' => [],
         ], [], [], []);
+    }
+
+    public function test_privacy_filter_removes_private_file_metadata_and_signed_urls(): void
+    {
+        $payload = app(ProductContentPrivacyFilter::class)->sanitize([
+            'source' => [
+                'original_name' => 'private-customer.pdf',
+                'storage_path' => 'private/customer/123/file.pdf',
+                'signed_url' => 'https://storage.example.test/file?token=secret-value',
+                'facts' => [['value' => 'راهنمای نصب معتبر']],
+            ],
+        ]);
+
+        $this->assertArrayNotHasKey('original_name', $payload['source']);
+        $this->assertArrayNotHasKey('storage_path', $payload['source']);
+        $this->assertArrayNotHasKey('signed_url', $payload['source']);
+        $this->assertSame('راهنمای نصب معتبر', $payload['source']['facts'][0]['value']);
     }
 
     public function test_text_document_without_text_summary_or_facts_is_not_ready_even_if_visual_report_exists(): void
