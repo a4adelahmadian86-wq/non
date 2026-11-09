@@ -126,17 +126,41 @@
         const details = [source.type, source.pages ? source.pages + ' صفحه' : '', source.facts_total ? source.facts_total + ' شاهد' : ''].filter(Boolean).join(' · ');
         return String(source.name || 'منبع') + (details ? ' — ' + details : '');
       }));
-      const usedFactIds = new Set((suggestions.used_fact_ids || []).map(id => String(id)));
-      const usedEvidence = (payload.sources || []).flatMap(source => (source.facts || [])
-        .filter(fact => usedFactIds.has(String(fact.id)))
-        .map(fact => {
+      const fieldLabels = {
+        title: 'عنوان', short_description: 'معرفی کوتاه', description: 'توضیحات',
+        seo_title: 'عنوان SEO', seo_description: 'توضیح SEO', focus_keyword: 'کلیدواژه کانونی',
+        secondary_keywords: 'کلیدواژه‌های فرعی', tags: 'برچسب‌ها', category: 'دسته‌بندی',
+        selling_points: 'نکات فروش'
+      };
+      const factLookup = new Map();
+      const sourceLookup = new Map();
+      (payload.sources || []).forEach(source => {
+        sourceLookup.set(String(source.source_id || ''), String(source.file_name || source.name || 'منبع'));
+        (source.facts || []).forEach(fact => {
+          factLookup.set(String(fact.id), { source: String(source.file_name || 'منبع'), fact });
+        });
+      });
+      const usedEvidence = Object.entries(suggestions.field_evidence || {}).flatMap(([fieldName, evidence]) => {
+        const references = [];
+        (evidence.fact_ids || []).forEach(id => {
+          const match = factLookup.get(String(id));
+          if (!match) return;
+          const fact = match.fact;
           const locator = fact.locator && (fact.locator.page || fact.locator.section)
             ? ' (' + [fact.locator.page ? 'صفحه ' + fact.locator.page : '', fact.locator.section || ''].filter(Boolean).join('، ') + ')'
             : '';
-          return String(source.file_name || 'منبع') + ' — ' + String(fact.key || fact.type || 'واقعیت')
-            + ': ' + String(fact.value || '') + '؛ شاهد: ' + String(fact.evidence || '') + locator;
-        }));
-      renderList(modal?.querySelector('[data-ai-content-used-facts]'), usedEvidence.length ? usedEvidence : ['شاهد مشخصی در خروجی مدل ارجاع نشده است.']);
+          references.push(match.source + ' — ' + String(fact.key || fact.type || 'واقعیت')
+            + ': ' + String(fact.value || '') + '؛ شاهد: ' + String(fact.evidence || '') + locator);
+        });
+        (evidence.source_ids || []).forEach(id => {
+          const name = sourceLookup.get(String(id));
+          if (name && !references.some(item => item.startsWith(name + ' —'))) references.push(name);
+        });
+        return references.length
+          ? [String(fieldLabels[fieldName] || fieldName) + ' ← ' + references.join(' | ')]
+          : [];
+      });
+      renderList(modal?.querySelector('[data-ai-content-used-facts]'), usedEvidence.length ? usedEvidence : ['برای بعضی فیلدها شاهد فیلدی معتبر برگردانده نشد؛ آن فیلدها اعمال نمی‌شوند.']);
       renderList(modal?.querySelector('[data-ai-content-lessons]'), (payload.course_lessons || []).map(lesson => {
         const heading = [lesson.section, lesson.title].filter(Boolean).join(' / ');
         const excerpt = lesson.summary || lesson.content || '';
