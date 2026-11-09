@@ -27,4 +27,25 @@ class ContentDiscussionTest extends TestCase {
   $p=$this->product();$this->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این محصول برای استفاده آموزشی مناسب است؟'])->assertRedirect(route('login'));
   $u=$this->user('09123456785');$this->actingAs($u)->from(route('store.product',$p->slug))->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'review','body'=>'تجربه من از استفاده از این محصول مثبت بوده است.'])->assertSessionHasErrors('rating');
  }
+ public function test_product_review_is_unique_per_user_and_approved_rating_is_displayed(): void {
+  $p=$this->product();$u=$this->user('09123456786');
+  $payload=['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'review','title'=>'تجربه خرید','body'=>'این محصول برای نیاز من کاربردی و باکیفیت بوده است.','rating'=>5];
+  $this->actingAs($u)->post(route('discussions.store'),$payload)->assertRedirect();
+  $this->assertDatabaseHas('content_discussions',['target_type'=>'product','target_key'=>(string)$p->id,'user_id'=>$u->id,'kind'=>'review','status'=>'pending','rating'=>5]);
+  $this->from(route('store.product',$p->slug))->post(route('discussions.store'),$payload)->assertSessionHasErrors('body');
+  $this->assertDatabaseCount('content_discussions',1);
+  $d=ContentDiscussion::firstOrFail();$a=$this->user('09123456787','admin');
+  $this->actingAs($a)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
+  $this->get(route('store.product',$p->slug))->assertOk()->assertSee('5.0')->assertSee('تجربه خرید');
+ }
+ public function test_blog_question_is_moderated_and_only_approved_content_is_public(): void {
+  $u=$this->user('09123456788');
+  $this->actingAs($u)->post(route('discussions.store'),['target_type'=>'article','target_key'=>'workflow-writing','kind'=>'question','title'=>'درباره روند کار','body'=>'آیا می‌توان این روند را برای پروژه‌های تیمی هم استفاده کرد؟'])->assertRedirect();
+  $d=ContentDiscussion::firstOrFail();$this->assertSame('pending',$d->status);
+  $this->get(route('blog.show','workflow-writing'))->assertDontSee('پروژه‌های تیمی');
+  $a=$this->user('09123456789','admin');
+  $this->actingAs($a)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
+  $this->get(route('blog.show','workflow-writing'))->assertOk()->assertSee('پروژه‌های تیمی')->assertSee('پرسش');
+ }
+
 }
