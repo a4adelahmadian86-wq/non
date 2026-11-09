@@ -201,9 +201,15 @@ class ContentDiscussionController extends Controller {
  public function adminIndex(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'pending';
   $targetType=in_array($request->query('target_type'),['product','article'],true)?$request->query('target_type'):'';
+  $kind=in_array($request->query('kind'),['review','question','comment','reply'],true)?$request->query('kind'):'';
+  $search=mb_substr(trim((string)$request->query('q','')),0,100);
   $base=ContentDiscussion::query();
   $stats=['pending'=>(clone $base)->where('status','pending')->count(),'approved'=>(clone $base)->where('status','approved')->count(),'rejected'=>(clone $base)->where('status','rejected')->count()];
-  $discussions=(clone $base)->with(['user','parent.user'])->where('status',$status)->when($targetType!=='',fn($q)=>$q->where('target_type',$targetType))->latest()->paginate(25)->withQueryString();
+  $discussions=(clone $base)->with(['user','parent.user'])->withCount('reports')->where('status',$status)
+   ->when($targetType!=='',fn($q)=>$q->where('target_type',$targetType))
+   ->when($kind!=='',fn($q)=>$q->where('kind',$kind))
+   ->when($search!=='',fn($q)=>$q->where(function($w) use($search){$w->where('body','like','%'.$search.'%')->orWhere('title','like','%'.$search.'%')->orWhereHas('user',fn($u)=>$u->where('name','like','%'.$search.'%'));}))
+   ->latest()->paginate(25)->withQueryString();
   $items=$discussions->getCollection();
   $productIds=$items->where('target_type','product')->pluck('target_key')->map(fn($key)=>(int)$key)->filter()->unique()->values();
   $products=$productIds->isNotEmpty()
@@ -221,14 +227,50 @@ class ContentDiscussionController extends Controller {
     $item->setAttribute('target_url',$article ? route('blog.show',$item->target_key) : null);
    }
   });
-  return view('admin.discussions.index',compact('discussions','stats','status','targetType'));
+  return view('admin.discussions.index',compact('discussions','stats','status','targetType','kind','search'));
+ }
+ private function discussionPublicUrl(ContentDiscussion $discussion): ?string {
+  if($discussion->target_type==='product') {
+   $product=StoreProduct::find((int)$discussion->target_key);
+   $base=$product?route('store.product',$product->slug):null;
+  } else {
+   $base=BlogController::articleExists($discussion->target_key)?route('blog.show',$discussion->target_key):null;
+  }
+  return $base ? $base.'#discussion-'.$discussion->id : null;
+ }
+ private function notifyModerationDecision(ContentDiscussion $discussion,string $status): void {
+  if(!$discussion->user_id) return;
+  $url=$this->discussionPublicUrl($discussion);
+  $approved=$status==='approved';
+  app(NotificationService::class)->push((int)$discussion->user_id,
+   $approved?'discussion_approved':'discussion_rejected',
+   $approved?'مشارکت شما منتشر شد':'نتیجه بررسی مشارکت شما',
+   $approved?'مشارکت شما پس از بررسی مدیر در فراست منتشر شد.':('مشارکت شما منتشر نشد.'.($discussion->moderation_note?' دلیل: '.$discussion->moderation_note:'')),
+   array_filter(['url'=>$url,'discussion_id'=>$discussion->id,'status'=>$status],fn($v)=>$v!==null)
+  );
  }
  public function moderate(Request $request,ContentDiscussion $discussion) {
-  $data=$request->validate(['status'=>['required','in:approved,rejected']]);
-  $wasApproved=$discussion->status==='approved';
-  $discussion->forceFill(['status'=>$data['status'],'moderator_id'=>$request->user()->id,'moderated_at'=>now()])->save();
-  if(!$wasApproved && $data['status']==='approved' && $discussion->kind==='reply') $this->notifyDiscussionFollowers($discussion);
-  return back()->with('status',$data['status']==='approved'?'محتوا منتشر شد.':'محتوا رد شد و در سایت نمایش داده نمی‌شود.');
+  $data=$request->validate(['status'=>['required','in:approved,rejected'],'moderation_note'=>['nullable','string','max:1000']]);
+  $result=DB::transaction(function() use($request,$discussion,$data) {
+   $locked=ContentDiscussion::query()->whereKey($discussion->id)->lockForUpdate()->firstOrFail();
+   $previous=$locked->status;
+   if($previous===$data['status']) return ['changed'=>false,'discussion'=>$locked];
+   $note=trim((string)($data['moderation_note']??''));
+   $locked->forceFill([
+    'status'=>$data['status'],'moderator_id'=>$request->user()->id,'moderated_at'=>now(),
+    'moderation_note'=>$note!==''?$note:null,
+   ])->save();
+   \App\Models\DiscussionModerationEvent::create([
+    'discussion_id'=>$locked->id,'moderator_id'=>$request->user()->id,
+    'from_status'=>$previous,'to_status'=>$data['status'],'note'=>$note!==''?$note:null,
+   ]);
+   return ['changed'=>true,'discussion'=>$locked];
+  });
+  if($result['changed']) {
+   $this->notifyModerationDecision($result['discussion'],$data['status']);
+   if($data['status']==='approved' && $result['discussion']->kind==='reply') $this->notifyDiscussionFollowers($result['discussion']);
+  }
+  return back()->with('status',$data['status']==='approved'?'محتوا منتشر شد و نتیجه به نویسنده اطلاع داده شد.':'محتوا رد شد و نتیجه به نویسنده اطلاع داده شد.');
  }
  public function reply(Request $request,ContentDiscussion $discussion) {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body')]);

@@ -216,4 +216,25 @@ class ContentDiscussionTest extends TestCase {
   $this->get(route('store.product',['slug'=>$p->slug,'page'=>2]))->assertOk()->assertSee('پرسش شماره 1')->assertDontSee('پرسش شماره 16');
  }
 
+
+ public function test_moderation_decisions_are_audited_and_notify_the_content_author(): void {
+  $p=$this->product();$author=$this->user('09123456931');$admin=$this->user('09123456932','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $item=ContentDiscussion::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$item),['status'=>'rejected','moderation_note'=>'لطفاً پرسش را دقیق‌تر و مرتبط با محتوای محصول مطرح کنید.'])->assertRedirect();
+  $this->assertDatabaseHas('discussion_moderation_events',['discussion_id'=>$item->id,'moderator_id'=>$admin->id,'from_status'=>'pending','to_status'=>'rejected']);
+  $this->assertDatabaseHas('content_discussions',['id'=>$item->id,'moderation_note'=>'لطفاً پرسش را دقیق‌تر و مرتبط با محتوای محصول مطرح کنید.']);
+  $this->assertDatabaseHas('farast_notifications',['user_id'=>$author->id,'type'=>'discussion_rejected']);
+  $this->actingAs($author)->get(route('community.mine',['status'=>'rejected']))->assertOk()->assertSee('توضیح تیم بررسی')->assertSee('پرسش را دقیق‌تر');
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$item),['status'=>'rejected'])->assertRedirect();
+  $this->assertDatabaseCount('discussion_moderation_events',1);
+  $this->assertDatabaseCount('farast_notifications',1);
+ }
+ public function test_admin_discussion_queue_can_filter_by_kind_and_search_author_or_text(): void {
+  $p=$this->product();$author=$this->user('09123456933');$admin=$this->user('09123456934','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $this->actingAs($admin)->get(route('admin.discussions.index',['status'=>'pending','kind'=>'question','q'=>'کلاس آموزشی']))->assertOk()->assertSee('discussionKind')->assertSee('کلاس آموزشی');
+  $this->actingAs($admin)->get(route('admin.discussions.index',['status'=>'pending','q'=>'کاربر آزمایشی']))->assertOk()->assertSee('آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟');
+ }
+
 }
