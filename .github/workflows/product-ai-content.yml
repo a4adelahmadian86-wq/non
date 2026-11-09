@@ -81,7 +81,7 @@ jobs:
 
       - name: Check PHP syntax for changed runtime files
         run: |
-          find app/Http/Controllers/AdminCourseController.php app/Http/Controllers/AdminProductContentController.php app/Http/Controllers/AdminStoreController.php app/Jobs/ProcessProductDocument.php app/Services/AI/AiOperationRegistry.php app/Services/AI/Providers/GeminiEditorProvider.php app/Services/ProductContentGenerationService.php app/Services/ProductDocumentProcessingState.php app/Services/ProductKnowledgeService.php -type f -print0 | xargs -0 -n1 php -l
+          find app/Http/Controllers/AdminCourseController.php app/Http/Controllers/AdminProductContentController.php app/Http/Controllers/AdminStoreController.php app/Jobs/ProcessProductDocument.php app/Services/AI/AiOperationRegistry.php app/Services/AI/Providers/GeminiEditorProvider.php app/Services/ProductContentGenerationService.php app/Services/ProductContentPrivacyFilter.php app/Services/ProductDocumentProcessingState.php app/Services/ProductKnowledgeService.php -type f -print0 | xargs -0 -n1 php -l
 
       - name: Check smart-fill JavaScript syntax
         run: node --check public/js/admin-store-product-ai.js
