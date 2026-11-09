@@ -184,7 +184,7 @@ trait PaysWithZarinpal
                 ]);
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
-                app(\\App\\Services\\NotificationService::class)->push(
+                app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
                     'خرید شما با موفقیت ثبت شد',
