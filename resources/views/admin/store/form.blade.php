@@ -134,6 +134,7 @@
               <div><strong>نکات برجسته</strong><ul data-ai-content-points></ul></div>
               <div><strong>منابع مورد استفاده</strong><ul data-ai-content-sources></ul></div>
               <div class="product-ai-content-evidence-facts"><strong>شواهد استفاده‌شده</strong><ul data-ai-content-used-facts></ul></div>
+              <div><strong>متن درس‌های بررسی‌شده</strong><ul data-ai-content-lessons></ul></div>
               <div><strong>موارد فاقد منبع کافی</strong><ul data-ai-content-unknowns></ul></div>
             </div>
             <label class="product-ai-content-overwrite"><input type="checkbox" data-ai-content-only-empty checked> فقط فیلدهای خالی را پر کن و مقادیر فعلی را حفظ کن</label>
