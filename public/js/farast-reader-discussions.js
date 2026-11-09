@@ -59,6 +59,60 @@
     }
     updatePdfTextSelection();
   });
+  const findQuoteRange=(container,quote)=>{
+    if(!container||!quote)return null;
+    const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT);
+    const nodes=[];let text='';let node;
+    while((node=walker.nextNode())){
+      nodes.push({node,start:text.length,end:text.length+node.nodeValue.length});
+      text+=node.nodeValue;
+    }
+    const index=text.indexOf(quote);
+    if(index<0)return null;
+    const start=nodes.find(item=>item.start<=index&&item.end>index);
+    const endOffset=index+quote.length;
+    const end=nodes.find(item=>item.start<endOffset&&item.end>=endOffset);
+    if(!start||!end)return null;
+    const range=document.createRange();
+    range.setStart(start.node,index-start.start);
+    range.setEnd(end.node,endOffset-end.start);
+    return range;
+  };
+  document.querySelectorAll('[data-reader-jump]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const targetPage=Math.max(1,Number(button.dataset.page)||1);
+      const pageInput=root.querySelector('#reader-page-number');
+      if(!pageInput)return;
+      const navigate=()=>{
+        const page=activePage();
+        const container=getTextContainer(page);
+        const range=findQuoteRange(container,button.dataset.quote||'');
+        if(range){
+          const selection=window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          const target=range.startContainer.parentElement;
+          target?.scrollIntoView({behavior:'smooth',block:'center'});
+          return true;
+        }
+        page?.scrollIntoView({behavior:'smooth',block:'start'});
+        return false;
+      };
+      if(Number(pageInput.value)===targetPage){navigate();return;}
+      const onChange=event=>{
+        if(Number(event.detail?.page)!==targetPage)return;
+        root.removeEventListener('farast:reader-page-change',onChange);
+        window.setTimeout(navigate,0);
+      };
+      root.addEventListener('farast:reader-page-change',onChange);
+      pageInput.value=String(targetPage);
+      pageInput.dispatchEvent(new Event('change',{bubbles:true}));
+      window.setTimeout(()=>{
+        root.removeEventListener('farast:reader-page-change',onChange);
+        navigate();
+      },2500);
+    });
+  });
   form.addEventListener('submit',event=>{
     const quote=clampText(quoteInput.value);
     if(quote.length<2){
