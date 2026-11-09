@@ -164,6 +164,14 @@ class PaymentController extends Controller
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 $document->update(['status' => 'paid', 'price_rials' => $gross]);
+                app(\App\Services\NotificationService::class)->push(
+                    (int) $locked->user_id,
+                    'order_paid',
+                    'پرداخت سفارش خدمات تایپ تأیید شد',
+                    'پرداخت سفارش شماره '.$locked->id.' با موفقیت ثبت شد. مبلغ: '.number_format((int) $total).' ریال.',
+                    ['order_id' => $locked->id, 'amount_rials' => (int) $total, 'url' => route('dashboard')],
+                    true,
+                );
                 if ($document->project_id) {
                     $project = FarastProject::whereKey($document->project_id)->where('user_id', auth()->id())->lockForUpdate()->first();
                     if ($project) $project->update(['paid_rials' => max((int)$project->paid_rials, (int)$total), 'billing_state' => array_merge($project->billing_state ?? [], ['status'=>'paid','amount_remaining'=>0]), 'output_state' => ['status'=>'unlocked','reason'=>'payment_verified']]);
@@ -300,6 +308,14 @@ class PaymentController extends Controller
                 }
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                app(\App\Services\NotificationService::class)->push(
+                    (int) $locked->user_id,
+                    'order_paid',
+                    'خرید شما با موفقیت ثبت شد',
+                    'سفارش فروشگاه شماره '.$locked->id.' پرداخت شد و محتوای خریداری‌شده در کتابخانه شما قرار گرفت.',
+                    ['order_id' => $locked->id, 'amount_rials' => (int) $total, 'url' => route('dashboard')],
+                    true,
+                );
                 $paidOrder = $locked->fresh();
             });
 
@@ -363,6 +379,14 @@ class PaymentController extends Controller
                 ]);
 
                 $locked->update(['status' => 'deposit_paid', 'paid_at' => now()]);
+                app(\App\Services\NotificationService::class)->push(
+                    (int) $locked->user_id,
+                    'order_deposit_paid',
+                    'پیش‌پرداخت خدمات تایپ تأیید شد',
+                    'پیش‌پرداخت سفارش شماره '.$locked->id.' با موفقیت ثبت شد. مبلغ: '.number_format((int) $amount).' ریال.',
+                    ['order_id' => $locked->id, 'amount_rials' => (int) $amount, 'url' => route('dashboard')],
+                    true,
+                );
                 $request->session()->put('typing_preflight_deposit_order', $locked->id);
                 $request->session()->put('typing_preflight_accepted', [
                     'path' => $path,

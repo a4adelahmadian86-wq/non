@@ -324,6 +324,13 @@ class AuthController extends Controller
         $user = User::where('mobile', $phone)->firstOrFail();
         abort_if($user->is_blocked, 403, 'حساب کاربری شما غیرفعال است.');
         $user->update(['password' => $data['password']]);
+        app(\App\Services\NotificationService::class)->pushToUser(
+            $user,
+            'security_password_changed',
+            'رمز عبور حساب شما تغییر کرد',
+            'رمز عبور حساب فراست با موفقیت بازنشانی شد. اگر این کار توسط شما انجام نشده، حساب خود را بررسی کنید.',
+            ['url' => route('platform.security')],
+        );
 
         try {
             $emailService->sendPasswordChanged($user);

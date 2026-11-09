@@ -200,6 +200,14 @@ class WalletController extends Controller
                     'paid_at' => now(),
                 ]);
                 $lockedOrder->update(['status' => 'paid', 'paid_at' => now()]);
+                app(\App\Services\NotificationService::class)->push(
+                    (int) $lockedOrder->user_id,
+                    'wallet_topup_paid',
+                    'کیف پول با موفقیت شارژ شد',
+                    'مبلغ '.number_format((int) $lockedPayment->amount_rials).' ریال به موجودی کیف پول شما اضافه شد.',
+                    ['order_id' => $lockedOrder->id, 'amount_rials' => (int) $lockedPayment->amount_rials, 'url' => route('wallet')],
+                    true,
+                );
                 $credited = true;
             });
         } catch (\Throwable $exception) {
