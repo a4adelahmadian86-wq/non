@@ -86,7 +86,7 @@ class StoreCartController extends Controller
         return back()->with('status', 'کد تخفیف حذف شد.');
     }
 
-    public function checkout(Request $request, StoreCartService $cart)
+    public function checkout(Request $request, StoreCartService $cart, \\App\\Services\\StoreCouponRedemptionService $couponRedemptions)
     {
         $request->validate(['accept_terms' => ['accepted']]);
         abort_unless($request->user(), 401);
@@ -95,22 +95,18 @@ class StoreCartController extends Controller
         $payload = $cart->payload($current, $request);
         abort_if(empty($payload['items']), 422, 'سبد خرید خالی است.');
 
-        $order = DB::transaction(function () use ($request, $current, $payload) {
+        try {\n            $order = DB::transaction(function () use ($request, $current, $payload, $couponRedemptions) {
             $taxRate = max(0, (float) SiteSetting::read('tax_rate_percent', 10));
             $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
             $subtotal = (int) $payload['subtotal_rials'];
-            $discount = (int) $payload['discount_rials'];
-            $taxable = max(0, $subtotal - $discount);
-            $tax = ($taxable > 0 && $taxEnabled) ? (int) round($taxable * $taxRate / 100) : 0;
-            $total = $taxable + $tax;
 
             $order = Order::create([
                 'user_id' => $request->user()->id,
                 'document_id' => null,
                 'subtotal_rials' => $subtotal,
-                'discount_rials' => $discount,
-                'tax_rials' => $tax,
-                'total_rials' => $total,
+                'discount_rials' => 0,
+                'tax_rials' => 0,
+                'total_rials' => $subtotal,
                 'status' => 'pending',
                 'pricing_snapshot' => [
                     'kind' => 'store',
@@ -120,6 +116,18 @@ class StoreCartController extends Controller
                 ],
                 'free_pages_applied' => 0,
                 'terms_accepted_at' => now(),
+            ]);
+
+            $discount = $payload['coupon_code']
+                ? $couponRedemptions->reserve((string) $payload['coupon_code'], $order, $subtotal)
+                : 0;
+            $taxable = max(0, $subtotal - $discount);
+            $tax = ($taxable > 0 && $taxEnabled) ? (int) round($taxable * $taxRate / 100) : 0;
+            $total = $taxable + $tax;
+            $order->update([
+                'discount_rials' => $discount,
+                'tax_rials' => $tax,
+                'total_rials' => $total,
             ]);
 
             $orderItems = [];
@@ -164,10 +172,6 @@ class StoreCartController extends Controller
                 $orderItems[] = [$orderItem, $product, $file];
             }
 
-            if ($payload['coupon_code']) {
-                StoreCoupon::where('code', $payload['coupon_code'])->increment('used_count');
-            }
-
             $current->delete();
             $request->session()->forget('store_coupon_code');
 
@@ -196,7 +200,10 @@ class StoreCartController extends Controller
             }
 
             return $order->fresh();
-        });
+            });
+        } catch (\\RuntimeException $exception) {
+            return back()->withErrors(['checkout' => $exception->getMessage()]);
+        }
 
         if ((int) $order->total_rials === 0 && $order->status === 'paid') {
             return redirect()->route('library')->with('status', 'سفارش رایگان ثبت شد؛ فایل یا دسترسی دوره در کتابخانه شما فعال است.');
