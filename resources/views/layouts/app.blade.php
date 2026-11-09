@@ -11,7 +11,8 @@ if($isEditor&&auth()->check()){$farastCapabilities=app(\App\Services\CapabilityS
 if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::hasTable('site_settings')){$footerRaw=\App\Models\SiteSetting::read('social_links','[]');$decodedSocial=json_decode((string)$footerRaw,true);if(is_array($decodedSocial)){$footerSocial=array_values(array_filter($decodedSocial,static fn($item)=>is_array($item)&&filter_var($item['url']??'',FILTER_VALIDATE_URL)));}}}
 @endphp
 <link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-<link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1"><link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css">
+<link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1">
+@if(!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261109chrome1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css">
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
 @if($isDashboard)<link rel="stylesheet" href="/css/dashboard-navigation.css">@endif
 @if($isEditor)
@@ -24,11 +25,13 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 </head>
 <body data-assistant-auth="{{ auth()->check() ? '1' : '0' }}" class="{{ $isEditor?'editor-page-body':'' }} {{ $isAuthPage?'auth-page':'' }} {{ !$isEditor && !$isAdmin && !$isDashboard && !$isAuthPage ? 'has-mobile-dock' : '' }}">
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)
+<a class="farast-skip-link" href="#app-main">رفتن به محتوای اصلی</a>
 <header class="top premium-header" data-app-header>
+  <div class="farast-public-topline"><div class="farast-public-topline__inner"><span><i class="fa-solid fa-layer-group" aria-hidden="true"></i> محصولات دیجیتال و ابزارهای کار با سند</span><a href="{{ route('editor') }}">شروع با تایپ و ویرایش سند <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a></div></div>
   <div class="header-inner">
     <a class="brand premium-brand" href="{{ route('home') }}" aria-label="فراست">
       <span class="brand-mark farast-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
-      <span><b>FARAST</b><small>فراست | فروش فایل و خدمات هوشمند</small></span>
+      <span><b>FARAST</b><small>فراست | محصولات دیجیتال و خدمات سند</small></span>
     </a>
     <div class="header-search" role="search">
       <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
@@ -90,6 +93,17 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)<aside class="farast-cart-drawer" id="farastCartDrawer" aria-hidden="true"><div class="farast-cart-head"><strong>سبد خرید</strong><button type="button" data-cart-close aria-label="بستن"><i class="fa-solid fa-xmark"></i></button></div><div class="farast-cart-body" id="farastCartBody"></div><div class="farast-cart-foot"><span>جمع</span><strong id="farastCartTotal">۰ تومان</strong><button type="button" id="farastCartCheckout" disabled>ادامه پرداخت</button></div></aside><div class="farast-cart-backdrop" id="farastCartBackdrop" hidden></div><div class="farast-connectivity" id="farastConnectivity" aria-live="polite" hidden><div class="farast-connectivity-card"><div class="farast-connectivity-copy"><strong id="farastConnectivityTitle">اتصال اینترنت در دسترس نیست</strong><span id="farastConnectivityMessage">بخش‌های ذخیره‌شده در دسترس می‌مانند.</span></div><button type="button" id="farastConnectivityRetry" aria-label="تلاش دوباره"><i class="fa-solid fa-rotate-right"></i></button></div></div><button type="button" id="farastSoundToggle" class="farast-sound-toggle" aria-label="فعال یا غیرفعال کردن صدای رابط" aria-pressed="false"><i class="fa-solid fa-volume-high"></i></button>@endif
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)<footer class="site-footer" dir="rtl">
   <div class="footer-glow" aria-hidden="true"></div>
+  <section class="farast-footer-cta" aria-labelledby="farast-footer-cta-title">
+    <div class="farast-footer-cta__copy">
+      <span class="farast-footer-cta__eyebrow"><i class="fa-solid fa-compass" aria-hidden="true"></i> قدم بعدی شما</span>
+      <h2 id="farast-footer-cta-title">برای خرید محصول آمده‌اید یا آماده‌سازی یک سند؟</h2>
+      <p>مسیر مناسب را انتخاب کنید و کارتان را در فراست ادامه دهید.</p>
+    </div>
+    <div class="farast-footer-cta__actions">
+      <a class="farast-footer-cta__primary" href="{{ route('editor') }}"><i class="fa-solid fa-file-pen" aria-hidden="true"></i> شروع با سند</a>
+      <a class="farast-footer-cta__secondary" href="{{ route('store') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> دیدن محصولات</a>
+    </div>
+  </section>
   <div class="footer-top">
     <div class="footer-about">
       <div class="footer-brand"><span class="brand-mark farast-symbol"><i></i><i></i><i></i><i></i><b></b></span><b>فراست</b></div>

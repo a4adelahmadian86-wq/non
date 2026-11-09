@@ -51,6 +51,10 @@ class HomeIntentTest extends TestCase
             ->assertSee('name="description"', false)
             ->assertSee('home-hero-visual', false)
             ->assertSee('home-editor-preview', false)
+            ->assertSee('farast-public-topline', false)
+            ->assertSee('farast-footer-cta', false)
+            ->assertSee('برای خرید محصول آمده‌اید یا آماده‌سازی یک سند؟')
+            ->assertSee('رفتن به محتوای اصلی')
             ->assertSee('شروع کار با فایل')
             ->assertDontSee('</script>ipt>', false);
     }
