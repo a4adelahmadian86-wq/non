@@ -184,6 +184,14 @@ trait PaysWithZarinpal
                 ]);
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                app(\\App\\Services\\NotificationService::class)->push(
+                    (int) $locked->user_id,
+                    'order_paid',
+                    'خرید شما با موفقیت ثبت شد',
+                    'سفارش فروشگاه شماره '.$locked->id.' از طریق زرین‌پال پرداخت شد و محتوای خریداری‌شده در کتابخانه شما قرار گرفت.',
+                    ['order_id' => $locked->id, 'amount_rials' => (int) $locked->total_rials, 'url' => route('library')],
+                    true,
+                );
                 $paymentProcessed = true;
             });
         } catch (\RuntimeException $e) {
