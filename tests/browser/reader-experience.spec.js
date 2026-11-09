@@ -1333,7 +1333,7 @@ test('personal reading light, font preferences, highlights and annotations stay 
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-font-size', '125');
   await expect(page.locator('.farast-reader-document')).toHaveCSS('font-family', /Georgia/);
   await page.locator('[data-reader-line-height]').selectOption('2.1');
-  await page.locator('[data-reader-measure]').selectOption('narrow');
+  await page.locator('select[data-reader-measure]').selectOption('narrow');
   await page.locator('[data-reader-paragraph-spacing]').selectOption('1.5');
   await page.locator('[data-reader-focus]').click();
   await expect(page.locator('[data-reader-root]')).toHaveAttribute('data-reader-measure', 'narrow');
@@ -1396,7 +1396,7 @@ test('personal reading light, font preferences, highlights and annotations stay 
   });
   page.once('dialog', dialog => dialog.accept('یادداشت محلی'));
   await page.locator('[data-reader-note]').click();
-  await expect(page.locator('.farast-reader-note')).toContainText('یادداشت محلی');
+  await expect(page.locator('.farast-reader-note:not(.farast-reader-highlight-entry)')).toContainText('یادداشت محلی');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:personal-tools-fixture')));
   expect(saved.light).toBe(true);
   expect(saved.font).toBe('serif');
@@ -1440,7 +1440,7 @@ test('personal reader backup restores local notes and highlights without a serve
   await expect(page.locator('[data-reader-focus]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-reader-ruler]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.farast-reader-reading-ruler')).toBeVisible();
-  await expect(page.locator('.farast-reader-note')).toContainText('یادداشت بازیابی‌شده');
+  await expect(page.locator('.farast-reader-note:not(.farast-reader-highlight-entry)')).toContainText('یادداشت بازیابی‌شده');
   await expect(page.locator('mark.farast-reader-local-highlight')).toHaveText('متن نمونه');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:backup-fixture')));
   expect(saved.notes[0].note).toBe('یادداشت بازیابی‌شده');
@@ -1688,7 +1688,8 @@ test('saved reader notes navigate back to their exact anchored text', async ({ p
   });
   await page.locator('[data-reader-note]').click();
   await page.locator('[data-reader-notes]').click();
-  await page.locator('.farast-reader-note [aria-label^="رفتن به محل یادداشت"]').click();
+  await expect(page.locator('.farast-reader-local-notes')).toBeVisible();
+  await page.locator('.farast-reader-note:not(.farast-reader-highlight-entry) [aria-label^="رفتن به محل یادداشت"]').click({ force: true });
   await expect.poll(() => page.evaluate(() => window.getSelection().toString())).toBe('عبارت دوم');
 });
 
