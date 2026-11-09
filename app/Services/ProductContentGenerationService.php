@@ -208,10 +208,32 @@ class ProductContentGenerationService
         $allowedCategoryIds = array_map('strval', array_column($categories, 'id'));
         if (! in_array($categoryId, $allowedCategoryIds, true)) $categoryId = '';
 
-        $usedFactIds = collect(is_array($result['used_fact_ids'] ?? null) ? $result['used_fact_ids'] : [])
-            ->map(fn ($id) => (int) $id)->filter(fn ($id) => in_array($id, $validFactIds, true))->unique()->values()->all();
-        $usedSourceIds = collect(is_array($result['used_source_ids'] ?? null) ? $result['used_source_ids'] : [])
-            ->map(fn ($id) => trim((string) $id))->filter(fn ($id) => in_array($id, $validSourceIds, true))->unique()->values()->all();
+        $allowedEvidenceFields = [
+            'title', 'short_description', 'description', 'seo_title', 'seo_description',
+            'focus_keyword', 'secondary_keywords', 'tags', 'category', 'selling_points',
+        ];
+        $fieldEvidence = [];
+        foreach (is_array($result['field_evidence'] ?? null) ? $result['field_evidence'] : [] as $entry) {
+            if (! is_array($entry)) continue;
+            $field = trim((string) ($entry['field'] ?? ''));
+            if (! in_array($field, $allowedEvidenceFields, true) || isset($fieldEvidence[$field])) continue;
+            $factIdsForField = collect(is_array($entry['fact_ids'] ?? null) ? $entry['fact_ids'] : [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => in_array($id, $validFactIds, true))
+                ->unique()->values()->all();
+            $sourceIdsForField = collect(is_array($entry['source_ids'] ?? null) ? $entry['source_ids'] : [])
+                ->map(fn ($id) => trim((string) $id))
+                ->filter(fn ($id) => in_array($id, $validSourceIds, true))
+                ->unique()->values()->all();
+            if ($factIdsForField !== [] || $sourceIdsForField !== []) {
+                $fieldEvidence[$field] = [
+                    'fact_ids' => $factIdsForField,
+                    'source_ids' => $sourceIdsForField,
+                ];
+            }
+        }
+        $usedFactIds = collect($fieldEvidence)->flatMap(fn (array $evidence) => $evidence['fact_ids'])->unique()->values()->all();
+        $usedSourceIds = collect($fieldEvidence)->flatMap(fn (array $evidence) => $evidence['source_ids'])->unique()->values()->all();
 
         $normalized = [
             'title' => $string('title', 220),
@@ -227,11 +249,30 @@ class ProductContentGenerationService
             'selling_points' => $list('selling_points', 8, 180),
             'used_fact_ids' => $usedFactIds,
             'used_source_ids' => $usedSourceIds,
+            'field_evidence' => $fieldEvidence,
             'unknowns' => $list('unknowns', 10, 240),
         ];
 
         foreach (['title', 'short_description', 'description', 'seo_title', 'seo_description'] as $required) {
-            if ($normalized[$required] === '') throw new RuntimeException('ai_product_content_invalid');
+            if ($normalized[$required] === '' || ! isset($fieldEvidence[$required])) {
+                throw new RuntimeException('ai_product_content_invalid');
+            }
+        }
+
+        foreach ([
+            'focus_keyword' => 'focus_keyword',
+            'secondary_keywords' => 'secondary_keywords',
+            'tags' => 'tags',
+            'selling_points' => 'selling_points',
+        ] as $outputField => $evidenceField) {
+            if ($normalized[$outputField] !== [] && ! isset($fieldEvidence[$evidenceField])) {
+                $normalized[$outputField] = [];
+            }
+        }
+
+        if ($normalized['category_id'] !== '' && ! isset($fieldEvidence['category'])) {
+            $normalized['category_id'] = '';
+            $normalized['category_reason'] = '';
         }
 
         return $normalized;
