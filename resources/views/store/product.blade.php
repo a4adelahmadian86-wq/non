@@ -5,6 +5,33 @@
 <meta property="og:description" content="{{ $product->seo_description ?: $product->short_description }}">
 <meta property="og:type" content="product">
 <meta property="og:url" content="{{ request()->url() }}">
+@php($ratingCount = array_sum($ratingBreakdown))
+<script type="application/ld+json">
+@json([
+    '@context' => 'https://schema.org',
+    '@type' => 'Product',
+    'name' => $product->title,
+    'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description), 300),
+    'image' => $product->cover_path ? [asset($product->cover_path)] : [],
+    'sku' => $product->sku,
+    'url' => request()->url(),
+    'offers' => [
+        '@type' => 'Offer',
+        'url' => request()->url(),
+        'priceCurrency' => 'IRR',
+        'price' => (int) $product->price_rials,
+        'availability' => 'https://schema.org/InStock',
+        'itemCondition' => 'https://schema.org/NewCondition',
+    ],
+    'aggregateRating' => $ratingCount > 0 && $averageRating !== null ? [
+        '@type' => 'AggregateRating',
+        'ratingValue' => round((float) $averageRating, 1),
+        'reviewCount' => $ratingCount,
+        'bestRating' => 5,
+        'worstRating' => 1,
+    ] : null,
+])
+</script>
 @endpush
 
 @section('content')
@@ -111,6 +138,16 @@
         <small>{{ $product->type === 'course' ? 'دوره آموزشی' : ($product->category?->name ?? 'فایل دیجیتال') }}</small>
         <h1>{{ $product->title }}</h1>
         <p class="lead">{{ $product->short_description }}</p>
+        <div class="store-product-rating" aria-label="امتیاز کاربران">
+          @if($ratingCount > 0 && $averageRating !== null)
+            <span class="store-product-rating__score"><i class="fa-solid fa-star" aria-hidden="true"></i> {{ number_format((float) $averageRating, 1) }}</span>
+            <span class="store-product-rating__detail">{{ number_format($ratingCount) }} امتیاز ثبت‌شده</span>
+            <a href="#store-discussions">مشاهده دیدگاه‌ها</a>
+          @else
+            <span class="store-product-rating__empty"><i class="fa-regular fa-star" aria-hidden="true"></i> هنوز امتیازی ثبت نشده</span>
+            <a href="#store-discussions">اولین دیدگاه را ثبت کنید</a>
+          @endif
+        </div>
         @if($product->tags->isNotEmpty())
           <div class="store-product-tags" aria-label="برچسب‌های محصول">
             @foreach($product->tags as $tag)<span>{{ $tag->name }}</span>@endforeach
@@ -191,6 +228,12 @@
 <style>
 
 
+.store-product-rating{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:8px 0 14px;padding:9px 11px;border:1px solid #e5ebf4;border-radius:11px;background:#f8fafd;font-size:.7rem}
+.store-product-rating__score{display:inline-flex;align-items:center;gap:5px;color:#9a6500;font-weight:900;font-variant-numeric:tabular-nums}
+.store-product-rating__score i{color:#e6a52a}
+.store-product-rating__detail,.store-product-rating__empty{color:#687b95}
+.store-product-rating>a{margin-inline-start:auto;color:#356bb0;text-decoration:none;font-weight:800}
+.store-product-rating>a:hover{text-decoration:underline}
 .store-product-tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
 .store-product-tags span{padding:5px 9px;border-radius:99px;background:#f1f5fb;color:#536783;font-size:.65rem;font-weight:700}
 
