@@ -259,10 +259,11 @@
       textLayer.classList.add('textLayer');
       textLayer.style.width=viewport.width+'px';
       textLayer.style.height=viewport.height+'px';
-      const query=(searchInput?.value||'').trim().toLocaleLowerCase();
+      const query=(searchInput?.value||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
         span.style.userSelect='text';span.style.webkitUserSelect='text';
-        span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
+        const spanText=span.textContent.replace(/\s+/g,' ').trim().toLocaleLowerCase();
+        span.classList.toggle('reader-search-hit',Boolean(query)&&spanText.includes(query));
       });
     }
     if(request!==pdfRenderSequence)return;
@@ -327,10 +328,11 @@
       const textContent=await page.getTextContent();
       const layer=new window.pdfjsLib.TextLayer({textContentSource:textContent,container:textLayer,viewport});
       await layer.render();
-      const query=(searchInput?.value||'').trim().toLocaleLowerCase();
+      const query=(searchInput?.value||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();
       textLayer.querySelectorAll('span').forEach(span=>{
         span.style.userSelect='text';span.style.webkitUserSelect='text';
-        span.classList.toggle('reader-search-hit',Boolean(query)&&span.textContent.toLocaleLowerCase().includes(query));
+        const spanText=span.textContent.replace(/\s+/g,' ').trim().toLocaleLowerCase();
+        span.classList.toggle('reader-search-hit',Boolean(query)&&spanText.includes(query));
       });
     }
     wrapper.dataset.rendered='1';
@@ -748,6 +750,8 @@
   document.addEventListener('keydown',e=>{
     const key=e.key.toLowerCase();
     const modifier=e.ctrlKey||e.metaKey;
+    if(modifier&&key==='f'){e.preventDefault();searchInput?.focus();searchInput?.select();return;}
+    if(modifier&&key==='g'){e.preventDefault();moveSearchMatch(e.shiftKey?-1:1).catch(showPdfError);return;}
     // Print/save must stay blocked even while focus is inside the search or page controls.
     if(modifier&&['p','s'].includes(key)){e.preventDefault();e.stopPropagation();return;}
     if(isEditableTarget(e.target)||isReaderSpeechTarget(e.target))return;
