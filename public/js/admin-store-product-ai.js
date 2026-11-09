@@ -137,6 +137,11 @@
             + ': ' + String(fact.value || '') + '؛ شاهد: ' + String(fact.evidence || '') + locator;
         }));
       renderList(modal?.querySelector('[data-ai-content-used-facts]'), usedEvidence.length ? usedEvidence : ['شاهد مشخصی در خروجی مدل ارجاع نشده است.']);
+      renderList(modal?.querySelector('[data-ai-content-lessons]'), (payload.course_lessons || []).map(lesson => {
+        const heading = [lesson.section, lesson.title].filter(Boolean).join(' / ');
+        const excerpt = lesson.summary || lesson.content || '';
+        return heading + (excerpt ? ' — ' + excerpt : '');
+      }));
       renderList(modal?.querySelector('[data-ai-content-points]'), suggestions.selling_points || []);
       renderList(modal?.querySelector('[data-ai-content-unknowns]'), suggestions.unknowns || []);
       const evidence = modal?.querySelector('[data-ai-content-evidence]');
