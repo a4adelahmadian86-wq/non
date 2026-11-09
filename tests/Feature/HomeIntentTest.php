@@ -48,7 +48,11 @@ class HomeIntentTest extends TestCase
             ->assertSee('schema.org')
             ->assertSee('Organization')
             ->assertSee('og:title', false)
-            ->assertSee('name="description"', false);
+            ->assertSee('name="description"', false)
+            ->assertSee('home-hero-visual', false)
+            ->assertSee('home-editor-preview', false)
+            ->assertSee('شروع کار با فایل')
+            ->assertDontSee('</script>ipt>', false);
     }
 
     public function test_word_processor_project_intents_classify_and_suggest_templates(): void

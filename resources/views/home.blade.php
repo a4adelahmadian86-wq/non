@@ -62,19 +62,49 @@
 <div class="farast-home" dir="rtl" data-authenticated="{{ $isAuthenticated ? '1' : '0' }}">
     <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero-copy">
-            <span class="home-kicker"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> FARAST</span>
-            <h1 id="home-title">از ایده تا نتیجه، مسیرتان را با فراست شروع کنید</h1>
-            <p>محصول دیجیتال موردنیازتان را پیدا کنید یا کار با سند را همین‌جا آغاز کنید؛ از ورود فایل و تبدیل گفتار به متن تا ویرایش و آماده‌سازی خروجی، در یک مسیر روشن و یکپارچه.</p>
+            <span class="home-kicker"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> فضای یکپارچه فراست</span>
+            <h1 id="home-title">هر چیزی برای کار با محتوا و سند، از یک نقطه</h1>
+            <p>فراست دو مسیر روشن پیش روی شما می‌گذارد: محصولات دیجیتال و آموزشی را پیدا کنید، یا فایل و گفتار خود را به سندی قابل ویرایش تبدیل کنید؛ از شروع تا خروجی، در یک محیط منسجم.</p>
             <div class="home-hero-actions">
-                <a class="home-hero-cta home-hero-cta--primary" href="#homeDiscovery"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> شروع یک کار جدید</a>
-                <a class="home-hero-cta home-hero-cta--secondary" href="{{ route('store') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> ورود به فروشگاه</a>
+                <a class="home-hero-cta home-hero-cta--primary" href="#homeDiscovery"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> شروع کار با فایل</a>
+                <a class="home-hero-cta home-hero-cta--secondary" href="{{ route('store') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> کشف محصولات دیجیتال</a>
             </div>
             <div class="home-hero-assurance" aria-label="دو مسیر اصلی فراست">
-                <span><i class="fa-solid fa-book-open" aria-hidden="true"></i> محصولات دیجیتال</span>
-                <span><i class="fa-solid fa-file-pen" aria-hidden="true"></i> خدمات و ابزارهای سند</span>
+                <span><i class="fa-solid fa-book-open" aria-hidden="true"></i> یادگیری و منابع دیجیتال</span>
+                <span><i class="fa-solid fa-file-pen" aria-hidden="true"></i> تایپ، تبدیل و ویرایش سند</span>
             </div>
         </div>
-        <div class="home-hero-rule" aria-hidden="true"></div>
+        <div class="home-hero-visual" aria-label="نمایی نمایشی از گردش کار اسناد در فراست">
+            <div class="home-visual-orbit home-visual-orbit--one" aria-hidden="true"></div>
+            <div class="home-visual-orbit home-visual-orbit--two" aria-hidden="true"></div>
+            <div class="home-editor-preview">
+                <div class="home-editor-preview__top">
+                    <span class="home-editor-preview__brand"><i class="fa-solid fa-shapes" aria-hidden="true"></i> FARAST</span>
+                    <span class="home-editor-preview__file"><i class="fa-regular fa-file-word" aria-hidden="true"></i> سند من</span>
+                    <span class="home-editor-preview__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                </div>
+                <div class="home-editor-preview__toolbar" aria-hidden="true">
+                    <span>فایل</span><span>ویرایش</span><span>درج</span><span>قالب‌بندی</span><b><i class="fa-solid fa-arrow-rotate-left"></i></b><b><i class="fa-solid fa-bold"></i></b><b><i class="fa-solid fa-align-right"></i></b>
+                </div>
+                <div class="home-editor-preview__workspace">
+                    <aside class="home-editor-preview__rail" aria-hidden="true"><i class="fa-solid fa-file-lines"></i><i class="fa-solid fa-layer-group"></i><i class="fa-solid fa-comment-dots"></i></aside>
+                    <div class="home-editor-preview__page" aria-hidden="true">
+                        <span class="home-editor-preview__page-kicker">سند قابل ویرایش</span>
+                        <strong>از فایل خام تا محتوای آماده</strong>
+                        <span class="home-editor-preview__line home-editor-preview__line--wide"></span>
+                        <span class="home-editor-preview__line"></span>
+                        <span class="home-editor-preview__line home-editor-preview__line--medium"></span>
+                        <span class="home-editor-preview__paragraph"></span>
+                        <span class="home-editor-preview__line home-editor-preview__line--wide"></span>
+                        <span class="home-editor-preview__line home-editor-preview__line--medium"></span>
+                        <span class="home-editor-preview__paragraph home-editor-preview__paragraph--short"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="home-visual-chip home-visual-chip--file"><span><i class="fa-solid fa-file-pdf" aria-hidden="true"></i></span><span><b>ورود فایل</b><small>PDF، تصویر و اسکن</small></span></div>
+            <div class="home-visual-chip home-visual-chip--edit"><span><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></span><span><b>ویرایش محتوا</b><small>بازبینی و قالب‌بندی</small></span></div>
+            <div class="home-visual-caption"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> یک مسیر منسجم برای کار با سند</div>
+        </div>
     </section>
 
     <section class="home-pathways" aria-label="دو مسیر اصلی استفاده از فراست">
@@ -334,7 +364,7 @@
     </section>
     <script type="application/ld+json">
     @json($faqSchema)
-    </script>ipt>
+    </script>
 </div>
 @endsection
 
