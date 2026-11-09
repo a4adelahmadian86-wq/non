@@ -374,9 +374,9 @@ class FilePipelineTests(unittest.TestCase):
 
     def test_docx_over_visual_image_limit_is_marked_incomplete(self):
         document = Document()
-        for _ in range(5):
+        for index in range(5):
             image_stream = io.BytesIO()
-            Image.new("RGB", (24, 24), "white").save(image_stream, format="PNG")
+            Image.new("RGB", (24, 24), (index * 35, 80, 120)).save(image_stream, format="PNG")
             document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(0.5))
         stream = io.BytesIO()
         document.save(stream)
