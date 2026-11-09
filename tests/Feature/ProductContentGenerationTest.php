@@ -205,6 +205,8 @@ class ProductContentGenerationTest extends TestCase
         $this->assertStringContainsString('[REDACTED]', $result['suggestions']['description']);
         $this->assertSame((string) $data['category']->id, $result['suggestions']['category_id']);
         $this->assertSame([$data['fact']->id], $result['suggestions']['used_fact_ids']);
+        $this->assertSame([$data['fact']->id], $result['suggestions']['field_evidence']['title']['fact_ids']);
+        $this->assertSame(['file:'.$data['file']->id], $result['suggestions']['field_evidence']['title']['source_ids']);
         $this->assertSame($data['fact']->id, $result['sources'][0]['facts'][0]['id']);
         $this->assertNotEmpty($result['sources'][0]['file_name']);
         $this->assertSame('available', app(ProductContentGenerationService::class)->readiness($data['product'])['status']);
