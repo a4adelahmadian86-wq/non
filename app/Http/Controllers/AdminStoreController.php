@@ -140,6 +140,8 @@ class AdminStoreController extends Controller
     public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
     {
         $provenance = null;
+        $submittedFingerprints = null;
+        $submittedSignature = null;
         if ($request->filled('ai_content_source_fingerprints') || $request->filled('ai_content_signature')) {
             $request->validate([
                 'ai_content_source_fingerprints' => 'required|string|max:12000',
@@ -147,11 +149,9 @@ class AdminStoreController extends Controller
                 'ai_content_request_id' => 'nullable|string|max:64',
                 'ai_content_model' => 'nullable|string|max:120',
             ]);
-            $provenance = $contentGenerator->assertFreshProvenance(
-                $product,
-                (string) $request->input('ai_content_source_fingerprints'),
-                (string) $request->input('ai_content_signature')
-            );
+            $submittedFingerprints = (string) $request->input('ai_content_source_fingerprints');
+            $submittedSignature = (string) $request->input('ai_content_signature');
+            $provenance = $contentGenerator->assertFreshProvenance($product, $submittedFingerprints, $submittedSignature);
         }
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
@@ -175,8 +175,11 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            if ($provenance !== null) {
+                $contentGenerator->assertFreshProvenance($lockedProduct, (string) $submittedFingerprints, (string) $submittedSignature);
+            }
             foreach ($aiTagNames as $tagName) {
                 $tagName = trim((string) $tagName);
                 if ($tagName === '') continue;
