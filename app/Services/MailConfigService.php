@@ -131,7 +131,7 @@ class MailConfigService
             return false;
         }
 
-        return DIRECTORY_SEPARATOR === '\'
+        return DIRECTORY_SEPARATOR === chr(92)
             ? is_file($binary)
             : (is_file($binary) && is_executable($binary));
     }
