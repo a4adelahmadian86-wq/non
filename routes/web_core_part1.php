@@ -89,7 +89,7 @@ Route::view('/refund-policy','legal.refunds')->name('refunds');
 Route::view('/privacy','legal.privacy')->name('privacy');
 
 Route::get('/trust', function () {
-    $rawBadges = \App\Models\SiteSetting::read('trust_badges', '[]');
+    $rawBadges = Schema::hasTable('site_settings') ? \App\Models\SiteSetting::read('trust_badges', '[]') : '[]';
     $decodedBadges = json_decode((string) $rawBadges, true);
     $trustBadges = is_array($decodedBadges) ? collect($decodedBadges)->filter(function ($badge) {
         if (!is_array($badge) || empty($badge['name'])) return false;
