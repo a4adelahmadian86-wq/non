@@ -79,7 +79,38 @@ class ProductContentPrivacyFilter
             $value
         ) ?? $value;
 
+        $value = preg_replace_callback(
+            '/(?<![0-9۰-۹٠-٩])(?:[0-9۰-۹٠-٩][ -]?){10}(?![0-9۰-۹٠-٩])/u',
+            function (array $match): string {
+                $digits = preg_replace('/[^0-9۰-۹٠-٩]/u', '', $match[0]) ?? '';
+                return $this->passesIranianNationalCode($digits) ? '[REDACTED]' : $match[0];
+            },
+            $value
+        ) ?? $value;
+
         return $value;
+    }
+
+    private function passesIranianNationalCode(string $digits): bool
+    {
+        $digits = strtr($digits, [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+        if (strlen($digits) !== 10 || preg_match('/^(\d)\1{9}$/', $digits)) {
+            return false;
+        }
+
+        $sum = 0;
+        for ($index = 0; $index < 9; $index++) {
+            $sum += (int) $digits[$index] * (10 - $index);
+        }
+        $remainder = $sum % 11;
+        $check = $remainder < 2 ? $remainder : 11 - $remainder;
+
+        return $check === (int) $digits[9];
     }
 
     private function passesLuhn(string $digits): bool
