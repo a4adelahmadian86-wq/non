@@ -217,6 +217,7 @@ async def review_product_file(
         warnings.extend(pdf_inspection.warnings or [])
     visual_report = ""
     transcription = ""
+    transcription_truncated = False
     provider_status = {
         "gemini": "not_requested",
         "groq": "not_requested",
@@ -226,34 +227,75 @@ async def review_product_file(
         "gladia": "disabled",
     }
 
-    if inspection.image_bytes:
+    image_assets = list(inspection.image_assets or [])
+    if not image_assets and inspection.image_bytes:
+        image_assets = [{
+            "image_bytes": inspection.image_bytes,
+            "mime": inspection.image_mime or "image/jpeg",
+            "locator": {"kind": "legacy_image_asset"},
+        }]
+        inspection.embedded_image_count = max(1, inspection.embedded_image_count)
+
+    if inspection.embedded_image_count > 0:
         if groq_provider_ready():
-            try:
-                visual_report = await analyze_image_with_groq(
-                    inspection.image_bytes,
-                    inspection.image_mime or "image/jpeg",
-                    {
-                        "title": redact_sensitive_content(product_title)[0],
-                        "category": redact_sensitive_content(category_name or "")[0],
-                        "tags": [redact_sensitive_content(tag)[0] for tag in tags],
-                    },
-                )
+            visual_parts = []
+            successful_images = 0
+            for index, asset in enumerate(image_assets[:MAX_VISUAL_ASSETS]):
+                image_data = asset.get("image_bytes")
+                if not isinstance(image_data, bytes) or not image_data:
+                    continue
+                try:
+                    report = await analyze_image_with_groq(
+                        image_data,
+                        str(asset.get("mime") or "image/jpeg"),
+                        {
+                            "title": redact_sensitive_content(product_title)[0],
+                            "category": redact_sensitive_content(category_name or "")[0],
+                            "tags": [redact_sensitive_content(tag)[0] for tag in tags],
+                        },
+                    )
+                    report, _ = redact_sensitive_content(report)
+                    if report.strip():
+                        locator = asset.get("locator") if isinstance(asset.get("locator"), dict) else {}
+                        page_number = locator.get("page")
+                        label = f"تصویر {index + 1}" + (f" صفحه {page_number}" if page_number else "")
+                        visual_parts.append(f"{label}: {report}")
+                        successful_images += 1
+                except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+                    warnings.append(f"تحلیل تصویر شماره {index + 1} انجام نشد.")
+            visual_report = "\\n".join(visual_parts)
+            if (
+                successful_images == inspection.embedded_image_count
+                and not inspection.visual_review_truncated
+                and inspection.visual_inventory_complete
+            ):
                 provider_status["groq_vision"] = "completed"
-            except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
+            elif successful_images > 0:
+                provider_status["groq_vision"] = "partial"
+                warnings.append("فقط بخشی از تصاویر فایل بررسی شد؛ تحلیل تصویری کامل نیست.")
+            else:
                 provider_status["groq_vision"] = "unavailable"
-                warnings.append("تحلیل تصویر توسط سرویس بینایی انجام نشد؛ درباره محتوای تصویر ادعایی ثبت نشد.")
+                warnings.append("تصاویر فایل به‌طور کامل بررسی نشدند.")
         else:
             provider_status["groq_vision"] = "not_configured"
             warnings.append("کلید Groq تنظیم نشده یا تأیید Zero Data Retention فعال نیست؛ هیچ تصویر محصولی به سرویس خارجی ارسال نشد.")
 
+    if not inspection.visual_inventory_complete:
+        warnings.append("فهرست‌برداری از تصاویر جاسازی‌شده کامل نشد؛ تولید محتوای هوشمند تا بررسی کامل غیرفعال می‌ماند.")
+    if inspection.visual_review_truncated:
+        warnings.append("تعداد یا قالب تصاویر از سقف بررسی کامل بیشتر است؛ سند به‌عنوان بررسی‌نشده علامت می‌خورد.")
+
     if inspection.audio_bytes:
         if groq_provider_ready():
             try:
-                transcription = await transcribe_audio_with_groq(
+                transcription, transcription_truncated = await transcribe_audio_with_groq(
                     inspection.audio_bytes,
                     inspection.audio_filename or "upload.audio",
                 )
-                provider_status["groq_transcription"] = "completed"
+                inspection.transcription_truncated = transcription_truncated
+                if transcription_truncated:
+                    warnings.append("رونویسی صوت از سقف استخراج عبور کرده و ناقص است؛ تولید محتوا غیرفعال می‌ماند.")
+                provider_status["groq_transcription"] = "partial" if transcription_truncated else "completed"
             except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError):
                 provider_status["groq_transcription"] = "unavailable"
                 warnings.append("تبدیل صوت به متن انجام نشد؛ محتوای صوتی بررسی‌نشده باقی ماند.")
@@ -316,12 +358,16 @@ async def review_product_file(
             severity_value = item.get("severity")
             area = area_value if isinstance(area_value, str) and area_value in allowed_areas else "general"
             severity = severity_value if isinstance(severity_value, str) and severity_value in allowed_severities else "warning"
+            safe_title, title_redactions = redact_sensitive_content(str(item.get("title") or "نکته قابل بررسی"))
+            safe_detail, detail_redactions = redact_sensitive_content(str(item.get("detail") or ""))
+            safe_recommendation, recommendation_redactions = redact_sensitive_content(str(item.get("recommendation") or ""))
+            redaction_count += title_redactions + detail_redactions + recommendation_redactions
             safe_findings.append({
                 "area": area,
                 "severity": severity,
-                "title": str(item.get("title") or "نکته قابل بررسی")[:140],
-                "detail": str(item.get("detail") or "")[:700],
-                "recommendation": str(item.get("recommendation") or "")[:500],
+                "title": safe_title[:140],
+                "detail": safe_detail[:700],
+                "recommendation": safe_recommendation[:500],
             })
 
     source_chunks = []
@@ -398,6 +444,11 @@ async def review_product_file(
             break
 
     # File inspection is advisory. A missing antivirus engine is never reported as clean.
+    safe_summary, summary_redactions = redact_sensitive_content(
+        str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")
+    )
+    redaction_count += summary_redactions
+
     return {
         "review_id": str(uuid.uuid4()),
         "product_id": product_id,
@@ -412,7 +463,7 @@ async def review_product_file(
         "sample_page_numbers": sample_page_numbers,
         "sample_pdf_base64": sample_pdf_base64,
         "provider_status": provider_status,
-        "summary": str(model_review.get("summary") or "بررسی ساختاری فایل انجام شد؛ تحلیل معنایی کامل نیست.")[:700],
+        "summary": safe_summary[:700],
         "findings": safe_findings,
         "facts": safe_facts[:100],
         "warnings": [str(item)[:400] for item in warnings[:20]],
