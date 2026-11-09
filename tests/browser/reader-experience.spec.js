@@ -1715,8 +1715,10 @@ test('PDF reader notes preserve their internal page and jump to the selected pas
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
   const textSpan = secondPage.locator('.farast-pdf-cont-text span').first();
   await textSpan.evaluate(span => {
+    const textNode = span.firstChild;
     const range = document.createRange();
-    range.selectNodeContents(span);
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, textNode.length);
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
