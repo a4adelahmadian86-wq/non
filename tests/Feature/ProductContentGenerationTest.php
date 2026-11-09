@@ -177,6 +177,17 @@ class ProductContentGenerationTest extends TestCase
                         'selling_points' => ['آموزش گام‌به‌گام'],
                         'used_fact_ids' => [$data['fact']->id],
                         'used_source_ids' => ['file:'.$data['file']->id],
+                        'field_evidence' => [
+                            ['field' => 'title', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'short_description', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'description', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'seo_title', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'seo_description', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'focus_keyword', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'tags', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'selling_points', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'category', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                        ],
                         'unknowns' => [],
                     ],
                     'ai' => [
