@@ -54,6 +54,7 @@ class ProductContentGenerationService
             ->all();
 
         $sourceIds = collect($knowledge['sources'])->pluck('source_id')->all();
+        $sourceIds[] = 'product:existing';
         if ($knowledge['course_lessons'] !== []) $sourceIds[] = 'course:lessons';
         $factIds = collect($knowledge['sources'])->flatMap(fn ($source) => collect($source['facts'])->pluck('id'))
             ->map(fn ($id) => (int) $id)->unique()->values()->all();
@@ -69,6 +70,7 @@ class ProductContentGenerationService
                     return $source;
                 })->values()->all(),
                 'course_lessons' => $knowledge['course_lessons'],
+                'product_context_source_id' => 'product:existing',
                 'grounding_instruction' => $knowledge['grounding_instruction'],
             ],
             'output_rules' => [
@@ -143,7 +145,15 @@ class ProductContentGenerationService
                     'facts_total' => $source['facts_total'],
                     'facts' => $usedSourceFacts,
                 ];
-            })->values()->all(),
+            })->when(in_array('product:existing', $usedSources, true), fn ($sources) => $sources->prepend([
+                'source_id' => 'product:existing',
+                'name' => 'اطلاعات ثبت‌شده محصول',
+                'file_name' => 'اطلاعات ثبت‌شده محصول',
+                'type' => 'product_record',
+                'pages' => null,
+                'facts_total' => 0,
+                'facts' => [],
+            ]))->values()->all(),
             'course_lesson_count' => count($knowledge['course_lessons']),
             'course_lessons' => $knowledge['course_lessons'],
             'source_fingerprints' => $knowledge['source_fingerprints'],
@@ -199,7 +209,8 @@ class ProductContentGenerationService
             throw ValidationException::withMessages(['ai_content_field_evidence' => 'دانش محصول تغییر کرده است؛ ابتدا پیشنهاد تازه بساز.']);
         }
 
-        $validSourceIds = collect($knowledge['sources'])->pluck('source_id')->map(fn ($id) => (string) $id)->all();
+        $validSourceIds = collect($knowledge['sources'])->pluck('source_id')->map(fn ($id) => (string) $id)->push('product:existing')->all();
+        if ($knowledge['course_lessons'] !== []) $validSourceIds[] = 'course:lessons';
         $factSourceMap = [];
         foreach ($knowledge['sources'] as $source) {
             foreach ($source['facts'] as $fact) {
