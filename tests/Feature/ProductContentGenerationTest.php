@@ -134,7 +134,7 @@ class ProductContentGenerationTest extends TestCase
         $structure['ai_review']['media_reports']['visual'] = 'گزارش بینایی: بسته‌بندی آبی؛ تماس 09121234567';
         $data['document']->update(['structure_json' => $structure]);
         $data['fact']->update([
-            'fact_value' => 'راهنمای نصب مرحله‌به‌مرحله؛ شبا DE89370400440532013000؛ کارت 4111111111111111؛ کارت فارسی ۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱',
+            'fact_value' => 'راهنمای نصب مرحله‌به‌مرحله؛ شبا DE89370400440532013000؛ کارت 4111111111111111؛ کارت فارسی '.'۴'.str_repeat('۱', 15),
             'evidence_text' => 'در صفحه نخست راهنما آمده است؛ کلید sk-abcdefghijklmnopqrstuvwxyz123456',
         ]);
 
