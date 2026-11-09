@@ -53,9 +53,9 @@ class ProductContentPrivacyFilter
         }
 
         $value = preg_replace_callback(
-            '/(?<![0-9])(?:[0-9][ -]?){13,19}(?![0-9])/u',
+            '/(?<!\\p{Nd})(?:\\p{Nd}[ -]?){13,19}(?!\\p{Nd})/u',
             function (array $match): string {
-                $digits = preg_replace('/[^0-9]/', '', $match[0]) ?? '';
+                $digits = preg_replace('/[^\\p{Nd}]/u', '', $match[0]) ?? '';
                 return $this->passesLuhn($digits) ? '[REDACTED]' : $match[0];
             },
             $value
@@ -66,6 +66,12 @@ class ProductContentPrivacyFilter
 
     private function passesLuhn(string $digits): bool
     {
+        $digits = strtr($digits, [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
         $length = strlen($digits);
         if ($length < 13 || $length > 19) {
             return false;
