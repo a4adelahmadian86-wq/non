@@ -94,9 +94,12 @@ class NotificationService
                     ->orWhere('type', 'like', 'wallet_%')
                     ->orWhere('type', 'like', 'billing_%');
             });
+        } elseif ($filter === 'community') {
+            $q->where('type', 'like', 'discussion_%');
         } elseif ($filter === 'announcement') {
             $q->where('type', 'like', 'announcement_%');
         } elseif ($filter === 'system') {
+            $q->where('type', 'not like', 'discussion_%');
             $q->where('type', 'not like', 'ticket_%')
                 ->where('type', 'not like', 'order_%')
                 ->where('type', 'not like', 'wallet_%')
@@ -127,7 +130,7 @@ class NotificationService
     public function countsByCategory(int $userId): array
     {
         if (! Schema::hasTable('farast_notifications')) {
-            return ['all' => 0, 'unread' => 0, 'support' => 0, 'finance' => 0, 'announcement' => 0, 'system' => 0];
+            return ['all' => 0, 'unread' => 0, 'support' => 0, 'finance' => 0, 'announcement' => 0, 'community' => 0, 'system' => 0];
         }
 
         $base = FarastNotification::query()->where('user_id', $userId);
@@ -142,7 +145,8 @@ class NotificationService
                     ->orWhere('type', 'like', 'billing_%');
             })->count(),
             'announcement' => (clone $base)->where('type', 'like', 'announcement_%')->count(),
-            'system' => (clone $base)->where('type', 'not like', 'ticket_%')
+            'community' => (clone $base)->where('type', 'like', 'discussion_%')->count(),
+            'system' => (clone $base)->where('type', 'not like', 'discussion_%')->where('type', 'not like', 'ticket_%')
                 ->where('type', 'not like', 'order_%')
                 ->where('type', 'not like', 'wallet_%')
                 ->where('type', 'not like', 'billing_%')

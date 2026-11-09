@@ -135,3 +135,8 @@
 .discussion-report-remove{background:#fff0ee;color:#a3443b}
 .discussion-report-context{padding:10px 12px;border-right:3px solid #b8cce4;background:#f7f9fc;border-radius:8px}
 @media(max-width:640px){.discussion-report-form{grid-template-columns:1fr}.discussion-report-note{grid-column:auto}.discussion-sort-form{width:100%}.discussion-toolbar{align-items:flex-start;flex-direction:column}}
+
+.discussion-follow-form{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:10px 0 3px}
+.discussion-follow-form button{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:6px 11px;border:1px solid #d9e5f4;border-radius:9px;background:#f5f8fd;color:#315f9d;font:inherit;font-size:.64rem;font-weight:850;cursor:pointer}
+.discussion-follow-form button.is-following{border-color:#c8dfd2;background:#f0f8f3;color:#34724c}
+.discussion-follow-form small{color:#8a98aa;font-size:.59rem}

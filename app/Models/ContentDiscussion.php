@@ -12,4 +12,5 @@ class ContentDiscussion extends Model {
  public function moderator(): BelongsTo { return $this->belongsTo(User::class,'moderator_id'); }
  public function parent(): BelongsTo { return $this->belongsTo(self::class,'parent_id'); }
  public function replies(): HasMany { return $this->hasMany(self::class,'parent_id'); }
+ public function subscriptions(): HasMany { return $this->hasMany(DiscussionSubscription::class,'discussion_id'); }
 }

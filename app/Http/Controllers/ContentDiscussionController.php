@@ -2,6 +2,8 @@
 namespace App\Http\Controllers;
 use App\Models\ContentDiscussion;
 use App\Models\DiscussionReport;
+use App\Models\DiscussionSubscription;
+use App\Services\NotificationService;
 use App\Models\StoreProduct;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -22,7 +24,8 @@ class ContentDiscussionController extends Controller {
    if($data['kind']==='review') throw ValidationException::withMessages(['kind'=>'امتیازدهی فقط برای محصولات فعال است.']);
    $data['rating']=null;$key=$data['target_key'];$redirect=route('blog.show',$key).'#store-discussions';
   }
-  ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
+  $discussion=ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
+  DiscussionSubscription::firstOrCreate(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id]);
   return redirect($redirect)->with('discussion_status','پیام شما ثبت شد و پس از بررسی مدیر در همین صفحه نمایش داده می‌شود.');
  }
  public function react(Request $request, ContentDiscussion $discussion) {
@@ -47,6 +50,26 @@ class ContentDiscussionController extends Controller {
    ['reason'=>$data['reason'],'details'=>trim((string)($data['details']??'')) ?: null,'status'=>'pending']
   );
   return back()->with('discussion_status',$report->wasRecentlyCreated?'گزارش شما برای بررسی به تیم مدیریت ارسال شد.':'گزارش قبلی شما برای این محتوا ثبت شده است.');
+ }
+ public function toggleFollow(Request $request, ContentDiscussion $discussion) {
+  abort_unless($discussion->parent_id===null && $discussion->status==='approved',404);
+  $subscription=DiscussionSubscription::query()->where('discussion_id',$discussion->id)->where('user_id',$request->user()->id)->first();
+  if($subscription){$subscription->delete();$message='اعلان پاسخ‌های این گفت‌وگو برای شما غیرفعال شد.';}
+  else {DiscussionSubscription::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id]);$message='این گفت‌وگو را دنبال می‌کنید؛ پاسخ‌های جدید به شما اطلاع داده می‌شود.';}
+  return back()->with('discussion_status',$message);
+ }
+ private function notifyDiscussionFollowers(ContentDiscussion $reply): void {
+  if(!$reply->parent_id) return;
+  $parent=ContentDiscussion::query()->with('subscriptions')->find($reply->parent_id);
+  if(!$parent) return;
+  $url=$parent->target_type==='product'
+   ? (($product=StoreProduct::find((int)$parent->target_key)) ? route('store.product',$product->slug) : null)
+   : route('blog.show',$parent->target_key);
+  if(!$url) return;
+  $recipients=$parent->subscriptions->pluck('user_id')->push($parent->user_id)->filter()->unique()->reject(fn($id)=>(int)$id===(int)$reply->user_id);
+  foreach($recipients as $userId){
+   app(NotificationService::class)->push((int)$userId,'discussion_reply','پاسخ جدید در گفت‌وگوی دنبال‌شده','برای گفت‌وگویی که دنبال می‌کنید پاسخ تازه‌ای منتشر شد.',['url'=>$url.'#discussion-'.$parent->id,'discussion_id'=>$parent->id,'reply_id'=>$reply->id]);
+  }
  }
  public function publicReply(Request $request, ContentDiscussion $discussion) {
   abort_unless($discussion->parent_id===null && $discussion->status==='approved',404);
@@ -112,13 +135,16 @@ class ContentDiscussionController extends Controller {
  }
  public function moderate(Request $request,ContentDiscussion $discussion) {
   $data=$request->validate(['status'=>['required','in:approved,rejected']]);
+  $wasApproved=$discussion->status==='approved';
   $discussion->forceFill(['status'=>$data['status'],'moderator_id'=>$request->user()->id,'moderated_at'=>now()])->save();
+  if(!$wasApproved && $data['status']==='approved' && $discussion->kind==='reply') $this->notifyDiscussionFollowers($discussion);
   return back()->with('status',$data['status']==='approved'?'محتوا منتشر شد.':'محتوا رد شد و در سایت نمایش داده نمی‌شود.');
  }
  public function reply(Request $request,ContentDiscussion $discussion) {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body')]);
   abort_unless($discussion->parent_id===null && $discussion->status==='approved',404);$data=$request->validate(['body'=>['required','string','min:2','max:3000']]);
-  ContentDiscussion::create(['target_type'=>$discussion->target_type,'target_key'=>$discussion->target_key,'kind'=>'reply','parent_id'=>$discussion->id,'user_id'=>$request->user()->id,'body'=>trim($data['body']),'status'=>'approved','moderator_id'=>$request->user()->id,'moderated_at'=>now()]);
+  $reply=ContentDiscussion::create(['target_type'=>$discussion->target_type,'target_key'=>$discussion->target_key,'kind'=>'reply','parent_id'=>$discussion->id,'user_id'=>$request->user()->id,'body'=>trim($data['body']),'status'=>'approved','moderator_id'=>$request->user()->id,'moderated_at'=>now()]);
+  $this->notifyDiscussionFollowers($reply);
   return back()->with('status','پاسخ شما ثبت و منتشر شد.');
  }
 }

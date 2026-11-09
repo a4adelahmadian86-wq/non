@@ -3,7 +3,7 @@
 @section('content')
 @php
     $filter = $filter ?? 'all';
-    $counts = $counts ?? ['all'=>0,'unread'=>0,'support'=>0,'finance'=>0,'announcement'=>0,'system'=>0];
+    $counts = $counts ?? ['all'=>0,'unread'=>0,'support'=>0,'finance'=>0,'announcement'=>0,'community'=>0,'system'=>0];
 @endphp
 <link rel="stylesheet" href="{{ asset('css/notifications.css') }}?v=20261019n2">
 
@@ -29,6 +29,7 @@
         <a href="{{ route('platform.notifications', ['filter' => 'support']) }}" class="{{ $filter==='support'?'is-on':'' }}">پشتیبانی <b>{{ $counts['support'] }}</b></a>
         <a href="{{ route('platform.notifications', ['filter' => 'finance']) }}" class="{{ $filter==='finance'?'is-on':'' }}">مالی <b>{{ $counts['finance'] }}</b></a>
         <a href="{{ route('platform.notifications', ['filter' => 'announcement']) }}" class="{{ $filter==='announcement'?'is-on':'' }}">اعلان‌ها <b>{{ $counts['announcement'] ?? 0 }}</b></a>
+        <a href="{{ route('platform.notifications', ['filter' => 'community']) }}" class="{{ $filter==='community'?'is-on':'' }}">گفت‌وگوها <b>{{ $counts['community'] ?? 0 }}</b></a>
         <a href="{{ route('platform.notifications', ['filter' => 'system']) }}" class="{{ $filter==='system'?'is-on':'' }}">سیستم <b>{{ $counts['system'] }}</b></a>
     </div>
 

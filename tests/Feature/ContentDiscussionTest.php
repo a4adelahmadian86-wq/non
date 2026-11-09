@@ -123,4 +123,29 @@ class ContentDiscussionTest extends TestCase {
   $reply=ContentDiscussion::where('parent_id',$parent->id)->firstOrFail();
   $this->actingAs($u)->post(route('discussions.public-reply',$reply),['body'=>'پاسخ تو در تو'])->assertNotFound();
  }
+
+ public function test_users_can_follow_discussions_and_toggle_following(): void {
+  $p=$this->product();$author=$this->user('09123456821');$follower=$this->user('09123456822');$admin=$this->user('09123456823','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $parent=ContentDiscussion::firstOrFail();
+  $this->assertDatabaseHas('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($follower)->post(route('discussions.follow',$parent))->assertRedirect();
+  $this->assertDatabaseHas('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$follower->id]);
+  $this->actingAs($follower)->post(route('discussions.follow',$parent))->assertRedirect();
+  $this->assertDatabaseMissing('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$follower->id]);
+ }
+ public function test_followers_receive_in_app_notification_when_reply_is_approved(): void {
+  $p=$this->product();$author=$this->user('09123456824');$follower=$this->user('09123456825');$responder=$this->user('09123456826');$admin=$this->user('09123456827','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $parent=ContentDiscussion::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$parent),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($follower)->post(route('discussions.follow',$parent))->assertRedirect();
+  $this->actingAs($responder)->post(route('discussions.public-reply',$parent),['body'=>'بله، برای استفاده در کلاس آموزشی قابل استفاده است.'])->assertRedirect();
+  $reply=ContentDiscussion::where('parent_id',$parent->id)->firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$reply),['status'=>'approved'])->assertRedirect();
+  $this->assertDatabaseHas('farast_notifications',['user_id'=>$follower->id,'type'=>'discussion_reply']);
+  $this->assertDatabaseHas('farast_notifications',['user_id'=>$author->id,'type'=>'discussion_reply']);
+  $this->assertDatabaseMissing('farast_notifications',['user_id'=>$responder->id,'type'=>'discussion_reply']);
+ }
 }

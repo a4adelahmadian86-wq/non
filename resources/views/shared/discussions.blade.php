@@ -71,6 +71,16 @@
                 <p class="discussion-body">{{ $entry->body }}</p>
                 @include('shared.discussion-reactions', ['discussionItem' => $entry])
                 @include('shared.discussion-report', ['discussionItem' => $entry])
+                @auth
+                    <form method="post" action="{{ route('discussions.follow', $entry) }}" class="discussion-follow-form">
+                        @csrf
+                        <button type="submit" class="{{ $entry->is_following ? 'is-following' : '' }}" aria-pressed="{{ $entry->is_following ? 'true' : 'false' }}">
+                            <i class="fa-{{ $entry->is_following ? 'solid' : 'regular' }} fa-bell" aria-hidden="true"></i>
+                            {{ $entry->is_following ? 'دنبال می‌کنید · لغو اعلان' : 'دنبال‌کردن پاسخ‌ها' }}
+                        </button>
+                        <small>با انتشار پاسخ جدید، اعلان داخل فراست دریافت می‌کنید.</small>
+                    </form>
+                @endauth
 
                 @auth
                     <form method="post" action="{{ route('discussions.public-reply', $entry) }}" class="discussion-public-reply">
