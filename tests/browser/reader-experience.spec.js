@@ -221,12 +221,14 @@ test.describe('FARAST sample reader interactions', () => {
     await page.keyboard.press('Control+f');
     await expect(root.locator('#reader-search-input')).toBeFocused();
     await expect(root.locator('.farast-pdf-text-layer')).toHaveCSS('pointer-events', 'auto');
+    await page.evaluate(() => { document.querySelector('[data-reader-root]').addEventListener('selectstart', event => { window.__readerSelectStartAllowed = !event.defaultPrevented; }); });
     const textBox = await textSpan.boundingBox();
     expect(textBox?.width).toBeGreaterThan(20);
     await page.mouse.move(textBox.x + 1, textBox.y + textBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(textBox.x + Math.min(textBox.width - 1, 70), textBox.y + textBox.height / 2, { steps: 8 });
+    await page.mouse.move(textBox.x + textBox.width - 1, textBox.y + textBox.height / 2, { steps: 8 });
     await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => window.__readerSelectStartAllowed)).toBe(true);
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().trim())).toContain('FARAST');
     await page.evaluate(() => window.getSelection()?.removeAllRanges());
     await root.locator('#reader-search-input').fill('FARAST');
@@ -257,7 +259,7 @@ test.describe('FARAST sample reader interactions', () => {
     expect(continuousTextBox?.width).toBeGreaterThan(20);
     await page.mouse.move(continuousTextBox.x + 1, continuousTextBox.y + continuousTextBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(continuousTextBox.x + Math.min(continuousTextBox.width - 1, 70), continuousTextBox.y + continuousTextBox.height / 2, { steps: 8 });
+    await page.mouse.move(continuousTextBox.x + continuousTextBox.width - 1, continuousTextBox.y + continuousTextBox.height / 2, { steps: 8 });
     await page.mouse.up();
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().trim())).toContain('FARAST');
     await page.evaluate(() => window.getSelection()?.removeAllRanges());

@@ -789,7 +789,7 @@
   root.addEventListener('copy',e=>e.preventDefault());
   root.addEventListener('cut',e=>e.preventDefault());
   root.addEventListener('paste',e=>{if(!isEditableTarget(e.target))e.preventDefault();});
-  root.addEventListener('selectstart',e=>{if(!isEditableTarget(e.target)&&!isReaderSpeechTarget(e.target))e.preventDefault();});
+  root.addEventListener('selectstart',e=>{const path=e.composedPath?.()||[];const readerText=isReaderSpeechTarget(e.target)||path.some(node=>node instanceof Element&&node.matches('.farast-pdf-text-layer,.farast-pdf-cont-text,[data-reader-text-layer]'));if(!isEditableTarget(e.target)&&!readerText)e.preventDefault();});
   root.addEventListener('dragstart',e=>e.preventDefault());
   window.addEventListener('resize',()=>{if(isPdf()&&pdfDoc&&zoom<=0){if(continuousMode)refreshContinuousVisiblePages().catch(showPdfError);else renderPdfPage(pdfPage).catch(showPdfError);}});
   setZoomLabel();
