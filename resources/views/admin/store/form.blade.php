@@ -28,13 +28,18 @@
       </section>
     @endif
 
+    <section class="product-editor-progress" data-product-progress aria-label="پیشرفت تکمیل فرم">
+      <div class="product-editor-progress-head"><strong>تکمیل اطلاعات محصول</strong><span data-product-progress-label aria-live="polite">در حال محاسبه…</span></div>
+      <div class="product-editor-progress-track" role="progressbar" aria-label="درصد تکمیل فیلدهای ضروری" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-product-progress-bar></span></div>
+      <small>این شاخص فقط فیلدهای ضروری فرم را می‌سنجد؛ آمادگی واقعی انتشار جداگانه در سرور بررسی می‌شود.</small>
+    </section>
     <div class="product-workflow {{ $isEdit ? 'has-media' : '' }}" aria-label="مراحل آماده‌سازی محصول">
-      <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
-      <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
-      <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
-      @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه و فایل</b><small>کاور و دارایی‌ها</small></a>@endif
-      <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۴' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
-      <a href="#product-ai-supervisor"><span>{{ $isEdit ? '۶' : '۵' }}</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
+      <a href="#product-identity" data-product-step-link aria-current="step"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
+      <a href="#product-pricing" data-product-step-link><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
+      <a href="#product-content" data-product-step-link><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
+      @if($isEdit)<a href="#product-media" data-product-step-link><span>۴</span><b>رسانه و فایل</b><small>کاور و دارایی‌ها</small></a>@endif
+      <a href="#product-discovery" data-product-step-link><span>{{ $isEdit ? '۵' : '۴' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
+      <a href="#product-ai-supervisor" data-product-step-link><span>{{ $isEdit ? '۶' : '۵' }}</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
@@ -548,10 +553,20 @@
 
 .product-discovery-links{padding-top:4px}.product-discovery-links select{min-height:118px}.product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
 </style>
+.product-editor-progress{display:grid;gap:8px;padding:12px 14px;margin:0 0 12px;border:1px solid #dfe8f4;border-radius:14px;background:#fff;box-shadow:0 4px 16px rgba(15,35,70,.035)}
+.product-editor-progress-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.product-editor-progress-head strong{font-size:.75rem;color:var(--st-ink)}.product-editor-progress-head span{font-size:.68rem;color:var(--st-blue);font-weight:800;font-variant-numeric:tabular-nums}
+.product-editor-progress-track{height:7px;overflow:hidden;border-radius:99px;background:#edf2f8}.product-editor-progress-track>span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#4c86d5,#2e69bd);transition:width .2s ease}
+.product-editor-progress>small{font-size:.63rem;color:var(--st-muted);line-height:1.7}
+.product-workflow{position:sticky;top:10px;z-index:12;padding:7px;border:1px solid #e1e9f4;border-radius:16px;background:rgba(248,250,253,.94);backdrop-filter:blur(12px)}
+.product-workflow a.is-active{border-color:#8db0e4;background:#f1f6ff;box-shadow:0 5px 18px rgba(35,91,170,.08)}
+.product-workflow a.is-active>span{background:#2868c8;color:#fff}
+#product-identity,#product-pricing,#product-content,#product-media,#product-discovery,#product-ai-supervisor{scroll-margin-top:125px}
+@media(max-width:760px){.product-workflow,.product-workflow.has-media{display:flex;grid-template-columns:none;overflow-x:auto;gap:7px;scroll-snap-type:x mandatory;overscroll-behavior-inline:contain}.product-workflow a{flex:0 0 155px;scroll-snap-align:start;padding:10px}.product-editor-progress{padding:11px}}
 @endpush
 
 @push('scripts')
 <script>
+
 (() => {
   const form = document.getElementById('productEditorForm');
   if (!form) return;
@@ -664,6 +679,55 @@
       button.textContent = 'در حال ذخیره اطلاعات…';
     }
   });
+
+  const progressRoot = document.querySelector('[data-product-progress]');
+  const progressLabel = progressRoot?.querySelector('[data-product-progress-label]');
+  const progressBar = progressRoot?.querySelector('[data-product-progress-bar]');
+  const progressTrack = progressRoot?.querySelector('[role="progressbar"]');
+  const requiredFields = Array.from(form.querySelectorAll('[required]')).filter(field => !field.disabled && field.type !== 'hidden');
+  const updateFormProgress = () => {
+    if (!progressRoot || !progressLabel || !progressBar || !progressTrack) return;
+    const total = requiredFields.length;
+    const complete = requiredFields.filter(field => field.type === 'checkbox'
+      ? field.checked
+      : String(field.value ?? '').trim() !== '' && field.checkValidity()).length;
+    const percentage = total ? Math.round((complete / total) * 100) : 100;
+    progressBar.style.width = percentage + '%';
+    progressTrack.setAttribute('aria-valuenow', String(percentage));
+    const formatter = new Intl.NumberFormat('fa-IR');
+    progressLabel.textContent = formatter.format(complete) + ' از ' + formatter.format(total) + ' فیلد ضروری · ' + formatter.format(percentage) + '٪';
+  };
+  form.addEventListener('input', updateFormProgress);
+  form.addEventListener('change', updateFormProgress);
+  updateFormProgress();
+
+  const workflow = document.querySelector('.product-workflow');
+  const stepLinks = Array.from(workflow?.querySelectorAll('[data-product-step-link]') || []);
+  const stepTargets = stepLinks.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+  const setActiveStep = target => {
+    stepLinks.forEach(link => {
+      const active = link.getAttribute('href') === '#' + target.id;
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current', 'step');
+      else link.removeAttribute('aria-current');
+    });
+  };
+  if (stepTargets.length) {
+    setActiveStep(stepTargets[0]);
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(entries => {
+        const visible = entries.filter(entry => entry.isIntersecting)
+          .sort((a, b) => Math.abs(a.boundingClientRect.top - 135) - Math.abs(b.boundingClientRect.top - 135));
+        if (visible[0]) setActiveStep(visible[0].target);
+      }, {rootMargin: '-125px 0px -62% 0px', threshold: [0, 0.1, 0.25]});
+      stepTargets.forEach(target => observer.observe(target));
+    }
+    stepLinks.forEach(link => link.addEventListener('click', () => {
+      const target = document.querySelector(link.getAttribute('href'));
+      if (target) setActiveStep(target);
+    }));
+  }
 })();
+
 </script>
 @endpush
