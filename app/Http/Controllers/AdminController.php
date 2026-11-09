@@ -787,6 +787,9 @@ class AdminController extends Controller
         }
 
         $logs = Schema::hasTable('email_logs') ? EmailLog::latest()->limit(100)->get() : collect();
+        $emailStats = Schema::hasTable('email_logs')
+            ? EmailLog::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status')->all()
+            : [];
         $tickets = Schema::hasTable('tickets') ? Ticket::with('user')->latest()->limit(30)->get() : collect();
         $provider = $mailConfig->currentProvider();
 
@@ -794,6 +797,7 @@ class AdminController extends Controller
             'flags' => $flags,
             'types' => EmailService::TYPES,
             'logs' => $logs,
+            'emailStats' => $emailStats,
             'tickets' => $tickets,
             'mailFrom' => SiteSetting::read('mail_from_address', config('mail.from.address')),
             'mailFromName' => SiteSetting::read('mail_from_name', config('mail.from.name')),
