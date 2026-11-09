@@ -1200,7 +1200,7 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> tuple[str, b
             "https://api.groq.com/openai/v1/audio/transcriptions",
             headers={"Authorization": f"Bearer {key}"},
             data={"model": model, "response_format": "json", "language": "fa"},
-            files={"file": (filename, data, "application/octet-stream")},
+            files={"file": ("upload.audio", data, "application/octet-stream")},
         )
         response.raise_for_status()
         raw_text = str(response.json().get("text", ""))
