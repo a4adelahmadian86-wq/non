@@ -1607,6 +1607,32 @@ test('reader ink exposes keyboard guidance and discards cancelled pointer stroke
   await expect(canvas).toHaveCSS('touch-action', 'auto');
 });
 
+test('reader backup restore enforces the aggregate ink point budget', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent(`
+    <section class="farast-reader" data-reader-root data-product-id="ink-budget-fixture">
+      <nav class="farast-reader-toolbar"></nav>
+      <article class="farast-reader-page-item is-active" data-index="0" data-reader-page="1">
+        <div class="farast-reader-document"><p>صفحهٔ آزمایشی قلم نوری</p></div>
+      </article>
+    </section>
+  `);
+  const point = { x: 0.5, y: 0.5, p: 0.5 };
+  const strokes = Array.from({ length: 61 }, (_, index) => ({
+    id: 'stroke-' + index, page: 1, tool: 'pen', color: '#123456', width: 3,
+    points: Array.from({ length: 1000 }, () => point)
+  }));
+  await page.evaluate(strokes => localStorage.setItem(
+    'farast.reader.personal-tools.v1:ink-budget-fixture',
+    JSON.stringify({ inkStrokes: strokes })
+  ), strokes);
+  await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await page.locator('[data-ink-undo]').click();
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:ink-budget-fixture')));
+  expect(stored.inkStrokes).toHaveLength(59);
+  expect(stored.inkStrokes.reduce((total, stroke) => total + stroke.points.length, 0)).toBe(59000);
+});
+
 test('saved reader highlights can be navigated to and removed from the personal panel', async ({ page }) => {
   await page.goto('/');
   await page.setContent(`
