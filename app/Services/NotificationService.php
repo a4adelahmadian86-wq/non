@@ -69,7 +69,16 @@ class NotificationService
 
                 if ($existing) {
                     if ((int) $existing->user_id !== $userId) {
-                        throw new RuntimeException('کلید یکتای اعلان قبلاً برای کاربر دیگری استفاده شده است.');
+                        Log::warning('farast.notification.dedupe_key_conflict', [
+                            'user_id' => $userId,
+                            'type' => $type,
+                        ]);
+
+                        if ($throwOnFailure) {
+                            throw new RuntimeException('کلید یکتای اعلان قبلاً برای کاربر دیگری استفاده شده است.');
+                        }
+
+                        return null;
                     }
 
                     return $existing;
