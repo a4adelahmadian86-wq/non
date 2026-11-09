@@ -156,6 +156,10 @@ class AdminStoreController extends Controller
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
         $relatedIds = $data['related_product_ids'] ?? [];
+        $aiTagNames = $request->validate([
+            'ai_content_tag_names' => 'nullable|array|max:10',
+            'ai_content_tag_names.*' => 'required|string|max:80',
+        ])['ai_content_tag_names'] ?? [];
         unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model']);
         if ($provenance !== null) {
             $metadata = $data['metadata'] ?? $product->metadata ?? [];
@@ -171,8 +175,24 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $snapshotBuilder, $publicationReadiness) {
+        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            foreach ($aiTagNames as $tagName) {
+                $tagName = trim((string) $tagName);
+                if ($tagName === '') continue;
+                $tag = StoreTag::query()->where('name', $tagName)->first();
+                if (! $tag) {
+                    $base = Str::slug($tagName) ?: 'tag-'.Str::random(6);
+                    $slug = $base;
+                    $suffix = 1;
+                    while (StoreTag::query()->where('slug', $slug)->exists()) {
+                        $slug = $base.'-'.$suffix++;
+                    }
+                    $tag = StoreTag::create(['name' => $tagName, 'slug' => $slug]);
+                }
+                $tagIds[] = $tag->id;
+            }
+            $tagIds = collect($tagIds)->map(fn ($id) => (int) $id)->unique()->values()->all();
             if ($data['type'] !== $lockedProduct->type) {
                 throw ValidationException::withMessages([
                     'type' => 'نوع محصول پس از ایجاد قابل تغییر نیست؛ برای نوع دیگر یک محصول جدید بسازید تا فایل‌ها و دسترسی‌های قبلی مخلوط نشوند.',
@@ -1147,7 +1167,7 @@ class AdminStoreController extends Controller
                 'policy' => $request->boolean('ai_supervisor.checks.policy'),
                 'course' => $request->boolean('ai_supervisor.checks.course'),
             ];
-            $data['metadata'] = array_merge($existingMetadata, [
+            $data['metadata'] = array_merge($data['metadata'] ?? $existingMetadata, [
                 'ai_supervisor' => [
                     'enabled' => $request->boolean('ai_supervisor.enabled'),
                     'mode' => $request->input('ai_supervisor.mode', 'suggest'),
