@@ -161,6 +161,7 @@ class ProductContentGenerationTest extends TestCase
         $data = $this->productWithKnowledge();
         $readiness = app(ProductContentGenerationService::class)->readiness($data['product']);
         $data['file']->update(['sha256' => hash('sha256', 'replacement-file')]);
+        $data['product']->refresh();
 
         $this->expectException(ValidationException::class);
         app(ProductContentGenerationService::class)->assertFreshProvenance(
