@@ -429,90 +429,45 @@ class EmailService
     ): void {
         $this->mailConfig->apply();
 
+        $provider = $this->mailConfig->currentProvider();
         $log = EmailLog::create([
             'type' => $type,
             'to_email' => mb_strtolower(trim($to)),
             'user_id' => $user?->id,
             'subject' => $subject,
             'status' => 'queued',
-            'meta' => array_merge($meta, ['provider' => $this->mailConfig->currentProvider()]),
+            'queued_at' => now(),
+            'meta' => array_merge($meta, ['provider' => $provider]),
         ]);
 
         try {
-            $provider = $this->mailConfig->currentProvider();
+            $forceSync = in_array($type, ['otp', 'test'], true)
+                || config('queue.default') === 'sync'
+                || filter_var(SiteSetting::read('email_sync', false), FILTER_VALIDATE_BOOLEAN);
 
-            if ($provider === 'resend') {
-                $this->sendViaResendApi($to, $subject, $htmlView, $viewData);
+            if ($forceSync) {
+                DeliverFarastEmail::dispatchSync($log->id, $to, $mailable);
             } else {
-                $selfHosted = in_array($provider, ['sendmail', 'local', 'smtp', 'log'], true);
-                $forceSync = $selfHosted
-                    || config('queue.default') === 'sync'
-                    || filter_var(SiteSetting::read('email_sync', true), FILTER_VALIDATE_BOOLEAN);
-
-                if ($forceSync) {
-                    Mail::to($to)->send($mailable);
-                } else {
-                    Mail::to($to)->queue($mailable);
-                }
+                DeliverFarastEmail::dispatch($log->id, $to, $mailable)->onQueue('default');
             }
-
-            $log->update(['status' => 'sent', 'sent_at' => now()]);
-            Log::info('farast.email.sent', [
-                'type' => $type,
-                'provider' => $provider,
-                'email_hash' => $this->hash($to),
-                'log_id' => $log->id,
-            ]);
         } catch (Throwable $e) {
-            $msg = $e->getMessage();
-            if (str_contains(strtolower($msg), 'mailpit')) {
-                $msg = 'اتصال به mailpit ممکن نیست. این host فقط داخل Docker کار می‌کند. در پنل ایمیل سرویس‌دهنده را «لاگ داخلی» بگذارید یا SMTP را روی 127.0.0.1 تنظیم کنید.';
-            } elseif (str_contains(strtolower($msg), 'sendmail')) {
-                $msg = 'Sendmail در دسترس نیست. روی ویندوز از «لاگ داخلی» استفاده کنید؛ روی سرور لینوکس Postfix/Sendmail نصب کنید.';
-            }
-
+            $message = mb_substr($e->getMessage(), 0, 1000);
             $log->update([
                 'status' => 'failed',
-                'error' => mb_substr($msg, 0, 1000),
+                'error' => $message,
+                'last_attempt_at' => now(),
             ]);
 
-            Log::error('farast.email.failed', [
+            Log::error('farast.email.delivery_dispatch_failed', [
                 'type' => $type,
                 'email_hash' => $this->hash($to),
-                'error' => $msg,
+                'log_id' => $log->id,
+                'error' => $message,
             ]);
 
-            if ($type !== 'test') {
-                return;
+            if ($type === 'test' || $type === 'otp') {
+                throw new \\RuntimeException($message, 0, $e);
             }
-
-            throw new \RuntimeException($msg, 0, $e);
-        }
-    }
-
-    protected function sendViaResendApi(string $to, string $subject, string $htmlView, array $viewData): void
-    {
-        $apiKey = SiteSetting::read('resend_api_key', env('RESEND_API_KEY'));
-        if (! filled($apiKey)) {
-            throw new \RuntimeException('کلید Resend تنظیم نشده است.');
-        }
-
-        $html = View::make($htmlView, array_merge($viewData, ['subject' => $subject]))->render();
-
-        $from = config('mail.from.address');
-        $fromName = config('mail.from.name');
-
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->post('https://api.resend.com/emails', [
-                'from' => "{$fromName} <{$from}>",
-                'to' => [$to],
-                'subject' => $subject,
-                'html' => $html,
-            ]);
-
-        if (! $response->successful()) {
-            throw new \RuntimeException('Resend API: '.$response->body());
         }
     }
 
