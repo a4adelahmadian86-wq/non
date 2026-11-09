@@ -2,7 +2,7 @@
 
 The farast:recover-product-documents scheduler command repairs only abandoned queue leases:
 
-- Processing documents older than 25 minutes and pending documents older than 30 minutes are candidates.
+- Only processing documents older than 25 minutes are candidates. Old pending rows are deliberately left alone because a queue backend may already contain their job; redispatching them blindly could create duplicate work.
 - The source file must still exist on the private disk, remain active, have a clean upload-scan result, and match both the document and file SHA-256 values.
 - The command re-checks eligibility under a row lock, resets the state to pending, writes a system audit event, and dispatches after the transaction commits.
 - Failed, stale, awaiting-provider, inactive, missing, or checksum-mismatched documents are never automatically retried. They require diagnosis or an explicit operator action.
