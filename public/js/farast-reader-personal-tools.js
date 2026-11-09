@@ -13,6 +13,12 @@
     if (saved && typeof saved === 'object') state = { ...defaults, ...saved };
   } catch (_) {}
   const validInkStroke = stroke => stroke && (stroke.tool === 'pen' || stroke.tool === 'eraser') && Number.isFinite(Number(stroke.page)) && Number(stroke.page) > 0 && Number.isFinite(Number(stroke.width)) && stroke.width >= 1 && stroke.width <= 32 && Array.isArray(stroke.points) && stroke.points.length >= 2 && stroke.points.length <= 1000 && stroke.points.every(point => point && Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1);
+  const limitInkStrokes = strokes => {
+    const limited = (Array.isArray(strokes) ? strokes.filter(validInkStroke) : []).slice(-250);
+    let points = limited.reduce((total, stroke) => total + stroke.points.length, 0);
+    while (points > 60000 && limited.length > 1) points -= limited.shift().points.length;
+    return limited;
+  };
   state.light = !!state.light;
   state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';
   state.size = Math.min(160, Math.max(80, Number(state.size) || 100));
@@ -23,7 +29,7 @@
   state.readingRuler = !!state.readingRuler;
   state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
-  state.inkStrokes = Array.isArray(state.inkStrokes) ? state.inkStrokes.filter(validInkStroke).slice(-250) : [];
+  state.inkStrokes = limitInkStrokes(state.inkStrokes);
   const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
   const announce = message => { status.textContent = message; };
   const group = document.createElement('div');
@@ -187,7 +193,7 @@
       const incoming = payload.data;
       if (!Array.isArray(incoming.highlights) || !Array.isArray(incoming.notes) || incoming.highlights.length > 500 || incoming.notes.length > 500 || (incoming.inkStrokes !== undefined && (!Array.isArray(incoming.inkStrokes) || incoming.inkStrokes.length > 250))) throw new Error('محتوای فایل پشتیبان معتبر نیست.');
       if (!window.confirm('یادداشت‌ها و هایلایت‌های فعلی با نسخهٔ پشتیبان جایگزین شوند؟')) return;
-      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', lineHeight: [1.4,1.6,1.7,1.9,2.1].includes(Number(incoming.lineHeight)) ? Number(incoming.lineHeight) : 1.7, measure: ['narrow','normal','wide'].includes(incoming.measure) ? incoming.measure : 'normal', paragraphSpacing: [0.5,1,1.5,2].includes(Number(incoming.paragraphSpacing)) ? Number(incoming.paragraphSpacing) : 1, focusMode: !!incoming.focusMode, readingRuler: !!incoming.readingRuler, highlightColor: highlightColors[incoming.highlightColor] ? incoming.highlightColor : 'yellow', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))), inkStrokes: (incoming.inkStrokes || []).filter(validInkStroke).slice(-250) };
+      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', lineHeight: [1.4,1.6,1.7,1.9,2.1].includes(Number(incoming.lineHeight)) ? Number(incoming.lineHeight) : 1.7, measure: ['narrow','normal','wide'].includes(incoming.measure) ? incoming.measure : 'normal', paragraphSpacing: [0.5,1,1.5,2].includes(Number(incoming.paragraphSpacing)) ? Number(incoming.paragraphSpacing) : 1, focusMode: !!incoming.focusMode, readingRuler: !!incoming.readingRuler, highlightColor: highlightColors[incoming.highlightColor] ? incoming.highlightColor : 'yellow', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))), inkStrokes: limitInkStrokes(incoming.inkStrokes) };
       persist(); applyPrefs(); renderNotes(); renderHighlights(); announce('نسخهٔ پشتیبان در همین مرورگر بازیابی شد.');
     } catch (error) { announce(error.message || 'بازیابی فایل ناموفق بود.'); }
     finally { importFile.value = ''; }
