@@ -89,7 +89,7 @@ class ContentDiscussionController extends Controller {
    ? (($product=StoreProduct::find((int)$parent->target_key)) ? route('store.product',$product->slug) : null)
    : route('blog.show',$parent->target_key);
   if(!$url) return;
-  $recipients=$parent->subscriptions->pluck('user_id')->push($parent->user_id)->filter()->unique()->reject(fn($id)=>(int)$id===(int)$reply->user_id);
+  $recipients=$parent->subscriptions->pluck('user_id')->filter()->unique()->reject(fn($id)=>(int)$id===(int)$reply->user_id);
   foreach($recipients as $userId){
    app(NotificationService::class)->push((int)$userId,'discussion_reply','پاسخ جدید در گفت‌وگوی دنبال‌شده','برای گفت‌وگویی که دنبال می‌کنید پاسخ تازه‌ای منتشر شد.',['url'=>$url.'#discussion-'.$parent->id,'discussion_id'=>$parent->id,'reply_id'=>$reply->id]);
   }

@@ -267,4 +267,24 @@ class ContentDiscussionTest extends TestCase {
   $this->assertDatabaseMissing('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
  }
 
+
+ public function test_author_can_unfollow_their_own_discussion_and_stop_reply_notifications(): void {
+  $p=$this->product();$author=$this->user('09123456951');$responder=$this->user('09123456952');$admin=$this->user('09123456953','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $parent=ContentDiscussion::firstOrFail();
+  $this->assertDatabaseHas('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
+  $this->actingAs($author)->post(route('discussions.follow',$parent))->assertRedirect();
+  $this->assertDatabaseMissing('discussion_subscriptions',['discussion_id'=>$parent->id,'user_id'=>$author->id]);
+  $this->actingAs($responder)->post(route('discussions.public-reply',$parent),['body'=>'بله، برای استفاده در کلاس آموزشی قابل استفاده است.'])->assertRedirect();
+  $reply=ContentDiscussion::where('parent_id',$parent->id)->firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$reply),['status'=>'approved'])->assertRedirect();
+  $this->assertDatabaseMissing('farast_notifications',['user_id'=>$author->id,'type'=>'discussion_reply']);
+ }
+ public function test_notification_visit_rejects_external_redirect_targets(): void {
+  $owner=$this->user('09123456954');
+  $notification=\\App\\Models\\FarastNotification::create(['user_id'=>$owner->id,'type'=>'discussion_approved','title'=>'اعلان','body'=>'متن','data'=>['url'=>'https://evil.example/phishing']]);
+  $this->actingAs($owner)->get(route('platform.notifications.visit',$notification->id))->assertRedirect(route('platform.notifications'));
+  $this->assertDatabaseMissing('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
+ }
+
 }
