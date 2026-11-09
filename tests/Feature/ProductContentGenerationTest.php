@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\StoreCategory;
+use App\Models\StoreCourse;
+use App\Models\StoreCourseLesson;
+use App\Models\StoreCourseSection;
 use App\Models\StoreProduct;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductDocumentChunk;
@@ -421,6 +424,36 @@ class ProductContentGenerationTest extends TestCase
         $this->expectException(ValidationException::class);
 
         app(ProductContentGenerationService::class)->generate($data['admin'], $data['product']);
+    }
+
+    public function test_course_metadata_edits_invalidate_generated_provenance(): void
+    {
+        $category = StoreCategory::create(['name' => 'دوره‌های آموزشی', 'slug' => 'course-provenance', 'is_active' => true]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id, 'title' => 'دوره آزمایشی', 'slug' => 'course-provenance-test',
+            'sku' => 'COURSE-PROVENANCE-001', 'type' => 'course', 'price_rials' => 0, 'status' => 'draft',
+        ]);
+        $course = StoreCourse::create(['product_id' => $product->id, 'subtitle' => 'زیرعنوان اولیه', 'level' => 'beginner', 'language' => 'fa']);
+        $section = StoreCourseSection::create(['course_id' => $course->id, 'title' => 'بخش نخست']);
+        StoreCourseLesson::create([
+            'section_id' => $section->id, 'title' => 'درس نخست', 'slug' => 'course-provenance-first-lesson',
+            'lesson_type' => 'text', 'summary' => 'خلاصه درس نخست', 'content' => 'متن کامل و قابل استناد درس نخست دوره.',
+            'is_published' => false,
+        ]);
+
+        $service = app(ProductContentGenerationService::class);
+        $readiness = $service->readiness($product);
+        $this->assertSame('available', $readiness['status']);
+        $this->assertArrayHasKey('product:content', $readiness['source_fingerprints']);
+
+        $course->update(['subtitle' => 'زیرعنوان تغییر یافته']);
+
+        $this->expectException(ValidationException::class);
+        $service->assertFreshProvenance(
+            $product->fresh(),
+            json_encode($readiness['source_fingerprints'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            $readiness['source_signature']
+        );
     }
 
     public function test_concurrent_product_content_edit_invalidates_generated_provenance(): void
