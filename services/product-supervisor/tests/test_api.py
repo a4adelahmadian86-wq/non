@@ -136,6 +136,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
             "access_scope": "full_document",
             "sources": [{
                 "source_file_id": 4, "source_sha256": "a" * 64,
+                "file_name": "customer-name-secret.pdf",
                 "summary": "گزارش بررسی‌شده",
                 "chunks": [{"content": "متن کامل محرمانه فایل"}],
                 "sample_pages": ["متن خام صفحه و محتوای کامل محرمانه"],
@@ -149,6 +150,8 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertNotIn("chunks", source)
         self.assertNotIn("source_file_id", source)
         self.assertNotIn("source_sha256", source)
+        self.assertNotIn("file_name", source)
+        self.assertNotIn("customer-name-secret.pdf", str(report))
         self.assertNotIn("archive_entry", str(report))
         self.assertNotIn("customer-name", str(report))
         self.assertNotIn("sample_pages", source)
