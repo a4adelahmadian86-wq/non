@@ -12,6 +12,17 @@ class ContentDiscussionTest extends TestCase {
  use RefreshDatabase;
  private function product(): StoreProduct {$c=StoreCategory::create(['name'=>'دسته گفت‌وگو','slug'=>'discussion-test-category','is_active'=>true]);return StoreProduct::create(['category_id'=>$c->id,'title'=>'محصول گفت‌وگو','slug'=>'discussion-test-product','sku'=>'DISCUSSION-TEST-001','type'=>'digital_file','price_rials'=>100000,'status'=>'published','published_at'=>now()]);}
  private function user(string $mobile,string $role='user'): User {return User::create(['name'=>$role==='admin'?'مدیر فراست':'کاربر آزمایشی','mobile'=>$mobile,'password'=>'secret','role'=>$role]);}
+ public function test_new_discussions_and_reports_notify_moderators_through_the_central_ledger(): void {
+  $product=$this->product();$author=$this->user('09123456901');$admin=$this->user('09123456902','admin');$reporter=$this->user('09123456903');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$product->id,'kind'=>'question','body'=>'آیا این محصول برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $discussion=ContentDiscussion::firstOrFail();
+  $this->assertDatabaseHas('farast_notifications',['user_id'=>$admin->id,'type'=>'discussion_moderation_pending','dedupe_key'=>'discussion:pending:'.$discussion->id.':admin:'.$admin->id]);
+
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$discussion),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($reporter)->post(route('discussions.report',$discussion),['reason'=>'spam','details'=>'گزارش آزمایشی برای بررسی مدیر'])->assertRedirect();
+  $report=\\App\\Models\\DiscussionReport::firstOrFail();
+  $this->assertDatabaseHas('farast_notifications',['user_id'=>$admin->id,'type'=>'discussion_report_received','dedupe_key'=>'discussion:report:'.$report->id.':admin:'.$admin->id]);
+ }
  public function test_product_question_moderation_and_admin_reply(): void {
   $p=$this->product();$u=$this->user('09123456781');
   $this->actingAs($u)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','title'=>'فرمت فایل چیست؟','body'=>'می‌خواهم بدانم این فایل با چه فرمتی ارائه می‌شود؟'])->assertRedirect(route('store.product',$p->slug).'#store-discussions');
