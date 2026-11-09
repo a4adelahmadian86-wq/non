@@ -372,6 +372,22 @@ class FilePipelineTests(unittest.TestCase):
         self.assertFalse(result.visual_review_truncated)
         self.assertEqual(len(result.image_assets), 1)
 
+    def test_docx_over_visual_image_limit_is_marked_incomplete(self):
+        document = Document()
+        for _ in range(5):
+            image_stream = io.BytesIO()
+            Image.new("RGB", (24, 24), "white").save(image_stream, format="PNG")
+            document.add_picture(io.BytesIO(image_stream.getvalue()), width=Inches(0.5))
+        stream = io.BytesIO()
+        document.save(stream)
+
+        result = inspect_file(stream.getvalue(), "many-images.docx")
+
+        self.assertEqual(result.embedded_image_count, 5)
+        self.assertEqual(len(result.image_assets), 4)
+        self.assertTrue(result.visual_inventory_complete)
+        self.assertTrue(result.visual_review_truncated)
+
     def test_pdf_image_inventory_detects_embedded_raster_images(self):
         image_stream = io.BytesIO()
         Image.new("RGB", (48, 48), "white").save(image_stream, format="PDF")
