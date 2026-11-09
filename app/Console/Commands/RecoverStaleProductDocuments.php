@@ -15,7 +15,7 @@ class RecoverStaleProductDocuments extends Command
     protected $signature = 'farast:recover-product-documents
         {--limit=50 : Maximum documents to inspect in one run}
         {--processing-minutes=25 : Minimum age of a processing lease before recovery}
-        {--pending-minutes=30 : Minimum age of a pending document before redispatch}';
+';
 
     protected $description = 'Safely redispatch abandoned product-document jobs after verifying their immutable source files.';
 
@@ -23,19 +23,11 @@ class RecoverStaleProductDocuments extends Command
     {
         $limit = max(1, min(200, (int) $this->option('limit')));
         $processingMinutes = max(15, min(240, (int) $this->option('processing-minutes')));
-        $pendingMinutes = max(15, min(240, (int) $this->option('pending-minutes')));
         $processingCutoff = now()->subMinutes($processingMinutes);
-        $pendingCutoff = now()->subMinutes($pendingMinutes);
 
         $ids = StoreProductDocument::query()
-            ->where(function ($query) use ($processingCutoff, $pendingCutoff) {
-                $query->where(fn ($processing) => $processing
-                    ->where('processing_status', 'processing')
-                    ->where('updated_at', '<=', $processingCutoff))
-                    ->orWhere(fn ($pending) => $pending
-                        ->where('processing_status', 'pending')
-                        ->where('updated_at', '<=', $pendingCutoff));
-            })
+            ->where('processing_status', 'processing')
+            ->where('updated_at', '<=', $processingCutoff)
             ->orderBy('updated_at')
             ->limit($limit)
             ->pluck('id');
@@ -83,14 +75,14 @@ class RecoverStaleProductDocuments extends Command
                     continue;
                 }
 
-                $wasRecovered = DB::transaction(function () use ($id, $processingCutoff, $pendingCutoff, $audit): bool {
+                $wasRecovered = DB::transaction(function () use ($id, $processingCutoff, $audit): bool {
                     $locked = StoreProductDocument::query()->whereKey($id)->lockForUpdate()->first();
                     if (! $locked) {
                         return false;
                     }
 
-                    $eligible = ($locked->processing_status === 'processing' && $locked->updated_at?->lte($processingCutoff))
-                        || ($locked->processing_status === 'pending' && $locked->updated_at?->lte($pendingCutoff));
+                    $eligible = $locked->processing_status === 'processing'
+                        && $locked->updated_at?->lte($processingCutoff);
                     if (! $eligible) {
                         return false;
                     }
