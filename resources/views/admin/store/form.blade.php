@@ -83,7 +83,7 @@
             <div>
               <span>تکمیل محتوا از پایگاه دانش محصول</span>
               <h3 id="product-ai-content-title">تولید هوشمند عنوان، توضیحات و سئو</h3>
-              <p>مدل فقط گزارش‌های ذخیره‌شده و واقعیت‌های دارای شاهد را دریافت می‌کند؛ فایل خام و مسیر ذخیره‌سازی ارسال نمی‌شود.</p>
+              <p>برای تولید محتوا، فقط گزارش ساختاریافته و شواهد کوتاه به Gemini ارسال می‌شود؛ فایل خام، chunkهای کامل و مسیر ذخیره‌سازی ارسال نمی‌شوند. بررسی فایل پیش از این مرحله در ناظر سایت انجام می‌شود.</p>
             </div>
             <button type="button" class="store-primary-btn" data-ai-content-generate @disabled($aiContentReadiness['status'] !== 'available')>
               <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> تکمیل خودکار با هوش مصنوعی
