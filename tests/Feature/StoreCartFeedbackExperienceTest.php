@@ -45,7 +45,10 @@ class StoreCartFeedbackExperienceTest extends TestCase
             ->assertSee('id="store-product-description"', false)
             ->assertSee('id="store-buy-card"', false)
             ->assertSee('data-share-product', false)
-            ->assertSee('store-gallery-dialog', false);
+            ->assertSee('store-gallery-dialog', false)
+            ->assertSee('application/ld+json', false)
+            ->assertSee('store-product-rating', false)
+            ->assertSee('هنوز امتیازی ثبت نشده');
     }
 
     public function test_storefront_product_discovery_page_loads(): void
