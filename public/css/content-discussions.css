@@ -46,7 +46,7 @@
 .discussion-reply{padding:12px 14px;border:1px solid #e2ebf6;border-right:3px solid #4c83c8;border-radius:11px;background:#f7faff}
 .discussion-reply-heading{display:flex;align-items:center;gap:7px;color:#356daF}.discussion-reply-heading i{font-size:.68rem}.discussion-reply-heading strong{font-size:.66rem}.discussion-reply-heading small{margin-inline-start:auto;color:#96a3b3;font-size:.58rem}
 .discussion-reply p{margin-top:6px;color:#5d7189;font-size:.7rem}
-#discussion-filter-primary:checked~.discussion-list .discussion-entry:not([data-kind="review"]):not([data-kind="comment"]),#discussion-filter-questions:checked~.discussion-list .discussion-entry:not([data-kind="question"]){display:none}
+.farast-discussions:has(#discussion-filter-primary:checked) .discussion-list .discussion-entry:not([data-kind="review"]):not([data-kind="comment"]),.farast-discussions:has(#discussion-filter-questions:checked) .discussion-list .discussion-entry:not([data-kind="question"]){display:none}
 .discussion-empty{display:grid;justify-items:center;padding:35px 18px;border:1px dashed #d5e0ee;border-radius:16px;background:rgba(255,255,255,.65);text-align:center}
 .discussion-empty-icon{width:48px;height:48px;display:grid;place-items:center;margin-bottom:11px;border-radius:15px;background:#edf4ff;color:#3c76c1;font-size:1.1rem}
 .discussion-empty strong{color:#304b6d;font-size:.8rem}.discussion-empty p{margin:6px 0 0;color:#8795a8;font-size:.67rem;line-height:1.9}
