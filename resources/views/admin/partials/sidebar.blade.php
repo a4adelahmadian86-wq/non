@@ -18,6 +18,7 @@
         @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'store'))
             <a href="{{ route('admin.store.index') }}" @if(request()->routeIs('admin.store.*')) aria-current="page" @endif><i class="fa-solid fa-boxes-stacked"></i><span>محصولات و دوره‌ها</span></a>
+            <a href="{{ route('admin.discussions.index') }}" @if(request()->routeIs('admin.discussions.*')) aria-current="page" @endif><i class="fa-regular fa-comments"></i><span>نظرات و پرسش‌ها</span></a>
             <a class="farast-admin-nav-create-product" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-circle-plus"></i><span>افزودن محصول جدید</span><b>+</b></a>
         @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}" @if(request()->routeIs('admin.finance')) aria-current="page" @endif><i class="fa-solid fa-wallet"></i><span>مالی و پرداخت‌ها</span></a>@endif

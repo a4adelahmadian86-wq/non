@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ContentDiscussion;
 use Illuminate\Http\Request;
 
 class BlogController extends Controller
@@ -127,6 +128,11 @@ class BlogController extends Controller
         ];
     }
 
+    public static function articleExists(string $slug): bool
+    {
+        return array_key_exists($slug, self::articles());
+    }
+
     public function index(Request $request)
     {
         $q = trim((string) $request->query('q', ''));
@@ -151,6 +157,11 @@ class BlogController extends Controller
             ->take(3)
             ->values();
 
-        return view('blog.show', compact('article', 'related'));
+        $discussions = ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->whereNull('parent_id')->where('status', 'approved')->with(['user', 'replies' => fn ($q) => $q->where('status', 'approved')->with('user')->oldest()])->latest()->limit(30)->get();
+        $discussionCounts = [
+            'comments' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'comment')->whereNull('parent_id')->where('status', 'approved')->count(),
+            'questions' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
+        ];
+        return view('blog.show', compact('article', 'related', 'discussions', 'discussionCounts'));
     }
 }

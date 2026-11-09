@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ContentDiscussionController;
 use App\Http\Controllers\AdminPlatformController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CanvaController;
@@ -103,6 +104,10 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/discussions', [ContentDiscussionController::class, 'adminIndex'])->middleware('admin.section:store')->name('discussions.index');
+    Route::patch('/discussions/{discussion}/moderate', [ContentDiscussionController::class, 'moderate'])->middleware(['admin.section:store', 'throttle:30,10'])->name('discussions.moderate');
+    Route::post('/discussions/{discussion}/reply', [ContentDiscussionController::class, 'reply'])->middleware(['admin.section:store', 'throttle:20,10'])->name('discussions.reply');
+
     // CRM marketing: saved segments and explicitly dispatched in-app campaigns.
     Route::get('/crm/marketing/segments', [CrmMarketingController::class, 'segments'])->middleware('admin.section:marketing')->name('crm.marketing.segments.index');
     Route::post('/crm/marketing/segments', [CrmMarketingController::class, 'storeSegment'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('crm.marketing.segments.store');

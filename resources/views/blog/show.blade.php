@@ -51,6 +51,8 @@
             </article>
         </div>
 
+        @include('shared.discussions', ['context' => 'article', 'targetKey' => $article['slug'], 'entries' => $discussions, 'counts' => $discussionCounts, 'averageRating' => null])
+
         @if($related->isNotEmpty())
             <section class="blog-related"><div class="blog-section-heading"><div><span class="blog-eyebrow">ادامه مسیر</span><h2>شاید این‌ها هم به کارتان بیاید</h2></div><a href="{{ route('blog') }}">همه مقاله‌ها <i class="fa-solid fa-arrow-left"></i></a></div>
                 <div class="blog-grid">@foreach($related as $item)<article class="blog-card"><a class="blog-card-image" href="{{ route('blog.show', $item['slug']) }}"><img src="{{ $item['image'] }}" alt="{{ $item['alt'] }}" loading="lazy"><span>{{ $item['category'] }}</span></a><div class="blog-card-content"><div class="blog-card-meta"><span>{{ $item['date'] }}</span><span>{{ $item['read_time'] }} دقیقه</span></div><h3><a href="{{ route('blog.show', $item['slug']) }}">{{ $item['title'] }}</a></h3><p>{{ $item['excerpt'] }}</p><div class="blog-card-footer"><span>{{ $item['author'] }}</span><a href="{{ route('blog.show', $item['slug']) }}"><i class="fa-solid fa-arrow-left"></i></a></div></div></article>@endforeach</div>
@@ -62,6 +64,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{ asset('css/blog.css') }}?v=20261107b">
+<link rel="stylesheet" href="{{ asset('css/content-discussions.css') }}?v=20261109discussion1">
 @endpush
 @push('scripts')
 <script src="{{ asset('js/blog.js') }}?v=20261107a" defer></script>

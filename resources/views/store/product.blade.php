@@ -28,6 +28,7 @@
       <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
       @if($product->type === 'course' && $product->course)<a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>@endif
       <a href="#store-buy-card"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> قیمت و خرید</a>
+      <a href="#store-discussions"><i class="fa-regular fa-comments" aria-hidden="true"></i> نظرها و پرسش‌ها</a>
     </nav>
     <div class="store-detail-grid">
       <section>
@@ -103,6 +104,7 @@
             @endforelse
           </div>
         @endif
+        @include('shared.discussions', ['context' => 'product', 'targetKey' => (string) $product->id, 'entries' => $discussions, 'counts' => $discussionCounts, 'averageRating' => $averageRating])
       </section>
 
       <aside class="store-buy-card" id="store-buy-card">
@@ -184,7 +186,8 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261109product3">
+<link rel="stylesheet" href="/css/store.css?v=20261109product4">
+<link rel="stylesheet" href="/css/content-discussions.css?v=20261109discussion1">
 <style>
 
 
