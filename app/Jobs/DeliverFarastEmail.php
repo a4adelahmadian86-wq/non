@@ -1,16 +1,16 @@
 <?php
 
-namespace App\\Jobs;
+namespace App\Jobs;
 
-use App\\Models\\EmailLog;
-use App\\Services\\MailConfigService;
-use Illuminate\\Bus\\Queueable;
-use Illuminate\\Contracts\\Queue\\ShouldQueue;
-use Illuminate\\Foundation\\Bus\\Dispatchable;
-use Illuminate\\Mail\\Mailable;
-use Illuminate\\Queue\\InteractsWithQueue;
-use Illuminate\\Queue\\SerializesModels;
-use Illuminate\\Support\\Facades\\Mail;
+use App\Models\EmailLog;
+use App\Services\MailConfigService;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 class DeliverFarastEmail implements ShouldQueue
