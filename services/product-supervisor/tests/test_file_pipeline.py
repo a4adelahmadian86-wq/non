@@ -49,7 +49,8 @@ class FilePipelineTests(unittest.TestCase):
         text, count = redact_sensitive_content(
             "Contact person@example.com, Bearer abcdefghijklmnopqrstuvwxyz, "
             "mobile 09121234567, IBAN DE89370400440532013000, "
-            "card 4111111111111111, and token sk-abcdefghijklmnopqrstuvwxyz123456"
+            "card 4111111111111111, Persian card ۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱, "
+            "and token sk-abcdefghijklmnopqrstuvwxyz123456"
         )
         self.assertGreaterEqual(count, 6)
         self.assertNotIn("person@example.com", text)
@@ -57,6 +58,7 @@ class FilePipelineTests(unittest.TestCase):
         self.assertNotIn("09121234567", text)
         self.assertNotIn("DE89370400440532013000", text)
         self.assertNotIn("4111111111111111", text)
+        self.assertNotIn("۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱", text)
 
     def test_executable_extension_is_rejected(self):
         with self.assertRaises(FileInspectionError):
