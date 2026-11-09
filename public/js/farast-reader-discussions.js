@@ -92,8 +92,9 @@
       if(currentSection!==targetSection){
         const sectionChanged=waitForReaderEvent('farast:reader-section-change',event=>Number(event.detail?.section)===targetSection);
         const pageChanged=waitForReaderEvent('farast:reader-page-change',()=>true);
-        if(!readerPageInput)return;
-        readerPageInput.value=String(targetSection+1);readerPageInput.dispatchEvent(new Event('change',{bubbles:true}));
+        const sectionThumb=root.querySelector('.farast-reader-thumb[data-goto="'+targetSection+'"]');
+        if(!sectionThumb)throw new Error('Reader section control is unavailable');
+        sectionThumb.click();
         await sectionChanged;await pageChanged;
       }
       const page=activePage();

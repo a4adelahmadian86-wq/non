@@ -1730,6 +1730,8 @@ test('captures a selected reader passage and jumps back to its anchored discussi
   await page.setContent(`
     <section data-reader-root>
       <input id="reader-page-number" value="1">
+      <button type="button" class="farast-reader-thumb" data-goto="0">بخش اول</button>
+      <button type="button" class="farast-reader-thumb" data-goto="1">بخش دوم</button>
       <article class="farast-reader-page-item is-active" data-index="0">
         <div class="farast-pdf-text-layer"><span>متن نمونه برای عبارت مهم در این فایل</span></div>
       </article>
@@ -1753,12 +1755,13 @@ test('captures a selected reader passage and jumps back to its anchored discussi
   await page.evaluate(() => {
     const root = document.querySelector('[data-reader-root]');
     const pageInput = document.querySelector('#reader-page-number');
-    pageInput.addEventListener('change', () => {
-      const section = Math.max(0, Number(pageInput.value) - 1);
+    root.querySelectorAll('.farast-reader-thumb[data-goto]').forEach(thumb => thumb.addEventListener('click', () => {
+      const section = Number(thumb.dataset.goto);
+      pageInput.value = String(section + 1);
       root.querySelectorAll('.farast-reader-page-item').forEach(item => item.classList.toggle('is-active', Number(item.dataset.index) === section));
       root.dispatchEvent(new CustomEvent('farast:reader-section-change', { detail: { section } }));
       root.dispatchEvent(new CustomEvent('farast:reader-page-change', { detail: { page: section + 1 } }));
-    });
+    }));
   });
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-discussions.js') });
   await page.evaluate(() => {

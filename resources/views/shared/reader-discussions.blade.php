@@ -87,6 +87,6 @@
 </style>
 @endpush
 @push('scripts')
-<script src="/js/farast-reader-discussions.js?v=20261109anchor1" defer></script>
+<script src="/js/farast-reader-discussions.js?v=20261109anchor2" defer></script>
 @endpush
 @endonce
