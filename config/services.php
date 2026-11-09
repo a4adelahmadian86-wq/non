@@ -19,6 +19,7 @@ return [
         'url' => env('FARAST_PRODUCT_SUPERVISOR_URL', ''),
         'token' => env('FARAST_PRODUCT_SUPERVISOR_TOKEN', ''),
         'timeout' => max(10, min(180, (int) env('FARAST_PRODUCT_SUPERVISOR_TIMEOUT', 40))),
+        'file_timeout' => max(300, min(540, (int) env('FARAST_PRODUCT_SUPERVISOR_FILE_TIMEOUT', 540))),
     ],
 
     'gemini' => [
