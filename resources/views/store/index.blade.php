@@ -51,7 +51,7 @@
     <nav class="store-chips" aria-label="دسته‌بندی محصولات">
       <a class="{{ !$category ? 'active' : '' }}" href="{{ route('store', request()->only(['q','sort','price','type'])) }}">همه</a>
       @foreach($categories as $cat)
-        <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', array_merge(request()->only(['q','sort','price']), ['category'=>$cat->slug])) }}">{{ $cat->name }}</a>
+        <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', array_merge(request()->only(['q','sort','price','type']), ['category'=>$cat->slug])) }}">{{ $cat->name }}</a>
       @endforeach
     </nav>
 
@@ -92,8 +92,8 @@
         <label class="store-filter-label">نوع محصول
           <select name="type" onchange="this.form.submit()" class="store-filter-select">
             <option value="all" @selected(($type??'all')==='all')>همه انواع</option>
-            <option value="digital" @selected(($type??'')==='digital')>فایل دیجیتال</option>
-            <option value="course" @selected(($type??'')==='course')>دوره آموزشی</option>
+            <option value="digital" @selected(($type??'')==='digital') >فایل دیجیتال ({{ $digitalCount }})</option>
+            <option value="course" @selected(($type??'')==='course') >دوره آموزشی ({{ $courseCount }})</option>
           </select>
         </label>
         <span class="store-results-total">{{ $products->total() }} مورد</span>
