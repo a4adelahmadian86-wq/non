@@ -211,6 +211,15 @@ test.describe('FARAST sample reader interactions', () => {
     const textSpan = root.locator('.farast-pdf-text-layer span').first();
     await expect(textSpan).toBeVisible();
     await expect(textSpan).toHaveCSS('user-select', 'text');
+    await expect(root.locator('.farast-pdf-text-layer')).toHaveCSS('pointer-events', 'auto');
+    const textBox = await textSpan.boundingBox();
+    expect(textBox?.width).toBeGreaterThan(20);
+    await page.mouse.move(textBox.x + 1, textBox.y + textBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(textBox.x + Math.min(textBox.width - 1, 70), textBox.y + textBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().trim())).toContain('FARAST');
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
@@ -225,6 +234,8 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(root.locator('.farast-pdf-continuous-pages')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page canvas')).toBeVisible();
     await expect(root.locator('.farast-pdf-cont-page')).toHaveAttribute('data-rendered', '1');
+    await expect(root.locator('.farast-pdf-cont-text')).toHaveCSS('pointer-events', 'auto');
+    await expect(root.locator('.farast-pdf-cont-text span').first()).toHaveCSS('user-select', 'text');
     // Page-number navigation in continuous mode must scroll the matching page into view.
     const continuousPage = root.locator('.farast-pdf-cont-page').first();
     await continuousPage.evaluate(element => {
