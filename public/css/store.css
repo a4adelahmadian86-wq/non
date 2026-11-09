@@ -444,3 +444,9 @@
   .store-product-card,.store-product-cover img,.store-feature{transition:none!important}
   .store-product-card:hover,.store-feature:hover{transform:none}
 }
+
+.store-chips a small{
+  display:inline-grid;place-items:center;min-width:19px;height:19px;margin-inline-start:5px;
+  padding:0 5px;border-radius:999px;background:#edf2f9;color:#60748f;font-size:.62rem;font-weight:800
+}
+.store-chips a.active small,.store-chips a:hover small{background:rgba(255,255,255,.2);color:#fff}
