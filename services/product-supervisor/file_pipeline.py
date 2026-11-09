@@ -1256,6 +1256,27 @@ def redact_sensitive_content(value: str) -> tuple[str, int]:
         return match.group(0)
 
     value = re.sub(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)", redact_card, value)
+
+    def redact_iranian_national_code(match: re.Match[str]) -> str:
+        nonlocal count
+        digits = match.group(0).translate(str.maketrans(
+            "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+            "01234567890123456789",
+        ))
+        if len(digits) != 10 or len(set(digits)) == 1:
+            return match.group(0)
+        checksum = sum(int(digits[index]) * (10 - index) for index in range(9)) % 11
+        expected = checksum if checksum < 2 else 11 - checksum
+        if int(digits[9]) == expected:
+            count += 1
+            return "[REDACTED]"
+        return match.group(0)
+
+    value = re.sub(
+        r"(?<!\d)(?:\d[ -]?){10}(?!\d)",
+        redact_iranian_national_code,
+        value,
+    )
     return value, count
 
 def groq_provider_ready() -> bool:
