@@ -223,6 +223,8 @@ test.describe('FARAST sample reader interactions', () => {
     await root.locator('#reader-search-input').fill('FARAST');
     await root.locator('#reader-search').click();
     await expect(root.locator('#reader-search-count')).toContainText('۱');
+    await expect(root.locator('#reader-search-count')).toContainText('صفحه نتیجه');
+    await expect(root.locator('#reader-search-count')).toContainText('تطبیق');
     await expect(root.locator('.farast-pdf-text-layer .reader-search-hit')).toHaveCount(1);
     await root.locator('#reader-search-input').fill('');
     await root.locator('#reader-search').click();

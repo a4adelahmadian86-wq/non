@@ -31,7 +31,7 @@
     return pdfjsPromise;
   };
 
-  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
+  let itemIndex=0,zoom=1,rotation=0,pdfDoc=null,pdfPage=1,pdfMatches=[],matchIndex=-1,searchTotalMatches=0,renderTask=null,pdfRenderSequence=0,continuousMode=false,continuousObserver=null,continuousFallbackHandler=null,continuousFallbackFrame=0,activePdfUrl=null,searchRequest=0;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const activeArticle=()=>articles[itemIndex];
   const isPdf=()=>Boolean(activeArticle()?.querySelector('.farast-pdf-document'));
@@ -627,11 +627,17 @@
     else setZoom(1);
   };
 
+  const updateSearchCount=()=>{
+    if(!searchCount)return;
+    if(!pdfMatches.length){searchCount.textContent=searchTotalMatches?'بدون نتیجه':'';return;}
+    searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه · '+faNumber(searchTotalMatches)+' تطبیق';
+  };
+
   const searchPdf=async()=>{
     const request=++searchRequest;
-    const query=(searchInput?.value||'').trim().toLocaleLowerCase();
+    const query=(searchInput?.value||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();
     if(!query){
-      pdfMatches=[];matchIndex=-1;
+      pdfMatches=[];matchIndex=-1;searchTotalMatches=0;
       if(searchCount)searchCount.textContent='';
       if(isPdf()&&pdfDoc){
         if(continuousMode)await refreshContinuousVisiblePages();
@@ -640,22 +646,26 @@
       return;
     }
     if(!pdfDoc){if(searchCount)searchCount.textContent='سند هنوز بارگذاری نشده';return;}
-    pdfMatches=[];matchIndex=-1;
+    pdfMatches=[];matchIndex=-1;searchTotalMatches=0;
     for(let n=1;n<=pdfDoc.numPages;n++){
       const page=await pdfDoc.getPage(n);
       const content=await page.getTextContent();
       if(request!==searchRequest)return;
-      const text=content.items.map(item=>item.str||'').join(' ').toLocaleLowerCase();
+      const text=content.items.map(item=>item.str||'').join(' ').replace(/\s+/g,' ').trim().toLocaleLowerCase();
       const count=text.split(query).length-1;
-      if(count>0)pdfMatches.push({page:n,count});
+      if(count>0){pdfMatches.push({page:n,count});searchTotalMatches+=count;}
     }
     if(request!==searchRequest)return;
-    const total=pdfMatches.reduce((sum,item)=>sum+item.count,0);
-    if(searchCount)searchCount.textContent=total?faNumber(total)+' نتیجه در '+faNumber(pdfMatches.length)+' صفحه':'بدون نتیجه';
-    if(pdfMatches.length){matchIndex=0;await navigatePdfPage(pdfMatches[0].page);if(request===searchRequest&&searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه';}
-    else if(isPdf()&&pdfDoc){
-      if(continuousMode)await refreshContinuousVisiblePages();
-      else await renderPdfPage(pdfPage);
+    if(pdfMatches.length){
+      matchIndex=0;
+      await navigatePdfPage(pdfMatches[0].page);
+      if(request===searchRequest)updateSearchCount();
+    }else{
+      if(searchCount)searchCount.textContent='بدون نتیجه';
+      if(isPdf()&&pdfDoc){
+        if(continuousMode)await refreshContinuousVisiblePages();
+        else await renderPdfPage(pdfPage);
+      }
     }
   };
 
@@ -702,7 +712,7 @@
     if(!pdfMatches.length)return;
     matchIndex=(matchIndex+direction+pdfMatches.length)%pdfMatches.length;
     await navigatePdfPage(pdfMatches[matchIndex].page);
-    if(searchCount)searchCount.textContent=faNumber(matchIndex+1)+' / '+faNumber(pdfMatches.length)+' صفحه نتیجه';
+    updateSearchCount();
   };
   bookmarkButton?.addEventListener('click',()=>{
     const current=currentPosition();
