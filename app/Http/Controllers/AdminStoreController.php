@@ -194,6 +194,10 @@ class AdminStoreController extends Controller
                 }
             }
             if ($provenance !== null) {
+                \App\Models\StoreProductDocument::query()
+                    ->where('product_id', $lockedProduct->id)
+                    ->lockForUpdate()
+                    ->get(['id']);
                 $contentGenerator->assertFreshProvenance($lockedProduct, (string) $submittedFingerprints, (string) $submittedSignature);
             }
             foreach ($aiTagNames as $tagName) {
