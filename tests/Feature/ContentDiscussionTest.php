@@ -191,4 +191,29 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($user)->get(route('platform.notifications',['filter'=>'community']))->assertOk()->assertSee('پاسخ جدید')->assertSee('گفت‌وگوها');
  }
 
+
+ public function test_community_directory_supports_member_search_kind_filter_and_activity_sort(): void {
+  $p=$this->product();$member=$this->user('09123456911');$other=$this->user('09123456912');$admin=$this->user('09123456913','admin');
+  foreach([[$member,'question','آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'],[$member,'reply','این پاسخ برای تکمیل پرسش ثبت شده است.'],[$other,'question','آیا نسخه دیگری از این فایل نیز ارائه می‌شود؟']] as [$author,$kind,$body]){
+   $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>$kind==='reply'?'question':$kind,'body'=>$body])->assertRedirect();
+  }
+  $items=ContentDiscussion::orderBy('id')->get();
+  foreach($items as $item){$this->actingAs($admin)->patch(route('admin.discussions.moderate',$item),['status'=>'approved'])->assertRedirect();}
+  $this->get(route('community.index',['q'=>'کاربر آزمایشی','kind'=>'question']))->assertOk()->assertSee('مشارکت‌کننده‌های جامعه')->assertSee('فعال‌ترین اعضا');
+  $this->get(route('community.index',['sort'=>'active']))->assertOk()->assertSee('فعال‌ترین اعضا');
+ }
+
+
+ public function test_product_discussions_are_paginated_beyond_the_first_thirty_items(): void {
+  $p=$this->product();$author=$this->user('09123456921');
+  for($i=1;$i<=16;$i++){
+   ContentDiscussion::create([
+    'target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question',
+    'user_id'=>$author->id,'body'=>'پرسش شماره '.$i.' درباره جزئیات این محصول چیست؟','status'=>'approved',
+   ]);
+  }
+  $this->get(route('store.product',$p->slug))->assertOk()->assertSee('discussion-pagination')->assertSee('پرسش شماره 16');
+  $this->get(route('store.product',['slug'=>$p->slug,'page'=>2]))->assertOk()->assertSee('پرسش شماره 1')->assertDontSee('پرسش شماره 16');
+ }
+
 }

@@ -132,16 +132,26 @@ class ContentDiscussionController extends Controller {
   });
   return back()->with('discussion_status','مشارکت در انتظار بررسی شما لغو شد.');
  }
- public function communityIndex() {
-  $members=User::query()->select('users.id','users.name','users.created_at')
+ public function communityIndex(Request $request) {
+  $search=mb_substr(trim((string)$request->query('q','')),0,80);
+  $kind=in_array($request->query('kind'),['review','question','comment','reply'],true)?$request->query('kind'):'';
+  $sort=in_array($request->query('sort'),['helpful','active'],true)?$request->query('sort'):'helpful';
+  $query=User::query()->select('users.id','users.name','users.created_at')
    ->join('content_discussions','content_discussions.user_id','=','users.id')
    ->where('content_discussions.status','approved')
+   ->when($search!=='',fn($q)=>$q->where('users.name','like','%'.$search.'%'))
+   ->when($kind!=='',fn($q)=>$q->whereExists(function($sub) use($kind){
+    $sub->selectRaw('1')->from('content_discussions as member_kind')
+     ->whereColumn('member_kind.user_id','users.id')
+     ->where('member_kind.status','approved')->where('member_kind.kind',$kind);
+   }))
    ->groupBy('users.id','users.name','users.created_at')
    ->selectRaw('COUNT(content_discussions.id) as contributions')
-   ->selectSub(DB::table('discussion_reactions')->join('content_discussions as dc','dc.id','=','discussion_reactions.discussion_id')->selectRaw('COUNT(*)')->whereColumn('dc.user_id','users.id')->where('dc.status','approved')->where('discussion_reactions.type','like'),'helpful')
-   ->orderByDesc('helpful')->orderByDesc('contributions')->orderBy('users.name')
-   ->paginate(24);
-  return view('community.index',compact('members'));
+   ->selectSub(DB::table('discussion_reactions')->join('content_discussions as dc','dc.id','=','discussion_reactions.discussion_id')->selectRaw('COUNT(*)')->whereColumn('dc.user_id','users.id')->where('dc.status','approved')->where('discussion_reactions.type','like'),'helpful');
+  if($sort==='active') $query->orderByDesc('contributions')->orderByDesc('helpful');
+  else $query->orderByDesc('helpful')->orderByDesc('contributions');
+  $members=$query->orderBy('users.name')->paginate(24)->withQueryString();
+  return view('community.index',compact('members','search','kind','sort'));
  }
  public function member(User $user) {
   $approved=ContentDiscussion::query()->where('user_id',$user->id)->where('status','approved');

@@ -164,7 +164,7 @@ class BlogController extends Controller
                 ->when($discussionSort==='oldest', fn($q)=>$q->oldest())
                 ->when($discussionSort==='most_replied', fn($q)=>$q->orderByDesc('replies_count')->orderByDesc('created_at'))
                 ->when($discussionSort==='newest', fn($q)=>$q->latest())
-                ->limit(30)->get();
+                ->paginate(15)->withQueryString();
             $discussionCounts = [
                 'comments' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'comment')->whereNull('parent_id')->where('status', 'approved')->count(),
                 'questions' => ContentDiscussion::query()->where('target_type', 'article')->where('target_key', $slug)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
