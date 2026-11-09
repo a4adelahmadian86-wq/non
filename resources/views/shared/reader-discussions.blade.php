@@ -1,7 +1,7 @@
 <section class="reader-discussions" id="reader-discussions" dir="rtl" aria-labelledby="reader-discussions-title">
     <header class="reader-discussions-head">
         <div><span class="reader-discussions-eyebrow">گفت‌وگوی صفحه‌ای</span><h2 id="reader-discussions-title">نظرها درباره بخش‌های این فایل</h2><p>متن دلخواه را در خوانشگر انتخاب کنید تا دیدگاه شما به همان قسمت پیوند بخورد. دیگر خوانندگان می‌توانند پاسخ دهند و واکنش ثبت کنند.</p></div>
-        <span class="reader-discussions-count">{{ number_format($readerDiscussions->total()) }} گفت‌وگو</span>
+        <span class="reader-discussions-count">{{ number_format($readerDiscussions->count()) }} گفت‌وگو</span>
     </header>
 
     @if(session('discussion_status'))
