@@ -1082,6 +1082,10 @@ async def analyze_image_with_groq(image_bytes: bytes, mime: str, context: dict[s
         return str(body["choices"][0]["message"]["content"])[:5000]
 
 
+def _bounded_transcription(raw_text: str) -> tuple[str, bool]:
+    return raw_text[:MAX_EXTRACTED_CHARS], len(raw_text) > MAX_EXTRACTED_CHARS
+
+
 async def transcribe_audio_with_groq(data: bytes, filename: str) -> tuple[str, bool]:
     key = _groq_api_key()
     if not key:
@@ -1096,7 +1100,7 @@ async def transcribe_audio_with_groq(data: bytes, filename: str) -> tuple[str, b
         )
         response.raise_for_status()
         raw_text = str(response.json().get("text", ""))
-        return raw_text[:MAX_EXTRACTED_CHARS], len(raw_text) > MAX_EXTRACTED_CHARS
+        return _bounded_transcription(raw_text)
 
 
 
