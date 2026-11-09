@@ -40,7 +40,6 @@ class DeliverFarastEmail implements ShouldQueue
 
         $mailConfig->apply();
         $provider = $mailConfig->currentProvider();
-        $mailConfig->assertAvailable($provider);
 
         $log->increment('attempts');
         $log->forceFill([
@@ -48,6 +47,8 @@ class DeliverFarastEmail implements ShouldQueue
             'error' => null,
             'meta' => array_merge($log->meta ?? [], ['provider' => $provider]),
         ])->save();
+
+        $mailConfig->assertAvailable($provider);
 
         Mail::to($this->recipient)->send($this->mailable);
 
