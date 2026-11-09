@@ -280,7 +280,39 @@ class ProductKnowledgeService
                 continue;
             }
 
-            $fingerprints['file:'.$file->id] = (string) $file->sha256;
+            $sourceFindings = collect($review['findings'] ?? [])->take(8)->map(fn ($finding) => [
+                'severity' => (string) data_get($finding, 'severity', ''),
+                'title' => mb_substr((string) data_get($finding, 'title', ''), 0, 140),
+                'detail' => mb_substr((string) data_get($finding, 'detail', ''), 0, 300),
+            ])->values()->all();
+            $factsTotal = $document->facts->filter(fn ($fact) =>
+                hash_equals((string) $file->sha256, (string) $fact->source_sha256)
+                && $fact->verification_status === 'evidence_backed'
+            )->count();
+            $fingerprints['file:'.$file->id] = hash('sha256', json_encode([
+                'source_sha256' => (string) $file->sha256,
+                'processing_status' => (string) $document->processing_status,
+                'detected_type' => (string) ($document->detected_type ?: ''),
+                'page_count' => (int) ($document->page_count ?? 0),
+                'word_count' => (int) ($document->word_count ?? 0),
+                'character_count' => (int) ($document->character_count ?? 0),
+                'extraction_complete' => $extractionComplete,
+                'semantic_review_complete' => $semanticReviewComplete,
+                'inspection' => [
+                    'extracted_characters' => (int) data_get($structure, 'inspection.extracted_characters', 0),
+                    'extraction_truncated' => (bool) data_get($structure, 'inspection.extraction_truncated', false),
+                    'transcription_truncated' => (bool) data_get($structure, 'inspection.transcription_truncated', false),
+                ],
+                'review' => [
+                    'summary' => $summary,
+                    'findings' => $sourceFindings,
+                    'provider_status' => $providers,
+                    'analysis_batch_count' => $expected,
+                    'successful_analysis_batches' => $successful,
+                    'facts_total' => $factsTotal,
+                ],
+                'facts' => $sourceFacts,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
             $sources[] = [
                 'source_id' => 'file:'.$file->id,
                 'file_name' => (string) $file->original_name,
@@ -289,13 +321,9 @@ class ProductKnowledgeService
                 'word_count' => $document->word_count,
                 'character_count' => $document->character_count,
                 'summary' => mb_substr($summary, 0, 2200),
-                'findings' => collect($review['findings'] ?? [])->take(8)->map(fn ($finding) => [
-                    'severity' => (string) data_get($finding, 'severity', ''),
-                    'title' => mb_substr((string) data_get($finding, 'title', ''), 0, 140),
-                    'detail' => mb_substr((string) data_get($finding, 'detail', ''), 0, 300),
-                ])->values()->all(),
+                'findings' => $sourceFindings,
                 'facts' => $sourceFacts,
-                'facts_total' => $document->facts->where('verification_status', 'evidence_backed')->count(),
+                'facts_total' => $factsTotal,
             ];
         }
 
