@@ -100,7 +100,7 @@ class ProductContentGenerationService
             'provider' => 'gemini',
             'processing_mode' => 'external',
             'instruction' => $instruction,
-            'idempotency_key' => 'product-content-'.$product->id.'-'.hash('sha256', $text.'|'.$instruction),
+            'idempotency_key' => 'product-content-'.$product->id.'-'.Str::uuid(),
         ]);
 
         $result = is_array($ai['result'] ?? null) ? $ai['result'] : $ai;
