@@ -103,13 +103,15 @@ class RecoverStaleProductDocumentsTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_recent_processing_document_is_not_requeued(): void
+    public function test_recent_processing_and_old_pending_documents_are_not_requeued(): void
     {
-        $document = $this->document('processing', 'recent source', 5);
+        $recent = $this->document('processing', 'recent source', 5);
+        $pending = $this->document('pending', 'already queued source', 90);
 
         $this->artisan('farast:recover-product-documents')->assertExitCode(0);
 
-        $this->assertSame('processing', $document->fresh()->processing_status);
+        $this->assertSame('processing', $recent->fresh()->processing_status);
+        $this->assertSame('pending', $pending->fresh()->processing_status);
         Queue::assertNothingPushed();
     }
 }
