@@ -50,7 +50,8 @@ class FilePipelineTests(unittest.TestCase):
             "Contact person@example.com, Bearer abcdefghijklmnopqrstuvwxyz, "
             "mobile 09121234567, IBAN DE89370400440532013000, "
             "card 4111111111111111, Persian card ۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱, "
-            "and token sk-abcdefghijklmnopqrstuvwxyz123456"
+            "and token sk-abcdefghijklmnopqrstuvwxyz123456; password: mySecret123; "
+            "Authorization: Basic dXNlcjpwYXNz; postgres://user:supersecret@db.example.com/app"
         )
         self.assertGreaterEqual(count, 6)
         self.assertNotIn("person@example.com", text)
@@ -59,6 +60,9 @@ class FilePipelineTests(unittest.TestCase):
         self.assertNotIn("DE89370400440532013000", text)
         self.assertNotIn("4111111111111111", text)
         self.assertNotIn("۴۱۱۱۱۱۱۱۱۱۱۱۱۱۱۱", text)
+        self.assertNotIn("mySecret123", text)
+        self.assertNotIn("dXNlcjpwYXNz", text)
+        self.assertNotIn("supersecret", text)
 
     def test_executable_extension_is_rejected(self):
         with self.assertRaises(FileInspectionError):
