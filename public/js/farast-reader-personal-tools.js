@@ -6,7 +6,7 @@
   if (!toolbar) return;
   const product = root.dataset.productId || location.pathname;
   const storageKey = 'farast.reader.personal-tools.v1:' + product;
-  const defaults = { light: false, font: 'system', size: 100, highlightColor: 'yellow', highlights: [], notes: [], inkStrokes: [] };
+  const defaults = { light: false, font: 'system', size: 100, lineHeight: 1.7, measure: 'normal', paragraphSpacing: 1, focusMode: false, highlightColor: 'yellow', highlights: [], notes: [], inkStrokes: [] };
   let state = { ...defaults };
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
@@ -16,6 +16,10 @@
   state.light = !!state.light;
   state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';
   state.size = Math.min(160, Math.max(80, Number(state.size) || 100));
+  state.lineHeight = [1.4, 1.6, 1.7, 1.9, 2.1].includes(Number(state.lineHeight)) ? Number(state.lineHeight) : 1.7;
+  state.measure = ['narrow', 'normal', 'wide'].includes(state.measure) ? state.measure : 'normal';
+  state.paragraphSpacing = [0.5, 1, 1.5, 2].includes(Number(state.paragraphSpacing)) ? Number(state.paragraphSpacing) : 1;
+  state.focusMode = !!state.focusMode;
   state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.inkStrokes = Array.isArray(state.inkStrokes) ? state.inkStrokes.filter(validInkStroke).slice(-250) : [];
@@ -24,7 +28,7 @@
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
   group.setAttribute('aria-label', 'ابزارهای شخصی مطالعه');
-  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><label class="reader-personal-label">رنگ <select data-reader-highlight-color aria-label="رنگ هایلایت"><option value="yellow">زرد</option><option value="green">سبز</option><option value="blue">آبی</option><option value="pink">صورتی</option></select></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-export><i class="fa-solid fa-file-export"></i><span>خروجی یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-import><i class="fa-solid fa-file-import"></i><span>بازیابی</span></button><input type="file" accept="application/json,.json" data-reader-import-file hidden aria-label="انتخاب پشتیبان یادداشت‌ها"></div>';
+  group.innerHTML = '<button type="button" class="reader-tool reader-tool-wide" data-reading-light aria-pressed="false"><i class="fa-solid fa-lightbulb"></i><span>نور مطالعه</span></button><label class="reader-personal-label">قلم <select data-reader-font aria-label="نوع قلم"><option value="system">قلم سیستم</option><option value="sans">بدون سریف</option><option value="serif">سریف</option><option value="mono">تک‌فاصله</option><option value="dyslexic">OpenDyslexic (در صورت نصب)</option></select></label><label class="reader-personal-label">اندازه <input data-reader-font-size type="range" min="80" max="160" step="5" aria-label="اندازه قلم"></label><label class="reader-personal-label">فاصله خطوط <select data-reader-line-height aria-label="فاصله خطوط"><option value="1.4">فشرده</option><option value="1.6">کم</option><option value="1.7">معمولی</option><option value="1.9">باز</option><option value="2.1">خیلی باز</option></select></label><label class="reader-personal-label">عرض متن <select data-reader-measure aria-label="عرض ستون متن"><option value="narrow">باریک</option><option value="normal">معمولی</option><option value="wide">عریض</option></select></label><label class="reader-personal-label">فاصله بندها <select data-reader-paragraph-spacing aria-label="فاصله بندها"><option value="0.5">کم</option><option value="1">معمولی</option><option value="1.5">زیاد</option><option value="2">خیلی زیاد</option></select></label><button type="button" class="reader-tool reader-tool-wide" data-reader-focus aria-pressed="false">حالت تمرکز</button><label class="reader-personal-label">رنگ <select data-reader-highlight-color aria-label="رنگ هایلایت"><option value="yellow">زرد</option><option value="green">سبز</option><option value="blue">آبی</option><option value="pink">صورتی</option></select></label><button type="button" class="reader-tool" data-reader-highlight aria-label="هایلایت متن انتخاب‌شده" title="هایلایت انتخاب‌شده"><i class="fa-solid fa-highlighter"></i></button><button type="button" class="reader-tool reader-tool-wide" data-reader-note><i class="fa-regular fa-note-sticky"></i><span>حاشیه‌نویسی</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-notes aria-expanded="false"><i class="fa-solid fa-list"></i><span>یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-export><i class="fa-solid fa-file-export"></i><span>خروجی یادداشت‌ها</span></button><button type="button" class="reader-tool reader-tool-wide" data-reader-import><i class="fa-solid fa-file-import"></i><span>بازیابی</span></button><input type="file" accept="application/json,.json" data-reader-import-file hidden aria-label="انتخاب پشتیبان یادداشت‌ها"></div>';
   const status = document.createElement('span');
   status.className = 'sr-only';
   status.setAttribute('role', 'status');
@@ -39,6 +43,14 @@
   const css = document.createElement('style');
   css.textContent = `
     .farast-reader-personal-tools{flex-wrap:wrap}
+    .farast-reader-document{line-height:var(--reader-personal-line-height,1.7)}
+    .farast-reader-document p,.farast-reader-document li{margin-block-end:calc(1em * var(--reader-personal-paragraph-spacing,1))}
+    .farast-reader[data-reader-measure="narrow"] .farast-reader-document{max-width:min(100%,48rem);margin-inline:auto}
+    .farast-reader[data-reader-measure="normal"] .farast-reader-document{max-width:min(100%,68rem);margin-inline:auto}
+    .farast-reader[data-reader-measure="wide"] .farast-reader-document{max-width:100%}
+    .farast-reader.is-reader-focus .farast-reader-toolbar>*:not(.farast-reader-personal-tools),.farast-reader.is-reader-focus #reader-sidebar{opacity:.18;transition:opacity .2s ease}
+    .farast-reader.is-reader-focus .farast-reader-toolbar:hover>*:not(.farast-reader-personal-tools),.farast-reader.is-reader-focus #reader-sidebar:hover{opacity:1}
+    .farast-reader.is-reader-focus .farast-reader-canvas{max-width:100%}
     .reader-personal-label{display:inline-flex;align-items:center;gap:5px;color:var(--reader-muted);font-size:.7rem}
     .reader-personal-label select,.reader-personal-label input{max-width:125px;border:1px solid var(--reader-line);border-radius:7px;background:var(--reader-panel);color:var(--reader-text);padding:5px;font:inherit}
     .farast-reader.is-reading-light{--reader-bg:#f4ecd8;--reader-panel:#fff8e8;--reader-text:#392f22;--reader-muted:#786b58;--reader-line:rgba(90,70,40,.2);background:var(--reader-bg);color:var(--reader-text)}
@@ -65,6 +77,10 @@
   const lightButton = group.querySelector('[data-reading-light]');
   const fontSelect = group.querySelector('[data-reader-font]');
   const sizeInput = group.querySelector('[data-reader-font-size]');
+  const lineHeightSelect = group.querySelector('[data-reader-line-height]');
+  const measureSelect = group.querySelector('[data-reader-measure]');
+  const paragraphSpacingSelect = group.querySelector('[data-reader-paragraph-spacing]');
+  const focusButton = group.querySelector('[data-reader-focus]');
   const highlightColorSelect = group.querySelector('[data-reader-highlight-color]');
   const highlightColors = { yellow: 'rgba(250,204,21,.55)', green: 'rgba(74,222,128,.38)', blue: 'rgba(96,165,250,.42)', pink: 'rgba(244,114,182,.4)' };
   const applyPrefs = () => {
@@ -73,6 +89,14 @@
     root.dataset.readerFontSize = String(state.size);
     root.style.setProperty('--reader-personal-font-size', state.size + '%');
     root.style.setProperty('--reader-font-scale', String(state.size / 100));
+    root.style.setProperty('--reader-personal-line-height', String(state.lineHeight));
+    root.style.setProperty('--reader-personal-paragraph-spacing', String(state.paragraphSpacing));
+    root.dataset.readerMeasure = state.measure;
+    root.classList.toggle('is-reader-focus', state.focusMode);
+    lineHeightSelect.value = String(state.lineHeight);
+    measureSelect.value = state.measure;
+    paragraphSpacingSelect.value = String(state.paragraphSpacing);
+    focusButton.setAttribute('aria-pressed', String(state.focusMode));
     lightButton.setAttribute('aria-pressed', String(!!state.light));
     fontSelect.value = state.font;
     sizeInput.value = String(state.size);
@@ -83,6 +107,10 @@
   lightButton.addEventListener('click', () => { state.light = !state.light; applyPrefs(); persist(); announce(state.light ? 'نور مطالعه روشن شد.' : 'نور مطالعه خاموش شد.'); });
   fontSelect.addEventListener('change', () => { state.font = fontSelect.value; applyPrefs(); persist(); announce('قلم مطالعه تغییر کرد. قلم‌های نصب‌شدهٔ سیستم قابل استفاده‌اند.'); });
   sizeInput.addEventListener('input', () => { state.size = Number(sizeInput.value); applyPrefs(); persist(); });
+  lineHeightSelect.addEventListener('change', () => { state.lineHeight = Number(lineHeightSelect.value); applyPrefs(); persist(); announce('فاصلهٔ خطوط تغییر کرد.'); });
+  measureSelect.addEventListener('change', () => { state.measure = measureSelect.value; applyPrefs(); persist(); announce('عرض ستون مطالعه تغییر کرد.'); });
+  paragraphSpacingSelect.addEventListener('change', () => { state.paragraphSpacing = Number(paragraphSpacingSelect.value); applyPrefs(); persist(); announce('فاصلهٔ بندها تغییر کرد.'); });
+  focusButton.addEventListener('click', () => { state.focusMode = !state.focusMode; applyPrefs(); persist(); announce(state.focusMode ? 'حالت تمرکز روشن شد.' : 'حالت تمرکز خاموش شد.'); });
   highlightColorSelect.addEventListener('change', () => { state.highlightColor = highlightColorSelect.value; persist(); announce('رنگ هایلایت تغییر کرد.'); });
   const getPageTextMap = page => {
     const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT, { acceptNode(node) {
@@ -143,7 +171,7 @@
       const incoming = payload.data;
       if (!Array.isArray(incoming.highlights) || !Array.isArray(incoming.notes) || incoming.highlights.length > 500 || incoming.notes.length > 500 || (incoming.inkStrokes !== undefined && (!Array.isArray(incoming.inkStrokes) || incoming.inkStrokes.length > 250))) throw new Error('محتوای فایل پشتیبان معتبر نیست.');
       if (!window.confirm('یادداشت‌ها و هایلایت‌های فعلی با نسخهٔ پشتیبان جایگزین شوند؟')) return;
-      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', highlightColor: highlightColors[incoming.highlightColor] ? incoming.highlightColor : 'yellow', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))), inkStrokes: (incoming.inkStrokes || []).filter(validInkStroke).slice(-250) };
+      state = { ...defaults, light: !!incoming.light, font: ['system','sans','serif','mono','dyslexic'].includes(incoming.font) ? incoming.font : 'system', lineHeight: [1.4,1.6,1.7,1.9,2.1].includes(Number(incoming.lineHeight)) ? Number(incoming.lineHeight) : 1.7, measure: ['narrow','normal','wide'].includes(incoming.measure) ? incoming.measure : 'normal', paragraphSpacing: [0.5,1,1.5,2].includes(Number(incoming.paragraphSpacing)) ? Number(incoming.paragraphSpacing) : 1, focusMode: !!incoming.focusMode, highlightColor: highlightColors[incoming.highlightColor] ? incoming.highlightColor : 'yellow', size: Math.min(160, Math.max(80, Number(incoming.size) || 100)), highlights: incoming.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))), notes: incoming.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))), inkStrokes: (incoming.inkStrokes || []).filter(validInkStroke).slice(-250) };
       persist(); applyPrefs(); renderNotes(); renderHighlights(); announce('نسخهٔ پشتیبان در همین مرورگر بازیابی شد.');
     } catch (error) { announce(error.message || 'بازیابی فایل ناموفق بود.'); }
     finally { importFile.value = ''; }
