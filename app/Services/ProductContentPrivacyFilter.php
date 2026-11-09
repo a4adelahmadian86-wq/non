@@ -17,6 +17,7 @@ class ProductContentPrivacyFilter
                 'client_filename',
                 'upload_name',
                 'source_file_name',
+                'archive_entry',
                 'original_name',
                 'source_sha256',
                 'storage_path',
