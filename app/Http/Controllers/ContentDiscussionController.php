@@ -10,12 +10,13 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 class ContentDiscussionController extends Controller {
- private function rejectDiscussionSpam(Request $request,string $targetType,string $targetKey,string $body): void {
+ private function rejectDiscussionSpam(Request $request,string $targetType,string $targetKey,string $body,?int $exceptId=null): void {
   $links=preg_match_all('~(?:https?://|www\.)~i',$body);
   if($links>2) throw ValidationException::withMessages(['body'=>'برای جلوگیری از تبلیغات ناخواسته، در هر مشارکت حداکثر دو پیوند مجاز است.']);
   $duplicate=ContentDiscussion::query()->where('user_id',$request->user()->id)
    ->where('target_type',$targetType)->where('target_key',$targetKey)
-   ->where('body',$body)->where('created_at','>=',now()->subMinutes(10))->exists();
+   ->where('body',$body)->where('created_at','>=',now()->subMinutes(10))
+   ->when($exceptId!==null,fn($q)=>$q->whereKeyNot($exceptId))->exists();
   if($duplicate) throw ValidationException::withMessages(['body'=>'این متن را به‌تازگی در همین گفت‌وگو فرستاده‌اید؛ از ارسال تکراری خودداری کنید.']);
  }
  private function safeDiscussionRedirect(ContentDiscussion $discussion) {
@@ -29,7 +30,6 @@ class ContentDiscussionController extends Controller {
    if(!in_array($data['kind'],['review','question'],true)) throw ValidationException::withMessages(['kind'=>'برای محصول فقط دیدگاه یا پرسش مجاز است.']);
    if($data['kind']==='review' && !($data['rating'] ?? null)) throw ValidationException::withMessages(['rating'=>'برای ثبت دیدگاه، امتیاز یک تا پنج را انتخاب کنید.']);
    if($data['kind']!=='review') $data['rating']=null;
-   if($data['kind']==='review' && ContentDiscussion::where('target_type','product')->where('target_key',(string)$product->id)->where('kind','review')->where('user_id',$request->user()->id)->where('status','!=','rejected')->exists()) throw ValidationException::withMessages(['body'=>'برای این محصول قبلاً دیدگاه ثبت کرده‌اید.']);
    $key=(string)$product->id;$redirect=route('store.product',$product->slug).'#store-discussions';
   } else {
    if(!BlogController::articleExists($data['target_key'])) abort(404);
@@ -37,8 +37,17 @@ class ContentDiscussionController extends Controller {
    $data['rating']=null;$key=$data['target_key'];$redirect=route('blog.show',$key).'#store-discussions';
   }
   $this->rejectDiscussionSpam($request,$data['target_type'],$key,trim($data['body']));
-  $discussion=ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
-  DiscussionSubscription::firstOrCreate(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id]);
+  $discussion=DB::transaction(function() use($request,$data,$key,$product) {
+   if($data['target_type']==='product') {
+    $lockedProduct=StoreProduct::published()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+    if($data['kind']==='review' && ContentDiscussion::query()->where('target_type','product')->where('target_key',(string)$lockedProduct->id)->where('kind','review')->where('user_id',$request->user()->id)->where('status','!=','rejected')->exists()) {
+     throw ValidationException::withMessages(['body'=>'برای این محصول قبلاً دیدگاه ثبت کرده‌اید.']);
+    }
+   }
+   $item=ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
+   DiscussionSubscription::firstOrCreate(['discussion_id'=>$item->id,'user_id'=>$request->user()->id]);
+   return $item;
+  });
   return redirect($redirect)->with('discussion_status','پیام شما ثبت شد و پس از بررسی مدیر در همین صفحه نمایش داده می‌شود.');
  }
  public function react(Request $request, ContentDiscussion $discussion) {
@@ -147,7 +156,7 @@ class ContentDiscussionController extends Controller {
    $locked=ContentDiscussion::query()->whereKey($discussion->id)->lockForUpdate()->firstOrFail();
    abort_unless((int)$locked->user_id===(int)$request->user()->id,404);
    abort_unless($locked->status==='pending',409,'پس از تصمیم تیم بررسی، ویرایش این مشارکت امکان‌پذیر نیست.');
-   $this->rejectDiscussionSpam($request,$locked->target_type,$locked->target_key,trim((string)$body));
+   $this->rejectDiscussionSpam($request,$locked->target_type,$locked->target_key,trim((string)$body),$locked->id);
    $locked->forceFill([
     'body'=>trim((string)$body),
     'title'=>$locked->kind==='reply'?null:(trim((string)$title)?:null),
