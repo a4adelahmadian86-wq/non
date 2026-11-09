@@ -18,7 +18,9 @@ class ProductDocumentProcessingState
         int $readerPageCount,
     ): array {
         $extractionComplete = ! (bool) ($inspection['extraction_truncated'] ?? false);
-        $visualOnlyReviewComplete = $expectedBatches === 0 && ($providers['groq_vision'] ?? null) === 'completed';
+        $visualOnlyReviewComplete = $expectedBatches === 0
+            && ($providers['groq_vision'] ?? null) === 'completed'
+            && (int) ($inspection['extracted_characters'] ?? 0) === 0;
         $analysisBatchesComplete = $expectedBatches > 0
             ? $successfulBatches >= $expectedBatches
             : $visualOnlyReviewComplete;
