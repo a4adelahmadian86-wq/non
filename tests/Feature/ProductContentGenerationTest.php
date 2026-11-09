@@ -130,7 +130,7 @@ class ProductContentGenerationTest extends TestCase
         ]];
         $data['document']->update(['structure_json' => $structure]);
         $data['fact']->update([
-            'fact_value' => 'راهنمای نصب مرحله‌به‌مرحله؛ شبا DE89370400440532013000',
+            'fact_value' => 'راهنمای نصب مرحله‌به‌مرحله؛ شبا DE89370400440532013000؛ کارت 4111111111111111',
             'evidence_text' => 'در صفحه نخست راهنما آمده است؛ کلید sk-abcdefghijklmnopqrstuvwxyz123456',
         ]);
 
@@ -147,6 +147,7 @@ class ProductContentGenerationTest extends TestCase
                     $this->assertStringNotContainsString('09121234567', $text);
                     $this->assertStringNotContainsString('sk-abcdefghijklmnopqrstuvwxyz123456', $text);
                     $this->assertStringNotContainsString('DE89370400440532013000', $text);
+                    $this->assertStringNotContainsString('4111111111111111', $text);
                     $this->assertStringContainsString('[REDACTED]', $text);
                     $this->assertSame('gemini', $context['provider']);
                     $this->assertSame('external', $context['processing_mode']);
