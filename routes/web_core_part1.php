@@ -61,6 +61,7 @@ Route::get('/blog', [BlogController::class, 'index'])->name('blog');
 Route::get('/community', [ContentDiscussionController::class, 'communityIndex'])->name('community.index');
 Route::middleware('auth')->group(function () {
     Route::get('/my/community', [ContentDiscussionController::class, 'myDiscussions'])->name('community.mine');
+    Route::put('/my/community/{discussion}', [ContentDiscussionController::class, 'updateOwn'])->middleware('throttle:10,10')->name('community.mine.update');
     Route::delete('/my/community/{discussion}', [ContentDiscussionController::class, 'withdrawOwn'])->middleware('throttle:10,10')->name('community.mine.withdraw');
 });
 Route::get('/community/members/{user}', [ContentDiscussionController::class, 'member'])->whereNumber('user')->name('community.member');

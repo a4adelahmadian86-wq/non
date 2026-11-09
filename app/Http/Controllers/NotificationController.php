@@ -46,6 +46,35 @@ class NotificationController extends Controller
         return back()->with('status', $n ? $n.' اعلان خوانده شد.' : 'اعلان خوانده‌نشده‌ای نبود.');
     }
 
+    public function visit(Request $request, int $id)
+    {
+        $notification = \App\Models\FarastNotification::query()
+            ->where('user_id', $request->user()->id)
+            ->findOrFail($id);
+        $target = $notification->url();
+        if (! is_string($target) || trim($target) === '') {
+            $this->notifications->markRead($request->user()->id, $notification->id);
+            return redirect()->route('platform.notifications');
+        }
+
+        $parts = parse_url($target);
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        $targetHost = is_array($parts) ? ($parts['host'] ?? null) : null;
+        $scheme = is_array($parts) ? ($parts['scheme'] ?? null) : null;
+        $safeRelative = str_starts_with($target, '/') && ! str_starts_with($target, '//');
+        $safeAbsolute = in_array($scheme, ['http', 'https'], true)
+            && is_string($targetHost) && is_string($appHost)
+            && hash_equals(strtolower($appHost), strtolower($targetHost));
+
+        if (! $safeRelative && ! $safeAbsolute) {
+            $this->notifications->markRead($request->user()->id, $notification->id);
+            return redirect()->route('platform.notifications');
+        }
+
+        $this->notifications->markRead($request->user()->id, $notification->id);
+        return redirect()->to($target);
+    }
+
     public function unreadCount()
     {
         return response()->json([

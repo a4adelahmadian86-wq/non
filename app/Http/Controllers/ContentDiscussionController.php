@@ -10,6 +10,17 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 class ContentDiscussionController extends Controller {
+ private function rejectDiscussionSpam(Request $request,string $targetType,string $targetKey,string $body): void {
+  $links=preg_match_all('~(?:https?://|www\.)~i',$body);
+  if($links>2) throw ValidationException::withMessages(['body'=>'برای جلوگیری از تبلیغات ناخواسته، در هر مشارکت حداکثر دو پیوند مجاز است.']);
+  $duplicate=ContentDiscussion::query()->where('user_id',$request->user()->id)
+   ->where('target_type',$targetType)->where('target_key',$targetKey)
+   ->where('body',$body)->where('created_at','>=',now()->subMinutes(10))->exists();
+  if($duplicate) throw ValidationException::withMessages(['body'=>'این متن را به‌تازگی در همین گفت‌وگو فرستاده‌اید؛ از ارسال تکراری خودداری کنید.']);
+ }
+ private function safeDiscussionRedirect(ContentDiscussion $discussion) {
+  return redirect()->to($this->discussionPublicUrl($discussion) ?: route('community.index'));
+ }
  public function store(Request $request) {
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body'),'title'=>is_string($request->input('title'))?trim($request->input('title')):$request->input('title')]);
   $data=$request->validate(['target_type'=>['required','in:product,article'],'target_key'=>['required','string','max:240'],'kind'=>['required','in:review,question,comment'],'title'=>['nullable','string','max:180'],'body'=>['required','string','min:10','max:5000'],'rating'=>['nullable','integer','min:1','max:5']]);
@@ -25,6 +36,7 @@ class ContentDiscussionController extends Controller {
    if($data['kind']==='review') throw ValidationException::withMessages(['kind'=>'امتیازدهی فقط برای محصولات فعال است.']);
    $data['rating']=null;$key=$data['target_key'];$redirect=route('blog.show',$key).'#store-discussions';
   }
+  $this->rejectDiscussionSpam($request,$data['target_type'],$key,trim($data['body']));
   $discussion=ContentDiscussion::create(['target_type'=>$data['target_type'],'target_key'=>$key,'kind'=>$data['kind'],'user_id'=>$request->user()->id,'title'=>($data['title'] ?? null) ?: null,'body'=>trim($data['body']),'rating'=>$data['rating']??null,'status'=>'pending']);
   DiscussionSubscription::firstOrCreate(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id]);
   return redirect($redirect)->with('discussion_status','پیام شما ثبت شد و پس از بررسی مدیر در همین صفحه نمایش داده می‌شود.');
@@ -40,7 +52,7 @@ class ContentDiscussionController extends Controller {
    if($reaction) { $reaction->type=$data['type']; $reaction->save(); return; }
    \App\Models\DiscussionReaction::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id,'type'=>$data['type']]);
   });
-  return redirect()->to(url()->previous().'#store-discussions')->with('discussion_status','واکنش شما ثبت شد.');
+  return $this->safeDiscussionRedirect($discussion)->with('discussion_status','واکنش شما ثبت شد.');
  }
  public function report(Request $request, ContentDiscussion $discussion) {
   abort_unless($discussion->status==='approved',404);
@@ -50,14 +62,14 @@ class ContentDiscussionController extends Controller {
    ['discussion_id'=>$discussion->id,'reporter_id'=>$request->user()->id],
    ['reason'=>$data['reason'],'details'=>trim((string)($data['details']??'')) ?: null,'status'=>'pending']
   );
-  return back()->with('discussion_status',$report->wasRecentlyCreated?'گزارش شما برای بررسی به تیم مدیریت ارسال شد.':'گزارش قبلی شما برای این محتوا ثبت شده است.');
+  return $this->safeDiscussionRedirect($discussion)->with('discussion_status',$report->wasRecentlyCreated?'گزارش شما برای بررسی به تیم مدیریت ارسال شد.':'گزارش قبلی شما برای این محتوا ثبت شده است.');
  }
  public function toggleFollow(Request $request, ContentDiscussion $discussion) {
   abort_unless($discussion->parent_id===null && $discussion->status==='approved',404);
   $subscription=DiscussionSubscription::query()->where('discussion_id',$discussion->id)->where('user_id',$request->user()->id)->first();
   if($subscription){$subscription->delete();$message='اعلان پاسخ‌های این گفت‌وگو برای شما غیرفعال شد.';}
   else {DiscussionSubscription::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id]);$message='این گفت‌وگو را دنبال می‌کنید؛ پاسخ‌های جدید به شما اطلاع داده می‌شود.';}
-  return back()->with('discussion_status',$message);
+  return $this->safeDiscussionRedirect($discussion)->with('discussion_status',$message);
  }
  private function notifyDiscussionFollowers(ContentDiscussion $reply): void {
   if(!$reply->parent_id) return;
@@ -76,6 +88,7 @@ class ContentDiscussionController extends Controller {
   abort_unless($discussion->parent_id===null && $discussion->status==='approved',404);
   $request->merge(['body'=>is_string($request->input('body'))?trim($request->input('body')):$request->input('body')]);
   $data=$request->validate(['body'=>['required','string','min:2','max:3000']]);
+  $this->rejectDiscussionSpam($request,$discussion->target_type,$discussion->target_key,trim($data['body']));
   ContentDiscussion::create([
    'target_type'=>$discussion->target_type,
    'target_key'=>$discussion->target_key,
@@ -85,7 +98,7 @@ class ContentDiscussionController extends Controller {
    'body'=>trim($data['body']),
    'status'=>'pending',
   ]);
-  return back()->with('discussion_status','پاسخ شما ثبت شد و پس از بررسی مدیر منتشر می‌شود.');
+  return $this->safeDiscussionRedirect($discussion)->with('discussion_status','پاسخ شما ثبت شد و پس از بررسی مدیر منتشر می‌شود.');
  }
 
 
@@ -122,6 +135,26 @@ class ContentDiscussionController extends Controller {
    $item->setAttribute('parent_url',$item->target_url ? $item->target_url.'#discussion-'.$anchor : null);
   });
   return view('community.mine',compact('discussions','stats','status','kind','targetType','search'));
+ }
+ public function updateOwn(Request $request,ContentDiscussion $discussion) {
+  $body=is_string($request->input('body'))?trim($request->input('body')):$request->input('body');
+  $title=is_string($request->input('title'))?trim($request->input('title')):$request->input('title');
+  $rules=['body'=>['required','string',$discussion->kind==='reply'?'min:2':'min:10',$discussion->kind==='reply'?'max:3000':'max:5000']];
+  if($discussion->kind!=='reply') $rules['title']=['nullable','string','max:180'];
+  if($discussion->kind==='review') $rules['rating']=['required','integer','min:1','max:5'];
+  $data=$request->validate($rules);
+  DB::transaction(function() use($request,$discussion,$data,$title,$body) {
+   $locked=ContentDiscussion::query()->whereKey($discussion->id)->lockForUpdate()->firstOrFail();
+   abort_unless((int)$locked->user_id===(int)$request->user()->id,404);
+   abort_unless($locked->status==='pending',409,'پس از تصمیم تیم بررسی، ویرایش این مشارکت امکان‌پذیر نیست.');
+   $this->rejectDiscussionSpam($request,$locked->target_type,$locked->target_key,trim((string)$body));
+   $locked->forceFill([
+    'body'=>trim((string)$body),
+    'title'=>$locked->kind==='reply'?null:(trim((string)$title)?:null),
+    'rating'=>$locked->kind==='review'?(int)$data['rating']:null,
+   ])->save();
+  });
+  return back()->with('discussion_status','اصلاحات مشارکت شما ذخیره شد و در صف بررسی باقی ماند.');
  }
  public function withdrawOwn(Request $request, ContentDiscussion $discussion) {
   DB::transaction(function() use($request,$discussion){

@@ -56,7 +56,7 @@
                     @endif
                     <div class="nf-actions">
                         @if($url)
-                            <a href="{{ $url }}" class="nf-action-primary">مشاهده</a>
+                            <a href="{{ route('platform.notifications.visit', $n->id) }}" class="nf-action-primary">مشاهده</a>
                         @endif
                         @unless($n->isRead())
                             <form method="post" action="{{ route('platform.notifications.read', $n->id) }}">

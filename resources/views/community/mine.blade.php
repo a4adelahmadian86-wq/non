@@ -39,6 +39,12 @@
      <div>
       @if($item->parent_url)<a href="{{ $item->discussion_url }}">مشاهده در محتوا <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>@elseif($item->target_url)<a href="{{ $item->target_url }}#discussion-{{ $item->id }}">مشاهده در محتوا <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>@endif
       @if($item->status==='pending')
+       <details class="community-mine-edit"><summary>ویرایش مشارکت</summary><form method="post" action="{{ route('community.mine.update',$item) }}">@csrf @method('PUT')
+        @if($item->kind!=='reply')<label>عنوان<input type="text" name="title" maxlength="180" value="{{ $item->title }}"></label>@endif
+        <label>متن مشارکت<textarea name="body" rows="4" minlength="{{ $item->kind==='reply'?2:10 }}" maxlength="{{ $item->kind==='reply'?3000:5000 }}" required>{{ $item->body }}</textarea></label>
+        @if($item->kind==='review')<label>امتیاز<select name="rating" required>@for($score=5;$score>=1;$score--)<option value="{{ $score }}" @selected((int)$item->rating===$score)>{{ $score }} از ۵</option>@endfor</select></label>@endif
+        <button type="submit">ذخیره اصلاحات</button>
+       </form></details>
        <form method="post" action="{{ route('community.mine.withdraw',$item) }}" onsubmit="return confirm('این مشارکت از صف بررسی لغو شود؟')">@csrf @method('DELETE')<button type="submit">لغو مشارکت</button></form>
       @endif
      </div>

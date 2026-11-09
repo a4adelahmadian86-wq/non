@@ -238,4 +238,33 @@ class ContentDiscussionTest extends TestCase {
   $this->actingAs($admin)->get(route('admin.discussions.index',['status'=>'pending','q'=>'کاربر آزمایشی']))->assertOk()->assertSee('آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟');
  }
 
+
+ public function test_members_can_edit_only_their_own_pending_discussions(): void {
+  $p=$this->product();$author=$this->user('09123456941');$other=$this->user('09123456942');$admin=$this->user('09123456943','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','title'=>'عنوان اولیه','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $item=ContentDiscussion::firstOrFail();
+  $this->actingAs($other)->put(route('community.mine.update',$item),['title'=>'دستکاری','body'=>'این متن متعلق به کاربر دیگری است.'])->assertNotFound();
+  $this->actingAs($author)->put(route('community.mine.update',$item),['title'=>'عنوان اصلاح‌شده','body'=>'آیا نسخه قابل ویرایش این فایل برای استفاده در کلاس آموزشی موجود است؟'])->assertRedirect();
+  $this->assertDatabaseHas('content_discussions',['id'=>$item->id,'title'=>'عنوان اصلاح‌شده','status'=>'pending']);
+  $this->actingAs($admin)->patch(route('admin.discussions.moderate',$item),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($author)->put(route('community.mine.update',$item),['body'=>'این متن پس از انتشار دیگر نباید قابل تغییر باشد.'])->assertStatus(409);
+ }
+ public function test_duplicate_discussion_content_and_excessive_links_are_rejected(): void {
+  $p=$this->product();$author=$this->user('09123456944');
+  $payload=['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'];
+  $this->actingAs($author)->post(route('discussions.store'),$payload)->assertRedirect();
+  $this->actingAs($author)->from(route('store.product',$p->slug))->post(route('discussions.store'),$payload)->assertSessionHasErrors('body');
+  $payload['body']='لینک اول https://example.com لینک دوم https://example.org لینک سوم https://example.net';
+  $this->actingAs($author)->from(route('store.product',$p->slug))->post(route('discussions.store'),$payload)->assertSessionHasErrors('body');
+  $this->assertDatabaseCount('content_discussions',1);
+ }
+ public function test_notification_visit_marks_owned_notification_read_and_rejects_other_users(): void {
+  $owner=$this->user('09123456945');$other=$this->user('09123456946');
+  $notification=\\App\\Models\\FarastNotification::create(['user_id'=>$owner->id,'type'=>'discussion_approved','title'=>'مشارکت منتشر شد','body'=>'مشارکت شما تأیید شد.','data'=>['url'=>'/community']]);
+  $this->actingAs($other)->get(route('platform.notifications.visit',$notification->id))->assertNotFound();
+  $this->assertDatabaseHas('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
+  $this->actingAs($owner)->get(route('platform.notifications.visit',$notification->id))->assertRedirect('/community');
+  $this->assertDatabaseMissing('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
+ }
+
 }
