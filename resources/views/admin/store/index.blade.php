@@ -31,7 +31,7 @@
         <div><span>قرنطینه منتظر تأیید</span><b>{{ number_format($ingestionStats['inspected']) }}</b></div>
       </div>
       <div class="product-pipeline-meta">
-        <span>درایور صف: <b>{{ $queueDriver = config('queue.default') }}</b></span>
+        <span>درایور صف: <b>{{ config('queue.default') }}</b></span>
         <span>کارهای صف اسناد: <b>{{ $queueStats['pending'] === null ? 'ناموجود' : number_format($queueStats['pending']) }}</b></span>
         <span>کارهای ناموفق: <b>{{ $queueStats['failed'] === null ? 'ناموجود' : number_format($queueStats['failed']) }}</b></span>
       </div>
