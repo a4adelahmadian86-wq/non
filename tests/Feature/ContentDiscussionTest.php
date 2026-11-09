@@ -260,7 +260,7 @@ class ContentDiscussionTest extends TestCase {
  }
  public function test_notification_visit_marks_owned_notification_read_and_rejects_other_users(): void {
   $owner=$this->user('09123456945');$other=$this->user('09123456946');
-  $notification=\\App\\Models\\FarastNotification::create(['user_id'=>$owner->id,'type'=>'discussion_approved','title'=>'مشارکت منتشر شد','body'=>'مشارکت شما تأیید شد.','data'=>['url'=>'/community']]);
+  $notification=\App\Models\FarastNotification::create(['user_id'=>$owner->id,'type'=>'discussion_approved','title'=>'مشارکت منتشر شد','body'=>'مشارکت شما تأیید شد.','data'=>['url'=>'/community']]);
   $this->actingAs($other)->get(route('platform.notifications.visit',$notification->id))->assertNotFound();
   $this->assertDatabaseHas('farast_notifications',['id'=>$notification->id,'read_at'=>null]);
   $this->actingAs($owner)->get(route('platform.notifications.visit',$notification->id))->assertRedirect('/community');
