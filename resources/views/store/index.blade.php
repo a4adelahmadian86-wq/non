@@ -51,7 +51,7 @@
     <nav class="store-chips" aria-label="دسته‌بندی محصولات">
       <a class="{{ !$category ? 'active' : '' }}" href="{{ route('store', request()->only(['q','sort','price','type'])) }}">همه</a>
       @foreach($categories as $cat)
-        <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', array_merge(request()->only(['q','sort','price','type']), ['category'=>$cat->slug])) }}">{{ $cat->name }}</a>
+        <a class="{{ $category===$cat->slug ? 'active' : '' }}" href="{{ route('store', array_merge(request()->only(['q','sort','price','type']), ['category'=>$cat->slug])) }}">{{ $cat->name }} <small>{{ $cat->published_products_count }}</small></a>
       @endforeach
     </nav>
 
