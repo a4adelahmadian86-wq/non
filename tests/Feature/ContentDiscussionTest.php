@@ -66,7 +66,8 @@ class ContentDiscussionTest extends TestCase {
   $p=$this->product();$author=$this->user('09123456793');
   $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا امکان دریافت نسخه قابل ویرایش این فایل وجود دارد؟'])->assertRedirect();
   $d=ContentDiscussion::firstOrFail();
-  $this->app['auth']->guard()->logout();\n  $this->post(route('discussions.reaction',$d),['type'=>'like'])->assertRedirect(route('login'));
+  $this->app['auth']->guard()->logout();
+  $this->post(route('discussions.reaction',$d),['type'=>'like'])->assertRedirect(route('login'));
   $this->actingAs($author)->post(route('discussions.reaction',$d),['type'=>'like'])->assertNotFound();
   $admin=$this->user('09123456794','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
   $this->actingAs($author)->post(route('discussions.reaction',$d),['type'=>'like'])->assertForbidden();
