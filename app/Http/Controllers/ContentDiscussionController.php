@@ -224,16 +224,15 @@ class ContentDiscussionController extends Controller {
   $products=$productIds->isNotEmpty()
    ? StoreProduct::query()->whereIn('id',$productIds)->get(['id','title','slug'])->keyBy(fn($product)=>(string)$product->id)
    : collect();
-  $articles=collect(BlogController::articles());
-  $items->each(function($item) use ($products,$articles) {
+  $items->each(function($item) use ($products) {
    if($item->target_type==='product') {
     $product=$products->get((string)$item->target_key);
     $item->setAttribute('target_label',$product?->title ?: 'محصول حذف‌شده');
     $item->setAttribute('target_url',$product?->slug ? route('store.product',$product->slug) : null);
    } else {
-    $article=$articles->get($item->target_key);
-    $item->setAttribute('target_label',$article['title'] ?? 'مقاله ناموجود');
-    $item->setAttribute('target_url',$article ? route('blog.show',$item->target_key) : null);
+    $exists=BlogController::articleExists($item->target_key);
+    $item->setAttribute('target_label',$exists ? 'مقاله · '.$item->target_key : 'مقاله ناموجود');
+    $item->setAttribute('target_url',$exists ? route('blog.show',$item->target_key) : null);
    }
   });
   return view('admin.discussions.index',compact('discussions','stats','status','targetType','kind','search'));
