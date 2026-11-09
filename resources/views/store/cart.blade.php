@@ -23,6 +23,7 @@
       </div>
     @else
       <div class="store-cart-grid">
+        <div class="store-cart-feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
         <div class="store-cart-list">
           @foreach($cart['items'] as $item)
             <div class="store-cart-row" data-product="{{ $item['product_id'] }}">
@@ -31,10 +32,10 @@
                 <small>{{ number_format($item['unit_price_rials']/10) }} تومان برای هر عدد</small>
               </div>
               <div class="store-qty">
-                <button type="button" data-cart-action="minus">−</button>
-                <b>{{ $item['quantity'] }}</b>
-                <button type="button" data-cart-action="plus">+</button>
-                <button type="button" data-cart-action="remove" title="حذف">حذف</button>
+                <button type="button" data-cart-action="minus" aria-label="کاهش تعداد {{ $item['title'] }}">−</button>
+                <b aria-live="polite">{{ $item['quantity'] }}</b>
+                <button type="button" data-cart-action="plus" aria-label="افزایش تعداد {{ $item['title'] }}">+</button>
+                <button type="button" data-cart-action="remove" title="حذف" aria-label="حذف {{ $item['title'] }} از سبد">حذف</button>
               </div>
               <strong>{{ number_format($item['line_total_rials']/10) }} تومان</strong>
             </div>
@@ -80,7 +81,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20260929">
+<link rel="stylesheet" href="/css/store.css?v=20261109cart3">
 @endpush
 @push('scripts')
 <script>
@@ -90,9 +91,20 @@
     const r=await fetch(url,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify(body||{})});
     const j=await r.json(); if(!r.ok) throw new Error(j.message||'خطا در سبد'); return j;
   }
+  const feedback=document.querySelector('.store-cart-feedback');
+  const showFeedback=(message)=>{
+    if(!feedback)return;
+    feedback.hidden=false;
+    feedback.textContent=message;
+    feedback.classList.add('is-error');
+  };
   document.querySelectorAll('.store-cart-row').forEach(row=>row.addEventListener('click',async e=>{
-    const b=e.target.closest('[data-cart-action]'); if(!b) return;
+    const b=e.target.closest('[data-cart-action]'); if(!b||b.disabled) return;
     const id=row.dataset.product; const action=b.dataset.cartAction;
+    if(action==='remove'&&!window.confirm('این محصول از سبد خرید حذف شود؟'))return;
+    const controls=row.querySelectorAll('button[data-cart-action]');
+    controls.forEach(control=>{control.disabled=true;});
+    if(feedback){feedback.hidden=true;feedback.textContent='';}
     try{
       if(action==='remove') await call('/cart/products/'+id+'/remove');
       else {
@@ -101,7 +113,10 @@
         await call('/cart/products/'+id+'/update',{quantity:Math.max(0,q)});
       }
       location.reload();
-    }catch(err){alert(err.message)}
+    }catch(err){
+      controls.forEach(control=>{control.disabled=false;});
+      showFeedback(err.message||'به‌روزرسانی سبد خرید انجام نشد؛ دوباره تلاش کنید.');
+    }
   }));
 })();
 </script>
