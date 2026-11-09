@@ -186,7 +186,7 @@ class ProductContentGenerationService
         };
 
         $categoryId = trim((string) ($result['category_id'] ?? ''));
-        $allowedCategoryIds = array_column($categories, 'id');
+        $allowedCategoryIds = array_map('strval', array_column($categories, 'id'));
         if (! in_array($categoryId, $allowedCategoryIds, true)) $categoryId = '';
 
         $usedFactIds = collect(is_array($result['used_fact_ids'] ?? null) ? $result['used_fact_ids'] : [])
