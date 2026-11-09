@@ -123,8 +123,13 @@ class StoreController extends Controller
             ->values();
         $hasPreview = $showPreviews->isNotEmpty();
         $title = $product->seo_title ?: $product->title;
+        $discussionSort = in_array(request()->query('discussion_sort'), ['helpful','newest','oldest','highest_rated'], true) ? request()->query('discussion_sort') : 'newest';
         if (Schema::hasTable('content_discussions')) {
-            $discussions = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->whereNull('parent_id')->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($q) => $q->where('type', 'like'), 'reactions as dislikes_count' => fn ($q) => $q->where('type', 'dislike')])->with(['user', 'reactions' => fn ($q) => $q->where('user_id', auth()->id()), 'replies' => fn ($q) => $q->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($r) => $r->where('type', 'like'), 'reactions as dislikes_count' => fn ($r) => $r->where('type', 'dislike')])->with(['user', 'reactions' => fn ($r) => $r->where('user_id', auth()->id())])->oldest()])->latest()->limit(30)->get();
+            $discussions = ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->whereNull('parent_id')->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($q) => $q->where('type', 'like'), 'reactions as dislikes_count' => fn ($q) => $q->where('type', 'dislike')])->with(['user', 'reactions' => fn ($q) => $q->where('user_id', auth()->id()), 'replies' => fn ($q) => $q->where('status', 'approved')->withCount(['reactions as likes_count' => fn ($r) => $r->where('type', 'like'), 'reactions as dislikes_count' => fn ($r) => $r->where('type', 'dislike')])->with(['user', 'reactions' => fn ($r) => $r->where('user_id', auth()->id())])->oldest()])->when($discussionSort==='helpful', fn($q)=>$q->orderByRaw("(SELECT COUNT(*) FROM discussion_reactions dr WHERE dr.discussion_id = content_discussions.id AND dr.type = 'like') - (SELECT COUNT(*) FROM discussion_reactions dr2 WHERE dr2.discussion_id = content_discussions.id AND dr2.type = 'dislike') DESC"))
+                ->when($discussionSort==='oldest', fn($q)=>$q->oldest())
+                ->when($discussionSort==='highest_rated', fn($q)=>$q->orderByDesc('rating')->orderByDesc('created_at'))
+                ->when($discussionSort==='newest', fn($q)=>$q->latest())
+                ->limit(30)->get();
             $discussionCounts = [
                 'reviews' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'review')->whereNull('parent_id')->where('status', 'approved')->count(),
                 'questions' => ContentDiscussion::query()->where('target_type', 'product')->where('target_key', (string) $product->id)->where('kind', 'question')->whereNull('parent_id')->where('status', 'approved')->count(),
@@ -138,7 +143,7 @@ class StoreController extends Controller
             $ratingBreakdown = [];
         }
 
-        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating', 'ratingBreakdown'));
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating', 'ratingBreakdown', 'discussionSort'));
     }
 
     public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)

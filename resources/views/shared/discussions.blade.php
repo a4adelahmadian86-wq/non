@@ -44,7 +44,8 @@
     @endif
 
     <div class="discussion-toolbar">
-        <div><strong>گفت‌وگوهای منتشرشده</strong><small>جدیدترین موارد ابتدا نمایش داده می‌شوند.</small></div>
+        <div><strong>گفت‌وگوهای منتشرشده</strong><small>مرتب‌سازی بر اساس زمان یا میزان مفیدبودن</small></div>
+        <form class="discussion-sort-form" method="get" action="{{ request()->url() }}"><label for="discussion-sort">مرتب‌سازی</label><select id="discussion-sort" name="discussion_sort"><option value="newest" @selected(($discussionSort ?? request()->query('discussion_sort', 'newest')) === 'newest')>جدیدترین</option><option value="helpful" @selected(($discussionSort ?? request()->query('discussion_sort')) === 'helpful')>مفیدترین</option><option value="oldest" @selected(($discussionSort ?? request()->query('discussion_sort')) === 'oldest')>قدیمی‌ترین</option>@if($isProduct)<option value="highest_rated" @selected(($discussionSort ?? request()->query('discussion_sort')) === 'highest_rated')>بالاترین امتیاز</option>@endif</select><button type="submit">اعمال</button></form>
         <div class="discussion-filters" role="group" aria-label="فیلتر گفت‌وگوها">
             <input type="radio" name="discussion-filter" id="discussion-filter-all" checked>
             <label for="discussion-filter-all">همه <span>{{ number_format($primaryCount + $questionCount) }}</span></label>
@@ -57,7 +58,7 @@
 
     <div class="discussion-list">
         @forelse($entries as $entry)
-            <article class="discussion-entry" data-kind="{{ $entry->kind }}">
+            <article class="discussion-entry" id="discussion-{{ $entry->id }}" data-kind="{{ $entry->kind }}">
                 <div class="discussion-entry-top">
                     <span class="discussion-avatar" aria-hidden="true">{{ $entry->user?->name ? mb_substr($entry->user->name, 0, 1) : '؟' }}</span>
                     <div class="discussion-author"><strong>{{ $entry->user?->name ?: 'حساب حذف‌شده' }}</strong><small>{{ $entry->created_at?->translatedFormat('d F Y') }}</small></div>
@@ -69,13 +70,15 @@
                 @if($entry->title)<h3>{{ $entry->title }}</h3>@endif
                 <p class="discussion-body">{{ $entry->body }}</p>
                 @include('shared.discussion-reactions', ['discussionItem' => $entry])
+                @include('shared.discussion-report', ['discussionItem' => $entry])
                 @if($entry->replies->isNotEmpty())
                     <div class="discussion-replies">
                         @foreach($entry->replies as $reply)
-                            <div class="discussion-reply">
+                            <div class="discussion-reply" id="discussion-{{ $reply->id }}">
                                 <div class="discussion-reply-heading"><i class="fa-solid fa-reply" aria-hidden="true"></i><strong>پاسخ مدیریت</strong><small>{{ $reply->created_at?->translatedFormat('d F Y') }}</small></div>
                                 <p>{{ $reply->body }}</p>
                                 @include('shared.discussion-reactions', ['discussionItem' => $reply])
+                                @include('shared.discussion-report', ['discussionItem' => $reply])
                             </div>
                         @endforeach
                     </div>

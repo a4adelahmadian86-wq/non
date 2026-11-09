@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 @section('admin-content')
-<section class="discussion-admin-page" dir="rtl"><div class="discussion-admin-heading"><div><span class="eyebrow">مدیریت تعامل کاربران</span><h1>نظرات و پرسش‌ها</h1><p>محتوای ارسالی محصولات و مجله را بررسی و پاسخ دهید.</p></div><a class="store-outline-btn" href="{{ route('admin.store.index') }}">مدیریت محصولات</a></div>
+<section class="discussion-admin-page" dir="rtl"><div class="discussion-admin-heading"><div><span class="eyebrow">مدیریت تعامل کاربران</span><h1>نظرات و پرسش‌ها</h1><p>محتوای ارسالی محصولات و مجله را بررسی و پاسخ دهید.</p></div><div class="discussion-admin-heading-actions"><a class="store-outline-btn" href="{{ route('admin.discussion-reports.index') }}">گزارش‌های کاربران</a><a class="store-outline-btn" href="{{ route('admin.store.index') }}">مدیریت محصولات</a></div></div>
  @if(session('status'))<div class="store-alert success" role="status">{{ session('status') }}</div>@endif
  @if($errors->any())<div class="discussion-errors" role="alert" aria-live="assertive"><strong>ثبت پاسخ انجام نشد:</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
  <div class="discussion-admin-stats">@foreach(['pending'=>'در انتظار بررسی','approved'=>'منتشرشده','rejected'=>'ردشده'] as $key=>$title)<a class="{{ $status===$key?'is-active':'' }}" href="{{ route('admin.discussions.index',['status'=>$key,'target_type'=>$targetType]) }}"><span>{{ $title }}</span><strong>{{ number_format($stats[$key]) }}</strong></a>@endforeach</div>

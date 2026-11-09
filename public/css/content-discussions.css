@@ -109,3 +109,29 @@
 .discussion-reaction-login a{color:#326db8;font-weight:850;text-decoration:none}
 .discussion-reaction-login a:hover{text-decoration:underline}
 .discussion-reply .discussion-reactions{margin-top:10px}
+
+.discussion-sort-form{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.discussion-sort-form label{font-size:.65rem;color:#71839a;font-weight:800}
+.discussion-sort-form select{min-height:35px;padding:5px 9px;border:1px solid #dfe7f0;border-radius:9px;background:#fff;color:#34445a;font:inherit;font-size:.66rem}
+.discussion-sort-form button{min-height:35px;padding:5px 12px;border:0;border-radius:9px;background:#17365d;color:#fff;font:inherit;font-size:.65rem;font-weight:800;cursor:pointer}
+.discussion-entry,.discussion-reply{scroll-margin-top:100px}
+.discussion-entry:target,.discussion-reply:target{outline:2px solid #a9c9ef;outline-offset:4px;border-radius:14px}
+.discussion-report{margin-top:9px}
+.discussion-report summary{width:max-content;cursor:pointer;color:#97a3b2;font-size:.6rem;font-weight:750;list-style:none}
+.discussion-report summary::-webkit-details-marker{display:none}
+.discussion-report summary:hover{color:#a24c4c}
+.discussion-report-form{display:grid;grid-template-columns:minmax(130px,180px) minmax(160px,1fr) auto;gap:8px;align-items:center;margin-top:9px;padding:11px;border:1px solid #f0e4e4;border-radius:11px;background:#fffafa}
+.discussion-report-form select,.discussion-report-form input{min-height:36px;min-width:0;padding:7px 9px;border:1px solid #e8dede;border-radius:8px;background:#fff;font:inherit;font-size:.65rem}
+.discussion-report-form button{min-height:36px;padding:6px 12px;border:0;border-radius:8px;background:#9c4e4e;color:#fff;font:inherit;font-size:.65rem;font-weight:800;cursor:pointer}
+.discussion-report-note{grid-column:1/-1;margin:0;color:#9b8585;font-size:.58rem}
+.discussion-admin-heading-actions{display:flex;gap:8px;flex-wrap:wrap}
+.discussion-report-admin-card{padding:17px;border:1px solid #e5eaf1;border-radius:15px;background:#fff;margin:12px 0}
+.discussion-report-admin-meta{display:flex;gap:10px;flex-wrap:wrap;color:#78889b;font-size:.68rem}
+.discussion-report-admin-card h2{font-size:1rem;margin:12px 0 7px}
+.discussion-report-admin-card p{line-height:1.9;white-space:pre-wrap}
+.discussion-report-admin-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.discussion-report-admin-actions button{padding:8px 13px;border:0;border-radius:9px;font:inherit;font-size:.68rem;font-weight:800;cursor:pointer}
+.discussion-report-dismiss{background:#eef2f7;color:#52647b}
+.discussion-report-remove{background:#fff0ee;color:#a3443b}
+.discussion-report-context{padding:10px 12px;border-right:3px solid #b8cce4;background:#f7f9fc;border-radius:8px}
+@media(max-width:640px){.discussion-report-form{grid-template-columns:1fr}.discussion-report-note{grid-column:auto}.discussion-sort-form{width:100%}.discussion-toolbar{align-items:flex-start;flex-direction:column}}

@@ -72,4 +72,32 @@ class ContentDiscussionTest extends TestCase {
   $admin=$this->user('09123456794','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
   $this->actingAs($author)->post(route('discussions.reaction',$d),['type'=>'like'])->assertForbidden();
  }
+
+ public function test_users_can_report_approved_discussion_and_admin_can_remove_reported_content(): void {
+  $p=$this->product();$author=$this->user('09123456801');$reporter=$this->user('09123456802');$admin=$this->user('09123456803','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $d=ContentDiscussion::firstOrFail();$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
+  $this->actingAs($reporter)->post(route('discussions.report',$d),['reason'=>'spam','details'=>'این پیام تبلیغاتی و نامرتبط است.'])->assertRedirect();
+  $this->assertDatabaseHas('discussion_reports',['discussion_id'=>$d->id,'reporter_id'=>$reporter->id,'reason'=>'spam','status'=>'pending']);
+  $this->actingAs($reporter)->post(route('discussions.report',$d),['reason'=>'abuse'])->assertRedirect();
+  $this->assertDatabaseCount('discussion_reports',1);
+  $report=\\App\\Models\\DiscussionReport::firstOrFail();
+  $this->actingAs($admin)->patch(route('admin.discussion-reports.moderate',$report),['action'=>'remove_content'])->assertRedirect();
+  $this->assertDatabaseHas('content_discussions',['id'=>$d->id,'status'=>'rejected']);
+  $this->assertDatabaseHas('discussion_reports',['id'=>$report->id,'status'=>'resolved','reviewed_by'=>$admin->id]);
+ }
+ public function test_guests_cannot_report_and_authors_cannot_report_their_own_content(): void {
+  $p=$this->product();$author=$this->user('09123456804');$admin=$this->user('09123456805','admin');
+  $this->actingAs($author)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا امکان دریافت نسخه قابل ویرایش این فایل وجود دارد؟'])->assertRedirect();
+  $d=ContentDiscussion::firstOrFail();$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
+  $this->app['auth']->guard()->logout();
+  $this->post(route('discussions.report',$d),['reason'=>'spam'])->assertRedirect(route('login'));
+  $this->actingAs($author)->post(route('discussions.report',$d),['reason'=>'spam'])->assertForbidden();
+ }
+ public function test_public_discussion_sort_parameter_is_whitelisted(): void {
+  $p=$this->product();$u=$this->user('09123456806');
+  $this->actingAs($u)->post(route('discussions.store'),['target_type'=>'product','target_key'=>(string)$p->id,'kind'=>'question','body'=>'آیا این فایل برای استفاده در کلاس آموزشی مناسب است؟'])->assertRedirect();
+  $d=ContentDiscussion::firstOrFail();$admin=$this->user('09123456807','admin');$this->actingAs($admin)->patch(route('admin.discussions.moderate',$d),['status'=>'approved'])->assertRedirect();
+  $this->get(route('store.product',$p->slug,['discussion_sort'=>'helpful']))->assertOk()->assertSee('discussion-sort');
+ }
 }

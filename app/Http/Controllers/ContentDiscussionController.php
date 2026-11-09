@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 use App\Models\ContentDiscussion;
+use App\Models\DiscussionReport;
 use App\Models\StoreProduct;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -36,6 +37,38 @@ class ContentDiscussionController extends Controller {
    \App\Models\DiscussionReaction::create(['discussion_id'=>$discussion->id,'user_id'=>$request->user()->id,'type'=>$data['type']]);
   });
   return redirect()->to(url()->previous().'#store-discussions')->with('discussion_status','واکنش شما ثبت شد.');
+ }
+ public function report(Request $request, ContentDiscussion $discussion) {
+  abort_unless($discussion->status==='approved',404);
+  abort_if((int)$discussion->user_id===(int)$request->user()->id,403);
+  $data=$request->validate(['reason'=>['required','in:spam,abuse,harassment,misinformation,other'],'details'=>['nullable','string','max:1000']]);
+  $report=DiscussionReport::firstOrCreate(
+   ['discussion_id'=>$discussion->id,'reporter_id'=>$request->user()->id],
+   ['reason'=>$data['reason'],'details'=>trim((string)($data['details']??'')) ?: null,'status'=>'pending']
+  );
+  return back()->with('discussion_status',$report->wasRecentlyCreated?'گزارش شما برای بررسی به تیم مدیریت ارسال شد.':'گزارش قبلی شما برای این محتوا ثبت شده است.');
+ }
+ public function adminReports(Request $request) {
+  $status=in_array($request->query('status'),['pending','resolved','dismissed'],true)?$request->query('status'):'pending';
+  $base=DiscussionReport::query();
+  $stats=['pending'=>(clone $base)->where('status','pending')->count(),'resolved'=>(clone $base)->where('status','resolved')->count(),'dismissed'=>(clone $base)->where('status','dismissed')->count()];
+  $reports=(clone $base)->with(['discussion.user','reporter','reviewer'])->where('status',$status)->latest()->paginate(25)->withQueryString();
+  return view('admin.discussion-reports.index',compact('reports','stats','status'));
+ }
+ public function moderateReport(Request $request, DiscussionReport $report) {
+  $data=$request->validate(['action'=>['required','in:dismiss,remove_content']]);
+  DB::transaction(function() use($request,$report,$data) {
+   $locked=DiscussionReport::query()->whereKey($report->id)->lockForUpdate()->firstOrFail();
+   $discussion=ContentDiscussion::query()->whereKey($locked->discussion_id)->lockForUpdate()->firstOrFail();
+   if($data['action']==='remove_content') {
+    $discussion->forceFill(['status'=>'rejected','moderator_id'=>$request->user()->id,'moderated_at'=>now()])->save();
+    $locked->status='resolved';
+   } else { $locked->status='dismissed'; }
+   $locked->reviewed_by=$request->user()->id;
+   $locked->reviewed_at=now();
+   $locked->save();
+  });
+  return back()->with('status',$data['action']==='remove_content'?'محتوا از سایت برداشته و گزارش رسیدگی شد.':'گزارش بررسی و مختومه شد.');
  }
  public function adminIndex(Request $request) {
   $status=in_array($request->query('status'),['pending','approved','rejected'],true)?$request->query('status'):'pending';

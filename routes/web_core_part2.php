@@ -104,6 +104,8 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/discussion-reports', [ContentDiscussionController::class, 'adminReports'])->middleware('admin.section:store')->name('discussion-reports.index');
+    Route::patch('/discussion-reports/{report}', [ContentDiscussionController::class, 'moderateReport'])->middleware(['admin.section:store', 'throttle:30,10'])->name('discussion-reports.moderate');
     Route::get('/discussions', [ContentDiscussionController::class, 'adminIndex'])->middleware('admin.section:store')->name('discussions.index');
     Route::patch('/discussions/{discussion}/moderate', [ContentDiscussionController::class, 'moderate'])->middleware(['admin.section:store', 'throttle:30,10'])->name('discussions.moderate');
     Route::post('/discussions/{discussion}/reply', [ContentDiscussionController::class, 'reply'])->middleware(['admin.section:store', 'throttle:20,10'])->name('discussions.reply');
