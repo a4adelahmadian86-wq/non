@@ -100,6 +100,23 @@ class ProductSupervisorProviderDiagnosticsTests(unittest.IsolatedAsyncioTestCase
         self.assertEqual(audio_result, ("", False))
         self.assertEqual(_FakeAsyncClient.calls, [])
 
+    async def test_image_context_is_redacted_before_provider_submission(self):
+        _FakeAsyncClient.responses = [
+            _FakeResponse(200, {"choices": [{"message": {"content": "تصویر آزمایشی"}}]})
+        ]
+        context = {
+            "product_title": "محصول آزمایشی با تماس 09121234567",
+            "category": "person@example.com",
+        }
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
+            with patch("file_pipeline.httpx.AsyncClient", _FakeAsyncClient):
+                await analyze_image_with_groq(b"fake-image-bytes", "image/png", context)
+
+        provider_text = _FakeAsyncClient.calls[0]["json"]["messages"][0]["content"][0]["text"]
+        self.assertNotIn("09121234567", provider_text)
+        self.assertNotIn("person@example.com", provider_text)
+        self.assertIn("[REDACTED]", provider_text)
+
     async def test_audio_provider_receives_generic_filename_not_user_filename(self):
         _FakeAsyncClient.responses = [_FakeResponse(200, {"text": "رونویسی آزمایشی"})]
         with patch.dict(os.environ, {"GROQ_API_KEY": "test-key", "GROQ_ZDR_CONFIRMED": "true"}, clear=False):
