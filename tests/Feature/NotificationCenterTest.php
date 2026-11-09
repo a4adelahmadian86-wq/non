@@ -43,16 +43,17 @@ class NotificationCenterTest extends TestCase
         $service->push($other->id, 'security_login', 'اعلان خصوصی کاربر دیگر', 'این اعلان نباید نمایش داده شود');
 
         $this->actingAs($user)->get(route('platform.notifications', ['filter' => 'security']))
-            ->assertOk()->assertSee('ورود جدید به حساب')->assertDontSee('پیشنهاد ویژه فراست')->assertDontSee('اعلان خصوصی کاربر دیگر');
+            ->assertOk()->assertSee('ورود جدید به حساب')->assertSee('nf-cat-security')
+            ->assertDontSee('nf-cat-marketing')->assertDontSee('اعلان خصوصی کاربر دیگر');
 
         $this->actingAs($user)->get(route('platform.notifications', ['filter' => 'marketing']))
-            ->assertOk()->assertSee('پیشنهاد ویژه فراست')->assertDontSee('به‌روزرسانی سرویس');
+            ->assertOk()->assertSee('پیشنهاد ویژه فراست')->assertSee('nf-cat-marketing')->assertDontSee('nf-cat-announcement');
 
         $this->actingAs($user)->get(route('platform.notifications', ['filter' => 'announcement']))
-            ->assertOk()->assertSee('به‌روزرسانی سرویس')->assertDontSee('پیشنهاد ویژه فراست');
+            ->assertOk()->assertSee('به‌روزرسانی سرویس')->assertSee('nf-cat-announcement')->assertDontSee('nf-cat-marketing');
 
         $this->actingAs($user)->get(route('platform.notifications', ['filter' => 'system', 'q' => 'گردش‌کار']))
-            ->assertOk()->assertSee('گردش‌کار اجرا شد')->assertDontSee('ورود جدید به حساب');
+            ->assertOk()->assertSee('گردش‌کار اجرا شد')->assertSee('nf-cat-system')->assertDontSee('nf-cat-security');
     }
 
     public function test_user_can_archive_and_restore_only_their_own_notification(): void
