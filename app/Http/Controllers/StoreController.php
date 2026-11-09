@@ -468,6 +468,7 @@ class StoreController extends Controller
                     'reactions as dislikes_count' => fn ($query) => $query->where('type', 'dislike'),
                     'subscriptions as followers_count',
                 ])
+                ->withExists(['subscriptions as is_following' => fn ($query) => $query->where('user_id', $user?->id ?? 0)])
                 ->with([
                     'user',
                     'reactions' => fn ($query) => $query->where('user_id', $user?->id ?? 0),
