@@ -795,7 +795,8 @@ class AdminStoreProductWorkflowTest extends TestCase
             ]);
         });
 
-        $this->actingAs($admin)
+        $this->from(route('admin.store.edit', $product))
+            ->actingAs($admin)
             ->put(route('admin.store.update', $product), $this->payload($category, [
                 'title' => 'محصول دارای شواهد معتبر',
                 'ai_content_source_fingerprints' => json_encode(['file:1' => 'source-fingerprint']),
