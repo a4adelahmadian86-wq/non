@@ -11,6 +11,7 @@
             </div>
             <div class="library-heading-actions">
                 <span class="library-count"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> {{ number_format($items->total()) }} محصول</span>
+                <a class="store-outline-btn" href="{{ route('wishlist') }}"><i class="fa-regular fa-heart" aria-hidden="true"></i> علاقه‌مندی‌ها</a>
                 <a class="store-outline-btn" href="{{ route('store') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> بازگشت به فروشگاه</a>
             </div>
         </div>
@@ -24,7 +25,12 @@
         <div id="libraryDownloadFeedback" class="library-feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
         @if($items->count())
-            <div class="store-product-grid library-product-grid">
+            <div class="library-toolbar">
+                <label for="libraryQuickSearch"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> جست‌وجو در این صفحه</label>
+                <input id="libraryQuickSearch" type="search" placeholder="نام محصول را بنویسید..." autocomplete="off">
+                <span id="librarySearchCount" aria-live="polite">{{ number_format($items->count()) }} مورد</span>
+            </div>
+            <div class="store-product-grid library-product-grid" id="libraryProductGrid">
                 @foreach($items as $item)
                     @php
                         $fileBytes = (int) ($item->file?->size_bytes ?? 0);
@@ -34,7 +40,7 @@
                         $fileAvailable = $item->file && $item->file->is_active;
                         $readerOnly = ($item->product?->download_policy ?? 'signed') === 'reader_only';
                     @endphp
-                    <article class="store-product-card library-product-card">
+                    <article class="store-product-card library-product-card" data-library-search="{{ \Illuminate\Support\Str::lower(($item->product?->title ?? '').' '.($item->product?->category?->name ?? '')) }}">
                         <div class="store-product-cover library-product-cover">
                             @if($item->product?->cover_path)
                                 <img src="{{ asset($item->product->cover_path) }}" alt="{{ $item->product->title }}" loading="lazy">
@@ -68,6 +74,7 @@
                     </article>
                 @endforeach
             </div>
+            <p class="library-no-results" id="libraryNoResults" hidden>محصولی با این نام در این صفحه پیدا نشد.</p>
             <div class="library-pagination">{{ $items->links() }}</div>
         @else
             <div class="store-empty-state library-empty">
@@ -88,6 +95,21 @@
 <script>
 (()=>{
  const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';
+ const search=document.getElementById('libraryQuickSearch');
+ const cards=[...document.querySelectorAll('.library-product-card')];
+ const count=document.getElementById('librarySearchCount');
+ const empty=document.getElementById('libraryNoResults');
+ search?.addEventListener('input',()=>{
+   const query=search.value.trim().toLocaleLowerCase();
+   let visible=0;
+   cards.forEach(card=>{
+     const match=(card.dataset.librarySearch||'').includes(query);
+     card.hidden=!match;
+     if(match)visible++;
+   });
+   if(count)count.textContent=visible.toLocaleString('fa-IR')+' مورد';
+   if(empty)empty.hidden=visible!==0;
+ });
  const feedback=document.getElementById('libraryDownloadFeedback');
  const showFeedback=(message,type='error')=>{
    if(!feedback)return;
