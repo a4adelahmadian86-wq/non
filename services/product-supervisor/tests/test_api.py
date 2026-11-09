@@ -142,7 +142,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
                 "sample_pages": ["متن خام صفحه و محتوای کامل محرمانه"],
                 "sample_sheets": [{"rows": [["متن خام شیت محرمانه"]]}],
                 "findings": [{"area": "content", "severity": "warning", "title": "نقص", "detail": "گزارش کوتاه", "recommendation": "اصلاح شود"}],
-                "facts": [{"type": "feature", "key": "ویژگی", "value": "مقدار", "evidence": "شاهد کوتاه از سند", "locator": {"page": 3, "archive_entry": "private/customer-name/secret.pdf"}, "verification_status": "evidence_backed"},
+                "facts": [{"type": "feature", "key": "ویژگی", "value": "مقدار", "evidence": "شاهد کوتاه از سند", "locator": {"page": 3, "sheet": "customer-account-details", "archive_entry": "private/customer-name/secret.pdf"}, "verification_status": "evidence_backed"},
                           {"type": "feature", "key": "ساختگی", "value": "نباید وارد شود", "evidence": "بدون تأیید", "locator": {}, "verification_status": "unverified"}],
             }],
         }, lambda value: (value, 0))
@@ -154,6 +154,7 @@ class ProductSupervisorFileApiTests(unittest.TestCase):
         self.assertNotIn("customer-name-secret.pdf", str(report))
         self.assertNotIn("archive_entry", str(report))
         self.assertNotIn("customer-name", str(report))
+        self.assertNotIn("customer-account-details", str(report))
         self.assertNotIn("sample_pages", source)
         self.assertNotIn("sample_sheets", source)
         self.assertNotIn("متن کامل محرمانه فایل", str(report))
