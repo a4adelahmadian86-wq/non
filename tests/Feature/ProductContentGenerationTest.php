@@ -184,7 +184,7 @@ class ProductContentGenerationTest extends TestCase
                             ['field' => 'title', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
                             ['field' => 'short_description', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
                             ['field' => 'description', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
-                            ['field' => 'seo_title', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
+                            ['field' => 'seo_title', 'fact_ids' => [], 'source_ids' => ['product:existing']],
                             ['field' => 'seo_description', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
                             ['field' => 'focus_keyword', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
                             ['field' => 'tags', 'fact_ids' => [$data['fact']->id], 'source_ids' => ['file:'.$data['file']->id]],
@@ -211,8 +211,9 @@ class ProductContentGenerationTest extends TestCase
         $this->assertSame([$data['fact']->id], $result['suggestions']['used_fact_ids']);
         $this->assertSame([$data['fact']->id], $result['suggestions']['field_evidence']['title']['fact_ids']);
         $this->assertSame(['file:'.$data['file']->id], $result['suggestions']['field_evidence']['title']['source_ids']);
-        $this->assertSame($data['fact']->id, $result['sources'][0]['facts'][0]['id']);
-        $this->assertNotEmpty($result['sources'][0]['file_name']);
+        $this->assertSame('product:existing', $result['sources'][0]['source_id']);
+        $this->assertSame($data['fact']->id, $result['sources'][1]['facts'][0]['id']);
+        $this->assertNotEmpty($result['sources'][1]['file_name']);
         $this->assertSame('available', app(ProductContentGenerationService::class)->readiness($data['product'])['status']);
     }
 
