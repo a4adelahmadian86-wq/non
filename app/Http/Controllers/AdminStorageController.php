@@ -185,11 +185,14 @@ class AdminStorageController extends Controller
     {
         $hasManagedFiles = $volume->files()->whereNotIn('status', ['deleted'])->exists();
         $hasProviderObjects = (int) $volume->object_count > 0;
+        $inventoryIsFresh = $volume->status === 'healthy'
+            && $volume->last_checked_at
+            && $volume->last_checked_at->gte(now()->subMinutes(30));
 
         abort_if(
-            $hasManagedFiles || $hasProviderObjects,
+            $hasManagedFiles || $hasProviderObjects || ! $inventoryIsFresh,
             409,
-            'این هاست هنوز فایل یا نسخه پشتیبان دارد. ابتدا اطلاعات را به مقصد دیگری منتقل و خالی بودن کامل هاست را تأیید کنید.'
+            'برای حذف امن، ابتدا اتصال را بررسی کنید و مطمئن شوید موجودی سرویس‌دهنده در ۳۰ دقیقه اخیر صفر بوده و هیچ فایل یا نسخه پشتیبانی باقی نمانده است.'
         );
 
         $volume->files()->where('status', 'deleted')->update(['storage_volume_id' => null]);
