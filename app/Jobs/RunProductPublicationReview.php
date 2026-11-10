@@ -24,7 +24,7 @@ class RunProductPublicationReview implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 600;
-    public int $tries = 4;
+    public int $tries = 30;
 
     public function __construct(public int $reviewId)
     {
@@ -42,9 +42,23 @@ class RunProductPublicationReview implements ShouldQueue
         ProductKnowledgeService $knowledge,
         ProductPublicationReadiness $readiness
     ): void {
-        $review = StoreProductPublicationReview::query()->with('product')->find($this->reviewId);
+        $claimed = DB::transaction(function () {
+            $locked = StoreProductPublicationReview::query()->whereKey($this->reviewId)->lockForUpdate()->first();
+            if (! $locked) return false;
+            $claimable = in_array($locked->status, ['queued', 'failed'], true)
+                || ($locked->status === 'reviewing' && $locked->updated_at?->lt(now()->subMinutes(10)));
+            if (! $claimable) return false;
+            $locked->update([
+                'status' => 'reviewing',
+                'attempts' => (int) $locked->attempts + 1,
+                'failure_code' => null,
+            ]);
+            return true;
+        });
+        if (! $claimed) return;
+
+        $review = StoreProductPublicationReview::query()->with(['product', 'requester'])->find($this->reviewId);
         if (! $review || ! $review->product) return;
-        if (! in_array($review->status, ['queued', 'reviewing', 'failed'], true)) return;
 
         $product = $review->product;
         if ($product->status !== 'pending_review') {
@@ -56,7 +70,8 @@ class RunProductPublicationReview implements ShouldQueue
             return;
         }
 
-        $activeFiles = $product->files()->where('purpose', 'product_download')->where('is_active', true)->get();
+        $activePurposes = $product->type === 'course' ? ['lesson_resource'] : ['product_download'];
+        $activeFiles = $product->files()->whereIn('purpose', $activePurposes)->where('is_active', true)->get();
         if ($product->type === 'digital_file' && ! $activeFiles->contains(fn ($file) => $file->is_primary && $file->scan_status === 'clean')) {
             $this->markNeedsCorrection($review, 'primary_file_not_ready', [[
                 'area' => 'media', 'severity' => 'critical',
@@ -97,7 +112,6 @@ class RunProductPublicationReview implements ShouldQueue
             'snapshot_hash' => $snapshotHash,
             'reviewed_snapshot_hash' => $snapshotHash,
             'snapshot_json' => $snapshot,
-            'attempts' => (int) $review->attempts + 1,
             'failure_code' => null,
         ]);
 
@@ -132,6 +146,12 @@ class RunProductPublicationReview implements ShouldQueue
                 $lockedProduct = StoreProduct::query()->whereKey($freshProduct->id)->lockForUpdate()->firstOrFail();
                 $lockedReview = StoreProductPublicationReview::query()->whereKey($review->id)->lockForUpdate()->firstOrFail();
                 if ($lockedReview->status !== 'reviewing' || $lockedProduct->status !== 'pending_review') return;
+                $lockedSnapshot = $snapshotBuilder->build($lockedProduct, $settings);
+                $lockedSnapshot['document_knowledge'] = $knowledge->contextForProduct($lockedProduct, 12000);
+                if (! hash_equals($snapshotHash, $snapshotBuilder->fingerprint($lockedSnapshot))) {
+                    $lockedReview->update(['status' => 'stale', 'failure_code' => 'product_changed_before_ai_correction']);
+                    return;
+                }
 
                 $before = [];
                 foreach ($corrections as $field => $value) {
@@ -186,10 +206,16 @@ class RunProductPublicationReview implements ShouldQueue
             && ! $critical
             && $this->canPublish($freshProduct, $readiness);
 
-        DB::transaction(function () use ($review, $freshProduct, $result, $findings, $snapshotHash, $canAutoPublish) {
+        DB::transaction(function () use ($review, $freshProduct, $result, $findings, $snapshotHash, $canAutoPublish, $snapshotBuilder, $knowledge, $settings) {
             $lockedProduct = StoreProduct::query()->whereKey($freshProduct->id)->lockForUpdate()->firstOrFail();
             $lockedReview = StoreProductPublicationReview::query()->whereKey($review->id)->lockForUpdate()->firstOrFail();
             if ($lockedReview->status !== 'reviewing' || $lockedProduct->status !== 'pending_review') return;
+            $lockedSnapshot = $snapshotBuilder->build($lockedProduct, $settings);
+            $lockedSnapshot['document_knowledge'] = $knowledge->contextForProduct($lockedProduct, 12000);
+            if (! hash_equals($snapshotHash, $snapshotBuilder->fingerprint($lockedSnapshot))) {
+                $lockedReview->update(['status' => 'stale', 'failure_code' => 'product_changed_before_publication']);
+                return;
+            }
 
             $lockedProduct->update($canAutoPublish
                 ? ['status' => 'published', 'published_at' => now()]
@@ -222,6 +248,8 @@ class RunProductPublicationReview implements ShouldQueue
     private function canPublish(StoreProduct $product, ProductPublicationReadiness $readiness): bool
     {
         if (! $product->category()->where('is_active', true)->exists()) return false;
+        if ($product->price_rials === null || $product->price_rials < 0) return false;
+        if ($product->compare_at_price_rials !== null && $product->compare_at_price_rials <= $product->price_rials) return false;
         if ($product->type === 'course') {
             return $product->course()->whereHas('sections.lessons', fn ($query) => $query->publishable())->exists();
         }

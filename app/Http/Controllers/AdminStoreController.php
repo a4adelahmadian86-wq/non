@@ -516,16 +516,21 @@ class AdminStoreController extends Controller
         $contentReady = $product->type === 'course'
             ? $product->course()->whereHas('sections.lessons', fn ($query) => $query->publishable())->exists()
             : $product->files()->where('purpose', 'product_download')->where('is_active', true)->where('is_primary', true)->where('scan_status', 'clean')->exists();
-        if (! $categoryReady || ! $contentReady
+        $priceReady = $product->price_rials !== null && $product->price_rials >= 0
+            && ($product->compare_at_price_rials === null || $product->compare_at_price_rials > $product->price_rials);
+        if (! $categoryReady || ! $contentReady || ! $priceReady
             || (($product->download_policy ?? 'signed') === 'reader_only' && $product->type !== 'course' && ! $readiness->hasReadyPrimaryReader($product))) {
             return back()->withErrors(['publication' => 'الزامات قطعی انتشار هنوز کامل نیست؛ محصول منتشر نشد.']);
         }
 
-        DB::transaction(function () use ($request, $product, $review, $currentHash) {
+        DB::transaction(function () use ($request, $product, $review, $currentHash, $snapshotBuilder, $knowledge, $settings) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             $lockedReview = StoreProductPublicationReview::query()->whereKey($review->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedReview->status === 'awaiting_manager' && $lockedProduct->status === 'pending_review', 409);
             abort_unless(hash_equals((string) $lockedReview->snapshot_hash, $currentHash), 409);
+            $lockedSnapshot = $snapshotBuilder->build($lockedProduct, $settings);
+            $lockedSnapshot['document_knowledge'] = $knowledge->contextForProduct($lockedProduct, 12000);
+            abort_unless(hash_equals((string) $lockedReview->snapshot_hash, $snapshotBuilder->fingerprint($lockedSnapshot)), 409);
 
             $lockedProduct->update(['status' => 'published', 'published_at' => now()]);
             $lockedReview->update([
