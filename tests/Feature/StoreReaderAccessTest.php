@@ -163,7 +163,7 @@ class StoreReaderAccessTest extends TestCase
 
         $previewResponse = $this->withServerVariables(['REMOTE_ADDR' => $guestIp])->get(route('store.preview', $preview));
         $previewResponse->assertOk();
-        $this->assertSame('%PDF-1.4 sample', $previewResponse->streamedContent());
+        $this->assertSame('%PDF-1.4 sample', $previewResponse->getContent());
     }
 
     public function test_reader_only_purchase_unlocks_page_text_but_never_the_original_file_or_download(): void
@@ -804,6 +804,14 @@ class StoreReaderAccessTest extends TestCase
             ->assertOk()
             ->assertDontSee('نسخه محصول:')
             ->assertDontSee('نسخه فایل اصلی:');
+    }
+
+    public function test_product_detail_blade_compiles_to_valid_php(): void
+    {
+        $source = file_get_contents(resource_path('views/store/product.blade.php'));
+        $compiled = app('blade.compiler')->compileString($source);
+        token_get_all($compiled, TOKEN_PARSE);
+        $this->assertTrue(true);
     }
 
 }

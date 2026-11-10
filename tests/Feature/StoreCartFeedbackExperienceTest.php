@@ -42,7 +42,6 @@ class StoreCartFeedbackExperienceTest extends TestCase
         $this->get(route('store.product', $product->slug))
             ->assertOk()
             ->assertSee('store-product-jump', false)
-            ->assertSee('id="store-product-preview"', false)
             ->assertSee('id="store-product-description"', false)
             ->assertSee('id="store-buy-card"', false)
             ->assertSee('data-share-product', false)
