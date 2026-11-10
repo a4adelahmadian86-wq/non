@@ -177,6 +177,12 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertFalse($authorization->allows($employee, 'reports.workflows'));
     }
 
+    public function test_debug_public_route_exception_for_global_middleware(): void
+    {
+        $this->withoutExceptionHandling();
+        $this->get('/blog/not-a-real-article');
+    }
+
     public function test_direct_override_does_not_activate_before_its_start_time(): void
     {
         $employee = $this->user('09140000138');
