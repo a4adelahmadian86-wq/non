@@ -34,13 +34,21 @@
     @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 
-    @if($canManageWorkflows)
+    @if($showWorkflowBuilder)
     <section class="wf-card">
-        <h2>ساخت گردش‌کار جدید</h2>
+        <h2>{{ $editingWorkflow ? 'ویرایش گردش‌کار' : 'ساخت گردش‌کار جدید' }}</h2>
         <form method="post" action="{{ route('platform.workflows.save') }}" id="workflow-builder">
             @csrf
+            @if($editingWorkflow)<input type="hidden" name="id" value="{{ $editingWorkflow->id }}">@endif
+            @php
+                $builderSteps = $editingWorkflow ? (json_decode((string) $editingWorkflow->steps, true) ?: []) : [];
+                if (!$builderSteps) $builderSteps = [['action' => 'notify', 'title' => '', 'message' => '', 'description' => '', 'priority' => 'normal', 'due_at' => '']];
+                $builderConditions = $editingWorkflow ? (json_decode((string) ($editingWorkflow->conditions ?? '[]'), true) ?: []) : [];
+                $conditionFieldLabels = ['order_kind'=>'نوع سفارش','amount_rials'=>'مبلغ سفارش (ریال)','total_rials'=>'مبلغ کل (ریال)','status'=>'وضعیت','event_type'=>'نوع رویداد','document_id'=>'شناسه سند','ticket_id'=>'شناسه تیکت','product_id'=>'شناسه محصول','organization_id'=>'شناسه سازمان','team_id'=>'شناسه تیم'];
+                $conditionOperatorLabels = ['equals'=>'برابر است با','not_equals'=>'برابر نیست با','greater_than'=>'بزرگ‌تر از','greater_or_equal'=>'بزرگ‌تر یا مساوی','less_than'=>'کمتر از','less_or_equal'=>'کمتر یا مساوی','contains'=>'شامل','in'=>'یکی از مقادیر','not_in'=>'هیچ‌کدام از مقادیر','exists'=>'وجود دارد'];
+            @endphp
             <div class="wf-grid">
-                <label class="wf-field">نام گردش‌کار<input name="name" required maxlength="160" placeholder="مثلاً پیگیری سفارش‌های با مبلغ بالا"></label>
+                <label class="wf-field">نام گردش‌کار<input name="name" required maxlength="160" value="{{ $editingWorkflow->name ?? '' }}" placeholder="مثلاً پیگیری سفارش‌های با مبلغ بالا"></label>
                 <label class="wf-field">رویداد آغاز
                     <select name="trigger_type" required>
                         <option value="document.saved">پس از ذخیره سند</option>
@@ -50,36 +58,61 @@
                     </select>
                 </label>
                 <label class="wf-field">فاصله امن بین اجراها (ثانیه)
-                    <input type="number" name="cooldown_seconds" min="0" max="86400" value="0">
+                    <input type="number" name="cooldown_seconds" min="0" max="86400" value="{{ (int) ($editingWorkflow->cooldown_seconds ?? 0) }}">
                 </label>
             </div>
 
             <h3 style="font-size:12px;margin:18px 0 4px">شرایط اجرا</h3>
             <p class="wf-muted">همه شرط‌ها باید برقرار باشند. اگر شرطی تعریف نکنید، گردش‌کار برای هر رویداد از همان نوع اجرا می‌شود.</p>
-            <div id="workflow-conditions"></div>
+            <div id="workflow-conditions">
+                @foreach($builderConditions as $conditionIndex => $condition)
+                    <div class="wf-condition" data-condition>
+                        <div class="wf-condition-head"><span>شرط {{ $loop->iteration }}</span><button type="button" class="wf-btn remove" data-remove-condition>حذف شرط</button></div>
+                        <div class="wf-grid">
+                            <label class="wf-field">فیلد<select name="conditions[{{ $conditionIndex }}][field]">
+                                @foreach($conditionFieldLabels as $field => $label)<option value="{{ $field }}" @selected(($condition['field'] ?? '') === $field)>{{ $label }}</option>@endforeach
+                            </select></label>
+                            <label class="wf-field">عملگر<select name="conditions[{{ $conditionIndex }}][operator]">
+                                @foreach($conditionOperatorLabels as $operator => $label)<option value="{{ $operator }}" @selected(($condition['operator'] ?? 'equals') === $operator)>{{ $label }}</option>@endforeach
+                            </select></label>
+                            <label class="wf-field wf-full">مقدار<input name="conditions[{{ $conditionIndex }}][value]" maxlength="500" value="{{ $condition['value'] ?? '' }}"></label>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
             <p class="wf-muted">هیچ شرطی تعریف نشده است؛ در این حالت تمام رویدادهای متناظر اجرا می‌شوند.</p>
             <div class="wf-actions"><button type="button" class="wf-btn alt" id="add-condition">افزودن شرط</button></div>
 
             <h3 style="font-size:12px;margin:20px 0 4px">اقدام‌های گردش‌کار</h3>
             <p class="wf-muted">می‌توانید چند اقدام را به ترتیب اجرا کنید. اگر یک اقدام شکست بخورد، اقدام‌های موفق قبلی تکرار نمی‌شوند.</p>
             <div id="workflow-steps">
-                <div class="wf-step" data-step>
-                    <div class="wf-step-head"><span>گام ۱</span><button type="button" class="wf-btn remove" data-remove-step>حذف گام</button></div>
-                    <div class="wf-grid">
-                        <label class="wf-field">نوع اقدام<select name="steps[0][action]"><option value="notify">ارسال اعلان به صاحب گردش‌کار</option><option value="create_follow_up">ساخت وظیفه پیگیری CRM</option></select></label>
-                        <label class="wf-field">عنوان<input name="steps[0][title]" maxlength="180" placeholder="عنوان اعلان یا وظیفه"></label>
-                        <label class="wf-field wf-full">متن اعلان / توضیحات<textarea name="steps[0][message]" rows="2" maxlength="5000"></textarea></label>
-                        <label class="wf-field wf-full">توضیحات وظیفه CRM<textarea name="steps[0][description]" rows="2" maxlength="4000"></textarea></label>
-                        <label class="wf-field">اولویت<select name="steps[0][priority]"><option value="normal">معمولی</option><option value="low">کم</option><option value="high">زیاد</option></select></label>
-                        <label class="wf-field">مهلت پیگیری<input type="datetime-local" name="steps[0][due_at]"></label>
+                @foreach($builderSteps as $stepIndex => $step)
+                    <div class="wf-step" data-step>
+                        <div class="wf-step-head"><span>گام {{ $loop->iteration }}</span><button type="button" class="wf-btn remove" data-remove-step>حذف گام</button></div>
+                        <div class="wf-grid">
+                            <label class="wf-field">نوع اقدام<select name="steps[{{ $stepIndex }}][action]">
+                                <option value="notify" @selected(($step['action'] ?? 'notify') === 'notify')>ارسال اعلان به صاحب گردش‌کار</option>
+                                <option value="create_follow_up" @selected(($step['action'] ?? '') === 'create_follow_up')>ساخت وظیفه پیگیری CRM</option>
+                            </select></label>
+                            <label class="wf-field">عنوان<input name="steps[{{ $stepIndex }}][title]" maxlength="180" value="{{ $step['title'] ?? '' }}" placeholder="عنوان اعلان یا وظیفه"></label>
+                            <label class="wf-field wf-full">متن اعلان / توضیحات<textarea name="steps[{{ $stepIndex }}][message]" rows="2" maxlength="5000">{{ $step['message'] ?? '' }}</textarea></label>
+                            <label class="wf-field wf-full">توضیحات وظیفه CRM<textarea name="steps[{{ $stepIndex }}][description]" rows="2" maxlength="4000">{{ $step['description'] ?? '' }}</textarea></label>
+                            <label class="wf-field">اولویت<select name="steps[{{ $stepIndex }}][priority]">
+                                <option value="normal" @selected(($step['priority'] ?? 'normal') === 'normal')>معمولی</option>
+                                <option value="low" @selected(($step['priority'] ?? '') === 'low')>کم</option>
+                                <option value="high" @selected(($step['priority'] ?? '') === 'high')>زیاد</option>
+                            </select></label>
+                            <label class="wf-field">مهلت پیگیری<input type="datetime-local" name="steps[{{ $stepIndex }}][due_at]" value="{{ $step['due_at'] ?? '' }}"></label>
+                        </div>
                     </div>
-                </div>
+                @endforeach
             </div>
             <div class="wf-actions">
                 <button type="button" class="wf-btn alt" id="add-step">افزودن اقدام</button>
-                <button class="wf-btn" type="submit">ذخیره و فعال‌سازی گردش‌کار</button>
+                <button class="wf-btn" type="submit">{{ $editingWorkflow ? 'ذخیره تغییرات گردش‌کار' : 'ذخیره و فعال‌سازی گردش‌کار' }}</button>
+                @if($editingWorkflow)<a class="wf-btn alt" href="{{ route('platform.workflows') }}">انصراف از ویرایش</a>@endif
             </div>
-            <label class="wf-checkbox"><input type="checkbox" name="enabled" value="1" checked> گردش‌کار پس از ذخیره فعال باشد</label>
+            <label class="wf-checkbox"><input type="checkbox" name="enabled" value="1" @checked($editingWorkflow ? (bool) $editingWorkflow->enabled : true)> گردش‌کار پس از ذخیره فعال باشد</label>
         </form>
     </section>
     @endif
@@ -92,6 +125,9 @@
                     <div><strong>{{ $w->name }}</strong><small>{{ $w->trigger_type }} · {{ (int)($w->cooldown_seconds ?? 0) }} ثانیه فاصله اجرا</small></div>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                         <span class="wf-status">{{ $w->enabled ? 'فعال' : 'خاموش' }}</span>
+                        @if($canEditWorkflows)
+                            <a class="wf-btn alt" href="{{ route('platform.workflows', ['edit' => $w->id]) }}">ویرایش</a>
+                        @endif
                         @if($canRunWorkflows && empty($w->conditions))
                             <form method="post" action="{{ route('platform.workflows.run', $w->id) }}">@csrf<button class="wf-btn alt" type="submit">اجرای دستی</button></form>
                         @elseif($canRunWorkflows)
@@ -129,7 +165,7 @@
     @endif
 </div>
 
-@if($canManageWorkflows)
+@if($showWorkflowBuilder)
 <template id="workflow-step-template">
     <div class="wf-step" data-step>
         <div class="wf-step-head"><span>گام جدید</span><button type="button" class="wf-btn remove" data-remove-step>حذف گام</button></div>
