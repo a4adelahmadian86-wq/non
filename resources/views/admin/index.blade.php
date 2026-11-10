@@ -1,51 +1,120 @@
-@extends('layouts.app')
-@section('content')
-<div class="farast-admin" dir="rtl">
-    @include('admin.partials.sidebar')
-
-    <main class="farast-admin-main">
-        <header class="farast-admin-topbar">
-            <div class="farast-admin-heading">
-                <div class="farast-admin-kicker"><span></span> MASTER CONTROL</div>
-                <h1>مرکز عملیات فراست</h1>
-                <p>وضعیت واقعی محصول، کاربران، AI و کنترل‌های اجرایی را از یک فضای واحد مدیریت کنید.</p>
-            </div>
-            <div class="farast-admin-top-actions">
-                <a href="/" target="_blank" class="admin-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده سایت</a>
-                <div class="farast-admin-user"><span>م</span><div><b>{{ auth()->user()->name ?: 'کاربر کنسول' }}</b><small>{{ auth()->user()->mobile }}</small></div><form method="post" action="{{ route('logout') }}">@csrf<button aria-label="خروج"><i class="fa-solid fa-right-from-bracket"></i></button></form></div>
-            </div>
-        </header>
-
-        @if(session('status'))
+@extends('layouts.admin')
+@section('admin-content')
+@if(session('status'))
             <div class="farast-admin-toast"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>
         @endif
 
         <section id="overview" class="admin-command-hero">
             <div class="hero-copy">
                 <div class="hero-badge"><i class="fa-solid fa-shield-halved"></i> محیط مدیریت امن</div>
-                <h2>یک داشبورد برای دیدن، تصمیم‌گیری و کنترل</h2>
-                <p>اطلاعات این صفحه از داده‌های واقعی سیستم خوانده می‌شود؛ داشبورد نقش کنسول عملیات را دارد، نه مجموعه‌ای از تب‌های نمایشی.</p>
+                <h1>مرکز عملیات فراست</h1>
+                <p>نمای یکپارچه کاربران، اسناد، پروژه‌ها، سرویس‌ها و رخدادهای ثبت‌شده؛ دسترسی هر بخش بر اساس نقش و دامنهٔ شما اعمال می‌شود.</p>
                 <div class="hero-actions">
                     @if($console->sectionAllowed(auth()->user(), 'store'))<a class="admin-primary" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-plus"></i> افزودن محصول</a><a class="admin-outline" href="{{ route('admin.store.index') }}"><i class="fa-solid fa-boxes-stacked"></i> مرکز محصولات</a>@endif
                     @if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-outline" href="{{ route('admin.crm.projects.index') }}"><i class="fa-solid fa-diagram-project"></i> پروژه‌ها و پرونده‌های مشتریان</a><a class="admin-outline" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif
                     @if($console->sectionAllowed(auth()->user(), 'settings'))<a class="admin-outline" href="#ai-settings"><i class="fa-solid fa-sparkles"></i> تنظیم AI</a>@endif
                 </div>
             </div>
-            <div class="hero-orbit" aria-hidden="true"><div class="orbit-core"><span></span><span></span><span></span><span></span><b></b></div><i class="orbit-dot d1"></i><i class="orbit-dot d2"></i><i class="orbit-dot d3"></i></div>
+            <div class="hero-quick-stats" aria-label="خلاصه عملیات">
+                <div><span>کاربران فعال در دامنه</span><strong>{{ number_format($stats['active_users']) }}</strong></div>
+                @if($console->sectionAllowed(auth()->user(), 'users'))
+                    <div><span>پروژه‌های فعال</span><strong>{{ number_format($stats['active_projects']) }}</strong></div>
+                @endif
+                @if($console->sectionAllowed(auth()->user(), 'support_admin'))
+                    <div><span>تیکت‌های باز</span><strong>{{ number_format($stats['tickets_open']) }}</strong></div>
+                @endif
+            </div>
         </section>
 
         <section class="admin-metric-grid" aria-label="شاخص‌های اصلی">
-            <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>کل حساب‌های ثبت‌شده</small></article>
-            <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>سندهای ایجادشده</small></article>
+            <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>{{ number_format($stats['new_users_week']) }} ثبت‌نام در ۷ روز · {{ number_format($stats['blocked_users']) }} مسدود</small></article>
+            <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>{{ number_format($stats['new_documents_week']) }} سند جدید در ۷ روز اخیر</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
             @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
             <article class="metric-card metric-green"><div class="metric-top"><span>اعتبارنامه Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'ثبت شده' : 'ثبت نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
             @endif
         </section>
 
+        <section class="admin-metric-grid admin-action-metrics" aria-label="اقدام‌های عملیاتی">
+            @if($console->sectionAllowed(auth()->user(), 'support_admin'))
+                <a class="metric-card metric-orange admin-action-metric" href="{{ route('admin.support.management') }}">
+                    <div class="metric-top"><span>تیکت‌های نیازمند پیگیری</span><i class="fa-solid fa-headset"></i></div>
+                    <strong>{{ number_format($stats['tickets_open']) }}</strong>
+                    <small>گفتگوهای باز یا پاسخ‌داده‌شده · مشاهده صف پشتیبانی</small>
+                </a>
+            @endif
+            @if($console->sectionAllowed(auth()->user(), 'finance'))
+                <a class="metric-card metric-green admin-action-metric" href="{{ route('admin.finance') }}">
+                    <div class="metric-top"><span>درآمد ماه جاری</span><i class="fa-solid fa-chart-line"></i></div>
+                    <strong>{{ number_format($stats['revenue_month']) }}</strong>
+                    <small>ریال · کل درآمد ثبت‌شده: {{ number_format($stats['revenue_total']) }} ریال</small>
+                </a>
+                <a class="metric-card metric-violet admin-action-metric" href="{{ route('admin.finance') }}">
+                    <div class="metric-top"><span>موجودی تجمیعی کیف پول</span><i class="fa-solid fa-wallet"></i></div>
+                    <strong>{{ number_format($stats['wallet_balance']) }}</strong>
+                    <small>ریال · مشاهده دفتر مالی و تراکنش‌ها</small>
+                </a>
+            @endif
+        </section>
+
+        @php
+            $trendLabels = $charts['labels'] ?? [];
+            $trendUsers = $charts['users'] ?? [];
+            $trendDocuments = $charts['documents'] ?? [];
+            $trendAi = $charts['ai'] ?? [];
+            $trendMaximum = max(1, max($trendUsers ?: [0]), max($trendDocuments ?: [0]), max($trendAi ?: [0]));
+            $trendTotal = array_sum($trendUsers) + array_sum($trendDocuments) + array_sum($trendAi);
+        @endphp
+        @if(count($trendLabels) > 0)
+            <section id="activity-trends" class="admin-section admin-panel-wide dashboard-trend-panel">
+                <div class="admin-panel-head">
+                    <div><span class="panel-eyebrow">ACTIVITY TRENDS</span><h2>روند فعالیت در ۳۰ روز اخیر</h2><p>تجمیع روزانهٔ کاربران، اسناد و تعامل‌های هوش مصنوعی؛ بر اساس همان دامنهٔ دسترسی داشبورد.</p></div>
+                    <span class="status-chip">۳۰ روز گذشته</span>
+                </div>
+                <div class="dashboard-trend-legend" aria-label="راهنمای نمودار">
+                    <span><i class="users"></i> کاربران</span>
+                    <span><i class="documents"></i> اسناد</span>
+                    <span><i class="ai"></i> تعامل AI</span>
+                </div>
+                @if($trendTotal === 0)
+                    <p class="dashboard-trend-empty">در بازهٔ ۳۰ روز گذشته فعالیتی برای نمایش ثبت نشده است.</p>
+                @else
+                    <div class="dashboard-trend-scroll" role="img" aria-label="نمودار میله‌ای روند روزانه کاربران، اسناد و تعامل‌های هوش مصنوعی در ۳۰ روز گذشته">
+                        <div class="dashboard-trend-chart">
+                            @foreach($trendLabels as $index => $day)
+                                @php
+                                    $userValue = (int) ($trendUsers[$index] ?? 0);
+                                    $documentValue = (int) ($trendDocuments[$index] ?? 0);
+                                    $aiValue = (int) ($trendAi[$index] ?? 0);
+                                @endphp
+                                <div class="dashboard-trend-day" title="{{ $day }}">
+                                    <div class="dashboard-trend-bars">
+                                        <span class="dashboard-trend-bar users" style="height: {{ $userValue > 0 ? max(2, round(($userValue / $trendMaximum) * 100)) : 0 }}%" title="کاربران: {{ number_format($userValue) }}"></span>
+                                        <span class="dashboard-trend-bar documents" style="height: {{ $documentValue > 0 ? max(2, round(($documentValue / $trendMaximum) * 100)) : 0 }}%" title="اسناد: {{ number_format($documentValue) }}"></span>
+                                        <span class="dashboard-trend-bar ai" style="height: {{ $aiValue > 0 ? max(2, round(($aiValue / $trendMaximum) * 100)) : 0 }}%" title="تعامل AI: {{ number_format($aiValue) }}"></span>
+                                    </div>
+                                    <small class="dashboard-trend-date">{{ \Illuminate\Support\Carbon::parse($day)->format('m/d') }}</small>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+                <div class="dashboard-trend-axis"><span>{{ \Illuminate\Support\Carbon::parse($trendLabels[0])->format('Y/m/d') }}</span><span>{{ \Illuminate\Support\Carbon::parse($trendLabels[count($trendLabels) - 1])->format('Y/m/d') }}</span></div>
+                <table class="dashboard-trend-sr-only">
+                    <caption>داده‌های روزانهٔ نمودار فعالیت</caption>
+                    <thead><tr><th>تاریخ</th><th>کاربران</th><th>اسناد</th><th>تعامل AI</th></tr></thead>
+                    <tbody>
+                        @foreach($trendLabels as $index => $day)
+                            <tr><th>{{ $day }}</th><td>{{ (int) ($trendUsers[$index] ?? 0) }}</td><td>{{ (int) ($trendDocuments[$index] ?? 0) }}</td><td>{{ (int) ($trendAi[$index] ?? 0) }}</td></tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </section>
+        @endif
+
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
-                <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="live-pill"><i></i> زنده</span></div>
+                <div class="admin-panel-head"><div><span class="panel-eyebrow">OPERATIONAL SNAPSHOT</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="status-chip">به‌روزرسانی در {{ now()->format('H:i') }}</span></div>
                 <div class="ops-grid">
                     <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
@@ -63,6 +132,25 @@
             </article>
 @endif
         </section>
+
+@if($console->sectionAllowed(auth()->user(), 'audit'))
+        <section id="recent-activity" class="admin-panel admin-panel-wide">
+            <div class="admin-panel-head">
+                <div><span class="panel-eyebrow">AUDIT TRAIL</span><h2>فعالیت‌های اخیر</h2><p>آخرین رخدادهای ثبت‌شده در دفتر ممیزی، متناسب با دامنهٔ دسترسی شما.</p></div>
+                <a class="panel-link" href="{{ route('admin.audit') }}">مشاهده دفتر ممیزی <i class="fa-solid fa-arrow-left"></i></a>
+            </div>
+            <div class="admin-activity-list">
+                @forelse($recentAudit as $event)
+                    <article class="admin-activity-row">
+                        <span class="admin-activity-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                        <div><strong>{{ \Illuminate\Support\Str::headline(str_replace(['.', '_'], ' ', $event->action)) }}</strong><small>{{ $event->actor_name ?: 'سامانه' }} · {{ \Illuminate\Support\Carbon::parse($event->created_at)->format('Y/m/d H:i') }}</small></div>
+                    </article>
+                @empty
+                    <div class="admin-empty">هنوز رخداد قابل‌نمایشی در این دامنه ثبت نشده است.</div>
+                @endforelse
+            </div>
+        </section>
+@endif
 
 @if($console->sectionAllowed(auth()->user(), 'settings'))
         <section id="ai-settings" class="admin-section admin-panel-wide">
@@ -211,11 +299,6 @@
         </section>
 @endif
 
-        <section class="admin-footer-actions">
-            @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><div><b>مرکز مالی</b><small>کیف پول، مالیات و درگاه</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-        </section>
     @if($scope === 'global')
         <section class="admin-section admin-panel-wide" id="system-health">
             <div class="admin-panel-head">
@@ -231,8 +314,6 @@
             <p class="health-footnote">محیط: {{ $systemHealth['env'] }} · PHP {{ $systemHealth['php'] }} · Laravel {{ $systemHealth['laravel'] }} · Debug: {{ $systemHealth['debug'] ? 'روشن' : 'خاموش' }}</p>
         </section>
         @endif
-        </main>
-</div>
 @if($console->sectionAllowed(auth()->user(), 'access') || $console->sectionAllowed(auth()->user(), 'organizations') || $console->sectionAllowed(auth()->user(), 'integrations') || $console->sectionAllowed(auth()->user(), 'analytics') || $console->sectionAllowed(auth()->user(), 'audit') || $console->sectionAllowed(auth()->user(), 'finance') || $console->sectionAllowed(auth()->user(), 'emails') || $console->sectionAllowed(auth()->user(), 'social'))
 <section class="admin-section admin-panel-wide" id="platform-control">
 <div class="admin-panel-head"><div><span class="panel-eyebrow">FARAST CONTROL CENTER</span><h2>مدیریت کامل پلتفرم</h2><p>ماژول‌های عملیاتی واقعی از همین کنسول قابل دسترسی‌اند؛ وضعیت‌های «planned» بدون مسیر عملیاتی به‌عنوان قابلیت کامل معرفی نمی‌شوند.</p></div></div>
@@ -256,6 +337,45 @@
 .farast-admin-nav-create-product i{color:#70b4ff;font-size:1rem}
 .farast-admin-nav-create-product b{margin-inline-start:auto;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#2e73d2;color:white;font-size:1rem}
 .farast-admin-nav a[aria-current="page"]{outline:1px solid rgba(111,174,255,.22)}
+.hero-copy h1{font-size:25px;line-height:1.55;margin:13px 0 7px;letter-spacing:-.5px}
+.hero-quick-stats{position:relative;z-index:2;display:grid;gap:9px;min-width:230px;max-width:290px}
+.hero-quick-stats>div{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid rgba(255,255,255,.13);border-radius:13px;background:rgba(255,255,255,.07);backdrop-filter:blur(8px)}
+.hero-quick-stats span{font-size:10px;color:#a9c0e3}
+.hero-quick-stats strong{font-size:18px;color:#fff;font-weight:900;font-variant-numeric:tabular-nums}
+@media(max-width:760px){.hero-quick-stats{width:100%;max-width:none;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}.hero-quick-stats>div{padding:10px;gap:8px}.hero-quick-stats span{font-size:9px}}
+
+.admin-action-metrics{margin-top:-5px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.admin-action-metric{display:block;min-width:0;text-decoration:none;color:inherit;transition:transform .18s ease,box-shadow .18s ease}
+.admin-action-metric:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(16,35,70,.12)}
+.admin-action-metric:focus-visible{outline:2px solid #3679e8;outline-offset:3px}
+.admin-action-metric strong{display:block}
+
+.admin-activity-list{display:grid;gap:0}
+.admin-activity-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-top:1px solid #edf1f7;min-width:0}
+.admin-activity-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#edf4ff;color:#315fae}
+.admin-activity-row>div{display:grid;gap:4px;min-width:0}
+.admin-activity-row strong{font-size:11px;color:#253550;overflow-wrap:anywhere}
+.admin-activity-row small{font-size:10px;color:#8390a5}
 @media(max-width:760px){.farast-admin-nav-create-product{margin-inline:8px}}
+
+.dashboard-trend-panel{min-width:0}
+.dashboard-trend-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0 0 14px;color:var(--admin-muted,#9aa9bd);font-size:.82rem}
+.dashboard-trend-legend span{display:inline-flex;align-items:center;gap:7px}
+.dashboard-trend-legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.dashboard-trend-legend i.users,.dashboard-trend-bar.users{background:#4f8df7}
+.dashboard-trend-legend i.documents,.dashboard-trend-bar.documents{background:#9b7cf6}
+.dashboard-trend-legend i.ai,.dashboard-trend-bar.ai{background:#20b7a7}
+.dashboard-trend-scroll{max-width:100%;overflow-x:auto;padding:8px 2px 4px;scrollbar-width:thin}
+.dashboard-trend-chart{display:grid;grid-template-columns:repeat(30,minmax(17px,1fr));gap:7px;align-items:end;min-width:720px;height:184px;border-bottom:1px solid rgba(145,165,190,.2)}
+.dashboard-trend-day{height:100%;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:7px}
+.dashboard-trend-bars{height:150px;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px}
+.dashboard-trend-bar{display:block;flex:1 1 0;min-width:2px;max-width:10px;border-radius:4px 4px 1px 1px;transition:height .2s ease}
+.dashboard-trend-date{font-size:10px;line-height:1.2;color:var(--admin-muted,#9aa9bd);white-space:nowrap;direction:ltr}
+.dashboard-trend-axis{display:flex;justify-content:space-between;margin-top:9px;color:var(--admin-muted,#9aa9bd);font-size:11px;direction:ltr}
+.dashboard-trend-empty{padding:24px 12px;text-align:center;border:1px dashed rgba(145,165,190,.25);border-radius:12px;color:var(--admin-muted,#9aa9bd)}
+.dashboard-trend-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media(max-width:760px){.dashboard-trend-chart{min-width:680px}.dashboard-trend-legend{gap:10px}}
+@media(prefers-reduced-motion:reduce){.dashboard-trend-bar{transition:none}}
+
 </style>
 @endpush
