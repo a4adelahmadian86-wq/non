@@ -133,6 +133,9 @@ class StorageBackupService
             foreach (['private', 'public'] as $diskName) {
                 $disk = Storage::disk($diskName);
                 foreach ($disk->allFiles() as $legacyPath) {
+                    if (str_starts_with($legacyPath, 'store/quarantine/') || str_starts_with($legacyPath, 'typing/') || str_starts_with($legacyPath, '.farast-health/')) {
+                        continue;
+                    }
                     $local = $workspace.'/legacy-'.hash('sha256', $diskName.'/'.$legacyPath);
                     $stream = $disk->readStream($legacyPath);
                     if (! is_resource($stream)) continue;
