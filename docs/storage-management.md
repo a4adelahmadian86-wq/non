@@ -10,6 +10,19 @@ Application modules must use `App\\Services\\Storage\\StorageManager`; they must
 - `storage:transfer-pending` moves staged files after a healthy target is available.
 - Backups are written to `foreign_backup`; `iran_backup` is an optional second destination.
 
+## Initial module routing policy
+
+| Application asset | Classification | Logical drive | Retention |
+| --- | --- | --- | --- |
+| Product downloads, product covers, and gallery images | critical | iran_primary | Until the owning product/file is removed |
+| User editor files and persistent editor image assets | non_critical | foreign_primary | Indefinite |
+| Ticket and support attachments | non_critical | foreign_primary | Indefinite unless explicitly removed with the owning record |
+| Internal messenger attachments | non_critical | foreign_primary | Indefinite unless explicitly removed with the owning message |
+| Weekly application/database archives | backup | foreign_backup | Retained; pruning is disabled |
+| Optional second backup copy | backup | iran_backup | Enabled only by configuration |
+
+Uploads that need security inspection may briefly enter the private local quarantine disk. The module then hands the file to StorageManager; only StorageManager chooses the drive and provider. A staged file remains available locally until the transfer worker confirms the remote copy and updates its source reference.
+
 ## S3-compatible host connection JSON
 
 ```json
