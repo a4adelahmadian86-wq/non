@@ -34,6 +34,7 @@ class EnsureResourcePermission
         if ($resource instanceof User) {
             $context['owner_id'] = $resource->id;
             $context['organization_id'] = $resource->organization_id;
+            $context['team_ids'] = $resource->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
         } elseif ($resource instanceof Organization) {
             $context['organization_id'] = $resource->id;
         } elseif ($resource instanceof Team) {
