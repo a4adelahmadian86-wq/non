@@ -31,7 +31,7 @@ class UploadSecurityServiceTest extends TestCase
             $pdf->Output('F', $pdfPath);
 
             $zip = new \ZipArchive();
-            $this->assertTrue($zip->open($archivePath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true);
+            $this->assertTrue($zip->open($archivePath, \ZipArchive::CREATE) === true);
             $zip->addFile($pdfPath, 'documents/manual.pdf');
             $zip->close();
 
@@ -60,7 +60,7 @@ class UploadSecurityServiceTest extends TestCase
         $archivePath = tempnam(sys_get_temp_dir(), 'farast-zip-');
         try {
             $zip = new \ZipArchive();
-            $this->assertTrue($zip->open($archivePath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true);
+            $this->assertTrue($zip->open($archivePath, \ZipArchive::CREATE) === true);
             $zip->addFromString('../outside.txt', 'must never be extracted');
             $zip->close();
             Storage::disk('private')->put('security-tests/traversal.zip', file_get_contents($archivePath));
