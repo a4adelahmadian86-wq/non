@@ -5,6 +5,8 @@
   if (!root) return;
 
   const input = root.querySelector('[data-ingestion-input]');
+  const folderInput = root.querySelector('[data-ingestion-folder]');
+  const folderPick = root.querySelector('[data-ingestion-folder-pick]');
   const pick = root.querySelector('[data-ingestion-pick]');
   const overlay = root.querySelector('[data-ingestion-global]');
   const modal = root.querySelector('[data-ingestion-modal]');
@@ -16,6 +18,7 @@
   const primaryInput = root.querySelector('[data-ingestion-primary]');
   const csrf = root.querySelector('[data-ingestion-csrf]').value;
   const queueView = root.querySelector('[data-ingestion-queue]');
+  const selectedView = root.querySelector('[data-ingestion-selected]');
   const progress = root.querySelector('[data-ingestion-progress]');
   const progressBar = root.querySelector('[data-ingestion-progress-bar]');
   const progressLabel = root.querySelector('[data-ingestion-progress-label]');
@@ -29,6 +32,7 @@
     primaryCommitted: false,
     busy: false,
     dragDepth: 0,
+    archiveEntries: [],
   };
 
   const labels = {
@@ -89,14 +93,17 @@
   const openModal = (file) => {
     state.current = file;
     state.ingestionId = null;
-    filename.textContent = file.name;
+    state.archiveEntries = [];
+    filename.textContent = file.webkitRelativePath || file.name;
     setProgress(0, '', false);
-    report.innerHTML = '<p>فایل در قرنطینه خصوصی دریافت شد. بررسی ساختار و نشانه‌های خطر در حال انجام است...</p>';
-    confirmButton.disabled = true;
-    confirmButton.textContent = 'تأیید و ذخیره فایل';
+    report.innerHTML = '<p>فایل انتخاب شد. پیش از انتقال به قرنطینه، فهرست و مشخصات اولیه را بررسی کنید؛ هنوز چیزی آپلود یا ذخیره نشده است.</p>';
+    confirmButton.disabled = false;
+    confirmButton.textContent = 'بررسی امن فایل';
     cancelButton.disabled = false;
+    cancelButton.textContent = 'لغو انتخاب';
     closeButton.disabled = false;
-    setStep('inspect', ['received']);
+    setStep('received', []);
+    renderSelectedFiles();
     modal.hidden = false;
   };
 
@@ -104,6 +111,7 @@
     modal.hidden = true;
     state.current = null;
     state.ingestionId = null;
+    state.archiveEntries = [];
     state.busy = false;
     setProgress(0, '', false);
   };
@@ -146,16 +154,18 @@
     ).join('');
 
     const entries = Array.isArray(inspection.archive_entries) ? inspection.archive_entries : [];
+    state.archiveEntries = entries;
     const archive = entries.length
-      ? '<h4>محتویات شناسایی‌شده آرشیو</h4><ol class="product-ingestion-archive">' +
-        entries.map((entry) => {
+      ? '<h4>محتویات شناسایی‌شده آرشیو · برای مشاهده جزئیات هر مورد انتخاب کنید</h4><div class="product-ingestion-archive-list">' +
+        entries.map((entry, index) => {
           const scanLabel = entry.content_scan === 'checked'
-            ? ' · محتوای عضو بررسی شد'
-            : (entry.content_scan === 'skipped_size_limit' ? ' · بررسی محتوایی محدود' : '');
-          return '<li>' + escapeHtml(entry.name) + ' · ' + formatBytes(entry.size_bytes) +
-            (entry.type === 'directory' ? ' · پوشه' : ' · فایل') + scanLabel + '</li>';
-        }).join('') +
-        '</ol>' + (inspection.archive_entry_count > entries.length ? '<p>فقط ' + entries.length + ' مورد نخست از ' + inspection.archive_entry_count + ' مورد نمایش داده شده است.</p>' : '')
+            ? 'بررسی شد'
+            : (entry.content_scan === 'skipped_size_limit' ? 'بررسی محدود' : 'بررسی‌نشده');
+          return '<button type="button" class="product-ingestion-archive-item" data-archive-entry="' + index + '" aria-expanded="false"><strong>' +
+            escapeHtml(entry.name) + '</strong><small>' + (entry.type === 'directory' ? 'پوشه' : 'فایل') +
+            '</small><small>' + formatBytes(entry.size_bytes) + ' · ' + scanLabel + '</small></button>';
+        }).join('') + '</div><div class="product-ingestion-archive-detail" data-archive-detail hidden></div>' +
+        (inspection.archive_entry_count > entries.length ? '<p>فقط ' + entries.length + ' مورد از ' + inspection.archive_entry_count + ' مورد مجاز نمایش داده شده است.</p>' : '')
       : '';
 
     const findings = Array.isArray(inspection.findings) ? inspection.findings : [];
@@ -177,7 +187,7 @@
     }
     const file = state.queue.shift();
     updateQueue();
-    await preflight(file);
+    openModal(file);
   };
 
   const updateQueue = () => {
@@ -191,14 +201,6 @@
   };
 
   const preflight = async (file) => {
-    if (file.size > 50 * 1024 * 1024) {
-      report.textContent = '';
-      openModal(file);
-      showError('حجم فایل از سقف ۵۰ مگابایت بیشتر است.');
-      return;
-    }
-
-    openModal(file);
     state.busy = true;
     const form = new FormData();
     form.append('file', file, file.name);
@@ -217,6 +219,8 @@
       renderReport(payload);
       setStep('review', ['received', 'upload', 'inspect']);
       confirmButton.disabled = !payload.inspection?.safe;
+      confirmButton.textContent = 'تأیید و ذخیره فایل';
+      cancelButton.textContent = 'رد فایل';
       if (!payload.inspection?.safe) {
         showError('این فایل از بررسی ایستای داخلی عبور نکرد و ذخیره نخواهد شد.');
       }
@@ -240,6 +244,7 @@
         });
       }
     } finally {
+      state.queue = state.queue.filter((file) => file !== state.current);
       closeModal();
       processNext();
     }
@@ -342,7 +347,11 @@
   };
 
   const confirmCurrent = async () => {
-    if (state.busy || !state.ingestionId) return;
+    if (state.busy) return;
+    if (!state.ingestionId) {
+      if (state.current) await preflight(state.current);
+      return;
+    }
     state.busy = true;
     confirmButton.disabled = true;
     cancelButton.disabled = true;
@@ -450,8 +459,68 @@
       state.queue.push(file);
     });
     updateQueue();
+    renderSelectedFiles();
     processNext();
   };
+
+  const renderSelectedFiles = () => {
+    if (!selectedView) return;
+    const files = [state.current, ...state.queue].filter(Boolean);
+    const rows = files.map((file, index) => {
+      const relative = file.webkitRelativePath || file.name;
+      return '<div><strong>' + escapeHtml(relative) + '</strong><small>' + formatBytes(file.size) +
+        ' · ' + escapeHtml(fileExtension(file.name).toUpperCase() || 'نامشخص') +
+        (file.lastModified ? ' · ' + new Intl.DateTimeFormat('fa-IR').format(new Date(file.lastModified)) : '') +
+        '</small>' + (index > 0 ? '<button type="button" data-remove-selected="' + (index - 1) + '">حذف از صف</button>' : '') + '</div>';
+    }).join('');
+    const errors = state.rejected.map(item => '<div class="product-ingestion-queue-error"><strong>' +
+      escapeHtml(item.name) + '</strong><small>' + escapeHtml(item.reason) + '</small></div>').join('');
+    selectedView.innerHTML = files.length
+      ? '<strong>فهرست انتخاب‌شده · ' + files.length + ' فایل</strong>' + rows + errors
+      : errors;
+  };
+
+  const showArchiveEntryDetail = (index) => {
+    const entry = state.archiveEntries[index];
+    const target = report.querySelector('[data-archive-detail]');
+    if (!entry || !target) return;
+    const meta = entry.metadata || {};
+    const scan = entry.content_scan === 'checked' ? 'محتوای فایل در بررسی ایستا خوانده شد'
+      : (entry.content_scan === 'skipped_size_limit' ? 'بررسی محتوا به‌دلیل محدودیت اندازه کامل نشد' : 'بررسی محتوایی انجام نشده');
+    const details = [
+      ['مسیر داخل آرشیو', entry.name || '—'],
+      ['نوع فایل', meta.mime || meta.extension || entry.type || 'نامشخص'],
+      ['حجم اصلی', formatBytes(entry.size_bytes)],
+      ['حجم فشرده', entry.compressed_bytes != null ? formatBytes(entry.compressed_bytes) : '—'],
+      ['تعداد صفحات', meta.page_count != null ? meta.page_count : 'از این فایل قابل تشخیص نیست'],
+      ['پدیدآورنده', meta.author || 'فراداده پدیدآورنده ثبت نشده است'],
+      ['تاریخ ایجاد', meta.created_at || 'ثبت نشده است'],
+      ['وضعیت بررسی داخلی', scan],
+    ];
+    target.innerHTML = '<dl>' + details.map(([label, value]) =>
+      '<div><dt>' + escapeHtml(label) + '</dt><dd>' + escapeHtml(value) + '</dd></div>'
+    ).join('') + '</dl>';
+    target.hidden = false;
+    report.querySelectorAll('[data-archive-entry]').forEach(button => {
+      button.setAttribute('aria-expanded', Number(button.dataset.archiveEntry) === index ? 'true' : 'false');
+    });
+  };
+
+  report.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-archive-entry]');
+    if (!button) return;
+    showArchiveEntryDetail(Number(button.dataset.archiveEntry));
+  });
+
+  selectedView?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-remove-selected]');
+    if (!button) return;
+    const index = Number(button.dataset.removeSelected);
+    if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
+    state.queue.splice(index, 1);
+    updateQueue();
+    renderSelectedFiles();
+  });
 
   queueView.addEventListener('click', (event) => {
     const button = event.target.closest('[data-remove-queued]');
@@ -460,9 +529,15 @@
     if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
     state.queue.splice(index, 1);
     updateQueue();
+    renderSelectedFiles();
   });
 
   pick.addEventListener('click', () => input.click());
+  folderPick?.addEventListener('click', () => folderInput?.click());
+  folderInput?.addEventListener('change', () => {
+    enqueue(folderInput.files);
+    folderInput.value = '';
+  });
   pick.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -473,6 +548,27 @@
     enqueue(input.files);
     input.value = '';
   });
+
+  const readDroppedEntry = async (entry, prefix = '') => {
+    if (entry.isFile) {
+      return new Promise(resolve => entry.file(file => {
+        try {
+          Object.defineProperty(file, 'webkitRelativePath', {value: prefix + file.name, configurable: true});
+        } catch (_) {}
+        resolve([file]);
+      }, () => resolve([])));
+    }
+    if (!entry.isDirectory) return [];
+    const reader = entry.createReader();
+    const children = [];
+    while (true) {
+      const batch = await new Promise(resolve => reader.readEntries(resolve, () => resolve([])));
+      if (!batch.length) break;
+      children.push(...batch);
+    }
+    const nested = await Promise.all(children.map(child => readDroppedEntry(child, prefix + entry.name + '/')));
+    return nested.flat();
+  };
 
   confirmButton.addEventListener('click', confirmCurrent);
   cancelButton.addEventListener('click', cancelCurrent);
@@ -500,7 +596,13 @@
     event.preventDefault();
     state.dragDepth = 0;
     overlay.hidden = true;
-    enqueue(event.dataTransfer.files);
+    const items = Array.from(event.dataTransfer.items || []);
+    const entries = items.map(item => item.webkitGetAsEntry?.()).filter(Boolean);
+    if (entries.length) {
+      Promise.all(entries.map(entry => readDroppedEntry(entry))).then(groups => enqueue(groups.flat()));
+    } else {
+      enqueue(event.dataTransfer.files);
+    }
   });
   window.addEventListener('dragend', () => {
     state.dragDepth = 0;
