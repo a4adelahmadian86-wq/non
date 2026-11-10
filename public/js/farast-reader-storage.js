@@ -30,10 +30,17 @@ const requestPersistence=()=>{
  persistPromise=(async()=>{
   let persisted=false,granted=false;
   try{if(navigator.storage?.persisted)persisted=await navigator.storage.persisted();if(!persisted&&navigator.storage?.persist){granted=await navigator.storage.persist();persisted=granted;}}catch(_){}
-  return{supported:!!navigator.storage?.persist,persisted,granted};
+  const result={supported:!!navigator.storage?.persist,persisted,granted};
+  if(!persisted)persistPromise=null;
+  if(persisted)window.dispatchEvent(new Event('farast:storage-persistence-ready'));
+  return result;
  })();
  return persistPromise;
 };
+let persistenceRetryUsed=false;
+const retryPersistence=()=>{if(persistenceRetryUsed)return;persistenceRetryUsed=true;requestPersistence().catch(()=>{});};
+document.addEventListener('pointerdown',retryPersistence,{once:true,capture:true});
+document.addEventListener('keydown',retryPersistence,{once:true,capture:true});
 const estimate=async()=>{try{return await navigator.storage?.estimate?.()||null;}catch(_){return null;}};
 const restore=async key=>{const record=await get(key);return record&&Object.prototype.hasOwnProperty.call(record,'value')?record.value:null;};
 const migrate=async(key,legacyValue)=>{const existing=await restore(key);if(existing!==null)return existing;if(legacyValue!==null&&legacyValue!==undefined){await set(key,legacyValue);return legacyValue;}return null;};
