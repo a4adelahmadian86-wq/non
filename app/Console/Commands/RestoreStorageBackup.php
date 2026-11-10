@@ -78,6 +78,7 @@ class RestoreStorageBackup extends Command
                 $zip->close();
                 throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
             }
+            File::ensureDirectoryExists($extracted);
             if (! $zip->extractTo($extracted)) {
                 $zip->close();
                 throw new RuntimeException('استخراج فایل‌های رمزنگاری‌شده بکاپ ناموفق بود.');
