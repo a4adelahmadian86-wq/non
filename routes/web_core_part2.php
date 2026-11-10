@@ -72,6 +72,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.run');
     Route::get('/workspace/security', [AccountSecurityController::class, 'index'])->name('platform.security');
     Route::post('/workspace/security/sessions/{session}/revoke', [AccountSecurityController::class, 'revoke'])->whereNumber('session')->middleware('throttle:10,10')->name('platform.security.sessions.revoke');
+    Route::post('/workspace/security/sessions/{session}/block-device', [AccountSecurityController::class, 'blockDevice'])->whereNumber('session')->middleware('throttle:5,10')->name('platform.security.devices.block');
+    Route::post('/workspace/security/devices/{device}/unblock', [AccountSecurityController::class, 'unblockDevice'])->whereNumber('device')->middleware('throttle:5,10')->name('platform.security.devices.unblock');
     Route::post('/workspace/security/sessions/revoke-others', [AccountSecurityController::class, 'revokeOthers'])->middleware('throttle:5,10')->name('platform.security.sessions.revoke-others');
     Route::post('/workspace/security/password', [AccountSecurityController::class, 'changePassword'])->middleware('throttle:5,10')->name('platform.security.password.update');
     Route::post('/workspace/security/sessions/revoke-all', [AccountSecurityController::class, 'revokeAll'])->middleware('throttle:3,10')->name('platform.security.sessions.revoke-all');
