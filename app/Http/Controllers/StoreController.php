@@ -140,7 +140,9 @@ class StoreController extends Controller
             ->published()
             ->where('id', '!=', $product->id)
             ->whereIn('id', collect($ids)->reject(fn ($id) => (int) $id === (int) $product->id)->take(8))
-            ->get();
+            ->get()
+            ->sortBy(fn (StoreProduct $viewedProduct) => array_search((int) $viewedProduct->id, $ids, true))
+            ->values();
 
         $inWishlist = false;
         $inLater = false;
