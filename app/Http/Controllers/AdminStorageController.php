@@ -45,14 +45,10 @@ class AdminStorageController extends Controller
         return view('admin.storage.backups', compact('backups'));
     }
 
-    public function runBackup(StorageBackupService $backups)
+    public function runBackup()
     {
-        $run = $backups->runWeekly();
-        if ($run->status === 'completed') {
-            return redirect()->route('admin.storage.backups')->with('status', 'نسخه پشتیبان با موفقیت ایجاد و صحت‌سنجی شد.');
-        }
-
-        return redirect()->route('admin.storage.backups')->with('warning', $run->error_message ?: 'تهیه نسخه پشتیبان ناموفق بود.');
+        RunStorageBackup::dispatch()->afterCommit();
+        return redirect()->route('admin.storage.backups')->with('status', 'درخواست تهیه بکاپ در صف اجرا قرار گرفت. نتیجه پس از پایان عملیات در همین صفحه ثبت می‌شود.');
     }
 
     public function store(Request $request, StorageConnectionService $connections)
