@@ -97,8 +97,8 @@ class PlatformCompletionController extends Controller {
  }
  public function saveWorkflow(Request $r){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
-  $conditionFields=\\App\\Services\\WorkflowConditionEvaluator::FIELDS;
-  $conditionOperators=\\App\\Services\\WorkflowConditionEvaluator::OPERATORS;
+  $conditionFields=\App\Services\WorkflowConditionEvaluator::FIELDS;
+  $conditionOperators=\App\Services\WorkflowConditionEvaluator::OPERATORS;
   $x=$r->validate([
    'id'=>'nullable|integer|min:1',
    'name'=>'required|string|max:160',
@@ -111,8 +111,8 @@ class PlatformCompletionController extends Controller {
    'steps.*.priority'=>'nullable|in:low,normal,high',
    'steps.*.due_at'=>'nullable|date',
    'conditions'=>'nullable|array|max:10',
-   'conditions.*.field'=>['required',\\Illuminate\\Validation\\Rule::in($conditionFields)],
-   'conditions.*.operator'=>['required',\\Illuminate\\Validation\\Rule::in($conditionOperators)],
+   'conditions.*.field'=>['required',\Illuminate\Validation\Rule::in($conditionFields)],
+   'conditions.*.operator'=>['required',\Illuminate\Validation\Rule::in($conditionOperators)],
    'conditions.*.value'=>'nullable|string|max:500',
    'cooldown_seconds'=>'nullable|integer|min:0|max:86400',
   ]);
