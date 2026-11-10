@@ -17,7 +17,6 @@ trait PaysWithZarinpal
     public function payWithZarinpal(Request $request, Order $order, ZarinpalService $zarinpal)
     {
         abort_unless($order->user_id === auth()->id(), 404);
-        abort_unless($order->status === 'pending', 409, 'این سفارش قابل پرداخت نیست.');
         abort_unless(($order->pricing_snapshot['kind'] ?? null) === 'store', 422, 'درگاه مستقیم فعلاً برای سفارش فروشگاه فعال است.');
         $request->validate(['accept_terms' => ['accepted']]);
 
@@ -30,27 +29,62 @@ trait PaysWithZarinpal
             return back()->withErrors(['payment' => 'مبلغ سفارش برای درگاه معتبر نیست.']);
         }
 
+        // Reserve the order before contacting the gateway. Wallet payment cannot
+        // proceed while this external payment attempt is being initialized.
+        try {
+            [$lockedOrder, $payment] = DB::transaction(function () use ($order, $amount) {
+                $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+                abort_unless($locked->status === 'pending', 409, 'این سفارش در حال پرداخت یا قبلاً تعیین تکلیف شده است.');
+                abort_unless((int) $locked->total_rials === $amount, 409, 'مبلغ سفارش تغییر کرده است.');
+
+                $locked->update(['status' => 'gateway_pending']);
+                $attempt = Payment::create([
+                    'order_id' => $locked->id,
+                    'gateway' => 'zarinpal',
+                    'amount_rials' => $amount,
+                    'status' => 'initiating',
+                ]);
+
+                return [$locked->fresh(), $attempt];
+            });
+        } catch (\\Throwable $e) {
+            return back()->withErrors(['payment' => $e->getMessage()]);
+        }
+
         try {
             $result = $zarinpal->request(
                 $amount,
-                'پرداخت سفارش فروشگاه #'.$order->id,
+                'پرداخت سفارش فروشگاه #'.$lockedOrder->id,
                 route('checkout.zarinpal.callback'),
                 auth()->user()->mobile ?? null,
                 auth()->user()->email ?? null
             );
-        } catch (\Throwable $e) {
+
+            abort_unless(! empty($result['authority']) && ! empty($result['url']), 502, 'پاسخ درگاه معتبر نیست.');
+
+            DB::transaction(function () use ($payment, $result) {
+                $lockedPayment = Payment::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
+                abort_unless($lockedPayment->status === 'initiating', 409, 'درخواست پرداخت قبلاً تعیین تکلیف شده است.');
+                $lockedPayment->update([
+                    'authority' => $result['authority'],
+                    'transaction_id' => $result['authority'],
+                    'status' => 'pending',
+                ]);
+            });
+        } catch (\\Throwable $e) {
+            DB::transaction(function () use ($lockedOrder, $payment) {
+                $locked = Order::query()->whereKey($lockedOrder->id)->lockForUpdate()->first();
+                $attempt = Payment::query()->whereKey($payment->id)->lockForUpdate()->first();
+                if ($attempt && $attempt->status === 'initiating') {
+                    $attempt->update(['status' => 'failed']);
+                }
+                if ($locked && $locked->status === 'gateway_pending') {
+                    $locked->update(['status' => 'pending']);
+                }
+            });
+
             return back()->withErrors(['payment' => $e->getMessage()]);
         }
-
-        Payment::updateOrCreate(
-            ['order_id' => $order->id, 'gateway' => 'zarinpal', 'status' => 'pending'],
-            [
-                'amount_rials' => $amount,
-                'authority' => $result['authority'],
-                'transaction_id' => $result['authority'],
-                'paid_at' => null,
-            ]
-        );
 
         $request->session()->put('zarinpal_order_id', $order->id);
         $request->session()->put('zarinpal_authority', $result['authority']);
@@ -125,7 +159,7 @@ trait PaysWithZarinpal
                     return;
                 }
 
-                abort_unless($locked->status === 'pending' && $lockedPayment->status === 'pending', 409, 'سفارش یا تراکنش قبلاً تعیین تکلیف شده است.');
+                abort_unless(in_array($locked->status, ['pending', 'gateway_pending'], true) && $lockedPayment->status === 'pending', 409, 'سفارش یا تراکنش قبلاً تعیین تکلیف شده است.');
                 abort_unless((int) $lockedPayment->amount_rials === (int) $locked->total_rials, 409, 'مبلغ تراکنش با سفارش مطابقت ندارد.');
 
                 $items = $locked->storeItems()->with('product')->get();
