@@ -110,7 +110,7 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
         $this->authorize('view', $ticket);
 
-        $ticket->load(['publicMessages.user', 'relatedProduct', 'relatedOrder.storeItems', 'assignee']);
+        $ticket->load(['publicMessages.user', 'relatedProduct', 'assignee', 'relatedOrder' => fn ($query) => $query->where('user_id', $ticket->user_id)]);
         $this->tickets->markCustomerSeen($ticket);
         $ticket->setRelation('messages', $ticket->publicMessages);
 
