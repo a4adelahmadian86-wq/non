@@ -95,6 +95,41 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertFalse($authorization->allowsFor($employee, 'access.audit', ['organization_id' => $organizationB->id]));
     }
 
+    public function test_role_assignment_start_and_expiry_windows_are_enforced(): void
+    {
+        $employee = $this->user('09140000137');
+        $roleId = $this->role('time-bounded-role');
+        $this->grant($roleId, 'access.audit');
+
+        $assignmentId = DB::table('farast_user_roles')->insertGetId([
+            'user_id' => $employee->id,
+            'role_id' => $roleId,
+            'scope_type' => 'global',
+            'scope_id' => null,
+            'starts_at' => now()->addHour(),
+            'expires_at' => now()->addDays(2),
+            'assigned_by' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertFalse($authorization->allows($employee, 'access.audit'));
+
+        DB::table('farast_user_roles')->where('id', $assignmentId)->update([
+            'starts_at' => now()->subMinute(),
+            'expires_at' => now()->addHour(),
+        ]);
+        $authorization->forgetUser($employee->id);
+        $this->assertTrue($authorization->allows($employee, 'access.audit'));
+
+        DB::table('farast_user_roles')->where('id', $assignmentId)->update([
+            'expires_at' => now()->subMinute(),
+        ]);
+        $authorization->forgetUser($employee->id);
+        $this->assertFalse($authorization->allows($employee, 'access.audit'));
+    }
+
     public function test_explicit_user_deny_overrides_a_role_grant(): void
     {
         $employee = $this->user('09140000102');
