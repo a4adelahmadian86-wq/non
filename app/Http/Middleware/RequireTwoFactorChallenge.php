@@ -10,21 +10,40 @@ class RequireTwoFactorChallenge
 {
     public function handle(Request $request, Closure $next): Response
     {
+        $user = $request->user();
+
+        // Existing authenticated sessions are stopped before protected route
+        // actions execute. The post-response check below handles the initial
+        // password/OTP login request, where authentication happens in-route.
+        if ($this->requiresChallenge($request, $user)) {
+            return $this->challengeResponse($request);
+        }
+
         $response = $next($request);
         $user = $request->user();
 
-        if (! $user || ! $user->two_factor_enabled_at || $request->session()->boolean('auth.two_factor_passed')) {
-            return $response;
+        if ($this->requiresChallenge($request, $user)) {
+            return $this->challengeResponse($request);
         }
 
-        if ($request->routeIs(
+        return $response;
+    }
+
+    private function requiresChallenge(Request $request, $user): bool
+    {
+        if (! $user || ! $user->two_factor_enabled_at || $request->session()->boolean('auth.two_factor_passed')) {
+            return false;
+        }
+
+        return ! $request->routeIs(
             'two-factor.challenge',
             'two-factor.challenge.verify',
             'logout'
-        )) {
-            return $response;
-        }
+        );
+    }
 
+    private function challengeResponse(Request $request): Response
+    {
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => 'برای ادامه، تأیید دومرحله‌ای حساب خود را تکمیل کنید.',
