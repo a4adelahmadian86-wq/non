@@ -462,7 +462,15 @@ class AdminStoreController extends Controller
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها را در بخش منابع هر جلسه بارگذاری کنید.');
-        $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean']);
+        $request->validate([
+            'file' => 'required|file|max:51200',
+            'is_primary' => 'nullable|boolean',
+            'security_scan' => 'nullable|boolean',
+        ]);
+        $antivirusRequested = $request->boolean('security_scan');
+        $canRequestAntivirus = app(\\App\\Services\\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.security_scan');
+        abort_if($antivirusRequested && ! $canRequestAntivirus, 403, 'مجوز درخواست اسکن آنتی‌ویروس برای این حساب فعال نیست.');
 
         $upload = $request->file('file');
         $originalNameLower = strtolower(str_replace('\\', '/', $upload->getClientOriginalName()));
@@ -497,6 +505,12 @@ class AdminStoreController extends Controller
         try {
             $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024);
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ایستای داخلی عبور نکرده است.');
+            $antivirusResult = null;
+            if ($antivirusRequested) {
+                $antivirusResult = app(\\App\\Services\\OptionalAntivirusScanner::class)
+                    ->scan(Storage::disk('private')->path($path));
+                $inspection['antivirus'] = $antivirusResult;
+            }
             $ingestion = StoreProductIngestion::create([
                 'id' => (string) Str::uuid(),
                 'product_id' => $product->id,
@@ -510,6 +524,9 @@ class AdminStoreController extends Controller
                 'sha256' => $inspection['checksum'],
                 'inspection_json' => $inspection,
                 'is_primary' => $request->boolean('is_primary', true),
+                'antivirus_requested' => $antivirusRequested,
+                'antivirus_status' => $antivirusResult['status'] ?? null,
+                'antivirus_scanned_at' => isset($antivirusResult['scanned_at']) ? now() : null,
                 'expires_at' => now()->addMinutes(30),
             ]);
         } catch (Throwable $exception) {
@@ -534,6 +551,12 @@ class AdminStoreController extends Controller
                 'sha256' => $ingestion->sha256,
             ],
             'inspection' => $inspection,
+            'antivirus' => $antivirusResult ? [
+                'requested' => true,
+                'status' => $antivirusResult['status'],
+                'engine' => $antivirusResult['engine'],
+                'version' => $antivirusResult['version'],
+            ] : ['requested' => false, 'status' => 'not_requested'],
         ], 201);
     }
 
