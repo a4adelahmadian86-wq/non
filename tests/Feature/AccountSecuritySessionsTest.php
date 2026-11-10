@@ -127,6 +127,69 @@ class AccountSecuritySessionsTest extends TestCase
         ]);
     }
 
+    public function test_security_lists_paginate_independently_without_hiding_older_records(): void
+    {
+        $user = $this->makeUser();
+
+        $this->actingAs($user)->get(route('platform.security'))->assertOk();
+
+        for ($i = 1; $i <= 17; $i++) {
+            DB::table('farast_account_sessions')->insert([
+                'user_id' => $user->id,
+                'session_key' => hash('sha256', 'pagination-session-'.$i),
+                'session_id_encrypted' => Crypt::encryptString('pagination-session-'.$i),
+                'device_label' => 'Device '.$i,
+                'ip_address' => '203.0.113.'.(($i % 200) + 1),
+                'user_agent' => 'Pagination test browser '.$i,
+                'last_activity' => now()->subMinutes($i),
+                'created_at' => now()->subDays($i),
+                'updated_at' => now(),
+            ]);
+        }
+
+        for ($i = 1; $i <= 12; $i++) {
+            DB::table('farast_blocked_devices')->insert([
+                'user_id' => $user->id,
+                'device_key_hash' => hash('sha256', 'pagination-blocked-device-'.$i),
+                'device_label' => 'Blocked device '.$i,
+                'ip_address' => '203.0.114.'.(($i % 200) + 1),
+                'user_agent' => 'Blocked browser '.$i,
+                'blocked_at' => now()->subDays($i),
+                'created_at' => now()->subDays($i),
+                'updated_at' => now(),
+            ]);
+        }
+
+        for ($i = 1; $i <= 22; $i++) {
+            DB::table('farast_security_events')->insert([
+                'user_id' => $user->id,
+                'event' => 'pagination_event_'.$i,
+                'ip' => '203.0.115.'.(($i % 200) + 1),
+                'user_agent' => 'Audit browser '.$i,
+                'meta' => json_encode(['sequence' => $i]),
+                'created_at' => now()->subMinutes($i),
+                'updated_at' => now()->subMinutes($i),
+            ]);
+        }
+
+        $response = $this->get(route('platform.security', [
+            'sessions_page' => 2,
+            'blocked_page' => 2,
+            'events_page' => 2,
+        ]));
+
+        $response->assertOk()
+            ->assertViewHas('sessions', function ($sessions) {
+                return $sessions->total() === 18 && $sessions->count() === 3;
+            })
+            ->assertViewHas('blockedDevices', function ($devices) {
+                return $devices->total() === 12 && $devices->count() === 2;
+            })
+            ->assertViewHas('events', function ($events) {
+                return $events->total() === 22 && $events->count() === 2;
+            });
+    }
+
     public function test_blocked_device_sessions_are_revoked_and_owner_can_unblock_device(): void
     {
         $user = $this->makeUser();
