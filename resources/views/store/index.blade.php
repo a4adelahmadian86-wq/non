@@ -108,7 +108,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261109catalog2">
+<link rel="stylesheet" href="/css/store.css?v=20261110focused1">
 @endpush
 @push('scripts')
 <script>
