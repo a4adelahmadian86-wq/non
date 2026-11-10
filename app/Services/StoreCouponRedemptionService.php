@@ -55,6 +55,32 @@ class StoreCouponRedemptionService
             }
         }
 
+        if ($assignment && $assignment->campaign_id) {
+            // Serialize all redemptions for this campaign on its parent row.
+            // This keeps simultaneous orders from exceeding the campaign's own cap.
+            $campaign = DB::table('crm_marketing_campaigns')
+                ->where('id', $assignment->campaign_id)
+                ->lockForUpdate()
+                ->first();
+            if (! $campaign || (int) ($campaign->budget_cap_rials ?? 0) <= 0) {
+                throw new RuntimeException('بودجه کمپین این پیشنهاد دیگر معتبر نیست.');
+            }
+
+            $campaignSpent = DB::table('store_coupon_assignments as assignments')
+                ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
+                ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
+                ->where('assignments.campaign_id', $assignment->campaign_id)
+                ->where('assignments.status', 'redeemed')
+                ->where('orders.status', 'paid')
+                ->whereNotNull('orders.paid_at')
+                ->where('orders.id', '!=', $order->id)
+                ->sum('store_coupons.value');
+
+            if ((int) $campaignSpent + (int) $coupon->value > (int) $campaign->budget_cap_rials) {
+                throw new RuntimeException('سقف بودجه این کمپین پیش از پرداخت سفارش تکمیل شده است.');
+            }
+        }
+
         if ($assignment) {
             $product = StoreProduct::query()->find($assignment->product_id);
             $orderItems = $order->storeItems()->get();
