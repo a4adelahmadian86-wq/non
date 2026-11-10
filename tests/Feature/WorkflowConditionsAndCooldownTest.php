@@ -36,6 +36,30 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ], $options));
     }
 
+    public function test_dispatch_rejects_unapproved_context_fields_and_non_integer_user_ids(): void
+    {
+        $owner = $this->owner('09140000209');
+        $engine = app(WorkflowEngine::class);
+
+        try {
+            $engine->dispatch('document.saved', [
+                'user_id' => $owner->id,
+                'document_id' => 9,
+                'password' => 'must-not-be-stored',
+            ], 'document:unsafe-context:1');
+            $this->fail('Unsupported event context fields must be rejected.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('unsupported fields', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $engine->dispatch('document.saved', [
+            'user_id' => (string) ($owner->id + 0.5),
+            'document_id' => 9,
+        ], 'document:invalid-user:1'));
+        $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:unsafe-context:1']);
+        $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:invalid-user:1']);
+    }
+
     public function test_event_only_runs_workflow_when_all_conditions_match(): void
     {
         $owner = $this->owner('09140000201');
