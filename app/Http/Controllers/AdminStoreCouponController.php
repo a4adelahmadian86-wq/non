@@ -99,7 +99,7 @@ class AdminStoreCouponController extends Controller
                 'offer_valid_hours' => (int) SiteSetting::read('smart_discount_offer_valid_hours', 48),
                 'max_discount_percent' => (int) SiteSetting::read('smart_discount_max_discount_percent', 10),
                 'abandonment_hours' => (int) SiteSetting::read('smart_discount_abandonment_hours', 2),
-                'retention_days' => (int) SiteSetting::read('marketing_signal_retention_days', 30),
+                'retention_days' => (int) SiteSetting::read('marketing_signal_retention_days', 90),
             ],
         ]);
     }
