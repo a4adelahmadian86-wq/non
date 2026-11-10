@@ -365,6 +365,46 @@
         @endif
     </section>
 
+    <section class="home-transparency" aria-labelledby="home-transparency-title">
+        <div class="home-section-heading">
+            <div>
+                <span class="home-kicker">شفافیت پیش از انتخاب</span>
+                <h2 id="home-transparency-title">قبل از شروع، تصویر روشنی داشته باشید</h2>
+                <p>اطلاعاتی که برای تصمیم‌گیری لازم دارید، بدون آمار و ادعای تأییدنشده در دسترس شماست.</p>
+            </div>
+        </div>
+        <div class="home-transparency-grid">
+            <article class="home-transparency-card">
+                <span class="home-transparency-icon"><i class="fa-solid fa-calculator" aria-hidden="true"></i></span>
+                <h3>هزینه پیش از تأیید</h3>
+                <p>برای فایل‌های مشمول برآورد، تعداد صفحات، اعتبار اعمال‌شده و مبلغ لازم برای ادامه مسیر پیش از تأیید نمایش داده می‌شود.</p>
+                <a href="{{ route('pricing') }}">روش قیمت‌گذاری <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+            </article>
+            <article class="home-transparency-card">
+                <span class="home-transparency-icon"><i class="fa-solid fa-box-open" aria-hidden="true"></i></span>
+                <h3>ویترین مبتنی بر محصولات منتشرشده</h3>
+                <p>در صفحه اصلی فقط محصولات منتشرشده نمایش داده می‌شوند؛ اگر محصولی برای نمایش نباشد، وضعیت فروشگاه شفاف اعلام می‌شود.</p>
+                <a href="{{ route('store') }}">بررسی فروشگاه <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+            </article>
+            <article class="home-transparency-card">
+                <span class="home-transparency-icon"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i></span>
+                <h3>قوانین و سیاست‌های در دسترس</h3>
+                <p>پیش از خرید یا استفاده، شرایط استفاده، حریم خصوصی و ضوابط بازگشت وجه را مطالعه کنید.</p>
+                <div class="home-transparency-links">
+                    <a href="{{ route('terms') }}">قوانین</a>
+                    <a href="{{ route('privacy') }}">حریم خصوصی</a>
+                    <a href="{{ route('refunds') }}">بازگشت وجه</a>
+                </div>
+            </article>
+            <article class="home-transparency-card">
+                <span class="home-transparency-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                <h3>بررسی اطلاعات اعتماد</h3>
+                <p>برای مشاهده اطلاعات و وضعیت مدارک و نمادهای ثبت‌شده، به مرکز شفافیت فراست مراجعه کنید.</p>
+                <a href="{{ route('trust') }}">مرکز شفافیت <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+            </article>
+        </div>
+    </section>
+
     <section class="home-faq" aria-labelledby="home-faq-title">
         <div class="home-section-heading home-section-heading--center">
             <div>
