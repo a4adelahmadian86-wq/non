@@ -6,7 +6,7 @@
 </style>
 <div class="ac-shell">
     <header class="ac-head">
-        <div><h1>مرکز ارتباطات فراست</h1><p>یک نمای هماهنگ از تیکت‌های پشتیبانی، گفت‌وگوهای داخلی و اعلان‌ها؛ با حفظ منبع داده و گردش‌کار اصلی هر بخش.</p></div>
+        <div><h1>مرکز ارتباطات فراست</h1><p>{{ $isAdmin ? 'نمای هماهنگ تیکت‌های پشتیبانی، گفت‌وگوهای داخلی و اعلان‌ها؛ با حفظ منبع داده و گردش‌کار اصلی هر بخش.' : 'نمای یکپارچه تیکت‌های پشتیبانی شما و اعلان‌های حساب، بدون پراکندگی میان بخش‌های مختلف.' }}</p></div>
         <div class="ac-actions">
             @if($canSupport)
                 <a class="ac-btn primary" href="{{ $isAdmin ? route('admin.support.management') : route('support') }}"><i class="fa-solid fa-headset"></i> {{ $isAdmin ? 'میز تیکت‌ها' : 'تیکت‌های من' }}</a>
