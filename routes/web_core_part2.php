@@ -73,6 +73,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspace/security', [AccountSecurityController::class, 'index'])->name('platform.security');
     Route::post('/workspace/security/sessions/{session}/revoke', [AccountSecurityController::class, 'revoke'])->whereNumber('session')->middleware('throttle:10,10')->name('platform.security.sessions.revoke');
     Route::post('/workspace/security/sessions/revoke-others', [AccountSecurityController::class, 'revokeOthers'])->middleware('throttle:5,10')->name('platform.security.sessions.revoke-others');
+    Route::post('/workspace/security/password', [AccountSecurityController::class, 'changePassword'])->middleware('throttle:5,10')->name('platform.security.password.update');
+    Route::post('/workspace/security/sessions/revoke-all', [AccountSecurityController::class, 'revokeAll'])->middleware('throttle:3,10')->name('platform.security.sessions.revoke-all');
     Route::post('/workspace/ocr', [PlatformCompletionController::class, 'ocr'])->middleware('throttle:10,1')->name('platform.ocr');
     Route::get('/workspace/ocr/{id}', [PlatformCompletionController::class, 'ocrStatus'])->middleware('throttle:60,1')->name('platform.ocr.status');
     Route::get('/workspace/billing', [PlatformCompletionController::class, 'billing'])->name('platform.billing');
