@@ -606,11 +606,7 @@ class AdvancedAccessControlTest extends TestCase
         $this->assign($supervisor, $localRole, 'team', $localTeam->id);
 
         $orphan = $this->user('09140000324');
-        DB::table('team_user')->insert([
-            'team_id' => $localTeam->id,
-            'user_id' => $orphan->id,
-            'team_role' => 'member',
-        ]);
+        $orphan->teams()->attach($localTeam->id, ['team_role' => 'member']);
         $userViewRole = $this->role('local-team-user-view', 'team', $localTeam->id);
         $this->grant($userViewRole, 'users.view', 'team');
         $this->assign($supervisor, $userViewRole, 'team', $localTeam->id);
