@@ -185,7 +185,6 @@ class SupportTicketService
                     Ticket::class,
                     (int) $ticket->id
                 );
-                \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
             } catch (\\Throwable $exception) {
                 \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
                 throw $exception;
@@ -202,6 +201,7 @@ class SupportTicketService
         }
 
         $message = $ticket->messages()->create($payload);
+        if (! empty($path)) \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
         foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
             if (! empty($attachment['managed_file_id'])) {
                 StorageManagedFile::whereKey($attachment['managed_file_id'])->update([
