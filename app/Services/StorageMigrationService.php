@@ -128,11 +128,13 @@ class StorageMigrationService
     private function migrateSupportAttachments(int $limit): int
     {
         $count = 0;
-        TicketMessage::query()->whereNotNull('attachments')->orderBy('id')->limit($limit)->get()
-            ->each(function (TicketMessage $message) use (&$count): void {
+        TicketMessage::query()->whereNotNull('attachments')->orderBy('id')->chunkById(100, function ($messages) use (&$count, $limit): bool {
+            foreach ($messages as $message) {
+                if ($count >= $limit) return false;
                 $attachments = (array) ($message->attachments ?? []);
                 $changed = false;
                 foreach ($attachments as $index => $attachment) {
+                    if ($count >= $limit) break;
                     if (! is_array($attachment) || ($attachment['disk'] ?? 'private') !== 'private' || empty($attachment['path'])) {
                         continue;
                     }
@@ -150,7 +152,9 @@ class StorageMigrationService
                 if ($changed) {
                     $message->update(['attachments' => array_values($attachments)]);
                 }
-            });
+            }
+            return $count < $limit;
+        });
         return $count;
     }
 
