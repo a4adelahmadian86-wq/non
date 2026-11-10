@@ -186,6 +186,7 @@ class SupportController extends Controller
                 'ticket.created',
                 [
                     'user_id' => (int) $request->user()->id,
+                    'customer_id' => (int) $request->user()->id,
                     'ticket_id' => (int) $ticket->id,
                     'status' => (string) $ticket->status,
                 ],
