@@ -47,7 +47,7 @@ trait PaysWithZarinpal
 
                 return [$locked->fresh(), $attempt];
             });
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['payment' => $e->getMessage()]);
         }
 
@@ -71,7 +71,7 @@ trait PaysWithZarinpal
                     'status' => 'pending',
                 ]);
             });
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             DB::transaction(function () use ($lockedOrder, $payment) {
                 $locked = Order::query()->whereKey($lockedOrder->id)->lockForUpdate()->first();
                 $attempt = Payment::query()->whereKey($payment->id)->lockForUpdate()->first();
