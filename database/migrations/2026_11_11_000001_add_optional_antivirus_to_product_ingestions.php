@@ -29,10 +29,12 @@ return new class extends Migration {
 
     public function down(): void
     {
-        $permissionId = Permission::query()->where('key', 'store.security_scan')->value('id');
-        if ($permissionId) {
-            RolePermission::query()->where('permission_id', $permissionId)->delete();
-            Permission::query()->whereKey($permissionId)->delete();
+        $permissionIds = Permission::query()
+            ->whereIn('key', ['store.security_scan', 'store.publish_products'])
+            ->pluck('id');
+        if ($permissionIds->isNotEmpty()) {
+            RolePermission::query()->whereIn('permission_id', $permissionIds)->delete();
+            Permission::query()->whereIn('id', $permissionIds)->delete();
         }
 
         Schema::table('store_product_ingestions', function (Blueprint $table) {
