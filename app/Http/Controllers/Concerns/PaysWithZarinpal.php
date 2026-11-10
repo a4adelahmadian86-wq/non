@@ -173,6 +173,8 @@ trait PaysWithZarinpal
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
+                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
+
                 $lockedPayment->update([
                     'status' => 'paid',
                     'gateway_response' => [
