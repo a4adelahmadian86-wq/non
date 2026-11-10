@@ -122,6 +122,7 @@ class StorageManager
             ->first();
         if ($managed) {
             if ($volumeId && $managed->volume) $managed->volume->decrement('used_bytes', (int) $managed->size_bytes);
+                $managed->volume->decrement('object_count');
             $managed->update(['status' => 'deleted']);
         }
     }
@@ -228,6 +229,7 @@ class StorageManager
 
         if ($volume) {
             $volume->increment('used_bytes', (int) $file->getSize());
+            $volume->increment('object_count');
         }
 
         return [
