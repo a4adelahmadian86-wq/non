@@ -87,6 +87,14 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertNotEmpty($product->sku);
         $this->assertStringStartsWith('PRD-', $product->sku);
         $this->assertNotEmpty($product->slug);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.edit', $product))
+            ->assertOk()
+            ->assertSee('data-product-ingestion', false)
+            ->assertSee('data-ingestion-input', false)
+            ->assertSee('data-ingestion-confirm', false)
+            ->assertSee('بررسی ساختار و امنیت');
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
