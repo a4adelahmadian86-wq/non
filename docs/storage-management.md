@@ -62,6 +62,10 @@ Use a separate API credential with only the required bucket permissions. The end
 
 The Laravel scheduler and queue worker must be running. Weekly backups are encrypted with ZIP AES-256, downloaded again after upload for SHA-256 verification, and retained; automatic pruning is intentionally disabled. A manual backup request is queued and appears in the backup history. The verification command checks the remote checksum, encrypted manifest, and database stream. Restore first verifies the archive, restores the database and local files, and re-stages remote managed objects so the transfer engine can place critical files back on Iran and non-critical files back abroad. It intentionally leaves maintenance mode enabled; inspect the recovered application, then run `php artisan up`. Keep the original Laravel `APP_KEY` and `FARAST_BACKUP_ENCRYPTION_KEY` safely available for disaster recovery.
 
+## International outage readiness
+
+Iranian file storage protects file reads and writes only when the application can still reach that Iranian endpoint. To keep the whole site available during an international outage, the application runtime, primary database, session/cache/queue services, DNS resolution, authentication dependencies, and any required CDN or payment integrations must also be reachable through domestic infrastructure or have a tested local fallback. Storage Core does not by itself make an overseas application server or external third-party API available.
+
 ## Safety notes
 
 Do not delete source files until the destination upload, checksum validation, and database reference update have succeeded. Do not route critical files to foreign storage as a fallback. Provider capacity and object-count limits are enforced when the provider reports them.
