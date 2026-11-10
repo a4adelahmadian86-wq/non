@@ -294,4 +294,19 @@ class CrmMarketingCampaignTest extends TestCase
     }
 
 
+
+    public function test_campaign_workspace_is_available_to_marketing_admins(): void
+    {
+        $admin = $this->user('09151110041');
+
+        $this->actingAs($admin)
+            ->get(route('admin.crm.marketing.index'))
+            ->assertOk()
+            ->assertSee('مرکز کمپین‌های بازاریابی')
+            ->assertSee('ساخت سگمنت رفتاری')
+            ->assertSee('سقف بودجه کمپین')
+            ->assertSee('عملکرد و چرخه کمپین‌ها');
+    }
+
+
 }
