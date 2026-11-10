@@ -9,6 +9,7 @@ use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Services\StoreCourseEnrollmentService;
+use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
