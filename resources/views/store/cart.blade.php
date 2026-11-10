@@ -3,7 +3,7 @@
 <section class="store-page" dir="rtl">
   <div class="store-container">
     <div class="store-section-head">
-      <div><span class="eyebrow">سبد خرید</span><h1>مرور سفارش و تسویه</h1><p>مبالغ در سرور دوباره محاسبه می‌شوند.</p></div>
+      <div><span class="eyebrow">سبد خرید</span><h1>مرور سفارش و تسویه</h1><p>مبالغ در سرور دوباره محاسبه می‌شوند. <span class="store-cart-count" data-cart-count>{{ number_format($cart['count'] ?? 0) }} قلم</span></p></div>
       <a class="store-outline-btn" href="{{ route('store') }}"><i class="fa-solid fa-arrow-right"></i> ادامه خرید</a>
     </div>
 
@@ -44,9 +44,9 @@
 
         <aside class="store-cart-summary">
           <strong style="display:block;margin-bottom:10px">خلاصه سفارش</strong>
-          <div class="store-summary-line"><span>جمع کالاها</span><span>{{ number_format($cart['subtotal_rials']/10) }} تومان</span></div>
-          <div class="store-summary-line"><span>تخفیف</span><span>{{ number_format(($cart['discount_rials']??0)/10) }} تومان</span></div>
-          <div class="store-summary-line total"><span>قابل پرداخت</span><strong>{{ number_format($cart['total_rials']/10) }} تومان</strong></div>
+          <div class="store-summary-line"><span>جمع کالاها</span><span data-cart-subtotal>{{ number_format($cart['subtotal_rials']/10) }} تومان</span></div>
+          <div class="store-summary-line"><span>تخفیف</span><span data-cart-discount>{{ number_format(($cart['discount_rials']??0)/10) }} تومان</span></div>
+          <div class="store-summary-line total"><span>قابل پرداخت</span><strong data-cart-total>{{ number_format($cart['total_rials']/10) }} تومان</strong></div>
 
           <form method="post" action="{{ route('cart.coupon') }}" class="store-coupon">
             @csrf
@@ -91,6 +91,17 @@
     const r=await fetch(url,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify(body||{})});
     const j=await r.json(); if(!r.ok) throw new Error(j.message||'خطا در سبد'); return j;
   }
+  const formatMoney=value=>new Intl.NumberFormat('fa-IR').format(Number(value)||0)+' تومان';
+  const updateSummary=payload=>{
+    const subtotal=document.querySelector('[data-cart-subtotal]');
+    const discount=document.querySelector('[data-cart-discount]');
+    const total=document.querySelector('[data-cart-total]');
+    const count=document.querySelector('[data-cart-count]');
+    if(subtotal)subtotal.textContent=formatMoney(payload.subtotal_toman);
+    if(discount)discount.textContent=formatMoney(payload.discount_toman);
+    if(total)total.textContent=formatMoney(payload.total_toman);
+    if(count)count.textContent=new Intl.NumberFormat('fa-IR').format(payload.count||0)+' قلم';
+  };
   const feedback=document.querySelector('.store-cart-feedback');
   const showFeedback=(message)=>{
     if(!feedback)return;
@@ -106,13 +117,23 @@
     controls.forEach(control=>{control.disabled=true;});
     if(feedback){feedback.hidden=true;feedback.textContent='';}
     try{
-      if(action==='remove') await call('/cart/products/'+id+'/remove');
-      else {
-        const current=Number(row.querySelector('.store-qty b').textContent||1);
-        const q=current+(action==='plus'?1:-1);
-        await call('/cart/products/'+id+'/update',{quantity:Math.max(0,q)});
+      const payload=action==='remove'
+        ? await call('/cart/products/'+id+'/remove')
+        : await call('/cart/products/'+id+'/update',{quantity:Math.max(0,Number(row.querySelector('.store-qty b').textContent||1)+(action==='plus'?1:-1))});
+      const item=(payload.items||[]).find(entry=>String(entry.product_id)===String(id));
+      if(action==='remove'||!item){
+        row.remove();
+        if(!document.querySelector('.store-cart-row')){location.reload();return;}
+      }else{
+        row.querySelector('.store-qty b').textContent=item.quantity;
+        const unit=row.querySelector('div small');
+        if(unit)unit.textContent=formatMoney(item.unit_price_toman)+' برای هر عدد';
+        const line=row.querySelector(':scope > strong:last-child');
+        if(line)line.textContent=formatMoney(item.line_total_toman);
+        controls.forEach(control=>{control.disabled=false;});
       }
-      location.reload();
+      updateSummary(payload);
+      if(feedback){feedback.hidden=false;feedback.classList.remove('is-error');feedback.textContent='سبد خرید به‌روز شد.';}
     }catch(err){
       controls.forEach(control=>{control.disabled=false;});
       showFeedback(err.message||'به‌روزرسانی سبد خرید انجام نشد؛ دوباره تلاش کنید.');
