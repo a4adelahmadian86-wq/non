@@ -57,7 +57,7 @@ Route::get('/', function () {
 
     return view('home', compact('recentProjects', 'homeProducts', 'homeCategories'));
 })->name('home');
-Route::get('/storage/managed/{file}', [\\App\\Http\\Controllers\\ManagedStoragePublicController::class, 'show'])->whereNumber('file')->name('storage.managed.public');
+Route::get('/storage/managed/{file}', [\App\Http\Controllers\ManagedStoragePublicController::class, 'show'])->whereNumber('file')->name('storage.managed.public');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog');
 Route::get('/community', [ContentDiscussionController::class, 'communityIndex'])->name('community.index');
 Route::middleware('auth')->group(function () {
