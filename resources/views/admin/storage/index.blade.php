@@ -7,7 +7,7 @@
 <div class="storage-page">
     <section class="storage-hero">
         <div><h1>مرکز مدیریت فضای ذخیره‌سازی</h1><p>مدیریت درایوها، اتصال سرورها، ظرفیت، فایل‌ها و زیرساخت پشتیبان‌گیری</p></div>
-        <div><span class="storage-status healthy">۴ درایو منطقی</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="storage-status healthy">۴ درایو منطقی</span><a class="storage-btn" href="{{ route('admin.storage.backups') }}">تاریخچه بکاپ‌ها</a></div>
     </section>
     @if(session('status'))<div class="storage-success">{{ session('status') }}</div>@endif
     @if(session('warning'))<div class="storage-alert">{{ session('warning') }}</div>@endif
