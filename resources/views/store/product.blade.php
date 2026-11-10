@@ -12,7 +12,7 @@
         '@type' => 'Product',
         'name' => $product->title,
         'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description), 300),
-        'image' => $product->cover_path ? [asset($product->cover_path)] : [],
+        'image' => collect([$product->cover_path])->filter()->merge($product->images->pluck('path'))->filter()->unique()->map(fn ($path) => asset($path))->values()->all(),
         'sku' => $product->sku,
         'url' => request()->url(),
         'offers' => [
@@ -97,10 +97,12 @@
           </section>
         @endif
 
-        <article class="store-panel" id="store-product-description">
-          <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
-          <div class="body">{!! nl2br(e($product->description ?: $product->short_description ?: 'توضیحی ثبت نشده است.')) !!}</div>
-        </article>
+        @if(filled($product->description) || filled($product->short_description))
+          <article class="store-panel" id="store-product-description">
+            <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
+            <div class="body">{!! nl2br(e($product->description ?: $product->short_description)) !!}</div>
+          </article>
+        @endif
         @if($product->type === 'course' && $product->course)
           <div class="store-panel course-public-curriculum" id="store-product-curriculum">
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
@@ -190,13 +192,29 @@
         @endauth
 
         <div class="meta">
-          <span><i class="fa-solid fa-code-branch"></i> نسخه {{ $product->version ?: '1.0' }}</span>
-          @if($product->type !== 'course' && $product->files->isNotEmpty())
-            <span><i class="fa-solid fa-file-lines"></i> فرمت فایل: {{ strtoupper(pathinfo((string) $product->files->first()->original_name, PATHINFO_EXTENSION)) ?: 'نامشخص' }}</span>
-            <span><i class="fa-solid fa-hard-drive"></i> حجم فایل: {{ $product->files->first()->size_bytes >= 1048576 ? number_format($product->files->first()->size_bytes / 1048576, 2).' مگابایت' : ($product->files->first()->size_bytes >= 1024 ? number_format($product->files->first()->size_bytes / 1024, 1).' کیلوبایت' : number_format($product->files->first()->size_bytes).' بایت') }}</span>
+          @php
+            $deliveryFile = $product->type !== 'course' ? $product->files->first() : null;
+            $productVersion = filled($product->version) ? trim((string) $product->version) : null;
+            $fileVersion = filled($deliveryFile?->version) ? trim((string) $deliveryFile->version) : null;
+            $licenseValue = filled($product->license_type) ? trim((string) $product->license_type) : null;
+            $licenseLabel = $licenseValue === 'standard' ? 'استاندارد' : $licenseValue;
+          @endphp
+          @if($productVersion)
+            <span><i class="fa-solid fa-code-branch"></i> نسخه محصول: {{ $productVersion }}</span>
+          @elseif($fileVersion)
+            <span><i class="fa-solid fa-code-branch"></i> نسخه فایل اصلی: {{ $fileVersion }}</span>
+          @endif
+          @if($deliveryFile)
+            <span><i class="fa-solid fa-file-lines"></i> فرمت فایل: {{ strtoupper(pathinfo((string) $deliveryFile->original_name, PATHINFO_EXTENSION)) ?: 'نامشخص' }}</span>
+            @php($fileSizeBytes = (int) $deliveryFile->size_bytes)
+            @if($fileSizeBytes > 0)
+              <span><i class="fa-solid fa-hard-drive"></i> حجم فایل: {{ $fileSizeBytes >= 1048576 ? number_format($fileSizeBytes / 1048576, 2).' مگابایت' : ($fileSizeBytes >= 1024 ? number_format($fileSizeBytes / 1024, 1).' کیلوبایت' : number_format($fileSizeBytes).' بایت') }}</span>
+            @endif
           @endif
           <span><i class="fa-solid fa-shield-halved"></i> {{ $product->type === 'course' ? 'دسترسی به دوره در کتابخانه آموزشی' : (($product->download_policy ?? 'signed') === 'reader_only' ? 'مطالعه در خوانشگر پس از پرداخت' : 'دریافت در کتابخانه پس از پرداخت') }}</span>
-          <span><i class="fa-solid fa-file-contract"></i> مجوز {{ $product->license_type ?: 'شخصی' }}</span>
+          @if($licenseLabel)
+            <span><i class="fa-solid fa-file-contract"></i> مجوز استفاده: {{ $licenseLabel }}</span>
+          @endif
         </div>
         <div class="store-product-assurance"><i class="fa-solid fa-circle-check"></i><span><strong>پیش از خرید، شرایط محصول را بررسی کنید</strong><small>جزئیات دریافت و مجوز استفاده در همین بخش مشخص شده‌اند.</small></span></div>
       </aside>
