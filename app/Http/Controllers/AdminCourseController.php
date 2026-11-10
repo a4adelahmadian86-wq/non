@@ -156,6 +156,22 @@ class AdminCourseController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 256 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
+            $resourceStream = Storage::disk('private')->readStream($path);
+            abort_unless(is_resource($resourceStream), 503, 'خواندن فایل منبع ممکن نشد.');
+            try {
+                abort_unless(Storage::disk('managed')->put($path, $resourceStream, [
+                    'farast_classification' => 'critical',
+                    'farast_source_type' => 'course_resource',
+                    'farast_source_id' => $lesson->id,
+                    'farast_product_id' => $product->id,
+                    'farast_owner_user_id' => auth()->id(),
+                    'farast_original_name' => $upload->getClientOriginalName(),
+                    'mimetype' => $inspection['mime'],
+                ]), 503, 'ذخیره منبع دوره در زیرساخت مرکزی ممکن نشد.');
+            } finally {
+                fclose($resourceStream);
+            }
+
             $documentId = null;
             $processingStatus = ((int) $inspection['size'] <= 25 * 1024 * 1024) ? 'queued' : 'awaiting_provider';
             DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path, &$documentId, $processingStatus) {
@@ -165,7 +181,7 @@ class AdminCourseController extends Controller
                     'course_lesson_id' => $lesson->id,
                     'purpose' => 'lesson_resource',
                     'version' => $lockedProduct->version,
-                    'disk' => 'private',
+                    'disk' => 'managed',
                     'path' => $path,
                     'original_name' => $upload->getClientOriginalName(),
                     'mime' => $inspection['mime'],
@@ -204,12 +220,15 @@ class AdminCourseController extends Controller
                 ]);
             });
         } catch (Throwable $exception) {
+            Storage::disk('managed')->delete($path);
             Storage::disk('private')->delete($path);
             if ($exception instanceof \Illuminate\Validation\ValidationException) {
                 throw $exception;
             }
             abort(503, 'بارگذاری به دلیل ناموفق بودن بررسی امنیتی متوقف شد.');
         }
+
+        Storage::disk('private')->delete($path);
 
         $dispatchFailed = false;
         if ($documentId && $processingStatus === 'queued') {
