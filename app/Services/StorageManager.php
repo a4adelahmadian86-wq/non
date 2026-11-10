@@ -274,9 +274,22 @@ class StorageManager
         }
 
         if ($record->replicated_to_volume_id && $record->replicaVolume?->status === 'healthy' && $record->replica_file_key) {
-            return true;
+            try {
+                $replicaDisk = $this->connections->disk($record->replicaVolume);
+                if ($replicaDisk->exists($record->replica_file_key)
+                    && (int) $replicaDisk->size($record->replica_file_key) === $record->size_bytes) {
+                    return true;
+                }
+                $record->replicaVolume->decrement('used_bytes', $record->size_bytes);
+                $record->update(['replicated_to_volume_id' => null, 'replica_file_key' => null]);
+            } catch (Throwable $exception) {
+                report($exception);
+                $record->replicaVolume->update(['status' => 'error', 'last_checked_at' => now()]);
+            }
         }
 
+        $oldReplicaId = $record->replicated_to_volume_id;
+        $oldReplicaKey = $record->replica_file_key;
         $target = $this->reserveReplicaVolume($record);
         if (! $target) {
             $metadata = (array) ($record->metadata ?? []);
@@ -363,6 +376,18 @@ class StorageManager
                 $target->decrement('reserved_files');
             });
             $reserved = false;
+
+            if ($oldReplicaId && $oldReplicaKey && $oldReplicaId !== $target->id) {
+                try {
+                    $oldReplica = StorageVolume::find($oldReplicaId);
+                    if ($oldReplica) {
+                        $this->connections->disk($oldReplica)->delete($oldReplicaKey);
+                        $oldReplica->decrement('used_bytes', $record->size_bytes);
+                    }
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
 
             return true;
         } catch (Throwable $exception) {
