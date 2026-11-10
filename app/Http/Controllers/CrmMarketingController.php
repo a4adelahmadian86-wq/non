@@ -242,7 +242,7 @@ class CrmMarketingController extends Controller
             $reserved = $reservedStats->get($campaignId);
             $revenue = $revenueStats->get($campaignId);
             $viewed = $viewedByCampaign[$campaignId] ?? [];
-            $clicked = $clickedByCampaign[$campaignId] ?? [];
+            $clicked = array_intersect_key($clickedByCampaign[$campaignId] ?? [], $viewed);
 
             $campaign->offer_count = $campaignAssignments->count();
             $campaign->redeemed_offer_count = (int) ($redeemed->redeemed_offer_count ?? 0);
