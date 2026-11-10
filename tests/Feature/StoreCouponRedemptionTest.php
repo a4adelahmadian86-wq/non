@@ -8,6 +8,7 @@ use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
+use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\StoreCouponRedemptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -265,6 +266,48 @@ class StoreCouponRedemptionTest extends TestCase
 
         $this->assertSame(0, $coupon->fresh()->used_count);
         $this->assertSame('offered', $assignment->fresh()->status);
+    }
+
+
+    public function test_monthly_coupon_budget_allows_exact_cap_and_rejects_the_next_redemption(): void
+    {
+        SiteSetting::write('store_coupon_monthly_budget_rials', 15000);
+
+        $user = User::create(['name' => 'Monthly Budget QA', 'mobile' => '09123456786', 'password' => 'secret']);
+        $firstCoupon = StoreCoupon::create([
+            'code' => 'BUDGETFIRST', 'type' => 'fixed', 'value' => 10000,
+            'max_uses' => 1, 'used_count' => 0, 'is_active' => true,
+        ]);
+        $firstOrder = Order::create([
+            'user_id' => $user->id, 'subtotal_rials' => 100000, 'discount_rials' => 10000,
+            'tax_rials' => 0, 'total_rials' => 90000, 'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $firstCoupon->code, 'coupon_redemption_pending' => true],
+        ]);
+
+        $service = app(StoreCouponRedemptionService::class);
+        $service->redeemForPaidOrder($firstOrder);
+        $firstOrder->update(['status' => 'paid', 'paid_at' => now()]);
+
+        $secondCoupon = StoreCoupon::create([
+            'code' => 'BUDGETSECOND', 'type' => 'fixed', 'value' => 6000,
+            'max_uses' => 1, 'used_count' => 0, 'is_active' => true,
+        ]);
+        $secondOrder = Order::create([
+            'user_id' => $user->id, 'subtotal_rials' => 100000, 'discount_rials' => 6000,
+            'tax_rials' => 0, 'total_rials' => 94000, 'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $secondCoupon->code, 'coupon_redemption_pending' => true],
+        ]);
+
+        try {
+            $service->redeemForPaidOrder($secondOrder);
+            $this->fail('A redemption that exceeds the monthly budget must be rejected.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('بودجه ماهانه', $exception->getMessage());
+        }
+
+        $this->assertSame(1, $firstCoupon->fresh()->used_count);
+        $this->assertSame(0, $secondCoupon->fresh()->used_count);
+        $this->assertTrue((bool) $secondOrder->fresh()->pricing_snapshot['coupon_redemption_pending']);
     }
 
     public function test_coupon_codes_are_normalized_when_saved(): void
