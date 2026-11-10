@@ -117,7 +117,7 @@ class StorageTransferService
                 });
                 try {
                     $source->delete($file->file_key);
-                } catch (\\Throwable $cleanupException) {
+                } catch (\Throwable $cleanupException) {
                     report($cleanupException);
                     $file->update(['metadata' => array_merge((array) $file->metadata, [
                         'staging_cleanup_pending' => true,
