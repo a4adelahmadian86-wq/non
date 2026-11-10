@@ -14,6 +14,7 @@ use App\Models\StoreLibraryItem;
 use App\Models\StoreWishlist;
 use App\Models\StoreCouponAssignment;
 use App\Services\MarketingSignalService;
+use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
