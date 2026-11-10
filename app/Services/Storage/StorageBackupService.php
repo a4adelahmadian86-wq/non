@@ -62,6 +62,7 @@ class StorageBackupService
                         'metadata' => ['sha256' => $checksum, 'encrypted' => true, 'encryption' => 'Zip AES-256'],
                     ]);
                     $target->increment('used_bytes', (int) filesize($archivePath));
+                    $target->increment('object_count');
                     $results[] = ['volume_id' => $target->id, 'status' => 'completed', 'object_key' => $objectKey];
                 } catch (\Throwable $exception) {
                     $run->update(['status' => 'failed', 'object_key' => $objectKey, 'completed_at' => now(), 'error_message' => mb_substr($exception->getMessage(), 0, 1000)]);
@@ -97,7 +98,7 @@ class StorageBackupService
                 if (! $file->volume) continue;
                 $temporary = $work.'/managed-'.$file->id;
                 $this->storage->downloadTo('storage_volume:'.$file->storage_volume_id, $file->file_key, $temporary);
-                $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
+                $safeKey = str_replace(['..', '\'], '_', $file->file_key);
                 $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
                 $this->addEncryptedFile($zip, $temporary, $entry);
                 @unlink($temporary);
@@ -161,7 +162,7 @@ class StorageBackupService
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
             if (! $file->isFile()) continue;
-            $relative = ltrim(str_replace('\\', '/', substr($file->getPathname(), strlen($directory))), '/');
+            $relative = ltrim(str_replace('\', '/', substr($file->getPathname(), strlen($directory))), '/');
             $this->addEncryptedFile($zip, $file->getPathname(), $prefix.'/'.$relative);
         }
     }
