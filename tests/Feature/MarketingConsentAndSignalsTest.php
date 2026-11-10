@@ -58,6 +58,38 @@ class MarketingConsentAndSignalsTest extends TestCase
         $this->assertSame([$optedIn->id], app(CrmAudienceService::class)->query([])->pluck('id')->all());
     }
 
+    public function test_marketing_signal_retention_command_prunes_only_old_marketing_events(): void
+    {
+        $user = $this->user('09151112006', true);
+        DB::table('farast_workflow_events')->insert([
+            [
+                'event_type' => 'marketing.product_viewed',
+                'idempotency_key' => 'retention-old-'.$user->id,
+                'user_id' => $user->id,
+                'context' => json_encode(['product_id' => 12]),
+                'matched_workflows' => 0,
+                'processed_at' => null,
+                'created_at' => now()->subDays(91),
+                'updated_at' => now()->subDays(91),
+            ],
+            [
+                'event_type' => 'marketing.product_viewed',
+                'idempotency_key' => 'retention-recent-'.$user->id,
+                'user_id' => $user->id,
+                'context' => json_encode(['product_id' => 13]),
+                'matched_workflows' => 0,
+                'processed_at' => null,
+                'created_at' => now()->subDays(10),
+                'updated_at' => now()->subDays(10),
+            ],
+        ]);
+
+        \\Illuminate\\Support\\Facades\\Artisan::call('store:marketing:prune-signals --days=90 --limit=100');
+
+        $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'retention-old-'.$user->id]);
+        $this->assertDatabaseHas('farast_workflow_events', ['idempotency_key' => 'retention-recent-'.$user->id]);
+    }
+
     public function test_user_can_withdraw_consent_and_existing_marketing_signals_are_deleted(): void
     {
         $user = $this->user('09151112005', true);
