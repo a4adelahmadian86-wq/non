@@ -93,7 +93,10 @@ class StorageManager
             $oldVolumeId = $existing?->storage_volume_id;
             $oldKey = $existing?->file_key;
             $oldSize = (int) ($existing?->size_bytes ?? 0);
-            DB::transaction(function () use ($existing, $volume, $logicalPath, $objectKey, $size, $checksum, $classification, $config, $oldVolumeId, $oldSize) {
+            $oldReplicaId = $existing?->replicated_to_volume_id;
+            $oldReplicaKey = $existing?->replica_file_key;
+            $replicationRequired = $this->replicationRequired($classification);
+            DB::transaction(function () use ($existing, $volume, $logicalPath, $objectKey, $size, $checksum, $classification, $config, $oldVolumeId, $oldSize, $replicationRequired) {
                 if ($existing) {
                     $existing->update([
                         'storage_volume_id' => $volume->id,
@@ -108,9 +111,11 @@ class StorageManager
                         'source_id' => $config->get('farast_source_id'),
                         'product_id' => $config->get('farast_product_id'),
                         'owner_user_id' => $config->get('farast_owner_user_id'),
+                        'replicated_to_volume_id' => null,
+                        'replica_file_key' => null,
                         'status' => 'active',
                         'visibility' => 'private',
-                        'metadata' => ['fallback' => (bool) data_get($volume->metadata, 'local_fallback', false)],
+                        'metadata' => ['fallback' => (bool) data_get($volume->metadata, 'local_fallback', false), 'replication_status' => $replicationRequired ? 'queued' : 'not_required'],
                     ]);
                     if ($oldVolumeId) {
                         StorageVolume::whereKey($oldVolumeId)->decrement('used_bytes', $oldSize);
@@ -131,6 +136,8 @@ class StorageManager
                         'source_id' => $config->get('farast_source_id'),
                         'product_id' => $config->get('farast_product_id'),
                         'owner_user_id' => $config->get('farast_owner_user_id'),
+                        'replicated_to_volume_id' => null,
+                        'replica_file_key' => null,
                         'visibility' => 'private',
                         'status' => 'active',
                         'metadata' => ['fallback' => (bool) data_get($volume->metadata, 'local_fallback', false)],
@@ -149,6 +156,24 @@ class StorageManager
                     }
                 } catch (Throwable $exception) {
                     report($exception);
+                }
+            }
+            if ($oldReplicaId && $oldReplicaKey) {
+                try {
+                    $oldReplica = StorageVolume::find($oldReplicaId);
+                    if ($oldReplica) {
+                        $this->connections->disk($oldReplica)->delete($oldReplicaKey);
+                        $oldReplica->decrement('used_bytes', $oldSize);
+                    }
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+            }
+
+            if ($replicationRequired) {
+                $managedRecord = StorageManagedFile::query()->where('logical_path', $logicalPath)->first();
+                if ($managedRecord) {
+                    \App\Jobs\ReplicateStorageFile::dispatch($managedRecord->id)->afterCommit();
                 }
             }
         } catch (Throwable $exception) {
