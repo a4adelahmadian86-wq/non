@@ -9,6 +9,7 @@ return [
             'editor-assets',
             'community-attachments',
             'messenger-attachments',
+            'messenger',
             'editor-documents',
             'generated-documents',
         ],
