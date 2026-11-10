@@ -11,6 +11,23 @@ class WorkflowEngine
 
     public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false): int
     {
+        $userId = filter_var($context['user_id'] ?? null, FILTER_VALIDATE_INT);
+        if (! $userId || $userId < 1) {
+            throw new \InvalidArgumentException('A workflow run must be bound to a valid owner account.');
+        }
+
+        if ($manual) {
+            $manualFields = ['user_id', 'customer_id', 'manual_run'];
+            if ($eventWorkflowId !== null
+                || array_diff(array_keys($context), $manualFields) !== []
+                || (isset($context['customer_id']) && (int) $context['customer_id'] !== (int) $userId)
+                || empty($context['manual_run'])) {
+                throw new \InvalidArgumentException('Manual workflow runs may only use the authenticated owner context.');
+            }
+        } elseif ($eventWorkflowId === null) {
+            throw new \InvalidArgumentException('Non-manual workflow runs require a claimed domain-event mapping.');
+        }
+
         $runId = DB::table('farast_workflow_runs')->insertGetId([
             'workflow_id' => $workflowId,
             'status' => 'running',
@@ -29,6 +46,9 @@ class WorkflowEngine
                     ->first();
                 if (! $workflow || ! $workflow->enabled) {
                     throw new \RuntimeException('Workflow is disabled or missing.');
+                }
+                if ((int) $workflow->user_id !== (int) $userId) {
+                    throw new \RuntimeException('Workflow owner does not match the trusted event or authenticated user.');
                 }
 
                 $steps = json_decode((string) $workflow->steps, true);
