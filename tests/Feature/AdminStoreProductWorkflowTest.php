@@ -72,7 +72,10 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertDontSee('نوع مجوز استفاده')
             ->assertSee('admin-store-product-wizard.js')
             ->assertSee('product-upload-step')
-            ->assertSee('ورود به انتخاب فایل');
+            ->assertSee('ورود به انتخاب فایل')
+            ->assertSee('data-ingestion-folder')
+            ->assertSee('data-ingestion-selected')
+            ->assertSee('بررسی امن فایل');
         $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
 
         $response = $this->actingAs($admin)->post(route('admin.store.store'), [
