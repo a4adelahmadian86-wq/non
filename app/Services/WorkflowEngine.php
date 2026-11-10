@@ -244,7 +244,8 @@ class WorkflowEngine
             // Freeze the matching set once. An event with no matching workflow must
             // not unexpectedly start running a workflow created hours later.
             if (! $hasMappings && empty($lockedEvent->matched_at)) {
-                $subject = User::query()->find((int) $lockedEvent->user_id);
+                $subjectId = filter_var($context['customer_id'] ?? $lockedEvent->user_id, FILTER_VALIDATE_INT);
+                $subject = $subjectId && $subjectId > 0 ? User::query()->find((int) $subjectId) : null;
                 $workflows = DB::table('farast_workflows')
                     ->where('trigger_type', $lockedEvent->event_type)
                     ->where('enabled', true)
