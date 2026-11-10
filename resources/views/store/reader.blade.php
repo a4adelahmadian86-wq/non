@@ -8,7 +8,7 @@
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
       <strong>{{ $product->title }}</strong>
-      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} بخش</span>
+      <span><i class="fa-solid fa-shield-halved"></i> FARAST PDF Studio · مطالعه امن · {{ $previews->count() }} بخش</span>
     </div>
     <div class="farast-reader-account"><i class="fa-solid fa-user-shield"></i><span>{{ $readerWatermark }}</span></div>
   </header>
