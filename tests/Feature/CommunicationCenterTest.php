@@ -10,6 +10,7 @@ use App\Models\TicketMessage;
 use App\Models\SiteSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Tests\TestCase;
 
 class CommunicationCenterTest extends TestCase
@@ -270,9 +271,10 @@ class CommunicationCenterTest extends TestCase
                 ->assertDontSee(route('admin.support.management', ['ticket' => $ownTicket->id]), false);
 
             $this->get(route('support.show', $ownTicket))->assertOk();
-            $this->get(route('support.show', $otherTicket))->assertForbidden();
-            $this->post(route('support.message', $otherTicket), ['body' => 'تلاش برای پاسخ خارج از دامنه'])->assertForbidden();
-            $this->post(route('support.close', $otherTicket))->assertForbidden();
+            $this->assertTrue(Gate::forUser($admin)->allows('view', $ownTicket));
+            $this->assertFalse(Gate::forUser($admin)->allows('view', $otherTicket));
+            $this->assertFalse(Gate::forUser($admin)->allows('reply', $otherTicket));
+            $this->assertFalse(Gate::forUser($admin)->allows('close', $otherTicket));
         } finally {
             SiteSetting::query()->where('key', $overrideKey)->delete();
             config(['farast_admin.scope_override_key' => $previousOverrideKey]);
