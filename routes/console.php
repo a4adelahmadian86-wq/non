@@ -21,7 +21,7 @@ Artisan::command('farast:storage-backup', function (StorageBackupService $backup
     return 0;
 })->purpose('Create and verify an encrypted off-site backup of database and files');
 
-Artisan::command('farast:storage-backup:restore-files {run_id} {--overwrite}', function (\\App\\Services\\StorageBackupRestoreService $restore) {
+Artisan::command('farast:storage-backup:restore-files {run_id} {--overwrite}', function (\App\Services\StorageBackupRestoreService $restore) {
     $result = $restore->restoreFiles((int) $this->argument('run_id'), (bool) $this->option('overwrite'));
     $this->info('Managed files restored: '.$result['managed']);
     $this->info('Legacy files restored: '.$result['legacy']);
@@ -29,7 +29,7 @@ Artisan::command('farast:storage-backup:restore-files {run_id} {--overwrite}', f
     $this->warn('Database dump staged for manual restore at: '.$result['database_dump']);
 })->purpose('Verify and restore files from an encrypted backup; stage database dump for manual restore');
 
-Artisan::command('farast:storage-backup:password {run_id}', function (\\App\\Services\\StorageBackupRestoreService $restore) {
+Artisan::command('farast:storage-backup:password {run_id}', function (\App\Services\StorageBackupRestoreService $restore) {
     $this->line($restore->password((int) $this->argument('run_id')));
 })->purpose('Reveal the decryption password for a completed backup from the CLI');
 
