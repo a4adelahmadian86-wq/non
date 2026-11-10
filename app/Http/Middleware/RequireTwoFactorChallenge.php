@@ -1,10 +1,10 @@
 <?php
 
-namespace App\\Http\\Middleware;
+namespace App\Http\Middleware;
 
 use Closure;
-use Illuminate\\Http\\Request;
-use Symfony\\Component\\HttpFoundation\\Response;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class RequireTwoFactorChallenge
 {
@@ -31,7 +31,7 @@ class RequireTwoFactorChallenge
 
     private function requiresChallenge(Request $request, $user): bool
     {
-        if (! $user || ! $user->two_factor_enabled_at || $request->session()->boolean('auth.two_factor_passed')) {
+        if (! $user || ! $user->two_factor_enabled_at || filter_var($request->session()->get('auth.two_factor_passed', false), FILTER_VALIDATE_BOOLEAN)) {
             return false;
         }
 
@@ -49,6 +49,10 @@ class RequireTwoFactorChallenge
                 'message' => 'برای ادامه، تأیید دومرحله‌ای حساب خود را تکمیل کنید.',
                 'two_factor_required' => true,
             ], 423);
+        }
+
+        if ($request->isMethod('GET')) {
+            $request->session()->put('url.intended', $request->fullUrl());
         }
 
         return redirect()->route('two-factor.challenge');
