@@ -175,7 +175,7 @@ class SupportTicketService
             $path = $file->store('ticket-attachments/'.$ticket->id, 'private');
             try {
                 $inspection = app(UploadSecurityService::class)->inspect($path, (string) $file->getMimeType(), 8 * 1024 * 1024);
-                if (empty($inspection['safe'])) throw new \\RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
+                if (empty($inspection['safe'])) throw new \RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
                 $managed = app(StorageManager::class)->adoptExistingPrivate(
                     $path,
                     $file->getClientOriginalName(),
@@ -185,9 +185,9 @@ class SupportTicketService
                     Ticket::class,
                     (int) $ticket->id
                 );
-                \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
-            } catch (\\Throwable $exception) {
-                \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
+                \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
                 throw $exception;
             }
             $payload['attachments'] = [[
