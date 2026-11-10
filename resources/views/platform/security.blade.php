@@ -85,6 +85,9 @@
                         <span class="security-event-icon"><i class="fa-solid fa-shield" aria-hidden="true"></i></span>
                         <div><strong>{{ [
                             'login_session_started' => 'شروع نشست ورود',
+                            'login_failed' => 'تلاش ناموفق برای ورود',
+                            'logout' => 'خروج از حساب',
+                            'all_sessions_revoked' => 'خروج از تمام دستگاه‌ها',
                             'new_environment_detected' => 'ورود از محیط جدید',
                             'session_revoked' => 'خروج یک دستگاه',
                             'other_sessions_revoked' => 'خروج از سایر دستگاه‌ها',
