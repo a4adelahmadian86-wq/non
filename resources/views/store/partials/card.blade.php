@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="store-card-actions">
-      <button type="button" class="buy" data-add-cart="{{ $product->id }}" aria-label="افزودن {{ $product->title }} به سبد خرید">افزودن</button>
+      <button type="button" class="buy" data-add-cart="{{ $product->id }}" aria-label="افزودن {{ $product->title }} به سبد خرید">افزودن به سبد</button>
       <a class="detail" href="{{ route('store.product',$product->slug) }}">جزئیات</a>
     </div>
   </div>
