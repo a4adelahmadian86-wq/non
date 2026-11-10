@@ -56,7 +56,20 @@ class StoreCouponRedemptionService
 
         if ($assignment) {
             $product = StoreProduct::query()->find($assignment->product_id);
-            $orderItem = $order->storeItems()->where('product_id', $assignment->product_id)->first();
+            $orderItems = $order->storeItems()->get();
+            $orderItem = $orderItems->firstWhere('product_id', (int) $assignment->product_id);
+            $hasFinancialSnapshot = $orderItem
+                && ! empty(($orderItem->product_snapshot ?? [])['cost_snapshot_captured_at']);
+
+            // New checkout snapshots must show the smart discount on the target
+            // line only, with item discounts reconciling to the order discount.
+            // Keep legacy pending orders compatible with their older item schema.
+            if ($hasFinancialSnapshot
+                && ((int) $orderItem->discount_rials !== (int) $coupon->value
+                    || (int) $orderItems->sum('discount_rials') !== (int) $order->discount_rials)) {
+                throw new RuntimeException('تخصیص تخفیف در ردیف‌های سفارش با کد اختصاصی مطابقت ندارد؛ پرداخت انجام نشد.');
+            }
+
             $safeDiscountCap = $product && $orderItem
                 ? app(StoreCouponMarginPolicy::class)->maximumDiscount($product, (int) $orderItem->unit_price_rials, (int) $orderItem->quantity)
                 : 0;
