@@ -17,12 +17,13 @@ class StorageMigrationService
     public function migrateLegacy(int $limit = 100): array
     {
         $limit = max(1, min(500, $limit));
-        $counts = ['product_files' => 0, 'previews' => 0, 'artifacts' => 0, 'user_files' => 0, 'support_attachments' => 0, 'editor_assets' => 0];
+        $counts = ['product_files' => 0, 'previews' => 0, 'artifacts' => 0, 'product_public_assets' => 0, 'user_files' => 0, 'support_attachments' => 0, 'editor_assets' => 0];
 
         if ($this->hasDedicatedVolume('iran_primary')) {
             $counts['product_files'] += $this->migrateProductFiles($limit);
             $counts['previews'] += $this->migratePreviews($limit);
             $counts['artifacts'] += $this->migrateArtifacts($limit);
+            $counts['product_public_assets'] += $this->migrateProductPublicAssets($limit);
         }
 
         if ($this->hasDedicatedVolume('foreign_primary')) {
@@ -91,6 +92,28 @@ class StorageMigrationService
                 if ($this->copyToManaged('private', $artifact->path, 'critical', 'product_document_artifact', $artifact->id, $productId ?: null, null, basename($artifact->path), $artifact->mime)) {
                     $artifact->update(['disk' => 'managed']);
                     Storage::disk('private')->delete($artifact->path);
+                    $count++;
+                }
+            });
+        return $count;
+    }
+
+    private function migrateProductPublicAssets(int $limit): int
+    {
+        $count = 0;
+        StoreProduct::query()->where('cover_path', 'like', 'storage/store/covers/%')->orderBy('id')->limit($limit)->get()
+            ->each(function (StoreProduct $product) use (&$count): void {
+                $path = ltrim(substr((string) $product->cover_path, strlen('storage/')), '/');
+                if ($path !== '' && $this->copyToManaged('public', $path, 'critical', 'product_cover', $product->id, $product->id, null, basename($path), null)) {
+                    $count++;
+                }
+            });
+
+        StoreProductImage::query()->where('path', 'like', 'storage/store/product-images/%')->orderBy('id')->limit($limit)->get()
+            ->each(function (StoreProductImage $image) use (&$count): void {
+                $path = ltrim(substr((string) $image->path, strlen('storage/')), '/');
+                $image->loadMissing('product');
+                if ($path !== '' && $this->copyToManaged('public', $path, 'critical', 'product_gallery_image', $image->product_id, $image->product_id, null, basename($path), null)) {
                     $count++;
                 }
             });
