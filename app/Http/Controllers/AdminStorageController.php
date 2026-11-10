@@ -21,14 +21,14 @@ class AdminStorageController extends Controller
 
     public function index()
     {
-        $volumes = StorageVolume::withCount('files')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
+        $volumes = StorageVolume::withCount('files')->withSum('files', 'size_bytes')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
         $drives = collect(self::DRIVES)->map(function (array $definition, string $key) use ($volumes) {
             $items = $volumes->get($key, collect());
             return [
                 'key' => $key, 'title' => $definition['title'], 'region' => $definition['region'],
                 'kind' => $definition['kind'], 'volumes' => $items,
-                'capacity' => $items->sum(fn ($v) => $v->capacity_bytes ?? 0),
-                'used' => $items->sum('used_bytes'),
+                'capacity' => $items->isNotEmpty() && $items->every(fn ($v) => $v->capacity_bytes !== null) ? $items->sum('capacity_bytes') : null,
+                'used' => $items->sum('files_sum_size_bytes'),
                 'files' => $items->sum('files_count'),
                 'healthy' => $items->where('status', 'healthy')->count(),
             ];
