@@ -34,6 +34,8 @@ return new class extends Migration
                 $table->timestamp('muted_at')->nullable();
                 $table->timestamp('archived_at')->nullable();
                 $table->timestamp('joined_at')->nullable();
+                $table->timestamp('last_active_at')->nullable()->index();
+                $table->timestamp('typing_until')->nullable();
                 $table->timestamps();
                 $table->unique(['conversation_id', 'user_id']);
                 $table->index(['user_id', 'archived_at', 'read_at']);
