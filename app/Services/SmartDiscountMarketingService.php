@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\StoreCoupon;
+use App\Models\SiteSetting;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreProduct;
 use App\Models\User;
@@ -24,6 +25,12 @@ class SmartDiscountMarketingService
             return null;
         }
 
+        $scoreThreshold = max(1, min(12, (int) SiteSetting::read('smart_discount_score_threshold', self::SCORE_THRESHOLD)));
+        $signalWindowDays = max(1, min(60, (int) SiteSetting::read('smart_discount_signal_window_days', self::SIGNAL_WINDOW_DAYS)));
+        $offerCooldownDays = max(1, min(90, (int) SiteSetting::read('smart_discount_cooldown_days', self::OFFER_COOLDOWN_DAYS)));
+        $offerValidHours = max(1, min(168, (int) SiteSetting::read('smart_discount_offer_valid_hours', self::OFFER_VALID_HOURS)));
+        $maxDiscountPercent = max(1, min(50, (int) SiteSetting::read('smart_discount_max_discount_percent', self::MAX_DISCOUNT_PERCENT)));
+
         $product = StoreProduct::query()->published()->find($productId);
         if (! $product || $product->cost_price_rials === null) {
             return null;
@@ -42,7 +49,7 @@ class SmartDiscountMarketingService
                 'marketing.coupon_attempted',
                 'marketing.cart_abandoned',
             ])
-            ->where('created_at', '>=', now()->subDays(self::SIGNAL_WINDOW_DAYS))
+            ->where('created_at', '>=', now()->subDays($signalWindowDays))
             ->get(['event_type', 'context']);
 
         $counts = [
@@ -82,20 +89,20 @@ class SmartDiscountMarketingService
             $reasons[] = 'coupon_interest';
         }
 
-        if ($score < self::SCORE_THRESHOLD) {
+        if ($score < $scoreThreshold) {
             return null;
         }
 
         $price = (int) $product->price_rials;
         $cost = (int) $product->cost_price_rials;
         $availableDiscount = app(StoreCouponMarginPolicy::class)->maximumDiscount($product, $price, 1);
-        $discount = min((int) floor($price * self::MAX_DISCOUNT_PERCENT / 100), $availableDiscount);
+        $discount = min((int) floor($price * $maxDiscountPercent / 100), $availableDiscount);
 
         if ($price <= 0 || $cost < 0 || $availableDiscount <= 0 || $discount <= 0) {
             return null;
         }
 
-        return DB::transaction(function () use ($user, $productId, $score, $reasons, $discount) {
+        return DB::transaction(function () use ($user, $productId, $score, $reasons, $discount, $offerCooldownDays, $offerValidHours, $maxDiscountPercent) {
             $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->first();
             if (! $lockedUser || ! $lockedUser->marketing_consent) {
                 return null;
@@ -107,7 +114,7 @@ class SmartDiscountMarketingService
 
             if (StoreCouponAssignment::query()
                 ->where('user_id', $lockedUser->id)
-                ->where('offered_at', '>=', now()->subDays(self::OFFER_COOLDOWN_DAYS))
+                ->where('offered_at', '>=', now()->subDays($offerCooldownDays))
                 ->exists()) {
                 return null;
             }
@@ -119,14 +126,14 @@ class SmartDiscountMarketingService
 
             $currentAvailable = app(StoreCouponMarginPolicy::class)->maximumDiscount($lockedProduct, (int) $lockedProduct->price_rials, 1);
             $currentDiscount = min(
-                (int) floor((int) $lockedProduct->price_rials * self::MAX_DISCOUNT_PERCENT / 100),
+                (int) floor((int) $lockedProduct->price_rials * $maxDiscountPercent / 100),
                 $currentAvailable
             );
             if ($currentDiscount <= 0 || $currentDiscount !== $discount) {
                 return null;
             }
 
-            $expiresAt = now()->addHours(self::OFFER_VALID_HOURS);
+            $expiresAt = now()->addHours($offerValidHours);
             $code = $this->uniqueCode();
 
             $coupon = StoreCoupon::create([
