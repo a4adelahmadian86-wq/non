@@ -31,6 +31,7 @@ class UserFileController extends Controller
             'farast_source_id' => auth()->id(),
             'farast_owner_user_id' => auth()->id(),
             'farast_original_name' => $file->getClientOriginalName(),
+            'mimetype' => $file->getMimeType(),
         ]);
         $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $path, 'managed');
         $quote = $pricing->estimateByPages($pages);
