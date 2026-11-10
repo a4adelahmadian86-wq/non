@@ -39,14 +39,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (! Schema::hasTable('permissions')) {
-            return;
-        }
-
-        DB::table('permissions')->whereIn('key', [
-            'access.roles.manage', 'access.assign', 'access.override', 'access.audit',
-            'workflows.create', 'workflows.edit', 'workflows.delete', 'workflows.run', 'workflows.audit',
-            'automation.manage', 'automation.run', 'automation.audit',
-        ])->delete();
+        // Keep catalog entries on rollback: roles and audit history may already
+        // reference them, and deleting a permission would silently alter access.
     }
 };
