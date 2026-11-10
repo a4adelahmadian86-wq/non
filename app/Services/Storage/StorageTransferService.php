@@ -26,8 +26,8 @@ class StorageTransferService
                 $stream = $source->readStream($file->file_key);
                 if (! is_resource($stream)) throw new RuntimeException('خواندن جریان فایل موقت ناموفق بود.');
                 $out = fopen($temp, 'wb');
-                stream_copy_to_stream($stream, $out);
-                fclose($stream);
+                if (stream_copy_to_stream($stream, $out) === false) throw new RuntimeException('انتقال جریان فایل موقت ناموفق بود.');
+                fclose($out);
                 fclose($stream);
                 if ($target->driver === 's3') {
                     $this->s3->putFile($target, $file->file_key, $temp);
