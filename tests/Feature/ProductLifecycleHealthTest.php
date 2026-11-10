@@ -154,4 +154,45 @@ class ProductLifecycleHealthTest extends TestCase
         $this->assertSame(1, $snapshot['reader_only_without_ready_document']);
     }
 
+
+    public function test_snapshot_detects_document_source_hash_owner_and_private_storage_violations(): void
+    {
+        $category = StoreCategory::create(['name' => 'دسته یکپارچگی منبع', 'slug' => 'source-integrity-category', 'is_active' => true]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id, 'title' => 'محصول منبع یکپارچگی', 'slug' => 'source-integrity-product',
+            'sku' => 'SOURCE-INTEGRITY-001', 'type' => 'digital_file', 'price_rials' => 100000, 'status' => 'draft',
+        ]);
+        $otherProduct = StoreProduct::create([
+            'category_id' => $category->id, 'title' => 'محصول مالک دیگر', 'slug' => 'source-integrity-other-product',
+            'sku' => 'SOURCE-INTEGRITY-002', 'type' => 'digital_file', 'price_rials' => 100000, 'status' => 'draft',
+        ]);
+        $hash = hash('sha256', 'immutable-source');
+        $file = StoreProductFile::create([
+            'product_id' => $product->id, 'purpose' => 'product_download', 'version' => '1.0', 'disk' => 'private',
+            'path' => 'store/integrity/source.pdf', 'original_name' => 'source.pdf', 'mime' => 'application/pdf',
+            'size_bytes' => 16, 'sha256' => $hash, 'is_primary' => true, 'is_active' => true,
+            'scan_status' => 'clean', 'scan_engine' => 'farast_static_v1', 'scanned_at' => now(),
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id, 'product_file_id' => $file->id, 'source_sha256' => $hash, 'processing_status' => 'pending',
+        ]);
+
+        $snapshot = app(ProductLifecycleHealthService::class)->snapshot();
+        $this->assertSame(0, $snapshot['documents_with_source_binding_violations']);
+        $this->assertSame(0, $snapshot['documents_with_untrusted_source_files']);
+
+        $file->update(['sha256' => hash('sha256', 'changed-source')]);
+        $snapshot = app(ProductLifecycleHealthService::class)->snapshot();
+        $this->assertSame(1, $snapshot['documents_with_source_binding_violations']);
+
+        $file->update(['sha256' => $hash, 'disk' => 'public']);
+        $snapshot = app(ProductLifecycleHealthService::class)->snapshot();
+        $this->assertSame(1, $snapshot['documents_with_untrusted_source_files']);
+
+        $file->update(['disk' => 'private']);
+        $document->update(['product_id' => $otherProduct->id]);
+        $snapshot = app(ProductLifecycleHealthService::class)->snapshot();
+        $this->assertSame(1, $snapshot['documents_with_source_binding_violations']);
+    }
+
 }
