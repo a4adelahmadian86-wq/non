@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
 use App\Models\StoreCategory;
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
@@ -92,6 +93,7 @@ class AdminStoreCouponDashboardTest extends TestCase
             'offered_at' => now()->subDay(),
             'expires_at' => now()->addDay(),
             'redeemed_at' => now(),
+            'redeemed_order_id' => $order->id,
         ]);
 
         $this->actingAs($admin)
@@ -101,7 +103,8 @@ class AdminStoreCouponDashboardTest extends TestCase
             ->assertSee('SMARTDASH10')
             ->assertSee('مشتری پیشنهاد')
             ->assertSee('استفاده موفق')
-            ->assertSee('1,200', false)\n            ->assertSee('8,800', false);
+            ->assertSee('1,200', false)
+            ->assertSee('8,800', false);
     }
 
     public function test_admin_can_create_normalized_public_coupon_and_toggle_it(): void
