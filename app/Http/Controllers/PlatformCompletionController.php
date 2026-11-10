@@ -155,7 +155,7 @@ class PlatformCompletionController extends Controller {
    'steps'=>json_encode(array_values($x['steps']),JSON_UNESCAPED_UNICODE),
    'conditions'=>!empty($x['conditions'])?json_encode(array_values($x['conditions']),JSON_UNESCAPED_UNICODE):null,
    'cooldown_seconds'=>(int)($x['cooldown_seconds']??0),
-   'enabled'=>$r->boolean('enabled',true),
+   'enabled'=>$r->boolean('enabled',false),
    'updated_at'=>now(),
   ];
   DB::transaction(function()use($r,$x,$payload){
