@@ -207,59 +207,53 @@ class PaymentController extends Controller
                     throw new \RuntimeException('سفارش فروشگاه فاقد محصول است.');
                 }
 
-                $subtotal = 0;
+                // The order totals and per-item prices are immutable checkout snapshots.
+                // Repricing here would make wallet and gateway payments disagree.
                 $validatedItems = [];
                 foreach ($items as $item) {
                     $product = $item->product;
                     if (! $product || ! app(\App\Services\StoreCartService::class)->isPurchasable($product)) {
                         throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
                     }
+
                     $file = null;
                     if ($product->type === 'course') {
                         if (! $product->course || ! $product->course->sections()->whereHas('lessons', fn ($query) => $query->where('is_published', true))->exists()) {
-                            throw new \RuntimeException('برنامه آموزشی این دوره برای تحویل آماده نیست.');
+                            throw new \RuntimeException('برنامه آموزشی این دوره هنوز برای تحویل آماده نیست.');
                         }
                     } else {
-                        $file = $product->files()->where('purpose', 'product_download')->where('is_active', true)
-                            ->whereIn('scan_status', ['clean', 'legacy'])->orderByDesc('is_primary')->first();
-                        if (! $file) {
+                        $snapshot = $item->product_snapshot ?? [];
+                        $fileId = (int) ($snapshot['file_id'] ?? 0);
+                        $file = $fileId > 0
+                            ? \App\Models\StoreProductFile::query()
+                                ->whereKey($fileId)
+                                ->where('product_id', $product->id)
+                                ->where('purpose', 'product_download')
+                                ->first()
+                            : $product->files()->where('purpose', 'product_download')
+                                ->where('is_active', true)
+                                ->whereIn('scan_status', ['clean', 'legacy'])
+                                ->orderByDesc('is_primary')
+                                ->first();
+
+                        if (! $file || ! $file->is_active || ! in_array($file->scan_status, ['clean', 'legacy'], true)) {
                             throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
                         }
+
+                        $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
+                        if ($expectedHash !== '' && ! hash_equals($expectedHash, (string) $file->sha256)) {
+                            throw new \RuntimeException('نسخه فایل محصول پس از ثبت سفارش تغییر کرده است.');
+                        }
                     }
-                    $unit = max(0, (int) $product->price_rials);
-                    $line = $unit * max(1, (int) $item->quantity);
-                    $subtotal += $line;
-                    $validatedItems[] = [$item, $product, $file, $unit, $line];
+
+                    $validatedItems[] = [$item, $product, $file];
                 }
 
-                $taxRate = max(0, (float) SiteSetting::read('tax_rate_percent', 10));
-                $taxEnabled = filter_var(SiteSetting::read('tax_enabled', true), FILTER_VALIDATE_BOOLEAN);
-                $discount = max(0, min($subtotal, (int) $locked->discount_rials));
-                $taxable = max(0, $subtotal - $discount);
-                $tax = ($taxable > 0 && $taxEnabled) ? (int) round($taxable * $taxRate / 100) : 0;
-                $total = $taxable + $tax;
-
-                $locked->update([
-                    'subtotal_rials' => $subtotal,
-                    'discount_rials' => $discount,
-                    'tax_rials' => $tax,
-                    'total_rials' => $total,
-                    'pricing_snapshot' => [
-                        'kind' => 'store',
-                        'tax_rate' => $taxRate,
-                        'items' => collect($validatedItems)->map(fn ($row) => [
-                            'product_id' => $row[1]->id,
-                            'title' => $row[1]->title,
-                            'sku' => $row[1]->sku,
-                            'quantity' => $row[0]->quantity,
-                            'unit_price_rials' => $row[3],
-                            'line_total_rials' => $row[4],
-                            'file_id' => $row[2]?->id,
-                            'file_sha256' => $row[2]?->sha256,
-                        ])->values()->all(),
-                    ],
-                    'terms_accepted_at' => now(),
-                ]);
+                // Charge exactly the amount confirmed on the checkout page.
+                $total = (int) $locked->total_rials;
+                if ($total < 0) {
+                    throw new \RuntimeException('مبلغ سفارش معتبر نیست.');
+                }
 
                 $wallet = Wallet::firstOrCreate(['user_id' => auth()->id()], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
