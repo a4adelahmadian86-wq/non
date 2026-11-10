@@ -88,10 +88,17 @@ class PlatformCompletionController extends Controller {
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.view'),403);
   $items=DB::table('farast_workflows')->where('user_id',$r->user()->id)->orderByDesc('updated_at')->get();
   $canManageWorkflows=app(AuthorizationService::class)->allows($r->user(),'workflows.manage');
-  return view('platform.workflows',compact('items','canManageWorkflows'));
+  $runs=DB::table('farast_workflow_runs as runs')
+   ->join('farast_workflows as workflows','workflows.id','=','runs.workflow_id')
+   ->where('workflows.user_id',$r->user()->id)
+   ->select('runs.id','runs.workflow_id','runs.status','runs.error','runs.started_at','runs.finished_at','workflows.name as workflow_name')
+   ->orderByDesc('runs.id')->limit(30)->get();
+  return view('platform.workflows',compact('items','canManageWorkflows','runs'));
  }
  public function saveWorkflow(Request $r){
   abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
+  $conditionFields=\App\Services\WorkflowConditionEvaluator::FIELDS;
+  $conditionOperators=\App\Services\WorkflowConditionEvaluator::OPERATORS;
   $x=$r->validate([
    'id'=>'nullable|integer|min:1',
    'name'=>'required|string|max:160',
@@ -103,11 +110,18 @@ class PlatformCompletionController extends Controller {
    'steps.*.description'=>'nullable|string|max:4000',
    'steps.*.priority'=>'nullable|in:low,normal,high',
    'steps.*.due_at'=>'nullable|date',
+   'conditions'=>'nullable|array|max:10',
+   'conditions.*.field'=>['required',\Illuminate\Validation\Rule::in($conditionFields)],
+   'conditions.*.operator'=>['required',\Illuminate\Validation\Rule::in($conditionOperators)],
+   'conditions.*.value'=>'nullable|string|max:500',
+   'cooldown_seconds'=>'nullable|integer|min:0|max:86400',
   ]);
   $payload=[
    'name'=>$x['name'],
    'trigger_type'=>$x['trigger_type'],
-   'steps'=>json_encode($x['steps'],JSON_UNESCAPED_UNICODE),
+   'steps'=>json_encode(array_values($x['steps']),JSON_UNESCAPED_UNICODE),
+   'conditions'=>!empty($x['conditions'])?json_encode(array_values($x['conditions']),JSON_UNESCAPED_UNICODE):null,
+   'cooldown_seconds'=>(int)($x['cooldown_seconds']??0),
    'enabled'=>$r->boolean('enabled',true),
    'updated_at'=>now(),
   ];
