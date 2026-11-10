@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\StoreCart;
 use App\Models\StoreCoupon;
+use App\Models\StoreCouponAssignment;
+use App\Models\Order;
 use App\Models\StoreProduct;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +24,7 @@ class StoreCartService
                     foreach ($guest->items as $item) {
                         $existing = $cart->items()->where('product_id', $item->product_id)->first();
                         if ($existing) {
-                            $existing->update(['quantity' => min(99, $existing->quantity + $item->quantity)]);
+                            $existing->update(['quantity' => min(99, $existing->quantity + $item->quantity), 'marketing_abandoned_at' => null]);
                         } else {
                             $cart->items()->create([
                                 'product_id' => $item->product_id,
@@ -51,6 +53,7 @@ class StoreCartService
         $item = $cart->items()->firstOrNew(['product_id' => $product->id]);
         $item->quantity = min(99, max(1, (int) $item->quantity + $quantity));
         $item->price_snapshot_rials = (int) $product->price_rials;
+        $item->marketing_abandoned_at = null;
         $item->save();
 
         return $cart->fresh('items.product');
@@ -67,6 +70,7 @@ class StoreCartService
             $item->update([
                 'quantity' => min(99, $quantity),
                 'price_snapshot_rials' => (int) $product->price_rials,
+                'marketing_abandoned_at' => null,
             ]);
         }
 
@@ -111,6 +115,26 @@ class StoreCartService
         }
 
         $cart = $this->current($request);
+        $assignment = StoreCouponAssignment::query()->where('coupon_id', $coupon->id)->first();
+        if ($assignment) {
+            if (! $request->user() || (int) $assignment->user_id !== (int) $request->user()->id
+                || $assignment->status !== 'offered' || ! $assignment->expires_at || $assignment->expires_at->lte(now())
+                || Order::query()->where('user_id', $assignment->user_id)->where('status', 'paid')
+                    ->whereHas('storeItems', fn ($items) => $items->where('product_id', $assignment->product_id))->exists()) {
+                throw new \RuntimeException('این کد تخفیف اختصاصی برای حساب شما معتبر نیست یا مهلت آن پایان یافته است.');
+            }
+            if (! $cart->items->contains(fn ($item) => (int) $item->product_id === (int) $assignment->product_id)) {
+                throw new \RuntimeException('این کد فقط برای محصول مشخص‌شده در پیشنهاد اختصاصی قابل استفاده است.');
+            }
+            $assignedProduct = StoreProduct::query()->find($assignment->product_id);
+            $assignedQuantity = (int) $cart->items->where('product_id', $assignment->product_id)->sum('quantity');
+            $safeDiscountCap = $assignedProduct && $assignedProduct->cost_price_rials !== null
+                ? max(0, ((int) $assignedProduct->price_rials - (int) $assignedProduct->cost_price_rials - max(0, (int) $assignedProduct->marketing_min_margin_rials)) * $assignedQuantity)
+                : 0;
+            if ($coupon->type !== 'fixed' || (int) $coupon->value > $safeDiscountCap) {
+                throw new \RuntimeException('شرایط سودآوری محصول تغییر کرده و این پیشنهاد دیگر قابل استفاده نیست.');
+            }
+        }
         $cartPayload = $this->payload($cart);
         if ((int) $cartPayload['subtotal_rials'] <= 0) {
             throw new \RuntimeException('ابتدا یک محصول به سبد خرید اضافه کنید.');
@@ -160,18 +184,16 @@ class StoreCartService
 
         $discount = 0;
         $couponCode = null;
+        $couponAssignmentId = null;
+        $couponProductId = null;
         if ($request) {
             $couponCode = $request->session()->get('store_coupon_code');
             if ($couponCode) {
                 $couponCode = mb_strtoupper(trim((string) $couponCode));
                 $coupon = StoreCoupon::whereRaw('UPPER(code) = ?', [$couponCode])
                     ->where('is_active', true)
-                    ->where(function ($query) {
-                        $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
-                    })
-                    ->where(function ($query) {
-                        $query->whereNull('ends_at')->orWhere('ends_at', '>=', now());
-                    })
+                    ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                    ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))
                     ->first();
 
                 $hasRemainingUses = $coupon
@@ -179,12 +201,54 @@ class StoreCartService
                 $meetsMinimum = $coupon
                     && ($coupon->min_subtotal_rials === null || $subtotal >= (int) $coupon->min_subtotal_rials);
 
-                if ($coupon && $hasRemainingUses && $meetsMinimum && $subtotal > 0) {
-                    $discount = $coupon->type === 'percent'
-                        ? (int) floor($subtotal * (int) $coupon->value / 100)
-                        : min($subtotal, (int) $coupon->value);
+                if ($coupon && $hasRemainingUses && $meetsMinimum && $subtotal > 0
+                    && in_array($coupon->type, ['percent', 'fixed'], true)
+                    && (int) $coupon->value > 0
+                    && ! ($coupon->type === 'percent' && (int) $coupon->value > 100)) {
+                    $assignment = StoreCouponAssignment::query()->where('coupon_id', $coupon->id)->first();
+                    if ($assignment) {
+                        $eligibleLineTotal = 0;
+                        $eligibleQuantity = 0;
+                        foreach ($items as $item) {
+                            if ((int) $item['product_id'] === (int) $assignment->product_id) {
+                                $eligibleLineTotal += (int) $item['line_total_rials'];
+                                $eligibleQuantity += (int) $item['quantity'];
+                            }
+                        }
+                        $assignedProduct = StoreProduct::query()->find($assignment->product_id);
+                        $safeDiscountCap = $assignedProduct && $assignedProduct->cost_price_rials !== null
+                            ? max(0, ((int) $assignedProduct->price_rials - (int) $assignedProduct->cost_price_rials - max(0, (int) $assignedProduct->marketing_min_margin_rials)) * $eligibleQuantity)
+                            : 0;
+                        $validAssignment = $coupon->type === 'fixed'
+                            && (int) $coupon->value <= $safeDiscountCap
+                            && $request->user()
+                            && (int) $assignment->user_id === (int) $request->user()->id
+                            && $assignment->status === 'offered'
+                            && $assignment->expires_at
+                            && $assignment->expires_at->gt(now())
+                            && $eligibleLineTotal > 0
+                            && ! Order::query()->where('user_id', $assignment->user_id)->where('status', 'paid')
+                                ->whereHas('storeItems', fn ($orderItems) => $orderItems->where('product_id', $assignment->product_id))->exists();
+
+                        if ($validAssignment) {
+                            $discount = $coupon->type === 'percent'
+                                ? (int) floor($eligibleLineTotal * (int) $coupon->value / 100)
+                                : min($eligibleLineTotal, (int) $coupon->value);
+                            $couponAssignmentId = (int) $assignment->id;
+                            $couponProductId = (int) $assignment->product_id;
+                        } else {
+                            $couponCode = null;
+                        }
+                    } else {
+                        $discount = $coupon->type === 'percent'
+                            ? (int) floor($subtotal * (int) $coupon->value / 100)
+                            : min($subtotal, (int) $coupon->value);
+                    }
                 } else {
                     $couponCode = null;
+                }
+
+                if ($couponCode === null) {
                     $request->session()->forget('store_coupon_code');
                 }
             }
@@ -203,6 +267,8 @@ class StoreCartService
             'discount_toman' => (int) floor($discount / 10),
             'total_toman' => (int) floor($taxable / 10),
             'coupon_code' => $couponCode,
+            'coupon_assignment_id' => $couponAssignmentId,
+            'coupon_product_id' => $couponProductId,
         ];
     }
 

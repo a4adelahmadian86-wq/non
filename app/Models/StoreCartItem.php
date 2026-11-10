@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class StoreCartItem extends Model
 {
-    protected $fillable = ['cart_id','product_id','quantity','price_snapshot_rials'];
-    protected $casts = ['quantity'=>'integer','price_snapshot_rials'=>'integer'];
+    protected $fillable = ['cart_id','product_id','quantity','price_snapshot_rials','marketing_abandoned_at'];
+    protected $casts = ['quantity'=>'integer','price_snapshot_rials'=>'integer','marketing_abandoned_at'=>'datetime'];
     public function cart(): BelongsTo { return $this->belongsTo(StoreCart::class, 'cart_id'); }
     public function product(): BelongsTo { return $this->belongsTo(StoreProduct::class, 'product_id'); }
 }

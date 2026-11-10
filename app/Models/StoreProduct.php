@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class StoreProduct extends Model
 {
-    protected $fillable = ['category_id','seller_id','title','slug','sku','type','short_description','description','price_rials','compare_at_price_rials','tax_class','status','published_at','featured','sort_order','seo_title','seo_description','cover_path','preview_policy','preview_pages','download_policy','license_type','version','metadata'];
-    protected $casts = ['published_at'=>'datetime','featured'=>'boolean','metadata'=>'array','price_rials'=>'integer','compare_at_price_rials'=>'integer','preview_pages'=>'integer'];
+    protected $fillable = ['category_id','seller_id','title','slug','sku','type','short_description','description','price_rials','cost_price_rials','marketing_min_margin_rials','compare_at_price_rials','tax_class','status','published_at','featured','sort_order','seo_title','seo_description','cover_path','preview_policy','preview_pages','download_policy','license_type','version','metadata'];
+    protected $casts = ['published_at'=>'datetime','featured'=>'boolean','metadata'=>'array','price_rials'=>'integer','cost_price_rials'=>'integer','marketing_min_margin_rials'=>'integer','compare_at_price_rials'=>'integer','preview_pages'=>'integer'];
 
     public function category(): BelongsTo { return $this->belongsTo(StoreCategory::class, 'category_id'); }
     public function seller(): BelongsTo { return $this->belongsTo(User::class, 'seller_id'); }

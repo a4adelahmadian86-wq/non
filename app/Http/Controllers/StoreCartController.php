@@ -64,7 +64,9 @@ class StoreCartController extends Controller
     {
         $data = $request->validate(['code' => 'required|string|max:40']);
         if ($request->user()) {
-            app(MarketingSignalService::class)->record($request->user(), 'coupon_attempted');
+            foreach ($cart->current($request)->items as $cartItem) {
+                app(MarketingSignalService::class)->record($request->user(), 'coupon_attempted', (int) $cartItem->product_id);
+            }
         }
         try {
             $payload = $cart->applyCoupon($request, $data['code']);
@@ -123,6 +125,8 @@ class StoreCartController extends Controller
                     'tax_rate' => $taxRate,
                     'cart_items' => $payload['items'],
                     'coupon_code' => $payload['coupon_code'],
+                    'coupon_assignment_id' => $payload['coupon_assignment_id'] ?? null,
+                    'coupon_product_id' => $payload['coupon_product_id'] ?? null,
                     'coupon_redemption_pending' => (bool) $payload['coupon_code'],
                 ],
                 'free_pages_applied' => 0,
