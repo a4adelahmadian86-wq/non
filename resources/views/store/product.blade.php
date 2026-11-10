@@ -97,6 +97,8 @@
               <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> مشاهده نمونه
             </a>
           </section>
+        @else
+          <span id="store-product-preview" aria-hidden="true"></span>
         @endif
 
         @if(filled($product->description) || filled($product->short_description))
