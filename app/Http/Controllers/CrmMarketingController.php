@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreProduct;
+use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\StoreCouponMarginPolicy;
 use Illuminate\Http\Request;
@@ -124,8 +125,11 @@ class CrmMarketingController extends Controller
                     'crm_customer_segments.name as segment_name',
                 ])
                 ->through(function ($campaign) {
-                    $campaign->offer_count = DB::table('store_coupon_assignments')->where('campaign_id', $campaign->id)->count();
-                    $campaign->redeemed_offer_count = DB::table('store_coupon_assignments')->where('campaign_id', $campaign->id)->where('status', 'redeemed')->count();
+                    $assignmentIds = DB::table('store_coupon_assignments')
+                        ->where('campaign_id', $campaign->id)->pluck('id')->map(fn ($id) => (int) $id);
+                    $campaign->offer_count = $assignmentIds->count();
+                    $campaign->redeemed_offer_count = DB::table('store_coupon_assignments')
+                        ->where('campaign_id', $campaign->id)->where('status', 'redeemed')->count();
                     $campaign->redeemed_discount_rials = (int) DB::table('store_coupon_assignments as assignments')
                         ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
                         ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
@@ -134,6 +138,42 @@ class CrmMarketingController extends Controller
                         ->where('orders.status', 'paid')
                         ->whereNotNull('orders.paid_at')
                         ->sum('store_coupons.value');
+                    $campaign->attributed_revenue_rials = (int) DB::table('store_coupon_assignments as assignments')
+                        ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
+                        ->join('store_order_items', function ($join) {
+                            $join->on('store_order_items.order_id', '=', 'orders.id')
+                                ->on('store_order_items.product_id', '=', 'assignments.product_id');
+                        })
+                        ->where('assignments.campaign_id', $campaign->id)
+                        ->where('assignments.status', 'redeemed')
+                        ->where('orders.status', 'paid')
+                        ->whereNotNull('orders.paid_at')
+                        ->sum('store_order_items.total_rials');
+
+                    $viewed = [];
+                    $clicked = [];
+                    if ($assignmentIds->isNotEmpty()) {
+                        $events = DB::table('farast_workflow_events')
+                            ->whereIn('event_type', ['marketing.offer_viewed', 'marketing.offer_clicked'])
+                            ->get(['event_type', 'context']);
+                        foreach ($events as $event) {
+                            $context = is_array($event->context) ? $event->context : json_decode((string) $event->context, true);
+                            $assignmentId = (int) (is_array($context) ? ($context['assignment_id'] ?? 0) : 0);
+                            if ($assignmentId > 0 && $assignmentIds->contains($assignmentId)) {
+                                if ($event->event_type === 'marketing.offer_viewed') {
+                                    $viewed[$assignmentId] = true;
+                                } else {
+                                    $clicked[$assignmentId] = true;
+                                }
+                            }
+                        }
+                    }
+                    $campaign->offer_view_count = count($viewed);
+                    $campaign->offer_click_count = count($clicked);
+                    $campaign->view_to_click_rate = $campaign->offer_view_count > 0
+                        ? round($campaign->offer_click_count * 100 / $campaign->offer_view_count, 1) : 0;
+                    $campaign->view_to_redemption_rate = $campaign->offer_view_count > 0
+                        ? round($campaign->redeemed_offer_count * 100 / $campaign->offer_view_count, 1) : 0;
                     return $campaign;
                 }),
         ]);
@@ -240,6 +280,13 @@ class CrmMarketingController extends Controller
             $sent = 0;
             $audience->chunkById(200, function ($users) use ($record, $campaign, &$sent, &$budgetCommitted, $incentiveProduct, $notifications) {
                 foreach ($users as $user) {
+                    // Consent is rechecked under a user-row lock at delivery time,
+                    // not merely trusted from the earlier audience preview.
+                    $recipient = User::query()->whereKey($user->id)->lockForUpdate()->first();
+                    if (! $recipient || ! $recipient->marketing_consent || $recipient->is_blocked) {
+                        continue;
+                    }
+
                     $recipientId = DB::table('crm_campaign_recipients')->insertOrIgnore([
                         'campaign_id' => $campaign,
                         'user_id' => $user->id,
