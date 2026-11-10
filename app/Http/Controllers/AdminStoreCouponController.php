@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
+use App\Models\Order;
 use App\Models\SiteSetting;
 use App\Models\StoreProduct;
 use App\Services\AdminConsoleService;
@@ -112,6 +113,13 @@ class AdminStoreCouponController extends Controller
             }, 'store_order_items.id', 'order_item_id');
 
         $canManageGlobalCoupons = $visibleIds === null;
+        $monthlyBudgetSpent = Order::query()
+            ->where('status', 'paid')
+            ->whereNotNull('paid_at')
+            ->where('paid_at', '>=', now()->startOfMonth())
+            ->whereNotNull('pricing_snapshot->coupon_redeemed_at')
+            ->whereNotNull('pricing_snapshot->coupon_code')
+            ->sum('discount_rials');
         $genericCoupons = $canManageGlobalCoupons
             ? StoreCoupon::query()
                 ->whereNotIn('id', StoreCouponAssignment::query()->select('coupon_id'))
@@ -138,6 +146,7 @@ class AdminStoreCouponController extends Controller
                 'known_gross_profit_rials' => $knownGrossProfit,
                 'items_missing_historical_cost' => $itemsMissingHistoricalCost,
                 'products_missing_cost' => StoreProduct::query()->published()->whereNull('cost_price_rials')->count(),
+                'monthly_budget_spent_rials' => (int) $monthlyBudgetSpent,
             ],
             'settings' => [
                 'score_threshold' => (int) SiteSetting::read('smart_discount_score_threshold', 5),
@@ -147,6 +156,7 @@ class AdminStoreCouponController extends Controller
                 'max_discount_percent' => (int) SiteSetting::read('smart_discount_max_discount_percent', 10),
                 'abandonment_hours' => (int) SiteSetting::read('smart_discount_abandonment_hours', 2),
                 'retention_days' => (int) SiteSetting::read('marketing_signal_retention_days', 90),
+                'monthly_budget_rials' => (int) SiteSetting::read('store_coupon_monthly_budget_rials', 0),
             ],
         ]);
     }
@@ -163,6 +173,7 @@ class AdminStoreCouponController extends Controller
             'max_discount_percent' => ['required', 'integer', 'min:1', 'max:50'],
             'abandonment_hours' => ['required', 'integer', 'min:1', 'max:72'],
             'retention_days' => ['required', 'integer', 'min:7', 'max:180'],
+            'monthly_budget_rials' => ['required', 'integer', 'min:0', 'max:999999999999999'],
         ]);
         if ((int) $data['retention_days'] < (int) $data['signal_window_days']) {
             return back()->withErrors([
@@ -179,6 +190,7 @@ class AdminStoreCouponController extends Controller
                     'max_discount_percent' => 'smart_discount_max_discount_percent',
                     'abandonment_hours' => 'smart_discount_abandonment_hours',
                     'retention_days' => 'marketing_signal_retention_days',
+                    'monthly_budget_rials' => 'store_coupon_monthly_budget_rials',
                 }, $value);
             }
         });
