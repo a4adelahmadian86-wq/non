@@ -34,7 +34,9 @@ class EnsureResourcePermission
         if ($resource instanceof User) {
             $context['owner_id'] = $resource->id;
             $context['organization_id'] = $resource->organization_id;
-            $context['team_ids'] = $resource->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
+            $memberTeamIds = $resource->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
+            $supervisedTeamIds = Team::query()->where('supervisor_id', $resource->id)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $context['team_ids'] = array_values(array_unique(array_merge($memberTeamIds, $supervisedTeamIds)));
         } elseif ($resource instanceof Organization) {
             $context['organization_id'] = $resource->id;
         } elseif ($resource instanceof Team) {
