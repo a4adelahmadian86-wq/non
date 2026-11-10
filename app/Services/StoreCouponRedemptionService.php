@@ -7,6 +7,7 @@ use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreProduct;
 use App\Models\SiteSetting;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class StoreCouponRedemptionService
@@ -62,7 +63,7 @@ class StoreCouponRedemptionService
                 ->where('id', $assignment->campaign_id)
                 ->lockForUpdate()
                 ->first();
-            if (! $campaign || (int) ($campaign->budget_cap_rials ?? 0) <= 0) {
+            if (! $campaign || $campaign->status !== 'sent' || (int) $campaign->incentive_product_id !== (int) $assignment->product_id || (int) ($campaign->budget_cap_rials ?? 0) <= 0) {
                 throw new RuntimeException('بودجه کمپین این پیشنهاد دیگر معتبر نیست.');
             }
 
