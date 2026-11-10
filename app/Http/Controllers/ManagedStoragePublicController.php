@@ -11,6 +11,7 @@ class ManagedStoragePublicController extends Controller
     public function show(StorageManagedFile $file, StorageManager $storage): Response
     {
         abort_unless($file->visibility === 'public', 404);
+        abort_unless($file->classification === 'critical' && $file->drive_key === 'iran_primary', 404);
         abort_unless(in_array($file->status, ['active', 'pending_transfer', 'transfer_error'], true), 404);
         abort_unless(in_array(strtolower((string) $file->mime), ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true), 404);
 
