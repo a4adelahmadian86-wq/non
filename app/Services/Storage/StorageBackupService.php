@@ -101,7 +101,6 @@ class StorageBackupService
                 $safeKey = str_replace(['..', '\\'], '_', $file->file_key);
                 $entry = 'managed/'.$file->storage_volume_id.'/'.$safeKey;
                 $this->addEncryptedFile($zip, $temporary, $entry);
-                @unlink($temporary);
                 $managedCount++;
             }
         });
@@ -153,7 +152,6 @@ class StorageBackupService
         }
 
         $this->addEncryptedFile($zip, $dump, 'database/database.sql');
-        @unlink($dump);
     }
 
     private function addDirectory(ZipArchive $zip, string $directory, string $prefix): void
