@@ -291,7 +291,7 @@ class AuthController extends Controller
             abort(403);
         }
 
-        Auth::login($user, true);
+        Auth::login($user, false);
         $request->session()->regenerate();
         $request->session()->forget(['email_login.email', 'email_login.user_id', 'email_login.mobile']);
 
@@ -346,6 +346,8 @@ class AuthController extends Controller
         $user = User::where('mobile', $phone)->firstOrFail();
         abort_if($user->is_blocked, 403, 'حساب کاربری شما غیرفعال است.');
         $user->update(['password' => $data['password']]);
+        $user->setRememberToken(\Illuminate\Support\Str::random(60));
+        $user->save();
 
         // A password reset is a high-risk credential change: revoke every prior
         // authenticated browser session before establishing the new session.
@@ -383,7 +385,7 @@ class AuthController extends Controller
         }
 
         $request->session()->forget(['password_reset.mobile', 'password_reset.verified', 'password_reset.verified_mobile', 'password_reset.verified_at']);
-        Auth::login($user, true);
+        Auth::login($user, false);
         $request->session()->regenerate();
 
         return redirect()->intended($user->isAdmin() ? route('admin.index') : route('editor'))->with('status', 'رمز عبور با موفقیت تغییر کرد.');
