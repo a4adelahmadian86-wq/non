@@ -72,6 +72,16 @@ class AdminStoreCouponDashboardTest extends TestCase
             'used_count' => 1,
             'is_active' => true,
         ]);
+        $order = Order::create([
+            'user_id' => $customer->id,
+            'subtotal_rials' => 100000,
+            'discount_rials' => 12000,
+            'tax_rials' => 0,
+            'total_rials' => 88000,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'pricing_snapshot' => ['kind' => 'store'],
+        ]);
         StoreCouponAssignment::create([
             'coupon_id' => $coupon->id,
             'user_id' => $customer->id,
@@ -91,7 +101,7 @@ class AdminStoreCouponDashboardTest extends TestCase
             ->assertSee('SMARTDASH10')
             ->assertSee('مشتری پیشنهاد')
             ->assertSee('استفاده موفق')
-            ->assertSee('1,200', false);
+            ->assertSee('1,200', false)\n            ->assertSee('8,800', false);
     }
 
     public function test_admin_can_create_normalized_public_coupon_and_toggle_it(): void
