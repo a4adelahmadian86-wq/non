@@ -12,6 +12,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreWishlist;
+use App\Models\StoreCouponAssignment;
 use App\Services\MarketingSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -204,7 +205,7 @@ class StoreController extends Controller
             $ratingBreakdown = [];
         }
 
-        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating', 'ratingBreakdown', 'discussionSort'));
+        return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'smartOffer', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating', 'ratingBreakdown', 'discussionSort'));
     }
 
     public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)
