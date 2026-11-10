@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\StoreCouponMarginPolicy;
 use App\Services\StoreCouponBudgetPolicy;
+use App\Services\SmartDiscountMarketingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -408,8 +409,10 @@ class CrmMarketingController extends Controller
                             ->where('product_id', $incentiveProduct->id)
                             ->where('offered_at', '>=', now()->subDays(7))
                             ->exists();
+                        $effectivePercent = app(SmartDiscountMarketingService::class)
+                            ->effectiveCampaignDiscountPercent($incentiveProduct->id, (int) $record->incentive_discount_percent);
                         $discount = min(
-                            (int) floor((int) $incentiveProduct->price_rials * (int) $record->incentive_discount_percent / 100),
+                            (int) floor((int) $incentiveProduct->price_rials * $effectivePercent / 100),
                             app(StoreCouponMarginPolicy::class)->maximumDiscount($incentiveProduct, (int) $incentiveProduct->price_rials, 1)
                         );
 
