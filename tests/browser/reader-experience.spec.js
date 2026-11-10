@@ -124,7 +124,7 @@ async function mountPdfReader(page, pageCount = 1) {
   }));
   await page.goto('/reader-fixture.html');
   await page.setContent(
-    '<section class="farast-reader" data-reader-root data-theme="dark">' +
+    '<section class="farast-reader" data-reader-root data-product-id="pdf-notes-fixture" data-theme="dark">' +
       '<header><div class="farast-reader-account"><span>09123456789</span></div></header>' +
       '<nav class="farast-reader-toolbar"><button id="reader-prev" type="button">قبلی</button>' +
         '<label class="reader-page-input"><input id="reader-page-number" value="1"><span>/ ' + pageCount + '</span></label>' +
@@ -1712,7 +1712,7 @@ test('PDF reader notes preserve their internal page and jump to the selected pas
   });
   page.once('dialog', dialog => dialog.accept('یادداشت صفحه دوم'));
   await page.locator('[data-reader-note]').click();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:/reader-fixture.html')));
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:pdf-notes-fixture')));
   expect(saved.notes[0].page).toBe(2);
   expect(saved.notes[0].section).toBe(0);
   expect(saved.notes[0].quote).toContain('FARAST PDF PAGE 2');
