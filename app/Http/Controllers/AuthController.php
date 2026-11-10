@@ -128,7 +128,7 @@ class AuthController extends Controller
         }
 
         $request->session()->forget(['login.phone', 'register.mobile', 'register.verified', 'register.verified_mobile', 'register.verified_at']);
-        Auth::login($user, true);
+        Auth::login($user, false);
         $request->session()->regenerate();
 
         return redirect()->intended(route('editor'));
@@ -346,6 +346,29 @@ class AuthController extends Controller
         $user = User::where('mobile', $phone)->firstOrFail();
         abort_if($user->is_blocked, 403, 'حساب کاربری شما غیرفعال است.');
         $user->update(['password' => $data['password']]);
+
+        // A password reset is a high-risk credential change: revoke every prior
+        // authenticated browser session before establishing the new session.
+        if (\Illuminate\Support\Facades\Schema::hasTable('farast_account_sessions')) {
+            DB::table('farast_account_sessions')
+                ->where('user_id', $user->id)
+                ->whereNull('revoked_at')
+                ->update(['revoked_at' => now(), 'updated_at' => now()]);
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('sessions')) {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('farast_security_events')) {
+            DB::table('farast_security_events')->insert([
+                'user_id' => $user->id,
+                'event' => 'password_changed',
+                'ip' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 4000),
+                'meta' => json_encode(['method' => 'verified_mobile_otp'], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
         app(\App\Services\NotificationService::class)->pushToUser(
             $user,
             'security_password_changed',
@@ -370,6 +393,25 @@ class AuthController extends Controller
     {
         if ($request->user()) {
             EditorSession::where('user_id', $request->user()->id)->delete();
+
+            if (\Illuminate\Support\Facades\Schema::hasTable('farast_account_sessions')) {
+                DB::table('farast_account_sessions')
+                    ->where('session_key', hash('sha256', $request->session()->getId()))
+                    ->where('user_id', $request->user()->id)
+                    ->whereNull('revoked_at')
+                    ->update(['revoked_at' => now(), 'updated_at' => now()]);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('farast_security_events')) {
+                DB::table('farast_security_events')->insert([
+                    'user_id' => $request->user()->id,
+                    'event' => 'logout',
+                    'ip' => $request->ip(),
+                    'user_agent' => substr((string) $request->userAgent(), 0, 4000),
+                    'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
         Auth::logout();
         $request->session()->invalidate();
