@@ -218,11 +218,7 @@ class AdminCourseController extends Controller
                     'processing_status' => $processingStatus,
                 ]);
             });
-            StorageManagedFile::whereKey($managed['managed_file_id'])->update([
-                'source_type' => StoreProductFile::class,
-                'source_id' => $resourceRecord?->id,
-                'product_id' => $product->id,
-            ]);
+            $storage->bindReference((int) $managed['managed_file_id'], StoreProductFile::class, (int) $resourceRecord->id, (int) $product->id);
             Storage::disk('private')->delete($path);
         } catch (Throwable $exception) {
             if (isset($managed)) $storage->delete($managed['disk'], $managed['path']);
