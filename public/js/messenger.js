@@ -19,15 +19,16 @@
   const append = (message) => {
     if (document.querySelector('[data-message-id="' + message.id + '"]')) return;
     const article = document.createElement('article');
-    article.className = 'fm-message fm-new-message' + (Number(message.user_id) === Number(window.FARAST_USER_ID || -1) ? ' is-mine' : '');
+    article.className = 'fm-message fm-new-message' + (Number(message.user_id) === Number(root.dataset.currentUserId || -1) ? ' is-mine' : '');
     article.dataset.messageId = message.id;
     const date = message.created_at ? new Date(message.created_at).toLocaleString() : '';
     article.innerHTML = '<div class="fm-message-meta"><strong>' + escapeHtml(message.user_name || 'کاربر') + '</strong><time>' + escapeHtml(date) + '</time></div>' + (message.body ? '<p></p>' : '');
     if (message.body) article.querySelector('p').textContent = message.body;
     (message.attachments || []).forEach((file) => {
-      const link = document.createElement('span');
+      const link = document.createElement(file.url ? 'a' : 'span');
       link.className = 'fm-attachment';
       link.textContent = '📎 ' + (file.name || 'پیوست');
+      if (file.url) link.href = file.url;
       article.appendChild(link);
     });
     list.appendChild(article);
