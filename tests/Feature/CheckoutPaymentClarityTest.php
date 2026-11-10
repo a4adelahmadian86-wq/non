@@ -82,12 +82,23 @@ class CheckoutPaymentClarityTest extends TestCase
             'tax_rials' => 0,
             'total_rials' => 100000,
             'status' => 'pending',
-            'pricing_snapshot' => ['kind' => 'store'],
+            'pricing_snapshot' => [
+                'kind' => 'store',
+                'cart_items' => [[
+                    'title' => 'نمونه فایل دیجیتال',
+                    'quantity' => 1,
+                    'unit_price_rials' => 100000,
+                    'line_total_rials' => 100000,
+                ]],
+            ],
         ]);
 
         $this->get(route('checkout', $storeOrder))
             ->assertOk()
             ->assertSee('پرداخت مستقیم زرین‌پال')
+            ->assertSee('نمونه فایل دیجیتال')
+            ->assertSee('10,000 تومان')
+            ->assertDontSee('100,000 ریال')
             ->assertSee(route('checkout.zarinpal', $storeOrder), false);
     }
 }
