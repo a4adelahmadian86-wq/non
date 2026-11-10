@@ -30,7 +30,7 @@
   state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
   state.inkStrokes = limitInkStrokes(state.inkStrokes);
-  const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
+  const persist = () => { const raw=JSON.stringify(state);let localSaved=false;try { localStorage.setItem(storageKey, raw);localSaved=true; } catch (_) {}if(window.FarastReaderDurableStore)window.FarastReaderDurableStore.set(storageKey,raw).catch(()=>{if(!localSaved)announce('ذخیره‌سازی محلی در دسترس نیست؛ از یادداشت‌ها خروجی بگیرید.');});else if(!localSaved)announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); };
   const announce = message => { status.textContent = message; };
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
@@ -563,6 +563,8 @@
   document.head.append(inkStyle);
   refreshInk();
 
+  const restorePersonalTools=async()=>{if(!window.FarastReaderDurableStore)return;try{let legacy=null;try{legacy=localStorage.getItem(storageKey);}catch(_){}const raw=await window.FarastReaderDurableStore.migrate(storageKey,legacy);if(raw){const saved=JSON.parse(raw);if(saved&&typeof saved==='object'){state={...defaults,...saved};state.light=!!state.light;state.font=['system','sans','serif','mono','dyslexic'].includes(state.font)?state.font:'system';state.size=Math.min(160,Math.max(80,Number(state.size)||100));state.lineHeight=[1.4,1.6,1.7,1.9,2.1].includes(Number(state.lineHeight))?Number(state.lineHeight):1.7;state.measure=['narrow','normal','wide'].includes(state.measure)?state.measure:'normal';state.paragraphSpacing=[.5,1,1.5,2].includes(Number(state.paragraphSpacing))?Number(state.paragraphSpacing):1;state.focusMode=!!state.focusMode;state.readingRuler=!!state.readingRuler;state.highlights=Array.isArray(state.highlights)?state.highlights.filter(x=>x&&typeof x.quote==='string'&&x.quote.length<=2000&&Number.isFinite(Number(x.page))).slice(-500):[];state.notes=Array.isArray(state.notes)?state.notes.filter(x=>x&&typeof x.quote==='string'&&x.quote.length<=2000&&typeof x.note==='string'&&x.note.length<=4000&&Number.isFinite(Number(x.page))).slice(-500):[];state.inkStrokes=limitInkStrokes(state.inkStrokes);}}await window.FarastReaderDurableStore.requestPersistence();applyPrefs();ruler.hidden=!state.readingRuler;renderNotes();renderHighlights();}catch(_){}};
+  window.FarastReaderPersonalToolsReady=restorePersonalTools();
   renderNotes();
   renderHighlights();
 })();
