@@ -335,21 +335,21 @@ class AdminController extends Controller
             'scopeSummary' => $console->scopeSummary($actor, $canViewUsers),
             'allowedSections' => $allowedSections,
             'stats' => [
-                'users' => $canViewUsers ? $totalScopedUsers : 0,
-                'active_users' => ! $canViewUsers ? 0 : ($visibleIds === null
+                'users' => $canViewUsers ? $filteredUserTotal : 0,
+                'active_users' => ! $canViewUsers ? 0 : ($userVisibleIds === null
                     ? User::where('is_blocked', false)->count()
-                    : User::whereIn('id', $visibleIds)->where('is_blocked', false)->count()),
-                'new_users_week' => ! $canViewUsers ? 0 : ($visibleIds === null
+                    : User::whereIn('id', $userVisibleIds)->where('is_blocked', false)->count()),
+                'new_users_week' => ! $canViewUsers ? 0 : ($userVisibleIds === null
                     ? User::where('created_at', '>=', $weekAgo)->count()
-                    : User::whereIn('id', $visibleIds)->where('created_at', '>=', $weekAgo)->count()),
-                'blocked_users' => ! $canViewUsers ? 0 : ($visibleIds === null
+                    : User::whereIn('id', $userVisibleIds)->where('created_at', '>=', $weekAgo)->count()),
+                'blocked_users' => ! $canViewUsers ? 0 : ($userVisibleIds === null
                     ? User::where('is_blocked', true)->count()
-                    : User::whereIn('id', $visibleIds)->where('is_blocked', true)->count()),
+                    : User::whereIn('id', $userVisibleIds)->where('is_blocked', true)->count()),
                 'documents' => $canViewDocuments ? $documentCount() : 0,
                 'new_documents_week' => $canViewDocuments ? $documentCount($weekAgo) : 0,
                 // Project workspace is the canonical bridge between customer requests, documents, billing and human tasks.
-                'projects' => $scopedCount('farast_projects'),
-                'active_projects' => $scopedCount('farast_projects', ['status' => 'active']),
+                'projects' => $canViewAnalytics ? $scopedCount('farast_projects') : 0,
+                'active_projects' => $canViewAnalytics ? $scopedCount('farast_projects', ['status' => 'active']) : 0,
                 'ai' => $canViewAi && Schema::hasTable('ai_interactions')
                     && ($aiVisibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
                     ? ($aiVisibleIds === null ? DB::table('ai_interactions')->count() : DB::table('ai_interactions')->whereIn('user_id', $aiVisibleIds)->count())
