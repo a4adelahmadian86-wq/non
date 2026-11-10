@@ -1406,4 +1406,44 @@ class AdminStoreProductWorkflowTest extends TestCase
         Queue::assertPushed(ReviewProductFileAsset::class, fn ($job) => $job->productId === $product->id && $job->fileId === $file->id);
     }
 
+
+    public function test_new_product_flow_starts_with_file_preflight_and_creates_only_a_private_draft_shell(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+        $security = \Mockery::mock(UploadSecurityService::class);
+        $security->shouldReceive('inspect')->once()->andReturn([
+            'safe' => true,
+            'mime' => 'application/pdf',
+            'size' => 1024,
+            'checksum' => str_repeat('d', 64),
+            'risk_level' => 'low',
+            'detected_type' => 'pdf',
+            'findings' => [],
+            'warnings' => [],
+            'page_count' => 2,
+        ]);
+        $this->app->instance(UploadSecurityService::class, $security);
+
+        $response = $this->actingAs($admin)
+            ->post(route('admin.store.intake.preflight'), [
+                'file' => UploadedFile::fake()->create('راهنمای-محصول.pdf', 1, 'application/pdf'),
+                'security_scan' => '0',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('file.name', 'راهنمای-محصول.pdf');
+
+        $productId = (int) $response->json('product_id');
+        $this->assertGreaterThan(0, $productId);
+        $product = StoreProduct::findOrFail($productId);
+        $this->assertSame('draft', $product->status);
+        $this->assertSame($category->id, $product->category_id);
+        $this->assertSame('راهنمای-محصول', $product->title);
+        $this->assertTrue((bool) data_get($product->metadata, 'file_first_intake.enabled'));
+        $this->assertSame($admin->id, data_get($product->metadata, 'file_first_intake.owner_id'));
+        $this->assertStringContainsString('/admin/store/'.$product->id.'/edit', $response->json('next_url'));
+    }
+
 }
