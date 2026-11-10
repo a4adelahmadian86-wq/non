@@ -454,8 +454,8 @@
         state.rejected.push({name: file.name, reason: 'این فایل قبلاً در همین صف انتخاب شده است.'});
         return;
       }
-      if (state.queue.length >= 20) {
-        state.rejected.push({name: file.name, reason: 'حداکثر ۲۰ فایل را می‌توان در یک نوبت در صف قرار داد.'});
+      if (state.queue.length >= 100) {
+        state.rejected.push({name: file.name, reason: 'حداکثر ۱۰۰ فایل را می‌توان در یک نوبت در صف قرار داد.'});
         return;
       }
       state.queue.push(file);
@@ -473,7 +473,7 @@
       return '<div><strong>' + escapeHtml(relative) + '</strong><small>' + formatBytes(file.size) +
         ' · ' + escapeHtml(fileExtension(file.name).toUpperCase() || 'نامشخص') +
         (file.lastModified ? ' · ' + new Intl.DateTimeFormat('fa-IR').format(new Date(file.lastModified)) : '') +
-        '</small>' + (index > 0 ? '<button type="button" data-remove-selected="' + (index - 1) + '">حذف از صف</button>' : '') + '</div>';
+        '</small>' + (index > 0 ? '<button type="button" data-select-queued="' + (index - 1) + '">جزئیات و بررسی</button>' : '<small>فایل جاری</small>') + '</div>';
     }).join('');
     const errors = state.rejected.map(item => '<div class="product-ingestion-queue-error"><strong>' +
       escapeHtml(item.name) + '</strong><small>' + escapeHtml(item.reason) + '</small></div>').join('');
@@ -515,13 +515,23 @@
   });
 
   selectedView?.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-remove-selected]');
-    if (!button) return;
-    const index = Number(button.dataset.removeSelected);
+    const removeButton = event.target.closest('[data-remove-selected]');
+    if (removeButton) {
+      const index = Number(removeButton.dataset.removeSelected);
+      if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
+      state.queue.splice(index, 1);
+      updateQueue();
+      renderSelectedFiles();
+      return;
+    }
+    const selectButton = event.target.closest('[data-select-queued]');
+    if (!selectButton || state.busy || state.ingestionId) return;
+    const index = Number(selectButton.dataset.selectQueued);
     if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
-    state.queue.splice(index, 1);
+    const selected = state.queue.splice(index, 1)[0];
+    state.queue.unshift(state.current);
+    openModal(selected);
     updateQueue();
-    renderSelectedFiles();
   });
 
   queueView.addEventListener('click', (event) => {
