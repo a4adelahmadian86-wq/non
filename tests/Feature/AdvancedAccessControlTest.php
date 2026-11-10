@@ -6,6 +6,7 @@ use App\Models\Organization;
 use App\Models\Permission;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\AdminConsoleService;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -300,6 +301,48 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertDatabaseHas('farast_access_audit_logs', ['action' => 'role.created', 'actor_id' => $admin->id]);
         $this->assertDatabaseHas('farast_access_audit_logs', ['action' => 'user.role.assigned', 'subject_user_id' => $manager->id]);
         $this->assertDatabaseHas('farast_access_audit_logs', ['action' => 'user.permission.override.created', 'subject_user_id' => $manager->id]);
+    }
+
+    public function test_console_user_lists_apply_custom_team_scope_to_each_record(): void
+    {
+        $organization = Organization::create(['name' => 'Console Scope Org', 'slug' => 'console-scope-org', 'status' => 'active']);
+        $manager = $this->user('09140000121', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $otherSupervisor = $this->user('09140000122', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $teamA = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Visible Team',
+            'slug' => 'visible-team',
+            'supervisor_id' => $manager->id,
+        ]);
+        $teamB = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Hidden Team',
+            'slug' => 'hidden-team',
+            'supervisor_id' => $otherSupervisor->id,
+        ]);
+        $memberA = $this->user('09140000123', User::ROLE_EMPLOYEE, $organization->id);
+        $memberB = $this->user('09140000124', User::ROLE_EMPLOYEE, $organization->id);
+        $unassigned = $this->user('09140000125', User::ROLE_EMPLOYEE, $organization->id);
+
+        DB::table('team_user')->insert([
+            ['team_id' => $teamA->id, 'user_id' => $memberA->id, 'team_role' => 'employee', 'created_at' => now(), 'updated_at' => now()],
+            ['team_id' => $teamB->id, 'user_id' => $memberB->id, 'team_role' => 'employee', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $roleId = $this->role('console-team-users-view', 'team', $teamA->id);
+        $this->grant($roleId, 'users.view', 'team');
+        $this->assign($manager, $roleId, 'team', $teamA->id);
+
+        $this->actingAs($manager);
+        request()->attributes->set('farast.scope', 'organization');
+        request()->attributes->set('farast.section_permission', 'users.view');
+
+        $visibleIds = app(AdminConsoleService::class)->visibleUserIds($manager);
+
+        $this->assertContains($manager->id, $visibleIds);
+        $this->assertContains($memberA->id, $visibleIds);
+        $this->assertNotContains($memberB->id, $visibleIds);
+        $this->assertNotContains($unassigned->id, $visibleIds);
     }
 
     public function test_organization_role_cannot_be_assigned_outside_its_parent_organization(): void
