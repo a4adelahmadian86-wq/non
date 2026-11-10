@@ -23,6 +23,7 @@ class Ticket extends Model
         'topic_area',
         'related_service',
         'related_product_id',
+        'related_order_id',
         'source',
         'last_reply_at',
         'first_response_at',
@@ -63,6 +64,11 @@ class Ticket extends Model
     public function relatedProduct(): BelongsTo
     {
         return $this->belongsTo(StoreProduct::class, 'related_product_id');
+    }
+
+    public function relatedOrder(): BelongsTo
+    {
+        return $this->belongsTo(Order::class, 'related_order_id');
     }
 
     public function messages(): HasMany
