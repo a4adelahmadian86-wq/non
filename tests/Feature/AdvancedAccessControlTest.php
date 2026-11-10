@@ -177,6 +177,31 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertFalse($authorization->allows($employee, 'reports.workflows'));
     }
 
+    public function test_direct_override_does_not_activate_before_its_start_time(): void
+    {
+        $employee = $this->user('09140000138');
+        DB::table('farast_user_permission_overrides')->insert([
+            'user_id' => $employee->id,
+            'permission_id' => $this->permissionId('reports.workflows'),
+            'effect' => 'allow',
+            'scope_type' => 'own',
+            'reason' => 'Scheduled access window',
+            'starts_at' => now()->addHour(),
+            'expires_at' => now()->addHours(2),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertFalse($authorization->allows($employee, 'reports.workflows'));
+
+        DB::table('farast_user_permission_overrides')->where('user_id', $employee->id)->update([
+            'starts_at' => now()->subMinute(),
+        ]);
+        $authorization->forgetUser($employee->id);
+        $this->assertTrue($authorization->allows($employee, 'reports.workflows'));
+    }
+
     public function test_role_permission_conditions_use_only_the_declared_safe_operators(): void
     {
         $employee = $this->user('09140000104');
