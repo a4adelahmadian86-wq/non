@@ -267,6 +267,47 @@ class SmartDiscountMarketingServiceTest extends TestCase
         $this->assertSame(0, $service->process());
     }
 
+
+    public function test_offer_cooldown_is_scoped_to_the_product_not_the_whole_customer(): void
+    {
+        $user = $this->user();
+        $firstProduct = $this->product();
+        $secondProduct = $this->product();
+
+        $this->createQualifiedSignals($user, $firstProduct);
+        $this->assertDatabaseCount('store_coupon_assignments', 1);
+
+        $this->createQualifiedSignals($user, $secondProduct);
+
+        $this->assertDatabaseCount('store_coupon_assignments', 2);
+        $this->assertDatabaseHas('store_coupon_assignments', [
+            'user_id' => $user->id,
+            'product_id' => $secondProduct->id,
+            'status' => 'offered',
+        ]);
+    }
+
+    public function test_product_page_presents_and_measures_the_active_product_specific_offer(): void
+    {
+        $user = $this->user();
+        $product = $this->product();
+
+        $this->createQualifiedSignals($user, $product);
+        $assignment = StoreCouponAssignment::with('coupon')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee('پیشنهاد اختصاصی برای شما')
+            ->assertSee($assignment->coupon->code)
+            ->assertSee('data-copy-smart-coupon', false);
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'user_id' => $user->id,
+            'event_type' => 'marketing.offer_viewed',
+        ]);
+    }
+
     public function test_opt_out_revokes_outstanding_smart_offers_and_deactivates_their_codes(): void
     {
         $user = $this->user();
