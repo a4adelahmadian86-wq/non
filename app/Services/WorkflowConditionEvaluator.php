@@ -72,10 +72,12 @@ class WorkflowConditionEvaluator
                 'contains' => is_array($actual)
                     ? in_array($expected, $actual, true)
                     : (is_string($actual) && is_string($expected) && str_contains($actual, $expected)),
-                'greater_than' => is_numeric($actual) && is_numeric($expected) && (float) $actual > (float) $expected,
-                'greater_or_equal' => is_numeric($actual) && is_numeric($expected) && (float) $actual >= (float) $expected,
-                'less_than' => is_numeric($actual) && is_numeric($expected) && (float) $actual < (float) $expected,
-                'less_or_equal' => is_numeric($actual) && is_numeric($expected) && (float) $actual <= (float) $expected,
+                // All supported numeric event fields are integer IDs, counts or rial amounts.
+                // Compare their decimal strings exactly; float conversion loses precision above 2^53.
+                'greater_than' => ($comparison = $this->compareIntegerValues($actual, $expected)) !== null && $comparison > 0,
+                'greater_or_equal' => ($comparison = $this->compareIntegerValues($actual, $expected)) !== null && $comparison >= 0,
+                'less_than' => ($comparison = $this->compareIntegerValues($actual, $expected)) !== null && $comparison < 0,
+                'less_or_equal' => ($comparison = $this->compareIntegerValues($actual, $expected)) !== null && $comparison <= 0,
                 default => false,
             };
 
@@ -85,6 +87,50 @@ class WorkflowConditionEvaluator
         }
 
         return true;
+    }
+
+    /**
+     * Exact comparison for integer-like event fields without IEEE-754 rounding.
+     * Returns null for invalid/non-integer values so the condition fails closed.
+     */
+    private function compareIntegerValues(mixed $left, mixed $right): ?int
+    {
+        $normalize = static function (mixed $value): ?array {
+            if (! is_scalar($value)) {
+                return null;
+            }
+
+            $text = trim((string) $value);
+            if (! preg_match('/^[+-]?\d+$/D', $text)) {
+                return null;
+            }
+
+            $negative = str_starts_with($text, '-');
+            $digits = ltrim(ltrim($text, '+-'), '0');
+            $digits = $digits === '' ? '0' : $digits;
+
+            return [$negative && $digits !== '0', $digits];
+        };
+
+        $leftParts = $normalize($left);
+        $rightParts = $normalize($right);
+        if ($leftParts === null || $rightParts === null) {
+            return null;
+        }
+
+        [$leftNegative, $leftDigits] = $leftParts;
+        [$rightNegative, $rightDigits] = $rightParts;
+
+        if ($leftNegative !== $rightNegative) {
+            return $leftNegative ? -1 : 1;
+        }
+
+        $comparison = strlen($leftDigits) <=> strlen($rightDigits);
+        if ($comparison === 0) {
+            $comparison = strcmp($leftDigits, $rightDigits) <=> 0;
+        }
+
+        return $leftNegative ? -$comparison : $comparison;
     }
 
     private function listValue(mixed $value): array
