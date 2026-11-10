@@ -54,7 +54,9 @@
     </div>
     <nav class="store-product-jump" aria-label="دسترسی سریع به بخش‌های محصول">
       <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
-      @if($product->type === 'course' && $product->course)<a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>@endif
+      @if($product->type === 'course' && $product->course)
+        <a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>
+      @endif
       <a href="#store-buy-card"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> قیمت و خرید</a>
       <a href="#store-discussions"><i class="fa-regular fa-comments" aria-hidden="true"></i> نظرها و پرسش‌ها</a>
     </nav>
@@ -103,16 +105,29 @@
           <div class="store-panel course-public-curriculum" id="store-product-curriculum">
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
             <div class="course-public-meta">
-              @if($product->course->instructor_name)<span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>@endif
+              @if($product->course->instructor_name)
+                <span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>
+              @endif
               <span><i class="fa-solid fa-signal"></i> سطح: {{ ['beginner'=>'مقدماتی','intermediate'=>'متوسط','advanced'=>'پیشرفته','all'=>'همه سطوح'][$product->course->level] ?? 'مقدماتی' }}</span>
-              @if($product->course->duration_minutes)<span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>@endif
+              @if($product->course->duration_minutes)
+                <span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>
+              @endif
             </div>
             @forelse($product->course->sections as $section)
               @php($visibleLessons = $section->lessons->where('is_published',true))
               @if($visibleLessons->isNotEmpty())
                 <div class="course-public-section"><strong>{{ $loop->iteration }}. {{ $section->title }}</strong><span>{{ $visibleLessons->count() }} جلسه</span></div>
                 @foreach($visibleLessons as $lesson)
-                  <div class="course-public-lesson"><i class="fa-solid fa-{{ $lesson->lesson_type==='video'?'play':($lesson->lesson_type==='audio'?'headphones':'file-lines') }}"></i><span>{{ $lesson->title }}</span>@if($lesson->is_preview)<a class="course-preview-link" href="{{ route('store.course.preview',[$product,$lesson]) }}">نمونه رایگان</a>@endif @if($lesson->duration_seconds)<small>{{ gmdate('i:s',$lesson->duration_seconds) }}</small>@endif</div>
+                  <div class="course-public-lesson">
+                    <i class="fa-solid fa-{{ $lesson->lesson_type==='video'?'play':($lesson->lesson_type==='audio'?'headphones':'file-lines') }}"></i>
+                    <span>{{ $lesson->title }}</span>
+                    @if($lesson->is_preview)
+                      <a class="course-preview-link" href="{{ route('store.course.preview',[$product,$lesson]) }}">نمونه رایگان</a>
+                    @endif
+                    @if($lesson->duration_seconds)
+                      <small>{{ gmdate('i:s',$lesson->duration_seconds) }}</small>
+                    @endif
+                  </div>
                 @endforeach
               @endif
             @empty
