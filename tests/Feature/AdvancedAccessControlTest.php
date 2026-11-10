@@ -449,6 +449,34 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertDatabaseMissing('farast_roles', ['name' => 'نقش بدون ممیزی']);
     }
 
+    public function test_role_scope_cannot_be_narrowed_beyond_existing_assignments(): void
+    {
+        $organization = Organization::create(['name' => 'Role Scope Guard', 'slug' => 'role-scope-guard', 'status' => 'active']);
+        $admin = $this->user('09140000133', User::ROLE_ADMIN);
+        $manager = $this->user('09140000134', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $roleId = $this->role('global-role-scope-guard', 'global');
+        $this->assign($manager, $roleId, 'global', null);
+
+        $this->actingAs($admin)->put('/admin/access-center/roles/'.$roleId, [
+            'name' => 'Global role narrowed',
+            'description' => 'This change must not invalidate existing assignments',
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+            'is_active' => true,
+        ])->assertStatus(409);
+
+        $this->assertDatabaseHas('farast_roles', [
+            'id' => $roleId,
+            'scope_type' => 'global',
+            'scope_id' => null,
+        ]);
+        $this->assertDatabaseHas('farast_user_roles', [
+            'user_id' => $manager->id,
+            'role_id' => $roleId,
+            'scope_type' => 'global',
+        ]);
+    }
+
     public function test_sensitive_permissions_cannot_be_granted_as_direct_user_overrides(): void
     {
         $admin = $this->user('09140000131', User::ROLE_ADMIN);
