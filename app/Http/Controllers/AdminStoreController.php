@@ -1098,8 +1098,12 @@ class AdminStoreController extends Controller
             }
         } catch (Throwable $exception) {
             if ($managed) {
-                $disk = (string) ($managed['disk'] ?? 'private');
-                $storage->delete($disk, (string) $managed['path']);
+                try {
+                    $disk = (string) ($managed['disk'] ?? 'private');
+                    $storage->delete($disk, (string) $managed['path']);
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
             }
             Storage::disk('private')->delete($temporaryPath);
             if ($exception instanceof ValidationException) throw $exception;
@@ -1158,7 +1162,13 @@ class AdminStoreController extends Controller
                 ]);
             });
         } catch (Throwable $exception) {
-            if ($managed) $storage->delete((string) ($managed['disk'] ?? 'private'), (string) $managed['path']);
+            if ($managed) {
+                try {
+                    $storage->delete((string) ($managed['disk'] ?? 'private'), (string) $managed['path']);
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
             Storage::disk('private')->delete($temporaryPath);
             if ($exception instanceof ValidationException) throw $exception;
             report($exception);
