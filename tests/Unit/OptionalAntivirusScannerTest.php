@@ -37,7 +37,12 @@ class OptionalAntivirusScannerTest extends TestCase
     public function test_clamav_success_is_recorded_as_a_real_clean_scan(): void
     {
         $binary = tempnam(sys_get_temp_dir(), 'farast-clamav-');
-        file_put_contents($binary, "#!/bin/sh\\nif [ \\"\\$1\\" = \\"--version\\" ]; then echo 'ClamAV 1.4.0'; exit 0; fi\\nexit 0\\n");
+        file_put_contents($binary, <<<'SH'
+#!/bin/sh
+if [ "$1" = "--version" ]; then echo 'ClamAV 1.4.0'; exit 0; fi
+exit 0
+SH
+        );
         chmod($binary, 0700);
         config(['services.clamav.binary' => $binary]);
 
@@ -56,7 +61,12 @@ class OptionalAntivirusScannerTest extends TestCase
     public function test_clamav_detection_is_never_reported_as_clean(): void
     {
         $binary = tempnam(sys_get_temp_dir(), 'farast-clamav-');
-        file_put_contents($binary, "#!/bin/sh\\nif [ \\"\\$1\\" = \\"--version\\" ]; then echo 'ClamAV 1.4.0'; exit 0; fi\\nexit 1\\n");
+        file_put_contents($binary, <<<'SH'
+#!/bin/sh
+if [ "$1" = "--version" ]; then echo 'ClamAV 1.4.0'; exit 0; fi
+exit 1
+SH
+        );
         chmod($binary, 0700);
         config(['services.clamav.binary' => $binary]);
 
