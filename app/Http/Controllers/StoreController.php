@@ -348,7 +348,7 @@ class StoreController extends Controller
         $temporary = tempnam(sys_get_temp_dir(), 'farast-preview-audio');
         try {
             $storage->downloadTo($audioDisk, $preview->audio_path, $temporary);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             @unlink($temporary);
             throw $exception;
         }
