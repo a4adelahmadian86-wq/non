@@ -17,9 +17,11 @@ class AdminAccessCenterController extends Controller
     private const SCOPES = ['global', 'organization', 'team', 'own'];
     private const SCOPE_RANK = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
     private const SENSITIVE_DIRECT_GRANTS = [
-        'access.manage', 'access.roles.manage', 'access.assign', 'access.override',
-        'settings.manage', 'billing.manage', 'integrations.manage', 'voice.manage',
-        'system.audit', 'automation.manage',
+        'access.manage', 'access.roles.manage', 'access.assign', 'access.override', 'access.audit',
+        'settings.manage', 'billing.manage', 'finance.manage', 'integrations.manage', 'voice.manage',
+        'system.audit', 'automation.manage', 'automation.run', 'store.manage',
+        'users.delete', 'users.suspend', 'organization.manage', 'team.manage',
+        'workflows.manage', 'workflows.delete', 'workflows.run',
     ];
 
     private function ensurePlatformAdmin(Request $request): void
