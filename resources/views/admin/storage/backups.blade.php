@@ -9,7 +9,7 @@
         @forelse($backups as $backup)
             <tr>
                 <td>{{ $backup->backup_type }}</td><td>{{ $backup->volume?->name ?: 'ثبت نشده' }}</td>
-                <td>{{ $backup->status }}</td><td>{{ \\Illuminate\\Support\\Number::fileSize($backup->size_bytes) }}</td>
+                <td>{{ $backup->status }}</td><td>{{ \Illuminate\Support\Number::fileSize($backup->size_bytes) }}</td>
                 <td><code>{{ $backup->checksum ?: '—' }}</code></td><td>{{ optional($backup->started_at)->format('Y-m-d H:i') ?: '—' }}</td>
                 <td>{{ optional($backup->completed_at)->format('Y-m-d H:i') ?: '—' }}</td><td>{{ $backup->error_message ?: '—' }}</td>
             </tr>
