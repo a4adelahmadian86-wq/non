@@ -10,4 +10,14 @@ test('annotation workspace persists text highlights and supports undo',async({pa
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:annotations:v1:annotation-test')||'[]').length)).toBe(1);
   await page.locator('[data-action="undo"]').click();
   await expect(page.locator('.farast-annotation-mark')).toHaveCount(0);
+  await page.locator('[data-action="redo"]').click();
+  await expect(page.locator('.farast-annotation-mark.is-highlight')).toHaveCount(1);
+  await page.locator('[data-tool="rectangle"]').click();
+  const rect=await page.locator('.farast-pdf-document').boundingBox();
+  await page.mouse.move(rect.x+40,rect.y+40);await page.mouse.down();await page.mouse.move(rect.x+180,rect.y+140);await page.mouse.up();
+  await expect(page.locator('.farast-annotation-ink path')).toHaveCount(1);
+  page.on('dialog',dialog=>dialog.accept('APPROVED'));
+  await page.locator('[data-tool="stamp"]').click();
+  await page.mouse.click(rect.x+220,rect.y+180);
+  await expect(page.locator('.farast-annotation-stamp')).toHaveText('APPROVED');
 });
