@@ -114,6 +114,73 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertDatabaseCount('crm_follow_up_tasks', 0);
     }
 
+    public function test_workflow_create_and_edit_are_recorded_in_the_audit_ledger(): void
+    {
+        $owner = $this->owner('09140000205');
+        $payload = [
+            'name' => 'Audited workflow',
+            'trigger_type' => 'document.saved',
+            'steps' => [['action' => 'notify', 'title' => 'Initial title', 'message' => 'Initial message']],
+            'enabled' => '1',
+            'cooldown_seconds' => 0,
+        ];
+
+        $this->actingAs($owner)->post('/workspace/workflows', $payload)->assertRedirect();
+        $workflow = DB::table('farast_workflows')->where('user_id', $owner->id)->where('name', 'Audited workflow')->first();
+        $this->assertNotNull($workflow);
+        $this->assertDatabaseHas('farast_workflow_audit_logs', [
+            'workflow_id' => $workflow->id,
+            'owner_id' => $owner->id,
+            'action' => 'workflow.created',
+        ]);
+
+        $payload['id'] = $workflow->id;
+        $payload['name'] = 'Audited workflow updated';
+        $payload['steps'][0]['title'] = 'Updated title';
+        $this->post('/workspace/workflows', $payload)->assertRedirect();
+
+        $this->assertDatabaseHas('farast_workflow_audit_logs', [
+            'workflow_id' => $workflow->id,
+            'owner_id' => $owner->id,
+            'action' => 'workflow.updated',
+        ]);
+        $latest = DB::table('farast_workflow_audit_logs')->where('workflow_id', $workflow->id)->where('action', 'workflow.updated')->first();
+        $this->assertSame('Audited workflow', data_get(json_decode($latest->before_state, true), 'name'));
+        $this->assertSame('Audited workflow updated', data_get(json_decode($latest->after_state, true), 'name'));
+    }
+
+    public function test_workflow_with_execution_history_cannot_be_deleted(): void
+    {
+        $owner = $this->owner('09140000206');
+        $workflow = $this->workflow($owner);
+        app(WorkflowEngine::class)->dispatch(
+            'document.saved',
+            ['user_id' => $owner->id, 'document_id' => 206],
+            'document:206:revision:1',
+        );
+
+        $this->actingAs($owner)->delete('/workspace/workflows/'.$workflow)->assertStatus(409);
+        $this->assertDatabaseHas('farast_workflows', ['id' => $workflow]);
+        $this->assertDatabaseMissing('farast_workflow_audit_logs', [
+            'workflow_id' => $workflow,
+            'action' => 'workflow.deleted',
+        ]);
+    }
+
+    public function test_unused_workflow_can_be_deleted_without_losing_its_audit_record(): void
+    {
+        $owner = $this->owner('09140000207');
+        $workflow = $this->workflow($owner);
+
+        $this->actingAs($owner)->delete('/workspace/workflows/'.$workflow)->assertRedirect();
+        $this->assertDatabaseMissing('farast_workflows', ['id' => $workflow]);
+        $this->assertDatabaseHas('farast_workflow_audit_logs', [
+            'workflow_id' => $workflow,
+            'owner_id' => $owner->id,
+            'action' => 'workflow.deleted',
+        ]);
+    }
+
     public function test_event_matching_is_frozen_even_when_a_new_workflow_is_created_later(): void
     {
         $owner = $this->owner('09140000203');
