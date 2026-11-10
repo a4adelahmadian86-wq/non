@@ -162,6 +162,8 @@
                         <label class="ac-field">محدوده<select name="scope_type"><option value="own">شخصی</option><option value="team">تیمی</option><option value="organization">سازمانی</option><option value="global">سراسری</option></select></label>
                         <label class="ac-field">شناسه محدوده<input type="number" min="1" name="scope_id" placeholder="در صورت نیاز"></label>
                         <label class="ac-field">دلیل<input name="reason" required maxlength="1000" placeholder="دلیل این استثنا"></label>
+                        <label class="ac-field">شروع اعتبار<input type="datetime-local" name="starts_at"></label>
+                        <label class="ac-field">پایان اعتبار<input type="datetime-local" name="expires_at"></label>
                         <button class="ac-button secondary" type="submit">ثبت استثنا</button>
                     </form>
                 @else
