@@ -168,8 +168,18 @@ class PlatformCompletionController extends Controller {
   $w=DB::table('farast_workflows')->where('id',$id)->where('user_id',$r->user()->id)->first();
   abort_unless($w,404);
   abort_unless((bool)$w->enabled,409,'گردش‌کار غیرفعال است.');
-  $context=$r->validate(['context'=>'nullable|array'])['context']??[];
-  $context['user_id']=$r->user()->id;
+
+  // A browser request is not a trusted business event. Never accept caller-
+  // supplied order, payment, ticket, document or organization attributes here.
+  // Conditional workflows with business-data predicates must run from the
+  // corresponding server-side domain event, not from a forged manual payload.
+  $context=['user_id'=>(int)$r->user()->id,'manual_run'=>true];
+  abort_unless(
+   app(\App\Services\WorkflowConditionEvaluator::class)->matches($w->conditions??null,$context),
+   409,
+   'این گردش‌کار به اطلاعات یک رویداد واقعی نیاز دارد و از اجرای دستی قابل تأمین نیست.'
+  );
+
   $run=$engine->run((int)$id,$context);
   return response()->json(['run_id'=>$run,'status'=>'completed']);
  }
