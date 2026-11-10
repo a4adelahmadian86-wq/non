@@ -34,7 +34,13 @@ class StorageManager
         if ($volume) {
             try {
                 $this->writeToVolume($volume, $key, $file->getRealPath());
-                return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
+                try {
+                    return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
+                } catch (\\Throwable $exception) {
+                    if ($volume->driver === 's3') $this->s3->delete($volume, $key);
+                    else @unlink($this->localVolumePath($volume, $key));
+                    throw $exception;
+                }
             } catch (\Throwable $exception) {
                 $volume->forceFill(['status' => 'error', 'last_checked_at' => now(), 'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($exception->getMessage(), 0, 400)])])->save();
             }
@@ -133,6 +139,7 @@ class StorageManager
             ->where('status', 'healthy')
             ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$bytes]))
             ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $bytes))
+            ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('(SELECT COUNT(*) FROM storage_managed_files WHERE storage_managed_files.storage_volume_id = storage_volumes.id AND storage_managed_files.status != ?) < storage_volumes.file_limit', ['deleted']))
             ->orderBy('priority')
             ->first();
     }
