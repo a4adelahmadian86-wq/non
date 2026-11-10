@@ -100,7 +100,7 @@ Schedule::command('farast:storage-replicate-pending --limit=100')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 
-Schedule::command('farast:storage-backup')
+Schedule::job(new \App\Jobs\RunStorageBackup())
     ->weeklyOn(0, '02:30')
     ->withoutOverlapping();
 
