@@ -79,7 +79,7 @@
                     <div class="ac-empty">تیکتی ثبت نشده است.</div>
                 @endforelse
             </div>
-            <div class="ac-footer"><span>نمایش آخرین ۱۰ تیکت</span><a href="{{ $isAdmin ? route('admin.support.management') : route('support') }}">رفتن به بخش پشتیبانی ←</a></div>
+            <div class="ac-footer"><span>نمایش آخرین ۱۰ تیکت</span><a href="{{ $canManageAllTickets ? route('admin.support.management') : route('support') }}">رفتن به بخش پشتیبانی ←</a></div>
         </section>
 
         <div style="display:grid;gap:16px;align-content:start">
