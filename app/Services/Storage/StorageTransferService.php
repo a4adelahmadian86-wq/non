@@ -3,6 +3,7 @@
 namespace App\Services\Storage;
 
 use App\Models\StorageManagedFile;
+use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
 use App\Models\UserFile;
 use App\Models\StoreProductFile;
@@ -56,6 +57,9 @@ class StorageTransferService
 
     public function transferPending(int $limit = 100): int
     {
+        if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(3))->exists()) {
+            return 0;
+        }
         $moved = 0;
         StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error'])->orderBy('id')->limit(max(1, $limit))->get()->each(function (StorageManagedFile $file) use (&$moved) {
             if (data_get($file->metadata, 'reference_pending', false)) return;
