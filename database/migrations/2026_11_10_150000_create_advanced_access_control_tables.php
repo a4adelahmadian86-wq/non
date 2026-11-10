@@ -93,6 +93,23 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Refuse destructive rollback once access data exists. Dropping these
+        // tables could revoke live grants and erase the security audit trail.
+        foreach ([
+            'farast_access_audit_logs',
+            'farast_user_permission_overrides',
+            'farast_user_roles',
+            'farast_role_permissions',
+            'farast_roles',
+        ] as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'id')
+                && DB::table($table)->exists()) {
+                throw new RuntimeException(
+                    "Refusing to drop populated {$table}; export and migrate access data explicitly first."
+                );
+            }
+        }
+
         Schema::dropIfExists('farast_access_audit_logs');
         Schema::dropIfExists('farast_user_permission_overrides');
         Schema::dropIfExists('farast_user_roles');
