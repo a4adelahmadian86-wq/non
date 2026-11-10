@@ -75,7 +75,7 @@ class S3CompatibleAdapter
             $query = ['list-type' => '2', 'max-keys' => '1000'];
             if ($token !== null) $query['continuation-token'] = $token;
             $xml = (string) $this->request($volume, 'GET', '', $query)->getBody();
-            $document = simplexml_load_string($xml, \\SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
+            $document = simplexml_load_string($xml, \SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
             if ($document === false) throw new RuntimeException('پاسخ فهرست اشیای S3 قابل پردازش نیست.');
             foreach ($document->xpath('//*[local-name()="Contents"]') ?: [] as $object) {
                 $count++;
