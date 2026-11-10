@@ -151,14 +151,14 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_authorized_structural_only_mode_skips_optional_content_scanning_but_keeps_archive_validation(): void
     {
-        if (! class_exists(\\ZipArchive::class)) {
+        if (! class_exists(\ZipArchive::class)) {
             $this->markTestSkipped('PHP zip extension is unavailable.');
         }
 
         $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-structural-');
-        $archive = new \\ZipArchive();
-        $this->assertSame(true, $archive->open($temporary, \\ZipArchive::CREATE));
-        $archive->addFromString('notes.txt', 'X5O!P%@AP[4\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
+        $archive = new \ZipArchive();
+        $this->assertSame(true, $archive->open($temporary, \ZipArchive::CREATE));
+        $archive->addFromString('notes.txt', 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
         $archive->close();
 
         Storage::disk('private')->put('quarantine/eicar-structural.zip', file_get_contents($temporary));
@@ -176,13 +176,13 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_structural_only_mode_still_rejects_archive_path_traversal(): void
     {
-        if (! class_exists(\\ZipArchive::class)) {
+        if (! class_exists(\ZipArchive::class)) {
             $this->markTestSkipped('PHP zip extension is unavailable.');
         }
 
         $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-structural-traversal-');
-        $archive = new \\ZipArchive();
-        $this->assertSame(true, $archive->open($temporary, \\ZipArchive::CREATE));
+        $archive = new \ZipArchive();
+        $this->assertSame(true, $archive->open($temporary, \ZipArchive::CREATE));
         $archive->addFromString('../outside.txt', 'unsafe');
         $archive->close();
 
@@ -197,7 +197,7 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_security_scan_can_be_skipped_for_a_valid_pdf_without_skipping_structural_validation(): void
     {
-        $pdf = new \\FPDF();
+        $pdf = new \FPDF();
         $pdf->SetFont('Arial', '', 12);
         $pdf->AddPage();
         $pdf->Cell(0, 10, 'Valid document');
