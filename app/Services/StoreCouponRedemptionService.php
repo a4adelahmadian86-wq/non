@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreProduct;
+use App\Models\SiteSetting;
 use RuntimeException;
 
 class StoreCouponRedemptionService
@@ -98,6 +99,31 @@ class StoreCouponRedemptionService
 
         if ($coupon->max_uses !== null && (int) $coupon->used_count >= (int) $coupon->max_uses) {
             throw new RuntimeException('ظرفیت استفاده از این کد تخفیف پیش از پرداخت این سفارش تکمیل شده است.');
+        }
+
+        // A single locked first-party setting serializes coupon redemptions across
+        // different codes, preventing parallel orders from overspending the monthly
+        // marketing budget. Zero means the administrator has left the cap disabled.
+        $budgetSetting = SiteSetting::query()->firstOrCreate(
+            ['key' => 'store_coupon_monthly_budget_rials'],
+            ['value' => '0', 'is_secret' => false]
+        );
+        $budgetSetting = SiteSetting::query()->whereKey($budgetSetting->id)->lockForUpdate()->first();
+        $monthlyBudgetCap = max(0, (int) ($budgetSetting?->value ?? 0));
+        if ($monthlyBudgetCap > 0) {
+            $monthStart = now()->startOfMonth();
+            $spentBeforeThisOrder = Order::query()
+                ->where('status', 'paid')
+                ->whereNotNull('paid_at')
+                ->where('paid_at', '>=', $monthStart)
+                ->whereNotNull('pricing_snapshot->coupon_redeemed_at')
+                ->whereNotNull('pricing_snapshot->coupon_code')
+                ->where('id', '!=', $order->id)
+                ->sum('discount_rials');
+
+            if ((int) $spentBeforeThisOrder + max(0, (int) $order->discount_rials) > $monthlyBudgetCap) {
+                throw new RuntimeException('بودجه ماهانه تخفیف‌های فراست تکمیل شده است؛ این کد تا دوره بعد قابل مصرف نیست.');
+            }
         }
 
         // The order amount is immutable: never recalculate or silently alter its payable total here.
