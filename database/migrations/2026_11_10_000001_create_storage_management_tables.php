@@ -50,7 +50,6 @@ return new class extends Migration {
             $table->foreignId('replicated_to_volume_id')->nullable()->constrained('storage_volumes')->nullOnDelete();
             $table->json('metadata')->nullable();
             $table->timestamps();
-            $table->unique(['storage_volume_id', 'file_key']);
             $table->index(['drive_key', 'status', 'created_at']);
         });
 
