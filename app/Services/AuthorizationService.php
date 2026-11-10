@@ -132,7 +132,7 @@ class AuthorizationService
         }
 
         $contextKey = $context ? hash('sha256', json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') : 'navigation';
-        $cacheKey = $user->id.'|'.$user->role.'|'.$permission.'|'.$contextKey;
+        $cacheKey = $user->id.'|'.$user->role.'|'.($user->organization_id ?? 'none').'|'.(int) $user->is_blocked.'|'.$permission.'|'.$contextKey;
         if (array_key_exists($cacheKey, $this->decisionCache)) {
             return $this->decisionCache[$cacheKey];
         }
