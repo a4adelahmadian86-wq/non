@@ -17,7 +17,7 @@ class AccountTwoFactorController extends Controller
     public function challenge(Request $request)
     {
         abort_unless($request->user()?->two_factor_enabled_at, 404);
-        if ($request->session()->boolean('auth.two_factor_passed')) {
+        if ($request->session()->get('auth.two_factor_passed') === true) {
             return redirect()->intended(route('editor'));
         }
 
