@@ -28,7 +28,7 @@ return new class extends Migration
         if (Schema::hasTable('store_coupon_assignments') && ! Schema::hasColumn('store_coupon_assignments', 'campaign_id')) {
             Schema::table('store_coupon_assignments', function (Blueprint $table) {
                 $table->foreignId('campaign_id')->nullable()->after('coupon_id')
-                    ->constrained('crm_marketing_campaigns')->nullOnDelete();
+                    ->constrained('crm_marketing_campaigns')->restrictOnDelete();
                 $table->index(['campaign_id', 'status', 'expires_at'], 'store_coupon_campaign_status_idx');
             });
         }
