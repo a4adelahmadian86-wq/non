@@ -16,6 +16,7 @@
   const cancelButton = root.querySelector('[data-ingestion-cancel]');
   const closeButton = root.querySelector('[data-ingestion-close]');
   const primaryInput = root.querySelector('[data-ingestion-primary]');
+  const antivirusInput = root.querySelector('[data-ingestion-antivirus]');
   const csrf = root.querySelector('[data-ingestion-csrf]').value;
   const queueView = root.querySelector('[data-ingestion-queue]');
   const selectedView = root.querySelector('[data-ingestion-selected]');
@@ -94,6 +95,7 @@
     state.current = file;
     state.ingestionId = null;
     state.archiveEntries = [];
+    if (antivirusInput) antivirusInput.checked = false;
     filename.textContent = file.webkitRelativePath || file.name;
     setProgress(0, '', false);
     report.innerHTML = '<p>فایل انتخاب شد. پیش از انتقال به قرنطینه، فهرست و مشخصات اولیه را بررسی کنید؛ هنوز چیزی آپلود یا ذخیره نشده است.</p>';
@@ -176,6 +178,10 @@
     const notes = [...findings, ...warnings].map((item) =>
       '<div class="product-ingestion-warning">' + escapeHtml(item) + '</div>'
     ).join('');
+    const antivirus = payload.antivirus || {requested: false, status: 'not_requested'};
+    const antivirusNote = antivirus.requested
+      ? '<div class="product-ingestion-info">اسکن آنتی‌ویروس ClamAV: ' + escapeHtml(antivirus.status === 'clean' ? 'پاک؛ بدون تشخیص' : antivirus.status) + (antivirus.version ? ' · ' + escapeHtml(antivirus.version) : '') + '</div>'
+      : '<div class="product-ingestion-info">اسکن آنتی‌ویروس تکمیلی درخواست نشد؛ بررسی ساختاری داخلی انجام شد.</div>';
     const infoNotes = metadataNotes.map((item) =>
       '<div class="product-ingestion-info">' + escapeHtml(item) + '</div>'
     ).join('');
@@ -183,7 +189,7 @@
     const hasWarnings = inspection.risk_level === 'warning' || findings.length > 0 || warnings.length > 0;
     report.innerHTML =
       '<h4>خلاصه بررسی سایت، بدون استفاده از هوش مصنوعی</h4>' +
-      '<div class="product-ingestion-report-grid">' + grid + '</div>' + archive + notes + infoNotes +
+      '<div class="product-ingestion-report-grid">' + grid + '</div>' + archive + notes + infoNotes + antivirusNote +
       '<p><strong>نتیجه بررسی:</strong> ' + (!inspection.safe
         ? 'فایل برای ذخیره‌سازی پذیرفته نشده است.'
         : (hasWarnings
@@ -217,6 +223,7 @@
     form.append('file', file, file.name);
     state.primaryForCurrent = !!primaryInput.checked && !state.primaryCommitted;
     form.append('is_primary', state.primaryForCurrent ? '1' : '0');
+    form.append('security_scan', antivirusInput?.checked ? '1' : '0');
 
     try {
       setStep('upload', ['received']);
