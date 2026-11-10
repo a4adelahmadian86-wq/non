@@ -257,7 +257,7 @@ class EditorController extends Controller
         $asset = \App\Models\FarastStorageObject::query()
             ->where('user_id', $request->user()->id)
             ->where('document_id', $farast->id)
-            ->where('disk', 'private')
+            ->whereIn('disk', ['private', 'managed'])
             ->where('path', $path)
             ->where('classification', 'editor_asset')
             ->where('status', 'approved')
@@ -266,9 +266,32 @@ class EditorController extends Controller
         // Fail closed: a document resource is not proof that its stored object passed review.
         abort_unless($asset, 404);
         abort_unless(in_array(strtolower((string) $asset->mime), ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true), 404);
-        abort_unless(Storage::disk('private')->exists($asset->path), 404);
 
-        $stream = Storage::disk('private')->readStream($asset->path);
+        // Approved editor assets are promoted from the local quarantine area into the
+        // central storage router on first authorized delivery.
+        if ($asset->disk === 'private' && Storage::disk('private')->exists($asset->path)) {
+            $source = Storage::disk('private')->readStream($asset->path);
+            abort_unless(is_resource($source), 404);
+            try {
+                $stored = Storage::disk('managed')->put($asset->path, $source, [
+                    'farast_classification' => 'non_critical',
+                    'farast_source_type' => 'editor_asset',
+                    'farast_source_id' => $asset->document_id,
+                    'farast_owner_user_id' => $request->user()->id,
+                    'farast_original_name' => basename($asset->path),
+                    'mimetype' => $asset->mime,
+                ]);
+                abort_unless($stored, 503, 'ذخیره‌سازی مرکزی موقتاً در دسترس نیست.');
+                $asset->update(['disk' => 'managed']);
+                Storage::disk('private')->delete($asset->path);
+            } finally {
+                if (is_resource($source)) fclose($source);
+            }
+            $asset->refresh();
+        }
+
+        abort_unless(Storage::disk($asset->disk)->exists($asset->path), 404);
+        $stream = Storage::disk($asset->disk)->readStream($asset->path);
         abort_unless(is_resource($stream), 404);
 
         return response()->stream(function () use ($stream) {
