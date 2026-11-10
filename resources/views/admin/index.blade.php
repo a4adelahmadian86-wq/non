@@ -57,6 +57,61 @@
             @endif
         </section>
 
+        @php
+            $trendLabels = $charts['labels'] ?? [];
+            $trendUsers = $charts['users'] ?? [];
+            $trendDocuments = $charts['documents'] ?? [];
+            $trendAi = $charts['ai'] ?? [];
+            $trendMaximum = max(1, max($trendUsers ?: [0]), max($trendDocuments ?: [0]), max($trendAi ?: [0]));
+            $trendTotal = array_sum($trendUsers) + array_sum($trendDocuments) + array_sum($trendAi);
+        @endphp
+        @if(count($trendLabels) > 0)
+            <section id="activity-trends" class="admin-section admin-panel-wide dashboard-trend-panel">
+                <div class="admin-panel-head">
+                    <div><span class="panel-eyebrow">ACTIVITY TRENDS</span><h2>روند فعالیت در ۳۰ روز اخیر</h2><p>تجمیع روزانهٔ کاربران، اسناد و تعامل‌های هوش مصنوعی؛ بر اساس همان دامنهٔ دسترسی داشبورد.</p></div>
+                    <span class="status-chip">۳۰ روز گذشته</span>
+                </div>
+                <div class="dashboard-trend-legend" aria-label="راهنمای نمودار">
+                    <span><i class="users"></i> کاربران</span>
+                    <span><i class="documents"></i> اسناد</span>
+                    <span><i class="ai"></i> تعامل AI</span>
+                </div>
+                @if($trendTotal === 0)
+                    <p class="dashboard-trend-empty">در بازهٔ ۳۰ روز گذشته فعالیتی برای نمایش ثبت نشده است.</p>
+                @else
+                    <div class="dashboard-trend-scroll" role="img" aria-label="نمودار میله‌ای روند روزانه کاربران، اسناد و تعامل‌های هوش مصنوعی در ۳۰ روز گذشته">
+                        <div class="dashboard-trend-chart">
+                            @foreach($trendLabels as $index => $day)
+                                @php
+                                    $userValue = (int) ($trendUsers[$index] ?? 0);
+                                    $documentValue = (int) ($trendDocuments[$index] ?? 0);
+                                    $aiValue = (int) ($trendAi[$index] ?? 0);
+                                @endphp
+                                <div class="dashboard-trend-day" title="{{ $day }}">
+                                    <div class="dashboard-trend-bars">
+                                        <span class="dashboard-trend-bar users" style="height: {{ $userValue > 0 ? max(2, round(($userValue / $trendMaximum) * 100)) : 0 }}%" title="کاربران: {{ number_format($userValue) }}"></span>
+                                        <span class="dashboard-trend-bar documents" style="height: {{ $documentValue > 0 ? max(2, round(($documentValue / $trendMaximum) * 100)) : 0 }}%" title="اسناد: {{ number_format($documentValue) }}"></span>
+                                        <span class="dashboard-trend-bar ai" style="height: {{ $aiValue > 0 ? max(2, round(($aiValue / $trendMaximum) * 100)) : 0 }}%" title="تعامل AI: {{ number_format($aiValue) }}"></span>
+                                    </div>
+                                    <small class="dashboard-trend-date">{{ \\Illuminate\\Support\\Carbon::parse($day)->format('m/d') }}</small>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+                <div class="dashboard-trend-axis"><span>{{ \\Illuminate\\Support\\Carbon::parse($trendLabels[0])->format('Y/m/d') }}</span><span>{{ \\Illuminate\\Support\\Carbon::parse($trendLabels[count($trendLabels) - 1])->format('Y/m/d') }}</span></div>
+                <table class="dashboard-trend-sr-only">
+                    <caption>داده‌های روزانهٔ نمودار فعالیت</caption>
+                    <thead><tr><th>تاریخ</th><th>کاربران</th><th>اسناد</th><th>تعامل AI</th></tr></thead>
+                    <tbody>
+                        @foreach($trendLabels as $index => $day)
+                            <tr><th>{{ $day }}</th><td>{{ (int) ($trendUsers[$index] ?? 0) }}</td><td>{{ (int) ($trendDocuments[$index] ?? 0) }}</td><td>{{ (int) ($trendAi[$index] ?? 0) }}</td></tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </section>
+        @endif
+
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
                 <div class="admin-panel-head"><div><span class="panel-eyebrow">OPERATIONAL SNAPSHOT</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="status-chip">به‌روزرسانی در {{ now()->format('H:i') }}</span></div>
@@ -302,5 +357,25 @@
 .admin-activity-row strong{font-size:11px;color:#253550;overflow-wrap:anywhere}
 .admin-activity-row small{font-size:10px;color:#8390a5}
 @media(max-width:760px){.farast-admin-nav-create-product{margin-inline:8px}}
+
+.dashboard-trend-panel{min-width:0}
+.dashboard-trend-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0 0 14px;color:var(--admin-muted,#9aa9bd);font-size:.82rem}
+.dashboard-trend-legend span{display:inline-flex;align-items:center;gap:7px}
+.dashboard-trend-legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.dashboard-trend-legend i.users,.dashboard-trend-bar.users{background:#4f8df7}
+.dashboard-trend-legend i.documents,.dashboard-trend-bar.documents{background:#9b7cf6}
+.dashboard-trend-legend i.ai,.dashboard-trend-bar.ai{background:#20b7a7}
+.dashboard-trend-scroll{max-width:100%;overflow-x:auto;padding:8px 2px 4px;scrollbar-width:thin}
+.dashboard-trend-chart{display:grid;grid-template-columns:repeat(30,minmax(17px,1fr));gap:7px;align-items:end;min-width:720px;height:184px;border-bottom:1px solid rgba(145,165,190,.2)}
+.dashboard-trend-day{height:100%;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:7px}
+.dashboard-trend-bars{height:150px;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px}
+.dashboard-trend-bar{display:block;flex:1 1 0;min-width:2px;max-width:10px;border-radius:4px 4px 1px 1px;transition:height .2s ease}
+.dashboard-trend-date{font-size:10px;line-height:1.2;color:var(--admin-muted,#9aa9bd);white-space:nowrap;direction:ltr}
+.dashboard-trend-axis{display:flex;justify-content:space-between;margin-top:9px;color:var(--admin-muted,#9aa9bd);font-size:11px;direction:ltr}
+.dashboard-trend-empty{padding:24px 12px;text-align:center;border:1px dashed rgba(145,165,190,.25);border-radius:12px;color:var(--admin-muted,#9aa9bd)}
+.dashboard-trend-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media(max-width:760px){.dashboard-trend-chart{min-width:680px}.dashboard-trend-legend{gap:10px}}
+@media(prefers-reduced-motion:reduce){.dashboard-trend-bar{transition:none}}
+
 </style>
 @endpush
