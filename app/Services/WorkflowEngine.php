@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -400,9 +402,37 @@ class WorkflowEngine
                 throw new \RuntimeException('CRM follow-up target is missing.');
             }
             $customerId = (int) $context['customer_id'];
-            if ($customerId !== $ownerId) {
-                throw new \RuntimeException('Workflow cannot create a follow-up for another user.');
+            $owner = User::query()->find($ownerId);
+            $customer = User::query()->find($customerId);
+            if (! $owner || ! $customer) {
+                throw new \RuntimeException('Workflow follow-up owner or customer no longer exists.');
             }
+
+            $customerTeamIds = [];
+            if ($customer->organization_id) {
+                $customerTeamIds = $customer->teams()
+                    ->where('teams.organization_id', $customer->organization_id)
+                    ->pluck('teams.id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $supervisedTeamIds = Team::query()
+                    ->where('supervisor_id', $customer->id)
+                    ->where('organization_id', $customer->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $customerTeamIds = array_values(array_unique(array_merge($customerTeamIds, $supervisedTeamIds)));
+            }
+
+            $customerContext = [
+                'owner_id' => (int) $customer->id,
+                'organization_id' => $customer->organization_id,
+                'team_ids' => $customerTeamIds,
+            ];
+            if (! app(AuthorizationService::class)->allowsFor($owner, 'users.view', $customerContext)) {
+                throw new \RuntimeException('Workflow owner cannot create a follow-up outside the authorized customer scope.');
+            }
+
             DB::table('crm_follow_up_tasks')->insert([
                 'customer_id' => $customerId, 'assigned_to' => $ownerId, 'created_by' => $ownerId,
                 'title' => mb_substr((string) ($step['title'] ?? 'پیگیری خودکار'), 0, 180),
