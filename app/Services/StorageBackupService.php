@@ -121,6 +121,7 @@ class StorageBackupService
                         'source_type' => $record->source_type,
                         'source_id' => $record->source_id,
                         'product_id' => $record->product_id,
+                        'owner_user_id' => $record->owner_user_id,
                     ];
                     @unlink($local);
                 }
