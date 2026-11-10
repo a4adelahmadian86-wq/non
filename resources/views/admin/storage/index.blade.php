@@ -19,12 +19,12 @@
             <article class="storage-drive">
                 <div class="storage-drive-head"><div><h2>{{ $drive['title'] }}</h2><small>{{ $drive['region'] }} · {{ $drive['kind'] === 'backup' ? 'پشتیبان‌گیری' : 'ذخیره‌سازی عملیاتی' }}</small></div><span class="storage-status">{{ $drive['healthy'] }} از {{ $drive['volumes']->count() }} سالم</span></div>
                 <div class="storage-metrics">
-                    <div class="storage-metric"><small>ظرفیت کل</small><b>{{ $drive['capacity'] ? \\Illuminate\\Support\\Number::fileSize($drive['capacity']) : 'نامشخص' }}</b></div>
-                    <div class="storage-metric"><small>مصرف‌شده</small><b>{{ \\Illuminate\\Support\\Number::fileSize($drive['used']) }}</b></div>
+                    <div class="storage-metric"><small>ظرفیت کل</small><b>{{ $drive['capacity'] ? \Illuminate\Support\Number::fileSize($drive['capacity']) : 'نامشخص' }}</b></div>
+                    <div class="storage-metric"><small>مصرف‌شده</small><b>{{ \Illuminate\Support\Number::fileSize($drive['used']) }}</b></div>
                     <div class="storage-metric"><small>تعداد فایل</small><b>{{ number_format($drive['files']) }}</b></div>
                 </div>
                 <div class="storage-progress"><span style="width:{{ $percent }}%"></span></div>
-                <div class="storage-muted">فضای آزاد: {{ $drive['capacity'] ? \\Illuminate\\Support\\Number::fileSize(max(0,$drive['capacity']-$drive['used'])) : 'ظرفیت اعلام نشده' }}</div>
+                <div class="storage-muted">فضای آزاد: {{ $drive['capacity'] ? \Illuminate\Support\Number::fileSize(max(0,$drive['capacity']-$drive['used'])) : 'ظرفیت اعلام نشده' }}</div>
                 <div class="storage-volumes">
                     @forelse($drive['volumes'] as $volume)
                         <a class="storage-volume" href="{{ route('admin.storage.volume', $volume) }}">
