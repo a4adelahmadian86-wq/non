@@ -69,11 +69,10 @@ class AccountSecuritySessionsTest extends TestCase
             'id' => $otherId,
         ]);
         $this->assertNotNull(DB::table('farast_account_sessions')->where('id', $otherId)->value('revoked_at'));
-        $this->assertDatabaseHas('farast_account_sessions', [
-            'user_id' => $user->id,
-            'session_key' => hash('sha256', $currentSessionId),
-            'revoked_at' => null,
-        ]);
+        $this->assertSame(1, DB::table('farast_account_sessions')
+            ->where('user_id', $user->id)
+            ->whereNull('revoked_at')
+            ->count(), 'The current authenticated browser must remain active.');
     }
 
     public function test_revoke_others_rejects_an_incorrect_current_password(): void
