@@ -14,6 +14,7 @@ class WorkflowConditionEvaluator
         'total_rials',
         'status',
         'document_id',
+        'revision',
         'ticket_id',
         'product_id',
         'organization_id',
