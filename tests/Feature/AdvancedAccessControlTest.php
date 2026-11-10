@@ -244,6 +244,26 @@ class AdvancedAccessControlTest extends TestCase
         ));
     }
 
+    public function test_admin_console_never_reuses_an_admin_request_scope_for_another_user(): void
+    {
+        $organizationA = Organization::create(['name' => 'Scope Isolation A', 'slug' => 'scope-isolation-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Scope Isolation B', 'slug' => 'scope-isolation-b', 'status' => 'active']);
+        $admin = $this->user('09140000311', User::ROLE_ADMIN);
+        $manager = $this->user('09140000312', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $member = $this->user('09140000313', User::ROLE_EMPLOYEE, $organizationA->id);
+        $outside = $this->user('09140000314', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $this->actingAs($admin)->get('/admin')->assertOk();
+        $this->assertSame('global', request()->attributes->get('farast.scope'));
+
+        $visibleIds = app(AdminConsoleService::class)->visibleUserIds($manager, 'users.view');
+
+        $this->assertIsArray($visibleIds, 'A global request scope must not turn another user\'s scope into an unrestricted result.');
+        $this->assertContains($manager->id, $visibleIds);
+        $this->assertContains($member->id, $visibleIds);
+        $this->assertNotContains($outside->id, $visibleIds);
+    }
+
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
     {
         $employee = $this->user('09140000105');
