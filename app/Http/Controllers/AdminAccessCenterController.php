@@ -89,6 +89,7 @@ class AdminAccessCenterController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'reason' => ['required', 'string', 'max:1000'],
             'scope_type' => ['required', Rule::in(self::SCOPES)],
             'scope_id' => ['nullable', 'integer', 'min:1'],
         ]);
@@ -113,7 +114,7 @@ class AdminAccessCenterController extends Controller
             ]);
 
             $this->audit($request, 'role.created', null, $roleId, null, null, [
-                'key' => $key, 'name' => $data['name'], 'scope' => $data['scope_type'], 'scope_id' => $scopeId,
+                'key' => $key, 'name' => $data['name'], 'scope' => $data['scope_type'], 'scope_id' => $scopeId, 'reason' => $data['reason'],
             ]);
         });
 
@@ -128,6 +129,7 @@ class AdminAccessCenterController extends Controller
             'scope_type' => ['required', Rule::in(self::SCOPES)],
             'scope_id' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['required', 'boolean'],
+            'reason' => ['required', 'string', 'max:1000'],
         ]);
         $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
 
@@ -191,6 +193,7 @@ class AdminAccessCenterController extends Controller
             'permissions' => ['sometimes', 'array', 'max:250'],
             'permissions.*' => ['required', 'string', 'distinct', 'exists:permissions,key'],
             'scope_type' => ['nullable', Rule::in(self::SCOPES)],
+            'reason' => ['required', 'string', 'max:1000'],
         ]);
         $keys = array_values(array_unique($data['permissions'] ?? []));
 
@@ -224,6 +227,7 @@ class AdminAccessCenterController extends Controller
             ], [
                 'permissions' => $keys,
                 'scope' => $scope,
+                'reason' => $data['reason'],
             ]);
         });
 
@@ -240,6 +244,7 @@ class AdminAccessCenterController extends Controller
             'scope_id' => ['nullable', 'integer', 'min:1'],
             'starts_at' => ['nullable', 'date'],
             'expires_at' => ['nullable', 'date', 'after:starts_at'],
+            'reason' => ['required', 'string', 'max:1000'],
         ]);
 
         $targetId = (int) $user;
@@ -286,6 +291,7 @@ class AdminAccessCenterController extends Controller
                 'scope_id' => $scopeId,
                 'starts_at' => $data['starts_at'] ?? null,
                 'expires_at' => $data['expires_at'] ?? null,
+                'reason' => $data['reason'],
             ]);
 
             return $id;
