@@ -15,6 +15,11 @@ return [
     ],
 
     // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.
+    'clamav' => [
+        'binary' => env('CLAMAV_BINARY', ''),
+        'timeout' => max(10, min(300, (int) env('CLAMAV_TIMEOUT', 120))),
+    ],
+
     'product_supervisor' => [
         'url' => env('FARAST_PRODUCT_SUPERVISOR_URL', ''),
         'token' => env('FARAST_PRODUCT_SUPERVISOR_TOKEN', ''),
