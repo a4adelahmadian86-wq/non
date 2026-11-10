@@ -154,6 +154,28 @@ class StoreCartFeedbackExperienceTest extends TestCase
             ->assertJsonPath('subtotal_rials', 0);
     }
 
+    public function test_cart_quantity_updates_return_consistent_totals_for_live_refresh(): void
+    {
+        $product = $this->createCartTestProduct(125000);
+        $this->postJson(route('cart.add', $product))->assertOk();
+
+        $this->postJson(route('cart.update', $product), ['quantity' => 3])
+            ->assertOk()
+            ->assertJsonPath('count', 3)
+            ->assertJsonPath('items.0.quantity', 3)
+            ->assertJsonPath('items.0.line_total_rials', 375000)
+            ->assertJsonPath('subtotal_rials', 375000)
+            ->assertJsonPath('subtotal_toman', 37500)
+            ->assertJsonPath('total_toman', 37500);
+
+        $this->get(route('cart'))
+            ->assertOk()
+            ->assertSee('data-cart-subtotal', false)
+            ->assertSee('data-cart-discount', false)
+            ->assertSee('data-cart-total', false)
+            ->assertSee('data-cart-count', false);
+    }
+
     public function test_storefront_product_discovery_page_loads(): void
     {
         $this->get(route('store'))
