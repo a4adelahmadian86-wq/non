@@ -11,7 +11,7 @@ class ProductPublicationReadiness
         $isEligible = static fn ($file): bool => $file->purpose === 'product_download'
             && $file->is_active
             && $file->is_primary
-            && $file->scan_status === 'clean';
+            && in_array($file->scan_status, ['clean', 'structural'], true);
 
         $file = $product->relationLoaded('files')
             ? $product->files->first($isEligible)
@@ -19,7 +19,7 @@ class ProductPublicationReadiness
                 ->where('purpose', 'product_download')
                 ->where('is_active', true)
                 ->where('is_primary', true)
-                ->where('scan_status', 'clean')
+                ->whereIn('scan_status', ['clean', 'structural'])
                 ->first();
 
         $document = $file?->document;
