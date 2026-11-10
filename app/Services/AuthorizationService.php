@@ -151,7 +151,7 @@ class AuthorizationService
             return $this->decisionCache[$cacheKey] = true;
         }
 
-        if ($this->hasLegacyGrant($user, $permissionId)) {
+        if ($this->hasLegacyGrantForContext($user, $permissionId, $context)) {
             return $this->decisionCache[$cacheKey] = true;
         }
 
