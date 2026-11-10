@@ -36,7 +36,7 @@ class StoreCouponRedemptionTest extends TestCase
             'tax_rials' => 0,
             'total_rials' => 90000,
             'status' => 'pending',
-            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $coupon->code],
+            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $coupon->code, 'coupon_redemption_pending' => true],
         ]);
 
         $service = app(StoreCouponRedemptionService::class);
@@ -45,7 +45,7 @@ class StoreCouponRedemptionTest extends TestCase
         $service->redeemForPaidOrder($order->fresh());
 
         $this->assertSame(1, $coupon->fresh()->used_count);
-        $this->assertNotEmpty($order->fresh()->pricing_snapshot['coupon_redeemed_at'] ?? null);
+        $this->assertNotEmpty($order->fresh()->pricing_snapshot['coupon_redeemed_at'] ?? null);\n        $this->assertFalse($order->fresh()->pricing_snapshot['coupon_redemption_pending']);
     }
 
     public function test_coupon_capacity_is_checked_at_redemption_not_order_creation(): void
@@ -70,7 +70,7 @@ class StoreCouponRedemptionTest extends TestCase
             'tax_rials' => 0,
             'total_rials' => 90000,
             'status' => 'pending',
-            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $coupon->code],
+            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $coupon->code, 'coupon_redemption_pending' => true],
         ]);
 
         try {
