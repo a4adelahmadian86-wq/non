@@ -174,7 +174,6 @@ class AuthController extends Controller
                     'user_agent' => substr((string) $request->userAgent(), 0, 4000),
                     'meta' => json_encode(['reason' => 'invalid_credentials_or_blocked'], JSON_UNESCAPED_UNICODE),
                     'created_at' => now(),
-                    'updated_at' => now(),
                 ]);
             }
 
@@ -382,7 +381,6 @@ class AuthController extends Controller
                 'user_agent' => substr((string) $request->userAgent(), 0, 4000),
                 'meta' => json_encode(['method' => 'verified_mobile_otp'], JSON_UNESCAPED_UNICODE),
                 'created_at' => now(),
-                'updated_at' => now(),
             ]);
         }
         app(\App\Services\NotificationService::class)->pushToUser(
@@ -425,7 +423,6 @@ class AuthController extends Controller
                     'user_agent' => substr((string) $request->userAgent(), 0, 4000),
                     'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
                     'created_at' => now(),
-                    'updated_at' => now(),
                 ]);
             }
         }
