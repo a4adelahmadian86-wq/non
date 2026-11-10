@@ -56,6 +56,7 @@ class StorageTransferService
                 }
                 $file->update(['storage_volume_id' => $target->id, 'status' => 'active', 'metadata' => array_merge((array) $file->metadata, ['disk' => 'storage_volume:'.$target->id, 'transferred_at' => now()->toIso8601String()])]);
                 $target->increment('used_bytes', (int) $file->size_bytes);
+                $target->increment('object_count');
                 $source->delete($file->file_key);
                 $moved++;
             } catch (\Throwable $exception) {
