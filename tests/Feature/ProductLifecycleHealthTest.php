@@ -6,6 +6,8 @@ use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductFile;
+use App\Models\StoreProductDocument;
 use App\Models\User;
 use App\Services\ProductLifecycleHealthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
