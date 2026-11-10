@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminDashboardShellIntegrityTest extends TestCase
@@ -44,6 +45,7 @@ class AdminDashboardShellIntegrityTest extends TestCase
         $this->assertSame(1, substr_count($html, 'class="farast-admin-nav"'));
         $this->assertSame(1, substr_count($html, 'id="platform-control"'));
     }
+
     public function test_dashboard_activity_feed_displays_real_audit_events_and_links_to_the_audit_ledger(): void
     {
         $admin = User::factory()->create([
@@ -68,5 +70,4 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('Activity Feed Admin')
             ->assertSee(route('admin.audit'));
     }
-
 }
