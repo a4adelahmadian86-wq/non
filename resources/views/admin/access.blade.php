@@ -95,6 +95,7 @@
             <p>دسترسی هر نقش را بر اساس مسئولیت واقعی آن تنظیم کنید. تغییرات این صفحه در سطح سرور ذخیره می‌شود و محدودیت‌های دامنه سازمانی همچنان اعمال خواهند شد.</p>
         </div>
         <a class="role-access-back" href="{{ route('admin.index') }}">بازگشت به مرکز عملیات</a>
+        <a class="role-access-back" style="background:#eaf1ff;color:#214f91" href="{{ route('admin.access-center.index') }}">مرکز پیشرفته نقش‌ها و دسترسی‌ها</a>
     </header>
 
     <div class="role-access-notice" role="note">
