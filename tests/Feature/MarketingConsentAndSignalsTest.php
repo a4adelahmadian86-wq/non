@@ -84,7 +84,7 @@ class MarketingConsentAndSignalsTest extends TestCase
             ],
         ]);
 
-        \\Illuminate\\Support\\Facades\\Artisan::call('store:marketing:prune-signals --days=90 --limit=100');
+        \Illuminate\Support\Facades\Artisan::call('store:marketing:prune-signals --days=90 --limit=100');
 
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'retention-old-'.$user->id]);
         $this->assertDatabaseHas('farast_workflow_events', ['idempotency_key' => 'retention-recent-'.$user->id]);
