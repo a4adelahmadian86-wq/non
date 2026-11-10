@@ -15,7 +15,7 @@ class NotificationController extends Controller
     public function index(Request $request)
     {
         $filter = $request->string('filter')->toString() ?: 'all';
-        $allowed = ['all', 'unread', 'support', 'finance', 'announcement', 'community', 'security', 'marketing', 'system', 'archived'];
+        $allowed = ['all', 'unread', 'support', 'finance', 'announcement', 'community', 'security', 'marketing', 'communications', 'system', 'archived'];
         if (! in_array($filter, $allowed, true)) $filter = 'all';
 
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
