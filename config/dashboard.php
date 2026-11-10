@@ -175,9 +175,26 @@ return [
         $workspace,
         $combine('documents', 'اسناد و ویرایش', 'fa-folder-open', ['documents', 'editor']),
         $combine('automation', 'هوش مصنوعی و اتوماسیون', 'fa-robot', ['ai', 'automation']),
-        $combine('collaboration', 'تیم، سازمان و دسترسی‌ها', 'fa-people-group', ['collaboration', 'organization', 'access']),
+        [
+            'key' => 'collaboration',
+            'label' => 'تیم، سازمان و دسترسی‌ها',
+            'icon' => 'fa-people-group',
+            'items' => array_merge(
+                $take('collaboration'),
+                $pick('organization', ['organization.profile']),
+                $take('access')
+            ),
+        ],
         $combine('support_desk', 'ارتباطات و پشتیبانی', 'fa-headset', ['support_desk', 'notifications']),
-        $combine('reports', 'گزارش‌ها و امنیت', 'fa-chart-line', ['reports', 'security']),
+        [
+            'key' => 'reports',
+            'label' => 'گزارش‌ها و امنیت',
+            'icon' => 'fa-chart-line',
+            'items' => array_merge(
+                $without('reports', ['reports.finance']),
+                $take('security')
+            ),
+        ],
         [
             'key' => 'finance',
             'label' => 'مالی و اشتراک',
