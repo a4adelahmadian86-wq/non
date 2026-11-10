@@ -26,7 +26,7 @@ Schedule::command('storage:cleanup-deferred-deletes --limit=100')
 // Encrypted weekly application backup to configured foreign backup volumes.
 Schedule::command('storage:backup-weekly')
     ->weeklyOn(0, '02:00')
-    ->withoutOverlapping(360);
+    ->withoutOverlapping(600);
 
 Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
