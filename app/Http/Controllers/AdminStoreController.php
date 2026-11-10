@@ -837,7 +837,7 @@ class AdminStoreController extends Controller
             'success' => true,
             'message' => $productRequiresRepublish
                 ? 'فایل ذخیره شد؛ محصول برای آماده‌سازی دوباره خوانشگر یا بررسی ناظر به پیش‌نویس برگشت.'
-                : 'فایل پس از تأیید شما در فضای خصوصی فروشگاه ذخیره شد.',
+                : 'فایل در فضای خصوصی ذخیره شد؛ بررسی محتوایی ناظر هوشمند نیز در پس‌زمینه آغاز شده است.',
             'product' => [
                 'status' => $product->fresh()->status,
                 'requires_republish' => $productRequiresRepublish,
@@ -848,6 +848,7 @@ class AdminStoreController extends Controller
                 'size_bytes' => $fileRecord->size_bytes,
                 'scan_status' => $fileRecord->scan_status,
                 'processing_status' => $processingStatus,
+                'supervisor_review_status' => 'queued',
             ],
         ]);
     }
