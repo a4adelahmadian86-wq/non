@@ -86,6 +86,18 @@ class AdminStorageController extends Controller
 
         $credentials = (array) ($connection['credentials'] ?? []);
         $endpoint = (string) ($connection['endpoint'] ?? ($credentials['endpoint'] ?? ''));
+        if ($driver === 's3') {
+            $parsedEndpoint = parse_url($endpoint);
+            if (! is_array($parsedEndpoint)
+                || strtolower((string) ($parsedEndpoint['scheme'] ?? '')) !== 'https'
+                || empty($parsedEndpoint['host'])
+                || isset($parsedEndpoint['user'])
+                || isset($parsedEndpoint['pass'])
+                || isset($parsedEndpoint['query'])
+                || isset($parsedEndpoint['fragment'])) {
+                return back()->withErrors(['connection_json' => 'Endpoint سرویس ذخیره‌سازی باید HTTPS معتبر و بدون اطلاعات محرمانه داخل URL باشد.'])->withInput($request->except('connection_json'));
+            }
+        }
         $bucket = (string) ($connection['bucket'] ?? ($credentials['bucket'] ?? ''));
         $host = (string) parse_url($endpoint, PHP_URL_HOST);
         $provider = trim((string) ($connection['provider'] ?? $host));
