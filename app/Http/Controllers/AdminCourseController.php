@@ -134,7 +134,7 @@ class AdminCourseController extends Controller
         return back()->with('status', 'جلسه و منابع آن حذف شدند.');
     }
 
-    public function uploadResource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, UploadSecurityService $security)
+    public function uploadResource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, UploadSecurityService $security, StorageManager $storage)
     {
         $course = $this->assertCourse($product);
         abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
@@ -156,17 +156,29 @@ class AdminCourseController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), 256 * 1024 * 1024, $allowed);
             abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ فایل تا تأیید امنیتی قابل استفاده نخواهد بود.');
 
+            $managed = $storage->adoptExistingPrivate(
+                $path,
+                $upload->getClientOriginalName(),
+                (string) $inspection['mime'],
+                (int) $inspection['size'],
+                'course-resources',
+                StoreProductFile::class,
+                null,
+                (int) $product->id,
+                StorageManager::CRITICAL
+            );
             $documentId = null;
+            $resourceRecord = null;
             $processingStatus = ((int) $inspection['size'] <= 25 * 1024 * 1024) ? 'queued' : 'awaiting_provider';
-            DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path, &$documentId, $processingStatus) {
+            DB::transaction(function () use ($product, $lesson, $upload, $inspection, $path, $managed, &$documentId, &$resourceRecord, $processingStatus) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $resource = StoreProductFile::create([
                     'product_id' => $lockedProduct->id,
                     'course_lesson_id' => $lesson->id,
                     'purpose' => 'lesson_resource',
                     'version' => $lockedProduct->version,
-                    'disk' => 'private',
-                    'path' => $path,
+                    'disk' => $managed['disk'],
+                    'path' => $managed['path'],
                     'original_name' => $upload->getClientOriginalName(),
                     'mime' => $inspection['mime'],
                     'size_bytes' => $inspection['size'],
@@ -177,6 +189,7 @@ class AdminCourseController extends Controller
                     'scan_engine' => $inspection['scan'],
                     'scanned_at' => now(),
                 ]);
+                $resourceRecord = $resource;
                 $documentId = DB::table('store_product_documents')->insertGetId([
                     'product_id' => $product->id,
                     'product_file_id' => $resource->id,
@@ -203,7 +216,14 @@ class AdminCourseController extends Controller
                     'processing_status' => $processingStatus,
                 ]);
             });
+            StorageManagedFile::whereKey($managed['managed_file_id'])->update([
+                'source_type' => StoreProductFile::class,
+                'source_id' => $resourceRecord?->id,
+                'product_id' => $product->id,
+            ]);
+            Storage::disk('private')->delete($path);
         } catch (Throwable $exception) {
+            if (isset($managed)) $storage->delete($managed['disk'], $managed['path']);
             Storage::disk('private')->delete($path);
             if ($exception instanceof \Illuminate\Validation\ValidationException) {
                 throw $exception;
@@ -233,14 +253,14 @@ class AdminCourseController extends Controller
                 : 'منبع آموزشی ذخیره شد؛ به دلیل عبور از سقف پردازش فعلی، تحلیل کامل تا فراهم‌شدن مسیر مناسب فعال نیست.'));
     }
 
-    public function deleteResource(StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
+    public function deleteResource(StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file, StorageManager $storage)
     {
         $course = $this->assertCourse($product);
         abort_unless($lesson->section()->where('course_id', $course->id)->exists(), 404);
         abort_unless($file->product_id === $product->id && $file->course_lesson_id === $lesson->id && $file->purpose === 'lesson_resource', 404);
         $this->audit('store.course.resource_deleted', $product, ['lesson_id' => $lesson->id, 'file_id' => $file->id]);
         $this->deleteDocumentForFile($file);
-        Storage::disk($file->disk ?: 'private')->delete($file->path);
+        $storage->delete($file->disk ?: 'private', $file->path);
         $file->delete();
 
         return back()->with('status', 'منبع آموزشی حذف شد.');
@@ -294,7 +314,7 @@ class AdminCourseController extends Controller
             ->get();
         foreach ($files as $file) {
             $this->deleteDocumentForFile($file);
-            Storage::disk($file->disk ?: 'private')->delete($file->path);
+            app(StorageManager::class)->delete($file->disk ?: 'private', $file->path);
             $file->delete();
         }
     }
@@ -306,7 +326,7 @@ class AdminCourseController extends Controller
 
         foreach ($document->artifacts as $artifact) {
             if (filled($artifact->path)) {
-                Storage::disk($artifact->disk ?: 'private')->delete($artifact->path);
+                app(StorageManager::class)->delete($artifact->disk ?: 'private', $artifact->path);
             }
         }
         $document->chunks()->delete();
