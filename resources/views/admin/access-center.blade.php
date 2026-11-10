@@ -59,6 +59,7 @@
                     </label>
                     <label class="ac-field">شناسه سازمان یا تیم (در صورت نیاز)<input name="scope_id" type="number" min="1" placeholder="شناسه محدوده"></label>
                     <label class="ac-field full">توضیحات<textarea name="description" maxlength="2000" placeholder="مسئولیت‌ها و حدود این نقش"></textarea></label>
+                    <label class="ac-field full">دلیل ایجاد نقش<input name="reason" required maxlength="1000" placeholder="نیاز عملیاتی و علت اعطای این سطح دسترسی"></label>
                 </div>
                 <button class="ac-button" type="submit">ایجاد نقش</button>
             </form>
@@ -101,11 +102,13 @@
                             <label class="ac-field">شناسه محدوده<input name="scope_id" type="number" min="1" value="{{ $role->scope_id }}"></label>
                             <label class="ac-field">وضعیت<select name="is_active"><option value="1" @selected($role->is_active)>فعال</option><option value="0" @selected(!$role->is_active)>غیرفعال</option></select></label>
                             <label class="ac-field full">توضیحات<textarea name="description" maxlength="2000">{{ $role->description }}</textarea></label>
+                            <label class="ac-field full">دلیل تغییر<input name="reason" required maxlength="1000" placeholder="علت تغییر مشخصات یا دامنه نقش"></label>
                         </div>
                         <button class="ac-button secondary" type="submit">ذخیره مشخصات نقش</button>
                     </form>
                     <form method="post" action="{{ route('admin.access-center.roles.destroy', $role->id) }}" onsubmit="return confirm('این نقش فقط در صورت نداشتن انتساب قابل حذف است. ادامه می‌دهید؟')">
                         @csrf @method('delete')
+                        <label class="ac-field">دلیل حذف<input name="reason" required maxlength="1000" placeholder="علت حذف نقش"></label>
                         <button class="ac-button danger" type="submit">حذف نقش سفارشی</button>
                     </form>
                     <form method="post" action="{{ route('admin.access-center.roles.permissions', $role->id) }}">
@@ -117,6 +120,7 @@
                                 @endforeach
                             </select>
                         </label>
+                        <label class="ac-field">دلیل تغییر مجوزها<input name="reason" required maxlength="1000" placeholder="علت افزودن یا لغو مجوزها"></label>
                         <div class="ac-permissions">
                             @foreach($permissions as $group=>$groupPermissions)
                                 @foreach($groupPermissions as $permission)
@@ -157,6 +161,7 @@
                         <label class="ac-field">شناسه محدوده<input type="number" min="1" name="scope_id" placeholder="در صورت نیاز"></label>
                         <label class="ac-field">شروع اعتبار<input type="datetime-local" name="starts_at"></label>
                         <label class="ac-field">پایان اعتبار<input type="datetime-local" name="expires_at"></label>
+                        <label class="ac-field">دلیل انتساب<input name="reason" required maxlength="1000" placeholder="علت واگذاری نقش"></label>
                         <button class="ac-button" type="submit">انتساب نقش</button>
                     </form>
                     <form class="ac-inline" method="post" action="{{ route('admin.access-center.users.overrides.store', $user->id) }}" style="margin-top:10px">
@@ -184,7 +189,7 @@
             <h2>نقش‌های اختصاص‌یافته</h2>
             <div class="ac-table-wrap"><table class="ac-table"><thead><tr><th>کاربر</th><th>نقش</th><th>محدوده</th><th>اعتبار تا</th><th>عملیات</th></tr></thead><tbody>
                 @forelse($assignments as $assignment)
-                    <tr><td>#{{ $assignment->user_id }}</td><td>{{ $assignment->role_name }}</td><td>{{ $assignment->scope_type }}{{ $assignment->scope_id ? ' #'.$assignment->scope_id : '' }}</td><td>{{ $assignment->expires_at ?: 'بدون انقضا' }}</td><td><form method="post" action="{{ route('admin.access-center.users.roles.destroy', [$assignment->user_id,$assignment->id]) }}">@csrf @method('delete')<button class="ac-button danger" type="submit">لغو</button></form></td></tr>
+                    <tr><td>#{{ $assignment->user_id }}</td><td>{{ $assignment->role_name }}</td><td>{{ $assignment->scope_type }}{{ $assignment->scope_id ? ' #'.$assignment->scope_id : '' }}</td><td>{{ $assignment->expires_at ?: 'بدون انقضا' }}</td><td><form method="post" action="{{ route('admin.access-center.users.roles.destroy', [$assignment->user_id,$assignment->id]) }}">@csrf @method('delete')<input name="reason" required maxlength="1000" placeholder="دلیل لغو" aria-label="دلیل لغو انتساب نقش"><button class="ac-button danger" type="submit">لغو</button></form></td></tr>
                 @empty<tr><td colspan="5">موردی ثبت نشده است.</td></tr>@endforelse
             </tbody></table></div>
         </section>
@@ -192,7 +197,7 @@
             <h2>استثناهای مستقیم</h2>
             <div class="ac-table-wrap"><table class="ac-table"><thead><tr><th>کاربر</th><th>مجوز</th><th>اثر</th><th>محدوده</th><th>عملیات</th></tr></thead><tbody>
                 @forelse($overrides as $override)
-                    <tr><td>#{{ $override->user_id }}</td><td>{{ $override->permission_label }}</td><td>{{ $override->effect==='deny'?'منع':'اعطا' }}</td><td>{{ $override->scope_type }}</td><td><form method="post" action="{{ route('admin.access-center.users.overrides.destroy', [$override->user_id,$override->id]) }}">@csrf @method('delete')<button class="ac-button danger" type="submit">لغو</button></form></td></tr>
+                    <tr><td>#{{ $override->user_id }}</td><td>{{ $override->permission_label }}</td><td>{{ $override->effect==='deny'?'منع':'اعطا' }}</td><td>{{ $override->scope_type }}</td><td><form method="post" action="{{ route('admin.access-center.users.overrides.destroy', [$override->user_id,$override->id]) }}">@csrf @method('delete')<input name="reason" required maxlength="1000" placeholder="دلیل لغو" aria-label="دلیل لغو استثنا"><button class="ac-button danger" type="submit">لغو</button></form></td></tr>
                 @empty<tr><td colspan="5">موردی ثبت نشده است.</td></tr>@endforelse
             </tbody></table></div>
         </section>
