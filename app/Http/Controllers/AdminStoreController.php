@@ -534,7 +534,7 @@ class AdminStoreController extends Controller
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
-            $code = $exception instanceof \\RuntimeException ? $exception->getMessage() : 'inspection_failed';
+            $code = $exception instanceof \RuntimeException ? $exception->getMessage() : 'inspection_failed';
             $message = match ($code) {
                 'antivirus_scanner_unavailable' => 'اسکن آنتی‌ویروس انتخاب شده است، اما موتور ClamAV روی سرور متصل یا آماده نیست؛ فایل ذخیره نشد.',
                 'antivirus_malware_detected' => 'موتور آنتی‌ویروس تهدیدی در فایل شناسایی کرد؛ فایل ذخیره نشد.',
