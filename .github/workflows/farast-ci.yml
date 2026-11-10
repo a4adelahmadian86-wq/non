@@ -57,6 +57,17 @@ jobs:
       - run: php artisan route:list --path=messenger && php artisan route:list --path=communications
       - run: php artisan route:list --path=admin/store && php artisan route:list --path=store/preview && php artisan route:list --path=my-courses
       - run: php artisan view:cache
+      - name: Validate compiled Blade PHP and show syntax context
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            if ! php -l "$file"; then
+              echo "---- Compiled Blade context: $file ----"
+              nl -ba "$file" | sed -n '175,215p'
+              exit 1
+            fi
+          done < <(find storage/framework/views -type f -name '*.php' -print0)
       - run: php artisan test
         env:
           DB_CONNECTION: sqlite
