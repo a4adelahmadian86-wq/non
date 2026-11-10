@@ -129,10 +129,13 @@
           <div class="store-panel course-public-curriculum" id="store-product-curriculum">
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
             <div class="course-public-meta">
+              @php($courseLevelLabels = ['beginner' => 'مقدماتی', 'intermediate' => 'متوسط', 'advanced' => 'پیشرفته', 'all' => 'همه سطوح'])
               @if($product->course->instructor_name)
                 <span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>
               @endif
-              <span><i class="fa-solid fa-signal"></i> سطح: {{ ['beginner'=>'مقدماتی','intermediate'=>'متوسط','advanced'=>'پیشرفته','all'=>'همه سطوح'][$product->course->level] ?? 'مقدماتی' }}</span>
+              @if(isset($courseLevelLabels[$product->course->level]))
+                <span><i class="fa-solid fa-signal"></i> سطح: {{ $courseLevelLabels[$product->course->level] }}</span>
+              @endif
               @if($product->course->duration_minutes)
                 <span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>
               @endif
@@ -254,7 +257,7 @@
 
     @if($alsoViewed->count())
       <section class="store-shelf">
-        <div class="store-shelf-head"><h2>بر اساس بازدیدهای اخیر شما</h2><span>مارکتینگ هوشمند</span></div>
+        <div class="store-shelf-head"><h2>بر اساس بازدیدهای اخیر شما</h2><span>از سابقه بازدید شما</span></div>
         <div class="store-shelf-track">
           @foreach($alsoViewed as $p)
             @include('store.partials.card', ['product' => $p])
