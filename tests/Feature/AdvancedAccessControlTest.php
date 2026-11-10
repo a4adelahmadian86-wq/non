@@ -239,6 +239,58 @@ class AdvancedAccessControlTest extends TestCase
         ));
     }
 
+    public function test_regular_team_membership_does_not_create_team_management_scope(): void
+    {
+        $organization = Organization::create(['name' => 'Member Scope Org', 'slug' => 'member-scope-org', 'status' => 'active']);
+        $supervisor = $this->user('09140000126', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $actualSupervisor = $this->user('09140000127', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $team = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Ordinary Membership Team',
+            'slug' => 'ordinary-membership-team',
+            'supervisor_id' => $actualSupervisor->id,
+        ]);
+        DB::table('team_user')->insert([
+            'team_id' => $team->id,
+            'user_id' => $supervisor->id,
+            'team_role' => 'employee',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $roleId = $this->role('ordinary-member-team-role', 'team', $team->id);
+        $this->grant($roleId, 'access.audit', 'team');
+        $this->assign($supervisor, $roleId, 'team', $team->id);
+
+        $this->assertFalse(app(AuthorizationService::class)->allowsFor($supervisor, 'access.audit', [
+            'organization_id' => $organization->id,
+            'team_id' => $team->id,
+        ]));
+    }
+
+    public function test_role_scope_cannot_be_broadened_while_assignments_exist(): void
+    {
+        $organization = Organization::create(['name' => 'Immutable Role Scope Org', 'slug' => 'immutable-role-scope-org', 'status' => 'active']);
+        $admin = $this->user('09140000128', User::ROLE_ADMIN);
+        $manager = $this->user('09140000129', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $roleId = $this->role('immutable-org-scope-role', 'organization', $organization->id);
+        $this->assign($manager, $roleId, 'organization', $organization->id);
+
+        $this->actingAs($admin)->put('/admin/access-center/roles/'.$roleId, [
+            'name' => 'Immutable scope role',
+            'description' => 'Scope must remain stable while assigned',
+            'scope_type' => 'global',
+            'scope_id' => null,
+            'is_active' => true,
+        ])->assertStatus(409);
+
+        $this->assertDatabaseHas('farast_roles', [
+            'id' => $roleId,
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+        ]);
+    }
+
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
     {
         $employee = $this->user('09140000105');
