@@ -57,14 +57,21 @@ class AdminStoreCouponController extends Controller
         $offered = (clone $base)->where('status', 'offered')->where('expires_at', '>', now())->count();
         $expired = (clone $base)->where('status', 'offered')->where('expires_at', '<=', now())->count();
         $revoked = (clone $base)->where('status', 'revoked')->count();
+        // Smart assignments target one product. Attribute only that product's
+        // immutable order-item totals; never credit the full mixed-cart order.
         $attributedOrders = DB::table('store_coupon_assignments')
             ->join('orders', 'orders.id', '=', 'store_coupon_assignments.redeemed_order_id')
+            ->join('store_order_items', function ($join) {
+                $join->on('store_order_items.order_id', '=', 'orders.id')
+                    ->on('store_order_items.product_id', '=', 'store_coupon_assignments.product_id');
+            })
             ->when($visibleIds !== null, fn ($query) => $query->whereIn('store_coupon_assignments.user_id', $visibleIds))
             ->where('store_coupon_assignments.status', 'redeemed')
-            ->where('orders.status', 'paid');
-        $attributedOrderCount = (clone $attributedOrders)->count();
-        $attributedRevenue = (int) (clone $attributedOrders)->sum('orders.total_rials');
-        $redeemedDiscountCost = (int) (clone $attributedOrders)->sum('orders.discount_rials');
+            ->where('orders.status', 'paid')
+            ->whereNotNull('orders.paid_at');
+        $attributedOrderCount = (clone $attributedOrders)->distinct()->count('orders.id');
+        $attributedRevenue = (int) (clone $attributedOrders)->sum('store_order_items.total_rials');
+        $redeemedDiscountCost = (int) (clone $attributedOrders)->sum('store_order_items.discount_rials');
 
         $canManageGlobalCoupons = $visibleIds === null;
         $genericCoupons = $canManageGlobalCoupons
