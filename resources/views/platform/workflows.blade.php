@@ -92,8 +92,10 @@
                     <div><strong>{{ $w->name }}</strong><small>{{ $w->trigger_type }} · {{ (int)($w->cooldown_seconds ?? 0) }} ثانیه فاصله اجرا</small></div>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                         <span class="wf-status">{{ $w->enabled ? 'فعال' : 'خاموش' }}</span>
-                        @if($canRunWorkflows)
+                        @if($canRunWorkflows && empty($w->conditions))
                             <form method="post" action="{{ route('platform.workflows.run', $w->id) }}">@csrf<button class="wf-btn alt" type="submit">اجرای دستی</button></form>
+                        @elseif($canRunWorkflows)
+                            <span class="wf-status">نیازمند رویداد واقعی</span>
                         @else
                             <span class="wf-status">فقط مشاهده</span>
                         @endif
