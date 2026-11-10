@@ -70,7 +70,9 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertDontSee('شناسه محصول (SKU)')
             ->assertDontSee('نشانی اختصاصی (Slug)')
             ->assertDontSee('نوع مجوز استفاده')
-            ->assertSee('admin-store-product-wizard.js');
+            ->assertSee('admin-store-product-wizard.js')
+            ->assertSee('product-upload-step')
+            ->assertSee('ورود به انتخاب فایل');
         $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
 
         $response = $this->actingAs($admin)->post(route('admin.store.store'), [
@@ -81,10 +83,21 @@ class AdminStoreProductWorkflowTest extends TestCase
             'status' => 'draft',
         ]);
         $product = StoreProduct::query()->where('title', 'محصول با شناسه خودکار')->firstOrFail();
-        $response->assertRedirect(route('admin.store.edit', $product));
+        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
         $this->assertNotEmpty($product->sku);
         $this->assertStringStartsWith('PRD-', $product->sku);
         $this->assertNotEmpty($product->slug);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.edit', $product))
+            ->assertOk()
+            ->assertSee('data-product-ingestion', false)
+            ->assertSee('data-ingestion-input', false)
+            ->assertSee('data-ingestion-confirm', false)
+            ->assertSee('data-ingestion-folder', false)
+            ->assertSee('data-ingestion-selected', false)
+            ->assertSee('بررسی امن فایل')
+            ->assertSee('بررسی ساختار و امنیت');
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
@@ -271,7 +284,7 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
 
-        $response->assertRedirect(route('admin.store.edit', $product));
+        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
         $this->assertSame('draft', $product->status);
         $this->assertNull($product->published_at);
         $this->assertNull($product->cover_path);
@@ -322,7 +335,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         );
 
         $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
-        $response->assertRedirect(route('admin.store.edit', $product));
+        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
         $this->assertDatabaseHas('store_product_tag', [
             'product_id' => $product->id,
             'tag_id' => $tag->id,

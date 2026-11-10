@@ -189,7 +189,7 @@ class AdminStoreController extends Controller
             return redirect()->route('admin.store.course.edit', $product)->with('status', 'محصول دوره ایجاد شد؛ اکنون ساختار آموزشی آن را تکمیل کنید.');
         }
 
-        return redirect()->route('admin.store.edit', $product)->with('status', 'محصول ایجاد شد؛ فایل اصلی را بارگذاری کنید.');
+        return redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', 'پیش‌نویس ایجاد شد؛ اکنون فایل اصلی را در بخش بارگذاری امن انتخاب کنید.');
     }
 
     public function edit(StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
@@ -614,7 +614,7 @@ class AdminStoreController extends Controller
                     'sha256' => $inspection['checksum'],
                     'is_primary' => $lockedIngestion->is_primary,
                     'is_active' => true,
-                    'scan_status' => 'clean',
+                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' || ! empty($inspection['warnings']) ? 'warning' : 'clean',
                     'scan_engine' => 'farast_static_v1',
                     'scanned_at' => now(),
                 ]);
