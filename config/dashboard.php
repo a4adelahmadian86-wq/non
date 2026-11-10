@@ -1,6 +1,6 @@
 <?php
 
-return [
+$source = [
     'navigation' => [
         [
             'key' => 'workspace', 'label' => 'میز کار', 'icon' => 'fa-table-cells-large',
@@ -129,6 +129,88 @@ return [
                 ['key' => 'settings.providers', 'label' => 'ارائه‌دهندگان', 'icon' => 'fa-server', 'route' => 'admin.index', 'fragment' => '#voice-settings', 'admin_only' => true, 'permission' => 'ai.manage', 'scope' => 'global'],
                 ['key' => 'settings.cms', 'label' => 'مدیریت محتوا', 'icon' => 'fa-newspaper', 'route' => 'admin.cms', 'admin_only' => true, 'permission' => 'settings.manage', 'scope' => 'global'],
             ],
+        ],
+    ],
+];
+
+$sourceGroups = [];
+foreach ($source['navigation'] as $sourceGroup) {
+    $sourceGroups[$sourceGroup['key']] = $sourceGroup;
+}
+
+$take = static fn (string $key): array => $sourceGroups[$key]['items'] ?? [];
+
+$pick = static function (string $groupKey, array $keys) use ($take): array {
+    $wanted = array_fill_keys($keys, true);
+
+    return array_values(array_filter(
+        $take($groupKey),
+        static fn (array $item): bool => isset($wanted[$item['key'] ?? ''])
+    ));
+};
+
+$without = static function (string $groupKey, array $keys) use ($take): array {
+    $excluded = array_fill_keys($keys, true);
+
+    return array_values(array_filter(
+        $take($groupKey),
+        static fn (array $item): bool => ! isset($excluded[$item['key'] ?? ''])
+    ));
+};
+
+$combine = static function (string $key, string $label, string $icon, array $sourceKeys) use ($take): array {
+    $items = [];
+    foreach ($sourceKeys as $sourceKey) {
+        $items = array_merge($items, $take($sourceKey));
+    }
+
+    return compact('key', 'label', 'icon', 'items');
+};
+
+$workspace = $sourceGroups['workspace'];
+$workspace['items'] = $without('workspace', ['workspace.billing']);
+
+return [
+    'navigation' => [
+        $workspace,
+        $combine('documents', 'اسناد و ویرایش', 'fa-folder-open', ['documents', 'editor']),
+        $combine('automation', 'هوش مصنوعی و اتوماسیون', 'fa-robot', ['ai', 'automation']),
+        [
+            'key' => 'collaboration',
+            'label' => 'تیم، سازمان و دسترسی‌ها',
+            'icon' => 'fa-people-group',
+            'items' => array_merge(
+                $take('collaboration'),
+                $pick('organization', ['organization.profile']),
+                $take('access')
+            ),
+        ],
+        $combine('support_desk', 'ارتباطات و پشتیبانی', 'fa-headset', ['support_desk', 'notifications']),
+        [
+            'key' => 'reports',
+            'label' => 'گزارش‌ها و امنیت',
+            'icon' => 'fa-chart-line',
+            'items' => array_merge(
+                $without('reports', ['reports.finance']),
+                $take('security')
+            ),
+        ],
+        [
+            'key' => 'finance',
+            'label' => 'مالی و اشتراک',
+            'icon' => 'fa-wallet',
+            'items' => array_merge(
+                $pick('workspace', ['workspace.billing']),
+                $pick('organization', ['organization.billing', 'organization.plans']),
+                $pick('settings', ['settings.finance']),
+                $pick('reports', ['reports.finance'])
+            ),
+        ],
+        [
+            'key' => 'settings',
+            'label' => 'تنظیمات و یکپارچه‌سازی',
+            'icon' => 'fa-sliders',
+            'items' => $without('settings', ['settings.finance']),
         ],
     ],
 ];
