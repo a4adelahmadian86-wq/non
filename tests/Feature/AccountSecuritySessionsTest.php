@@ -85,4 +85,46 @@ class AccountSecuritySessionsTest extends TestCase
             ])
             ->assertSessionHasErrors('current_password');
     }
+    public function test_session_expires_after_three_years_without_a_visit(): void
+    {
+        $user = $this->makeUser();
+
+        $this->actingAs($user)->get(route('platform.security'))->assertOk();
+        $sessionKey = hash('sha256', $this->app['session']->getId());
+
+        DB::table('farast_account_sessions')
+            ->where('user_id', $user->id)
+            ->where('session_key', $sessionKey)
+            ->update(['last_activity' => now()->subYears(3)->subMinute()]);
+
+        $this->get(route('platform.security'))
+            ->assertRedirect(route('login'));
+
+        $this->assertGuest();
+        $this->assertNotNull(DB::table('farast_account_sessions')
+            ->where('user_id', $user->id)
+            ->where('session_key', $sessionKey)
+            ->value('revoked_at'));
+        $this->assertDatabaseHas('farast_security_events', [
+            'user_id' => $user->id,
+            'event' => 'session_expired_three_years',
+        ]);
+    }
+
+    public function test_explicit_logout_revokes_the_current_account_session(): void
+    {
+        $user = $this->makeUser();
+
+        $this->actingAs($user)->get(route('platform.security'))->assertOk();
+        $sessionKey = hash('sha256', $this->app['session']->getId());
+
+        $this->post(route('logout'))->assertRedirect(route('home'));
+
+        $this->assertGuest();
+        $this->assertNotNull(DB::table('farast_account_sessions')
+            ->where('user_id', $user->id)
+            ->where('session_key', $sessionKey)
+            ->value('revoked_at'));
+    }
+
 }
