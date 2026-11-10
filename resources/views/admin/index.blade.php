@@ -358,6 +358,34 @@
                         <small>درایور {{ $queueHealth['driver'] ?? 'نامشخص' }}؛ شمارش صف از این اتصال قابل مشاهده نیست.</small>
                     @endif
                 </article>
+                @if($console->sectionAllowed(auth()->user(), 'storage'))
+                    @php
+                        $storageHealth = $systemHealth['storage'] ?? [];
+                        $storageStatusLabel = match ($storageHealth['status'] ?? 'unavailable') {
+                            'healthy' => 'اتصال‌های ثبت‌شده سالم',
+                            'attention' => 'نیازمند بررسی',
+                            default => 'اطلاعات در دسترس نیست',
+                        };
+                        $storageMetricClass = ($storageHealth['status'] ?? '') === 'healthy'
+                            ? 'metric-green'
+                            : ((($storageHealth['status'] ?? '') === 'attention') ? 'metric-orange' : 'metric-violet');
+                    @endphp
+                    <a class="metric-card {{ $storageMetricClass }} dashboard-metric-link" href="{{ route('admin.storage.index') }}">
+                        <div class="metric-top"><span>ذخیره‌سازی و بکاپ</span><i class="fa-solid fa-hard-drive"></i></div>
+                        <strong>{{ $storageStatusLabel }}</strong>
+                        @if($storageHealth['available'] ?? false)
+                            <small>{{ number_format($storageHealth['healthy_volumes'] ?? 0) }} از {{ number_format($storageHealth['active_volumes'] ?? 0) }} فضای فعال سالم · {{ number_format($storageHealth['pending_transfers'] ?? 0) }} انتقال در انتظار</small>
+                            <small>{{ number_format($storageHealth['transfer_errors'] ?? 0) }} خطای انتقال · {{ number_format($storageHealth['failed_backups_24h'] ?? 0) }} بکاپ ناموفق در ۲۴ ساعت</small>
+                            @if(filled($storageHealth['last_successful_backup_at'] ?? null))
+                                <small>آخرین بکاپ موفق: {{ \\Illuminate\\Support\\Carbon::parse($storageHealth['last_successful_backup_at'])->format('Y/m/d H:i') }}</small>
+                            @else
+                                <small>هنوز بکاپ موفقی در سابقه ثبت نشده است.</small>
+                            @endif
+                        @else
+                            <small>آمار از جداول عملیاتی ذخیره‌سازی قابل دریافت نیست؛ صفر فرض نشده است.</small>
+                        @endif
+                    </a>
+                @endif
             </div>
             <p class="health-footnote">محیط: {{ $systemHealth['env'] }} · PHP {{ $systemHealth['php'] }} · Laravel {{ $systemHealth['laravel'] }} · Debug: {{ $systemHealth['debug'] ? 'روشن' : 'خاموش' }}</p>
         </section>
