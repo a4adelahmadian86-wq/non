@@ -44,7 +44,7 @@ Use a separate API credential with only the required bucket permissions. The end
 - `php artisan storage:cleanup-deferred-deletes`
 - `php artisan storage:verify-backup <run-id>`
 - `php artisan storage:restore-backup <run-id> --confirm` (destructive recovery; leaves the site in maintenance mode)
-- `php artisan queue:work --queue=backups,default --timeout=14400` (required for the manual backup button)
+- `php artisan queue:work backups --queue=backups --timeout=14400 --tries=1` (required for the manual backup button)
 
 The Laravel scheduler and queue worker must be running. Weekly backups are encrypted with ZIP AES-256, downloaded again after upload for SHA-256 verification, and retained; automatic pruning is intentionally disabled. A manual backup request is queued and appears in the backup history. The verification command checks the remote checksum, encrypted manifest, and database stream. Restore first verifies the archive, restores the database and local files, and re-stages remote managed objects so the transfer engine can place critical files back on Iran and non-critical files back abroad. It intentionally leaves maintenance mode enabled; inspect the recovered application, then run `php artisan up`. Keep the original Laravel `APP_KEY` and `FARAST_BACKUP_ENCRYPTION_KEY` safely available for disaster recovery.
 
