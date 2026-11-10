@@ -12,7 +12,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @endphp
 <link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="/css/farast.css"><link rel="stylesheet" href="/css/ui-polish.css"><link rel="stylesheet" href="/css/site-premium.css?v=20261107nav1">
-@if(!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261109chrome2">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css">
+@if(!$isEditor&&!$isAdmin&&!$isDashboard&&!$isAuthPage)<link rel="stylesheet" href="/css/farast-public-chrome.css?v=20261110compact1">@endif<link rel="stylesheet" href="/css/farast-app.css"><link rel="stylesheet" href="/css/farast-experience.css?v=20261108ux1"><link rel="stylesheet" href="/css/finance.css">
 @if(request()->routeIs('home'))<link rel="stylesheet" href="{{ asset('css/home.css') }}">@endif
 @if($isDashboard)<link rel="stylesheet" href="/css/dashboard-navigation.css">@endif
 @if($isEditor)
