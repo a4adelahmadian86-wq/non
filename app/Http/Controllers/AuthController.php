@@ -147,16 +147,29 @@ class AuthController extends Controller
 
     public function passwordLogin(Request $request)
     {
-        $phone = $request->session()->get('login.phone');
-        abort_unless($phone, 422);
-        $data = $request->validate(['password' => ['required', 'string']]);
-        $user = User::where('mobile', $phone)->firstOrFail();
+        $phone = (string) $request->session()->get('login.phone', '');
+        abort_unless($phone !== '', 422);
+        $data = $request->validate(['password' => ['required', 'string', 'max:4096']]);
 
-        if ($user->is_blocked || ! $user->password || ! Hash::check($data['password'], $user->password)) {
-            throw ValidationException::withMessages(['password' => 'رمز عبور صحیح نیست.']);
+        // A per-account + per-IP limiter complements the route/IP throttle and
+        // prevents repeated guessing against one known phone number.
+        $attemptKey = 'farast:login:password:'.hash('sha256', $phone.'|'.$request->ip());
+
+        if (RateLimiter::tooManyAttempts($attemptKey, 5)) {
+            $waitSeconds = RateLimiter::availableIn($attemptKey);
+            throw ValidationException::withMessages([
+                'password' => 'برای امنیت حساب، پس از '.$waitSeconds.' ثانیه دوباره تلاش کنید.',
+            ]);
         }
 
-        Auth::login($user, true);
+        $user = User::where('mobile', $phone)->first();
+        if (! $user || $user->is_blocked || ! $user->password || ! Hash::check($data['password'], $user->password)) {
+            RateLimiter::hit($attemptKey, 600);
+            throw ValidationException::withMessages(['password' => 'اطلاعات ورود صحیح نیست. رمز عبور را بررسی کنید.']);
+        }
+
+        RateLimiter::clear($attemptKey);
+        Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
         $request->session()->forget(['login.phone']);
 
