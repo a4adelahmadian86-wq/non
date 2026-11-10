@@ -163,4 +163,74 @@ class CheckoutPaymentClarityTest extends TestCase
         ]);
     }
 
+    public function test_preflight_acceptance_binds_the_quote_to_the_authenticated_project(): void
+    {
+        \\Illuminate\\Support\\Facades\\Storage::fake('private');
+
+        $user = User::create([
+            'name' => 'Preflight QA',
+            'mobile' => '09123456781',
+            'password' => 'secret',
+        ]);
+
+        $project = \\App\\Models\\FarastProject::create([
+            'user_id' => $user->id,
+            'name' => 'پروژه فایل هشت صفحه‌ای',
+            'project_type' => 'typing',
+            'workflow' => 'source_file',
+            'template_code' => 'simple_typing',
+            'status' => 'active',
+            'context' => ['source_type' => 'printed'],
+            'billing_state' => ['status' => 'estimated'],
+            'output_state' => ['status' => 'locked'],
+            'estimated_pages' => 1,
+            'estimated_price_rials' => 0,
+        ]);
+
+        $path = 'typing/'.$user->id.'/preflight-source.pdf';
+        $bytes = '%PDF-1.4 '.str_repeat('/Type /Page ', 8);
+        \\Illuminate\\Support\\Facades\\Storage::disk('private')->put($path, $bytes);
+        $hash = hash('sha256', $bytes);
+
+        $this->mock(\\App\\Services\\PricingService::class, function ($mock) {
+            $mock->shouldReceive('estimateByPages')->once()->with(8)->andReturn([
+                'price_rials' => 160000,
+                'free_page_value_rials' => 10000,
+            ]);
+        });
+        $this->mock(\\App\\Services\\FreeQuotaService::class, function ($mock) {
+            $mock->shouldReceive('availablePages')->once()->andReturn(0);
+        });
+
+        $response = $this->actingAs($user)
+            ->withSession([
+                'pending_upload' => [
+                    'path' => $path,
+                    'mime' => 'application/pdf',
+                    'name' => 'preflight-source.pdf',
+                    'source_type' => 'printed',
+                ],
+                'typing_preflight_quote' => [
+                    'path' => $path,
+                    'mime' => 'application/pdf',
+                    'name' => 'preflight-source.pdf',
+                    'hash' => $hash,
+                    'pages' => 8,
+                ],
+            ])
+            ->postJson('/editor/preflight/accept', [
+                'accept' => true,
+                'project_id' => $project->id,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('action', 'deposit')
+            ->assertJsonPath('order_id', fn ($id) => is_int($id) || ctype_digit((string) $id));
+
+        $orderId = (int) $response->json('order_id');
+        $order = Order::findOrFail($orderId);
+        $this->assertSame($project->id, (int) data_get($order->pricing_snapshot, 'project_id'));
+        $this->assertSame($project->id, (int) data_get(session('typing_preflight_deposit_order'), 'project_id', $project->id));
+    }
+
 }
