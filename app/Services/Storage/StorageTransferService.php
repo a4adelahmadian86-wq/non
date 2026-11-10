@@ -58,6 +58,7 @@ class StorageTransferService
     {
         $moved = 0;
         StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error'])->orderBy('id')->limit(max(1, $limit))->get()->each(function (StorageManagedFile $file) use (&$moved) {
+            if (data_get($file->metadata, 'reference_pending', false)) return;
             $targetDrive = (string) data_get($file->metadata, 'target_drive', $file->drive_key);
             $target = StorageVolume::query()
                 ->where('drive_key', $targetDrive)
