@@ -59,6 +59,14 @@ class StorageTransferService
                 $source->delete($file->file_key);
                 $moved++;
             } catch (\Throwable $exception) {
+                if ($uploaded) {
+                    try {
+                        if ($target->driver === 's3') $this->s3->delete($target, $file->file_key);
+                        elseif ($target->driver === 'local') @unlink(storage_path('app/storage-volumes/'.$target->id.'/'.$file->file_key));
+                    } catch (\Throwable $cleanupException) {
+                        report($cleanupException);
+                    }
+                }
                 $file->update(['status' => 'transfer_error', 'metadata' => array_merge((array) $file->metadata, ['transfer_error' => mb_substr($exception->getMessage(), 0, 400)])]);
             } finally {
                 @unlink($temp);
