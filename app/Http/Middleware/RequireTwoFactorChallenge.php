@@ -31,7 +31,7 @@ class RequireTwoFactorChallenge
 
     private function requiresChallenge(Request $request, $user): bool
     {
-        if (! $user || ! $user->two_factor_enabled_at || $request->session()->get('auth.two_factor_passed') === true) {
+        if (! $user || ! $user->two_factor_enabled_at || filter_var($request->session()->get('auth.two_factor_passed', false), FILTER_VALIDATE_BOOLEAN)) {
             return false;
         }
 
