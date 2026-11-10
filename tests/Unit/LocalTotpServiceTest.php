@@ -23,7 +23,7 @@ class LocalTotpServiceTest extends TestCase
         $codes = $service->generateRecoveryCodes(10);
 
         $this->assertCount(10, $codes);
-        $this->assertSame(12, strlen($service->normalizeRecoveryCode($codes[0])));
-        $this->assertMatchesRegularExpression('/^[A-F0-9]{4}(-[A-F0-9]{4}){2}$/', $codes[0]);
+        $this->assertSame(20, strlen($service->normalizeRecoveryCode($codes[0])));
+        $this->assertMatchesRegularExpression('/^[A-F0-9]{4}(-[A-F0-9]{4}){4}$/', $codes[0]);
     }
 }
