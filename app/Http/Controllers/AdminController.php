@@ -15,6 +15,7 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\VoiceProviderAccount;
 use App\Services\AdminConsoleService;
+use App\Services\AuthorizationService;
 use App\Services\AuditLogService;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
@@ -254,8 +255,8 @@ class AdminController extends Controller
             $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         }
 
-        $visibleTeamIds = $console->visibleTeamIds($actor);
-        $visibleOrganizationIds = $console->visibleOrganizationIds($actor);
+        $visibleTeamIds = $console->visibleTeamIds($actor, 'team.view');
+        $visibleOrganizationIds = $console->visibleOrganizationIds($actor, 'organization.manage');
         $paidPaymentsQuery = function () use ($financeVisibleIds) {
             $query = DB::table('payments')->where('payments.status', 'paid');
             if ($financeVisibleIds !== null) {
