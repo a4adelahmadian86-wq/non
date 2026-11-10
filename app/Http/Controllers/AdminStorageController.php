@@ -115,7 +115,7 @@ class AdminStorageController extends Controller
     public function verify(StorageVolume $volume, StorageConnectionService $connections)
     {
         try {
-            $connections->verify($volume);
+            $connections->verify($volume, true);
             return back()->with('status', 'آزمون خواندن، نوشتن و حذف موفق بود.');
         } catch (Throwable $e) {
             $volume->update(['status' => 'error', 'last_checked_at' => now()]);
