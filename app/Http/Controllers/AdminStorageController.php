@@ -37,7 +37,7 @@ class AdminStorageController extends Controller
         return view('admin.storage.index', compact('drives'));
     }
 
-    public function store(Request $request, StorageConnectionService $connections)
+    public function backups()\n    {\n        $backups = StorageBackupRun::with('volume')->latest()->paginate(30);\n        return view('admin.storage.backups', compact('backups'));\n    }\n\n    public function store(Request $request, StorageConnectionService $connections)
     {
         $data = $request->validate([
             'drive_key' => ['required', Rule::in(array_keys(self::DRIVES))],
