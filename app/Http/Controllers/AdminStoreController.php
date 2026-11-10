@@ -565,17 +565,22 @@ class AdminStoreController extends Controller
             throw new \RuntimeException('product_file_storage_move_failed');
         }
 
-        $managed = $storage->adoptExistingPrivate(
-            $finalPath,
-            $ingestion->original_name,
-            (string) $inspection['mime'],
-            (int) $inspection['size'],
-            'products',
-            StoreProductFile::class,
-            null,
-            (int) $product->id,
-            StorageManager::CRITICAL
-        );
+        try {
+            $managed = $storage->adoptExistingPrivate(
+                $finalPath,
+                $ingestion->original_name,
+                (string) $inspection['mime'],
+                (int) $inspection['size'],
+                'products',
+                StoreProductFile::class,
+                null,
+                (int) $product->id,
+                StorageManager::CRITICAL
+            );
+        } catch (Throwable $exception) {
+            $disk->delete($finalPath);
+            throw $exception;
+        }
 
         try {
             [$fileRecord, $productRequiresRepublish] = DB::transaction(function () use ($product, $ingestion, $inspection, $finalPath, $managed) {
