@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Organization;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Closure;
@@ -31,6 +33,11 @@ class EnsureResourcePermission
 
         if ($resource instanceof User) {
             $context['owner_id'] = $resource->id;
+            $context['organization_id'] = $resource->organization_id;
+        } elseif ($resource instanceof Organization) {
+            $context['organization_id'] = $resource->id;
+        } elseif ($resource instanceof Team) {
+            $context['team_id'] = $resource->id;
             $context['organization_id'] = $resource->organization_id;
         }
 
