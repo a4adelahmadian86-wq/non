@@ -68,7 +68,7 @@ class AuthorizationService
             return ['allowed' => false, 'reason' => 'unknown_permission', 'source' => null, 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
-        if (! $this->scopeMatches($user, $baseScope, null, $context)) {
+        if (! $this->scopeMatches($user, $this->baseScope($user), null, $context)) {
             return ['allowed' => false, 'reason' => 'outside_base_scope', 'source' => null, 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
@@ -146,7 +146,7 @@ class AuthorizationService
             return $this->decisionCache[$cacheKey] = false;
         }
 
-        if (! $this->scopeMatches($user, $this->baseScope($user), null, $context)) {
+        if (! $this->scopeMatches($user, $baseScope, null, $context)) {
             return $this->decisionCache[$cacheKey] = false;
         }
 
