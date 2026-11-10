@@ -562,7 +562,7 @@ class SupportController extends Controller
         $path = (string) ($attachment['path'] ?? '');
         abort_unless($path !== '', 404);
         $diskName = (string) ($attachment['disk'] ?? 'public');
-        abort_unless(in_array($diskName, ['private', 'public'], true), 404);
+        abort_unless(in_array($diskName, ['private', 'public', 'managed'], true), 404);
 
         $disk = Storage::disk($diskName);
         abort_unless($disk->exists($path), 404);
