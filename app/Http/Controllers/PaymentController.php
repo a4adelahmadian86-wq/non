@@ -211,7 +211,7 @@ class PaymentController extends Controller
                 $validatedItems = [];
                 foreach ($items as $item) {
                     $product = $item->product;
-                    if (! $product || $product->status !== 'published') {
+                    if (! $product || ! app(\\App\\Services\\StoreCartService::class)->isPurchasable($product)) {
                         throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
                     }
                     $file = null;
