@@ -18,5 +18,9 @@ test('studio exposes favorites immediately, applies saved styles and supports sh
   await page.locator('[aria-label="نمایش دوصفحه‌ای"]').click();
   await expect(page.locator('[aria-label="نمایش دوصفحه‌ای"]')).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('[data-reader-root]')).toHaveClass(/farast-reader-two-page/);
+  page.on('dialog',dialog=>dialog.accept('هایلایت سفارشی'));
+  await page.locator('[aria-label="افزودن ابزار به محبوب‌ها"]').click();
+  await expect(page.locator('.farast-studio-favorite')).toHaveCount(16);
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:studio-favorites:v1:studio-test')||'[]').length)).toBe(16);
   await page.reload();
 });
