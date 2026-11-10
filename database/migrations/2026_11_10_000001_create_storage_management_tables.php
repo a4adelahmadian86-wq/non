@@ -35,7 +35,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('storage_volume_id')->constrained('storage_volumes')->restrictOnDelete();
             $table->string('drive_key', 40)->index();
-            $table->string('file_key', 1024);
+            $table->string('file_key', 512);
             $table->string('original_name');
             $table->string('mime', 180)->nullable();
             $table->unsignedBigInteger('size_bytes')->default(0);
