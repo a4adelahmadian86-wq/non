@@ -57,7 +57,7 @@ class StorageTransferService
 
     public function transferPending(int $limit = 100): int
     {
-        if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(3))->exists()) {
+        if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(8))->exists()) {
             return 0;
         }
         $moved = 0;
