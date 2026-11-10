@@ -142,6 +142,27 @@ class AdminStorageController extends Controller
         return view('admin.storage.volume', compact('volume', 'files', 'backups'));
     }
 
+    public function downloadFile(StorageManagedFile $file, \\App\\Services\\Storage\\StorageManager $storage)
+    {
+        abort_unless(! in_array($file->status, ['deleted', 'delete_pending'], true), 404);
+        $disk = (string) data_get($file->metadata, 'disk', $file->storage_volume_id ? 'storage_volume:'.$file->storage_volume_id : 'private');
+        abort_unless($storage->exists($disk, $file->file_key), 404);
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-admin-storage');
+        abort_unless(is_string($temporaryPath), 503, 'ساخت فایل موقت برای دریافت ممکن نشد.');
+        try {
+            $storage->downloadTo($disk, $file->file_key, $temporaryPath);
+        } catch (Throwable $exception) {
+            @unlink($temporaryPath);
+            throw $exception;
+        }
+
+        return response()->download($temporaryPath, $file->original_name, [
+            'Content-Type' => $file->mime ?: 'application/octet-stream',
+            'X-Content-Type-Options' => 'nosniff',
+        ])->deleteFileAfterSend(true);
+    }
+
     public function verify(StorageVolume $volume, StorageConnectionService $connections)
     {
         try {
