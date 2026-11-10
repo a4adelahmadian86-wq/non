@@ -20,6 +20,11 @@ class EnsureAdminSection
             'دسترسی به این بخش از کنسول برای نقش یا دامنهٔ حساب شما مجاز نیست.'
         );
 
+        $definition = config("farast_admin.sections.$section");
+        if (is_array($definition) && is_string($definition['permission'] ?? null)) {
+            $request->attributes->set('farast.section_permission', $definition['permission']);
+        }
+
         return $next($request);
     }
 }
