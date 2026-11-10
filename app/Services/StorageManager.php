@@ -99,6 +99,7 @@ class StorageManager
                         'storage_volume_id' => $volume->id,
                         'drive_key' => $volume->drive_key,
                         'file_key' => $objectKey,
+                        'original_name' => basename($logicalPath),
                         'size_bytes' => $size,
                         'checksum' => $checksum,
                         'classification' => $classification,
