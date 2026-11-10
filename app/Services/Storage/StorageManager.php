@@ -97,15 +97,27 @@ class StorageManager
 
     public function delete(string $disk, string $path): void
     {
+        $volumeId = null;
         if (str_starts_with($disk, 'storage_volume:')) {
-            $volume = StorageVolume::find((int) substr($disk, 15));
+            $volumeId = (int) substr($disk, 15);
+            $volume = StorageVolume::find($volumeId);
             if ($volume) {
                 if ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $path));
                 else $this->s3->delete($volume, $path);
             }
-            return;
+        } else {
+            Storage::disk($disk ?: 'private')->delete($path);
         }
-        Storage::disk($disk ?: 'private')->delete($path);
+
+        $managed = StorageManagedFile::query()
+            ->when($volumeId, fn ($q) => $q->where('storage_volume_id', $volumeId), fn ($q) => $q->whereNull('storage_volume_id'))
+            ->where('file_key', $path)
+            ->whereNotIn('status', ['deleted'])
+            ->first();
+        if ($managed) {
+            if ($volumeId && $managed->volume) $managed->volume->decrement('used_bytes', (int) $managed->size_bytes);
+            $managed->update(['status' => 'deleted']);
+        }
     }
 
     public function volumeDisk(StorageVolume $volume): string
