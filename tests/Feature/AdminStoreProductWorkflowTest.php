@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreCourse;
+use App\Models\StoreCourseSection;
+use App\Models\StoreCourseLesson;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
@@ -1100,13 +1103,13 @@ class AdminStoreProductWorkflowTest extends TestCase
             'price_rials' => 100000,
             'status' => 'draft',
         ]);
-        $course = \\App\\Models\\StoreCourse::create(['product_id' => $product->id]);
-        $section = \\App\\Models\\StoreCourseSection::create([
+        $course = StoreCourse::create(['product_id' => $product->id]);
+        $section = StoreCourseSection::create([
             'course_id' => $course->id,
             'title' => 'بخش نخست',
             'sort_order' => 1,
         ]);
-        $lesson = \\App\\Models\\StoreCourseLesson::create([
+        $lesson = StoreCourseLesson::create([
             'section_id' => $section->id,
             'title' => 'درس راهنما',
             'slug' => 'lesson-guide',
