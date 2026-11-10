@@ -153,15 +153,30 @@ class StoreCourseLearningController extends Controller
 
         $disk = $file->disk ?: 'private';
         abort_unless($storage->exists($disk, $file->path), 404);
-        $bytes = $storage->get($disk, $file->path);
-        if ($file->sha256) {
-            $actualHash = hash('sha256', $bytes);
-            abort_unless(hash_equals((string) $file->sha256, $actualHash), 409, 'محتوای منبع آموزشی پس از اسکن امنیتی تغییر کرده است.');
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-course-resource');
+        try {
+            $storage->downloadTo($disk, $file->path, $temporary);
+            if ($file->sha256) {
+                $actualHash = hash_file('sha256', $temporary);
+                abort_unless(is_string($actualHash) && hash_equals((string) $file->sha256, $actualHash), 409, 'محتوای منبع آموزشی پس از اسکن امنیتی تغییر کرده است.');
+            }
+        } catch (\Throwable $exception) {
+            @unlink($temporary);
+            throw $exception;
         }
 
         $inline = str_starts_with((string) $file->mime, 'video/') || str_starts_with((string) $file->mime, 'audio/');
-        return response($bytes, 200, [
+        return response()->stream(function () use ($temporary) {
+            $stream = fopen($temporary, 'rb');
+            try {
+                if (is_resource($stream)) fpassthru($stream);
+            } finally {
+                if (is_resource($stream)) fclose($stream);
+                @unlink($temporary);
+            }
+        }, 200, [
             'Content-Type' => $file->mime ?: 'application/octet-stream',
+            'Content-Length' => (string) filesize($temporary),
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
