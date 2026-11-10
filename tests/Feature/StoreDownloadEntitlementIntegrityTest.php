@@ -512,7 +512,7 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
 
         $gateway = Mockery::mock(ZarinpalService::class);
         $gateway->shouldReceive('enabled')->once()->andReturn(true);
-        $gateway->shouldReceive('request')->once()->andThrow(new \\RuntimeException('gateway unavailable'));
+        $gateway->shouldReceive('request')->once()->andThrow(new \RuntimeException('gateway unavailable'));
         app()->instance(ZarinpalService::class, $gateway);
 
         $this->actingAs($user)
