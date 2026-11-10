@@ -441,6 +441,12 @@ class AdminAccessCenterController extends Controller
 
         if ($role->scope_type === 'team') {
             $teamId = (int) $role->scope_id;
+            $team = Team::query()->whereKey($teamId)->first();
+            abort_unless(
+                $team && $target->organization_id && (int) $team->organization_id === (int) $target->organization_id,
+                422,
+                'تیم نقش خارج از سازمان کاربر است.'
+            );
             $belongs = $target->teams()->where('teams.id', $teamId)->exists()
                 || Team::query()->whereKey($teamId)->where('supervisor_id', $target->id)->exists();
             abort_unless($belongs, 422, 'کاربر عضو تیم محدوده نقش نیست.');
@@ -478,6 +484,12 @@ class AdminAccessCenterController extends Controller
         if ($scope === 'organization') {
             abort_unless($user->organization_id && (int) $user->organization_id === $scopeId, 422, 'کاربر عضو سازمان انتخاب‌شده نیست.');
         } elseif ($scope === 'team') {
+            $team = Team::query()->whereKey($scopeId)->first();
+            abort_unless(
+                $team && $user->organization_id && (int) $team->organization_id === (int) $user->organization_id,
+                422,
+                'تیم انتخاب‌شده خارج از سازمان کاربر است.'
+            );
             $belongs = $user->teams()->where('teams.id', $scopeId)->exists()
                 || Team::query()->where('id', $scopeId)->where('supervisor_id', $user->id)->exists();
             abort_unless($belongs, 422, 'کاربر عضو یا سرپرست تیم انتخاب‌شده نیست.');
