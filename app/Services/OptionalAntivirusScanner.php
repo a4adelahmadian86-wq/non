@@ -1,9 +1,9 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
 use RuntimeException;
-use Symfony\\Component\\Process\\Process;
+use Symfony\Component\Process\Process;
 
 class OptionalAntivirusScanner
 {
@@ -73,7 +73,7 @@ class OptionalAntivirusScanner
         $process->run();
 
         return $process->isSuccessful()
-            ? mb_substr(trim(strtok($process->getOutput(), "\\n") ?: ''), 0, 120)
+            ? mb_substr(trim(strtok($process->getOutput(), "\n") ?: ''), 0, 120)
             : null;
     }
 }
