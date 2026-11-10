@@ -11,6 +11,44 @@ class StorageTransferService
 {
     public function __construct(private readonly S3CompatibleAdapter $s3) {}
 
+    private function syncSourceReference(StorageManagedFile $file, string $disk): void
+    {
+        if (! $file->source_id || ! $file->source_type) return;
+        $reference = match ($file->source_type) {
+            UserFile::class => UserFile::find($file->source_id),
+            StoreProductFile::class => StoreProductFile::find($file->source_id),
+            ConversationMessage::class => ConversationMessage::find($file->source_id),
+            TicketMessage::class => TicketMessage::find($file->source_id),
+            default => null,
+        };
+        if (! $reference) return;
+
+        if ($reference instanceof UserFile) {
+            $reference->update([
+                'disk' => $disk, 'path' => $file->file_key, 'status' => 'remote',
+                'remote_path' => $file->file_key, 'local_expires_at' => null,
+                'remote_expires_at' => null, 'transferred_at' => now(),
+            ]);
+            return;
+        }
+        if ($reference instanceof StoreProductFile) {
+            $reference->update(['disk' => $disk, 'path' => $file->file_key]);
+            return;
+        }
+
+        $attachments = (array) ($reference->attachments ?? []);
+        $changed = false;
+        foreach ($attachments as &$attachment) {
+            if ((int) ($attachment['managed_file_id'] ?? 0) === (int) $file->id) {
+                $attachment['disk'] = $disk;
+                $attachment['path'] = $file->file_key;
+                $changed = true;
+            }
+        }
+        unset($attachment);
+        if ($changed) $reference->update(['attachments' => $attachments]);
+    }
+
     public function transferPending(int $limit = 100): int
     {
         $moved = 0;
@@ -54,9 +92,13 @@ class StorageTransferService
                 if (! hash_equals((string) $file->checksum, (string) hash_file('sha256', $temp))) {
                     throw new RuntimeException('بررسی checksum فایل مبدأ ناموفق بود.');
                 }
-                $file->update(['storage_volume_id' => $target->id, 'status' => 'active', 'metadata' => array_merge((array) $file->metadata, ['disk' => 'storage_volume:'.$target->id, 'transferred_at' => now()->toIso8601String()])]);
-                $target->increment('used_bytes', (int) $file->size_bytes);
-                $target->increment('object_count');
+                $newDisk = 'storage_volume:'.$target->id;
+                DB::transaction(function () use ($file, $target, $newDisk) {
+                    $file->update(['storage_volume_id' => $target->id, 'status' => 'active', 'metadata' => array_merge((array) $file->metadata, ['disk' => $newDisk, 'transferred_at' => now()->toIso8601String()])]);
+                    $this->syncSourceReference($file, $newDisk);
+                    $target->increment('used_bytes', (int) $file->size_bytes);
+                    $target->increment('object_count');
+                });
                 $source->delete($file->file_key);
                 $moved++;
             } catch (\Throwable $exception) {
