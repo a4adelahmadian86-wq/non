@@ -28,13 +28,14 @@
       </section>
     @endif
 
-    <div class="product-workflow {{ $isEdit ? 'has-media' : '' }}" aria-label="مراحل آماده‌سازی محصول">
+    <div class="product-workflow {{ $isEdit ? 'has-media' : 'has-upload' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
-      @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه و فایل</b><small>کاور و دارایی‌ها</small></a>@endif
-      <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۴' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
-      <a href="#product-ai-supervisor"><span>{{ $isEdit ? '۶' : '۵' }}</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
+      @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه</b><small>کاور و تصاویر</small></a>
+      @else<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
+      <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۵' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
+      <a href="#product-ai-supervisor"><span>۶</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
@@ -266,8 +267,17 @@
         </div>
       </section>
 
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ایجاد پیش‌نویس و ادامه تکمیل' }}</button><span>اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.</span></div>
+      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
     </form>
+    @if(!$isEdit && $product->type !== 'course')
+      <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">
+        <div class="product-editor-heading"><div><span>گام چهارم · فایل اصلی</span><h2 id="product-upload-step-title">انتخاب و بارگذاری فایل محصول</h2></div><span class="product-editor-step">مرحله بعد از ذخیره</span></div>
+        <p>برای اینکه فایل به همین محصول متصل شود و در فضای خصوصی قرنطینه، بررسی و پردازش شود، ابتدا پیش‌نویس محصول را ذخیره کنید. بلافاصله پس از ذخیره، به همین بخش در صفحه محصول منتقل می‌شوید و می‌توانید یک یا چند فایل را انتخاب کنید.</p>
+        <ul><li>انتخاب چند فایل یا کشیدن و رها کردن</li><li>بررسی نوع، ساختار، حجم و هش فایل پیش از تأیید</li><li>تعیین فایل اصلی و نگهداری خصوصی</li><li>نمایش وضعیت مطالعه، استخراج صفحات و تولید صوت پس از ذخیره</li></ul>
+        <button type="submit" form="productEditorForm" class="store-primary-btn">ذخیره پیش‌نویس و ورود به انتخاب فایل</button>
+      </section>
+    @endif
+
     @if($isEdit)
       <form id="productSupervisorReviewForm" method="post" action="{{ route('admin.store.ai-supervisor.review', $product) }}">@csrf</form>
     @endif
@@ -315,7 +325,7 @@
     @if($isEdit && $product->type==='course')
       <div class="store-panel product-next-step"><div><strong>مرحله بعد: طراحی برنامه آموزشی</strong><p>فصل‌ها، جلسات، ویدئوها، فایل‌های ضمیمه و تنظیمات گواهی را مدیریت کنید.</p></div><a class="store-primary-btn" href="{{ route('admin.store.course.edit',$product) }}">ورود به مدیریت دوره <i class="fa-solid fa-arrow-left"></i></a></div>
     @elseif($isEdit)
-      <div class="store-panel product-files-panel">
+      <div class="store-panel product-files-panel" id="product-files">
         <div class="product-editor-heading"><div><span>محتوای قابل دریافت</span><h2>فایل‌های محصول</h2></div><span class="product-editor-step">اسکن امنیتی الزامی</span></div>
         <p>فایل‌ها در فضای خصوصی نگهداری می‌شوند. فقط فایل اصلیِ اسکن‌شده و فعال پس از خرید قابل دریافت خواهد بود.</p>
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
@@ -346,18 +356,21 @@
           data-status-url-template="{{ route('admin.store.files.processing',[$product,'__FILE__']) }}">
           <input type="hidden" data-ingestion-csrf value="{{ csrf_token() }}">
           <input type="file" data-ingestion-input multiple hidden accept=".pdf,.zip,.tar,.tar.gz,.tar.bz2,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
+          <input type="file" data-ingestion-folder multiple webkitdirectory directory hidden>
           <div class="product-ingestion-dropzone" data-ingestion-pick tabindex="0" role="button" aria-label="انتخاب یا رها کردن فایل محصول">
             <span class="product-ingestion-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
             <strong>فایل را اینجا رها کنید یا برای انتخاب کلیک کنید</strong>
-            <span>می‌توانید فایل را روی هر قسمت از همین صفحه بکشید و رها کنید.</span>
-            <small>PDF، Word، Excel، PowerPoint، تصویر، صوت، ویدئو، ZIP، TAR، TAR.GZ، TAR.BZ2 و متن · حداکثر ۵۰ مگابایت برای هر فایل</small>
+            <span>می‌توانید فایل یا پوشه را روی هر قسمت از همین صفحه بکشید و رها کنید.</span>
+            <small>PDF، Word، Excel، PowerPoint، تصویر، صوت، ویدئو، ZIP، TAR و متن · حداکثر ۵۰ مگابایت برای هر فایل</small>
           </div>
+          <div class="product-ingestion-folder-action"><button type="button" class="store-outline-btn" data-ingestion-folder-pick>انتخاب یک پوشه</button><small>فایل‌های پوشه به‌صورت فهرست قابل بازبینی اضافه می‌شوند.</small></div>
           <label class="product-ingestion-primary"><input type="checkbox" data-ingestion-primary checked> اولین فایل، فایل اصلی محصول باشد</label>
           <div class="product-ingestion-queue" data-ingestion-queue aria-live="polite"></div>
-          <div class="product-ingestion-global-drop" data-ingestion-global hidden><span><i class="fa-solid fa-cloud-arrow-down"></i></span><b>فایل را رها کنید تا بررسی اولیه آغاز شود</b><small>هنوز چیزی ذخیره یا منتشر نمی‌شود.</small></div>
+          <div class="product-ingestion-global-drop" data-ingestion-global hidden><span><i class="fa-solid fa-cloud-arrow-down"></i></span><b>فایل را رها کنید تا پنجره بازبینی باز شود</b><small>هنوز چیزی ذخیره یا منتشر نمی‌شود.</small></div>
           <div class="product-ingestion-modal" data-ingestion-modal hidden role="dialog" aria-modal="true" aria-labelledby="ingestion-modal-title">
             <div class="product-ingestion-dialog">
               <div class="product-ingestion-modal-head"><span class="product-ingestion-icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>بررسی داخلی فراست</small><h3 id="ingestion-modal-title">گزارش بررسی فایل</h3><p data-ingestion-filename></p></div><button type="button" data-ingestion-close aria-label="بستن پنجره">×</button></div>
+              <div class="product-ingestion-selected" data-ingestion-selected aria-live="polite"></div>
               <div class="product-ingestion-timeline" data-ingestion-timeline>
                 <div data-step="received" class="is-done"><i>✓</i><span>دریافت فایل</span></div>
                 <div data-step="upload"><i>2</i><span>انتقال امن به قرنطینه</span></div>
@@ -374,7 +387,7 @@
               </div>
               <div class="product-ingestion-report" data-ingestion-report><p>در حال بررسی فایل در محیط سایت...</p></div>
               <p class="product-ingestion-security-note">این اسکنر داخلی فایل را اجرا نمی‌کند و سرویس ضدبدافزار ثالثی به کار نمی‌گیرد. نتیجه، بررسی ایستای ساختار و نشانه‌های خطر است و تضمین کشف همه بدافزارهای ناشناخته نیست.</p>
-              <div class="product-ingestion-actions"><button type="button" class="store-outline-btn" data-ingestion-cancel>رد فایل</button><button type="button" class="store-primary-btn" data-ingestion-confirm disabled>تأیید و ذخیره فایل</button></div>
+              <div class="product-ingestion-actions"><button type="button" class="store-outline-btn" data-ingestion-cancel>لغو انتخاب</button><button type="button" class="store-primary-btn" data-ingestion-confirm disabled>بررسی امن فایل</button></div>
             </div>
           </div>
         </section>
@@ -447,8 +460,11 @@
 .product-ingestion-progress{display:grid;gap:7px;margin:12px 0}.product-ingestion-progress[hidden]{display:none}.product-ingestion-progress>div{height:8px;overflow:hidden;border-radius:99px;background:#e8eef7}.product-ingestion-progress>div span{display:block;width:0;height:100%;border-radius:99px;background:linear-gradient(90deg,#3478d0,#27a477);transition:width .18s}.product-ingestion-progress small{font-size:.66rem;color:var(--st-muted)}
 @media(max-width:700px){.product-ingestion-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.product-ingestion-timeline .is-active i{animation:none}.product-ingestion-progress>div span{transition:none}}
-.product-ingestion-report{padding:15px;border:1px solid #e5ebf2;border-radius:14px;background:#fbfcfe;font-size:.76rem;line-height:1.9}.product-ingestion-report h4{margin:0 0 10px;font-size:.8rem}.product-ingestion-report p{margin:5px 0}.product-ingestion-processing-result{margin-top:12px;padding:12px;border:1px solid #cde8d8;border-radius:12px;background:#f2fbf5;color:#287449}.product-ingestion-processing-result strong{font-size:.75rem}.product-ingestion-processing-result p{font-size:.68rem;color:#4e755e}.product-ingestion-report-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.product-ingestion-report-grid>div{padding:9px;border-radius:10px;background:#fff;border:1px solid #e8edf3}.product-ingestion-report-grid small{display:block;color:var(--st-muted);font-size:.62rem}.product-ingestion-report-grid b{font-size:.76rem;overflow-wrap:anywhere}.product-ingestion-archive{max-height:170px;overflow:auto;margin:10px 0 0;padding:9px 28px 9px 9px;border:1px solid #e8edf3;border-radius:10px;background:#fff}.product-ingestion-archive li{font-size:.68rem;overflow-wrap:anywhere}.product-ingestion-warning{padding:9px 11px;margin-top:9px;border-radius:10px;background:#fff6e8;color:#8b5b16;font-size:.68rem}
-.product-ingestion-security-note{margin:12px 0;color:var(--st-muted);font-size:.64rem;line-height:1.9}.product-ingestion-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:12px;border-top:1px solid #edf0f4}.product-ingestion-actions button{min-height:42px}.product-ingestion-queue{display:grid;gap:7px}.product-ingestion-queue:empty{display:none}.product-ingestion-queue>div{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid var(--st-line);border-radius:10px;font-size:.68rem}
+.product-ingestion-report{padding:15px;border:1px solid #e5ebf2;border-radius:14px;background:#fbfcfe;font-size:.76rem;line-height:1.9}.product-ingestion-report h4{margin:0 0 10px;font-size:.8rem}.product-ingestion-report p{margin:5px 0}.product-ingestion-processing-result{margin-top:12px;padding:12px;border:1px solid #cde8d8;border-radius:12px;background:#f2fbf5;color:#287449}.product-ingestion-processing-result strong{font-size:.75rem}.product-ingestion-processing-result p{font-size:.68rem;color:#4e755e}.product-ingestion-report-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.product-ingestion-report-grid>div{padding:9px;border-radius:10px;background:#fff;border:1px solid #e8edf3}.product-ingestion-report-grid small{display:block;color:var(--st-muted);font-size:.62rem}.product-ingestion-report-grid b{font-size:.76rem;overflow-wrap:anywhere}.product-ingestion-archive{max-height:170px;overflow:auto;margin:10px 0 0;padding:9px 28px 9px 9px;border:1px solid #e8edf3;border-radius:10px;background:#fff}.product-ingestion-archive li{font-size:.68rem;overflow-wrap:anywhere}.product-ingestion-warning{padding:9px 11px;margin-top:9px;border-radius:10px;background:#fff6e8;color:#8b5b16;font-size:.68rem}.product-ingestion-info{padding:9px 11px;margin-top:9px;border-radius:10px;background:#eef5fc;color:#496784;font-size:.68rem}
+.product-ingestion-security-note{margin:12px 0;color:var(--st-muted);font-size:.64rem;line-height:1.9}.product-ingestion-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:12px;border-top:1px solid #edf0f4}.product-ingestion-actions button{min-height:42px}.product-ingestion-queue{display:grid;gap:7px}.product-ingestion-queue:empty{display:none}.product-ingestion-queue>div{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--st-line);border-radius:10px;font-size:.68rem}.product-ingestion-queue button{flex:0 0 auto;border:0;border-radius:8px;padding:6px 9px;background:#eef3fa;color:#405875;font:inherit;font-size:.63rem;cursor:pointer}.product-ingestion-queue button:hover{background:#e2ebf7}.product-ingestion-queue .product-ingestion-queue-error{border-color:#f0d6bd;background:#fffaf4;color:#8b5b16}
+.product-ingestion-folder-action{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-ingestion-folder-action small{font-size:.66rem;color:var(--st-muted)}
+.product-ingestion-selected{display:grid;gap:7px;margin:12px 0}.product-ingestion-selected:empty{display:none}.product-ingestion-selected>div{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:10px 12px;border:1px solid #e5ebf2;border-radius:11px;background:#fff}.product-ingestion-selected strong{font-size:.72rem;overflow-wrap:anywhere}.product-ingestion-selected small{font-size:.64rem;color:var(--st-muted)}.product-ingestion-selected button{grid-column:2;grid-row:1/3;align-self:center;border:0;border-radius:8px;padding:7px 9px;background:#f1f4f8;color:#526780;font:inherit;font-size:.63rem}
+.product-ingestion-archive-list{display:grid;gap:6px;max-height:260px;overflow:auto;margin-top:10px}.product-ingestion-archive-item{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;width:100%;padding:10px 12px;border:1px solid #e6edf5;border-radius:10px;background:#fff;text-align:right;color:var(--st-ink);font:inherit;cursor:pointer}.product-ingestion-archive-item:hover,.product-ingestion-archive-item[aria-expanded=true]{border-color:#9bb9e7;background:#f5f9ff}.product-ingestion-archive-item strong{font-size:.68rem;overflow-wrap:anywhere}.product-ingestion-archive-item small{font-size:.62rem;color:var(--st-muted)}.product-ingestion-archive-detail{padding:11px;border:1px solid #dce7f4;border-radius:10px;background:#f7faff;font-size:.67rem;line-height:1.9}.product-ingestion-archive-detail dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}.product-ingestion-archive-detail dl div{padding:7px;background:#fff;border-radius:8px}.product-ingestion-archive-detail dt{font-size:.6rem;color:var(--st-muted)}.product-ingestion-archive-detail dd{margin:2px 0 0;font-weight:800;overflow-wrap:anywhere}
 @keyframes ingestionFadeIn{from{opacity:0}to{opacity:1}}@keyframes ingestionDialogIn{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes ingestionPulse{50%{box-shadow:0 0 0 5px rgba(52,116,199,.12)}}
 @media(max-width:680px){.product-ingestion-dialog{padding:15px;border-radius:17px}.product-ingestion-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}.product-ingestion-report-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.product-ingestion-actions{flex-direction:column-reverse}.product-ingestion-actions button{width:100%}}
 
@@ -471,7 +487,7 @@
 .product-readiness>p{margin:12px 0 0;color:var(--st-muted);font-size:.65rem}
 @media(max-width:760px){.product-readiness-list{grid-template-columns:repeat(2,minmax(0,1fr))}.product-readiness{padding:14px}}
 
-.product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}.product-workflow.has-media{grid-template-columns:repeat(6,minmax(0,1fr))}
+.product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}.product-workflow.has-media,.product-workflow.has-upload{grid-template-columns:repeat(6,minmax(0,1fr))}
 .product-workflow a{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;align-items:center;gap:2px 10px;padding:13px;border:1px solid var(--st-line);border-radius:14px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,box-shadow .18s}
 .product-workflow a:hover,.product-workflow a:focus-visible{border-color:#9bb9e7;box-shadow:0 5px 18px rgba(35,91,170,.08);outline:none}
 .product-workflow a>span{grid-row:span 2;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#edf4ff;color:#2868c8;font-weight:900}
@@ -565,6 +581,7 @@
 .product-related-auto{padding:14px;border:1px solid var(--st-line);border-radius:12px;background:#fbfcfe}
 .product-related-auto>strong{font-size:.78rem}.product-related-auto>small{display:block;margin-top:8px;color:var(--st-muted);font-size:.66rem;line-height:1.8}
 .product-related-auto-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.product-related-auto-list span{padding:7px 10px;border:1px solid #dce7f4;border-radius:99px;background:#fff;font-size:.68rem;color:#405875}.product-related-auto-list small{margin-right:5px;color:#73849b}
+.product-upload-next-step{display:grid;gap:12px;margin-top:16px;padding:20px;border:1px solid #dce7f4;border-radius:16px;background:linear-gradient(145deg,#f7faff,#fff)}.product-upload-next-step p,.product-upload-next-step li{font-size:.74rem;line-height:1.9;color:#526780}.product-upload-next-step ul{margin:0;padding-right:20px}.product-upload-next-step button{justify-self:start;min-height:44px}
 .product-wizard-progress{display:grid;gap:4px;padding:12px 15px;border:1px solid #dce7f4;border-radius:12px;background:#f6f9fd;color:#405875}
 .product-wizard-progress strong{font-size:.76rem}.product-wizard-progress span{font-size:.66rem;color:var(--st-muted)}
 @media(max-width:650px){.product-wizard-panel{padding:13px}.product-wizard-actions button{flex:1}.product-workflow{overflow-x:auto}}
@@ -585,8 +602,17 @@
     deliveryPolicyField.hidden = !isDigitalFile;
     deliveryPolicySelect.disabled = !isDigitalFile;
   };
+  const uploadStep = document.querySelector('[data-product-upload-step]');
+  const uploadNav = document.querySelector('[data-product-upload-nav]');
+  const syncUploadStep = () => {
+    const isDigitalFile = typeSelect?.value === 'digital_file';
+    if (uploadStep) uploadStep.hidden = !isDigitalFile;
+    if (uploadNav) uploadNav.hidden = !isDigitalFile;
+  };
   typeSelect?.addEventListener('change', syncDeliveryPolicy);
+  typeSelect?.addEventListener('change', syncUploadStep);
   syncDeliveryPolicy();
+  syncUploadStep();
 
   const price = form.querySelector('[name="price_rials"]');
   const pricePreview = form.querySelector('[data-price-preview]');
