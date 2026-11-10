@@ -52,7 +52,7 @@ class AdminAccessCenterController extends Controller
         return view('admin.access-center', [
             'roles' => DB::table('farast_roles')->orderBy('scope_type')->orderBy('name')->get(),
             'permissions' => Permission::query()->orderBy('group')->orderBy('key')->get()->groupBy('group'),
-            'rolePermissions' => DB::table('farast_role_permissions')->get()->groupBy('role_id'),
+            'rolePermissions' => DB::table('farast_role_permissions')->get(),
             'users' => $users,
             'assignments' => $userIds
                 ? DB::table('farast_user_roles as ur')->join('farast_roles as r', 'r.id', '=', 'ur.role_id')
