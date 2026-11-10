@@ -5,7 +5,7 @@
 <title>{{ $title ?? 'فراست' }}</title>
 @stack('head')
 @php
-$isEditor=request()->is('editor'); $isAdmin=request()->is('admin*'); $isDashboard=request()->routeIs('dashboard')||request()->routeIs('admin.*')||request()->routeIs('support')||request()->routeIs('support.*')||request()->routeIs('platform.notifications')||request()->routeIs('platform.security'); $isAuthPage=request()->is('login*')||request()->is('register')||request()->is('forgot-password*');
+$isEditor=request()->is('editor'); $isAdmin=request()->is('admin*'); $isDashboard=request()->routeIs('dashboard')||request()->routeIs('admin.*')||request()->routeIs('support')||request()->routeIs('support.*')||request()->routeIs('platform.notifications')||request()->routeIs('platform.security')||request()->routeIs('messenger.*'); $isAuthPage=request()->is('login*')||request()->is('register')||request()->is('forgot-password*');
 $footerSocial=[]; $farastCapabilities=null;
 if($isEditor&&auth()->check()){$farastCapabilities=app(\App\Services\CapabilityService::class)->forUser(auth()->user());}
 if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::hasTable('site_settings')){$footerRaw=\App\Models\SiteSetting::read('social_links','[]');$decodedSocial=json_decode((string)$footerRaw,true);if(is_array($decodedSocial)){$footerSocial=array_values(array_filter($decodedSocial,static fn($item)=>is_array($item)&&filter_var($item['url']??'',FILTER_VALIDATE_URL)));}}}
@@ -49,6 +49,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
         <a href="{{ route('account.marketing-preferences.edit') }}"><i class="fa-solid fa-bullseye"></i><span>ترجیحات بازاریابی</span></a>
         <a href="{{ route('dashboard') }}"><i class="fa-solid fa-table-cells-large"></i><span>فضای من</span></a>
         <a href="{{ route('support') }}"><i class="fa-solid fa-headset"></i><span>پشتیبانی</span></a>
+        <a href="{{ route('messenger.index') }}"><i class="fa-solid fa-comments"></i><span>پیام‌رسان</span></a>
         @if(auth()->user()->isAdmin())<a href="/admin"><i class="fa-solid fa-user-shield"></i><span>مدیریت</span></a>@endif
       @else
         <a href="{{ route('login') }}"><i class="fa-solid fa-right-to-bracket"></i><span>ورود</span></a>
