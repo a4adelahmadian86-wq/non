@@ -91,6 +91,7 @@ class StorageBackupService
         ];
         $this->addDirectory($zip, storage_path('app/private'), 'private');
         $this->addDirectory($zip, storage_path('app/public'), 'public');
+        $this->addDirectory($zip, storage_path('app/remote-archive'), 'legacy-remote-archive');
         $this->addDatabaseDump($zip, $work);
         $managedCount = 0;
         StorageManagedFile::query()->where('status', 'active')->whereNotNull('storage_volume_id')->with('volume')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount) {
@@ -127,26 +128,28 @@ class StorageBackupService
                 '--port='.(string) ($config['port'] ?? '3306'),
                 '--user='.(string) ($config['username'] ?? ''),
                 '--single-transaction', '--routines', '--triggers',
+                '--result-file='.$dump,
                 (string) ($config['database'] ?? ''),
             ];
             $process = new Process($command, base_path(), ['MYSQL_PWD' => (string) ($config['password'] ?? '')]);
             $process->setTimeout(3600);
             $process->run();
             if (! $process->isSuccessful()) throw new RuntimeException('تهیه خروجی MySQL ناموفق بود: '.mb_substr($process->getErrorOutput(), 0, 500));
-            file_put_contents($dump, $process->getOutput());
+            if (! is_file($dump) || filesize($dump) === 0) throw new RuntimeException('فایل خروجی MySQL خالی یا ایجادنشده است.');
         } elseif ($driver === 'pgsql') {
             $command = [
                 'pg_dump', '--host='.(string) ($config['host'] ?? '127.0.0.1'),
                 '--port='.(string) ($config['port'] ?? '5432'),
                 '--username='.(string) ($config['username'] ?? ''),
                 '--format=plain', '--no-owner', '--no-privileges',
+                '--file='.$dump,
                 (string) ($config['database'] ?? ''),
             ];
             $process = new Process($command, base_path(), ['PGPASSWORD' => (string) ($config['password'] ?? '')]);
             $process->setTimeout(3600);
             $process->run();
             if (! $process->isSuccessful()) throw new RuntimeException('تهیه خروجی PostgreSQL ناموفق بود: '.mb_substr($process->getErrorOutput(), 0, 500));
-            file_put_contents($dump, $process->getOutput());
+            if (! is_file($dump) || filesize($dump) === 0) throw new RuntimeException('فایل خروجی PostgreSQL خالی یا ایجادنشده است.');
         } else {
             throw new RuntimeException('درایور پایگاه داده برای بکاپ پشتیبانی نشده است.');
         }
