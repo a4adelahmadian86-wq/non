@@ -29,6 +29,7 @@ class DashboardMessagingSummaryService
                 'conversation_participants' => ['user_id', 'conversation_id', 'archived_at', 'last_read_message_id'],
                 'conversation_messages' => ['conversation_id', 'user_id', 'deleted_at'],
                 'conversations' => ['id'],
+                'users' => ['id', 'role', 'organization_id'],
             ] as $table => $columns) {
                 if (! Schema::hasTable($table)) {
                     return ['available' => true, 'status' => 'unavailable', 'unread_messages' => null];
@@ -59,7 +60,12 @@ class DashboardMessagingSummaryService
                         ->whereColumn('scoped_participant.conversation_id', 'conversations.id')
                         ->where('scoped_user.role', '!=', User::ROLE_ADMIN)
                         ->where(function ($scope) use ($actor) {
-                            $scope->whereNull('scoped_user.organization_id')
+                            $scope->whereNotIn('scoped_user.role', [
+                                User::ROLE_ORGANIZATION_MANAGER,
+                                User::ROLE_TEAM_SUPERVISOR,
+                                User::ROLE_EMPLOYEE,
+                            ])
+                                ->orWhereNull('scoped_user.organization_id')
                                 ->orWhere('scoped_user.organization_id', '!=', $actor->organization_id);
                         });
                 });
