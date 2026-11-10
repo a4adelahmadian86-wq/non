@@ -63,6 +63,11 @@ class OptionalTwoFactorAuthenticationTest extends TestCase
 
         $this->get(route('platform.security'))->assertOk();
         $this->assertTrue(session('auth.two_factor_passed'));
+        $this->assertNotNull($user->fresh()->two_factor_last_counter);
+
+        $this->withSession(['auth.two_factor_passed' => false])
+            ->post(route('two-factor.challenge.verify'), ['code' => $code])
+            ->assertSessionHasErrors('code');
     }
 
     public function test_recovery_code_is_consumed_once_and_cannot_be_reused(): void
