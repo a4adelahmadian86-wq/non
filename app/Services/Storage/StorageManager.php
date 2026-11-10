@@ -1,0 +1,160 @@
+<?php
+
+namespace App\Services\Storage;
+
+use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use RuntimeException;
+
+class StorageManager
+{
+    public const CRITICAL = 'critical';
+    public const NON_CRITICAL = 'non_critical';
+
+    public function __construct(private readonly S3CompatibleAdapter $s3) {}
+
+    public function storeUploadedFile(
+        UploadedFile $file,
+        string $classification,
+        string $sourceModule,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        ?int $productId = null,
+        string $visibility = 'private'
+    ): array {
+        $classification = $classification === self::CRITICAL ? self::CRITICAL : self::NON_CRITICAL;
+        $drive = $classification === self::CRITICAL ? 'iran_primary' : 'foreign_primary';
+        $key = trim($sourceModule, '/').'/'.now()->format('Y/m').'/'.Str::uuid().'-'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.strtolower($file->getClientOriginalExtension());
+        $checksum = hash_file('sha256', $file->getRealPath());
+        $volume = $this->selectVolume($drive, (int) $file->getSize());
+
+        if ($volume) {
+            try {
+                $this->writeToVolume($volume, $key, $file->getRealPath());
+                return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
+            } catch (\Throwable $exception) {
+                $volume->forceFill(['status' => 'error', 'last_checked_at' => now(), 'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($exception->getMessage(), 0, 400)])])->save();
+            }
+        }
+
+        // Safe local staging keeps the upload available while a target volume is unavailable.
+        // Critical content is never routed to a foreign volume; non-critical content waits for foreign replication.
+        if (! Storage::disk('private')->putFileAs(dirname($key), $file, basename($key))) {
+            throw new RuntimeException('ذخیره موقت فایل در فضای امن محلی ناموفق بود.');
+        }
+        return $this->register(null, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'pending_transfer', [
+            'staging_disk' => 'private',
+            'target_drive' => $drive,
+        ]);
+    }
+
+    public function exists(string $disk, string $path): bool
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $volume = StorageVolume::find((int) substr($disk, 15));
+            return $volume ? $this->s3->exists($volume, $path) : false;
+        }
+        return Storage::disk($disk ?: 'private')->exists($path);
+    }
+
+    public function get(string $disk, string $path): string
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+            return $this->s3->getContents($volume, $path);
+        }
+        return Storage::disk($disk ?: 'private')->get($path);
+    }
+
+    public function delete(string $disk, string $path): void
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $volume = StorageVolume::find((int) substr($disk, 15));
+            if ($volume) $this->s3->delete($volume, $path);
+            return;
+        }
+        Storage::disk($disk ?: 'private')->delete($path);
+    }
+
+    public function volumeDisk(StorageVolume $volume): string
+    {
+        return 'storage_volume:'.$volume->id;
+    }
+
+    private function selectVolume(string $drive, int $bytes): ?StorageVolume
+    {
+        return StorageVolume::query()
+            ->where('drive_key', $drive)
+            ->where('is_active', true)
+            ->where('status', 'healthy')
+            ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$bytes]))
+            ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $bytes))
+            ->orderBy('priority')
+            ->first();
+    }
+
+    private function writeToVolume(StorageVolume $volume, string $key, string $localPath): void
+    {
+        if ($volume->driver === 'local') {
+            $root = storage_path('app/storage-volumes/'.$volume->id);
+            $target = $root.'/'.$key;
+            if (! is_dir(dirname($target))) mkdir(dirname($target), 0775, true);
+            if (! copy($localPath, $target)) throw new RuntimeException('کپی فایل روی فضای محلی هاست ناموفق بود.');
+            return;
+        }
+        if ($volume->driver !== 's3') throw new RuntimeException('آداپتور این نوع سرویس هنوز نصب نشده است.');
+        $this->s3->putFile($volume, $key, $localPath);
+    }
+
+    private function register(
+        ?StorageVolume $volume,
+        string $key,
+        UploadedFile $file,
+        string $checksum,
+        string $classification,
+        string $sourceModule,
+        ?string $sourceType,
+        ?int $sourceId,
+        ?int $productId,
+        string $visibility,
+        string $status,
+        array $metadata = []
+    ): array {
+        $disk = $volume ? $this->volumeDisk($volume) : 'private';
+        $record = StorageManagedFile::create([
+            'storage_volume_id' => $volume?->id,
+            'drive_key' => $classification === self::CRITICAL ? 'iran_primary' : 'foreign_primary',
+            'file_key' => $key,
+            'original_name' => $file->getClientOriginalName(),
+            'mime' => $file->getMimeType(),
+            'size_bytes' => (int) $file->getSize(),
+            'checksum' => $checksum,
+            'classification' => $classification,
+            'source_module' => $sourceModule,
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'product_id' => $productId,
+            'visibility' => $visibility,
+            'status' => $status,
+            'metadata' => array_merge($metadata, ['disk' => $disk, 'original_extension' => $file->getClientOriginalExtension()]),
+        ]);
+
+        if ($volume) {
+            $volume->increment('used_bytes', (int) $file->getSize());
+        }
+
+        return [
+            'managed_file_id' => $record->id,
+            'disk' => $disk,
+            'path' => $key,
+            'volume_id' => $volume?->id,
+            'size_bytes' => (int) $file->getSize(),
+            'mime' => $file->getMimeType(),
+            'sha256' => $checksum,
+            'status' => $status,
+        ];
+    }
+}
