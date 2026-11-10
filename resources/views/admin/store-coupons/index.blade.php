@@ -20,6 +20,7 @@
         <article><span>در انتظار استفاده</span><strong>{{ number_format($stats['offered']) }}</strong><small>هنوز معتبر و قابل استفاده</small></article>
         <article><span>منقضی‌شده</span><strong>{{ number_format($stats['expired']) }}</strong><small>مهلت ۴۸ ساعته پایان یافته</small></article>
         <article><span>نمایش پیشنهادها</span><strong>{{ number_format($stats['offer_views']) }}</strong><small>نمایش یکتای دقیقه‌ای در {{ $stats['measurement_window_days'] }} روز اخیر</small></article>
+        <article><span>تعامل با پیشنهاد</span><strong>{{ number_format($stats['offer_clicks']) }}</strong><small>کپی کد اختصاصی · نرخ تعامل {{ number_format($stats['view_to_click_rate'], 1) }}٪</small></article>
         <article><span>نرخ تبدیل پیشنهاد</span><strong>{{ number_format($stats['conversion_rate'], 1) }}٪</strong><small>استفاده موفق نسبت به کل پیشنهادهای صادرشده</small></article>
         <article><span>تبدیل نمایش به خرید</span><strong>{{ number_format($stats['view_to_redemption_rate'], 1) }}٪</strong><small>مصرف موفق نسبت به نمایش‌های ثبت‌شده در همین بازه</small></article>
         <article><span>هزینه تخفیف مصرف‌شده</span><strong>{{ number_format((int) floor($stats['discount_cost_rials'] / 10)) }}</strong><small>تومان · مجموع ارزش کدهای مصرف‌شده</small></article>
