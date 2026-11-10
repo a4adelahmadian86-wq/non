@@ -24,7 +24,7 @@ class MessengerController extends Controller
             }])
             ->orderByDesc('last_message_at')->orderByDesc('id')->paginate(30);
 
-        $users = User::query()->where('id', '!=', $userId)->orderBy('name')->limit(200)->get(['id', 'name', 'email']);
+        $users = User::query()->where('id', '!=', $userId)->where('is_blocked', false)->orderBy('name')->limit(200)->get(['id', 'name', 'email']);
 
         return view('messenger.index', compact('conversations', 'users'));
     }
@@ -41,6 +41,7 @@ class MessengerController extends Controller
         $ids = collect($data['participant_ids'])->map(fn ($id) => (int) $id)
             ->reject(fn ($id) => $id === (int) $request->user()->id)->unique()->sort()->values();
         abort_if($ids->isEmpty(), 422, 'حداقل یک مخاطب دیگر انتخاب کنید.');
+        abort_unless(User::query()->whereIn('id', $ids)->where('is_blocked', false)->count() === $ids->count(), 422, 'یکی از مخاطبان انتخاب‌شده در دسترس نیست.');
         abort_if($data['type'] === 'group' && blank($data['title']), 422, 'عنوان گروه الزامی است.');
 
         $allIds = $ids->push((int) $request->user()->id)->unique()->sort()->values();
@@ -113,12 +114,34 @@ class MessengerController extends Controller
         $attachments = [];
         foreach ($files as $file) {
             $path = $file->store('messenger/'.$conversation->id, 'private');
+            try {
+                $inspection = app(\\App\\Services\\UploadSecurityService::class)->inspect(
+                    $path,
+                    (string) $file->getMimeType(),
+                    10 * 1024 * 1024,
+                );
+                if (empty($inspection['safe'])) {
+                    throw new \\RuntimeException('فایل از بررسی امنیتی داخلی عبور نکرد.');
+                }
+            } catch (\\Throwable $exception) {
+                Storage::disk('private')->delete($path);
+                foreach ($attachments as $stored) {
+                    Storage::disk('private')->delete($stored['path']);
+                }
+                throw ValidationException::withMessages([
+                    'attachments' => ['فایل پیوست توسط بررسی امنیتی داخلی پذیرفته نشد: '.$exception->getMessage()],
+                ]);
+            }
+
             $attachments[] = [
                 'path' => $path,
                 'disk' => 'private',
                 'name' => Str::limit(basename($file->getClientOriginalName()), 180, ''),
                 'size' => (int) $file->getSize(),
-                'mime' => (string) $file->getMimeType(),
+                'mime' => (string) ($inspection['mime'] ?? $file->getMimeType()),
+                'sha256' => (string) ($inspection['checksum'] ?? ''),
+                'scan' => (string) ($inspection['scan'] ?? 'farast_static_v1'),
+                'risk_level' => (string) ($inspection['risk_level'] ?? 'unknown'),
             ];
         }
 
