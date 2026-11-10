@@ -7,6 +7,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        Permission::firstOrCreate(
+            ['key' => 'store.security_scan'],
+            ['label' => 'درخواست اسکن آنتی‌ویروس فایل محصول', 'group' => 'store']
+        );
+
         Schema::table('store_product_ingestions', function (Blueprint $table) {
             $table->boolean('antivirus_requested')->default(false);
             $table->string('antivirus_status', 24)->nullable();
@@ -18,6 +23,8 @@ return new class extends Migration {
 
     public function down(): void
     {
+        Permission::query()->where('key', 'store.security_scan')->delete();
+
         Schema::table('store_product_ingestions', function (Blueprint $table) {
             $table->dropColumn([
                 'antivirus_requested',
