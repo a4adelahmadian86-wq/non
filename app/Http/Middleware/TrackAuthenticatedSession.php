@@ -1,15 +1,15 @@
 <?php
 
-namespace App\\Http\\Middleware;
+namespace App\Http\Middleware;
 
-use App\\Services\\NotificationService;
+use App\Services\NotificationService;
 use Closure;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Auth;
-use Illuminate\\Support\\Facades\\Crypt;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Str;
-use Symfony\\Component\\HttpFoundation\\Response;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class TrackAuthenticatedSession
 {
@@ -63,7 +63,7 @@ class TrackAuthenticatedSession
             return redirect()->route('login')->with('warning', 'این نشست از بخش امنیت حساب خارج شده است. دوباره وارد شوید.');
         }
 
-        if ($tracked && \Illuminate\\Support\\Carbon::parse($tracked->last_activity)->lt(now()->subYears(3))) {
+        if ($tracked && \Illuminate\Support\Carbon::parse($tracked->last_activity)->lt(now()->subYears(3))) {
             DB::table('farast_account_sessions')->where('id', $tracked->id)->update([
                 'revoked_at' => now(),
                 'updated_at' => now(),
@@ -77,7 +77,7 @@ class TrackAuthenticatedSession
                     'به دلیل بیش از سه سال عدم مراجعه، این نشست بسته شد. برای ادامه دوباره وارد شوید.',
                     ['url' => route('login')],
                 );
-            } catch (\\Throwable) {
+            } catch (\Throwable) {
             }
 
             Auth::logout();
@@ -132,7 +132,7 @@ class TrackAuthenticatedSession
                         'یک نشست جدید با دستگاه یا نشانی شبکه متفاوت برای حساب شما ثبت شد. اگر این ورود متعلق به شما نیست، آن را از مرکز نشست‌ها ببندید.',
                         ['url' => route('platform.security')],
                     );
-                } catch (\\Throwable) {
+                } catch (\Throwable) {
                 }
             }
 
@@ -177,10 +177,10 @@ class TrackAuthenticatedSession
 
     private function deviceLabel(string $agent): string
     {
-        $browser = preg_match('/Edg\\//i', $agent) ? 'Edge'
-            : (preg_match('/Firefox\\//i', $agent) ? 'Firefox'
-            : (preg_match('/Chrome\\//i', $agent) ? 'Chrome'
-            : (preg_match('/Safari\\//i', $agent) ? 'Safari' : 'مرورگر دیگر')));
+        $browser = preg_match('/Edg\//i', $agent) ? 'Edge'
+            : (preg_match('/Firefox\//i', $agent) ? 'Firefox'
+            : (preg_match('/Chrome\//i', $agent) ? 'Chrome'
+            : (preg_match('/Safari\//i', $agent) ? 'Safari' : 'مرورگر دیگر')));
         $platform = preg_match('/Windows/i', $agent) ? 'Windows'
             : (preg_match('/Android/i', $agent) ? 'Android'
             : (preg_match('/iPhone|iPad|iOS/i', $agent) ? 'iOS'
