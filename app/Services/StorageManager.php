@@ -64,13 +64,19 @@ class StorageManager
             }
             $checksum = hash_final($hash);
             rewind($temporary);
-            $this->persist($path, $temporary, $size, $checksum, $config);
+            $mime = $config->get('mimetype');
+            if (! is_string($mime) || $mime === '') {
+                $sample = fread($temporary, 8192) ?: '';
+                $mime = (new \\finfo(FILEINFO_MIME_TYPE))->buffer($sample) ?: 'application/octet-stream';
+                rewind($temporary);
+            }
+            $this->persist($path, $temporary, $size, $checksum, $config, $mime);
         } finally {
             fclose($temporary);
         }
     }
 
-    private function persist(string $logicalPath, $stream, int $size, string $checksum, Config $config): void
+    private function persist(string $logicalPath, $stream, int $size, string $checksum, Config $config, string $mime): void
     {
         $existing = StorageManagedFile::query()->where('logical_path', $logicalPath)->first();
         $classification = $this->classificationFor($logicalPath, $config);
@@ -82,7 +88,7 @@ class StorageManager
         try {
             $disk->writeStream($objectKey, $stream, [
                 'visibility' => 'private',
-                'mimetype' => $config->get('mimetype'),
+                'mimetype' => $mime,
             ]);
 
             $actualSize = (int) $disk->size($objectKey);
@@ -127,7 +133,7 @@ class StorageManager
                         'logical_path' => $logicalPath,
                         'file_key' => $objectKey,
                         'original_name' => (string) ($config->get('farast_original_name') ?: basename($logicalPath)),
-                        'mime' => $config->get('mimetype'),
+                        'mime' => $mime,
                         'size_bytes' => $size,
                         'checksum' => $checksum,
                         'classification' => $classification,
