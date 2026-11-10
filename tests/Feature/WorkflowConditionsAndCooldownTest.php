@@ -36,6 +36,23 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ], $options));
     }
 
+    public function test_numeric_conditions_compare_large_rial_values_without_float_rounding(): void
+    {
+        $evaluator = app(\App\Services\WorkflowConditionEvaluator::class);
+
+        $this->assertTrue($evaluator->matches([
+            ['field' => 'amount_rials', 'operator' => 'greater_than', 'value' => '9007199254740992'],
+        ], ['amount_rials' => 9007199254740993]));
+
+        $this->assertTrue($evaluator->matches([
+            ['field' => 'amount_rials', 'operator' => 'less_than', 'value' => '9007199254740993'],
+        ], ['amount_rials' => 9007199254740992]));
+
+        $this->assertFalse($evaluator->matches([
+            ['field' => 'amount_rials', 'operator' => 'greater_than', 'value' => '9007199254740992.5'],
+        ], ['amount_rials' => 9007199254740993]));
+    }
+
     public function test_dispatch_rejects_unapproved_context_fields_and_non_integer_user_ids(): void
     {
         $owner = $this->owner('09140000209');
