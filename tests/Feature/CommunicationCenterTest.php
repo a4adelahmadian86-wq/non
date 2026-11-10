@@ -204,4 +204,22 @@ class CommunicationCenterTest extends TestCase
 
         $this->actingAs($customer)->get(route('admin.communications.index'))->assertForbidden();
     }
+    public function test_customer_ticket_cards_link_to_their_own_customer_facing_ticket_page(): void
+    {
+        $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'تیکت قابل مشاهده مشتری',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('platform.communications'))
+            ->assertOk()
+            ->assertSee(route('support.show', $ticket), false)
+            ->assertDontSee(route('admin.support.management', ['ticket' => $ticket->id]), false);
+    }
+
 }
