@@ -138,7 +138,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('/store-coupons/{coupon}/toggle', [\App\Http\Controllers\AdminStoreCouponController::class, 'toggle'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.toggle');
     Route::post('/store-coupons/assignments/{assignment}/revoke', [\App\Http\Controllers\AdminStoreCouponController::class, 'revokeAssignment'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.assignments.revoke');
 
-    // CRM marketing: saved segments and explicitly dispatched in-app campaigns.
+    // CRM marketing: campaign workspace plus scoped JSON actions.
+    Route::get('/crm/marketing', [CrmMarketingController::class, 'dashboard'])->middleware('admin.section:marketing')->name('crm.marketing.index');
     Route::get('/crm/marketing/segments', [CrmMarketingController::class, 'segments'])->middleware('admin.section:marketing')->name('crm.marketing.segments.index');
     Route::post('/crm/marketing/segments', [CrmMarketingController::class, 'storeSegment'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('crm.marketing.segments.store');
     Route::post('/crm/marketing/audience/preview', [CrmMarketingController::class, 'previewAudience'])->middleware('admin.section:marketing')->name('crm.marketing.audience.preview');
