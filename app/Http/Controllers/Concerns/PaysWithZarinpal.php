@@ -131,7 +131,7 @@ trait PaysWithZarinpal
                 $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
                     $product = $item->product;
-                    if (! $product || ! app(\\App\\Services\\StoreCartService::class)->isPurchasable($product)) {
+                    if (! $product || ! app(\App\Services\StoreCartService::class)->isPurchasable($product)) {
                         throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
                     }
 
