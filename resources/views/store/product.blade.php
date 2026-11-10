@@ -130,7 +130,9 @@
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
             <div class="course-public-meta">
               @if($product->course->instructor_name)<span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>@endif
-              @php($courseLevelLabels = ['beginner' => 'مقدماتی', 'intermediate' => 'متوسط', 'advanced' => 'پیشرفته', 'all' => 'همه سطوح'])
+              @php
+                $courseLevelLabels = ['beginner' => 'مقدماتی', 'intermediate' => 'متوسط', 'advanced' => 'پیشرفته', 'all' => 'همه سطوح'];
+              @endphp
               @if(isset($courseLevelLabels[$product->course->level]))
                 <span><i class="fa-solid fa-signal"></i> سطح: {{ $courseLevelLabels[$product->course->level] }}</span>
               @endif
