@@ -98,8 +98,34 @@ class ProductLifecycleHealthService
                 ->count();
         }
 
+        $documentsWithSourceBindingViolations = 0;
+        $documentsWithUntrustedSourceFiles = 0;
+        if (Schema::hasTable('store_product_documents') && Schema::hasTable('store_product_files')) {
+            $documentsWithSourceBindingViolations = DB::table('store_product_documents as documents')
+                ->leftJoin('store_product_files as files', 'files.id', '=', 'documents.product_file_id')
+                ->where(function ($query): void {
+                    $query->whereNull('files.id')
+                        ->orWhereColumn('files.product_id', '<>', 'documents.product_id')
+                        ->orWhereNull('files.sha256')
+                        ->orWhereColumn('files.sha256', '<>', 'documents.source_sha256');
+                })
+                ->count('documents.id');
+
+            $documentsWithUntrustedSourceFiles = DB::table('store_product_documents as documents')
+                ->join('store_product_files as files', 'files.id', '=', 'documents.product_file_id')
+                ->where(function ($query): void {
+                    $query->where('files.disk', '<>', 'private')
+                        ->orWhere('files.is_active', false)
+                        ->orWhere('files.scan_status', '<>', 'clean')
+                        ->orWhereNotIn('files.purpose', ['product_download', 'lesson_resource']);
+                })
+                ->count('documents.id');
+        }
+
         return [
             'product_counts' => $productCounts,
+            'documents_with_source_binding_violations' => $documentsWithSourceBindingViolations,
+            'documents_with_untrusted_source_files' => $documentsWithUntrustedSourceFiles,
             'published_missing_safe_primary_file' => $missingSafePrimaryFile,
             'published_courses_without_publishable_lessons' => $coursesWithoutPublishableLessons,
             'reader_only_without_ready_document' => $readerOnlyWithoutReadyDocument,
