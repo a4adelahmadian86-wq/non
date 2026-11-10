@@ -379,8 +379,9 @@
                             <small>{{ number_format($storageHealth['transfer_errors'] ?? 0) }} خطای انتقال · {{ number_format($storageHealth['failed_backups_24h'] ?? 0) }} بکاپ ناموفق در ۲۴ ساعت</small>
                             @if(filled($storageHealth['last_successful_backup_at'] ?? null))
                                 <small>آخرین بکاپ موفق: {{ \Illuminate\Support\Carbon::parse($storageHealth['last_successful_backup_at'])->format('Y/m/d H:i') }}</small>
-                            @else
-                                <small>هنوز بکاپ موفقی در سابقه ثبت نشده است.</small>
+                            @endif
+                            @if($storageHealth['backup_stale'] ?? false)
+                                <small>در ۷ روز اخیر بکاپ موفقی ثبت نشده است.</small>
                             @endif
                         @else
                             <small>آمار از جداول عملیاتی ذخیره‌سازی قابل دریافت نیست؛ صفر فرض نشده است.</small>
