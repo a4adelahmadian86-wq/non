@@ -202,7 +202,7 @@ class GlobalAssistantVoiceTest extends TestCase
             $request->url() === 'https://voice.example.test/v1/chat/completions'
             && $request->hasHeader('Authorization', 'Bearer shared-render-token')
             && ($request->data()['stream'] ?? false) === true
-            && ($request->data()['max_tokens'] ?? null) === 220
+            && ($request->data()['max_tokens'] ?? null) === 500
             && str_contains((string) data_get($request->data(), 'messages.0.content', ''), 'حداکثر حدود ۷۰ کلمه')
         );
     }

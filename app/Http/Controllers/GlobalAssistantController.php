@@ -659,7 +659,7 @@ class GlobalAssistantController extends Controller
                                 'model' => 'farast-general',
                                 'messages' => $messages,
                                 'temperature' => 0.2,
-                                'max_tokens' => 220,
+                                'max_tokens' => 500,
                             ]);
                         $gatewayReply = $gatewayResponse->json('choices.0.message.content');
                         if ($gatewayResponse->successful() && is_string($gatewayReply) && trim($gatewayReply) !== '') {
@@ -687,7 +687,7 @@ class GlobalAssistantController extends Controller
                         'model' => $model,
                         'messages' => $messages,
                         'temperature' => 0.2,
-                        'max_completion_tokens' => 220,
+                        'max_completion_tokens' => 500,
                     ]);
                 if (! $response->successful()) {
                     // A configured but inaccessible provider (for example HTTP 403 in a restricted
