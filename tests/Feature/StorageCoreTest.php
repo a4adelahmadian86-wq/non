@@ -81,6 +81,50 @@ class StorageCoreTest extends TestCase
         ]);
     }
 
+    public function test_managed_deletes_are_deferred_until_backup_snapshot_finishes(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+        $storage = app(StorageManager::class);
+        $stored = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('deferred.txt', 'keep-until-snapshot'),
+            StorageManager::CRITICAL,
+            'test'
+        );
+        $lock = StorageBackupRun::create([
+            'backup_type' => 'weekly', 'source_name' => 'snapshot_lock',
+            'status' => 'running', 'started_at' => now(),
+        ]);
+
+        $storage->delete($stored['disk'], $stored['path']);
+        $this->assertTrue($storage->exists($stored['disk'], $stored['path']));
+        $this->assertDatabaseHas('storage_managed_files', ['id' => $stored['managed_file_id'], 'status' => 'delete_pending']);
+
+        $lock->update(['status' => 'completed', 'completed_at' => now()]);
+        $this->assertSame(1, $storage->cleanupDeferredDeletes());
+        $this->assertFalse($storage->exists($stored['disk'], $stored['path']));
+        $volume->refresh();
+        $this->assertSame(0, $volume->used_bytes);
+        $this->assertSame(0, $volume->object_count);
+    }
+
+    public function test_deleting_a_staged_file_does_not_require_a_volume_relation(): void
+    {
+        $storage = app(StorageManager::class);
+        $stored = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('staged-delete.txt', 'staged'),
+            StorageManager::NON_CRITICAL,
+            'test'
+        );
+
+        $storage->delete($stored['disk'], $stored['path']);
+        $this->assertFalse($storage->exists($stored['disk'], $stored['path']));
+        $this->assertDatabaseHas('storage_managed_files', ['id' => $stored['managed_file_id'], 'status' => 'deleted']);
+    }
+
     public function test_deleting_a_managed_file_releases_volume_usage_and_object_count(): void
     {
         $volume = StorageVolume::create([
