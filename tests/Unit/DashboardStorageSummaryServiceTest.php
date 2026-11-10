@@ -11,6 +11,16 @@ class DashboardStorageSummaryServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_snapshot_does_not_call_an_empty_storage_installation_healthy(): void
+    {
+        $snapshot = app(DashboardStorageSummaryService::class)->snapshot();
+
+        $this->assertTrue($snapshot['available']);
+        $this->assertSame('unconfigured', $snapshot['status']);
+        $this->assertSame(0, $snapshot['active_volumes']);
+        $this->assertSame(0, $snapshot['healthy_volumes']);
+    }
+
     public function test_snapshot_reports_real_volume_transfer_and_backup_health(): void
     {
         $healthyVolume = DB::table('storage_volumes')->insertGetId([
