@@ -22,7 +22,25 @@
         <article><span>نرخ تبدیل پیشنهاد</span><strong>{{ number_format($stats['conversion_rate'], 1) }}٪</strong><small>استفاده موفق نسبت به کل پیشنهادها</small></article>
         <article><span>هزینه تخفیف مصرف‌شده</span><strong>{{ number_format((int) floor($stats['discount_cost_rials'] / 10)) }}</strong><small>تومان · مجموع ارزش کدهای مصرف‌شده</small></article>
         <article><span>فروش منتسب به پیشنهاد</span><strong>{{ number_format((int) floor($stats['attributed_revenue_rials'] / 10)) }}</strong><small>تومان · {{ number_format($stats['attributed_orders']) }} سفارش پرداخت‌شده متصل به کد</small></article>
+        <article><span>محصولات منتشرشده بدون بهای تمام‌شده</span><strong>{{ number_format($stats['products_missing_cost']) }}</strong><small>برای این محصولات پیشنهاد خودکار صادر نمی‌شود</small></article>
     </div>
+
+    @if($canManageGlobalCoupons)
+    <section class="coupon-panel">
+        <div class="coupon-panel-head"><div><h2>قواعد اجرایی موتور پیشنهاد هوشمند</h2><p>این تنظیمات مستقیماً روی تحلیل سیگنال‌ها، سقف تخفیف، فاصله پیشنهادها و نگهداری داده اثر می‌گذارند.</p></div></div>
+        <form method="post" action="{{ route('admin.store-coupons.settings') }}" class="coupon-create-form">
+            @csrf @method('PUT')
+            <label>حداقل امتیاز لازم<input type="number" name="score_threshold" min="1" max="12" value="{{ old('score_threshold',$settings['score_threshold']) }}" required></label>
+            <label>پنجره تحلیل (روز)<input type="number" name="signal_window_days" min="1" max="60" value="{{ old('signal_window_days',$settings['signal_window_days']) }}" required></label>
+            <label>فاصله پیشنهادها (روز)<input type="number" name="cooldown_days" min="1" max="90" value="{{ old('cooldown_days',$settings['cooldown_days']) }}" required></label>
+            <label>اعتبار پیشنهاد (ساعت)<input type="number" name="offer_valid_hours" min="1" max="168" value="{{ old('offer_valid_hours',$settings['offer_valid_hours']) }}" required></label>
+            <label>حداکثر تخفیف خودکار (%)<input type="number" name="max_discount_percent" min="1" max="50" value="{{ old('max_discount_percent',$settings['max_discount_percent']) }}" required></label>
+            <label>تشخیص سبد رهاشده پس از (ساعت)<input type="number" name="abandonment_hours" min="1" max="72" value="{{ old('abandonment_hours',$settings['abandonment_hours']) }}" required></label>
+            <label>نگهداری سیگنال‌ها (روز)<input type="number" name="retention_days" min="7" max="180" value="{{ old('retention_days',$settings['retention_days']) }}" required></label>
+            <button type="submit">ذخیره قواعد موتور</button>
+        </form>
+    </section>
+    @endif
 
     <section class="coupon-panel">
         <div class="coupon-panel-head">
@@ -79,6 +97,7 @@
         <div class="coupon-pagination">{{ $assignments->links() }}</div>
     </section>
 
+    @if($canManageGlobalCoupons)
     <section class="coupon-panel">
         <div class="coupon-panel-head"><div><h2>ساخت کد تخفیف عمومی</h2><p>برای کمپین‌ها یا استفاده عمومی؛ کدهای هوشمند اختصاصی از این فرم قابل دستکاری نیستند.</p></div></div>
         <form method="post" action="{{ route('admin.store-coupons.store') }}" class="coupon-create-form">
@@ -94,7 +113,9 @@
             <button type="submit">ایجاد کد تخفیف</button>
         </form>
     </section>
+    @endif
 
+    @if($canManageGlobalCoupons)
     <section class="coupon-panel">
         <div class="coupon-panel-head"><div><h2>کدهای عمومی اخیر</h2><p>کدهای عمومی با سابقه مصرف و ظرفیت قابل مشاهده هستند.</p></div></div>
         <div class="coupon-table-wrap">
@@ -122,6 +143,9 @@
             </table>
         </div>
     </section>
+    @else
+    <section class="coupon-panel"><p>مدیریت کدهای عمومی و تنظیمات سراسری فقط در دامنه مدیریتی سراسری فعال است؛ پیشنهادهای اختصاصی در محدوده مجاز شما نمایش داده می‌شوند.</p></section>
+    @endif
 </section>
 @endsection
 
