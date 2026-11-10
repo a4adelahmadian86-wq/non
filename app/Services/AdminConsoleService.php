@@ -203,7 +203,7 @@ class AdminConsoleService
         if ($scope === self::SCOPE_ORGANIZATION) {
             $ids = $user->organization_id ? [(int) $user->organization_id] : [];
         } elseif ($scope === self::SCOPE_TEAM) {
-            $teamIds = $this->visibleTeamIds($user) ?? [];
+            $teamIds = $this->visibleTeamIds($user, $permission) ?? [];
             $ids = Team::query()->whereIn('id', $teamIds)->distinct()->pluck('organization_id')->map(fn ($id) => (int) $id)->all();
         } else {
             return [];
@@ -216,7 +216,7 @@ class AdminConsoleService
 
         // Preserve the permitted team subset when checking an organization
         // container; a team-scoped grant must not be promoted to whole-org access.
-        $permittedTeamIds = $this->visibleTeamIds($user) ?? [];
+        $permittedTeamIds = $this->visibleTeamIds($user, $permission) ?? [];
         $teamsByOrganization = Team::query()
             ->whereIn('id', $permittedTeamIds)
             ->get(['id', 'organization_id'])
