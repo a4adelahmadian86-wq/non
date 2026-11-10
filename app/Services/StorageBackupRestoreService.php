@@ -92,8 +92,10 @@ class StorageBackupRestoreService
                 $fileStream = fopen($source, 'rb');
                 try {
                     $ok = $target->put($logicalPath, $fileStream, [
-                        'farast_classification' => ($item['drive_key'] ?? '') === 'foreign_primary' ? 'non_critical' : 'critical',
+                        'farast_classification' => ($item['classification'] ?? (($item['drive_key'] ?? '') === 'foreign_primary' ? 'non_critical' : 'critical')),
                         'farast_source_type' => $item['source_type'] ?? 'restored_file',
+                        'farast_original_name' => $item['original_name'] ?? basename($logicalPath),
+                        'mimetype' => $item['mime'] ?? null,
                         'farast_source_id' => $item['source_id'] ?? null,
                         'farast_product_id' => $item['product_id'] ?? null,
                         'farast_owner_user_id' => $item['owner_user_id'] ?? null,
