@@ -262,4 +262,20 @@ class StoreCourseLearningTest extends TestCase
         $this->assertNull($progress->completed_at);
     }
 
+    public function test_revoked_course_entitlement_cannot_open_course_or_lessons(): void
+    {
+        $user = $this->makeUser();
+        [$product, , , $lesson] = $this->makeCourse('revoked-course-entitlement', 10000);
+        $libraryItem = $this->grantCourse($user, $product);
+        $libraryItem->update(['revoked_at' => now()]);
+
+        $this->actingAs($user)
+            ->get(route('store.course.learn', $product))
+            ->assertNotFound();
+
+        $this->get(route('store.course.lesson', [$product, $lesson]))
+            ->assertNotFound();
+    }
+
+
 }
