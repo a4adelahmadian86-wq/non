@@ -1,15 +1,15 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\EditorSession;
-use App\\Models\\User;
-use App\\Services\\NotificationService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Auth;
-use Illuminate\\Support\\Str;
-use Illuminate\\Support\\Facades\\Crypt;
-use Illuminate\\Support\\Facades\\DB;
+use App\Models\EditorSession;
+use App\Models\User;
+use App\Services\NotificationService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 
 class AccountSecurityController extends Controller
 {
@@ -162,7 +162,7 @@ class AccountSecurityController extends Controller
         return back()->with('status', $others->count().' نشست دیگر لغو شد. نشست فعلی باز می‌ماند.');
     }
 
-    public function changePassword(Request $request, \\App\\Services\\EmailService $emailService)
+    public function changePassword(Request $request, \App\Services\EmailService $emailService)
     {
         $data = $request->validate([
             'current_password' => ['required', 'current_password'],
@@ -193,7 +193,7 @@ class AccountSecurityController extends Controller
 
         try {
             $emailService->sendPasswordChanged($user);
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
         }
 
         return back()->with('status', 'رمز عبور تغییر کرد؛ نشست سایر دستگاه‌ها لغو شدند.');
@@ -242,7 +242,7 @@ class AccountSecurityController extends Controller
         try {
             $sessionId = Crypt::decryptString($record->session_id_encrypted);
             DB::table('sessions')->where('id', $sessionId)->delete();
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             // The revocation marker also supports non-database session drivers.
         }
     }
@@ -263,16 +263,16 @@ class AccountSecurityController extends Controller
     {
         try {
             app(NotificationService::class)->pushToUser($user, $type, $title, $body, $data);
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             // Security actions must remain successful if the notification store is temporarily unavailable.
         }
     }
 
     private function browserLabel(string $agent): string
     {
-        return preg_match('/Edg\\//i', $agent) ? 'Microsoft Edge'
-            : (preg_match('/Firefox\\//i', $agent) ? 'Mozilla Firefox'
-            : (preg_match('/Chrome\\//i', $agent) ? 'Google Chrome'
-            : (preg_match('/Safari\\//i', $agent) ? 'Safari' : 'مرورگر دیگر')));
+        return preg_match('/Edg\//i', $agent) ? 'Microsoft Edge'
+            : (preg_match('/Firefox\//i', $agent) ? 'Mozilla Firefox'
+            : (preg_match('/Chrome\//i', $agent) ? 'Google Chrome'
+            : (preg_match('/Safari\//i', $agent) ? 'Safari' : 'مرورگر دیگر')));
     }
 }
