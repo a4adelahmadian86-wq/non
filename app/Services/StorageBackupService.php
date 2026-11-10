@@ -6,6 +6,7 @@ use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
@@ -130,7 +131,7 @@ class StorageBackupService
                 }
             });
 
-            foreach (['private', 'public'] as $diskName) {
+            foreach (['private', 'public', 'farast_remote'] as $diskName) {
                 $disk = Storage::disk($diskName);
                 foreach ($disk->allFiles() as $legacyPath) {
                     if (str_starts_with($legacyPath, 'store/quarantine/') || str_starts_with($legacyPath, 'typing/') || str_starts_with($legacyPath, '.farast-health/')) {
