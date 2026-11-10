@@ -627,8 +627,13 @@ class AdminStoreController extends Controller
 
         if (! $product->files()->exists()
             && ! StoreProductIngestion::query()->where('product_id', $product->id)->where('status', 'inspected')->exists()) {
+            $metadata = (array) ($product->metadata ?? []);
+            $intake = (array) ($metadata['file_first_intake'] ?? []);
+            $intake['status'] = 'awaiting_file';
+            $intake['last_cancelled_at'] = now()->toISOString();
+            $metadata['file_first_intake'] = $intake;
+            $product->update(['metadata' => $metadata]);
             $this->audit('store.product.file_first_intake_cancelled', $product, ['reason' => 'no_file_confirmed']);
-            $product->delete();
         }
 
         return response()->json(['success' => true]);
