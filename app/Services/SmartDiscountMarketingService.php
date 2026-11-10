@@ -96,7 +96,8 @@ class SmartDiscountMarketingService
         $price = (int) $product->price_rials;
         $cost = (int) $product->cost_price_rials;
         $availableDiscount = app(StoreCouponMarginPolicy::class)->maximumDiscount($product, $price, 1);
-        $discount = min((int) floor($price * $maxDiscountPercent / 100), $availableDiscount);
+        $effectiveDiscountPercent = $this->effectiveDiscountPercent($productId, $maxDiscountPercent);
+        $discount = min((int) floor($price * $effectiveDiscountPercent / 100), $availableDiscount);
 
         if ($price <= 0 || $cost < 0 || $availableDiscount <= 0 || $discount <= 0) {
             return null;
@@ -128,8 +129,9 @@ class SmartDiscountMarketingService
             }
 
             $currentAvailable = app(StoreCouponMarginPolicy::class)->maximumDiscount($lockedProduct, (int) $lockedProduct->price_rials, 1);
+            $currentDiscountPercent = $this->effectiveDiscountPercent($productId, $maxDiscountPercent);
             $currentDiscount = min(
-                (int) floor((int) $lockedProduct->price_rials * $maxDiscountPercent / 100),
+                (int) floor((int) $lockedProduct->price_rials * $currentDiscountPercent / 100),
                 $currentAvailable
             );
             if ($currentDiscount <= 0 || $currentDiscount !== $discount) {
@@ -182,6 +184,38 @@ class SmartDiscountMarketingService
 
             return $assignment->fresh(['coupon', 'product']);
         });
+    }
+
+    /**
+     * Learn conservatively from the last 90 days of this product's real offers.
+     * Small samples never change the configured policy. Strong conversion earns
+     * a smaller incentive; weak conversion may use the configured ceiling, but
+     * the margin policy remains the hard financial limit in every case.
+     */
+    private function effectiveDiscountPercent(int $productId, int $configuredMaximum): int
+    {
+        $history = StoreCouponAssignment::query()
+            ->where('product_id', $productId)
+            ->where('offered_at', '>=', now()->subDays(90))
+            ->whereIn('status', ['offered', 'redeemed']);
+
+        $total = (clone $history)->count();
+        if ($total < 10) {
+            return $configuredMaximum;
+        }
+
+        $redeemed = (clone $history)->where('status', 'redeemed')->count();
+        $conversion = $redeemed / max(1, $total);
+
+        if ($conversion >= 0.35) {
+            return max(1, (int) floor($configuredMaximum * 0.75));
+        }
+
+        if ($conversion >= 0.10) {
+            return max(1, (int) floor($configuredMaximum * 0.90));
+        }
+
+        return $configuredMaximum;
     }
 
     private function hasPurchased(int $userId, int $productId): bool
