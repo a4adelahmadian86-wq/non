@@ -28,7 +28,7 @@ return Application::configure(basePath:dirname(__DIR__))
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
         $exceptions->context(fn()=>['farast_request_id'=>request()?->header('X-Request-Id'),'farast_correlation_id'=>request()?->header('X-Correlation-Id')]);
-        $exceptions->render(function (\\Throwable $exception, Request $request) {
+        $exceptions->render(function (\Throwable $exception, Request $request) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return null;
             }
