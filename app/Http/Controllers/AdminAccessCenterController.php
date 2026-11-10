@@ -139,6 +139,28 @@ class AdminAccessCenterController extends Controller
         return back()->with('status', 'تنظیمات نقش ذخیره شد.');
     }
 
+    public function destroyRole(Request $request, int $role)
+    {
+        $this->ensurePlatformAdmin($request);
+        $record = DB::table('farast_roles')->where('id', $role)->first();
+        abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل حذف نیست.');
+        abort_if(
+            DB::table('farast_user_roles')->where('role_id', $role)->exists(),
+            409,
+            'این نقش هنوز به کاربران اختصاص دارد؛ ابتدا همه انتساب‌های آن را لغو کنید.'
+        );
+
+        DB::transaction(function () use ($request, $role, $record): void {
+            DB::table('farast_role_permissions')->where('role_id', $role)->delete();
+            DB::table('farast_roles')->where('id', $role)->delete();
+            $this->audit($request, 'role.deleted', null, $role, null, (array) $record, null);
+        });
+
+        app(AuthorizationService::class)->forgetUser();
+
+        return back()->with('status', 'نقش سفارشی حذف شد.');
+    }
+
     public function syncPermissions(Request $request, int $role)
     {
         $this->ensurePlatformAdmin($request);
