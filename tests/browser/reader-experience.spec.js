@@ -183,6 +183,32 @@ test.describe('FARAST sample reader interactions', () => {
     await expect(page.locator('#reader-page-number')).toHaveValue('2');
   });
 
+  test('keeps local IndexedDB progress when the account endpoint has older state', async ({ page }) => {
+    let remoteWrite = null;
+    await page.route('**/store/1/reader-state', async route => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          progress: { section: 0, page: 1 }, bookmarks: [], updated_at: '2026-01-01T00:00:00Z'
+        }) });
+        return;
+      }
+      remoteWrite = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ saved: true }) });
+    });
+    await page.goto('/');
+    await page.addScriptTag({ url: new URL('/js/farast-reader-storage.js', page.url()).href });
+    await page.evaluate(async () => {
+      await window.FarastReaderDurableStore.set('farast-reader:v1:reader-fixture', JSON.stringify({
+        progress: { section: 1, page: 1 }, bookmarks: [{ section: 1, page: 1 }]
+      }));
+    });
+    await mountReader(page, false, '/store/1/reader-state');
+    await expect(page.locator('#reader-resume')).toBeVisible();
+    await page.locator('#reader-bookmarks-open').click();
+    await expect(page.locator('#reader-bookmarks-panel button')).toHaveCount(1);
+    await expect.poll(() => remoteWrite?.progress?.section).toBe(1);
+  });
+
   test('keeps page bookmarks across reader reloads and allows removing them', async ({ page }) => {
     await mountReader(page);
     const bookmark = page.locator('#reader-bookmark-toggle');
