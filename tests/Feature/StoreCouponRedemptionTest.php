@@ -12,6 +12,7 @@ use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\StoreCouponRedemptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -316,5 +317,87 @@ class StoreCouponRedemptionTest extends TestCase
 
         $this->assertSame('LOWERCASE-10', $coupon->fresh()->code);
     }
+
+
+    public function test_campaign_budget_is_rechecked_under_lock_when_smart_offer_is_redeemed(): void
+    {
+        $firstUser = User::create(['name' => 'Campaign Budget One', 'mobile' => '09123456791', 'password' => 'secret']);
+        $secondUser = User::create(['name' => 'Campaign Budget Two', 'mobile' => '09123456792', 'password' => 'secret']);
+        $category = StoreCategory::create(['name' => 'Campaign Budget', 'slug' => 'campaign-budget-category', 'is_active' => true]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id, 'title' => 'Campaign Budget Product',
+            'slug' => 'campaign-budget-product', 'sku' => 'CAMPAIGN-BUDGET-001',
+            'type' => 'digital_file', 'price_rials' => 100000, 'cost_price_rials' => 50000,
+            'status' => 'published', 'published_at' => now(),
+        ]);
+        $segmentId = DB::table('crm_customer_segments')->insertGetId([
+            'name' => 'Campaign budget audience', 'filters' => json_encode([]),
+            'created_by' => $firstUser->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $campaignId = DB::table('crm_marketing_campaigns')->insertGetId([
+            'name' => 'Capped campaign', 'channel' => 'in_app', 'status' => 'sent',
+            'segment_id' => $segmentId, 'title' => 'Campaign', 'body' => 'Campaign offer',
+            'created_by' => $firstUser->id, 'recipient_count' => 2, 'sent_at' => now(),
+            'incentive_product_id' => $product->id, 'incentive_discount_percent' => 10,
+            'incentive_valid_hours' => 48, 'budget_cap_rials' => 10000,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $createOrder = function (User $user, string $code) use ($product, $campaignId): array {
+            $coupon = StoreCoupon::create([
+                'code' => $code, 'type' => 'fixed', 'value' => 10000,
+                'max_uses' => 1, 'used_count' => 0, 'is_active' => true,
+                'ends_at' => now()->addDay(),
+            ]);
+            $assignment = StoreCouponAssignment::create([
+                'coupon_id' => $coupon->id, 'campaign_id' => $campaignId,
+                'user_id' => $user->id, 'product_id' => $product->id,
+                'status' => 'offered', 'score' => 0,
+                'reason_codes' => ['campaign_'.$campaignId],
+                'offered_at' => now(), 'expires_at' => now()->addDay(),
+            ]);
+            $order = Order::create([
+                'user_id' => $user->id, 'subtotal_rials' => 100000,
+                'discount_rials' => 10000, 'tax_rials' => 0, 'total_rials' => 90000,
+                'status' => 'pending',
+                'pricing_snapshot' => [
+                    'kind' => 'store', 'coupon_code' => $coupon->code,
+                    'coupon_assignment_id' => $assignment->id,
+                    'coupon_product_id' => $product->id, 'coupon_redemption_pending' => true,
+                ],
+            ]);
+            StoreOrderItem::create([
+                'order_id' => $order->id, 'product_id' => $product->id,
+                'title_snapshot' => $product->title, 'quantity' => 1,
+                'unit_price_rials' => 100000, 'discount_rials' => 10000,
+                'tax_rials' => 0, 'total_rials' => 90000,
+                'product_snapshot' => [
+                    'cost_price_rials' => 50000,
+                    'cost_snapshot_captured_at' => now()->toIso8601String(),
+                ],
+            ]);
+
+            return [$coupon, $assignment, $order];
+        };
+
+        [$firstCoupon, $firstAssignment, $firstOrder] = $createOrder($firstUser, 'CAMPAIGNCAP1');
+        app(StoreCouponRedemptionService::class)->redeemForPaidOrder($firstOrder);
+        $firstOrder->update(['status' => 'paid', 'paid_at' => now()]);
+        $this->assertSame('redeemed', $firstAssignment->fresh()->status);
+
+        [$secondCoupon, $secondAssignment, $secondOrder] = $createOrder($secondUser, 'CAMPAIGNCAP2');
+        try {
+            app(StoreCouponRedemptionService::class)->redeemForPaidOrder($secondOrder);
+            $this->fail('Campaign redemptions must not exceed the configured campaign budget.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('سقف بودجه این کمپین', $exception->getMessage());
+        }
+
+        $this->assertSame(1, $firstCoupon->fresh()->used_count);
+        $this->assertSame(0, $secondCoupon->fresh()->used_count);
+        $this->assertSame('offered', $secondAssignment->fresh()->status);
+        $this->assertTrue((bool) $secondOrder->fresh()->pricing_snapshot['coupon_redemption_pending']);
+    }
+
 
 }
