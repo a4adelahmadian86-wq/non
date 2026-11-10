@@ -10,6 +10,7 @@ use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
 use App\Services\StoreCartService;
 use App\Services\StoreCourseEnrollmentService;
+use App\Services\MarketingSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -37,6 +38,9 @@ class StoreCartController extends Controller
     {
         $data = $request->validate(['quantity' => 'nullable|integer|min:1|max:99']);
         $current = $cart->add($request, $product, (int) ($data['quantity'] ?? 1));
+        if ($request->user()) {
+            app(MarketingSignalService::class)->record($request->user(), 'cart_added', (int) $product->id);
+        }
 
         return response()->json(['ok' => true] + $cart->payload($current, $request));
     }
@@ -59,6 +63,9 @@ class StoreCartController extends Controller
     public function applyCoupon(Request $request, StoreCartService $cart)
     {
         $data = $request->validate(['code' => 'required|string|max:40']);
+        if ($request->user()) {
+            app(MarketingSignalService::class)->record($request->user(), 'coupon_attempted');
+        }
         try {
             $payload = $cart->applyCoupon($request, $data['code']);
             if ($request->expectsJson()) {

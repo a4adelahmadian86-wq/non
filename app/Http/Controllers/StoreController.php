@@ -12,6 +12,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreWishlist;
+use App\Services\MarketingSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
@@ -90,6 +91,10 @@ class StoreController extends Controller
             ->published()
             ->where('slug', $slug)
             ->firstOrFail();
+
+        if ($request->user()) {
+            app(MarketingSignalService::class)->record($request->user(), 'product_viewed', (int) $product->id);
+        }
 
         $ids = collect($request->session()->get('store_recent_ids', []))
             ->reject(fn ($id) => (int) $id === (int) $product->id)

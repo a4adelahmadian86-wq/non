@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StoreProduct;
 use App\Models\StoreWishlist;
+use App\Services\MarketingSignalService;
 use Illuminate\Http\Request;
 
 class StoreWishlistController extends Controller
@@ -47,6 +48,7 @@ class StoreWishlistController extends Controller
                 'list_type' => $type,
             ]);
             $active = true;
+            app(MarketingSignalService::class)->record($request->user(), 'wishlist_added', (int) $product->id);
         }
 
         if ($request->expectsJson()) {

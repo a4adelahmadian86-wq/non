@@ -10,7 +10,7 @@ class CrmAudienceService
 {
     public function query(array $filters, ?array $visibleUserIds = null): Builder
     {
-        $query = User::query()->where('is_blocked', false);
+        $query = User::query()->where('is_blocked', false)->where('marketing_consent', true);
 
         if ($visibleUserIds !== null) {
             $query->whereIn('users.id', $visibleUserIds);
