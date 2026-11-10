@@ -309,7 +309,32 @@
                 <article class="metric-card {{ $systemHealth['cache_ok'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>Cache</span><i class="fa-solid fa-bolt"></i></div><strong>{{ $systemHealth['cache_ok'] ? 'دسترس‌پذیر' : 'خطا' }}</strong><small>آزمون نوشتن، خواندن و پاک‌سازی موقت</small></article>
                 <article class="metric-card {{ $systemHealth['storage_writable'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>ذخیره‌سازی برنامه</span><i class="fa-solid fa-hard-drive"></i></div><strong>{{ $systemHealth['storage_writable'] ? 'قابل نوشتن' : 'غیرقابل نوشتن' }}</strong><small>بررسی مجوز مسیر storage</small></article>
                 <article class="metric-card {{ $systemHealth['private_storage_ok'] ? 'metric-green' : 'metric-orange' }}"><div class="metric-top"><span>فضای خصوصی فایل‌ها</span><i class="fa-solid fa-lock"></i></div><strong>{{ $systemHealth['private_storage_ok'] ? 'خواندن/نوشتن سالم' : 'خطا' }}</strong><small>آزمون واقعی نوشتن، خواندن و حذف فایل موقت</small></article>
-                <article class="metric-card metric-violet"><div class="metric-top"><span>صف پردازش</span><i class="fa-solid fa-list-check"></i></div><strong>{{ $systemHealth['queue_connection'] }}</strong><small>درایور پیکربندی‌شده؛ بدون ادعای probe زنده</small></article>
+                @php
+                    $queueHealth = $systemHealth['queue'] ?? [];
+                    $queueStatusLabel = match ($queueHealth['status'] ?? 'unavailable') {
+                        'clear' => 'بدون صف معوق',
+                        'queued' => 'دارای کار در صف',
+                        'attention' => 'نیازمند بررسی',
+                        'immediate' => 'اجرای فوری',
+                        'misconfigured' => 'پیکربندی ناقص',
+                        default => 'وضعیت نامشخص',
+                    };
+                    $queueMetricClass = in_array($queueHealth['status'] ?? '', ['clear', 'immediate'], true)
+                        ? 'metric-green'
+                        : (in_array($queueHealth['status'] ?? '', ['attention', 'misconfigured', 'unavailable'], true) ? 'metric-orange' : 'metric-violet');
+                @endphp
+                <article class="metric-card {{ $queueMetricClass }}">
+                    <div class="metric-top"><span>صف پردازش</span><i class="fa-solid fa-list-check"></i></div>
+                    <strong>{{ $queueStatusLabel }}</strong>
+                    @if(($queueHealth['driver'] ?? '') === 'database' && is_numeric($queueHealth['queued'] ?? null))
+                        <small>{{ number_format($queueHealth['ready'] ?? 0) }} آماده · {{ number_format($queueHealth['reserved'] ?? 0) }} در حال اجرا · {{ $queueHealth['failed'] === null ? 'خطاها نامشخص' : number_format($queueHealth['failed']).' ناموفق' }}</small>
+                        @if(($queueHealth['oldest_ready_seconds'] ?? 0) > 0)<small>قدیمی‌ترین کار آماده: {{ number_format($queueHealth['oldest_ready_seconds']) }} ثانیه</small>@endif
+                    @elseif(($queueHealth['driver'] ?? '') === 'sync')
+                        <small>درایور هم‌زمان؛ کارها در همان درخواست اجرا می‌شوند.</small>
+                    @else
+                        <small>درایور {{ $queueHealth['driver'] ?? 'نامشخص' }}؛ شمارش صف از این اتصال قابل مشاهده نیست.</small>
+                    @endif
+                </article>
             </div>
             <p class="health-footnote">محیط: {{ $systemHealth['env'] }} · PHP {{ $systemHealth['php'] }} · Laravel {{ $systemHealth['laravel'] }} · Debug: {{ $systemHealth['debug'] ? 'روشن' : 'خاموش' }}</p>
         </section>
