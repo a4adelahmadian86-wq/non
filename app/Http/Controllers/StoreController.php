@@ -97,7 +97,7 @@ class StoreController extends Controller
             'files' => fn ($query) => $query
                 ->where('purpose', 'product_download')
                 ->where('is_active', true)
-                ->whereIn('scan_status', ['clean', 'legacy'])
+                ->whereIn('scan_status', ['clean', 'legacy', 'structural'])
                 ->orderByDesc('is_primary')
                 ->orderByDesc('id')
                 ->select(['id', 'product_id', 'original_name', 'mime', 'size_bytes', 'version', 'is_primary', 'scan_status']),
@@ -440,7 +440,7 @@ class StoreController extends Controller
         $product = StoreProduct::with([
             'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
             'files' => fn ($query) => $query->where('purpose', 'product_download')
-                ->where('is_primary', true)->where('is_active', true)->where('scan_status', 'clean')->orderByDesc('id'),
+                ->where('is_primary', true)->where('is_active', true)->whereIn('scan_status', ['clean', 'structural'])->orderByDesc('id'),
         ])->published()->where('slug', $slug)->firstOrFail();
 
         $user = request()->user();
@@ -641,7 +641,7 @@ class StoreController extends Controller
             ->where('purpose', 'product_download')
             ->where('is_primary', true)
             ->where('is_active', true)
-            ->where('scan_status', 'clean')
+            ->whereIn('scan_status', ['clean', 'structural'])
             ->firstOrFail();
         $document = $file->document;
         abort_unless(
@@ -733,7 +733,7 @@ class StoreController extends Controller
             ->where('purpose', 'product_download')
             ->where('is_primary', true)
             ->where('is_active', true)
-            ->where('scan_status', 'clean')
+            ->whereIn('scan_status', ['clean', 'structural'])
             ->firstOrFail();
         abort_unless(
             (int) $document->product_id === (int) $product->id
