@@ -27,6 +27,9 @@
   const state = {
     queue: [],
     rejected: [],
+    productId: root.dataset.productId || null,
+    nextUrlCandidate: null,
+    nextUrl: null,
     current: null,
     ingestionId: null,
     primaryForCurrent: false,
@@ -200,6 +203,9 @@
   const processNext = async () => {
     if (state.busy || state.current || state.queue.length === 0) {
       updateQueue();
+      if (!state.busy && !state.current && state.queue.length === 0 && state.nextUrl) {
+        window.location.assign(state.nextUrl);
+      }
       return;
     }
     const file = state.queue.shift();
@@ -228,12 +234,17 @@
     try {
       setStep('upload', ['received']);
       setProgress(0, 'در حال انتقال فایل به قرنطینه خصوصی...');
-      const payload = await sendPreflight(root.dataset.preflightUrl, form, (percent, uploaded) => {
+      const preflightUrl = state.productId && root.dataset.productPreflightUrlTemplate
+        ? root.dataset.productPreflightUrlTemplate.replace('__PRODUCT__', encodeURIComponent(state.productId))
+        : root.dataset.preflightUrl;
+      const payload = await sendPreflight(preflightUrl, form, (percent, uploaded) => {
         setProgress(percent, uploaded ? 'انتقال کامل شد؛ بررسی ساختار و امنیت در حال اجراست...' : 'در حال انتقال امن فایل · ' + percent + '٪');
         if (uploaded) setStep('inspect', ['received', 'upload']);
       });
       setProgress(100, 'بررسی اولیه کامل شد؛ گزارش آماده است.');
       state.ingestionId = payload.ingestion_id;
+      if (payload.product_id) state.productId = String(payload.product_id);
+      if (payload.next_url) state.nextUrlCandidate = payload.next_url;
       renderReport(payload);
       setStep('review', ['received', 'upload', 'inspect']);
       confirmButton.disabled = !payload.inspection?.safe;
@@ -257,7 +268,9 @@
     state.busy = true;
     try {
       if (state.ingestionId) {
-        const url = root.dataset.cancelUrlTemplate.replace('__INGESTION__', encodeURIComponent(state.ingestionId));
+        const url = root.dataset.cancelUrlTemplate
+          .replace('__PRODUCT__', encodeURIComponent(state.productId || ''))
+          .replace('__INGESTION__', encodeURIComponent(state.ingestionId));
         await fetch(url, {
           method: 'DELETE',
           headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
@@ -274,7 +287,9 @@
   const pollProcessing = async (fileId) => {
     const template = root.dataset.statusUrlTemplate;
     if (!template || !fileId) return;
-    const url = template.replace('__FILE__', encodeURIComponent(fileId));
+    const url = template
+      .replace('__PRODUCT__', encodeURIComponent(state.productId || ''))
+      .replace('__FILE__', encodeURIComponent(fileId));
     let attempts = 0;
     const completedSteps = ['received', 'upload', 'inspect', 'review', 'store'];
 
@@ -381,7 +396,9 @@
     setStep('store', ['received', 'inspect', 'review']);
 
     try {
-      const url = root.dataset.confirmUrlTemplate.replace('__INGESTION__', encodeURIComponent(state.ingestionId));
+      const url = root.dataset.confirmUrlTemplate
+        .replace('__PRODUCT__', encodeURIComponent(state.productId || ''))
+        .replace('__INGESTION__', encodeURIComponent(state.ingestionId));
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
@@ -423,6 +440,13 @@
           const detail = contentRow.querySelector('small');
           if (detail) detail.textContent = 'نیازمند پردازش مجدد';
         }
+      }
+      if (state.nextUrlCandidate) {
+        state.nextUrl = state.nextUrlCandidate;
+        state.queue = state.queue.filter((file) => file !== state.current);
+        closeModal();
+        processNext();
+        return;
       }
       if (payload.file?.id) {
         await pollProcessing(payload.file.id);
