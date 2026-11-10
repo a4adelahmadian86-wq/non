@@ -18,9 +18,21 @@ class TrackAuthenticatedSession
 
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
-        if (! $user || ! $request->hasSession()) {
+        if (! $request->hasSession()) {
             return $next($request);
+        }
+
+        // Login controllers authenticate during route execution. Re-check the
+        // user after the controller so device denial is enforced on that very
+        // login response, not one page later.
+        $response = null;
+        $user = $request->user();
+        if (! $user) {
+            $response = $next($request);
+            $user = $request->user();
+            if (! $user) {
+                return $response;
+            }
         }
 
         $sessionId = $request->session()->getId();
@@ -157,7 +169,7 @@ class TrackAuthenticatedSession
                 ]);
         }
 
-        $response = $next($request);
+        $response = $response ?? $next($request);
         if ($newDeviceKey) {
             $response->headers->setCookie(cookie(
                 self::DEVICE_COOKIE,
