@@ -347,3 +347,16 @@
 .farast-home .decision-note{max-width:620px;margin:0 auto 16px;color:#718198;font-size:.73rem;line-height:1.9}
 .farast-home #acceptEstimate{min-width:min(100%,260px)}
 @media(max-width:560px){.farast-home .decision-row{align-items:flex-start;flex-direction:column;gap:4px}.farast-home .decision-row strong{white-space:normal}.farast-home #acceptEstimate{width:100%}}
+
+/* Evidence-based trust and transparency section. */
+.home-transparency{margin:0 0 34px;padding:28px;border:1px solid #dfe8f3;border-radius:25px;background:#fff}
+.home-transparency-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.home-transparency-card{display:flex;flex-direction:column;align-items:flex-start;min-width:0;padding:19px 17px;border:1px solid #e6edf5;border-radius:17px;background:#fbfcfe}
+.home-transparency-icon{display:grid;place-items:center;width:39px;height:39px;margin-bottom:12px;border-radius:12px;background:#edf4ff;color:#2867bd;font-size:.95rem}
+.home-transparency-card h3{margin:0 0 7px;color:#1b3456;font-size:.85rem;font-weight:900;line-height:1.8}
+.home-transparency-card p{flex:1;margin:0 0 13px;color:#718198;font-size:.73rem;line-height:2}
+.home-transparency-card>a,.home-transparency-links a{display:inline-flex;align-items:center;gap:7px;color:#2863bd;text-decoration:none;font-size:.72rem;font-weight:850}
+.home-transparency-card>a:hover,.home-transparency-links a:hover{text-decoration:underline}
+.home-transparency-links{display:flex;flex-wrap:wrap;gap:8px 13px}
+@media(max-width:980px){.home-transparency-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.home-transparency{padding:22px 14px;border-radius:20px}.home-transparency-grid{grid-template-columns:1fr}.home-transparency-card{padding:16px}}
