@@ -179,6 +179,20 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['owner_id' => $employee->id + 1, 'status' => 'active']));
     }
 
+    public function test_an_admin_request_scope_cannot_leak_into_another_users_permission_decision(): void
+    {
+        $admin = $this->user('09140000112', User::ROLE_ADMIN);
+        $employee = $this->user('09140000113');
+
+        $this->actingAs($admin)->get('/admin')->assertOk();
+
+        $this->assertFalse(app(AuthorizationService::class)->allowsFor(
+            $employee,
+            'documents.view',
+            ['owner_id' => $employee->id + 1]
+        ));
+    }
+
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
     {
         $employee = $this->user('09140000105');
