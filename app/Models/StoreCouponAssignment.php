@@ -9,7 +9,7 @@ class StoreCouponAssignment extends Model
 {
     protected $fillable = [
         'coupon_id', 'user_id', 'product_id', 'status', 'score', 'reason_codes',
-        'offered_at', 'expires_at', 'redeemed_at', 'notification_id',
+        'offered_at', 'expires_at', 'redeemed_at', 'redeemed_order_id', 'notification_id',
     ];
 
     protected $casts = [
@@ -33,6 +33,11 @@ class StoreCouponAssignment extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(StoreProduct::class, 'product_id');
+    }
+
+    public function redeemedOrder(): BelongsTo
+    {
+        return $this->belongsTo(Order::class, 'redeemed_order_id');
     }
 
     public function notification(): BelongsTo
