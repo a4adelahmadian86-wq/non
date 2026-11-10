@@ -9,6 +9,7 @@ use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\CapabilityService;
 use App\Services\SupportTicketService;
+use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
