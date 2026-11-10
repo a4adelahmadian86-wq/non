@@ -89,7 +89,7 @@ class AdminDashboardShellIntegrityTest extends TestCase
                 'title' => 'پیگیری امروز',
                 'status' => 'open',
                 'priority' => 'normal',
-                'due_at' => now()->addHour(),
+                'due_at' => today()->endOfDay(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
