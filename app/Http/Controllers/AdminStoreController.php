@@ -893,7 +893,14 @@ class AdminStoreController extends Controller
             $directory = 'store/previews/'.$product->id;
             $filename = Str::random(40).'.'.($kind === 'html' ? 'html' : ($kind === 'pdf' ? 'pdf' : $extension));
             $preparedPath = $directory.'/'.$filename;
-            abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده پیش‌نمایش ممکن نشد.');
+            abort_unless(Storage::disk('managed')->put($preparedPath, $preparedBytes, [
+                'farast_classification' => 'critical',
+                'farast_source_type' => 'product_preview',
+                'farast_source_id' => $product->id,
+                'farast_product_id' => $product->id,
+                'farast_owner_user_id' => auth()->id(),
+                'mimetype' => $mime,
+            ]), 503, 'ذخیره نسخه آماده پیش‌نمایش در زیرساخت مرکزی ممکن نشد.');
 
             Storage::disk('private')->delete($sourcePath);
 
@@ -902,7 +909,7 @@ class AdminStoreController extends Controller
                 $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
                 StoreProductPreview::create([
                     'product_id' => $lockedProduct->id,
-                    'disk' => 'private',
+                    'disk' => 'managed',
                     'path' => $preparedPath,
                     'mime' => $mime,
                     'page_number' => $request->input('page_number') ?: $sort,
@@ -926,7 +933,7 @@ class AdminStoreController extends Controller
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($sourcePath);
             if ($preparedPath) {
-                Storage::disk('private')->delete($preparedPath);
+                Storage::disk('managed')->delete($preparedPath);
             }
             if ($exception instanceof ValidationException) {
                 throw $exception;
