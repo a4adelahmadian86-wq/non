@@ -527,4 +527,34 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         ]);
     }
 
+    public function test_purchased_access_survives_non_revoking_order_status_changes(): void
+    {
+        Storage::fake('private');
+        Storage::disk('private')->put('products/completed-order.pdf', 'completed-order-content');
+
+        $user = $this->makeUser('09123456787');
+        [$product, $file] = $this->makeProduct('completed-order-access');
+        [$libraryItem, $download, $token] = $this->makeDownload($user, $product, $file);
+        $libraryItem->order()->update(['status' => 'completed']);
+
+        $this->actingAs($user)
+            ->get(route('library'))
+            ->assertOk()
+            ->assertSee('خریداری‌شده');
+
+        $this->post(route('library.download.issue', $libraryItem))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $url = URL::temporarySignedRoute(
+            'store.download.stream',
+            now()->addMinutes(10),
+            ['download' => $download->id, 'token' => $token]
+        );
+
+        $this->get($url)->assertOk();
+        $this->assertNull($libraryItem->fresh()->revoked_at);
+    }
+
+
 }
