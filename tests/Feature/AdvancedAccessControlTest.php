@@ -6,6 +6,11 @@ use App\Models\Organization;
 use App\Models\Permission;
 use App\Models\Team;
 use App\Models\User;
+use App\Http\Middleware\EnsureResourcePermission;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use App\Services\AdminConsoleService;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -454,6 +459,59 @@ class AdvancedAccessControlTest extends TestCase
         ])->assertServerError();
 
         $this->assertDatabaseMissing('farast_roles', ['name' => 'نقش بدون ممیزی']);
+    }
+
+    public function test_resource_middleware_does_not_fall_through_from_null_owner_to_creator_fields(): void
+    {
+        $employee = $this->user('09140000301');
+        $middleware = app(EnsureResourcePermission::class);
+
+        $resource = new class extends Model {
+            protected $guarded = [];
+        };
+        $resource->setRawAttributes([
+            'id' => 501,
+            'owner_id' => null,
+            'user_id' => $employee->id,
+            'created_by' => $employee->id,
+        ], true);
+
+        $request = Request::create('/resource/501', 'GET');
+        $route = new Route(['GET'], '/resource/{resource}', static fn () => null);
+        $route->setParameter('resource', $resource);
+        $request->setRouteResolver(static fn () => $route);
+        $request->setUserResolver(static fn () => $employee);
+
+        try {
+            $middleware->handle($request, static fn () => response('unexpectedly allowed'), 'documents.view');
+            $this->fail('An explicitly null owner must not fall through to user_id or created_by.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
+    public function test_resource_middleware_uses_legacy_owner_field_only_when_primary_field_is_absent(): void
+    {
+        $employee = $this->user('09140000302');
+        $middleware = app(EnsureResourcePermission::class);
+
+        $resource = new class extends Model {
+            protected $guarded = [];
+        };
+        $resource->setRawAttributes([
+            'id' => 502,
+            'user_id' => $employee->id,
+        ], true);
+
+        $request = Request::create('/resource/502', 'GET');
+        $route = new Route(['GET'], '/resource/{resource}', static fn () => null);
+        $route->setParameter('resource', $resource);
+        $request->setRouteResolver(static fn () => $route);
+        $request->setUserResolver(static fn () => $employee);
+
+        $response = $middleware->handle($request, static fn () => response('allowed'), 'documents.view');
+
+        $this->assertSame('allowed', $response->getContent());
     }
 
     public function test_advanced_access_center_is_only_available_to_the_platform_admin(): void
