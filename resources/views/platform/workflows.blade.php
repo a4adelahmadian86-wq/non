@@ -44,7 +44,7 @@
                 $builderSteps = $editingWorkflow ? (json_decode((string) $editingWorkflow->steps, true) ?: []) : [];
                 if (!$builderSteps) $builderSteps = [['action' => 'notify', 'title' => '', 'message' => '', 'description' => '', 'priority' => 'normal', 'due_at' => '']];
                 $builderConditions = $editingWorkflow ? (json_decode((string) ($editingWorkflow->conditions ?? '[]'), true) ?: []) : [];
-                $conditionFieldLabels = ['order_kind'=>'نوع سفارش','amount_rials'=>'مبلغ سفارش (ریال)','total_rials'=>'مبلغ کل (ریال)','status'=>'وضعیت','event_type'=>'نوع رویداد','document_id'=>'شناسه سند','ticket_id'=>'شناسه تیکت','product_id'=>'شناسه محصول','organization_id'=>'شناسه سازمان','team_id'=>'شناسه تیم'];
+                $conditionFieldLabels = ['order_kind'=>'نوع سفارش','amount_rials'=>'مبلغ سفارش (ریال)','total_rials'=>'مبلغ کل (ریال)','status'=>'وضعیت','event_type'=>'نوع رویداد','document_id'=>'شناسه سند','revision'=>'شماره ویرایش سند','ticket_id'=>'شناسه تیکت','product_id'=>'شناسه محصول','organization_id'=>'شناسه سازمان','team_id'=>'شناسه تیم'];
                 $conditionOperatorLabels = ['equals'=>'برابر است با','not_equals'=>'برابر نیست با','greater_than'=>'بزرگ‌تر از','greater_or_equal'=>'بزرگ‌تر یا مساوی','less_than'=>'کمتر از','less_or_equal'=>'کمتر یا مساوی','contains'=>'شامل','in'=>'یکی از مقادیر','not_in'=>'هیچ‌کدام از مقادیر','exists'=>'وجود دارد'];
             @endphp
             <div class="wf-grid">
