@@ -46,7 +46,7 @@ class StoreCartService
 
     public function add(Request $request, StoreProduct $product, int $quantity = 1): StoreCart
     {
-        abort_unless($product->status === 'published' && $product->published_at?->lte(now()), 404);
+        abort_unless($this->isPurchasable($product), 404);
         $cart = $this->current($request);
         $item = $cart->items()->firstOrNew(['product_id' => $product->id]);
         $item->quantity = min(99, max(1, (int) $item->quantity + $quantity));
@@ -58,6 +58,7 @@ class StoreCartService
 
     public function update(Request $request, StoreProduct $product, int $quantity): StoreCart
     {
+        abort_unless($this->isPurchasable($product), 404);
         $cart = $this->current($request);
         $item = $cart->items()->where('product_id', $product->id)->firstOrFail();
         if ($quantity <= 0) {
@@ -128,7 +129,7 @@ class StoreCartService
         $count = 0;
         $items = [];
         foreach ($cart->items as $item) {
-            if (! $item->product || $item->product->status !== 'published') {
+            if (! $item->product || ! $this->isPurchasable($item->product)) {
                 continue;
             }
             $unit = (int) $item->product->price_rials;
@@ -196,6 +197,13 @@ class StoreCartService
             'total_toman' => (int) floor($taxable / 10),
             'coupon_code' => $couponCode,
         ];
+    }
+
+    public function isPurchasable(StoreProduct $product): bool
+    {
+        return $product->status === 'published'
+            && $product->published_at !== null
+            && $product->published_at->lte(now());
     }
 
     private function sessionToken(Request $request): string
