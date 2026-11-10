@@ -202,6 +202,22 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
 
         // Catalog changes after checkout must not silently change the confirmed order price.
         $product->update(['price_rials' => 250000]);
+        $purchasedFile->update(['is_primary' => false]);
+        Storage::disk('private')->put('products/wallet-price-snapshot-v2.pdf', 'version-two');
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'scan_status' => 'clean',
+            'version' => '2.0',
+            'disk' => 'private',
+            'path' => 'products/wallet-price-snapshot-v2.pdf',
+            'original_name' => 'product-v2.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 11,
+            'sha256' => hash('sha256', 'version-two'),
+            'is_primary' => true,
+            'is_active' => true,
+        ]);
         Wallet::create(['user_id' => $user->id, 'balance_rials' => $originalTotal]);
 
         $email = Mockery::mock(EmailService::class);
