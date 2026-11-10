@@ -66,7 +66,7 @@ class DashboardQueueHealthService
                 ->where('available_at', '<=', $nowTimestamp);
             $ready = (int) (clone $readyQuery)->count();
             $reserved = (int) (clone $jobs)->whereNotNull('reserved_at')->count();
-            $oldestCreatedAt = (clone $readyQuery)->min('created_at');
+            $oldestAvailableAt = (clone $readyQuery)->min('available_at');
             $failed = null;
             $failed24h = null;
             $failedTableAvailable = Schema::connection($failedConnection)->hasTable($failedTable);
@@ -90,9 +90,9 @@ class DashboardQueueHealthService
                 'reserved' => $reserved,
                 'failed' => $failed,
                 'failed_24h' => $failed24h,
-                'oldest_ready_seconds' => $oldestCreatedAt === null
+                'oldest_ready_seconds' => $oldestAvailableAt === null
                     ? 0
-                    : max(0, $nowTimestamp - (int) $oldestCreatedAt),
+                    : max(0, $nowTimestamp - (int) $oldestAvailableAt),
             ]);
         } catch (Throwable) {
             return array_replace($snapshot, ['status' => 'unavailable']);
