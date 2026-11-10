@@ -101,22 +101,31 @@ class StorageMigrationService
     private function migrateProductPublicAssets(int $limit): int
     {
         $count = 0;
-        StoreProduct::query()->where('cover_path', 'like', 'storage/store/covers/%')->orderBy('id')->limit($limit)->get()
-            ->each(function (StoreProduct $product) use (&$count): void {
+        StoreProduct::query()->where('cover_path', 'like', 'storage/store/covers/%')->orderBy('id')->chunkById(100, function ($products) use (&$count, $limit): bool {
+            foreach ($products as $product) {
+                if ($count >= $limit) return false;
                 $path = ltrim(substr((string) $product->cover_path, strlen('storage/')), '/');
-                if ($path !== '' && $this->copyToManaged('public', $path, 'critical', 'product_cover', $product->id, $product->id, null, basename($path), null)) {
+                if ($path === '' || StorageManagedFile::query()->where('logical_path', $path)->where('status', 'active')->exists()) continue;
+                if ($this->copyToManaged('public', $path, 'critical', 'product_cover', $product->id, $product->id, null, basename($path), null)) {
                     $count++;
                 }
-            });
+            }
+            return $count < $limit;
+        });
 
-        StoreProductImage::query()->where('path', 'like', 'storage/store/product-images/%')->orderBy('id')->limit($limit)->get()
-            ->each(function (StoreProductImage $image) use (&$count): void {
-                $path = ltrim(substr((string) $image->path, strlen('storage/')), '/');
-                $image->loadMissing('product');
-                if ($path !== '' && $this->copyToManaged('public', $path, 'critical', 'product_gallery_image', $image->product_id, $image->product_id, null, basename($path), null)) {
-                    $count++;
+        if ($count < $limit) {
+            StoreProductImage::query()->where('path', 'like', 'storage/store/product-images/%')->orderBy('id')->chunkById(100, function ($images) use (&$count, $limit): bool {
+                foreach ($images as $image) {
+                    if ($count >= $limit) return false;
+                    $path = ltrim(substr((string) $image->path, strlen('storage/')), '/');
+                    if ($path === '' || StorageManagedFile::query()->where('logical_path', $path)->where('status', 'active')->exists()) continue;
+                    if ($this->copyToManaged('public', $path, 'critical', 'product_gallery_image', $image->id, $image->product_id, null, basename($path), null)) {
+                        $count++;
+                    }
                 }
+                return $count < $limit;
             });
+        }
         return $count;
     }
 
