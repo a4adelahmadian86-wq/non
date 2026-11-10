@@ -135,6 +135,15 @@ class AdminAccessCenterController extends Controller
             $record = DB::table('farast_roles')->where('id', $role)->lockForUpdate()->first();
             abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل ویرایش نیست.');
 
+            $hasAssignments = DB::table('farast_user_roles')->where('role_id', $role)->exists();
+            $scopeChanged = $record->scope_type !== $data['scope_type']
+                || ($record->scope_id === null ? null : (int) $record->scope_id) !== $scopeId;
+            abort_if(
+                $hasAssignments && $scopeChanged,
+                409,
+                'برای تغییر محدوده نقش، ابتدا همه انتساب‌های فعلی و تاریخی آن را لغو یا آرشیو کنید.'
+            );
+
             DB::table('farast_roles')->where('id', $role)->update([
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
