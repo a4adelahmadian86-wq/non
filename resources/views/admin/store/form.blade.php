@@ -64,6 +64,9 @@
       </section>
     @endif
 
+    @if(!$isEdit)
+      @include('admin.store.partials.file-first-intake')
+    @else
     <div class="product-workflow {{ $isEdit ? 'has-media' : 'has-upload' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
@@ -386,6 +389,7 @@
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
         <section class="product-ingestion" data-product-ingestion
+          data-product-id="{{ $product->id }}"
           data-preflight-url="{{ route('admin.store.files.preflight',$product) }}"
           data-confirm-url-template="{{ route('admin.store.files.confirm',[$product,'__INGESTION__']) }}"
           data-cancel-url-template="{{ route('admin.store.files.cancel',[$product,'__INGESTION__']) }}"
@@ -455,6 +459,7 @@
     <div class="store-panel product-category-panel product-tag-panel"><h2>مدیریت سریع برچسب‌ها</h2><p class="product-inline-feedback" data-inline-feedback role="status" aria-live="polite"></p><form method="post" action="{{ route('admin.store.tags.store') }}" data-inline-create="tag">@csrf<input name="name" required maxlength="100" placeholder="نام برچسب جدید"><input name="slug" maxlength="120" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن برچسب</button></form><small class="product-help">پس از ذخیره، برچسب در فهرست برچسب‌های قابل انتخاب محصول قرار می‌گیرد.</small></div>
   </div>
 </section>
+    @endif
 @endsection
 @push('scripts')
 <script src="{{ asset('js/product-ingestion.js') }}" defer></script>
