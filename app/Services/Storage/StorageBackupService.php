@@ -101,7 +101,7 @@ class StorageBackupService
                 }
             }
             return $results;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $snapshotLock->update(['status' => 'failed', 'completed_at' => now(), 'error_message' => mb_substr($exception->getMessage(), 0, 1000)]);
             throw $exception;
         } finally {
