@@ -8,6 +8,16 @@ use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
 
+// Retry staged uploads after remote storage becomes reachable; local staging is never pruned.
+Schedule::command('storage:transfer-pending --limit=100')
+    ->everyMinute()
+    ->withoutOverlapping(10);
+
+// Encrypted weekly application backup to configured foreign backup volumes.
+Schedule::command('storage:backup-weekly')
+    ->weeklyOn(0, '02:00')
+    ->withoutOverlapping(360);
+
 Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
 Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->withoutOverlapping();
