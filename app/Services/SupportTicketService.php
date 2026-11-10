@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Ticket;
+use App\Models\StorageManagedFile;
 use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\WorkflowEngine;
@@ -171,10 +172,19 @@ class SupportTicketService
         if (! empty($options['attachment']) && $options['attachment'] instanceof UploadedFile
             && Schema::hasColumn('ticket_messages', 'attachments')) {
             $file = $options['attachment'];
-            $path = $file->store('ticket-attachments/'.$ticket->id, 'private');
+            $path = \Illuminate\Support\Facades\Storage::disk('managed')->putFile('ticket-attachments/'.$ticket->id, $file, [
+                'farast_classification' => 'non_critical',
+                'farast_source_type' => 'ticket_attachment',
+                'farast_source_id' => $ticket->id,
+                'farast_owner_user_id' => $ticket->user_id,
+                'farast_product_id' => $ticket->related_product_id,
+                'farast_original_name' => $file->getClientOriginalName(),
+            ]);
+            $managedFile = StorageManagedFile::query()->where('logical_path', $path)->first();
             $payload['attachments'] = [[
                 'path' => $path,
-                'disk' => 'private',
+                'disk' => 'managed',
+                'storage_managed_file_id' => $managedFile?->id,
                 'name' => $file->getClientOriginalName(),
                 'size' => $file->getSize(),
                 'mime' => $file->getMimeType(),
