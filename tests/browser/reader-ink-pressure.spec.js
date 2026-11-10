@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and supports undo/redo',async({page})=>{
   await page.goto('/');
   await page.setContent('<section class="farast-reader" data-reader-root data-product-id="pressure-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Pressure ink test</span></div></div></article></section>');
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
   await page.addStyleTag({path:require('path').join(__dirname,'../../public/css/farast-reader-annotations.css')});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-ink-pressure.js')});
@@ -18,6 +19,12 @@ test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and s
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
   const fallback=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[1].points.map(p=>p.p));
   expect(fallback.every(p=>p===.5)).toBeTruthy();
+  const durableKey='farast-reader:pressure-ink:v1:pressure-test';
+  await expect.poll(()=>page.evaluate(async key=>{const raw=await window.FarastReaderDurableStore.restore(key);return raw?JSON.parse(raw).length:0;},durableKey)).toBe(2);
+  await page.evaluate(()=>localStorage.clear());
+  const durableStrokes=await page.evaluate(async key=>JSON.parse(await window.FarastReaderDurableStore.restore(key)),durableKey);
+  expect(durableStrokes).toHaveLength(2);
+  expect(durableStrokes[0].points.map(p=>p.p)).toContain(.18);
   await page.locator('[data-pressure-action="undo"]').click();await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
   await page.locator('[data-pressure-action="redo"]').click();await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
   const backup=await page.evaluate(()=>window.FarastReaderPressureInk.exportData());
