@@ -128,29 +128,14 @@ class StoreCouponRedemptionService
             throw new RuntimeException('ظرفیت استفاده از این کد تخفیف پیش از پرداخت این سفارش تکمیل شده است.');
         }
 
-        // A single locked first-party setting serializes coupon redemptions across
-        // different codes, preventing parallel orders from overspending the monthly
-        // marketing budget. Zero means the administrator has left the cap disabled.
-        $budgetSetting = SiteSetting::query()->firstOrCreate(
-            ['key' => 'store_coupon_monthly_budget_rials'],
-            ['value' => '0', 'is_secret' => false]
-        );
-        $budgetSetting = SiteSetting::query()->whereKey($budgetSetting->id)->lockForUpdate()->first();
-        $monthlyBudgetCap = max(0, (int) ($budgetSetting?->value ?? 0));
-        if ($monthlyBudgetCap > 0) {
-            $monthStart = now()->startOfMonth();
-            $spentBeforeThisOrder = Order::query()
-                ->where('status', 'paid')
-                ->whereNotNull('paid_at')
-                ->where('paid_at', '>=', $monthStart)
-                ->whereNotNull('pricing_snapshot->coupon_redeemed_at')
-                ->whereNotNull('pricing_snapshot->coupon_code')
-                ->where('id', '!=', $order->id)
-                ->sum('discount_rials');
-
-            if ((int) $spentBeforeThisOrder + max(0, (int) $order->discount_rials) > $monthlyBudgetCap) {
-                throw new RuntimeException('بودجه ماهانه تخفیف‌های فراست تکمیل شده است؛ این کد تا دوره بعد قابل مصرف نیست.');
-            }
+        // The same locked policy used by offer issuance includes active offers
+        // as reservations and excludes this assignment as it moves from reserved
+        // to consumed budget inside the current payment transaction.
+        if (! app(StoreCouponBudgetPolicy::class)->allows(
+            max(0, (int) $order->discount_rials),
+            $assignment?->id
+        )) {
+            throw new RuntimeException('بودجه ماهانه تخفیف‌های فراست تکمیل شده یا برای پیشنهادهای فعال رزرو شده است؛ این کد در این دوره قابل مصرف نیست.');
         }
 
         // The order amount is immutable: never recalculate or silently alter its payable total here.
