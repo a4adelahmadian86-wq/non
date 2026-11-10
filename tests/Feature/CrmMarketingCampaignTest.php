@@ -36,6 +36,7 @@ class CrmMarketingCampaignTest extends TestCase
     {
         $admin = $this->user('09151110001');
         $customer = $this->user('09151110002', User::ROLE_EMPLOYEE);
+        $customer->forceFill(['marketing_consent' => true, 'marketing_consent_updated_at' => now()])->save();
         $other = $this->user('09151110003', User::ROLE_EMPLOYEE);
         Order::create([
             'user_id' => $customer->id,
@@ -142,6 +143,7 @@ class CrmMarketingCampaignTest extends TestCase
         $admin->organization_id = $orgA->id;
         $admin->save();
         $inside = $this->user('09151110005', User::ROLE_EMPLOYEE);
+        $inside->forceFill(['marketing_consent' => true, 'marketing_consent_updated_at' => now()])->save();
         $outside = $this->user('09151110006', User::ROLE_EMPLOYEE);
         $inside->organization_id = $orgA->id;
         $inside->save();

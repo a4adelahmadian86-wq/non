@@ -38,12 +38,12 @@ class User extends Authenticatable
         self::ROLE_GUEST,
     ];
 
-    protected $fillable = ['name','mobile','email','password','role','is_verified','is_blocked','organization_id'];
+    protected $fillable = ['name','mobile','email','password','role','is_verified','is_blocked','organization_id','marketing_consent'];
     protected $hidden = ['password','remember_token'];
 
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'is_verified' => 'boolean', 'is_blocked' => 'boolean'];
+        return ['password' => 'hashed', 'is_verified' => 'boolean', 'is_blocked' => 'boolean', 'marketing_consent' => 'boolean', 'marketing_consent_updated_at' => 'datetime'];
     }
 
     public function documents(): HasMany { return $this->hasMany(TypingDocument::class); }
