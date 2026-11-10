@@ -131,7 +131,7 @@ trait PaysWithZarinpal
                 $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
                     $product = $item->product;
-                    if (! $product || $product->status !== 'published') {
+                    if (! $product || ! app(\\App\\Services\\StoreCartService::class)->isPurchasable($product)) {
                         throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
                     }
 
@@ -149,7 +149,7 @@ trait PaysWithZarinpal
                             : ($product->files()->where('purpose', 'product_download')->where('is_primary', true)->first()
                                 ?: $product->files()->where('purpose', 'product_download')->where('is_active', true)->first());
 
-                        if (! $file || ! $file->is_active) {
+                        if (! $file || ! $file->is_active || ! in_array($file->scan_status, ['clean', 'legacy'], true)) {
                             throw new \RuntimeException('فایل محصول برای تحویل آماده نیست.');
                         }
                         $expectedHash = trim((string) ($snapshot['file_sha256'] ?? ''));
