@@ -15,7 +15,15 @@
                     @if($console->sectionAllowed(auth()->user(), 'settings'))<a class="admin-outline" href="#ai-settings"><i class="fa-solid fa-sparkles"></i> تنظیم AI</a>@endif
                 </div>
             </div>
-            <div class="hero-orbit" aria-hidden="true"><div class="orbit-core"><span></span><span></span><span></span><span></span><b></b></div><i class="orbit-dot d1"></i><i class="orbit-dot d2"></i><i class="orbit-dot d3"></i></div>
+            <div class="hero-quick-stats" aria-label="خلاصه عملیات">
+                <div><span>کاربران فعال در دامنه</span><strong>{{ number_format($stats['active_users']) }}</strong></div>
+                @if($console->sectionAllowed(auth()->user(), 'users'))
+                    <div><span>پروژه‌های فعال</span><strong>{{ number_format($stats['active_projects']) }}</strong></div>
+                @endif
+                @if($console->sectionAllowed(auth()->user(), 'support_admin'))
+                    <div><span>تیکت‌های باز</span><strong>{{ number_format($stats['tickets_open']) }}</strong></div>
+                @endif
+            </div>
         </section>
 
         <section class="admin-metric-grid" aria-label="شاخص‌های اصلی">
@@ -275,6 +283,12 @@
 .farast-admin-nav-create-product b{margin-inline-start:auto;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#2e73d2;color:white;font-size:1rem}
 .farast-admin-nav a[aria-current="page"]{outline:1px solid rgba(111,174,255,.22)}
 .hero-copy h1{font-size:25px;line-height:1.55;margin:13px 0 7px;letter-spacing:-.5px}
+.hero-quick-stats{position:relative;z-index:2;display:grid;gap:9px;min-width:230px;max-width:290px}
+.hero-quick-stats>div{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid rgba(255,255,255,.13);border-radius:13px;background:rgba(255,255,255,.07);backdrop-filter:blur(8px)}
+.hero-quick-stats span{font-size:10px;color:#a9c0e3}
+.hero-quick-stats strong{font-size:18px;color:#fff;font-weight:900;font-variant-numeric:tabular-nums}
+@media(max-width:760px){.hero-quick-stats{width:100%;max-width:none;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}.hero-quick-stats>div{padding:10px;gap:8px}.hero-quick-stats span{font-size:9px}}
+
 .admin-action-metrics{margin-top:-5px}
 .admin-action-metric{display:block;min-width:0;text-decoration:none;color:inherit;transition:transform .18s ease,box-shadow .18s ease}
 .admin-action-metric:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(16,35,70,.12)}
