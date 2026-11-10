@@ -390,6 +390,7 @@ class AdvancedAccessControlTest extends TestCase
             'role_id' => $roleId,
             'scope_type' => 'organization',
             'scope_id' => $organizationB->id,
+            'reason' => 'Attempt to assign organization role outside parent scope',
         ])->assertUnprocessable();
 
         $this->assertDatabaseMissing('farast_user_roles', [
@@ -425,6 +426,7 @@ class AdvancedAccessControlTest extends TestCase
             'role_id' => $roleId,
             'scope_type' => 'team',
             'scope_id' => $teamB->id,
+            'reason' => 'Attempt to assign team role outside parent scope',
         ])->assertUnprocessable();
 
         $this->assertDatabaseMissing('farast_user_roles', [
@@ -442,6 +444,7 @@ class AdvancedAccessControlTest extends TestCase
             'name' => 'نقش بدون ممیزی',
             'description' => 'نباید بدون ثبت ممیزی ذخیره شود',
             'scope_type' => 'global',
+            'reason' => 'Audit atomicity test',
         ])->assertServerError();
 
         $this->assertDatabaseMissing('farast_roles', ['name' => 'نقش بدون ممیزی']);
