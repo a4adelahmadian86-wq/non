@@ -173,10 +173,10 @@ class InternalMessengerTest extends TestCase
         $sender = $this->makeEmployee($this->makeOrganization());
         $otherOrganizationUser = $this->makeEmployee($this->makeOrganization());
 
-        $this->actingAs($sender)->post(route('messenger.store'), [
+        $this->actingAs($sender)->postJson(route('messenger.store'), [
             'type' => 'direct',
             'participant_ids' => [$otherOrganizationUser->id],
-        ])->assertSessionHasErrors('participant_ids');
+        ])->assertStatus(422);
         $this->assertDatabaseCount('conversations', 0);
     }
 
