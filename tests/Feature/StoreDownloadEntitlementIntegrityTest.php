@@ -60,6 +60,8 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
 
         $file = StoreProductFile::create([
             'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'scan_status' => 'clean',
             'version' => '1.0',
             'disk' => 'private',
             'path' => 'products/'.$slug.'-v1.pdf',
