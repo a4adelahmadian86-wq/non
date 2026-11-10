@@ -134,7 +134,7 @@ class SupportGuestIsolationTest extends TestCase
             $ticket,
             $user,
             'Attached document',
-            ['attachment' => UploadedFile::fake()->create('document.pdf', 32, 'application/pdf'), 'notify' => false],
+            ['attachment' => UploadedFile::fake()->createWithContent('document.txt', 'Non-empty support attachment fixture.'), 'notify' => false],
         );
 
         $attachment = $message->fresh()->attachments[0];
