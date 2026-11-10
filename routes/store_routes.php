@@ -83,3 +83,8 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/categories',[AdminStoreController::class,'storeCategory'])->name('store.categories.store');
     Route::post('/store/tags',[AdminStoreController::class,'storeTag'])->name('store.tags.store');
 });
+
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('/store/{product}/publication/approve', [AdminStoreController::class, 'approvePublication'])->middleware('throttle:10,10')->name('store.publication.approve');
+    Route::post('/store/{product}/publication/retry', [AdminStoreController::class, 'retryPublicationReview'])->middleware('throttle:5,10')->name('store.publication.retry');
+});

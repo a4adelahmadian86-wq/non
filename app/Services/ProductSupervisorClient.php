@@ -44,6 +44,17 @@ class ProductSupervisorClient
             throw new RuntimeException('product_supervisor_invalid_response');
         }
 
+        $corrections = is_array($payload['corrections'] ?? null) ? $payload['corrections'] : [];
+        $allowedFields = ['title' => 220, 'short_description' => 2000, 'description' => 8000, 'seo_title' => 220, 'seo_description' => 320];
+        $payload['corrections'] = [];
+        foreach ($allowedFields as $field => $limit) {
+            if (isset($corrections[$field]) && is_string($corrections[$field])) {
+                $value = trim(mb_substr($corrections[$field], 0, $limit));
+                if ($value !== '') {
+                    $payload['corrections'][$field] = $value;
+                }
+            }
+        }
         $payload['automated_publication'] = false;
 
         return $payload;

@@ -7,7 +7,9 @@ use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductPublicationReview;
 use App\Jobs\ProcessProductDocument;
+use App\Jobs\RunProductPublicationReview;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
@@ -28,7 +30,7 @@ class AdminStoreController extends Controller
     {
         $q = mb_substr(trim((string) $request->query('q', '')), 0, 120);
         $type = in_array($request->query('type'), ['digital_file', 'course'], true) ? $request->query('type') : '';
-        $status = in_array($request->query('status'), ['draft', 'published', 'archived'], true) ? $request->query('status') : '';
+        $status = in_array($request->query('status'), ['draft', 'pending_review', 'published', 'archived'], true) ? $request->query('status') : '';
         $categoryId = filter_var($request->query('category_id'), FILTER_VALIDATE_INT) ?: null;
         $sort = in_array($request->query('sort'), ['newest', 'oldest', 'title_asc', 'price_asc', 'price_desc', 'updated'], true)
             ? $request->query('sort')
@@ -59,6 +61,7 @@ class AdminStoreController extends Controller
         $stats = [
             'total' => StoreProduct::count(),
             'published' => StoreProduct::where('status', 'published')->count(),
+            'pending_review' => StoreProduct::where('status', 'pending_review')->count(),
             'drafts' => StoreProduct::where('status', 'draft')->count(),
             'archived' => StoreProduct::where('status', 'archived')->count(),
             'courses' => StoreProduct::where('type', 'course')->count(),
@@ -199,6 +202,7 @@ class AdminStoreController extends Controller
         $tags = StoreTag::query()->orderBy('name')->get();
         $relatedProducts = app(ProductRelatedProductsService::class)->recommend($product);
         $aiContentReadiness = $contentGenerator->readiness($product);
+        $publicationReview = StoreProductPublicationReview::query()->where('product_id', $product->id)->latest('id')->first();
 
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
             && $file->is_active && $file->is_primary && $file->scan_status === 'clean');
@@ -230,7 +234,7 @@ class AdminStoreController extends Controller
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness'));
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'publicationReview'));
     }
 
     public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
@@ -255,6 +259,19 @@ class AdminStoreController extends Controller
             $fieldEvidence = $contentGenerator->validateFieldEvidence($product, $submittedFieldEvidence);
         }
         $data = $this->validated($request, $product);
+        $publicationRequested = $request->boolean('submit_for_publication') || (($data['status'] ?? null) === 'published');
+        $publicationReviewId = null;
+        $requesterId = auth()->id();
+        if ($publicationRequested) {
+            // Publication is always a queued decision; this request can never expose the product.
+            $data['status'] = 'pending_review';
+            $data['published_at'] = null;
+            $supervisorSettings = (array) data_get($data, 'metadata.ai_supervisor', data_get($product->metadata, 'ai_supervisor', []));
+            $supervisorSettings['enabled'] = true;
+            $supervisorSettings['mode'] = 'review_gate';
+            $supervisorSettings['checks'] = array_fill_keys(['content', 'pricing', 'seo', 'media', 'policy', 'course'], true);
+            $data['metadata'] = array_replace_recursive((array) ($data['metadata'] ?? $product->metadata ?? []), ['ai_supervisor' => $supervisorSettings]);
+        }
         $tagIds = $data['tag_ids'] ?? [];
         $aiTagNames = $request->validate([
             'ai_content_tag_names' => 'nullable|array|max:10',
@@ -276,7 +293,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
+        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence, $publicationRequested, $requesterId, &$publicationReviewId) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -424,6 +441,9 @@ class AdminStoreController extends Controller
                 $data['metadata'] = $metadata;
             }
             $lockedProduct->update($data);
+            if (! $publicationRequested) {
+                StoreProductPublicationReview::query()->where('product_id', $lockedProduct->id)->where('status', 'awaiting_manager')->update(['status' => 'stale', 'failure_code' => 'product_edited_after_review']);
+            }
             $lockedProduct->tags()->sync($tagIds);
             $lockedProduct->related()->sync(app(ProductRelatedProductsService::class)->recommend($lockedProduct)->pluck('id')->all());
             if ($provenance !== null) {
@@ -439,9 +459,115 @@ class AdminStoreController extends Controller
                 'status' => $lockedProduct->status,
                 'price_rials' => $lockedProduct->price_rials,
             ]);
+
+            if ($publicationRequested) {
+                StoreProductPublicationReview::query()->where('product_id', $lockedProduct->id)
+                    ->whereIn('status', ['queued', 'reviewing', 'awaiting_manager'])
+                    ->update(['status' => 'stale', 'failure_code' => 'superseded_by_new_submission']);
+                $review = StoreProductPublicationReview::create([
+                    'product_id' => $lockedProduct->id,
+                    'requested_by' => $requesterId,
+                    'status' => 'queued',
+                    'auto_publish' => (bool) data_get($lockedProduct->metadata, 'ai_supervisor.auto_publish', false),
+                ]);
+                $publicationReviewId = $review->id;
+                $this->audit('store.product.publication_submitted', $lockedProduct, [
+                    'publication_review_id' => $review->id,
+                    'auto_publish_requested' => $review->auto_publish,
+                ]);
+            }
         });
 
-        return back()->with('status', 'محصول به‌روزرسانی شد.');
+        if ($publicationRequested && $publicationReviewId) {
+            RunProductPublicationReview::dispatch($publicationReviewId)->afterCommit();
+        }
+
+        return back()->with('status', $publicationRequested
+            ? 'محصول ثبت شد و تا پایان بررسی هوش مصنوعی و تأیید لازم، در صف انتشار خصوصی باقی می‌ماند.'
+            : 'محصول به‌روزرسانی شد.');
+    }
+
+    public function approvePublication(
+        Request $request,
+        StoreProduct $product,
+        ProductSupervisorSnapshotBuilder $snapshotBuilder,
+        \App\Services\ProductPublicationReadiness $readiness,
+        \App\Services\ProductKnowledgeService $knowledge
+    ) {
+        abort_unless(app(\App\Services\AuthorizationService::class)->allows($request->user(), 'store.manage'), 403);
+
+        $review = StoreProductPublicationReview::query()
+            ->where('product_id', $product->id)
+            ->where('status', 'awaiting_manager')
+            ->latest('id')
+            ->firstOrFail();
+
+        $settings = (array) data_get($product->metadata, 'ai_supervisor', []);
+        $settings['checks'] = array_fill_keys(['content', 'pricing', 'seo', 'media', 'policy', 'course'], true);
+        $snapshot = $snapshotBuilder->build($product, $settings);
+        $snapshot['document_knowledge'] = $knowledge->contextForProduct($product, 12000);
+        $currentHash = $snapshotBuilder->fingerprint($snapshot);
+        if (! filled($review->snapshot_hash) || ! hash_equals((string) $review->snapshot_hash, $currentHash)) {
+            $review->update(['status' => 'stale', 'failure_code' => 'product_changed_after_supervisor_review']);
+            return back()->withErrors(['publication' => 'اطلاعات محصول پس از بررسی ناظر تغییر کرده است؛ بررسی تازه لازم است.']);
+        }
+
+        $categoryReady = $product->category()->where('is_active', true)->exists();
+        $contentReady = $product->type === 'course'
+            ? $product->course()->whereHas('sections.lessons', fn ($query) => $query->publishable())->exists()
+            : $product->files()->where('purpose', 'product_download')->where('is_active', true)->where('is_primary', true)->where('scan_status', 'clean')->exists();
+        if (! $categoryReady || ! $contentReady
+            || (($product->download_policy ?? 'signed') === 'reader_only' && $product->type !== 'course' && ! $readiness->hasReadyPrimaryReader($product))) {
+            return back()->withErrors(['publication' => 'الزامات قطعی انتشار هنوز کامل نیست؛ محصول منتشر نشد.']);
+        }
+
+        DB::transaction(function () use ($request, $product, $review, $currentHash) {
+            $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $lockedReview = StoreProductPublicationReview::query()->whereKey($review->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedReview->status === 'awaiting_manager' && $lockedProduct->status === 'pending_review', 409);
+            abort_unless(hash_equals((string) $lockedReview->snapshot_hash, $currentHash), 409);
+
+            $lockedProduct->update(['status' => 'published', 'published_at' => now()]);
+            $lockedReview->update([
+                'status' => 'published',
+                'manager_approved_by' => $request->user()->id,
+                'manager_approved_at' => now(),
+                'published_at' => now(),
+            ]);
+            app(\App\Services\AuditEventService::class)->record(
+                'store.product.publication_manager_approved',
+                $request->user()->id,
+                null,
+                'store_product',
+                $lockedProduct->id,
+                ['publication_review_id' => $lockedReview->id, 'review_verdict' => $lockedReview->verdict],
+                'admin_console'
+            );
+        });
+
+        return back()->with('status', 'تأیید انسانی ثبت شد و محصول منتشر گردید.');
+    }
+
+    public function retryPublicationReview(Request $request, StoreProduct $product)
+    {
+        abort_unless(app(\App\Services\AuthorizationService::class)->allows($request->user(), 'store.manage'), 403);
+
+        $review = StoreProductPublicationReview::query()
+            ->where('product_id', $product->id)
+            ->whereIn('status', ['failed', 'stale'])
+            ->latest('id')
+            ->firstOrFail();
+
+        $review->update([
+            'status' => 'queued',
+            'failure_code' => null,
+            'snapshot_hash' => null,
+            'reviewed_snapshot_hash' => null,
+            'reviewed_at' => null,
+        ]);
+        RunProductPublicationReview::dispatch($review->id)->afterCommit();
+
+        return back()->with('status', 'بررسی ناظر دوباره در صف اجرا قرار گرفت؛ محصول تا پایان فرایند خصوصی می‌ماند.');
     }
 
     public function destroy(StoreProduct $product)
@@ -1253,7 +1379,7 @@ class AdminStoreController extends Controller
             'cost_price_rials' => 'nullable|integer|min:0|lte:price_rials',
             'marketing_min_margin_rials' => 'nullable|integer|min:0|max:999999999999',
             'compare_at_price_rials' => 'nullable|integer|min:0|gt:price_rials',
-            'status' => 'required|in:draft,published,archived',
+            'status' => 'required|in:draft,pending_review,published,archived',
             'featured' => 'nullable|boolean',
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'preview_pages' => 'nullable|integer|min:0|max:50',
@@ -1280,6 +1406,7 @@ class AdminStoreController extends Controller
             'ai_supervisor.checks.policy' => 'nullable|boolean',
             'ai_supervisor.checks.course' => 'nullable|boolean',
             'ai_supervisor.instructions' => 'nullable|string|max:4000',
+            'ai_supervisor.auto_publish' => 'nullable|boolean',
         ]);
         $existingMetadata = $product?->metadata ?? [];
         $data['metadata'] = $existingMetadata;
@@ -1314,6 +1441,7 @@ class AdminStoreController extends Controller
                     'mode' => $request->input('ai_supervisor.mode', 'suggest'),
                     'checks' => $supervisorChecks,
                     'instructions' => trim((string) $request->input('ai_supervisor.instructions', '')),
+                    'auto_publish' => $request->boolean('ai_supervisor.auto_publish'),
                     'configuration_version' => 1,
                 ],
             ]);
