@@ -88,7 +88,7 @@
         </div>
         <div class="crm-marketing__table-wrap">
             <table>
-                <thead><tr><th>کمپین</th><th>وضعیت</th><th>مخاطب</th><th>پیشنهاد صادرشده</th><th>نمایش / کلیک</th><th>بازخرید</th><th>فروش منتسب</th><th>هزینه تخفیف</th><th>اقدام</th></tr></thead>
+                <thead><tr><th>کمپین</th><th>وضعیت</th><th>مخاطب</th><th>پیشنهاد صادرشده</th><th>نمایش / کلیک</th><th>بازخرید</th><th>فروش منتسب</th><th>هزینه تخفیف</th><th>بودجه رزروشده / مانده</th><th>اقدام</th></tr></thead>
                 <tbody id="campaignsList"><tr><td colspan="9" class="crm-marketing__empty">در حال دریافت کمپین‌ها…</td></tr></tbody>
             </table>
         </div>
@@ -222,7 +222,7 @@
         if (!items.length) {
             const row = document.createElement('tr');
             const cell = document.createElement('td');
-            cell.colSpan = 9;
+            cell.colSpan = 10;
             cell.className = 'crm-marketing__empty';
             cell.textContent = 'هنوز کمپینی ثبت نشده است.';
             row.append(cell);
@@ -253,6 +253,7 @@
                 [number(item.redeemed_offer_count), 'تبدیل نمایش ' + number(item.view_to_redemption_rate) + '٪'],
                 [number(item.attributed_revenue_rials) + ' ریال', ''],
                 [number(item.redeemed_discount_rials) + ' ریال', ''],
+                [number(item.reserved_discount_rials) + ' ریال', 'مانده ' + (item.budget_remaining_rials === null ? 'بدون سقف' : number(item.budget_remaining_rials) + ' ریال')],
             ];
             metrics.forEach(metric => {
                 const cell = document.createElement('td');
