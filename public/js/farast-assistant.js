@@ -367,7 +367,7 @@
       if(force){speechBatch=[];pendingSpeech='';if(combined)enqueueSpeech(combined);return;}
       var anotherCompleteSentence=/[.!?؟۔](?:\s+|$)/u.test(pendingSpeech);
       // Start the first TTS request sooner: waiting for buffered text can dominate time-to-first-audio.
-      var shouldFlush=firstSpeechBatchSent?(speechBatch.length>=2||combined.length>=200):(combined.length>=140||(speechBatch.length>=1&&!anotherCompleteSentence));
+      var shouldFlush=combined.length>=120||(speechBatch.length>=1&&!anotherCompleteSentence&&combined.length>=45);
       if(shouldFlush){speechBatch=[];if(combined){enqueueSpeech(combined);firstSpeechBatchSent=true;}}
     }
     function acceptDelta(delta){
