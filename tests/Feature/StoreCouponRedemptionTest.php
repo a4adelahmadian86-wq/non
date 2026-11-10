@@ -192,6 +192,8 @@ class StoreCouponRedemptionTest extends TestCase
             'name' => 'Smart Coupon Allocation QA',
             'mobile' => '09123456785',
             'password' => 'secret',
+            'marketing_consent' => true,
+            'marketing_consent_updated_at' => now(),
         ]);
         $category = StoreCategory::create([
             'name' => 'دسته آزمون تخصیص',
@@ -321,8 +323,14 @@ class StoreCouponRedemptionTest extends TestCase
 
     public function test_campaign_budget_is_rechecked_under_lock_when_smart_offer_is_redeemed(): void
     {
-        $firstUser = User::create(['name' => 'Campaign Budget One', 'mobile' => '09123456791', 'password' => 'secret']);
-        $secondUser = User::create(['name' => 'Campaign Budget Two', 'mobile' => '09123456792', 'password' => 'secret']);
+        $firstUser = User::create([
+            'name' => 'Campaign Budget One', 'mobile' => '09123456791', 'password' => 'secret',
+            'marketing_consent' => true, 'marketing_consent_updated_at' => now(),
+        ]);
+        $secondUser = User::create([
+            'name' => 'Campaign Budget Two', 'mobile' => '09123456792', 'password' => 'secret',
+            'marketing_consent' => true, 'marketing_consent_updated_at' => now(),
+        ]);
         $category = StoreCategory::create(['name' => 'Campaign Budget', 'slug' => 'campaign-budget-category', 'is_active' => true]);
         $product = StoreProduct::create([
             'category_id' => $category->id, 'title' => 'Campaign Budget Product',
