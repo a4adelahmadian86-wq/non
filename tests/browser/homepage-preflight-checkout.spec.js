@@ -79,6 +79,8 @@ test('homepage file intake sends a deposit quote to checkout after explicit acce
 
 test('service showcase entry points open the matching guided workflow instead of bypassing it', async ({ page }) => {
   await page.goto('/');
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.locator('.home-service-card__action[href="#homeDiscovery"]')).toHaveCount(4);
   const fileCard = page.locator('.home-service-card').filter({ hasText: 'تبدیل فایل به متن' });
   await fileCard.getByRole('link', { name: 'شروع با فایل' }).click();
   await expect(page.getByRole('heading', { name: 'نوع محتوای فایل چیست؟' })).toBeVisible();
