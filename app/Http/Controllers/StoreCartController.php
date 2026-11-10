@@ -176,14 +176,14 @@ class StoreCartController extends Controller
                 } else {
                     $lineDiscount = $isLast
                         ? $remainingDiscount
-                        : min($line, $subtotal > 0 ? (int) floor($discount * $line / $subtotal) : 0);
+                        : min($line, $remainingSubtotal > 0 ? (int) floor($remainingDiscount * $line / $remainingSubtotal) : 0);
                 }
                 $remainingDiscount -= $lineDiscount;
 
                 $lineTaxable = max(0, $line - $lineDiscount);
                 $lineTax = $isLast
                     ? $remainingTax
-                    : min($remainingTax, $taxable > 0 ? (int) floor($tax * $lineTaxable / $taxable) : 0);
+                    : min($remainingTax, $remainingTaxable > 0 ? (int) floor($remainingTax * $lineTaxable / $remainingTaxable) : 0);
                 $remainingTax -= $lineTax;
                 $remainingSubtotal -= $line;
                 $remainingTaxable -= $lineTaxable;
