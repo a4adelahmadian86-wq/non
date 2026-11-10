@@ -433,6 +433,7 @@ class AuthorizationService
         return true;
     }
 
+    /** Avoid PHP loose-comparison coercion in conditional grants. */
     private function sameScalarValue(mixed $actual, mixed $expected): bool
     {
         if ($actual === null || $expected === null) {
