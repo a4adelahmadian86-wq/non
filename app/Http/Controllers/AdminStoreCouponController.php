@@ -116,11 +116,21 @@ class AdminStoreCouponController extends Controller
         $monthlyBudgetCap = max(0, (int) SiteSetting::read('store_coupon_monthly_budget_rials', 0));
         $measurementWindowDays = max(7, min(180, (int) SiteSetting::read('marketing_signal_retention_days', 90)));
         $measurementSince = now()->subDays($measurementWindowDays);
-        $offerViews = DB::table('farast_workflow_events')
+        $offerViewContexts = DB::table('farast_workflow_events')
             ->where('event_type', 'marketing.offer_viewed')
             ->where('created_at', '>=', $measurementSince)
             ->when($visibleIds !== null, fn ($query) => $query->whereIn('user_id', $visibleIds))
-            ->count();
+            ->pluck('context');
+        $viewedAssignmentIds = $offerViewContexts
+            ->map(function ($context) {
+                $decoded = is_array($context) ? $context : json_decode((string) $context, true);
+                return is_array($decoded) ? ($decoded['assignment_id'] ?? null) : null;
+            })
+            ->filter(function ($id) { return is_numeric($id) && (int) $id > 0; })
+            ->map(function ($id) { return (int) $id; })
+            ->unique()
+            ->values();
+        $offerViews = $viewedAssignmentIds->count();
         $offerClicks = DB::table('farast_workflow_events')
             ->where('event_type', 'marketing.offer_clicked')
             ->where('created_at', '>=', $measurementSince)
@@ -128,7 +138,7 @@ class AdminStoreCouponController extends Controller
             ->count();
         $redeemedOffersInWindow = (clone $base)
             ->where('status', 'redeemed')
-            ->where('offered_at', '>=', $measurementSince)
+            ->whereIn('id', $viewedAssignmentIds->all())
             ->count();
         $monthlyBudgetSpent = Order::query()
             ->where('status', 'paid')
