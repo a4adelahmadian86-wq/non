@@ -211,7 +211,7 @@ class SmartDiscountMarketingService
      * a smaller incentive; weak conversion may use the configured ceiling, but
      * the margin policy remains the hard financial limit in every case.
      */
-    private function effectiveDiscountPercent(int $productId, int $configuredMaximum): int
+    private function effectiveDiscountPercent(int $productId, int $configuredMaximum): float
     {
         $history = StoreCouponAssignment::query()
             ->where('product_id', $productId)
@@ -235,11 +235,11 @@ class SmartDiscountMarketingService
         $conversion = $redeemed / max(1, $total);
 
         if ($conversion >= 0.35) {
-            return max(1, (int) floor($configuredMaximum * 0.75));
+            return max(1.0, $configuredMaximum * 0.75);
         }
 
         if ($conversion >= 0.10) {
-            return max(1, (int) floor($configuredMaximum * 0.90));
+            return max(1.0, $configuredMaximum * 0.90);
         }
 
         return $configuredMaximum;
