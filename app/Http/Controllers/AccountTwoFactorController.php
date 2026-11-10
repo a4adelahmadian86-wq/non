@@ -79,15 +79,17 @@ class AccountTwoFactorController extends Controller
         abort_unless($secret !== '' && $startedAt >= now()->subMinutes(10)->timestamp, 422, 'مهلت راه‌اندازی تمام شده است؛ دوباره شروع کنید.');
         abort_if($request->user()->two_factor_enabled_at, 409);
 
-        if (! $totp->verify($secret, (string) $request->input('code'))) {
+        $matchedCounter = $totp->matchingCounter($secret, (string) $request->input('code'));
+        if ($matchedCounter === null) {
             throw ValidationException::withMessages(['code' => 'کد برنامه احراز هویت صحیح نیست. ساعت دستگاه را بررسی و دوباره تلاش کنید.']);
         }
 
         $user = $request->user();
-        $codes = DB::transaction(function () use ($user, $secret, $totp) {
+        $codes = DB::transaction(function () use ($user, $secret, $matchedCounter, $totp) {
             $user->forceFill([
                 'two_factor_secret' => Crypt::encryptString($secret),
                 'two_factor_enabled_at' => now(),
+                'two_factor_last_counter' => $matchedCounter,
             ])->save();
 
             return $this->replaceRecoveryCodes($user, $totp);
@@ -145,6 +147,7 @@ class AccountTwoFactorController extends Controller
             $user->forceFill([
                 'two_factor_secret' => null,
                 'two_factor_enabled_at' => null,
+                'two_factor_last_counter' => null,
             ])->save();
 
             DB::table('farast_two_factor_recovery_codes')->where('user_id', $user->id)->delete();
@@ -165,8 +168,18 @@ class AccountTwoFactorController extends Controller
     {
         try {
             $secret = Crypt::decryptString((string) $user->two_factor_secret);
-            if ($totp->verify($secret, $code)) {
-                return true;
+            $counter = $totp->matchingCounter($secret, $code);
+            if ($counter !== null) {
+                return DB::table('users')
+                    ->where('id', $user->id)
+                    ->where(function ($query) use ($counter) {
+                        $query->whereNull('two_factor_last_counter')
+                            ->orWhere('two_factor_last_counter', '<', $counter);
+                    })
+                    ->update([
+                        'two_factor_last_counter' => $counter,
+                        'updated_at' => now(),
+                    ]) === 1;
             }
         } catch (Throwable) {
             // Fall through to a one-time recovery-code check.
