@@ -73,7 +73,7 @@ class AdminProductSupervisorController extends Controller
     public function reviewFile(StoreProduct $product, StoreProductFile $file, ProductSupervisorClient $supervisor)
     {
         abort_unless((int) $file->product_id === (int) $product->id && $file->purpose === 'product_download' && $file->is_active, 404);
-        abort_unless($file->scan_status === 'clean', 409, 'فایل باید ابتدا از اسکنر اصلی فروشگاه وضعیت سالم دریافت کند.');
+        abort_unless(in_array($file->scan_status, ['clean', 'structural'], true), 409, 'فایل باید ابتدا اعتبارسنجی ساختاری را با موفقیت طی کند.');
 
         return $this->reviewStoredAsset(
             $product,
@@ -101,7 +101,7 @@ class AdminProductSupervisorController extends Controller
             && (int) $file->course_lesson_id === (int) $lesson->id
             && $file->purpose === 'lesson_resource'
             && $file->is_active
-            && $file->scan_status === 'clean',
+            && in_array($file->scan_status, ['clean', 'structural'], true),
             404
         );
 

@@ -16,6 +16,7 @@
   const cancelButton = root.querySelector('[data-ingestion-cancel]');
   const closeButton = root.querySelector('[data-ingestion-close]');
   const primaryInput = root.querySelector('[data-ingestion-primary]');
+  const securityScanInput = root.querySelector('[data-ingestion-security-scan]');
   const csrf = root.querySelector('[data-ingestion-csrf]').value;
   const queueView = root.querySelector('[data-ingestion-queue]');
   const selectedView = root.querySelector('[data-ingestion-selected]');
@@ -217,12 +218,13 @@
     form.append('file', file, file.name);
     state.primaryForCurrent = !!primaryInput.checked && !state.primaryCommitted;
     form.append('is_primary', state.primaryForCurrent ? '1' : '0');
+    if (securityScanInput) form.append('security_scan', securityScanInput.checked ? '1' : '0');
 
     try {
       setStep('upload', ['received']);
       setProgress(0, 'در حال انتقال فایل به قرنطینه خصوصی...');
       const payload = await sendPreflight(root.dataset.preflightUrl, form, (percent, uploaded) => {
-        setProgress(percent, uploaded ? 'انتقال کامل شد؛ بررسی ساختار و امنیت در حال اجراست...' : 'در حال انتقال امن فایل · ' + percent + '٪');
+        setProgress(percent, uploaded ? (securityScanInput?.checked ? 'انتقال کامل شد؛ اعتبارسنجی و اسکن امنیتی در حال اجراست...' : 'انتقال کامل شد؛ اعتبارسنجی ساختاری در حال اجراست...') : 'در حال انتقال امن فایل · ' + percent + '٪');
         if (uploaded) setStep('inspect', ['received', 'upload']);
       });
       setProgress(100, 'بررسی اولیه کامل شد؛ گزارش آماده است.');

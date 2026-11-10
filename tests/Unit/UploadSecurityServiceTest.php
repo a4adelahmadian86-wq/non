@@ -148,6 +148,71 @@ class UploadSecurityServiceTest extends TestCase
         app(UploadSecurityService::class)->inspect('quarantine/traversal.zip', 'application/zip');
     }
 
+
+    public function test_authorized_structural_only_mode_skips_optional_content_scanning_but_keeps_archive_validation(): void
+    {
+        if (! class_exists(\\ZipArchive::class)) {
+            $this->markTestSkipped('PHP zip extension is unavailable.');
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-structural-');
+        $archive = new \\ZipArchive();
+        $this->assertSame(true, $archive->open($temporary, \\ZipArchive::CREATE));
+        $archive->addFromString('notes.txt', 'X5O!P%@AP[4\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
+        $archive->close();
+
+        Storage::disk('private')->put('quarantine/eicar-structural.zip', file_get_contents($temporary));
+        @unlink($temporary);
+
+        $result = app(UploadSecurityService::class)->inspect('quarantine/eicar-structural.zip', 'application/zip', null, null, false);
+
+        $this->assertTrue($result['safe']);
+        $this->assertFalse($result['security_scan_requested']);
+        $this->assertSame('farast_structural_v1', $result['scan']);
+        $this->assertSame('not_requested', $result['archive_entries'][0]['content_scan']);
+        $this->assertSame(1, $result['archive_entry_count']);
+        $this->assertSame(hash('sha256', Storage::disk('private')->get('quarantine/eicar-structural.zip')), $result['checksum']);
+    }
+
+    public function test_structural_only_mode_still_rejects_archive_path_traversal(): void
+    {
+        if (! class_exists(\\ZipArchive::class)) {
+            $this->markTestSkipped('PHP zip extension is unavailable.');
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-zip-structural-traversal-');
+        $archive = new \\ZipArchive();
+        $this->assertSame(true, $archive->open($temporary, \\ZipArchive::CREATE));
+        $archive->addFromString('../outside.txt', 'unsafe');
+        $archive->close();
+
+        Storage::disk('private')->put('quarantine/traversal-structural.zip', file_get_contents($temporary));
+        @unlink($temporary);
+
+        $this->expectException(\\RuntimeException::class);
+        $this->expectExceptionMessage('upload_archive_path_or_link_rejected');
+        app(UploadSecurityService::class)->inspect('quarantine/traversal-structural.zip', 'application/zip', null, null, false);
+    }
+
+
+    public function test_security_scan_can_be_skipped_for_a_valid_pdf_without_skipping_structural_validation(): void
+    {
+        $pdf = new \\FPDF();
+        $pdf->SetFont('Arial', '', 12);
+        $pdf->AddPage();
+        $pdf->Cell(0, 10, 'Valid document');
+        $bytes = $pdf->Output('S')."\\n% /OpenAction /JavaScript";
+        Storage::disk('private')->put('quarantine/active-structural.pdf', $bytes);
+
+        $result = app(UploadSecurityService::class)->inspect('quarantine/active-structural.pdf', 'application/pdf', null, null, false);
+
+        $this->assertTrue($result['safe']);
+        $this->assertFalse($result['security_scan_requested']);
+        $this->assertSame('farast_structural_v1', $result['scan']);
+        $this->assertGreaterThan(0, $result['page_count']);
+        $this->assertStringContainsString('فقط اعتبارسنجی ساختار', $result['security_notice']);
+    }
+
     public function test_empty_files_are_rejected(): void
     {
         Storage::disk('private')->put('quarantine/empty.txt', '');
