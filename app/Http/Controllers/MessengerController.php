@@ -202,7 +202,7 @@ class MessengerController extends Controller
                     'url' => route('messenger.attachment', [$conversation, $message, $i]),
                 ])->values(),
             ],
-        ], 201);
+        ], 201)->header('Cache-Control', 'private, no-store')->header('Pragma', 'no-cache');
     }
 
     public function poll(Request $request, Conversation $conversation)
@@ -237,7 +237,7 @@ class MessengerController extends Controller
                 'name' => $a['name'] ?? 'پیوست',
                 'url' => route('messenger.attachment', [$conversation, $m, $i]),
             ])->values(),
-        ])]);
+        ])])->header('Cache-Control', 'private, no-store')->header('Pragma', 'no-cache');
     }
 
     public function attachment(Request $request, Conversation $conversation, ConversationMessage $message, int $index)
