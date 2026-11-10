@@ -7,8 +7,9 @@ test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and s
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-ink-pressure.js')});
   await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.pressureInkReady)).toBe('true');
   await page.locator('[data-tool="pen"]').click();
-  const layer=page.locator('.farast-pressure-ink-layer').first(),rect=await page.locator('.farast-pdf-document').boundingBox();
-  const send=(type,x,y,pressure,pointerType='pen')=>layer.dispatchEvent(type,{bubbles:true,cancelable:true,pointerId:pointerType==='pen'?9:10,pointerType,pressure,clientX:rect.x+x,clientY:rect.y+y,tiltX:20,tiltY:10});
+  await expect(page.locator('[data-tool="pen"]')).toHaveAttribute('aria-pressed','true');
+  const rect=await page.locator('.farast-pdf-document').boundingBox();
+  const send=(type,x,y,pressure,pointerType='pen')=>page.evaluate(({type,x,y,pressure,pointerType,rect})=>{const layer=document.querySelector('.farast-pressure-ink-layer');layer.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:pointerType==='pen'?9:10,pointerType,pressure,clientX:rect.x+x,clientY:rect.y+y,tiltX:20,tiltY:10}));},{type,x,y,pressure,pointerType,rect});
   await send('pointerdown',80,80,.18);await send('pointermove',120,105,.82);await send('pointerup',150,120,.45);
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[0]);
