@@ -41,6 +41,21 @@ class CrmAudienceService
             $query->whereHas('orders', fn ($orders) => $orders->where('status', 'paid'));
         }
 
+        $signalEvent = $filters['signal_event'] ?? null;
+        $supportedSignals = ['product_viewed', 'wishlist_added', 'cart_added', 'cart_abandoned', 'coupon_attempted'];
+        if (in_array($signalEvent, $supportedSignals, true)) {
+            $signalWindowDays = max(1, min(90, (int) ($filters['signal_window_days'] ?? 14)));
+            $signalProductId = (int) ($filters['signal_product_id'] ?? 0);
+            $query->whereExists(function ($signals) use ($signalEvent, $signalWindowDays, $signalProductId) {
+                $signals->select(DB::raw('1'))
+                    ->from('farast_workflow_events')
+                    ->whereColumn('farast_workflow_events.user_id', 'users.id')
+                    ->where('farast_workflow_events.event_type', 'marketing.'.$signalEvent)
+                    ->where('farast_workflow_events.created_at', '>=', now()->subDays($signalWindowDays))
+                    ->when($signalProductId > 0, fn ($events) => $events->whereJsonContains('farast_workflow_events.context->product_id', $signalProductId));
+            });
+        }
+
         return $query->orderBy('users.id');
     }
 }
