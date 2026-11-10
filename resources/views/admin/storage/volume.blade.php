@@ -10,6 +10,7 @@
         <div class="storage-detail-head"><div><h1>{{ $volume->name }}</h1><p class="muted">{{ $volume->provider ?: $volume->driver }} · {{ $volume->region ?: 'منطقه نامشخص' }}</p></div><span>{{ $volume->status }}</span></div>
         <p>شناسه: #{{ $volume->id }} · درایو: {{ $volume->drive_key }} · آخرین بررسی: {{ optional($volume->last_checked_at)->format('Y-m-d H:i') ?: 'انجام نشده' }}</p>
         <p>ظرفیت: {{ $volume->capacity_bytes ? \Illuminate\Support\Number::fileSize($volume->capacity_bytes) : 'نامشخص' }} · مصرف ثبت‌شده: {{ \Illuminate\Support\Number::fileSize($volume->used_bytes) }} · فایل‌ها: {{ number_format($volume->files()->count()) }}</p>
+        <p>سقف تعداد فایل: {{ $volume->file_limit ? number_format($volume->file_limit) : 'اعلام نشده' }} · حداکثر حجم فایل: {{ $volume->max_file_bytes ? \Illuminate\Support\Number::fileSize($volume->max_file_bytes) : 'اعلام نشده' }} · اولویت تخصیص: {{ $volume->priority }}</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
             <form method="post" action="{{ route('admin.storage.verify',$volume) }}">@csrf<button class="btn">آزمون اتصال</button></form>
             <form method="post" action="{{ route('admin.storage.toggle',$volume) }}">@csrf<button class="btn">{{ $volume->is_active ? 'غیرفعال‌سازی' : 'فعال‌سازی' }}</button></form>
