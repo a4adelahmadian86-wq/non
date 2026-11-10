@@ -7,6 +7,7 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
 use App\Jobs\ReviewProductForPublication;
+use App\Jobs\ReviewProductFileAsset;
 use App\Services\ProductSupervisorClient;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\ProductPublicationReadiness;
@@ -1292,6 +1293,117 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('published', $product->fresh()->status);
         $this->assertSame('published', data_get($product->fresh()->metadata, 'publication_workflow.status'));
         $this->assertSame($admin->id, data_get($product->fresh()->metadata, 'publication_workflow.approved_by'));
+    }
+
+
+    public function test_file_asset_supervisor_runs_automatically_and_unblocks_waiting_publication(): void
+    {
+        Queue::fake();
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول با بررسی فایل',
+            'slug' => 'asset-review-product',
+            'sku' => 'ASSET-REVIEW-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'status' => 'draft',
+            'metadata' => ['publication_workflow' => ['status' => 'awaiting_assets', 'submitted_by' => $admin->id]],
+        ]);
+        $path = 'store/products/'.$product->id.'/asset.pdf';
+        Storage::disk('private')->put($path, 'verified asset bytes');
+        $sha = hash('sha256', 'verified asset bytes');
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => $path,
+            'original_name' => 'asset.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen('verified asset bytes'),
+            'sha256' => $sha,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+
+        $supervisor = \Mockery::mock(ProductSupervisorClient::class);
+        $supervisor->shouldReceive('configured')->once()->andReturn(true);
+        $supervisor->shouldReceive('reviewFile')->once()->andReturn([
+            'review_id' => 'asset-review-001',
+            'summary' => 'محتوای فایل بررسی شد.',
+            'findings' => [],
+            'warnings' => [],
+            'provider_status' => [],
+            'inspection' => [
+                'detected_type' => 'pdf',
+                'extracted_characters' => 24,
+                'antivirus_status' => 'not_configured',
+                'upstream_scan_status' => 'not_provided',
+                'archive_entries' => [],
+            ],
+            'security_gate' => 'structural_checks_passed',
+        ]);
+
+        (new ReviewProductFileAsset($product->id, $file->id))->handle($supervisor);
+
+        $review = data_get($product->fresh()->metadata, 'ai_supervisor.asset_reviews.file:'.$file->id);
+        $this->assertSame('completed', $review['status']);
+        $this->assertSame($sha, $review['sha256']);
+        $this->assertSame('asset-review-001', $review['review_id']);
+        Queue::assertPushed(ReviewProductForPublication::class, fn ($job) => $job->productId === $product->id);
+    }
+
+    public function test_publication_supervisor_waits_for_pending_file_asset_review(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول در انتظار بررسی فایل',
+            'slug' => 'awaiting-asset-review-product',
+            'sku' => 'ASSET-PENDING-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'status' => 'draft',
+            'metadata' => ['publication_workflow' => ['status' => 'queued', 'submitted_by' => $admin->id]],
+        ]);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/pending.pdf',
+            'original_name' => 'pending.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 100,
+            'sha256' => str_repeat('c', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        $supervisor = \Mockery::mock(ProductSupervisorClient::class);
+        $supervisor->shouldReceive('configured')->once()->andReturn(true);
+        $supervisor->shouldNotReceive('review');
+
+        (new ReviewProductForPublication($product->id))->handle(
+            $supervisor,
+            app(ProductSupervisorSnapshotBuilder::class),
+            app(ProductKnowledgeService::class),
+            app(ProductPublicationReadiness::class),
+            app(AuthorizationService::class)
+        );
+
+        $this->assertSame('awaiting_assets', data_get($product->fresh()->metadata, 'publication_workflow.status'));
+        Queue::assertPushed(ReviewProductFileAsset::class, fn ($job) => $job->productId === $product->id && $job->fileId === $file->id);
     }
 
 }
