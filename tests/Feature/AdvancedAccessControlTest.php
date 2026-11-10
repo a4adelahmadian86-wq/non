@@ -490,6 +490,33 @@ class AdvancedAccessControlTest extends TestCase
         }
     }
 
+    public function test_resource_middleware_does_not_treat_creator_attribution_as_ownership(): void
+    {
+        $employee = $this->user('09140000303');
+        $middleware = app(EnsureResourcePermission::class);
+
+        $resource = new class extends Model {
+            protected $guarded = [];
+        };
+        $resource->setRawAttributes([
+            'id' => 503,
+            'created_by' => $employee->id,
+        ], true);
+
+        $request = Request::create('/resource/503', 'GET');
+        $route = new Route(['GET'], '/resource/{resource}', static fn () => null);
+        $route->setParameter('resource', $resource);
+        $request->setRouteResolver(static fn () => $route);
+        $request->setUserResolver(static fn () => $employee);
+
+        try {
+            $middleware->handle($request, static fn () => response('unexpectedly allowed'), 'documents.view');
+            $this->fail('A creator attribution is not sufficient proof of resource ownership.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
     public function test_resource_middleware_uses_legacy_owner_field_only_when_primary_field_is_absent(): void
     {
         $employee = $this->user('09140000302');
