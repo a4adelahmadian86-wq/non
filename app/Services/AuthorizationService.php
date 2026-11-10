@@ -411,8 +411,8 @@ class AuthorizationService
             $expected = $condition['value'] ?? null;
             $matched = match ($operator) {
                 'exists' => array_key_exists($field, $context) || data_get($context, $field, '__farast_missing__') !== '__farast_missing__',
-                'equals' => $actual == $expected,
-                'not_equals' => $actual != $expected,
+                'equals' => $this->sameScalarValue($actual, $expected),
+                'not_equals' => ! $this->sameScalarValue($actual, $expected),
                 'in' => is_array($expected) && in_array($actual, $expected, true),
                 'not_in' => is_array($expected) && ! in_array($actual, $expected, true),
                 'contains' => is_array($actual) ? in_array($expected, $actual, true) : (is_string($actual) && is_string($expected) && str_contains($actual, $expected)),
@@ -429,6 +429,21 @@ class AuthorizationService
         }
 
         return true;
+    }
+
+    private function sameScalarValue(mixed $actual, mixed $expected): bool
+    {
+        if ($actual === null || $expected === null) {
+            return $actual === $expected;
+        }
+        if (! is_scalar($actual) || ! is_scalar($expected)) {
+            return false;
+        }
+        if (is_numeric($actual) && is_numeric($expected)) {
+            return (float) $actual === (float) $expected;
+        }
+
+        return (string) $actual === (string) $expected;
     }
 
     public function syncDefaults(): void
