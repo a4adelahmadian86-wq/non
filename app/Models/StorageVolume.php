@@ -43,6 +43,11 @@ class StorageVolume extends Model
         return $this->hasMany(StorageManagedFile::class, 'replicated_to_volume_id');
     }
 
+    public function backups(): HasMany
+    {
+        return $this->hasMany(StorageBackupRun::class, 'storage_volume_id');
+    }
+
     public function getFreeBytesAttribute(): ?int
     {
         return $this->capacity_bytes === null
