@@ -45,6 +45,15 @@
                 @endif
             </div>
 
+            @if($ticket->relatedOrder && (int) $ticket->relatedOrder->user_id === (int) $ticket->user_id)
+                <div style="margin:0 20px 14px;padding:12px 14px;border:1px solid #dbeafe;background:#f8fbff;border-radius:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:#334155;font-size:.84rem">
+                    <strong>سفارش مرتبط #{{ $ticket->relatedOrder->id }}</strong>
+                    <span>{{ $ticket->relatedOrder->status === 'paid' ? 'پرداخت‌شده' : ($ticket->relatedOrder->status === 'pending' ? 'در انتظار پرداخت' : $ticket->relatedOrder->status) }}</span>
+                    <span>{{ number_format((int) $ticket->relatedOrder->total_rials) }} ریال</span>
+                    <span>{{ $ticket->relatedOrder->created_at?->timezone(config('app.timezone'))->format('Y/m/d') }}</span>
+                </div>
+            @endif
+
             <div class="tk-divider"></div>
 
             <div class="tk-thread" id="chatMessages">
