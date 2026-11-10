@@ -19,6 +19,17 @@ use Illuminate\Support\Str;
 
 class CrmMarketingController extends Controller
 {
+    public function dashboard(Request $request, AdminConsoleService $console)
+    {
+        $console->authorizeAction($request->user(), 'marketing');
+
+        return view('admin.crm.marketing', [
+            'products' => StoreProduct::query()->published()
+                ->orderBy('title')
+                ->get(['id', 'title', 'price_rials', 'cost_price_rials']),
+        ]);
+    }
+
     private function scope(Request $request, AdminConsoleService $console): ?array
     {
         $console->authorizeAction($request->user(), 'marketing');
