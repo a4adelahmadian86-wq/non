@@ -45,6 +45,7 @@ class StorageBackupService
         $archivePath = $workspace.'/farast-weekly-backup.zip';
         $password = Str::random(64);
         $zip = null;
+        $uploadedObjectKey = null;
 
         try {
             if (! class_exists(ZipArchive::class) || ! defined(ZipArchive::class.'::EM_AES_256')) {
@@ -163,6 +164,7 @@ class StorageBackupService
             $size = (int) filesize($archivePath);
             $checksum = hash_file('sha256', $archivePath);
             $objectKey = 'backups/weekly/'.now()->format('Y/m/d').'/farast-'.$run->id.'-'.Str::random(12).'.zip';
+            $uploadedObjectKey = $objectKey;
             $destination = $this->connections->disk($target);
             $stream = fopen($archivePath, 'rb');
             if (! is_resource($stream)) {
@@ -209,6 +211,9 @@ class StorageBackupService
 
             $this->pruneOldBackups($target);
         } catch (Throwable $exception) {
+            if ($uploadedObjectKey && $target) {
+                try { $this->connections->disk($target)->delete($uploadedObjectKey); } catch (Throwable $cleanupException) { report($cleanupException); }
+            }
             if ($zip instanceof ZipArchive) {
                 $zip->close();
             }
