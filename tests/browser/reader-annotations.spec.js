@@ -54,3 +54,19 @@ test('annotation backup import rejects malformed records and confirms replacemen
   await page.locator('.farast-reader-text-dialog button[type="submit"]').click();
   await expect.poll(()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'[]')[0]?.id,key)).toBe('new-note');
 });
+
+test('annotations are restored from IndexedDB after localStorage is cleared',async({page})=>{
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="annotation-durable-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Durable annotation sample</span></div></div></article></section>');
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
+  await page.locator('.farast-pdf-text-layer span').evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
+  await page.locator('[data-tool="highlight"]').click();
+  const key='farast-reader:annotations:v1:annotation-durable-test';
+  await expect.poll(()=>page.evaluate(async key=>{const value=await window.FarastReaderDurableStore.restore(key);return value?JSON.parse(value).length:0;},key)).toBe(1);
+  await page.evaluate(()=>localStorage.clear());
+  const restored=await page.evaluate(async key=>JSON.parse(await window.FarastReaderDurableStore.restore(key)),key);
+  expect(restored).toHaveLength(1);
+  expect(restored[0].type).toBe('highlight');
+});
