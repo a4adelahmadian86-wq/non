@@ -23,7 +23,7 @@ class AdminStorageController extends Controller
 
     public function index()
     {
-        $volumes = StorageVolume::withCount(['files' => fn ($query) => $query->where('status', 'active')])->withSum(['files' => fn ($query) => $query->where('status', 'active')], 'size_bytes')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
+        $volumes = StorageVolume::withCount(['files' => fn ($query) => $query->where('status', 'active'), 'replicas' => fn ($query) => $query->where('status', 'active')])->withSum(['files' => fn ($query) => $query->where('status', 'active')], 'size_bytes')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
         $drives = collect(self::DRIVES)->map(function (array $definition, string $key) use ($volumes) {
             $items = $volumes->get($key, collect());
             return [
@@ -121,7 +121,7 @@ class AdminStorageController extends Controller
 
     public function show(StorageVolume $volume)
     {
-        $files = $volume->files()->where('status', 'active')->latest()->paginate(50);
+        $files = $volume->files()->with('replicaVolume')->where('status', 'active')->latest()->paginate(50);
         return view('admin.storage.volume', compact('volume', 'files'));
     }
 
