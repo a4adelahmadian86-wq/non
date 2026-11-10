@@ -52,6 +52,10 @@ class MessengerController extends Controller
             if ($directKey) {
                 $existing = Conversation::query()->where('direct_key', $directKey)->lockForUpdate()->first();
                 if ($existing) {
+                    DB::table('conversation_participants')
+                        ->where('conversation_id', $existing->id)
+                        ->whereIn('user_id', $allIds)
+                        ->update(['archived_at' => null, 'updated_at' => now()]);
                     return $existing;
                 }
             }
@@ -87,8 +91,14 @@ class MessengerController extends Controller
 
         $conversation->load('participants:id,name');
         $this->markRead($request, $conversation, (int) ($conversation->messages()->max('id') ?? 0));
+        $isGroupOwner = $conversation->type === 'group'
+            && $conversation->participants()->where('users.id', $request->user()->id)->wherePivot('role', 'owner')->exists();
+        $existingIds = $conversation->participants()->pluck('users.id')->all();
+        $availableUsers = $isGroupOwner
+            ? User::query()->where('is_blocked', false)->whereNotIn('id', $existingIds)->orderBy('name')->limit(200)->get(['id', 'name', 'email'])
+            : collect();
 
-        return view('messenger.show', compact('conversation', 'messages'));
+        return view('messenger.show', compact('conversation', 'messages', 'isGroupOwner', 'availableUsers'));
     }
 
     public function send(Request $request, Conversation $conversation)
@@ -162,6 +172,8 @@ class MessengerController extends Controller
             return $message;
         });
 
+        DB::table('conversation_participants')->where('conversation_id', $conversation->id)->update(['archived_at' => null, 'updated_at' => now()]);
+
         foreach ($conversation->participants()->where('users.id', '!=', $request->user()->id)->get() as $recipient) {
             app(\App\Services\NotificationService::class)->push(
                 (int) $recipient->id,
@@ -200,9 +212,20 @@ class MessengerController extends Controller
 
         if ($messages->isNotEmpty()) {
             $this->markRead($request, $conversation, (int) $messages->max('id'));
+        } else {
+            DB::table('conversation_participants')
+                ->where('conversation_id', $conversation->id)->where('user_id', $request->user()->id)
+                ->update(['last_active_at' => now(), 'updated_at' => now()]);
         }
 
-        return response()->json(['messages' => $messages->map(fn ($m) => [
+        $presence = $conversation->participants()->where('users.id', '!=', $request->user()->id)->get(['users.id', 'users.name'])
+            ->map(fn ($participant) => [
+                'name' => $participant->name,
+                'online' => $participant->pivot->last_active_at && $participant->pivot->last_active_at->gt(now()->subMinutes(2)),
+                'typing' => $participant->pivot->typing_until && $participant->pivot->typing_until->gt(now()),
+            ])->values();
+
+        return response()->json(['presence' => $presence, 'messages' => $messages->map(fn ($m) => [
             'id' => $m->id,
             'body' => $m->body,
             'user_id' => $m->user_id,
@@ -236,13 +259,102 @@ class MessengerController extends Controller
         $this->authorizeParticipant($request, $conversation);
         DB::table('conversation_participants')
             ->where('conversation_id', $conversation->id)->where('user_id', $request->user()->id)
-            ->update(['last_read_message_id' => $messageId ?: (int) ($conversation->messages()->max('id') ?? 0), 'read_at' => now(), 'updated_at' => now()]);
+            ->update(['last_read_message_id' => $messageId ?: (int) ($conversation->messages()->max('id') ?? 0), 'read_at' => now(), 'last_active_at' => now(), 'updated_at' => now()]);
 
         return response()->json(['ok' => true]);
     }
 
+    public function presence(Request $request, Conversation $conversation)
+    {
+        $this->authorizeParticipant($request, $conversation);
+        $typing = $request->boolean('typing');
+        DB::table('conversation_participants')
+            ->where('conversation_id', $conversation->id)->where('user_id', $request->user()->id)
+            ->update([
+                'last_active_at' => now(),
+                'typing_until' => $typing ? now()->addSeconds(6) : null,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function update(Request $request, Conversation $conversation)
+    {
+        $this->authorizeParticipant($request, $conversation);
+        abort_unless($conversation->type === 'group', 404);
+        abort_unless($conversation->participants()->where('users.id', $request->user()->id)->wherePivot('role', 'owner')->exists(), 403);
+        $data = $request->validate(['title' => ['required', 'string', 'min:2', 'max:160']]);
+        $conversation->update(['title' => trim($data['title'])]);
+
+        return back()->with('success', 'عنوان گروه به‌روزرسانی شد.');
+    }
+
+    public function addParticipants(Request $request, Conversation $conversation)
+    {
+        $this->authorizeParticipant($request, $conversation);
+        abort_unless($conversation->type === 'group', 404);
+        abort_unless($conversation->participants()->where('users.id', $request->user()->id)->wherePivot('role', 'owner')->exists(), 403);
+        $data = $request->validate([
+            'participant_ids' => ['required', 'array', 'min:1', 'max:49'],
+            'participant_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
+        ]);
+        $existing = $conversation->participants()->pluck('users.id')->map(fn ($id) => (int) $id);
+        $newIds = collect($data['participant_ids'])->map(fn ($id) => (int) $id)->unique()->diff($existing)->values();
+        abort_if($newIds->isEmpty(), 422, 'مخاطب جدیدی انتخاب نشده است.');
+        abort_unless(User::query()->whereIn('id', $newIds)->where('is_blocked', false)->count() === $newIds->count(), 422, 'یکی از مخاطبان انتخاب‌شده در دسترس نیست.');
+
+        $now = now();
+        $pivot = $newIds->mapWithKeys(fn ($id) => [$id => [
+            'role' => 'member', 'joined_at' => $now, 'created_at' => $now, 'updated_at' => $now,
+        ]])->all();
+        $conversation->participants()->attach($pivot);
+
+        foreach ($newIds as $id) {
+            app(\App\Services\NotificationService::class)->push(
+                (int) $id,
+                'message_group_invite',
+                'به یک گروه جدید اضافه شدید',
+                $conversation->title,
+                ['url' => route('messenger.show', $conversation), 'conversation_id' => $conversation->id],
+                false,
+                'conversation:'.$conversation->id.':member:'.$id,
+            );
+        }
+
+        return back()->with('success', 'اعضای جدید به گروه اضافه شدند.');
+    }
+
+    public function leave(Request $request, Conversation $conversation)
+    {
+        $this->authorizeParticipant($request, $conversation);
+        abort_unless($conversation->type === 'group', 404);
+        $actor = $conversation->participants()->where('users.id', $request->user()->id)->firstOrFail();
+        $others = $conversation->participants()->where('users.id', '!=', $request->user()->id)->get();
+        if ($actor->pivot->role === 'owner' && $others->isNotEmpty()) {
+            $data = $request->validate(['new_owner_id' => ['required', 'integer', 'in:'.$others->pluck('id')->implode(',')]]);
+            $conversation->participants()->updateExistingPivot((int) $data['new_owner_id'], ['role' => 'owner']);
+        }
+        $conversation->participants()->detach($request->user()->id);
+        if ($conversation->participants()->count() === 0) {
+            $conversation->delete();
+        }
+
+        return redirect()->route('messenger.index')->with('success', 'از گروه خارج شدید.');
+    }
+
+    public function archive(Request $request, Conversation $conversation)
+    {
+        $this->authorizeParticipant($request, $conversation);
+        DB::table('conversation_participants')
+            ->where('conversation_id', $conversation->id)->where('user_id', $request->user()->id)
+            ->update(['archived_at' => now(), 'updated_at' => now()]);
+
+        return redirect()->route('messenger.index')->with('success', 'گفت‌وگو بایگانی شد.');
+    }
+
     private function authorizeParticipant(Request $request, Conversation $conversation): void
     {
-        abort_unless($conversation->participants()->where('users.id', $request->user()->id)->exists(), 404);
+        abort_unless($conversation->participants()->where('users.id', $request->user()->id)->whereNull('conversation_participants.archived_at')->exists(), 404);
     }
 }
