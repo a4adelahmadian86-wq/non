@@ -80,7 +80,10 @@ class AdminController extends Controller
         $canViewStore = $console->sectionAllowed($actor, 'store');
         $storeProductStats = ['total' => 0, 'published' => 0, 'draft' => 0, 'archived' => 0];
         $followUpStats = ['open' => 0, 'overdue' => 0, 'due_today' => 0];
-        if ($canViewUsers && Schema::hasTable('crm_follow_up_tasks')) {
+        if ($canViewUsers && Schema::hasTable('crm_follow_up_tasks')
+            && Schema::hasColumn('crm_follow_up_tasks', 'customer_id')
+            && Schema::hasColumn('crm_follow_up_tasks', 'status')
+            && Schema::hasColumn('crm_follow_up_tasks', 'due_at')) {
             $followUpQuery = DB::table('crm_follow_up_tasks');
             if ($visibleIds !== null) {
                 $followUpQuery->whereIn('customer_id', $visibleIds);
@@ -96,8 +99,15 @@ class AdminController extends Controller
                 'due_today' => (int) ($followUpRow->due_today_count ?? 0),
             ];
         }
-        if ($canViewStore && Schema::hasTable('store_products')) {
-            $productStatusCounts = DB::table('store_products')
+        if ($canViewStore && Schema::hasTable('store_products')
+            && Schema::hasColumn('store_products', 'status')
+            && ($visibleIds === null || Schema::hasColumn('store_products', 'seller_id'))) {
+            $productQuery = DB::table('store_products');
+            if ($visibleIds !== null) {
+                // Seller-scoped operators only see products owned by visible sellers.
+                $productQuery->whereIn('seller_id', $visibleIds);
+            }
+            $productStatusCounts = $productQuery
                 ->select('status', DB::raw('COUNT(*) as aggregate'))
                 ->groupBy('status')
                 ->pluck('aggregate', 'status');
@@ -407,15 +417,15 @@ class AdminController extends Controller
             'ticketStats' => $ticketStats,
             'topConsumers' => $canViewAnalytics ? $topConsumers : collect(),
             'recentAudit' => (function () use ($canViewAudit, $visibleIds) {
-                if (! $canViewAudit || ! Schema::hasTable('audit_logs')) {
+                if (! $canViewAudit || ! Schema::hasTable('audit_logs')
+                    || ! Schema::hasColumn('audit_logs', 'user_id')
+                    || ! Schema::hasColumn('audit_logs', 'action')
+                    || ! Schema::hasColumn('audit_logs', 'created_at')) {
                     return collect();
                 }
 
                 // Scoped operators may only see audit entries attributed to users
                 // inside their visible user set. Never fall back to a global feed.
-                if ($visibleIds !== null && ! Schema::hasColumn('audit_logs', 'user_id')) {
-                    return collect();
-                }
 
                 $query = DB::table('audit_logs')
                     ->leftJoin('users', 'users.id', '=', 'audit_logs.user_id');
