@@ -74,38 +74,21 @@
                 <span><i class="fa-solid fa-file-pen" aria-hidden="true"></i> تایپ، تبدیل و ویرایش سند</span>
             </div>
         </div>
-        <div class="home-hero-visual" aria-label="نمایی نمایشی از گردش کار اسناد در فراست">
-            <div class="home-visual-orbit home-visual-orbit--one" aria-hidden="true"></div>
-            <div class="home-visual-orbit home-visual-orbit--two" aria-hidden="true"></div>
-            <div class="home-editor-preview">
-                <div class="home-editor-preview__top">
-                    <span class="home-editor-preview__brand"><i class="fa-solid fa-shapes" aria-hidden="true"></i> FARAST</span>
-                    <span class="home-editor-preview__file"><i class="fa-regular fa-file-word" aria-hidden="true"></i> سند من</span>
-                    <span class="home-editor-preview__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-                </div>
-                <div class="home-editor-preview__toolbar" aria-hidden="true">
-                    <span>فایل</span><span>ویرایش</span><span>درج</span><span>قالب‌بندی</span><b><i class="fa-solid fa-arrow-rotate-left"></i></b><b><i class="fa-solid fa-bold"></i></b><b><i class="fa-solid fa-align-right"></i></b>
-                </div>
-                <div class="home-editor-preview__workspace">
-                    <aside class="home-editor-preview__rail" aria-hidden="true"><i class="fa-solid fa-file-lines"></i><i class="fa-solid fa-layer-group"></i><i class="fa-solid fa-comment-dots"></i></aside>
-                    <div class="home-editor-preview__page" aria-hidden="true">
-                        <span class="home-editor-preview__page-kicker">سند قابل ویرایش</span>
-                        <strong>از فایل خام تا محتوای آماده</strong>
-                        <span class="home-editor-preview__line home-editor-preview__line--wide"></span>
-                        <span class="home-editor-preview__line"></span>
-                        <span class="home-editor-preview__line home-editor-preview__line--medium"></span>
-                        <span class="home-editor-preview__paragraph"></span>
-                        <span class="home-editor-preview__line home-editor-preview__line--wide"></span>
-                        <span class="home-editor-preview__line home-editor-preview__line--medium"></span>
-                        <span class="home-editor-preview__paragraph home-editor-preview__paragraph--short"></span>
-                    </div>
-                </div>
-            </div>
-            <div class="home-visual-chip home-visual-chip--file"><span><i class="fa-solid fa-file-pdf" aria-hidden="true"></i></span><span><b>ورود فایل</b><small>PDF، تصویر و اسکن</small></span></div>
-            <div class="home-visual-chip home-visual-chip--edit"><span><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></span><span><b>ویرایش محتوا</b><small>بازبینی و قالب‌بندی</small></span></div>
-            <div class="home-visual-caption"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> یک مسیر منسجم برای کار با سند</div>
-        </div>
+        <figure class="home-hero-visual">
+            <img
+                class="home-hero-art"
+                src="{{ asset('images/farast-home-workflow.webp') }}"
+                alt="گردش کار فراست: ورود فایل، ویرایش سند و دریافت خروجی آماده"
+                width="420"
+                height="337"
+                fetchpriority="high"
+                decoding="async"
+            >
+            <figcaption>از ورود فایل تا ویرایش و دریافت خروجی، در یک مسیر منسجم</figcaption>
+        </figure>
     </section>
+
+    <section class="home-pathways"n>
 
     <section class="home-pathways" aria-label="دو مسیر اصلی استفاده از فراست">
         <article class="home-pathway home-pathway--products">
