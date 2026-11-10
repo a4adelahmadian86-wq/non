@@ -16,7 +16,14 @@ class StorageTransferService
         $moved = 0;
         StorageManagedFile::query()->where('status', 'pending_transfer')->orderBy('id')->limit(max(1, $limit))->get()->each(function (StorageManagedFile $file) use (&$moved) {
             $targetDrive = (string) data_get($file->metadata, 'target_drive', $file->drive_key);
-            $target = StorageVolume::query()->where('drive_key', $targetDrive)->where('is_active', true)->where('status', 'healthy')->orderBy('priority')->first();
+            $target = StorageVolume::query()
+                ->where('drive_key', $targetDrive)
+                ->where('is_active', true)
+                ->where('status', 'healthy')
+                ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [(int) $file->size_bytes]))
+                ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', (int) $file->size_bytes))
+                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('(SELECT COUNT(*) FROM storage_managed_files WHERE storage_managed_files.storage_volume_id = storage_volumes.id AND storage_managed_files.status != ?) < storage_volumes.file_limit', ['deleted']))
+                ->orderBy('priority')->first();
             if (! $target) return;
             $sourceDisk = (string) data_get($file->metadata, 'staging_disk', 'private');
             $source = Storage::disk($sourceDisk);
@@ -40,6 +47,9 @@ class StorageTransferService
                     if (! copy($temp, $destination)) throw new RuntimeException('کپی فایل روی مقصد ناموفق بود.');
                 } else {
                     return;
+                }
+                if (! hash_equals((string) $file->checksum, (string) hash_file('sha256', $temp))) {
+                    throw new RuntimeException('بررسی checksum فایل مبدأ ناموفق بود.');
                 }
                 $file->update(['storage_volume_id' => $target->id, 'status' => 'active', 'metadata' => array_merge((array) $file->metadata, ['disk' => 'storage_volume:'.$target->id, 'transferred_at' => now()->toIso8601String()])]);
                 $target->increment('used_bytes', (int) $file->size_bytes);
