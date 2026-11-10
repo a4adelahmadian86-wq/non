@@ -88,6 +88,53 @@ class StoreReaderAccessTest extends TestCase
         ]);
     }
 
+    public function test_product_detail_shows_only_recorded_version_license_and_description(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $product->update([
+            'version' => null,
+            'license_type' => 'standard',
+            'description' => null,
+            'short_description' => null,
+        ]);
+
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '2.4',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/primary.pdf',
+            'original_name' => 'primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 2048,
+            'sha256' => str_repeat('a', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+        ]);
+
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee('نسخه فایل اصلی: 2.4')
+            ->assertSee('مجوز استفاده: استاندارد')
+            ->assertDontSee('نسخه محصول: 1.0')
+            ->assertDontSee('توضیحی ثبت نشده است.');
+
+        $product->update(['version' => '3.0']);
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee('نسخه محصول: 3.0')
+            ->assertDontSee('نسخه فایل اصلی: 2.4');
+
+        $product->update(['version' => null, 'license_type' => null]);
+        StoreProductFile::query()->where('product_id', $product->id)->update(['version' => null]);
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertDontSee('نسخه محصول:')
+            ->assertDontSee('نسخه فایل اصلی:')
+            ->assertDontSee('مجوز استفاده:');
+    }
+
     public function test_word_page_builder_preserves_semantic_block_types_and_bounds_cells(): void
     {
         $built = app(\App\Services\StoreProductDocumentPageBuilder::class)->build([
@@ -757,6 +804,34 @@ class StoreReaderAccessTest extends TestCase
         $this->assertDatabaseHas('content_discussions', ['id' => $pending->id, 'body' => $updatedBody, 'status' => 'pending']);
         $this->actingAs($author)->delete(route('community.mine.withdraw', $pending))->assertRedirect();
         $this->assertDatabaseMissing('content_discussions', ['id' => $pending->id]);
+    }
+
+
+    public function test_product_detail_renders_file_metadata_without_blade_compilation_errors(): void
+    {
+        [$product] = $this->makePreviewFixture();
+
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee($product->title);
+    }
+
+
+    public function test_product_detail_blade_compiles_to_valid_php(): void
+    {
+        $source = file_get_contents(resource_path('views/store/product.blade.php'));
+        $compiled = app('blade.compiler')->compileString($source);
+
+        try {
+            token_get_all($compiled, TOKEN_PARSE);
+        } catch (\ParseError $exception) {
+            $lines = explode("\n", $compiled);
+            $line = $exception->getLine();
+            $context = implode("\n", array_slice($lines, max(0, $line - 12), 24));
+            $this->fail($exception->getMessage()."\n".$context);
+        }
+
+        $this->assertTrue(true);
     }
 
 }
