@@ -178,7 +178,7 @@ test.describe('FARAST sample reader interactions', () => {
     await mountReader(page);
     await expect(page.locator('#reader-resume')).toBeVisible();
     await page.locator('#reader-bookmarks-open').click();
-    await expect(page.locator('#reader-bookmarks-panel button')).toHaveCount(1);
+    await expect(page.locator('#reader-bookmarks-panel button')).toHaveCount(2);
     await page.locator('#reader-resume').click();
     await expect(page.locator('#reader-page-number')).toHaveValue('2');
   });
@@ -205,7 +205,7 @@ test.describe('FARAST sample reader interactions', () => {
     await mountReader(page, false, '/store/1/reader-state');
     await expect(page.locator('#reader-resume')).toBeVisible();
     await page.locator('#reader-bookmarks-open').click();
-    await expect(page.locator('#reader-bookmarks-panel button')).toHaveCount(1);
+    await expect(page.locator('#reader-bookmarks-panel button')).toHaveCount(2);
     await expect.poll(() => remoteWrite?.progress?.section).toBe(1);
   });
 
