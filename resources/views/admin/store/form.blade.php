@@ -50,8 +50,6 @@
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
         <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
-        <label class="product-field">شناسه محصول (SKU) *<input name="sku" value="{{ old('sku',$product->sku) }}" required maxlength="80" placeholder="مثلاً COURSE-001"></label>
-        <label class="product-field">نشانی اختصاصی (Slug)<input name="slug" data-product-slug value="{{ old('slug',$product->slug) }}" maxlength="240" placeholder="خودکار از عنوان ساخته می‌شود"></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
         <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
         <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
@@ -69,7 +67,6 @@
           <input type="hidden" name="status" value="draft"><div class="product-draft-note"><i class="fa-solid fa-shield-halved"></i><span><b>شروع امن با پیش‌نویس</b><small>محصول ابتدا خصوصی ساخته می‌شود؛ پس از بارگذاری محتوا و بررسی نهایی می‌توانید آن را منتشر کنید.</small></span></div>
         @endif
         <label class="product-field">نسخه / ویرایش<input name="version" value="{{ old('version',$product->version) }}" maxlength="60" placeholder="مثلاً 1.0"></label>
-        <label class="product-field">نوع مجوز استفاده<input name="license_type" value="{{ old('license_type',$product->license_type) }}" maxlength="60" placeholder="مثلاً شخصی / استاندارد"></label>
         <label class="product-field">ترتیب نمایش<input type="number" name="sort_order" value="{{ old('sort_order',$product->sort_order ?? 0) }}" min="0"></label>
         <label class="product-field">تعداد صفحات نمونه<input type="number" name="preview_pages" value="{{ old('preview_pages',$product->preview_pages ?? 3) }}" min="0" max="50"></label>
         <label class="product-field product-field-check"><input type="checkbox" name="featured" value="1" @checked(old('featured',$product->featured))> نمایش به‌عنوان محصول ویژه</label>
@@ -182,12 +179,21 @@
           </select>
           <small id="product-tags-help">برای انتخاب چند مورد، در رایانه Ctrl یا در موبایل لمس چندگانه را استفاده کنید. برچسب‌ها برای دسته‌بندی و کشف بهتر محصولات استفاده می‌شوند.</small>
         </label>
-        <label class="product-field product-field-wide">محصولات مرتبط
-          <select name="related_product_ids[]" multiple size="5" aria-describedby="product-related-help">
-            @foreach($relatedProducts as $relatedProduct)<option value="{{ $relatedProduct->id }}" @selected(in_array($relatedProduct->id, old('related_product_ids', $product->related->pluck('id')->all())))>{{ $relatedProduct->title }} · {{ $relatedProduct->sku }} · {{ $relatedProduct->type === 'course' ? 'دوره' : 'فایل' }}</option>@endforeach
-          </select>
-          <small id="product-related-help">حداکثر ۱۲ محصول مرتبط؛ محصول جاری از فهرست انتخاب حذف شده است.</small>
-        </label>
+        <div class="product-field product-field-wide product-related-auto" aria-live="polite">
+          <strong>محصولات مرتبط (تشخیص خودکار)</strong>
+          @if($isEdit && $relatedProducts->isNotEmpty())
+            <div class="product-related-auto-list">
+              @foreach($relatedProducts as $relatedProduct)
+                <span>{{ $relatedProduct->title }} <small>{{ $relatedProduct->type === 'course' ? 'دوره' : 'فایل' }}</small></span>
+              @endforeach
+            </div>
+            <small>پیشنهادها بر اساس دسته‌بندی و برچسب‌های مشترک محاسبه و هنگام ذخیره به‌روزرسانی می‌شوند.</small>
+          @elseif($isEdit)
+            <small>هنوز محصول هم‌موضوعی پیدا نشده است؛ با تکمیل دسته‌بندی و برچسب‌ها، پیشنهادها به‌روزرسانی می‌شوند.</small>
+          @else
+            <small>پس از ثبت مشخصات اولیه و دسته‌بندی، سامانه محصولات مرتبط را خودکار شناسایی می‌کند.</small>
+          @endif
+        </div>
       </div>
       <section class="product-ai-supervisor" id="product-ai-supervisor" aria-labelledby="product-ai-supervisor-title">
         <div class="product-ai-supervisor-head">
@@ -393,11 +399,11 @@
 @endsection
 @push('scripts')
 <script src="{{ asset('js/product-ingestion.js') }}" defer></script>
+<script src="{{ asset('js/admin-store-product-wizard.js') }}" defer></script>
 @if($isEdit)<script src="{{ asset('js/admin-store-product-ai.js') }}" defer></script>@endif
 @endpush
 @push('styles')
-
-
+<style>
 .product-ai-content{display:grid;gap:14px;padding:18px;border:1px solid #d7e4f4;border-radius:16px;background:linear-gradient(145deg,#f6faff,#fff)}
 .product-ai-content-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .product-ai-content-head>div{min-width:0}.product-ai-content-head>div>span{font-size:.66rem;font-weight:900;color:#3474c7}.product-ai-content-head h3{margin:4px 0;font-size:.95rem;color:#263f5f}.product-ai-content-head p{margin:0;font-size:.7rem;line-height:1.8;color:#71839b}
@@ -445,7 +451,7 @@
 @media(max-width:680px){.product-ingestion-dialog{padding:15px;border-radius:17px}.product-ingestion-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}.product-ingestion-report-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.product-ingestion-actions{flex-direction:column-reverse}.product-ingestion-actions button{width:100%}}
 
 <link rel="stylesheet" href="/css/store.css?v=20261107product1">
-<style>
+
 
 
 .product-readiness{margin:0 0 16px;padding:18px}
@@ -547,6 +553,19 @@
 .product-gallery-panel{margin-top:16px}.product-file-row{flex-wrap:wrap}.product-asset-review{grid-column:1/-1;flex-basis:100%;padding:9px;border-radius:9px;background:#f5f8fc;border:1px solid #e2eaf4}.product-asset-review b{font-size:.68rem}.product-asset-review p{font-size:.68rem;line-height:1.8;margin:5px 0}.product-asset-review small{font-size:.62rem;color:var(--st-muted)}.product-asset-review-list,.product-asset-review-warnings{margin:7px 0 0;padding-right:18px;font-size:.65rem;line-height:1.7}.product-asset-review-list li{margin:4px 0}.product-asset-review-list span,.product-asset-review-list small{display:block}.product-asset-review-warnings{color:#9b5b17}
 
 .product-discovery-links{padding-top:4px}.product-discovery-links select{min-height:118px}.product-editor{max-width:1080px}.product-editor .store-section-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0}.product-editor-form{padding:24px;display:grid;gap:18px}.product-editor-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--st-line);padding-bottom:14px}.product-editor-heading span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.product-editor-heading h2{font-size:1.02rem;margin:4px 0 0}.product-editor-step{font-size:.7rem;color:var(--st-muted);background:#f2f6fb;border-radius:99px;padding:7px 11px}.product-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-field{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.product-field input,.product-field select,.product-field textarea,.product-category-panel input,.product-file-upload input[type=text],.product-file-upload input[type=number]{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem}.product-field small,.product-help{font-size:.67rem;color:var(--st-muted);font-weight:400}.product-field-wide{grid-column:1/-1}.product-field-check{display:flex;align-items:center;gap:9px}.product-editor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.product-editor-actions span,.product-files-panel>p{font-size:.72rem;color:var(--st-muted)}.product-next-step{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.product-next-step strong{font-size:.88rem}.product-next-step p{margin:5px 0 0;color:var(--st-muted);font-size:.75rem}.product-files-panel{margin-top:16px}.product-files-panel>p{margin:10px 0 14px}.product-file-list{display:grid;gap:8px;margin-bottom:16px}.product-file-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--st-line);border-radius:10px}.product-file-row>span{display:grid;grid-template-columns:auto 1fr;gap:3px 9px;align-items:center}.product-file-row>span i{grid-row:span 2;color:var(--st-blue)}.product-file-row b{font-size:.75rem}.product-file-row small{font-size:.66rem;color:var(--st-muted)}.product-danger{border:0;background:#fff1f1;color:#b72e2e;padding:7px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:.7rem}.product-file-upload,.product-category-panel form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.product-file-upload input[type=file]{max-width:100%;font-size:.72rem}.product-file-upload label{display:flex;align-items:center;gap:6px;font-size:.72rem}.product-help{display:block;margin-top:9px}.product-category-panel{margin-top:16px}.product-category-panel h2{font-size:.9rem}.product-category-panel input{width:auto;min-width:180px}.course-empty{padding:18px;border:1px dashed var(--st-line);border-radius:10px;text-align:center;color:var(--st-muted);font-size:.75rem}@media(max-width:700px){.product-editor-form{padding:15px}.product-editor-grid{grid-template-columns:1fr}.product-field-wide{grid-column:auto}.product-next-step{align-items:flex-start;flex-direction:column}.product-file-row{align-items:flex-start}}
+
+.product-wizard-panel{display:grid;gap:18px;padding:18px;border:1px solid var(--st-line);border-radius:16px;background:#fff}
+.product-wizard-panel[hidden]{display:none!important}
+.product-wizard-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:14px;border-top:1px solid var(--st-line)}
+.product-wizard-actions button{border:0;border-radius:10px;padding:11px 18px;font:inherit;font-size:.76rem;font-weight:800;cursor:pointer}
+.product-wizard-next{background:var(--st-blue);color:#fff}.product-wizard-back{background:#eef2f7;color:#43566f}
+.product-workflow a[aria-current=step]{border-color:var(--st-blue);background:#edf5ff;color:var(--st-blue)}
+.product-related-auto{padding:14px;border:1px solid var(--st-line);border-radius:12px;background:#fbfcfe}
+.product-related-auto>strong{font-size:.78rem}.product-related-auto>small{display:block;margin-top:8px;color:var(--st-muted);font-size:.66rem;line-height:1.8}
+.product-related-auto-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.product-related-auto-list span{padding:7px 10px;border:1px solid #dce7f4;border-radius:99px;background:#fff;font-size:.68rem;color:#405875}.product-related-auto-list small{margin-right:5px;color:#73849b}
+.product-wizard-progress{display:grid;gap:4px;padding:12px 15px;border:1px solid #dce7f4;border-radius:12px;background:#f6f9fd;color:#405875}
+.product-wizard-progress strong{font-size:.76rem}.product-wizard-progress span{font-size:.66rem;color:var(--st-muted)}
+@media(max-width:650px){.product-wizard-panel{padding:13px}.product-wizard-actions button{flex:1}.product-workflow{overflow-x:auto}}
 </style>
 @endpush
 
@@ -656,7 +675,7 @@
       event.preventDefault();
       return;
     }
-    if (!form.reportValidity()) return;
+    if (!form.dataset.wizardReady && !form.reportValidity()) return;
     if (button) {
       button.dataset.submitting = '1';
       button.disabled = true;
