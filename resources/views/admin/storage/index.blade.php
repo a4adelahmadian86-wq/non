@@ -46,8 +46,8 @@
         <form method="post" action="{{ route('admin.storage.store') }}" class="storage-form">
             @csrf
             <label>درایو مقصد<select name="drive_key" required>@foreach($drives as $drive)<option value="{{ $drive['key'] }}">{{ $drive['title'] }}</option>@endforeach</select></label>
-            <label class="wide">اطلاعات اتصال API / سرویس‌دهنده<textarea name="connection_json" rows="8" required spellcheck="false" placeholder='{"driver":"s3","name":"فضای ابری اصلی","provider":"نام شرکت","region":"eu-central-1","endpoint":"https://s3.example.com","bucket":"my-bucket","capacity_bytes":1099511627776,"credentials":{"key":"ACCESS_KEY","secret":"SECRET_KEY","use_path_style_endpoint":true}}'></textarea></label>
-            <div class="wide storage-muted">فقط درایو و اطلاعات اتصال را وارد کنید. نام، ارائه‌دهنده، منطقه، Bucket، ظرفیت و محدودیت‌ها از اطلاعات سرویس دریافت می‌شوند؛ هر مشخصه‌ای که سرویس اعلام نکند نامشخص می‌ماند. کلیدهای محرمانه رمزنگاری‌شده ذخیره می‌شوند.</div>
+            <label class="wide">اطلاعات اتصال API / سرویس‌دهنده<textarea name="connection_json" rows="8" required spellcheck="false" placeholder='{"driver":"s3","region":"eu-central-1","endpoint":"https://s3.example.com","bucket":"my-bucket","credentials":{"key":"ACCESS_KEY","secret":"SECRET_KEY","use_path_style_endpoint":true}}'></textarea></label>
+            <div class="wide storage-muted">فقط درایو و اطلاعات اتصال را وارد کنید. نام و ارائه‌دهنده از Endpoint و اطلاعات سرویس استخراج می‌شوند و مصرف واقعی از موجودی اشیا محاسبه می‌شود. سقف ظرفیت و محدودیت تعداد فایل فقط اگر API مدیریتی ارائه‌دهنده آن‌ها را اعلام کند نمایش داده می‌شود؛ در غیر این صورت نامشخص می‌ماند. کلیدهای محرمانه رمزنگاری‌شده ذخیره می‌شوند.</div>
             <div class="wide"><button class="storage-btn" type="submit"><i class="fa-solid fa-plug"></i> بررسی اتصال و افزودن هاست</button></div>
         </form>
     </section>
