@@ -66,6 +66,10 @@ class AuthorizationService
             return ['allowed' => false, 'reason' => 'unknown_permission', 'source' => null, 'permission' => $permission];
         }
 
+        if (! $this->scopeMatches($user, $this->baseScope($user), null, $context)) {
+            return ['allowed' => false, 'reason' => 'outside_base_scope', 'source' => null, 'permission' => $permission];
+        }
+
         $matching = array_values(array_filter(
             $this->overridesFor($user),
             fn ($override) => (int) $override->permission_id === $permissionId
@@ -136,6 +140,10 @@ class AuthorizationService
             return $this->decisionCache[$cacheKey] = false;
         }
 
+        if (! $this->scopeMatches($user, $this->baseScope($user), null, $context)) {
+            return $this->decisionCache[$cacheKey] = false;
+        }
+
         $matching = array_values(array_filter(
             $this->overridesFor($user),
             fn ($override) => (int) $override->permission_id === $permissionId
@@ -181,12 +189,8 @@ class AuthorizationService
         return isset($this->legacyPermissionIds[$user->role][$permissionId]);
     }
 
-    private function hasLegacyGrantForContext(User $user, int $permissionId, array $context): bool
+    private function baseScope(User $user): string
     {
-        if (! $this->hasLegacyGrant($user, $permissionId)) {
-            return false;
-        }
-
         $scope = request()->attributes->get('farast.scope');
         if (! in_array($scope, ['global', 'organization', 'team', 'own'], true)) {
             $scope = \App\Http\Middleware\ResolveAdminScope::scopeFor($user);
@@ -196,10 +200,16 @@ class AuthorizationService
         if ($scope === 'team'
             && ! $user->teams()->exists()
             && ! \App\Models\Team::query()->where('supervisor_id', $user->id)->exists()) {
-            $scope = 'own';
+            return 'own';
         }
 
-        return $this->scopeMatches($user, $scope, null, $context);
+        return $scope;
+    }
+
+    private function hasLegacyGrantForContext(User $user, int $permissionId, array $context): bool
+    {
+        return $this->hasLegacyGrant($user, $permissionId)
+            && $this->scopeMatches($user, $this->baseScope($user), null, $context);
     }
 
     /** Load active direct overrides once per user/request, not once per permission. */
