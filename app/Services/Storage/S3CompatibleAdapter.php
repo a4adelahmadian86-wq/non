@@ -234,6 +234,7 @@ class S3CompatibleAdapter implements FilesystemAdapter
         }
 
         $uriPath = '/'.implode('/', array_map('rawurlencode', explode('/', ltrim($uriPath, '/'))));
+        ksort($query);
         $queryString = $query ? http_build_query($query, '', '&', PHP_QUERY_RFC3986) : '';
         $url = $scheme.'://'.$host.$port.$uriPath.($queryString !== '' ? '?'.$queryString : '');
 
