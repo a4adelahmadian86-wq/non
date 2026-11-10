@@ -97,7 +97,10 @@ class StorageTransferService
                     $root = storage_path('app/storage-volumes/'.$target->id);
                     $destination = $root.'/'.$file->file_key;
                     if (! is_dir(dirname($destination))) mkdir(dirname($destination), 0775, true);
-                    if (! copy($temp, $destination)) throw new RuntimeException('کپی فایل روی مقصد ناموفق بود.');
+                    if (! copy($temp, $destination)) {
+                        @unlink($destination);
+                        throw new RuntimeException('کپی فایل روی مقصد ناموفق بود.');
+                    }
                     $uploaded = true;
                 } else {
                     return;
@@ -123,6 +126,7 @@ class StorageTransferService
                         report($cleanupException);
                     }
                 }
+                $target->update(['status' => 'error', 'last_checked_at' => now()]);
                 $file->update(['status' => 'transfer_error', 'metadata' => array_merge((array) $file->metadata, ['transfer_error' => mb_substr($exception->getMessage(), 0, 400)])]);
             } finally {
                 @unlink($temp);
