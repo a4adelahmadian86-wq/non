@@ -45,17 +45,8 @@
         <form method="post" action="{{ route('admin.storage.store') }}" class="storage-form">
             @csrf
             <label>درایو مقصد<select name="drive_key" required>@foreach($drives as $drive)<option value="{{ $drive['key'] }}">{{ $drive['title'] }}</option>@endforeach</select></label>
-            <label>نام نمایشی هاست<input name="name" required maxlength="120" placeholder="مثلاً فضای ابری شماره ۱"></label>
-            <label>نوع اتصال<select name="driver"><option value="s3">S3 Compatible</option><option value="local">فضای محلی برنامه (آزمایشی)</option></select></label>
-            <label>نام ارائه‌دهنده<input name="provider" placeholder="نام شرکت هاستینگ"></label>
-            <label>منطقه / کشور<input name="region" placeholder="مثلاً eu-central-1 یا ایران"></label>
-            <label>آدرس Endpoint<input name="endpoint" type="url" placeholder="https://s3.example.com"></label>
-            <label>نام Bucket<input name="bucket"></label>
-            <label>ظرفیت اختصاص‌یافته (بایت)<input name="capacity_bytes" type="number" min="1" placeholder="در صورت مشخص بودن"></label>
-            <label>حداکثر تعداد فایل<input name="file_limit" type="number" min="1"></label>
-            <label>حداکثر حجم هر فایل (بایت)<input name="max_file_bytes" type="number" min="1"></label>
-            <label>اولویت استفاده<input name="priority" type="number" min="1" max="10000" value="100"></label>
-            <label class="wide">اطلاعات API / کلید اتصال (JSON)<textarea name="credentials_json" rows="5" placeholder='{"key":"ACCESS_KEY","secret":"SECRET_KEY","bucket":"bucket-name","region":"eu-central-1","endpoint":"https://s3.example.com"}'></textarea></label>
+            <label class="wide">اطلاعات اتصال API / سرویس‌دهنده<textarea name="connection_json" rows="8" required spellcheck="false" placeholder='{"driver":"s3","name":"فضای ابری اصلی","provider":"نام شرکت","region":"eu-central-1","endpoint":"https://s3.example.com","bucket":"my-bucket","capacity_bytes":1099511627776,"credentials":{"key":"ACCESS_KEY","secret":"SECRET_KEY","use_path_style_endpoint":true}}'></textarea></label>
+            <div class="wide storage-muted">فقط درایو و اطلاعات اتصال را وارد کنید. نام، ارائه‌دهنده، منطقه، Bucket، ظرفیت و محدودیت‌ها از اطلاعات سرویس دریافت می‌شوند؛ هر مشخصه‌ای که سرویس اعلام نکند نامشخص می‌ماند. کلیدهای محرمانه رمزنگاری‌شده ذخیره می‌شوند.</div>
             <div class="wide"><button class="storage-btn" type="submit"><i class="fa-solid fa-plug"></i> بررسی اتصال و افزودن هاست</button></div>
         </form>
     </section>
