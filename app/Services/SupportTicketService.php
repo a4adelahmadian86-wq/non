@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Ticket;
 use App\Models\TicketMessage;
+use App\Models\StorageManagedFile;
 use App\Models\User;
 use App\Services\WorkflowEngine;
 use App\Services\Storage\StorageManager;
@@ -175,7 +176,7 @@ class SupportTicketService
             $path = $file->store('ticket-attachments/'.$ticket->id, 'private');
             try {
                 $inspection = app(UploadSecurityService::class)->inspect($path, (string) $file->getMimeType(), 8 * 1024 * 1024);
-                if (empty($inspection['safe'])) throw new \\RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
+                if (empty($inspection['safe'])) throw new \RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
                 $managed = app(StorageManager::class)->adoptExistingPrivate(
                     $path,
                     $file->getClientOriginalName(),
@@ -185,8 +186,8 @@ class SupportTicketService
                     Ticket::class,
                     (int) $ticket->id
                 );
-            } catch (\\Throwable $exception) {
-                \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
                 throw $exception;
             }
             $payload['attachments'] = [[
@@ -201,7 +202,7 @@ class SupportTicketService
         }
 
         $message = $ticket->messages()->create($payload);
-        if (isset($path) && $path !== '') \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
+        if (isset($path) && $path !== '') \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
         foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
             if (! empty($attachment['managed_file_id'])) {
                 app(StorageManager::class)->bindReference((int) $attachment['managed_file_id'], TicketMessage::class, (int) $message->id);
