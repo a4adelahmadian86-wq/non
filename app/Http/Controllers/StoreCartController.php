@@ -125,7 +125,7 @@ class StoreCartController extends Controller
             $orderItems = [];
             foreach ($current->items as $item) {
                 $product = $item->product;
-                if (! $product || $product->status !== 'published') {
+                if (! $product || ! app(StoreCartService::class)->isPurchasable($product)) {
                     throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
                 }
                 $file = null;
