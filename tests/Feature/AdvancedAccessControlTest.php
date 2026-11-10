@@ -330,7 +330,10 @@ class AdvancedAccessControlTest extends TestCase
             'user_id' => $manager->id,
             'name' => 'Scoped CRM follow-up',
             'trigger_type' => 'ticket.created',
-            'steps' => json_encode([['action' => 'create_follow_up', 'title' => 'پیگیری مشتری']], JSON_UNESCAPED_UNICODE),
+            'steps' => json_encode([
+                ['action' => 'notify', 'title' => 'رویداد مشتری', 'message' => 'یک رویداد در محدوده سازمان شما ثبت شد.'],
+                ['action' => 'create_follow_up', 'title' => 'پیگیری مشتری'],
+            ], JSON_UNESCAPED_UNICODE),
             'enabled' => true,
             'conditions' => null,
             'cooldown_seconds' => 0,
@@ -351,6 +354,15 @@ class AdvancedAccessControlTest extends TestCase
             'assigned_to' => $manager->id,
             'created_by' => $manager->id,
             'title' => 'پیگیری مشتری',
+        ]);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $manager->id,
+            'type' => 'workflow',
+            'title' => 'رویداد مشتری',
+        ]);
+        $this->assertDatabaseMissing('farast_notifications', [
+            'user_id' => $member->id,
+            'title' => 'رویداد مشتری',
         ]);
         $this->assertDatabaseHas('farast_workflow_events', [
             'idempotency_key' => 'ticket:scope-member:created',
