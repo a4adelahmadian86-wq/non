@@ -32,6 +32,31 @@
       <p class="ops-note">«تنظیمات موجود» فقط وجود پیکربندی را نشان می‌دهد و به معنی پاسخ‌گویی لحظه‌ای سرویس خارجی نیست. هیچ کلید یا مقدار محرمانه‌ای در این صفحه نمایش داده نمی‌شود.</p>
     </section>
 
+    <section class="ops-panel" aria-label="یکپارچگی چرخه عمر محصول">
+      <h2>یکپارچگی چرخه عمر محصول</h2>
+      <p class="ops-note">این شاخص‌ها ارتباط بین کاتالوگ، فایل اصلی، دوره، خوانشگر، دریافت فایل و پردازش پس‌زمینه را بررسی می‌کنند. گزارش فقط‌خواندنی است و هیچ وضعیت محصول یا فایل را خودکار تغییر نمی‌دهد.</p>
+      <div class="ops-grid ops-grid-status">
+        <div><span>فایل‌محورهای منتشرشده بدون فایل اصلی سالم</span><b class="{{ $lifecycleHealth['published_missing_safe_primary_file'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['published_missing_safe_primary_file']) }}</b></div>
+        <div><span>دوره‌های منتشرشده بدون جلسه قابل انتشار</span><b class="{{ $lifecycleHealth['published_courses_without_publishable_lessons'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['published_courses_without_publishable_lessons']) }}</b></div>
+        <div><span>خوانشگرهای کاملِ آماده‌نشده</span><b class="{{ $lifecycleHealth['reader_only_without_ready_document'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['reader_only_without_ready_document']) }}</b></div>
+        <div><span>محصولات منتشرشده با زمان انتشار آینده/خالی</span><b>{{ number_format($lifecycleHealth['published_not_yet_live']) }}</b></div>
+        <div><span>پیش‌بررسی‌های منقضی‌شده و پاک‌سازی‌نشده</span><b class="{{ $lifecycleHealth['expired_inspections'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['expired_inspections']) }}</b></div>
+        <div><span>اسناد معطل در صف بیش از ۳۰ دقیقه</span><b class="{{ $lifecycleHealth['stale_pending_documents'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['stale_pending_documents']) }}</b></div>
+        <div><span>اسناد در حال پردازش بیش از ۱۵ دقیقه</span><b class="{{ $lifecycleHealth['stale_processing_documents'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['stale_processing_documents']) }}</b></div>
+        <div><span>تعداد وضعیت‌های دریافت فایل</span><b>{{ number_format(array_sum($lifecycleHealth['ingestion_stats'])) }}</b></div>
+      </div>
+      <div class="ops-grid ops-grid-status">
+        @foreach($lifecycleHealth['product_counts'] as $key => $count)
+          <div><span>{{ $key }}</span><b>{{ number_format($count) }}</b></div>
+        @endforeach
+      </div>
+      <div class="ops-grid ops-grid-status">
+        @foreach($lifecycleHealth['ingestion_stats'] as $status => $count)
+          <div><span>دریافت · {{ $status }}</span><b>{{ number_format($count) }}</b></div>
+        @endforeach
+      </div>
+    </section>
+
     <section class="ops-panel">
       <h2>وضعیت اسناد محصول</h2>
       <div class="ops-grid ops-grid-status">
