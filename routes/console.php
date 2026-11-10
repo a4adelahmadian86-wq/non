@@ -67,7 +67,7 @@ Artisan::command('store:marketing:prune-signals {--limit=5000}', function () {
         return 0;
     }
 
-    $days = max(7, min(180, (int) SiteSetting::read('marketing_signal_retention_days', 30)));
+    $days = max(7, min(180, (int) SiteSetting::read('marketing_signal_retention_days', 90)));
     $limit = max(100, min(20000, (int) $this->option('limit')));
     $ids = DB::table('farast_workflow_events')
         ->where('event_type', 'like', 'marketing.%')
