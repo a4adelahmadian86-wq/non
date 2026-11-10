@@ -70,7 +70,7 @@
             <h2><i class="fa-solid fa-ticket"></i> تیکت‌های اخیر</h2>
             <div class="ac-list">
                 @forelse($tickets as $ticket)
-                    <a class="ac-item" href="{{ route('admin.support.management', ['ticket'=>$ticket->id]) }}">
+                    <a class="ac-item" href="{{ $isAdmin ? route('admin.support.management', ['ticket'=>$ticket->id]) : route('support.show', $ticket) }}">
                         <span class="ac-icon"><i class="fa-solid fa-headset"></i></span>
                         <span class="ac-copy"><strong>{{ $ticket->displayCode() }} · {{ $ticket->subject }}</strong><small>{{ $ticket->displayName() }} · {{ $ticket->statusLabel() }} · {{ $ticket->priorityLabel() }}</small></span>
                         <span class="ac-tag">{{ $ticket->departmentLabel() }}</span>
