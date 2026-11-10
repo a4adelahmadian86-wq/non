@@ -5,7 +5,7 @@ return [
     // Account sessions remain valid until explicit logout or three years
     // without a site visit. The account-security middleware enforces the same
     // inactivity boundary against its own last_activity timestamp.
-    'lifetime' => 1576800,
+    'lifetime' => 1578240,
     'expire_on_close' => false,
     'encrypt' => true,
     'files' => storage_path('framework/sessions'),
