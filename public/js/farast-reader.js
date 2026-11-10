@@ -59,8 +59,9 @@
   const currentPosition=()=>({section:itemIndex,page:isPdf()?pdfPage:1});
   const samePosition=(a,b)=>Boolean(a&&b&&a.section===b.section&&a.page===b.page);
   const persistReaderState=()=>{
-    try{localStorage.setItem(storageKey,JSON.stringify(readerState));}catch(_){}
+    const raw=JSON.stringify(readerState);try{localStorage.setItem(storageKey,raw);}catch(_){}window.FarastReaderDurableStore?.set(storageKey,raw).catch(()=>{});
   };
+  const restoreDurableReaderState=async()=>{if(!window.FarastReaderDurableStore)return;try{let legacy=null;try{legacy=localStorage.getItem(storageKey);}catch(_){}const raw=await window.FarastReaderDurableStore.migrate(storageKey,legacy);if(raw){const stored=JSON.parse(raw);if(stored&&typeof stored==='object'){const saved=stored.progress,bookmarks=Array.isArray(stored.bookmarks)?stored.bookmarks:[];readerState={progress:saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null,bookmarks:bookmarks.filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100)};}}await window.FarastReaderDurableStore.requestPersistence();}catch(_){}};
   const remoteStateUrl=root.dataset.readerStateUrl||'';
   let remoteSyncTimer=null;
   const queueRemoteSync=()=>{
@@ -811,7 +812,7 @@
   setZoomLabel();
   renderBookmarks();
   refreshBookmarkButton();
-  loadRemoteReaderState().finally(()=>showItem(0)).then(()=>{
+  restoreDurableReaderState().then(()=>loadRemoteReaderState()).finally(()=>showItem(0)).then(()=>{
     restoringInitial=false;
     refreshResumeButton();
     refreshBookmarkButton();
