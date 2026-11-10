@@ -179,6 +179,7 @@ class SupportTicketService
                 'farast_owner_user_id' => $ticket->user_id,
                 'farast_product_id' => $ticket->related_product_id,
                 'farast_original_name' => $file->getClientOriginalName(),
+                'mimetype' => $file->getMimeType(),
             ]);
             $managedFile = StorageManagedFile::query()->where('logical_path', $path)->first();
             $payload['attachments'] = [[
