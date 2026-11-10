@@ -34,7 +34,13 @@ class StorageManager
         if ($volume) {
             try {
                 $this->writeToVolume($volume, $key, $file->getRealPath());
-                return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
+                try {
+                    return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
+                } catch (\Throwable $exception) {
+                    if ($volume->driver === 's3') $this->s3->delete($volume, $key);
+                    else @unlink($this->localVolumePath($volume, $key));
+                    throw $exception;
+                }
             } catch (\Throwable $exception) {
                 $volume->forceFill(['status' => 'error', 'last_checked_at' => now(), 'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($exception->getMessage(), 0, 400)])])->save();
             }
@@ -120,6 +126,35 @@ class StorageManager
         }
     }
 
+    public function downloadTo(string $disk, string $path, string $target): void
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+            if ($volume->driver === 'local') {
+                $source = $this->localVolumePath($volume, $path);
+                if (! is_file($source) || ! copy($source, $target)) throw new RuntimeException('دریافت فایل از فضای محلی ناموفق بود.');
+                return;
+            }
+            $this->s3->downloadTo($volume, $path, $target);
+            return;
+        }
+
+        $stream = Storage::disk($disk ?: 'private')->readStream($path);
+        if (! is_resource($stream)) throw new RuntimeException('جریان فایل برای پشتیبان‌گیری در دسترس نیست.');
+        $output = fopen($target, 'wb');
+        try {
+            if (stream_copy_to_stream($stream, $output) === false) throw new RuntimeException('ذخیره جریان فایل ناموفق بود.');
+        } finally {
+            fclose($stream);
+            fclose($output);
+        }
+    }
+
+    public function uploadBackup(StorageVolume $volume, string $key, string $localPath): void
+    {
+        $this->writeToVolume($volume, $key, $localPath);
+    }
+
     public function volumeDisk(StorageVolume $volume): string
     {
         return 'storage_volume:'.$volume->id;
@@ -133,6 +168,7 @@ class StorageManager
             ->where('status', 'healthy')
             ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$bytes]))
             ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $bytes))
+            ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('(SELECT COUNT(*) FROM storage_managed_files WHERE storage_managed_files.storage_volume_id = storage_volumes.id AND storage_managed_files.status != ?) < storage_volumes.file_limit', ['deleted']))
             ->orderBy('priority')
             ->first();
     }
