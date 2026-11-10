@@ -105,7 +105,7 @@ class AdminStoreCouponDashboardTest extends TestCase
             'discount_rials' => 12000,
             'tax_rials' => 0,
             'total_rials' => 88000,
-            'product_snapshot' => [],
+            'product_snapshot' => ['cost_price_rials' => 50000],
         ]);
         StoreOrderItem::create([
             'order_id' => $order->id,
@@ -140,7 +140,71 @@ class AdminStoreCouponDashboardTest extends TestCase
             ->assertSee('مشتری پیشنهاد')
             ->assertSee('استفاده موفق')
             ->assertSee('1,200', false)
-            ->assertSee('8,800', false);
+            ->assertSee('8,800', false)
+            ->assertSee('3,800', false)
+            ->assertSee('سود ناخالص قابل محاسبه')
+            ->assertSee('اقلام فاقد بهای تاریخی');
+    }
+
+    public function test_dashboard_does_not_estimate_profit_for_legacy_items_without_cost_snapshot(): void
+    {
+        $admin = $this->admin();
+        $customer = User::create([
+            'name' => 'مشتری سفارش قدیمی',
+            'email' => 'coupon-legacy-cost@example.test',
+            'mobile' => '09151119995',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $product = $this->product();
+        $coupon = StoreCoupon::create([
+            'code' => 'SMARTLEGACY',
+            'type' => 'fixed',
+            'value' => 5000,
+            'max_uses' => 1,
+            'used_count' => 1,
+            'is_active' => true,
+        ]);
+        $order = Order::create([
+            'user_id' => $customer->id,
+            'subtotal_rials' => 100000,
+            'discount_rials' => 5000,
+            'tax_rials' => 0,
+            'total_rials' => 95000,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'pricing_snapshot' => ['kind' => 'store'],
+        ]);
+        StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 100000,
+            'discount_rials' => 5000,
+            'tax_rials' => 0,
+            'total_rials' => 95000,
+            'product_snapshot' => [],
+        ]);
+        StoreCouponAssignment::create([
+            'coupon_id' => $coupon->id,
+            'user_id' => $customer->id,
+            'product_id' => $product->id,
+            'status' => 'redeemed',
+            'score' => 5,
+            'reason_codes' => ['cart_intent'],
+            'offered_at' => now()->subDays(2),
+            'expires_at' => now()->subDay(),
+            'redeemed_at' => now()->subDay(),
+            'redeemed_order_id' => $order->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store-coupons.index'))
+            ->assertOk()
+            ->assertSee('اقلام فاقد بهای تاریخی')
+            ->assertSee('سود این اقلام محاسبه یا تخمین زده نمی‌شود');
     }
 
     public function test_global_admin_can_save_live_smart_discount_rules(): void
