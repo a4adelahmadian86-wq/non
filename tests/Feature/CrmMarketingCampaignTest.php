@@ -225,4 +225,68 @@ class CrmMarketingCampaignTest extends TestCase
     }
 
 
+
+    public function test_behavioral_segments_match_recent_product_signals_and_never_include_opted_out_users(): void
+    {
+        $admin = $this->user('09151110031');
+        $interested = $this->user('09151110032', User::ROLE_EMPLOYEE);
+        $interested->forceFill(['marketing_consent' => true, 'marketing_consent_updated_at' => now()])->save();
+        $noSignal = $this->user('09151110033', User::ROLE_EMPLOYEE);
+        $noSignal->forceFill(['marketing_consent' => true, 'marketing_consent_updated_at' => now()])->save();
+        $optedOut = $this->user('09151110034', User::ROLE_EMPLOYEE);
+
+        $category = StoreCategory::create([
+            'name' => 'دسته سگمنت رفتاری',
+            'slug' => 'behavior-segment-category',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول سگمنت رفتاری',
+            'slug' => 'behavior-segment-product',
+            'sku' => 'BEHAVIOR-SEGMENT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'cost_price_rials' => 50000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+
+        DB::table('farast_workflow_events')->insert([
+            'event_type' => 'marketing.cart_abandoned',
+            'idempotency_key' => 'marketing:cart_abandoned:'.$interested->id.':'.$product->id.':behavior-test',
+            'user_id' => $interested->id,
+            'context' => json_encode(['product_id' => $product->id]),
+            'matched_workflows' => 0,
+            'processed_at' => null,
+            'created_at' => now()->subHours(3),
+            'updated_at' => now()->subHours(3),
+        ]);
+        DB::table('farast_workflow_events')->insert([
+            'event_type' => 'marketing.cart_abandoned',
+            'idempotency_key' => 'marketing:cart_abandoned:'.$optedOut->id.':'.$product->id.':behavior-test',
+            'user_id' => $optedOut->id,
+            'context' => json_encode(['product_id' => $product->id]),
+            'matched_workflows' => 0,
+            'processed_at' => null,
+            'created_at' => now()->subHours(3),
+            'updated_at' => now()->subHours(3),
+        ]);
+
+        $this->actingAs($admin)->postJson('/admin/crm/marketing/segments', [
+            'name' => 'رهاکنندگان سبد محصول هدف',
+            'filters' => [
+                'signal_event' => 'cart_abandoned',
+                'signal_product_id' => $product->id,
+                'signal_window_days' => 14,
+            ],
+        ])->assertCreated()->assertJsonPath('audience_count', 1);
+
+        $segment = DB::table('crm_customer_segments')->where('created_by', $admin->id)->first();
+        $this->assertSame($interested->id, (int) $this->app->make(\\App\\Services\\CrmAudienceService::class)
+            ->query(json_decode($segment->filters, true))->value('id'));
+        $this->assertNotSame($noSignal->id, (int) $interested->id);
+    }
+
+
 }
