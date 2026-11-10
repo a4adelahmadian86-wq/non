@@ -166,10 +166,10 @@ class StorageCoreTest extends TestCase
             'status' => 'healthy', 'is_active' => true, 'priority' => 2,
         ]);
 
-        $adapter = \\Mockery::mock(\\App\\Services\\Storage\\S3CompatibleAdapter::class);
-        $adapter->shouldReceive('putFile')->once()->andThrow(new \\RuntimeException('provider unavailable'));
+        $adapter = \Mockery::mock(\App\Services\Storage\S3CompatibleAdapter::class);
+        $adapter->shouldReceive('putFile')->once()->andThrow(new \RuntimeException('provider unavailable'));
         $adapter->shouldReceive('delete')->zeroOrMoreTimes();
-        app()->instance(\\App\\Services\\Storage\\S3CompatibleAdapter::class, $adapter);
+        app()->instance(\App\Services\Storage\S3CompatibleAdapter::class, $adapter);
         app()->forgetInstance(StorageManager::class);
 
         $stored = app(StorageManager::class)->storeUploadedFile(
