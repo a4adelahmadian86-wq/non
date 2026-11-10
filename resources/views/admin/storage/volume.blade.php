@@ -8,7 +8,7 @@
     <div class="storage-detail-card">
         <a href="{{ route('admin.storage.index') }}">← بازگشت به درایوها</a>
         <div class="storage-detail-head"><div><h1>{{ $volume->name }}</h1><p class="muted">{{ $volume->provider ?: $volume->driver }} · {{ $volume->region ?: 'منطقه نامشخص' }}</p></div><span>{{ $volume->status }}</span></div>
-        <p>شناسه: #{{ $volume->id }} · درایو: {{ $volume->drive_key }} · آخرین بررسی: {{ optional($volume->last_checked_at)->format('Y-m-d H:i') ?: 'انجام نشده' }}</p>
+        <p>شناسه: #{{ $volume->id }} · درایو: {{ $volume->drive_key }} · آخرین بررسی: {{ optional($volume->last_checked_at)->format('Y-m-d H:i') ?: 'انجام نشده' }} · آخرین موفقیت: {{ optional($volume->last_success_at)->format('Y-m-d H:i') ?: 'ثبت نشده' }}</p>
         <p>ظرفیت: {{ $volume->capacity_bytes ? \Illuminate\Support\Number::fileSize($volume->capacity_bytes) : 'نامشخص' }} · مصرف ثبت‌شده: {{ \Illuminate\Support\Number::fileSize($volume->used_bytes) }} · فایل‌ها: {{ number_format($volume->files()->where('status', 'active')->count()) }}</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
             <form method="post" action="{{ route('admin.storage.verify',$volume) }}">@csrf<button class="btn">آزمون اتصال</button></form>
@@ -18,8 +18,8 @@
     </div>
     <div class="storage-detail-card">
         <h2>فایل‌های ثبت‌شده روی این هاست</h2>
-        <div style="overflow:auto"><table><thead><tr><th>نام فایل</th><th>حجم</th><th>نوع</th><th>منبع</th><th>شناسه مرتبط</th><th>وضعیت</th><th>تاریخ</th></tr></thead><tbody>
-        @forelse($files as $file)<tr><td>{{ $file->original_name }}</td><td>{{ \Illuminate\Support\Number::fileSize($file->size_bytes) }}</td><td>{{ $file->classification }}</td><td>{{ $file->source_module ?: '—' }} / {{ $file->source_type ?: '—' }}</td><td>{{ $file->product_id ? 'محصول #'.$file->product_id : ($file->source_id ? 'مرجع #'.$file->source_id : '—') }}</td><td>{{ $file->status }}</td><td>{{ $file->created_at->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="7">هنوز فایلی از طریق هسته مدیریت ذخیره‌سازی در این فضا ثبت نشده است.</td></tr>@endforelse
+        <div style="overflow:auto"><table><thead><tr><th>نام فایل</th><th>حجم</th><th>نوع</th><th>منبع</th><th>شناسه مرتبط</th><th>نسخه آینه‌ای</th><th>وضعیت</th><th>تاریخ</th></tr></thead><tbody>
+        @forelse($files as $file)<tr><td>{{ $file->original_name }}</td><td>{{ \Illuminate\Support\Number::fileSize($file->size_bytes) }}</td><td>{{ $file->classification }}</td><td>{{ $file->source_module ?: '—' }} / {{ $file->source_type ?: '—' }}</td><td>{{ $file->product_id ? 'محصول #'.$file->product_id : ($file->source_id ? 'مرجع #'.$file->source_id : '—') }}</td><td>{{ $file->replicaVolume?->name ?: (data_get($file->metadata, 'replication_status') === 'waiting_for_replica' ? 'در انتظار هاست دوم' : (data_get($file->metadata, 'replication_status') === 'failed' ? 'ناموفق' : '—')) }}</td><td>{{ $file->status }}</td><td>{{ $file->created_at->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="8">هنوز فایلی از طریق هسته مدیریت ذخیره‌سازی در این فضا ثبت نشده است.</td></tr>@endforelse
         </tbody></table></div>
         {{ $files->links() }}
     </div>
