@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 
@@ -90,7 +91,7 @@ class AccountSecurityController extends Controller
     {
         // Laravel stores one remember token per account. Rotating it prevents a
         // revoked browser from silently signing back in with an old recaller cookie.
-        $user->setRememberToken(\\Illuminate\\Support\\Str::random(60));
+        $user->setRememberToken(Str::random(60));
         $user->save();
     }
 
