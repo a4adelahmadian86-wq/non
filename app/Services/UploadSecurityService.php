@@ -359,6 +359,7 @@ class UploadSecurityService
                 }
 
                 $contentScan = 'not_required';
+                $memberBytes = null;
                 if ($type !== '5' && $entrySize <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES) {
                     $memberBytes = $readExact((int) $entrySize);
                     if (strlen($memberBytes) !== $entrySize) {
@@ -382,6 +383,7 @@ class UploadSecurityService
                     'compressed_bytes' => null,
                     'type' => $type === '5' ? 'directory' : 'file',
                     'content_scan' => $contentScan,
+                    'metadata' => is_string($memberBytes) ? $this->inspectArchiveMemberMetadata($memberBytes, $normalized) : [],
                 ];
 
                 $padding = (int) (ceil($entrySize / 512) * 512);
@@ -488,6 +490,7 @@ class UploadSecurityService
             }
             $centralPosition = ftell($handle);
             $contentScan = 'not_required';
+            $memberBytes = null;
             if (! str_ends_with($normalized, '/')) {
                 if ($meta['expanded'] <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES && $meta['compressed'] <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES) {
                     try {
@@ -516,6 +519,7 @@ class UploadSecurityService
                 'compressed_bytes' => (int) $meta['compressed'],
                 'type' => str_ends_with($normalized, '/') ? 'directory' : 'file',
                 'content_scan' => $contentScan,
+                'metadata' => is_string($memberBytes) ? $this->inspectArchiveMemberMetadata($memberBytes, $normalized) : [],
             ];
         }
         fclose($handle);
@@ -595,6 +599,58 @@ class UploadSecurityService
         }
 
         return $plain;
+    }
+
+    /**
+     * Extract only bounded metadata from an already-inspected archive member.
+     * No member is extracted to its original path or executed.
+     */
+    private function inspectArchiveMemberMetadata(string $bytes, string $name): array
+    {
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $metadata = [
+            'extension' => $extension ?: null,
+            'mime' => (new \\finfo(FILEINFO_MIME_TYPE))->buffer($bytes) ?: null,
+            'page_count' => null,
+            'author' => null,
+            'created_at' => null,
+        ];
+
+        if ($extension === 'pdf' && str_starts_with($bytes, '%PDF-')) {
+            if (preg_match('/\\/Author\\s*\\((.{1,512}?)\\)/s', $bytes, $match) === 1) {
+                $metadata['author'] = mb_substr(trim($match[1]), 0, 160);
+            }
+            $tempPath = tempnam(sys_get_temp_dir(), 'farast-member-');
+            if (is_string($tempPath)) {
+                try {
+                    file_put_contents($tempPath, $bytes, LOCK_EX);
+                    $metadata['page_count'] = $this->countPdfPages($tempPath);
+                } catch (\\Throwable) {
+                    $metadata['page_count'] = null;
+                } finally {
+                    @unlink($tempPath);
+                }
+            }
+        } elseif ($extension === 'xml' && str_ends_with(str_replace('\\\\', '/', $name), 'docProps/core.xml')) {
+            $previous = libxml_use_internal_errors(true);
+            try {
+                $document = new \\DOMDocument();
+                if ($document->loadXML($bytes, LIBXML_NONET | LIBXML_NOBLANKS)) {
+                    $xpath = new \\DOMXPath($document);
+                    $creator = $xpath->query('//*[local-name()="creator"]')?->item(0)?->textContent;
+                    $created = $xpath->query('//*[local-name()="created"]')?->item(0)?->textContent;
+                    $metadata['author'] = $creator ? mb_substr(trim($creator), 0, 160) : null;
+                    $metadata['created_at'] = $created ? mb_substr(trim($created), 0, 80) : null;
+                }
+            } catch (\\Throwable) {
+                // Metadata is optional and untrusted; malformed XML is ignored.
+            } finally {
+                libxml_clear_errors();
+                libxml_use_internal_errors($previous);
+            }
+        }
+
+        return array_filter($metadata, static fn ($value) => $value !== null && $value !== '');
     }
 
     /**
