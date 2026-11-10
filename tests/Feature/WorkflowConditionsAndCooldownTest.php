@@ -149,6 +149,24 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertSame('Audited workflow updated', data_get(json_decode($latest->after_state, true), 'name'));
     }
 
+    public function test_workflow_configuration_and_audit_write_roll_back_together(): void
+    {
+        $owner = $this->owner('09140000208');
+        DB::unprepared("CREATE TRIGGER fail_workflow_audit BEFORE INSERT ON farast_workflow_audit_logs BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END");
+
+        $this->actingAs($owner)->post('/workspace/workflows', [
+            'name' => 'Workflow without audit',
+            'trigger_type' => 'document.saved',
+            'steps' => [['action' => 'notify', 'title' => 'Should roll back']],
+            'enabled' => '1',
+        ])->assertServerError();
+
+        $this->assertDatabaseMissing('farast_workflows', [
+            'user_id' => $owner->id,
+            'name' => 'Workflow without audit',
+        ]);
+    }
+
     public function test_workflow_with_execution_history_cannot_be_deleted(): void
     {
         $owner = $this->owner('09140000206');
