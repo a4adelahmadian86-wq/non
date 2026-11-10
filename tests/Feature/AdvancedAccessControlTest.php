@@ -179,8 +179,9 @@ class AdvancedAccessControlTest extends TestCase
 
     public function test_debug_public_route_exception_for_global_middleware(): void
     {
-        $this->withoutExceptionHandling();
-        $this->get('/blog/not-a-real-article');
+        $response = $this->get('/blog/not-a-real-article');
+        fwrite(STDERR, "\nDEBUG_PUBLIC_ROUTE_RESPONSE: ".substr(strip_tags($response->getContent()), 0, 3000)."\n");
+        $response->assertNotFound();
     }
 
     public function test_direct_override_does_not_activate_before_its_start_time(): void
