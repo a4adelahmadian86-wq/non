@@ -180,6 +180,19 @@ class InternalMessengerTest extends TestCase
         $this->assertDatabaseCount('conversations', 0);
     }
 
+    public function test_employees_cannot_invite_customer_accounts_even_inside_their_organization(): void
+    {
+        $organization = $this->makeOrganization();
+        $employee = $this->makeEmployee($organization);
+        $customer = User::factory()->create(['organization_id' => $organization->id, 'role' => 'user']);
+
+        $this->actingAs($employee)->postJson(route('messenger.store'), [
+            'type' => 'direct',
+            'participant_ids' => [$customer->id],
+        ])->assertStatus(422);
+        $this->assertDatabaseCount('conversations', 0);
+    }
+
     public function test_customer_and_unassigned_accounts_cannot_open_internal_messenger(): void
     {
         $customer = User::factory()->create(['role' => 'user', 'organization_id' => null]);
