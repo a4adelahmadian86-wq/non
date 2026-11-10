@@ -39,6 +39,9 @@ class AdminDashboardShellIntegrityTest extends TestCase
         $this->assertNotFalse($mainEnd);
         $this->assertLessThan($platformControl, $mainStart);
         $this->assertLessThan($mainEnd, $platformControl);
+        $this->assertSame(1, substr_count($html, 'class="farast-admin farast-admin-workspace"'));
+        $this->assertSame(1, substr_count($html, 'class="farast-admin-main"'));
+        $this->assertSame(1, substr_count($html, 'class="farast-admin-nav"'));
         $this->assertSame(1, substr_count($html, 'id="platform-control"'));
     }
 }
