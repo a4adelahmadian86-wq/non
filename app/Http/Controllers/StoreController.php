@@ -90,7 +90,7 @@ class StoreController extends Controller
         $product = StoreProduct::with([
             'category',
             'images',
-            'previews',
+            'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
             'tags',
             'related',
             'files' => fn ($query) => $query
