@@ -137,8 +137,12 @@ class StorageMigrationService
     private function migrateUserFiles(int $limit): int
     {
         $count = 0;
-        UserFile::query()->where('disk', 'private')->where('status', 'local')->orderBy('id')->limit($limit)->get()
+        UserFile::query()->where('disk', 'private')->whereIn('status', ['local', 'remote'])->orderBy('id')->limit($limit)->get()
             ->each(function (UserFile $file) use (&$count): void {
+                if ($file->status === 'remote' && $file->remote_path) {
+                    if ($this->migrateArchivedUserFile($file)) $count++;
+                    return;
+                }
                 $sourceDisk = $file->disk ?: 'private';
                 $sourcePath = $file->path;
                 if ($this->copyToManaged($sourceDisk, $sourcePath, 'non_critical', 'user_file', $file->id, null, $file->user_id, $file->original_name, $file->mime)) {
@@ -155,6 +159,73 @@ class StorageMigrationService
                 }
             });
         return $count;
+    }
+
+    private function migrateArchivedUserFile(UserFile $file): bool
+    {
+        $archiveStream = Storage::disk('farast_remote')->readStream($file->remote_path);
+        if (! is_resource($archiveStream)) return false;
+
+        $archiveTemp = tmpfile();
+        if (! is_resource($archiveTemp)) {
+            fclose($archiveStream);
+            return false;
+        }
+
+        try {
+            if (stream_copy_to_stream($archiveStream, $archiveTemp) === false) return false;
+            $archivePath = stream_get_meta_data($archiveTemp)['uri'] ?? null;
+            if (! is_string($archivePath)) return false;
+            $zip = new \ZipArchive();
+            if ($zip->open($archivePath) !== true) return false;
+
+            $entryName = $file->original_name;
+            if ($zip->locateName($entryName) === false) {
+                $entryName = $zip->getNameIndex(0) ?: '';
+            }
+            if ($entryName === '') {
+                $zip->close();
+                return false;
+            }
+            $entryStream = $zip->getStream($entryName);
+            if (! is_resource($entryStream)) {
+                $zip->close();
+                return false;
+            }
+
+            $extension = pathinfo($file->original_name, PATHINFO_EXTENSION);
+            $newPath = 'user-files/'.$file->user_id.'/'.$file->id.'-'.\Illuminate\Support\Str::uuid().($extension ? '.'.$extension : '');
+            try {
+                $stored = Storage::disk('managed')->put($newPath, $entryStream, [
+                    'farast_classification' => 'non_critical',
+                    'farast_source_type' => 'user_file',
+                    'farast_source_id' => $file->id,
+                    'farast_owner_user_id' => $file->user_id,
+                    'farast_original_name' => $file->original_name,
+                    'mimetype' => $file->mime,
+                ]);
+            } finally {
+                fclose($entryStream);
+                $zip->close();
+            }
+
+            if (! $stored) return false;
+            $oldArchivePath = $file->remote_path;
+            $file->update([
+                'disk' => 'managed',
+                'path' => $newPath,
+                'status' => 'managed',
+                'remote_path' => null,
+                'local_expires_at' => null,
+                'remote_expires_at' => null,
+                'transferred_at' => now(),
+            ]);
+            Storage::disk('farast_remote')->delete($oldArchivePath);
+            return true;
+        } finally {
+            fclose($archiveStream);
+            fclose($archiveTemp);
+        }
     }
 
     private function migrateSupportAttachments(int $limit): int
