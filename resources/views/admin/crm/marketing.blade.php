@@ -89,7 +89,7 @@
         <div class="crm-marketing__table-wrap">
             <table>
                 <thead><tr><th>کمپین</th><th>وضعیت</th><th>مخاطب</th><th>پیشنهاد صادرشده</th><th>نمایش / کلیک</th><th>بازخرید</th><th>فروش منتسب</th><th>هزینه تخفیف</th><th>بودجه رزروشده / مانده</th><th>اقدام</th></tr></thead>
-                <tbody id="campaignsList"><tr><td colspan="9" class="crm-marketing__empty">در حال دریافت کمپین‌ها…</td></tr></tbody>
+                <tbody id="campaignsList"><tr><td colspan="10" class="crm-marketing__empty">در حال دریافت کمپین‌ها…</td></tr></tbody>
             </table>
         </div>
         <p class="crm-marketing__hint">فروش منتسب فقط از ردیف محصول هدف در سفارش‌های پرداخت‌شده محاسبه می‌شود. نرخ‌ها بر مبنای نمایش و تعامل یکتای هر پیشنهاد هستند؛ اعلان‌های عمومی بدون مشوق، پیشنهاد مالی محسوب نمی‌شوند.</p>
