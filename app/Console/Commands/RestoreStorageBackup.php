@@ -98,7 +98,6 @@ class RestoreStorageBackup extends Command
 
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
-            StorageManagedFile::query()->where('status', 'delete_pending')->update(['status' => 'deleted']);
 
             $this->newLine();
             $this->info('بازیابی پایگاه داده و فایل‌ها انجام شد.');
