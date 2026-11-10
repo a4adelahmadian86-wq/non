@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class MarketingSignalService
 {
-    private const ALLOWED_EVENTS = ['product_viewed', 'wishlist_added', 'cart_added', 'cart_abandoned', 'coupon_attempted'];
+    private const ALLOWED_EVENTS = ['product_viewed', 'wishlist_added', 'cart_added', 'cart_abandoned', 'coupon_attempted', 'offer_viewed'];
 
     /**
      * Store a minimal first-party signal only after explicit account consent.
@@ -44,7 +44,7 @@ class MarketingSignalService
             ]) === 1;
         });
 
-        if ($inserted && $productId) {
+        if ($inserted && $productId && $event !== 'offer_viewed') {
             try {
                 $freshUser = User::query()->find($user->id);
                 if ($freshUser) {
