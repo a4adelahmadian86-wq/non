@@ -11,7 +11,7 @@ test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and s
   await send('pointerdown',80,80,.18);await send('pointermove',120,105,.82);await send('pointerup',150,120,.45);
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[0]);
-  expect(saved.points.map(p=>p.p)).toContain(.18);expect(saved.points.map(p=>p.p)).toContain(.82);expect(saved.smoothing).toBe(true);
+  expect(saved.points.map(p=>p.p)).toContain(.18);expect(saved.points.map(p=>p.p)).toContain(.82);expect(saved.smoothing).toBe(true);expect(saved.points.some(p=>p.tiltX===20&&p.tiltY===10)).toBeTruthy();
   await send('pointerdown',180,160,.5,'mouse');await send('pointermove',220,185,.5,'mouse');await send('pointerup',250,200,.5,'mouse');
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
   const fallback=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[1].points.map(p=>p.p));
@@ -23,5 +23,8 @@ test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and s
   await page.evaluate(()=>window.FarastReaderPressureInk.importData([]));
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(0);
   await page.evaluate(data=>window.FarastReaderPressureInk.importData(data),backup);
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
+  const rejected=await page.evaluate(()=>{try{window.FarastReaderPressureInk.importData([{page:'0:1',color:'#111111',sensitivity:1,points:[{x:.1,y:.1,p:1.5,baseWidth:3},{x:.2,y:.2,p:.5,baseWidth:3}]}]);return false;}catch(_){return true;}});
+  expect(rejected).toBe(true);
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
 });
