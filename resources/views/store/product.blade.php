@@ -1,17 +1,33 @@
 @extends('layouts.app')
 @push('head')
-<meta name="description" content="{{ $product->seo_description ?: \Illuminate\Support\Str::limit(strip_tags($product->short_description ?: $product->description ?: $product->title), 155) }}">
+@php
+    $shareDescription = $product->seo_description
+        ?: $product->short_description
+        ?: \Illuminate\Support\Str::limit(strip_tags($product->description ?: $product->title), 155);
+    $socialImagePath = $product->cover_path ?: $product->images->first()?->path;
+@endphp
+<meta name="description" content="{{ $shareDescription }}">
 <meta property="og:title" content="{{ $product->seo_title ?: $product->title }}">
-<meta property="og:description" content="{{ $product->seo_description ?: $product->short_description }}">
+<meta property="og:description" content="{{ $shareDescription }}">
 <meta property="og:type" content="product">
 <meta property="og:url" content="{{ request()->url() }}">
+@if($socialImagePath)
+<meta property="og:image" content="{{ asset($socialImagePath) }}">
+<meta property="og:image:alt" content="{{ $product->title }}">
+@endif
+<meta name="twitter:card" content="{{ $socialImagePath ? 'summary_large_image' : 'summary' }}">
+<meta name="twitter:title" content="{{ $product->seo_title ?: $product->title }}">
+<meta name="twitter:description" content="{{ $shareDescription }}">
+@if($socialImagePath)
+<meta name="twitter:image" content="{{ asset($socialImagePath) }}">
+@endif
 @php
     $ratingCount = array_sum($ratingBreakdown);
     $productStructuredData = [
         '@context' => 'https://schema.org',
         '@type' => 'Product',
         'name' => $product->title,
-        'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description), 300),
+        'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description ?: $product->title), 300),
         'image' => collect([$product->cover_path])->filter()->merge($product->images->pluck('path'))->filter()->unique()->map(fn ($path) => asset($path))->values()->all(),
         'sku' => $product->sku,
         'url' => request()->url(),
