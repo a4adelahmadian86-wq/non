@@ -57,6 +57,13 @@
                     <small>{{ number_format((int) ($ticketStats['user_replied'] ?? 0)) }} پاسخ جدید مشتری · {{ number_format((int) ($ticketStats['open'] ?? 0)) }} تیکت باز</small>
                 </a>
             @endif
+            @if($console->sectionAllowed(auth()->user(), 'users'))
+                <a class="metric-card {{ ($followUpStats['overdue'] ?? 0) > 0 ? 'metric-orange' : 'metric-green' }} admin-action-metric" href="{{ route('admin.crm.followups.index') }}">
+                    <div class="metric-top"><span>پیگیری‌های معوق CRM</span><i class="fa-solid fa-calendar-check"></i></div>
+                    <strong>{{ number_format($followUpStats['overdue'] ?? 0) }}</strong>
+                    <small>{{ number_format($followUpStats['due_today'] ?? 0) }} موعد امروز · {{ number_format($followUpStats['open'] ?? 0) }} باز</small>
+                </a>
+            @endif
             @if($console->sectionAllowed(auth()->user(), 'finance'))
                 <a class="metric-card metric-green admin-action-metric" href="{{ route('admin.finance') }}">
                     <div class="metric-top"><span>درآمد ماه جاری</span><i class="fa-solid fa-chart-line"></i></div>
