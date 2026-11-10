@@ -77,6 +77,18 @@ class AdminController extends Controller
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
         $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
         $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
+        $canViewStore = $console->sectionAllowed($actor, 'store');
+        $storeProductStats = ['total' => 0, 'published' => 0, 'draft' => 0, 'archived' => 0];
+        if ($canViewStore && Schema::hasTable('store_products')) {
+            $productStatusCounts = DB::table('store_products')
+                ->select('status', DB::raw('COUNT(*) as aggregate'))
+                ->groupBy('status')
+                ->pluck('aggregate', 'status');
+            $storeProductStats['total'] = (int) $productStatusCounts->sum();
+            $storeProductStats['published'] = (int) ($productStatusCounts['published'] ?? 0);
+            $storeProductStats['draft'] = (int) ($productStatusCounts['draft'] ?? 0);
+            $storeProductStats['archived'] = (int) ($productStatusCounts['archived'] ?? 0);
+        }
         $messengerSummary = app(DashboardMessagingSummaryService::class)->snapshot($actor);
         $canViewAudit = $console->sectionAllowed($actor, 'audit');
 
@@ -319,6 +331,7 @@ class AdminController extends Controller
             'scopeSummary' => $console->scopeSummary($actor),
             'allowedSections' => $allowedSections,
             'messengerSummary' => $messengerSummary,
+            'storeProductStats' => $storeProductStats,
             'stats' => [
                 'users' => $totalScopedUsers,
                 'active_users' => $visibleIds === null
