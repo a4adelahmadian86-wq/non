@@ -6,6 +6,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
+use App\Services\Storage\StorageManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
