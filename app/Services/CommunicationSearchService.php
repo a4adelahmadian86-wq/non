@@ -31,9 +31,9 @@ class CommunicationSearchService
 
         if ($canSupport) {
             $tickets = Ticket::query()
-                ->with('user:id,name')
+                ->with(['user:id,name', 'relatedOrder:id,user_id,status,total_rials'])
                 ->when(! $isAdmin, fn ($query) => $query->where('user_id', $actor->id))
-                ->where(function ($query) use ($pattern) {
+                ->where(function ($query) use ($pattern, $term) {
                     $query->where('subject', 'like', $pattern)
                         ->orWhere('ticket_code', 'like', $pattern);
                 })
@@ -44,7 +44,7 @@ class CommunicationSearchService
             foreach ($tickets as $ticket) {
                 $results->push($this->item(
                     'ticket',
-                    $ticket->displayCode().' — '.$ticket->subject,
+                    $ticket->displayCode().' — '.$ticket->subject.($ticket->relatedOrder ? ' · سفارش #'.$ticket->relatedOrder->id : ''),
                     $ticket->displayName().' · '.$ticket->statusLabel(),
                     $isAdmin
                         ? route('admin.support.management', ['ticket' => $ticket->id])
@@ -55,7 +55,7 @@ class CommunicationSearchService
             }
 
             $ticketMessages = TicketMessage::query()
-                ->with('ticket')
+                ->with(['ticket.relatedOrder'])
                 ->where('body', 'like', $pattern)
                 ->whereHas('ticket', function ($query) use ($actor, $isAdmin) {
                     if (! $isAdmin) {
@@ -76,7 +76,7 @@ class CommunicationSearchService
                 }
                 $results->push($this->item(
                     'ticket',
-                    'پیام در '.$ticket->displayCode().' — '.$ticket->subject,
+                    'پیام در '.$ticket->displayCode().' — '.$ticket->subject.($ticket->relatedOrder ? ' · سفارش #'.$ticket->relatedOrder->id : ''),
                     Str::limit(trim(strip_tags((string) $message->body)), 180),
                     $isAdmin
                         ? route('admin.support.management', ['ticket' => $ticket->id])
