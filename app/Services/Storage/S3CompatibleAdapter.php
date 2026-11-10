@@ -19,6 +19,7 @@ class S3CompatibleAdapter implements FilesystemAdapter
     private string $bucket;
     private string $endpoint;
     private bool $pathStyle;
+    private ?string $sessionToken;
 
     public function __construct(array $config)
     {
@@ -34,6 +35,15 @@ class S3CompatibleAdapter implements FilesystemAdapter
         $this->bucket = (string) $config['bucket'];
         $this->endpoint = rtrim((string) $config['endpoint'], '/');
         $this->pathStyle = (bool) ($config['use_path_style_endpoint'] ?? true);
+        $this->sessionToken = isset($config['session_token']) ? (string) $config['session_token'] : null;
+        $scheme = strtolower((string) parse_url($this->endpoint, PHP_URL_SCHEME));
+        $host = strtolower((string) parse_url($this->endpoint, PHP_URL_HOST));
+        if ($scheme !== 'https' && ! in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            throw new RuntimeException('S3 endpoints must use HTTPS to protect storage credentials.');
+        }
+        if (parse_url($this->endpoint, PHP_URL_USER) || parse_url($this->endpoint, PHP_URL_PASS)) {
+            throw new RuntimeException('S3 endpoint must not embed credentials in its URL.');
+        }
         $this->client = new Client([
             'timeout' => (float) ($config['timeout'] ?? 30),
             'connect_timeout' => (float) ($config['connect_timeout'] ?? 8),
@@ -248,6 +258,9 @@ class S3CompatibleAdapter implements FilesystemAdapter
         $headers['host'] = $host.$port;
         $headers['x-amz-content-sha256'] = $payloadHash;
         $headers['x-amz-date'] = $now;
+        if ($this->sessionToken) {
+            $headers['x-amz-security-token'] = $this->sessionToken;
+        }
         ksort($headers);
 
         $canonicalHeaders = '';
