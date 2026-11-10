@@ -371,6 +371,14 @@
             <div class="product-ingestion-dialog">
               <div class="product-ingestion-modal-head"><span class="product-ingestion-icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>بررسی داخلی فراست</small><h3 id="ingestion-modal-title">گزارش بررسی فایل</h3><p data-ingestion-filename></p></div><button type="button" data-ingestion-close aria-label="بستن پنجره">×</button></div>
               <div class="product-ingestion-selected" data-ingestion-selected aria-live="polite"></div>
+              <div class="product-ingestion-antivirus">
+                @if(app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.security_scan'))
+                  <label><input type="checkbox" data-ingestion-antivirus> اسکن تکمیلی آنتی‌ویروس (اختیاری)</label>
+                  <small>پیش‌فرض خاموش است. با فعال‌سازی، فایل در قرنطینه خصوصی با موتور ClamAV بررسی می‌شود؛ این گزینه جایگزین بررسی ساختاری داخلی نیست.</small>
+                @else
+                  <small>بررسی ساختاری داخلی فعال است. اسکن آنتی‌ویروس تکمیلی فقط برای حساب‌های دارای مجوز مدیر اصلی در دسترس است.</small>
+                @endif
+              </div>
               <div class="product-ingestion-timeline" data-ingestion-timeline>
                 <div data-step="received" class="is-done"><i>✓</i><span>دریافت فایل</span></div>
                 <div data-step="upload"><i>2</i><span>انتقال امن به قرنطینه</span></div>
@@ -386,7 +394,7 @@
                 <small data-ingestion-progress-label>آماده‌سازی فایل...</small>
               </div>
               <div class="product-ingestion-report" data-ingestion-report><p>در حال بررسی فایل در محیط سایت...</p></div>
-              <p class="product-ingestion-security-note">این اسکنر داخلی فایل را اجرا نمی‌کند و سرویس ضدبدافزار ثالثی به کار نمی‌گیرد. نتیجه، بررسی ایستای ساختار و نشانه‌های خطر است و تضمین کشف همه بدافزارهای ناشناخته نیست.</p>
+              <p class="product-ingestion-security-note">بررسی ساختاری داخلی فایل را اجرا نمی‌کند. اسکن آنتی‌ویروس فقط با انتخاب صریح حساب مجاز و در صورت پیکربندی ClamAV انجام می‌شود؛ هیچ‌یک تضمین کشف همه تهدیدهای ناشناخته نیست.</p>
               <div class="product-ingestion-actions"><button type="button" class="store-outline-btn" data-ingestion-cancel>لغو انتخاب</button><button type="button" class="store-primary-btn" data-ingestion-confirm disabled>بررسی امن فایل</button></div>
             </div>
           </div>
