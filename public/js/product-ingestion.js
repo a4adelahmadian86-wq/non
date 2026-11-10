@@ -450,6 +450,11 @@
         return;
       }
       const identity = fileIdentity(file);
+      const selectedBytes = (state.current ? state.current.size : 0) + state.queue.reduce((total, queued) => total + queued.size, 0);
+      if (selectedBytes + file.size > 500 * 1024 * 1024) {
+        state.rejected.push({name: file.name, reason: 'مجموع حجم فایل‌های این نوبت نمی‌تواند از ۵۰۰ مگابایت بیشتر شود.'});
+        return;
+      }
       if ((state.current && fileIdentity(state.current) === identity) || state.queue.some((queued) => fileIdentity(queued) === identity)) {
         state.rejected.push({name: file.name, reason: 'این فایل قبلاً در همین صف انتخاب شده است.'});
         return;
@@ -604,11 +609,12 @@
     if (state.dragDepth === 0) overlay.hidden = true;
   });
   document.addEventListener('drop', (event) => {
-    if (!event.dataTransfer || !event.dataTransfer.files?.length) return;
+    if (!event.dataTransfer) return;
+    const items = Array.from(event.dataTransfer.items || []);
+    if (!event.dataTransfer.files?.length && !items.length) return;
     event.preventDefault();
     state.dragDepth = 0;
     overlay.hidden = true;
-    const items = Array.from(event.dataTransfer.items || []);
     const entries = items.map(item => item.webkitGetAsEntry?.()).filter(Boolean);
     if (entries.length) {
       Promise.all(entries.map(entry => readDroppedEntry(entry))).then(groups => enqueue(groups.flat()));
