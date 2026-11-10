@@ -147,6 +147,7 @@ class AdminStoreCouponController extends Controller
             ->whereNotNull('pricing_snapshot->coupon_redeemed_at')
             ->whereNotNull('pricing_snapshot->coupon_code')
             ->sum('discount_rials');
+        $monthlyBudgetReserved = app(\\App\\Services\\StoreCouponBudgetPolicy::class)->reservedAmount();
         $genericCoupons = $canManageGlobalCoupons
             ? StoreCoupon::query()
                 ->whereNotIn('id', StoreCouponAssignment::query()->select('coupon_id'))
@@ -179,8 +180,9 @@ class AdminStoreCouponController extends Controller
                 'items_missing_historical_cost' => $itemsMissingHistoricalCost,
                 'products_missing_cost' => StoreProduct::query()->published()->whereNull('cost_price_rials')->count(),
                 'monthly_budget_spent_rials' => (int) $monthlyBudgetSpent,
+                'monthly_budget_reserved_rials' => (int) $monthlyBudgetReserved,
                 'monthly_budget_cap_rials' => $monthlyBudgetCap,
-                'monthly_budget_remaining_rials' => $monthlyBudgetCap > 0 ? max(0, $monthlyBudgetCap - (int) $monthlyBudgetSpent) : null,
+                'monthly_budget_remaining_rials' => $monthlyBudgetCap > 0 ? max(0, $monthlyBudgetCap - (int) $monthlyBudgetSpent - (int) $monthlyBudgetReserved) : null,
             ],
             'settings' => [
                 'score_threshold' => (int) SiteSetting::read('smart_discount_score_threshold', 5),
