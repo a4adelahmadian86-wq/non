@@ -145,9 +145,9 @@ Route::post('/login/email/mobile',[AuthController::class,'requestEmailMobileOtp'
 Route::post('/logout',[AuthController::class,'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/two-factor/challenge', [\\App\\Http\\Controllers\\AccountTwoFactorController::class, 'challenge'])
+    Route::get('/two-factor/challenge', [\App\Http\Controllers\AccountTwoFactorController::class, 'challenge'])
         ->middleware('throttle:30,1')->name('two-factor.challenge');
-    Route::post('/two-factor/challenge', [\\App\\Http\\Controllers\\AccountTwoFactorController::class, 'verifyChallenge'])
+    Route::post('/two-factor/challenge', [\App\Http\Controllers\AccountTwoFactorController::class, 'verifyChallenge'])
         ->middleware('throttle:10,1')->name('two-factor.challenge.verify');
 });
 
