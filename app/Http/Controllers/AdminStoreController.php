@@ -614,7 +614,7 @@ class AdminStoreController extends Controller
                     'sha256' => $inspection['checksum'],
                     'is_primary' => $lockedIngestion->is_primary,
                     'is_active' => true,
-                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' || ! empty($inspection['warnings']) ? 'warning' : 'clean',
+                    'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'clean',
                     'scan_engine' => 'farast_static_v1',
                     'scanned_at' => now(),
                 ]);
