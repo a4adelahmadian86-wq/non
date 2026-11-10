@@ -30,3 +30,8 @@ A configured endpoint is not treated as a successful health check. The dashboard
 ## Scope boundaries
 
 The snapshot is a diagnostic contract, not a substitute for the publication guard. Publication must continue to validate current product data and file/document fingerprints at the point of mutation. Metrics can expose inconsistencies, but must not silently make them publishable.
+
+
+## Live infrastructure readiness
+
+The operations center also probes the authenticated readiness endpoint for the product supervisor and document-audio service. Results are cached for 45 seconds and requests have bounded connect/total timeouts. Supervisor readiness is split into Gemini product-review configuration and Groq file-review readiness with its privacy gate. Document-audio readiness checks that the voice model files are present and word alignment is available. A configured URL/token alone is never shown as a healthy service. The probe returns only status booleans and timestamps; credentials and raw provider responses are not rendered.

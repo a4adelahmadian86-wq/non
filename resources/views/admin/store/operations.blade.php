@@ -24,12 +24,15 @@
         <div><span>درایور صف</span><b>{{ $queueDriver }}</b></div>
         <div><span>اجرای worker زمان‌بندی‌شده</span><b>{{ $scheduledWorker ? 'فعال' : 'غیرفعال؛ worker مستقل لازم است' }}</b></div>
         <div><span>فضای ذخیره‌سازی خصوصی</span><b class="{{ $privateStorageWritable ? 'is-ok' : 'is-bad' }}">{{ $privateStorageWritable ? 'قابل نوشتن' : 'نیازمند بررسی' }}</b></div>
-        <div><span>ناظر محصول</span><b class="{{ $supervisorConfigured ? 'is-ok' : 'is-bad' }}">{{ $supervisorConfigured ? 'تنظیمات موجود' : 'تنظیم نشده' }}</b></div>
-        <div><span>سرویس صوت اسناد</span><b class="{{ $audioConfigured ? 'is-ok' : 'is-bad' }}">{{ $audioConfigured ? 'تنظیمات موجود' : 'تنظیم نشده' }}</b></div>
+        <div><span>پاسخ زنده ناظر محصول</span><b class="{{ $serviceHealth['supervisor']['status'] === 'healthy' ? 'is-ok' : 'is-bad' }}">{{ ['healthy'=>'پاسخ‌گو و آماده','degraded'=>'پاسخ‌گو؛ ناقص','unavailable'=>'پاسخ‌گو نیست','not_configured'=>'تنظیم نشده','misconfigured'=>'نشانی نامعتبر'][$serviceHealth['supervisor']['status']] ?? 'نامشخص' }}</b></div>
+        <div><span>آمادگی تولید/بازبینی محتوا</span><b class="{{ ($serviceHealth['supervisor']['product_review_ready'] ?? false) ? 'is-ok' : 'is-bad' }}">{{ ($serviceHealth['supervisor']['product_review_ready'] ?? false) ? 'آماده' : 'آماده نیست' }}</b></div>
+        <div><span>آمادگی تحلیل فایل و حریم خصوصی</span><b class="{{ (($serviceHealth['supervisor']['file_review_ready'] ?? false) && ($serviceHealth['supervisor']['privacy_gate_confirmed'] ?? false)) ? 'is-ok' : 'is-bad' }}">{{ ($serviceHealth['supervisor']['file_review_ready'] ?? false) && ($serviceHealth['supervisor']['privacy_gate_confirmed'] ?? false) ? 'آماده و تأییدشده' : 'آماده نیست' }}</b></div>
+        <div><span>پاسخ زنده سرویس صوت</span><b class="{{ $serviceHealth['document_audio']['status'] === 'healthy' ? 'is-ok' : 'is-bad' }}">{{ ['healthy'=>'پاسخ‌گو و آماده','degraded'=>'پاسخ‌گو؛ ناقص','unavailable'=>'پاسخ‌گو نیست','not_configured'=>'تنظیم نشده','misconfigured'=>'نشانی نامعتبر'][$serviceHealth['document_audio']['status']] ?? 'نامشخص' }}</b></div>
+        <div><span>مدل صوت و هم‌ترازی واژه</span><b class="{{ (($serviceHealth['document_audio']['model_ready'] ?? false) && ($serviceHealth['document_audio']['word_alignment_ready'] ?? false)) ? 'is-ok' : 'is-bad' }}">{{ ($serviceHealth['document_audio']['model_ready'] ?? false) && ($serviceHealth['document_audio']['word_alignment_ready'] ?? false) ? 'بارگذاری و آماده' : 'نیازمند بررسی' }}</b></div>
         <div><span>کارهای صف</span><b>{{ $queueStats['pending'] === null ? 'ناموجود' : number_format($queueStats['pending']) }}</b></div>
         <div><span>کارهای ناموفق Laravel</span><b>{{ $queueStats['failed'] === null ? 'ناموجود' : number_format($queueStats['failed']) }}</b></div>
       </div>
-      <p class="ops-note">«تنظیمات موجود» فقط وجود پیکربندی را نشان می‌دهد و به معنی پاسخ‌گویی لحظه‌ای سرویس خارجی نیست. هیچ کلید یا مقدار محرمانه‌ای در این صفحه نمایش داده نمی‌شود.</p>
+      <p class="ops-note">وضعیت سرویس‌ها از endpoint آمادگی احراز هویت‌شده خوانده و برای ۴۵ ثانیه cache می‌شود؛ کلیدها و پاسخ‌های محرمانه هرگز نمایش داده نمی‌شوند.</p>
     </section>
 
     <section class="ops-panel" aria-label="یکپارچگی چرخه عمر محصول">
