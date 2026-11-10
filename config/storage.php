@@ -2,8 +2,6 @@
 
 return [
     'routing' => [
-        // Temporary editor input remains on the local quarantine disk. Final editor assets,
-        // user file uploads and support attachments are routed to foreign storage.
         'non_critical_prefixes' => [
             'user-files',
             'ticket-attachments',
@@ -11,6 +9,8 @@ return [
             'editor-assets',
             'community-attachments',
             'messenger-attachments',
+            'editor-documents',
+            'generated-documents',
         ],
     ],
     'health' => [
