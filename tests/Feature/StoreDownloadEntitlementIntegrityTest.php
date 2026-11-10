@@ -211,6 +211,11 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
             ->assertRedirect(route('store'));
 
+        // Replaying the same wallet request must not debit or dispatch a second receipt.
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect(route('store'));
+
+        $this->assertSame(1, Payment::query()->where('order_id', $order->id)->where('gateway', 'wallet')->count());
         $this->assertDatabaseHas('wallets', [
             'user_id' => $user->id,
             'balance_rials' => 0,
