@@ -36,7 +36,8 @@ class StoreLibraryController extends Controller
             $libraryItem->file
                 && $libraryItem->file->is_active
                 && (int) $libraryItem->file->product_id === (int) $libraryItem->product_id
-                && $libraryItem->file->purpose === 'product_download',
+                && $libraryItem->file->purpose === 'product_download'
+                && in_array($libraryItem->file->scan_status, ['clean', 'legacy'], true),
             404,
             'فایل فعال نیست.'
         );
@@ -100,6 +101,7 @@ class StoreLibraryController extends Controller
                 ->where('product_id', $libraryItem->product_id)
                 ->where('purpose', 'product_download')
                 ->where('is_active', true)
+                ->whereIn('scan_status', ['clean', 'legacy'])
                 ->first();
             abort_unless($file, 404, 'فایل فعال نیست.');
 
