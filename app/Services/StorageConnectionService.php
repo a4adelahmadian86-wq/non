@@ -10,16 +10,21 @@ class StorageConnectionService
 {
     public function __construct(private readonly S3CompatibleAdapter $s3) {}
 
-    public function verify(StorageVolume $volume): array
+    public function verify(StorageVolume $volume, bool $refreshInventory = false): array
     {
         $inventory = null;
         $inventoryError = null;
+        $lastInventoryAttempt = data_get($volume->metadata, 'inventory_attempted_at');
+        $shouldRefreshInventory = $refreshInventory || ! $lastInventoryAttempt
+            || Carbon::parse($lastInventoryAttempt)->lt(now()->subHours(6));
         if ($volume->driver === 's3') {
             $result = $this->s3->probe($volume);
-            try {
-                $inventory = $this->s3->inventory($volume);
-            } catch (\\Throwable $exception) {
-                $inventoryError = mb_substr($exception->getMessage(), 0, 400);
+            if ($shouldRefreshInventory) {
+                try {
+                    $inventory = $this->s3->inventory($volume);
+                } catch (\\Throwable $exception) {
+                    $inventoryError = mb_substr($exception->getMessage(), 0, 400);
+                }
             }
         } elseif ($volume->driver === 'local') {
             $root = storage_path('app/storage-volumes/'.$volume->id);
@@ -35,7 +40,7 @@ class StorageConnectionService
                 @unlink($probe);
             }
             $result = ['read' => true, 'write' => true, 'delete' => true];
-            $inventory = $this->localInventory($root);
+            if ($shouldRefreshInventory) $inventory = $this->localInventory($root);
         } else {
             throw new RuntimeException('درایور این سرویس هنوز پشتیبانی نمی‌شود.');
         }
@@ -44,12 +49,13 @@ class StorageConnectionService
             'status' => 'healthy',
             'last_checked_at' => now(),
             'last_success_at' => now(),
-            'capabilities' => array_merge($result, ['list' => $inventory !== null]),
+            'capabilities' => array_merge($result, ['list' => $inventory !== null ? true : (bool) data_get($volume->capabilities, 'list', false)]),
             'used_bytes' => $inventory['used_bytes'] ?? $volume->used_bytes,
             'object_count' => $inventory['object_count'] ?? $volume->object_count,
             'metadata' => array_merge((array) $volume->metadata, [
-                'inventory_checked_at' => now()->toIso8601String(),
-                'inventory_error' => $inventoryError,
+                'inventory_attempted_at' => $shouldRefreshInventory ? now()->toIso8601String() : data_get($volume->metadata, 'inventory_attempted_at'),
+                'inventory_checked_at' => $inventory !== null ? now()->toIso8601String() : data_get($volume->metadata, 'inventory_checked_at'),
+                'inventory_error' => $inventoryError ?? data_get($volume->metadata, 'inventory_error'),
             ]),
         ])->save();
 
