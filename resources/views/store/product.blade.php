@@ -129,14 +129,18 @@
           <div class="store-panel course-public-curriculum" id="store-product-curriculum">
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
             <div class="course-public-meta">
-              @if($product->course->instructor_name)<span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>@endif
+              @if($product->course->instructor_name)
+                <span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>
+              @endif
               @php
                 $courseLevelLabels = ['beginner' => 'مقدماتی', 'intermediate' => 'متوسط', 'advanced' => 'پیشرفته', 'all' => 'همه سطوح'];
               @endphp
               @if(isset($courseLevelLabels[$product->course->level]))
                 <span><i class="fa-solid fa-signal"></i> سطح: {{ $courseLevelLabels[$product->course->level] }}</span>
               @endif
-              @if($product->course->duration_minutes)<span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>@endif
+              @if($product->course->duration_minutes)
+                <span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>
+              @endif
             </div>
             @forelse($product->course->sections as $section)
               @php
@@ -145,7 +149,16 @@
               @if($visibleLessons->isNotEmpty())
                 <div class="course-public-section"><strong>{{ $loop->iteration }}. {{ $section->title }}</strong><span>{{ $visibleLessons->count() }} جلسه</span></div>
                 @foreach($visibleLessons as $lesson)
-                  <div class="course-public-lesson"><i class="fa-solid fa-{{ $lesson->lesson_type==='video'?'play':($lesson->lesson_type==='audio'?'headphones':'file-lines') }}"></i><span>{{ $lesson->title }}</span>@if($lesson->is_preview)<a class="course-preview-link" href="{{ route('store.course.preview',[$product,$lesson]) }}">نمونه رایگان</a>@endif @if($lesson->duration_seconds)<small>{{ gmdate('i:s',$lesson->duration_seconds) }}</small>@endif</div>
+                  <div class="course-public-lesson">
+                    <i class="fa-solid fa-{{ $lesson->lesson_type === 'video' ? 'play' : ($lesson->lesson_type === 'audio' ? 'headphones' : 'file-lines') }}"></i>
+                    <span>{{ $lesson->title }}</span>
+                    @if($lesson->is_preview)
+                      <a class="course-preview-link" href="{{ route('store.course.preview', [$product, $lesson]) }}">نمونه رایگان</a>
+                    @endif
+                    @if($lesson->duration_seconds)
+                      <small>{{ gmdate('i:s', $lesson->duration_seconds) }}</small>
+                    @endif
+                  </div>
                 @endforeach
               @endif
             @empty
@@ -174,11 +187,14 @@
         </div>
         @if($product->tags->isNotEmpty())
           <div class="store-product-tags" aria-label="برچسب‌های محصول">
-            @foreach($product->tags as $tag)<span>{{ $tag->name }}</span>@endforeach
+            @foreach($product->tags as $tag)
+              <span>{{ $tag->name }}</span>
+            @endforeach
           </div>
         @endif
         <div class="price">
-          @if((int)$product->price_rials===0) رایگان
+          @if((int) $product->price_rials === 0)
+            رایگان
           @else
             {{ number_format((int)$product->price_rials/10) }} تومان
             @if($product->compare_at_price_rials && $product->compare_at_price_rials > $product->price_rials)
