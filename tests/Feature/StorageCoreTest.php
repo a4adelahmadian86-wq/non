@@ -151,4 +151,37 @@ class StorageCoreTest extends TestCase
         $this->assertSame(0, $volume->object_count);
         $this->assertDatabaseHas('storage_managed_files', ['id' => $stored['managed_file_id'], 'status' => 'deleted']);
     }
+    public function test_upload_fails_over_to_the_next_healthy_volume_in_the_same_drive(): void
+    {
+        $failed = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Unavailable S3', 'driver' => 's3',
+            'endpoint' => 'https://storage.invalid.example', 'bucket' => 'bucket',
+            'credentials' => ['key' => 'key', 'secret' => 'secret'],
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+        $iran = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran fallback', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 2,
+        ]);
+
+        $adapter = \\Mockery::mock(\\App\\Services\\Storage\\S3CompatibleAdapter::class);
+        $adapter->shouldReceive('putFile')->once()->andThrow(new \\RuntimeException('provider unavailable'));
+        $adapter->shouldReceive('delete')->zeroOrMoreTimes();
+        app()->instance(\\App\\Services\\Storage\\S3CompatibleAdapter::class, $adapter);
+        app()->forgetInstance(StorageManager::class);
+
+        $stored = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('critical-failover.txt', 'keep-in-iran'),
+            StorageManager::CRITICAL,
+            'test'
+        );
+
+        $this->assertSame($iran->id, $stored['volume_id']);
+        $this->assertNotSame($failed->id, $stored['volume_id']);
+        $this->assertSame('error', $failed->fresh()->status);
+        $this->assertSame('keep-in-iran', app(StorageManager::class)->get($stored['disk'], $stored['path']));
+    }
+
 }
