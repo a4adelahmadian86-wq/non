@@ -31,7 +31,7 @@ class UserFileController extends Controller
         $path = $stored['path'];
         $now = now();
         try {
-            $record = \Illuminate\\Support\\Facades\\DB::transaction(function () use ($file, $path, $stored, $bytes, $pages, $quote, $now, $storage) {
+            $record = \Illuminate\Support\Facades\DB::transaction(function () use ($file, $path, $stored, $bytes, $pages, $quote, $now, $storage) {
                 $record = UserFile::create([
                     'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
                     'disk' => $stored['disk'], 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
