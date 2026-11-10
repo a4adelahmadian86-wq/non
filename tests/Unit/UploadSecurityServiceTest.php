@@ -83,6 +83,8 @@ class UploadSecurityServiceTest extends TestCase
         $this->assertSame(1, $result['archive_entry_count']);
         $this->assertSame('chapters/intro.txt', $result['archive_entries'][0]['name']);
         $this->assertSame('checked', $result['archive_entries'][0]['content_scan']);
+        $this->assertSame('txt', $result['archive_entries'][0]['metadata']['extension']);
+        $this->assertSame('text/plain', $result['archive_entries'][0]['metadata']['mime']);
     }
 
     public function test_zip_manifest_is_listed_without_extracting_archive_members(): void
@@ -107,6 +109,8 @@ class UploadSecurityServiceTest extends TestCase
         $this->assertSame(1, $result['archive_entry_count']);
         $this->assertSame('chapters/intro.txt', $result['archive_entries'][0]['name']);
         $this->assertSame('checked', $result['archive_entries'][0]['content_scan']);
+        $this->assertSame('txt', $result['archive_entries'][0]['metadata']['extension']);
+        $this->assertSame('text/plain', $result['archive_entries'][0]['metadata']['mime']);
     }
 
     public function test_zip_member_with_known_malware_test_signature_is_rejected_without_extraction(): void
