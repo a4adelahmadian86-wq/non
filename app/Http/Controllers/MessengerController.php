@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class MessengerController extends Controller
 {
@@ -115,15 +116,15 @@ class MessengerController extends Controller
         foreach ($files as $file) {
             $path = $file->store('messenger/'.$conversation->id, 'private');
             try {
-                $inspection = app(\\App\\Services\\UploadSecurityService::class)->inspect(
+                $inspection = app(\App\Services\UploadSecurityService::class)->inspect(
                     $path,
                     (string) $file->getMimeType(),
                     10 * 1024 * 1024,
                 );
                 if (empty($inspection['safe'])) {
-                    throw new \\RuntimeException('فایل از بررسی امنیتی داخلی عبور نکرد.');
+                    throw new \RuntimeException('فایل از بررسی امنیتی داخلی عبور نکرد.');
                 }
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 Storage::disk('private')->delete($path);
                 foreach ($attachments as $stored) {
                     Storage::disk('private')->delete($stored['path']);
