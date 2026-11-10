@@ -74,7 +74,10 @@ class StorageConnectionService
             $disk->delete($probe);
         }
 
+        $metadata = (array) ($volume->metadata ?? []);
+        unset($metadata['last_health_error'], $metadata['last_error']);
         $volume->forceFill([
+            'metadata' => $metadata,
             'provider' => $volume->provider ?: $this->detectProvider($volume->endpoint),
             'status' => 'healthy',
             'last_checked_at' => now(),
