@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Services\AdminConsoleService;
 use App\Services\CapabilityService;
 use App\Services\MessengerAccessService;
 use App\Services\NotificationService;
@@ -22,19 +23,23 @@ class CommunicationCenterController extends Controller
         CapabilityService $capabilities,
         MessengerAccessService $messengerAccess,
         CommunicationSearchService $communicationSearch,
+        AdminConsoleService $adminConsole,
     ) {
         $user = $request->user();
         $isAdmin = $user->isAdmin();
-        $canSupport = $isAdmin || $capabilities->allowed($user, 'can_support');
-        $canUseMessenger = $messengerAccess->canUse($user);
+        // An admin role may be deliberately narrowed by the console scope override.
+        // Only the global support section may aggregate all customers' records.
+        $canManageAllTickets = $isAdmin && $adminConsole->sectionAllowed($user, 'support_admin');
+        $canSupport = $capabilities->allowed($user, 'can_support');
+        $canUseMessenger = $messengerAccess->canUse($user) && (! $isAdmin || $canManageAllTickets);
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
         $searchTerm = trim((string) ($validated['q'] ?? ''));
         $searchResults = $searchTerm !== ''
-            ? $communicationSearch->search($user, $searchTerm, $canSupport, $canUseMessenger)
+            ? $communicationSearch->search($user, $searchTerm, $canSupport, $canUseMessenger, 30, $canManageAllTickets)
             : collect();
 
         $ticketQuery = Ticket::query()->with(['user:id,name,email', 'assignee:id,name']);
-        if (! $isAdmin) {
+        if (! $canManageAllTickets) {
             $ticketQuery->where('user_id', $user->id);
         }
         if (! $canSupport) {
@@ -103,7 +108,7 @@ class CommunicationCenterController extends Controller
                 'kind' => 'ticket',
                 'title' => $ticket->displayCode().' — '.$ticket->subject,
                 'body' => $ticket->displayName().' · '.$ticket->statusLabel().' · '.$ticket->priorityLabel(),
-                'url' => $isAdmin
+                'url' => $canManageAllTickets
                     ? route('admin.support.management', ['ticket' => $ticket->id])
                     : route('support.show', $ticket),
                 'at' => $ticket->updated_at,
@@ -130,7 +135,7 @@ class CommunicationCenterController extends Controller
             ->values();
 
         $customerUnreadTickets = 0;
-        if (! $isAdmin && $canSupport) {
+        if ((! $isAdmin || ! $canManageAllTickets) && $canSupport) {
             $unreadTicketsQuery = Ticket::query()->where('user_id', $user->id)->where('status', 'answered');
             if (Schema::hasColumn('tickets', 'customer_last_seen_at') && Schema::hasColumn('tickets', 'last_reply_at')) {
                 $unreadTicketsQuery->where(function ($query) {
@@ -142,8 +147,10 @@ class CommunicationCenterController extends Controller
         }
 
         $stats = [
-            'tickets_needing_reply' => $isAdmin ? Ticket::query()->needsReply()->count() : $customerUnreadTickets,
-            'tickets_open' => $isAdmin ? Ticket::query()->openQueue()->count() : $tickets->where('status', '!=', 'closed')->count(),
+            'tickets_needing_reply' => $canManageAllTickets
+                ? Ticket::query()->needsReply()->count()
+                : ($isAdmin ? $tickets->whereIn('status', ['open', 'user_replied'])->count() : $customerUnreadTickets),
+            'tickets_open' => $canManageAllTickets ? Ticket::query()->openQueue()->count() : $tickets->where('status', '!=', 'closed')->count(),
             'conversations_unread' => $unreadConversationsCount,
             'notifications_unread' => $unreadNotifications,
         ];
@@ -155,6 +162,7 @@ class CommunicationCenterController extends Controller
             'feed',
             'stats',
             'isAdmin',
+            'canManageAllTickets',
             'canSupport',
             'canUseMessenger',
             'searchTerm',
