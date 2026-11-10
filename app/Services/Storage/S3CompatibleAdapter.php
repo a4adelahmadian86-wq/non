@@ -232,7 +232,7 @@ class S3CompatibleAdapter
 
         try {
             $client = new Client(['connect_timeout' => 8, 'timeout' => 120, 'http_errors' => false, 'verify' => true]);
-            $response = $client->request($method, $url, array_merge($options, ['headers' => array_merge($headers, $extraHeaders), 'body' => $body]));
+            $response = $client->request($method, $url, array_merge($options, ['headers' => $headers, 'body' => $body]));
         } catch (GuzzleException $exception) {
             throw new RuntimeException('ارتباط با فضای ذخیره‌سازی برقرار نشد: '.$exception->getMessage(), 0, $exception);
         }
