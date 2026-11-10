@@ -39,6 +39,8 @@
       <h2>یکپارچگی چرخه عمر محصول</h2>
       <p class="ops-note">این شاخص‌ها ارتباط بین کاتالوگ، فایل اصلی، دوره، خوانشگر، دریافت فایل و پردازش پس‌زمینه را بررسی می‌کنند. گزارش فقط‌خواندنی است و هیچ وضعیت محصول یا فایل را خودکار تغییر نمی‌دهد.</p>
       <div class="ops-grid ops-grid-status">
+        <div><span>اسناد با عدم تطابق مالکیت یا SHA-256 منبع</span><b class="{{ $lifecycleHealth['documents_with_source_binding_violations'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['documents_with_source_binding_violations']) }}</b></div>
+        <div><span>اسناد متصل به فایل غیرفعال، ناامن یا خارج از فضای خصوصی</span><b class="{{ $lifecycleHealth['documents_with_untrusted_source_files'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['documents_with_untrusted_source_files']) }}</b></div>
         <div><span>فایل‌محورهای منتشرشده بدون فایل اصلی سالم</span><b class="{{ $lifecycleHealth['published_missing_safe_primary_file'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['published_missing_safe_primary_file']) }}</b></div>
         <div><span>دوره‌های منتشرشده بدون جلسه قابل انتشار</span><b class="{{ $lifecycleHealth['published_courses_without_publishable_lessons'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['published_courses_without_publishable_lessons']) }}</b></div>
         <div><span>خوانشگرهای کاملِ آماده‌نشده</span><b class="{{ $lifecycleHealth['reader_only_without_ready_document'] > 0 ? 'is-bad' : 'is-ok' }}">{{ number_format($lifecycleHealth['reader_only_without_ready_document']) }}</b></div>
