@@ -115,6 +115,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     // Store coupon operations: consent-aware smart offers and public coupon inventory.
     Route::get('/store-coupons', [\App\Http\Controllers\AdminStoreCouponController::class, 'index'])->middleware('admin.section:marketing')->name('store-coupons.index');
+    Route::put('/store-coupons/settings', [\App\Http\Controllers\AdminStoreCouponController::class, 'saveSettings'])->middleware(['admin.section:marketing', 'throttle:10,10'])->name('store-coupons.settings');
     Route::post('/store-coupons', [\App\Http\Controllers\AdminStoreCouponController::class, 'store'])->middleware(['admin.section:marketing', 'throttle:10,10'])->name('store-coupons.store');
     Route::patch('/store-coupons/{coupon}/toggle', [\App\Http\Controllers\AdminStoreCouponController::class, 'toggle'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.toggle');
     Route::post('/store-coupons/assignments/{assignment}/revoke', [\App\Http\Controllers\AdminStoreCouponController::class, 'revokeAssignment'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.assignments.revoke');
