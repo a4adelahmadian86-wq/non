@@ -77,14 +77,14 @@ class GenerateProductDocumentAudio implements ShouldQueue, ShouldBeUnique
             $bytes = $generated['audio'];
             $sha256 = hash('sha256', $bytes);
             $path = 'store/products/'.$document->product_id.'/artifacts/'.$document->source_sha256.'/audio-v3.wav';
-            if (! Storage::disk('private')->put($path, $bytes)) {
+            if (! Storage::disk('managed')->put($path, $bytes, ['farast_classification' => 'critical', 'farast_source_type' => 'product_reader_audio', 'farast_source_id' => $document->id, 'farast_product_id' => $document->product_id, 'mimetype' => 'audio/wav'])) {
                 throw new \RuntimeException('product_audio_storage_failed');
             }
 
             $artifact = $document->artifacts()->updateOrCreate(
                 ['artifact_type' => 'audio_full_wav', 'version' => 3],
                 [
-                    'disk' => 'private',
+                    'disk' => 'managed',
                     'path' => $path,
                     'mime' => 'audio/wav',
                     'size_bytes' => strlen($bytes),
