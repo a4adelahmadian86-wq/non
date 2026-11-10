@@ -177,9 +177,17 @@ class AdminProductSupervisorController extends Controller
         $temporaryPath = null;
         if (str_starts_with($disk, 'storage_volume:')) {
             $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-supervisor-asset');
-            if (! is_string($temporaryPath)) throw new \\RuntimeException('temporary_asset_path_unavailable');
-            $storageManager->downloadTo($disk, $path, $temporaryPath);
-            abort_if((int) filesize($temporaryPath) > 25 * 1024 * 1024, 413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
+            if (! is_string($temporaryPath)) throw new \RuntimeException('temporary_asset_path_unavailable');
+            try {
+                $storageManager->downloadTo($disk, $path, $temporaryPath);
+            } catch (\\Throwable $exception) {
+                @unlink($temporaryPath);
+                throw $exception;
+            }
+            if ((int) filesize($temporaryPath) > 25 * 1024 * 1024) {
+                @unlink($temporaryPath);
+                abort(413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
+            }
             $stream = fopen($temporaryPath, 'rb');
         } else {
             $localDisk = Storage::disk($disk);
@@ -222,6 +230,7 @@ class AdminProductSupervisorController extends Controller
             return back()->withErrors(['ai_supervisor' => 'بررسی فایل انجام نشد؛ وضعیت سرویس و سلامت فایل را بررسی کنید.']);
         } finally {
             fclose($stream);
+            if ($temporaryPath) @unlink($temporaryPath);
         }
 
         $inspection = (array) ($review['inspection'] ?? []);
