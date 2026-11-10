@@ -34,6 +34,7 @@
         @endforeach
     </nav>
     <div class="farast-dashboard-nav__footer">
+        <a href="{{ route('platform.security') }}"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>امنیت حساب</span></a>
         <a href="{{ route('home') }}"><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i><span>بازگشت به سایت</span></a>
         <form method="post" action="{{ route('logout') }}"><button type="submit"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span>خروج از حساب</span></button>@csrf</form>
     </div>
