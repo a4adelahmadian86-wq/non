@@ -108,7 +108,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
     </div>
     <div class="footer-column"><h3>محصولات</h3><a href="{{ route('store') }}">فروشگاه</a><a href="{{ route('editor') }}">تایپ و ویرایش سند</a><a href="{{ route('pricing') }}">تعرفه خدمات</a></div>
     <div class="footer-column"><h3>راهنما</h3><a href="{{ route('blog') }}">مجله فراست</a><a href="/announcements">اطلاعیه‌ها</a><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a></div>
-    <div class="footer-column"><h3>حساب کاربری</h3><a href="{{ route('dashboard') }}">فضای کاربری</a><a href="/wishlist">علاقه‌مندی‌ها</a><a href="{{ route('account.marketing-preferences.edit') }}">ترجیحات بازاریابی</a><a href="/support">پشتیبانی</a></div>
+    <div class="footer-column"><h3>حساب کاربری</h3><a href="{{ route('dashboard') }}">فضای کاربری</a><a href="{{ route('platform.security') }}">امنیت حساب</a><a href="/wishlist">علاقه‌مندی‌ها</a><a href="{{ route('account.marketing-preferences.edit') }}">ترجیحات بازاریابی</a><a href="/support">پشتیبانی</a></div>
   </div>
   <div class="footer-bottom farast-footer-bottom">
     <section class="farast-footer-trust" aria-labelledby="farast-footer-trust-title">
