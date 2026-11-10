@@ -123,7 +123,7 @@ class MessengerController extends Controller
         return view('messenger.show', compact('conversation', 'messages', 'isGroupOwner', 'availableUsers', 'latestMessageId'));
     }
 
-    public function send(Request $request, Conversation $conversation)
+    public function send(Request $request, Conversation $conversation, StorageManager $storage)
     {
         $this->authorizeParticipant($request, $conversation);
         abort_if($conversation->is_locked, 423, 'این گفتگو موقتاً قفل شده است.');
@@ -159,7 +159,7 @@ class MessengerController extends Controller
             } catch (\Throwable $exception) {
                 Storage::disk('private')->delete($path);
                 foreach ($attachments as $stored) {
-                    Storage::disk('private')->delete($stored['path']);
+                    $storage->delete($stored['disk'] ?? 'private', $stored['path']);
                 }
                 throw ValidationException::withMessages([
                     'attachments' => ['فایل پیوست توسط بررسی امنیتی داخلی پذیرفته نشد: '.$exception->getMessage()],
@@ -260,17 +260,18 @@ class MessengerController extends Controller
         ])])->header('Cache-Control', 'private, no-store')->header('Pragma', 'no-cache');
     }
 
-    public function attachment(Request $request, Conversation $conversation, ConversationMessage $message, int $index)
+    public function attachment(Request $request, Conversation $conversation, ConversationMessage $message, int $index, StorageManager $storage)
     {
         $this->authorizeParticipant($request, $conversation);
         abort_unless((int) $message->conversation_id === (int) $conversation->id, 404);
         $attachment = $message->attachments[$index] ?? null;
-        abort_unless(is_array($attachment) && ($attachment['disk'] ?? null) === 'private' && filled($attachment['path'] ?? null), 404);
+        $disk = (string) ($attachment['disk'] ?? 'private');
+        abort_unless(is_array($attachment) && ($disk === 'private' || preg_match('/^storage_volume:[0-9]+$/', $disk)) && filled($attachment['path'] ?? null), 404);
+        abort_unless($storage->exists($disk, $attachment['path']), 404);
 
-        $disk = Storage::disk('private');
-        abort_unless($disk->exists($attachment['path']), 404);
-
-        return $disk->download($attachment['path'], $attachment['name'] ?? 'attachment', [
+        return response($storage->get($disk, $attachment['path']), 200, [
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment; filename="'.addslashes($attachment['name'] ?? 'attachment').'"',
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ]);
