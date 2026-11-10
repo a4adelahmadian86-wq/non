@@ -60,6 +60,21 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:invalid-user:1']);
     }
 
+    public function test_document_revision_metadata_is_accepted_as_a_trusted_event_field(): void
+    {
+        $owner = $this->owner('09140000210');
+
+        $this->assertSame(0, app(WorkflowEngine::class)->dispatch(
+            'document.saved',
+            ['user_id' => $owner->id, 'document_id' => 210, 'revision' => 4],
+            'document:210:revision:4',
+        ));
+
+        $event = DB::table('farast_workflow_events')->where('idempotency_key', 'document:210:revision:4')->first();
+        $this->assertNotNull($event);
+        $this->assertSame(4, (int) data_get(json_decode($event->context, true), 'revision'));
+    }
+
     public function test_event_only_runs_workflow_when_all_conditions_match(): void
     {
         $owner = $this->owner('09140000201');
