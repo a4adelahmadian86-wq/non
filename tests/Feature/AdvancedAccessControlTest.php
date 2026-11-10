@@ -272,6 +272,7 @@ class AdvancedAccessControlTest extends TestCase
             'scope_type' => 'organization',
             'scope_id' => $organization->id,
             'is_active' => true,
+            'reason' => 'Attempt to retarget an assigned role',
         ])->assertStatus(409);
 
         $this->assertDatabaseHas('farast_roles', [
