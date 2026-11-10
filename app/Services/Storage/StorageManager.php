@@ -76,6 +76,19 @@ class StorageManager
         return $stored;
     }
 
+    public function bindReference(int $managedFileId, string $sourceType, int $sourceId, ?int $productId = null): void
+    {
+        $file = StorageManagedFile::findOrFail($managedFileId);
+        $metadata = (array) $file->metadata;
+        $metadata['reference_pending'] = false;
+        $file->update([
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'product_id' => $productId ?? $file->product_id,
+            'metadata' => $metadata,
+        ]);
+    }
+
     public function exists(string $disk, string $path): bool
     {
         if (str_starts_with($disk, 'storage_volume:')) {
@@ -225,7 +238,7 @@ class StorageManager
             'product_id' => $productId,
             'visibility' => $visibility,
             'status' => $status,
-            'metadata' => array_merge($metadata, ['disk' => $disk, 'original_extension' => $file->getClientOriginalExtension()]),
+            'metadata' => array_merge($metadata, ['disk' => $disk, 'original_extension' => $file->getClientOriginalExtension(), 'reference_pending' => true]),
         ]);
 
         if ($volume) {
