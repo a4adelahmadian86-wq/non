@@ -7,6 +7,7 @@ use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use App\Jobs\RunStorageBackupJob;
 use App\Services\StorageConnectionService;
+use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -142,7 +143,7 @@ class AdminStorageController extends Controller
         return view('admin.storage.volume', compact('volume', 'files', 'backups'));
     }
 
-    public function downloadFile(StorageManagedFile $file, \\App\\Services\\Storage\\StorageManager $storage)
+    public function downloadFile(StorageManagedFile $file, StorageManager $storage)
     {
         abort_unless(! in_array($file->status, ['deleted', 'delete_pending'], true), 404);
         $disk = (string) data_get($file->metadata, 'disk', $file->storage_volume_id ? 'storage_volume:'.$file->storage_volume_id : 'private');
