@@ -20,6 +20,7 @@
             <a href="{{ route('admin.crm.followups.index') }}" @if(request()->routeIs('admin.crm.followups.*')) aria-current="page" @endif><i class="fa-solid fa-calendar-check"></i><span>پیگیری‌ها</span></a>
         @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'marketing'))
+            <a href="{{ route('admin.crm.marketing.index') }}" @if(request()->routeIs('admin.crm.marketing.*')) aria-current="page" @endif><i class="fa-solid fa-bullseye"></i><span>کمپین‌های بازاریابی</span></a>
             <a href="{{ route('admin.store-coupons.index') }}" @if(request()->routeIs('admin.store-coupons.*')) aria-current="page" @endif><i class="fa-solid fa-ticket"></i><span>کدهای تخفیف و پیشنهاد هوشمند</span></a>
         @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'store'))
