@@ -205,10 +205,7 @@ class SupportTicketService
         if (isset($path) && $path !== '') \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
         foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
             if (! empty($attachment['managed_file_id'])) {
-                StorageManagedFile::whereKey($attachment['managed_file_id'])->update([
-                    'source_type' => TicketMessage::class,
-                    'source_id' => $message->id,
-                ]);
+                app(StorageManager::class)->bindReference((int) $attachment['managed_file_id'], TicketMessage::class, (int) $message->id);
             }
         }
 
