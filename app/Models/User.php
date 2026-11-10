@@ -39,11 +39,11 @@ class User extends Authenticatable
     ];
 
     protected $fillable = ['name','mobile','email','password','role','is_verified','is_blocked','organization_id','marketing_consent'];
-    protected $hidden = ['password','remember_token'];
+    protected $hidden = ['password','remember_token','two_factor_secret'];
 
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'is_verified' => 'boolean', 'is_blocked' => 'boolean', 'marketing_consent' => 'boolean', 'marketing_consent_updated_at' => 'datetime'];
+        return ['password' => 'hashed', 'is_verified' => 'boolean', 'is_blocked' => 'boolean', 'marketing_consent' => 'boolean', 'marketing_consent_updated_at' => 'datetime', 'two_factor_enabled_at' => 'datetime'];
     }
 
     public function documents(): HasMany { return $this->hasMany(TypingDocument::class); }
