@@ -100,6 +100,7 @@ jobs:
           DB_DATABASE: database/database.sqlite
       - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-reader-server.log 2>&1 &
         env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
       - run: for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/up >/dev/null && exit 0; sleep 1; done; cat /tmp/farast-reader-server.log; exit 1
