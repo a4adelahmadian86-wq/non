@@ -111,16 +111,17 @@ class AdminController extends Controller
         $monthAgo = now()->subMonth();
 
         // شاخص‌های دامنه‌مند: اگر کاربر ادمین نباشد، فقط دادهٔ کاربران قابل‌مشاهده شمرده می‌شود.
-        $scopedCount = function (string $table, array $filters = [], ?string $userColumn = 'user_id') use ($visibleIds) {
+        $scopedCount = function (string $table, array $filters = [], ?string $userColumn = 'user_id', ?array $scopeIds = null, bool $overrideScope = false) use ($visibleIds) {
             if (! Schema::hasTable($table)) {
                 return 0;
             }
+            $ids = $overrideScope ? $scopeIds : $visibleIds;
             $q = DB::table($table);
-            if ($visibleIds !== null) {
+            if ($ids !== null) {
                 if ($table === 'users') {
-                    $q->whereIn('id', $visibleIds);
+                    $q->whereIn('id', $ids);
                 } elseif ($userColumn !== null && Schema::hasColumn($table, $userColumn)) {
-                    $q->whereIn($userColumn, $visibleIds);
+                    $q->whereIn($userColumn, $ids);
                 } else {
                     // A scoped dashboard must never fall back to an unfiltered aggregate.
                     return 0;
@@ -348,8 +349,8 @@ class AdminController extends Controller
                 'documents' => $canViewDocuments ? $documentCount() : 0,
                 'new_documents_week' => $canViewDocuments ? $documentCount($weekAgo) : 0,
                 // Project workspace is the canonical bridge between customer requests, documents, billing and human tasks.
-                'projects' => $canViewAnalytics ? $scopedCount('farast_projects') : 0,
-                'active_projects' => $canViewAnalytics ? $scopedCount('farast_projects', ['status' => 'active']) : 0,
+                'projects' => $canViewAnalytics ? $scopedCount('farast_projects', [], 'user_id', $analyticsVisibleIds, true) : 0,
+                'active_projects' => $canViewAnalytics ? $scopedCount('farast_projects', ['status' => 'active'], 'user_id', $analyticsVisibleIds, true) : 0,
                 'ai' => $canViewAi && Schema::hasTable('ai_interactions')
                     && ($aiVisibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
                     ? ($aiVisibleIds === null ? DB::table('ai_interactions')->count() : DB::table('ai_interactions')->whereIn('user_id', $aiVisibleIds)->count())
