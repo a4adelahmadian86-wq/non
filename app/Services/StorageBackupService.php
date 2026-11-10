@@ -221,7 +221,11 @@ class StorageBackupService
             });
             $reserved = false;
 
-            $this->pruneOldBackups($target);
+            try {
+                $this->pruneOldBackups($target);
+            } catch (Throwable $cleanupException) {
+                report($cleanupException);
+            }
         } catch (Throwable $exception) {
             if ($reserved && $target) {
                 $target->decrement('reserved_bytes', $size ?? 0);
