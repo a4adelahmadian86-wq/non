@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -38,6 +40,18 @@ class TrackAuthenticatedSession
         $sessionId = $request->session()->getId();
         if ($sessionId === '') {
             return $next($request);
+        }
+
+        // Avoid taking down authenticated pages while a partial migration is repaired.
+        foreach (['farast_account_sessions', 'farast_security_events', 'farast_blocked_devices'] as $requiredTable) {
+            if (! Schema::hasTable($requiredTable)) {
+                Log::warning('Account security tracking skipped because a required table is missing.', [
+                    'table' => $requiredTable,
+                    'user_id' => $user->id,
+                    'path' => $request->path(),
+                ]);
+                return $response ?? $next($request);
+            }
         }
 
         $deviceKey = (string) $request->cookie(self::DEVICE_COOKIE, '');
