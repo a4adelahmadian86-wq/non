@@ -95,7 +95,11 @@ class StoreCouponRedemptionService
         $order->update(['pricing_snapshot' => $snapshot]);
 
         if ($assignment) {
-            $assignment->update(['status' => 'redeemed', 'redeemed_at' => now()]);
+            $assignment->update([
+                'status' => 'redeemed',
+                'redeemed_at' => now(),
+                'redeemed_order_id' => $order->id,
+            ]);
         }
     }
 }
