@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AiFeedback;
 use App\Models\FarastDocument;
+use App\Models\FarastStorageObject;
 use App\Models\FarastProject;
 use App\Models\AiInteraction;
 use App\Models\EditorSession;
@@ -13,6 +14,7 @@ use App\Services\CapabilityService;
 use App\Services\FreeQuotaService;
 use App\Services\GeminiService;
 use App\Services\PricingService;
+use App\Services\Storage\StorageManager;
 use App\Services\ProjectInterviewService;
 use App\Services\FeedbackPipelineService;
 use App\Services\EntitlementService;
@@ -199,7 +201,7 @@ class EditorController extends Controller
         ]);
     }
 
-    public function uploadAsset(Request $request, CapabilityService $capabilities, \\App\\Services\\UploadSecurityService $security, StorageManager $storage)
+    public function uploadAsset(Request $request, CapabilityService $capabilities, \App\Services\UploadSecurityService $security, StorageManager $storage)
     {
         abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
 
@@ -252,7 +254,7 @@ class EditorController extends Controller
                 ],
             ]);
             $storage->bindReference((int) $managed['managed_file_id'], FarastStorageObject::class, (int) $asset->id);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($managed) $storage->delete((string) $managed['disk'], (string) $managed['path']);
             Storage::disk('private')->delete($temporaryPath);
             throw $exception;
