@@ -1,6 +1,6 @@
 @php
-    $adminConsole = $console ?? app(\\App\\Services\\AdminConsoleService::class);
-    $adminScope = $scope ?? \\App\\Services\\AdminConsoleService::scopeOf(auth()->user());
+    $adminConsole = $console ?? app(\App\Services\AdminConsoleService::class);
+    $adminScope = $scope ?? \App\Services\AdminConsoleService::scopeOf(auth()->user());
     $catalogActive = request()->routeIs('admin.store.*', 'admin.discussions.*', 'admin.discussion-reports.*');
     $customersActive = request()->routeIs('admin.users', 'admin.crm.*');
     $financeActive = request()->routeIs('admin.finance', 'admin.plans');
