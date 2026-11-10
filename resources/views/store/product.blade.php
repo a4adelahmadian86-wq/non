@@ -48,15 +48,17 @@
       <span>{{ $product->title }}</span>
     </div>
 
-    <div class="store-product-overview">
-      <span class="store-product-overview-mark"><i class="fa-solid fa-gem"></i></span>
-      <div><span class="store-product-overview-kicker">انتخاب هوشمندانه با فراست</span><strong>مشخصات محصول و شرایط دریافت را پیش از خرید بررسی کنید.</strong></div>
-    </div>
     <nav class="store-product-jump" aria-label="دسترسی سریع به بخش‌های محصول">
-      <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
+      @if(filled($product->description) || filled($product->short_description))
+        <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
+      @endif
+      @if($hasPreview)
+        <a href="#store-product-sample"><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه</a>
+      @endif
       @if($product->type === 'course' && $product->course)
         <a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>
       @endif
+      <a href="#store-product-details"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> مشخصات</a>
       <a href="#store-buy-card"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> قیمت و خرید</a>
       <a href="#store-discussions"><i class="fa-regular fa-comments" aria-hidden="true"></i> نظرها و پرسش‌ها</a>
     </nav>
@@ -191,7 +193,7 @@
           <p class="store-login-hint"><a href="{{ route('login') }}">وارد شوید</a> تا علاقه‌مندی و خرید ثبت شود.</p>
         @endauth
 
-        <div class="meta">
+        <div class="meta" id="store-product-details">
           @php
             $deliveryFile = $product->type !== 'course' ? $product->files->first() : null;
             $productVersion = filled($product->version) ? trim((string) $product->version) : null;
@@ -216,7 +218,6 @@
             <span><i class="fa-solid fa-file-contract"></i> مجوز استفاده: {{ $licenseLabel }}</span>
           @endif
         </div>
-        <div class="store-product-assurance"><i class="fa-solid fa-circle-check"></i><span><strong>پیش از خرید، شرایط محصول را بررسی کنید</strong><small>جزئیات دریافت و مجوز استفاده در همین بخش مشخص شده‌اند.</small></span></div>
       </aside>
     </div>
 
