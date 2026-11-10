@@ -16,7 +16,7 @@ class TrustCenterTest extends TestCase
             ->assertSee('هنوز نمادی ثبت نشده')
             ->assertSee('هیچ نشان نمونه یا غیرواقعی در این صفحه قرار نگرفته است.')
             ->assertSee('farast-footer-trust', false)
-            ->assertSee('مشاهده وضعیت نمادها و اطلاعات شفافیت')
+            ->assertSee('مشاهده اطلاعات و وضعیت نمادها')
             ->assertDontSee('نماد اعتماد الکترونیکی فعال');
     }
 }
