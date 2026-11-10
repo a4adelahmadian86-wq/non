@@ -453,4 +453,78 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             ->assertDontSee('data-library-download=', false);
     }
 
+    public function test_zarinpal_initialization_reserves_order_against_wallet_double_payment(): void
+    {
+        $user = $this->makeUser('09123456786');
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 50000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 50000,
+            'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store'],
+        ]);
+
+        $gateway = Mockery::mock(ZarinpalService::class);
+        $gateway->shouldReceive('enabled')->once()->andReturn(true);
+        $gateway->shouldReceive('request')->once()->andReturn([
+            'authority' => 'AUTH-RESERVED-ORDER',
+            'url' => 'https://gateway.example.test/pay/AUTH-RESERVED-ORDER',
+        ]);
+        app()->instance(ZarinpalService::class, $gateway);
+
+        $this->actingAs($user)
+            ->post(route('checkout.zarinpal', $order), ['accept_terms' => '1'])
+            ->assertRedirect('https://gateway.example.test/pay/AUTH-RESERVED-ORDER');
+
+        $this->assertSame('gateway_pending', $order->fresh()->status);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'authority' => 'AUTH-RESERVED-ORDER',
+            'status' => 'pending',
+            'amount_rials' => 50000,
+        ]);
+
+        // The wallet path must reject this order while the gateway attempt is active.
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertSessionHasErrors('payment');
+
+        $this->assertSame('gateway_pending', $order->fresh()->status);
+        $this->assertSame(0, Payment::query()->where('order_id', $order->id)->where('gateway', 'wallet')->count());
+    }
+
+    public function test_failed_zarinpal_initialization_releases_order_reservation(): void
+    {
+        $user = $this->makeUser('09123456785');
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 50000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 50000,
+            'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store'],
+        ]);
+
+        $gateway = Mockery::mock(ZarinpalService::class);
+        $gateway->shouldReceive('enabled')->once()->andReturn(true);
+        $gateway->shouldReceive('request')->once()->andThrow(new \\RuntimeException('gateway unavailable'));
+        app()->instance(ZarinpalService::class, $gateway);
+
+        $this->actingAs($user)
+            ->post(route('checkout.zarinpal', $order), ['accept_terms' => '1'])
+            ->assertSessionHasErrors('payment');
+
+        $this->assertSame('pending', $order->fresh()->status);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'status' => 'failed',
+        ]);
+    }
+
 }
