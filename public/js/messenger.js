@@ -12,7 +12,10 @@
   if (!root || !list || !form) return;
 
   const error = document.getElementById('fm-error');
+  const composerInput = form.querySelector('textarea[name="body"]');
   let lastId = Number(root.dataset.lastId || 0);
+  let typingTimer = null;
+  let typingSent = false;
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || form.querySelector('input[name="_token"]')?.value || '';
 
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -47,8 +50,22 @@
       if (!response.ok) throw new Error(data.message || Object.values(data.errors || {}).flat()[0] || 'ارسال پیام ناموفق بود.');
       append({...data.message,user_name:data.message.user_name});
       form.reset();
+      if (typingSent) { setTyping(false); typingSent = false; }
     } catch (e) { if (error) error.textContent = e.message || 'خطا در ارسال پیام'; }
     finally { button.disabled = false; }
+  });
+
+  const setTyping = (typing) => fetch(root.dataset.presenceUrl, {
+    method: 'POST',
+    headers: {'X-CSRF-TOKEN': csrf, 'Content-Type': 'application/json', 'Accept': 'application/json'},
+    body: JSON.stringify({typing}),
+    credentials: 'same-origin'
+  }).catch(() => {});
+
+  composerInput?.addEventListener('input', () => {
+    if (!typingSent) { setTyping(true); typingSent = true; }
+    window.clearTimeout(typingTimer);
+    typingTimer = window.setTimeout(() => { setTyping(false); typingSent = false; }, 1600);
   });
 
   const poll = async () => {
@@ -57,6 +74,12 @@
       if (!response.ok) return;
       const data = await response.json();
       (data.messages || []).forEach(append);
+      const presence = document.getElementById('fm-presence');
+      if (presence) {
+        const typingNames = (data.presence || []).filter((p) => p.typing).map((p) => p.name);
+        const onlineCount = (data.presence || []).filter((p) => p.online).length;
+        presence.textContent = typingNames.length ? '• ' + typingNames.join('، ') + ' در حال نوشتن…' : '• ' + (onlineCount ? onlineCount + ' نفر آنلاین' : 'فعلاً آفلاین');
+      }
     } catch (_) {}
   };
   list.scrollTop = list.scrollHeight;
