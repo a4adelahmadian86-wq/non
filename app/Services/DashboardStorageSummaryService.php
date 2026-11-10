@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
@@ -79,7 +80,7 @@ class DashboardStorageSummaryService
             $active = (int) ($volumeCounts->active_count ?? 0);
             $healthy = (int) ($volumeCounts->healthy_count ?? 0);
             $degraded = max(0, $active - $healthy);
-            $backupStale = $active > 0 && ($lastSuccessfulBackup === null || \\Illuminate\\Support\\Carbon::parse($lastSuccessfulBackup)->lt(now()->subDays(7)));
+            $backupStale = $active > 0 && ($lastSuccessfulBackup === null || Carbon::parse($lastSuccessfulBackup)->lt(now()->subDays(7)));
             $attention = $degraded > 0 || $transferErrors > 0 || $failedBackups24h > 0 || $backupStale;
 
             return [
