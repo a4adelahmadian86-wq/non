@@ -97,7 +97,56 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('data-ingestion-folder', false)
             ->assertSee('data-ingestion-selected', false)
             ->assertSee('بررسی امن فایل')
-            ->assertSee('بررسی ساختار و امنیت');
+            ->assertSee('بررسی ساختار و امنیت')
+            ->assertSee('اسکن تکمیلی آنتی‌ویروس (اختیاری)');
+    }
+
+    public function test_authorized_admin_can_opt_in_to_real_antivirus_during_preflight(): void
+    {
+        Storage::fake('private');
+        $admin = $this->admin();
+        $product = StoreProduct::create([
+            'category_id' => $this->category()->id,
+            'title' => 'محصول با اسکن آنتی‌ویروس',
+            'slug' => 'product-with-opt-in-antivirus',
+            'sku' => 'PRODUCT-ANTIVIRUS-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $binary = tempnam(sys_get_temp_dir(), 'farast-clamav-');
+        file_put_contents($binary, <<<'SH'
+#!/bin/sh
+if [ "$1" = "--version" ]; then echo 'ClamAV 1.4.0'; exit 0; fi
+exit 0
+SH
+        );
+        chmod($binary, 0700);
+        config(['services.clamav.binary' => $binary]);
+
+        try {
+            $this->actingAs($admin)
+                ->post(route('admin.store.files.preflight', $product), [
+                    'file' => UploadedFile::fake()->createWithContent('source.txt', 'Plain text product content for security scan.'),
+                    'security_scan' => '1',
+                ])
+                ->assertCreated()
+                ->assertJsonPath('antivirus.requested', true)
+                ->assertJsonPath('antivirus.status', 'clean')
+                ->assertJsonPath('antivirus.engine', 'clamav')
+                ->assertJsonPath('antivirus.version', 'ClamAV 1.4.0');
+        } finally {
+            @unlink($binary);
+        }
+
+        $this->assertDatabaseHas('store_product_ingestions', [
+            'product_id' => $product->id,
+            'antivirus_requested' => true,
+            'antivirus_status' => 'clean',
+            'antivirus_engine' => 'clamav',
+            'antivirus_version' => 'ClamAV 1.4.0',
+        ]);
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
