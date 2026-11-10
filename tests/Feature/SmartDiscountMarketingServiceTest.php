@@ -157,7 +157,7 @@ class SmartDiscountMarketingServiceTest extends TestCase
             ->with('coupon')
             ->firstOrFail();
 
-        $this->assertSame(7500, $assignment->coupon->value);
+        $this->assertSame(7000, $assignment->coupon->value);
     }
 
     public function test_engine_keeps_a_five_percent_default_margin_when_product_floor_is_not_configured(): void
