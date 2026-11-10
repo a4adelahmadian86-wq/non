@@ -69,6 +69,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspace/workflows', [PlatformCompletionController::class, 'workflow'])->name('platform.workflows');
     Route::post('/workspace/workflows', [PlatformCompletionController::class, 'saveWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.save');
     Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.run');
+    Route::delete('/workspace/workflows/{id}', [PlatformCompletionController::class, 'deleteWorkflow'])->whereNumber('id')->middleware('throttle:10,1')->name('platform.workflows.destroy');
     Route::get('/workspace/security', [PlatformCompletionController::class, 'security'])->name('platform.security');
     Route::post('/workspace/ocr', [PlatformCompletionController::class, 'ocr'])->middleware('throttle:10,1')->name('platform.ocr');
     Route::get('/workspace/ocr/{id}', [PlatformCompletionController::class, 'ocrStatus'])->middleware('throttle:60,1')->name('platform.ocr.status');
