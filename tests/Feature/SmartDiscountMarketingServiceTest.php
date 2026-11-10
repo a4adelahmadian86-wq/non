@@ -108,6 +108,22 @@ class SmartDiscountMarketingServiceTest extends TestCase
         );
     }
 
+    public function test_engine_keeps_a_five_percent_default_margin_when_product_floor_is_not_configured(): void
+    {
+        $user = $this->user();
+        $product = $this->product(90000, 0);
+
+        $this->createQualifiedSignals($user, $product);
+
+        $assignment = StoreCouponAssignment::query()->with('coupon')->firstOrFail();
+
+        $this->assertSame(5000, $assignment->coupon->value);
+        $this->assertGreaterThanOrEqual(
+            (int) ceil($product->price_rials * 0.05),
+            (int) $product->price_rials - (int) $product->cost_price_rials - (int) $assignment->coupon->value
+        );
+    }
+
     public function test_engine_does_not_offer_when_cost_is_unknown_or_margin_cannot_be_preserved(): void
     {
         $user = $this->user();
