@@ -3,7 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\StoreCategory;
 use App\Models\StoreCoupon;
+use App\Models\StoreCouponAssignment;
+use App\Models\StoreOrderItem;
+use App\Models\StoreProduct;
 use App\Models\User;
 use App\Services\StoreCouponRedemptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -178,6 +182,89 @@ class StoreCouponRedemptionTest extends TestCase
         }
 
         $this->assertSame(0, $coupon->fresh()->used_count);
+    }
+
+    public function test_new_smart_coupon_redemption_rejects_discount_not_allocated_to_its_target_item(): void
+    {
+        $user = User::create([
+            'name' => 'Smart Coupon Allocation QA',
+            'mobile' => '09123456785',
+            'password' => 'secret',
+        ]);
+        $category = StoreCategory::create([
+            'name' => 'دسته آزمون تخصیص',
+            'slug' => 'smart-coupon-allocation-test',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول هدف آزمون',
+            'slug' => 'smart-coupon-allocation-product',
+            'sku' => 'SMART-ALLOC-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'cost_price_rials' => 50000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $coupon = StoreCoupon::create([
+            'code' => 'SMARTALLOC12',
+            'type' => 'fixed',
+            'value' => 12000,
+            'max_uses' => 1,
+            'used_count' => 0,
+            'is_active' => true,
+        ]);
+        $assignment = StoreCouponAssignment::create([
+            'coupon_id' => $coupon->id,
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'status' => 'offered',
+            'score' => 6,
+            'reason_codes' => ['cart_intent'],
+            'offered_at' => now()->subHour(),
+            'expires_at' => now()->addDay(),
+        ]);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100000,
+            'discount_rials' => 12000,
+            'tax_rials' => 0,
+            'total_rials' => 88000,
+            'status' => 'pending',
+            'pricing_snapshot' => [
+                'kind' => 'store',
+                'coupon_code' => $coupon->code,
+                'coupon_redemption_pending' => true,
+                'coupon_assignment_id' => $assignment->id,
+                'coupon_product_id' => $product->id,
+            ],
+        ]);
+        StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 100000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 100000,
+            'product_snapshot' => [
+                'cost_price_rials' => 50000,
+                'cost_snapshot_captured_at' => now()->toIso8601String(),
+            ],
+        ]);
+
+        try {
+            app(StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
+            $this->fail('A new smart coupon order must allocate its discount to the target item.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('تخصیص تخفیف', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $coupon->fresh()->used_count);
+        $this->assertSame('offered', $assignment->fresh()->status);
     }
 
     public function test_coupon_codes_are_normalized_when_saved(): void
