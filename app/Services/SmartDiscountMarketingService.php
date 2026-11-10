@@ -164,7 +164,7 @@ class SmartDiscountMarketingService
                 $lockedUser,
                 'marketing_discount_offer',
                 'یک پیشنهاد اختصاصی برای شما',
-                'برای محصول «'.$lockedProduct->title.'»، کد اختصاصی '.$coupon->code.' با تخفیف '.number_format($discount).' ریال دریافت کرده‌اید. این پیشنهاد تا ۴۸ ساعت معتبر است.',
+                'برای محصول «'.$lockedProduct->title.'»، کد اختصاصی '.$coupon->code.' با تخفیف '.number_format($discount).' ریال دریافت کرده‌اید. این پیشنهاد تا '.$offerValidHours.' ساعت معتبر است.',
                 [
                     'coupon_code' => $coupon->code,
                     'product_id' => $lockedProduct->id,
