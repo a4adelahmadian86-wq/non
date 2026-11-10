@@ -127,6 +127,85 @@
         </form>
     </section>
 
+    <section class="security-panel security-two-factor-panel">
+        <div class="security-panel-heading">
+            <div>
+                <h2>تأیید دومرحله‌ای (اختیاری)</h2>
+                <p>این قابلیت اجباری نیست. فقط اگر خودتان فعالش کنید، پس از رمز عبور به یک کد یک‌بارمصرف نیاز خواهید داشت. فراست هیچ حساب یا سرویس بیرونی برای این کار متصل نمی‌کند.</p>
+            </div>
+            <span class="security-count">{{ $twoFactorEnabled ? 'فعال' : 'غیرفعال' }}</span>
+        </div>
+
+        @if(session('two_factor_recovery_codes'))
+            <div class="security-recovery-codes" role="status">
+                <strong>کدهای بازیابی شما — فقط همین بار نمایش داده می‌شوند</strong>
+                <p>هر کد فقط یک بار قابل استفاده است. همه کدها را اکنون در مکانی امن و خارج از این دستگاه ذخیره کنید. پس از بستن این پیام، امکان مشاهده دوباره آن‌ها وجود ندارد.</p>
+                <div class="security-recovery-grid">
+                    @foreach(session('two_factor_recovery_codes') as $recoveryCode)
+                        <code dir="ltr">{{ $recoveryCode }}</code>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        @if($twoFactorEnabled)
+            <div class="security-two-factor-state">
+                <strong><i class="fa-solid fa-shield-check" aria-hidden="true"></i> تأیید دومرحله‌ای فعال است</strong>
+                <span>از تاریخ {{ $twoFactorEnabledAt ? $twoFactorEnabledAt->format('Y/m/d H:i') : 'نامشخص' }}</span>
+                <span>{{ $recoveryCodesRemaining }} کد بازیابی استفاده‌نشده باقی مانده است.</span>
+            </div>
+
+            <div class="security-two-factor-actions">
+                <form method="post" action="{{ route('platform.security.two-factor.recovery-codes') }}" class="security-two-factor-form">
+                    @csrf
+                    <h3>تولید دوباره کدهای بازیابی</h3>
+                    <p>کدهای قبلی باطل می‌شوند. رمز فعلی و کد برنامه احراز هویت یا یک کد بازیابی استفاده‌نشده لازم است.</p>
+                    <label>رمز عبور فعلی<input type="password" name="current_password" autocomplete="current-password" required></label>
+                    <label>کد احراز هویت یا بازیابی<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+                    <button type="submit">باطل‌کردن قبلی‌ها و تولید کدهای تازه</button>
+                </form>
+
+                <form method="post" action="{{ route('platform.security.two-factor.disable') }}" class="security-two-factor-form security-two-factor-danger" onsubmit="return confirm('با غیرفعال‌سازی، ورود دوباره فقط به رمز عبور نیاز خواهد داشت. ادامه می‌دهید؟')">
+                    @csrf
+                    <h3>غیرفعال‌سازی تأیید دومرحله‌ای</h3>
+                    <p>برای جلوگیری از تغییر غیرمجاز، رمز عبور و کد فعلی یا کد بازیابی لازم است.</p>
+                    <label>رمز عبور فعلی<input type="password" name="current_password" autocomplete="current-password" required></label>
+                    <label>کد احراز هویت یا بازیابی<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+                    <button type="submit">غیرفعال‌سازی</button>
+                </form>
+            </div>
+        @else
+            @if($twoFactorPendingSecret)
+                <div class="security-two-factor-setup">
+                    <h3>۱. ثبت کلید در برنامه احراز هویت</h3>
+                    <p>در برنامه TOTP مورداعتماد خود گزینه افزودن حساب را انتخاب کنید و کلید زیر را به‌صورت دستی وارد کنید. نام حساب: {{ auth()->user()->email ?: auth()->user()->mobile }}</p>
+                    <div class="security-totp-secret" dir="ltr">{{ $twoFactorPendingSecret }}</div>
+                    <p class="security-small-note">این کلید تا ۱۰ دقیقه برای تکمیل راه‌اندازی معتبر است. آن را با کسی به اشتراک نگذارید.</p>
+                    <a class="security-otpauth-link" href="{{ $twoFactorProvisioningUri }}">بازکردن لینک ثبت در برنامه احراز هویت</a>
+
+                    <h3>۲. تأیید مالکیت کلید</h3>
+                    <p>کد شش‌رقمی فعلی برنامه را وارد کنید. تا پیش از این تأیید، قابلیت فعال نمی‌شود.</p>
+                    <form method="post" action="{{ route('platform.security.two-factor.enable') }}" class="security-two-factor-form">
+                        @csrf
+                        <label>رمز عبور فعلی<input type="password" name="current_password" autocomplete="current-password" required></label>
+                        <label>کد شش‌رقمی برنامه<input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+                        <button type="submit">تأیید و فعال‌سازی دومرحله‌ای</button>
+                    </form>
+                </div>
+            @else
+                <div class="security-two-factor-setup">
+                    <h3>فعال‌سازی فقط با انتخاب خودتان</h3>
+                    <p>برای شروع، رمز فعلی حساب را وارد کنید. فراست یک کلید محرمانه تولید می‌کند؛ پس از ثبت آن در برنامه TOTP و تأیید کد، قابلیت فعال و کدهای بازیابی تولید می‌شوند.</p>
+                    <form method="post" action="{{ route('platform.security.two-factor.setup') }}" class="security-two-factor-form">
+                        @csrf
+                        <label>رمز عبور فعلی<input type="password" name="current_password" autocomplete="current-password" required></label>
+                        <button type="submit">شروع راه‌اندازی اختیاری</button>
+                    </form>
+                </div>
+            @endif
+        @endif
+    </section>
+
     <section class="security-panel">
         <div class="security-panel-heading"><div><h2>گزارش فعالیت‌های امنیتی</h2><p>ورودها، خروج‌ها، تغییرات رمز و مدیریت دستگاه‌ها</p></div></div>
         @if($events->isEmpty())
@@ -166,6 +245,21 @@
 @push('styles')
 <link rel="stylesheet" href="{{ asset('css/security-center.css') }}">
 <style>
+.farast-security-page .security-recovery-codes{margin:16px 0;padding:16px;border:1px solid #86efac;background:#f0fdf4;border-radius:14px}
+.farast-security-page .security-recovery-codes p,.farast-security-page .security-two-factor-setup p,.farast-security-page .security-two-factor-form p{color:#64748b;line-height:1.8;font-size:13px}
+.farast-security-page .security-recovery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:12px}
+.farast-security-page .security-recovery-grid code,.farast-security-page .security-totp-secret{display:block;padding:10px;background:#fff;border:1px solid #dbeafe;border-radius:9px;text-align:center;font-weight:700;letter-spacing:1px}
+.farast-security-page .security-two-factor-state{display:grid;gap:8px;padding:14px;border-radius:12px;background:#f0fdf4;color:#166534}
+.farast-security-page .security-two-factor-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:18px}
+.farast-security-page .security-two-factor-form{display:grid;gap:10px;padding:16px;border:1px solid #e2e8f0;border-radius:12px}
+.farast-security-page .security-two-factor-form label{display:grid;gap:6px;font-size:13px;font-weight:600}
+.farast-security-page .security-two-factor-form input{width:100%;min-width:0;padding:10px;border:1px solid #cbd5e1;border-radius:9px}
+.farast-security-page .security-two-factor-form button,.farast-security-page .security-otpauth-link{display:inline-block;border:0;border-radius:9px;padding:10px 14px;background:#1e3a8a;color:white;text-align:center;text-decoration:none;cursor:pointer}
+.farast-security-page .security-two-factor-danger{border-color:#fecaca}
+.farast-security-page .security-two-factor-danger button{background:#b91c1c}
+.farast-security-page .security-two-factor-setup{display:grid;gap:12px;margin-top:12px}
+.farast-security-page .security-totp-secret{font-size:18px;overflow-wrap:anywhere}
+.farast-security-page .security-small-note{font-size:12px;color:#92400e!important}
 .farast-security-page .security-session{align-items:flex-start;flex-wrap:wrap}
 .farast-security-page .security-session-info{min-width:240px;flex:1}
 .farast-security-page .security-session-meta{display:flex;flex-wrap:wrap;gap:8px 16px}
