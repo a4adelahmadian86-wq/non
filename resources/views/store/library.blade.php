@@ -37,7 +37,7 @@
                         $fileSize = $fileBytes >= 1048576
                             ? number_format($fileBytes / 1048576, 2).' مگابایت'
                             : ($fileBytes > 0 ? number_format($fileBytes / 1024, 0).' کیلوبایت' : null);
-                        $fileAvailable = $item->file && $item->file->is_active;
+                        $fileAvailable = $item->file && $item->file->is_active && in_array($item->file->scan_status, ['clean', 'legacy'], true);
                         $readerOnly = ($item->product?->download_policy ?? 'signed') === 'reader_only';
                     @endphp
                     <article class="store-product-card library-product-card" data-library-search="{{ \Illuminate\Support\Str::lower(($item->product?->title ?? '').' '.($item->product?->category?->name ?? '')) }}">
