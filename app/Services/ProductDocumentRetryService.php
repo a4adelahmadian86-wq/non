@@ -30,7 +30,7 @@ class ProductDocumentRetryService
         $file = $document->file;
 
         $this->assertRetryable($document, $file);
-        $disk = Storage::disk('private');
+        $disk = Storage::disk($file->disk ?: 'private');
         if (! $disk->exists($file->path)) {
             $this->reject('فایل اصلی در فضای خصوصی پیدا نشد؛ بارگذاری مجدد لازم است.');
         }
@@ -61,7 +61,7 @@ class ProductDocumentRetryService
             if (! hash_equals((string) $locked->source_sha256, $actualHash)
                 || ! hash_equals((string) $lockedFile->sha256, $actualHash)
                 || $lockedFile->path !== $file->path
-                || ($lockedFile->disk ?: 'private') !== 'private') {
+                || ($lockedFile->disk ?: 'private') !== ($file->disk ?: 'private')) {
                 $this->reject('نسخه فایل هنگام آماده‌سازی تغییر کرده است؛ عملیات دوباره بررسی شود.');
             }
 
