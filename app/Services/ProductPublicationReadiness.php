@@ -6,6 +6,44 @@ use App\Models\StoreProduct;
 
 class ProductPublicationReadiness
 {
+
+    public function publicationBlockers(StoreProduct $product): array
+    {
+        $blockers = [];
+        if (! $product->category()->where('is_active', true)->exists()) {
+            $blockers[] = 'دسته‌بندی فعال برای محصول انتخاب نشده است.';
+        }
+
+        if ($product->type === 'digital_file') {
+            $hasPrimary = $product->files()
+                ->where('purpose', 'product_download')
+                ->where('is_active', true)
+                ->where('is_primary', true)
+                ->whereIn('scan_status', ['clean', 'structural'])
+                ->exists();
+            if (! $hasPrimary) {
+                $blockers[] = 'فایل اصلی محصول هنوز اعتبارسنجی ساختاری را با موفقیت طی نکرده است.';
+            } elseif (($product->download_policy ?? 'signed') === 'reader_only' && ! $this->hasReadyPrimaryReader($product)) {
+                $blockers[] = 'برای سیاست مطالعه آنلاین، نسخه خوانشگر آماده و معتبر نیست.';
+            }
+        } elseif ($product->type === 'course') {
+            $course = $product->course()->first();
+            if (! $course) {
+                $blockers[] = 'ساختار دوره ایجاد نشده است.';
+            } else {
+                $hasPublishableLesson = \\App\\Models\\StoreCourseLesson::query()
+                    ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
+                    ->publishable()
+                    ->exists();
+                if (! $hasPublishableLesson) {
+                    $blockers[] = 'دوره هنوز جلسه قابل انتشار ندارد.';
+                }
+            }
+        }
+
+        return $blockers;
+    }
+
     public function hasReadyPrimaryReader(StoreProduct $product): bool
     {
         $isEligible = static fn ($file): bool => $file->purpose === 'product_download'
