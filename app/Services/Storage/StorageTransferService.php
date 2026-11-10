@@ -14,7 +14,7 @@ class StorageTransferService
     public function transferPending(int $limit = 100): int
     {
         $moved = 0;
-        StorageManagedFile::query()->where('status', 'pending_transfer')->orderBy('id')->limit(max(1, $limit))->get()->each(function (StorageManagedFile $file) use (&$moved) {
+        StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error'])->orderBy('id')->limit(max(1, $limit))->get()->each(function (StorageManagedFile $file) use (&$moved) {
             $targetDrive = (string) data_get($file->metadata, 'target_drive', $file->drive_key);
             $target = StorageVolume::query()
                 ->where('drive_key', $targetDrive)
@@ -29,6 +29,7 @@ class StorageTransferService
             $source = Storage::disk($sourceDisk);
             if (! $source->exists($file->file_key)) return;
             $temp = tempnam(sys_get_temp_dir(), 'farast-transfer');
+            $uploaded = false;
             try {
                 $stream = $source->readStream($file->file_key);
                 if (! is_resource($stream)) throw new RuntimeException('خواندن جریان فایل موقت ناموفق بود.');
@@ -38,6 +39,7 @@ class StorageTransferService
                 fclose($stream);
                 if ($target->driver === 's3') {
                     $this->s3->putFile($target, $file->file_key, $temp);
+                    $uploaded = true;
                     $remoteHash = hash_file('sha256', $temp);
                     if (! hash_equals((string) $file->checksum, $remoteHash)) throw new RuntimeException('بررسی checksum فایل انتقال‌یافته ناموفق بود.');
                 } elseif ($target->driver === 'local') {
@@ -45,6 +47,7 @@ class StorageTransferService
                     $destination = $root.'/'.$file->file_key;
                     if (! is_dir(dirname($destination))) mkdir(dirname($destination), 0775, true);
                     if (! copy($temp, $destination)) throw new RuntimeException('کپی فایل روی مقصد ناموفق بود.');
+                    $uploaded = true;
                 } else {
                     return;
                 }
