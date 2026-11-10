@@ -220,8 +220,21 @@ class CrmMarketingCampaignTest extends TestCase
         ]);
         $this->assertSame(2, DB::table('crm_campaign_recipients')->where('campaign_id', $campaignId)->count());
 
-        $campaign = $this->getJson('/admin/crm/marketing/campaigns')->assertOk();
+        $offer = $assignments->first();
+        $offerUser = User::query()->findOrFail($offer->user_id);
+        $this->actingAs($offerUser)
+            ->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee($offer->coupon->code);
+        $this->postJson(route('store.smart-offer.interaction', $offer))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $campaign = $this->actingAs($admin)->getJson('/admin/crm/marketing/campaigns')->assertOk();
         $campaign->assertJsonPath('data.data.0.offer_count', 1)
+            ->assertJsonPath('data.data.0.offer_view_count', 1)
+            ->assertJsonPath('data.data.0.offer_click_count', 1)
+            ->assertJsonPath('data.data.0.view_to_click_rate', 100)
             ->assertJsonPath('data.data.0.reserved_discount_rials', 10000)
             ->assertJsonPath('data.data.0.budget_remaining_rials', 0);
         $this->assertSame(10000, (int) DB::table('crm_marketing_campaigns')->where('id', $campaignId)->value('budget_cap_rials'));
