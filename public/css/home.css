@@ -334,3 +334,16 @@
 @media(max-width:900px){.home-use-case-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.home-use-cases{margin-top:34px}.home-use-case-grid{grid-template-columns:1fr;gap:9px}.home-use-case{min-height:82px;padding:13px}.home-use-case__body strong{font-size:.76rem}.home-use-case__body small{font-size:.64rem}}
 @media(prefers-reduced-motion:reduce){.home-use-case,.home-use-case__arrow{transition:none}.home-use-case:hover{transform:none}}
+
+/* Preflight quote: show the actual amount due now separately from the full estimate. */
+.farast-home .decision-box{display:block;width:min(100%,620px);text-align:right}
+.farast-home .decision-rows{display:grid;gap:0}
+.farast-home .decision-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e5ebf3}
+.farast-home .decision-row:first-child{padding-top:0}
+.farast-home .decision-row:last-child{padding-bottom:0;border-bottom:0}
+.farast-home .decision-row span{color:#667991;font-size:.78rem}
+.farast-home .decision-row strong{color:#18345a;font-size:.88rem;font-weight:900;white-space:nowrap}
+.farast-home .decision-row:first-child strong{color:#1557b8;font-size:1rem}
+.farast-home .decision-note{max-width:620px;margin:0 auto 16px;color:#718198;font-size:.73rem;line-height:1.9}
+.farast-home #acceptEstimate{min-width:min(100%,260px)}
+@media(max-width:560px){.farast-home .decision-row{align-items:flex-start;flex-direction:column;gap:4px}.farast-home .decision-row strong{white-space:normal}.farast-home #acceptEstimate{width:100%}}
