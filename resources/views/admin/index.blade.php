@@ -54,7 +54,7 @@
                 <a class="metric-card metric-orange admin-action-metric" href="{{ route('admin.support.management') }}">
                     <div class="metric-top"><span>تیکت‌های نیازمند پیگیری</span><i class="fa-solid fa-headset"></i></div>
                     <strong>{{ number_format($stats['tickets_open']) }}</strong>
-                    <small>گفتگوهای باز یا پاسخ‌داده‌شده · مشاهده صف پشتیبانی</small>
+                    <small>{{ number_format((int) ($ticketStats['user_replied'] ?? 0)) }} پاسخ جدید مشتری · {{ number_format((int) ($ticketStats['open'] ?? 0)) }} تیکت باز</small>
                 </a>
             @endif
             @if($console->sectionAllowed(auth()->user(), 'finance'))
