@@ -202,6 +202,14 @@ class SupportTicketService
         }
 
         $message = $ticket->messages()->create($payload);
+        foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
+            if (! empty($attachment['managed_file_id'])) {
+                StorageManagedFile::whereKey($attachment['managed_file_id'])->update([
+                    'source_type' => TicketMessage::class,
+                    'source_id' => $message->id,
+                ]);
+            }
+        }
 
         if ($touchStatus && ! $isInternal) {
             $update = [];
