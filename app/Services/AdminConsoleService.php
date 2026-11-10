@@ -146,18 +146,30 @@ class AdminConsoleService
         // Base role scope is only the outer boundary. Custom role assignments
         // and direct deny overrides must also be enforced on every listed user.
         $candidates = User::query()
-            ->with('teams:id')
+            ->with('teams:id,organization_id')
             ->whereIn('id', $ids)
             ->get(['id', 'organization_id']);
         $supervisedTeams = Team::query()
             ->whereIn('supervisor_id', $candidates->pluck('id'))
-            ->get(['id', 'supervisor_id'])
+            ->get(['id', 'supervisor_id', 'organization_id'])
             ->groupBy('supervisor_id');
 
         $visible = [];
         foreach ($candidates as $candidate) {
-            $memberTeamIds = $candidate->teams->pluck('id')->map(fn ($id) => (int) $id)->all();
-            $supervisedTeamIds = ($supervisedTeams->get($candidate->id) ?? collect())->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $memberTeamIds = $candidate->organization_id
+                ? $candidate->teams
+                    ->where('organization_id', (int) $candidate->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
+            $supervisedTeamIds = $candidate->organization_id
+                ? ($supervisedTeams->get($candidate->id) ?? collect())
+                    ->where('organization_id', (int) $candidate->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
             $context = [
                 'owner_id' => (int) $candidate->id,
                 'organization_id' => $candidate->organization_id,
