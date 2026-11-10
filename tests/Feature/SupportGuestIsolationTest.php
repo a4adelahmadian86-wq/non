@@ -134,7 +134,7 @@ class SupportGuestIsolationTest extends TestCase
             $ticket,
             $user,
             'Attached document',
-            ['attachment' => UploadedFile::fake()->create('document.pdf', 32, 'application/pdf'), 'notify' => false],
+            ['attachment' => UploadedFile::fake()->createWithContent('document.txt', 'A private support attachment for the security scanner.'), 'notify' => false],
         );
 
         $attachment = $message->fresh()->attachments[0];
