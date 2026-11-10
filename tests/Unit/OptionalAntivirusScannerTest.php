@@ -1,13 +1,13 @@
 <?php
 
-namespace Tests\\Unit;
+namespace Tests\Unit;
 
-use App\\Models\\User;
-use App\\Services\\AuthorizationService;
-use App\\Services\\OptionalAntivirusScanner;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
+use App\Models\User;
+use App\Services\AuthorizationService;
+use App\Services\OptionalAntivirusScanner;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class OptionalAntivirusScannerTest extends TestCase
 {
