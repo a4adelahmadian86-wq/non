@@ -1,9 +1,9 @@
 <?php
 
-namespace Tests\\Unit;
+namespace Tests\Unit;
 
-use App\\Services\\LocalTotpService;
-use PHPUnit\\Framework\\TestCase;
+use App\Services\LocalTotpService;
+use PHPUnit\Framework\TestCase;
 
 class LocalTotpServiceTest extends TestCase
 {
