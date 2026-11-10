@@ -30,7 +30,7 @@ class AdminStoreController extends Controller
     {
         $q = mb_substr(trim((string) $request->query('q', '')), 0, 120);
         $type = in_array($request->query('type'), ['digital_file', 'course'], true) ? $request->query('type') : '';
-        $status = in_array($request->query('status'), ['draft', 'published', 'archived'], true) ? $request->query('status') : '';
+        $status = in_array($request->query('status'), ['draft', 'pending_review', 'published', 'archived'], true) ? $request->query('status') : '';
         $categoryId = filter_var($request->query('category_id'), FILTER_VALIDATE_INT) ?: null;
         $sort = in_array($request->query('sort'), ['newest', 'oldest', 'title_asc', 'price_asc', 'price_desc', 'updated'], true)
             ? $request->query('sort')
@@ -61,6 +61,7 @@ class AdminStoreController extends Controller
         $stats = [
             'total' => StoreProduct::count(),
             'published' => StoreProduct::where('status', 'published')->count(),
+            'pending_review' => StoreProduct::where('status', 'pending_review')->count(),
             'drafts' => StoreProduct::where('status', 'draft')->count(),
             'archived' => StoreProduct::where('status', 'archived')->count(),
             'courses' => StoreProduct::where('type', 'course')->count(),
@@ -441,6 +442,9 @@ class AdminStoreController extends Controller
                 $data['metadata'] = $metadata;
             }
             $lockedProduct->update($data);
+            if (! $publicationRequested) {
+                StoreProductPublicationReview::query()->where('product_id', $lockedProduct->id)->where('status', 'awaiting_manager')->update(['status' => 'stale', 'failure_code' => 'product_edited_after_review']);
+            }
             $lockedProduct->tags()->sync($tagIds);
             $lockedProduct->related()->sync(app(ProductRelatedProductsService::class)->recommend($lockedProduct)->pluck('id')->all());
             if ($provenance !== null) {
@@ -458,6 +462,7 @@ class AdminStoreController extends Controller
             ]);
 
             if ($publicationRequested) {
+                StoreProductPublicationReview::query()->where('product_id', $lockedProduct->id)->whereIn('status', ['queued', 'reviewing', 'awaiting_manager'])->update(['status' => 'stale', 'failure_code' => 'superseded_by_new_submission']);
                 $review = StoreProductPublicationReview::create([
                     'product_id' => $lockedProduct->id,
                     'requested_by' => $requesterId,
@@ -1373,7 +1378,7 @@ class AdminStoreController extends Controller
             'cost_price_rials' => 'nullable|integer|min:0|lte:price_rials',
             'marketing_min_margin_rials' => 'nullable|integer|min:0|max:999999999999',
             'compare_at_price_rials' => 'nullable|integer|min:0|gt:price_rials',
-            'status' => 'required|in:draft,published,archived',
+            'status' => 'required|in:draft,pending_review,published,archived',
             'featured' => 'nullable|boolean',
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'preview_pages' => 'nullable|integer|min:0|max:50',

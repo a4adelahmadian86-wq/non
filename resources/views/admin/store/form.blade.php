@@ -65,7 +65,7 @@
           <small>حالت مطالعه آنلاین فقط وقتی قابل انتشار است که استخراج کامل، صفحات خوانشگر و نسخه کامل خصوصی آماده باشند.</small>
         </label>
         @if($isEdit)
-          <label class="product-field">وضعیت انتشار *<select name="status" required>@foreach(['draft'=>'پیش‌نویس','published'=>'منتشرشده','archived'=>'بایگانی'] as $value=>$label)<option value="{{ $value }}" @selected(old('status',$product->status)===$value)>{{ $label }}</option>@endforeach</select><small>انتشار فقط پس از تکمیل الزامات محصول و بررسی فایل اصلی یا جلسات دوره ممکن است.</small></label>
+          <label class="product-field">وضعیت انتشار *<select name="status" required>@foreach(['draft'=>'پیش‌نویس','pending_review'=>'در صف انتشار','published'=>'ارسال به انتشار (پس از بررسی)','archived'=>'بایگانی'] as $value=>$label)<option value="{{ $value }}" @selected(old('status',$product->status)===$value)>{{ $label }}</option>@endforeach</select><small>انتخاب انتشار مستقیم وجود ندارد؛ وضعیت منتشرشده فقط پس از ناظر هوشمند و تأیید مجاز ثبت می‌شود.</small></label>
         @else
           <input type="hidden" name="status" value="draft"><div class="product-draft-note"><i class="fa-solid fa-shield-halved"></i><span><b>شروع امن با پیش‌نویس</b><small>محصول ابتدا خصوصی ساخته می‌شود؛ پس از بارگذاری محتوا و بررسی نهایی می‌توانید آن را منتشر کنید.</small></span></div>
         @endif
