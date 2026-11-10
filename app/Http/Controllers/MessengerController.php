@@ -166,9 +166,20 @@ class MessengerController extends Controller
                 ]);
             }
 
+            $managed = $storage->adoptExistingPrivate(
+                $path,
+                Str::limit(basename($file->getClientOriginalName()), 180, ''),
+                (string) ($inspection['mime'] ?? $file->getMimeType()),
+                (int) $file->getSize(),
+                'messenger',
+                Conversation::class,
+                (int) $conversation->id
+            );
+            Storage::disk('private')->delete($path);
             $attachments[] = [
-                'path' => $path,
-                'disk' => 'private',
+                'path' => $managed['path'],
+                'disk' => $managed['disk'],
+                'managed_file_id' => $managed['managed_file_id'],
                 'name' => Str::limit(basename($file->getClientOriginalName()), 180, ''),
                 'size' => (int) $file->getSize(),
                 'mime' => (string) ($inspection['mime'] ?? $file->getMimeType()),
