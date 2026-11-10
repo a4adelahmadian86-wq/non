@@ -44,9 +44,6 @@
                 <small>پیام جدید در گفت‌وگوهای قابل دسترس</small>
             </a>
             @endif
-            @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
-            <article class="metric-card metric-green"><div class="metric-top"><span>اعتبارنامه Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'ثبت شده' : 'ثبت نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
-            @endif
         </section>
 
         <section class="admin-metric-grid admin-action-metrics" aria-label="اقدام‌های عملیاتی">
@@ -135,13 +132,18 @@
 
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
-                <div class="admin-panel-head"><div><span class="panel-eyebrow">OPERATIONAL SNAPSHOT</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="status-chip">به‌روزرسانی در {{ now()->format('H:i') }}</span></div>
+                <div class="admin-panel-head"><div><span class="panel-eyebrow">OPERATIONAL SNAPSHOT</span><h2>نمای تکمیلی عملیات</h2><p>شاخص‌های مکمل ماژول‌ها؛ بدون تکرار اعداد کارت‌های اصلی داشبورد.</p></div><span class="status-chip">به‌روزرسانی در {{ now()->format('H:i') }}</span></div>
                 <div class="ops-grid">
-                    <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
-                    <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
-                    <div><span class="ops-icon cyan"><i class="fa-solid fa-bolt"></i></span><div><b>{{ number_format($stats['ai_today']) }}</b><small>درخواست AI امروز</small></div></div>
-                    @if($console->sectionAllowed(auth()->user(), 'users'))<div><span class="ops-icon purple"><i class="fa-solid fa-diagram-project"></i></span><div><b>{{ number_format($stats['projects']) }}</b><small>{{ number_format($stats['active_projects']) }} پروژه فعال مشتریان</small></div></div>@endif
-                    @if($console->sectionAllowed(auth()->user(), 'announcements'))<div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>@endif
+                    @if($console->sectionAllowed(auth()->user(), 'users'))
+                        <div><span class="ops-icon purple"><i class="fa-solid fa-diagram-project"></i></span><div><b>{{ number_format($stats['projects']) }}</b><small>کل پروژه‌های ثبت‌شده</small></div></div>
+                    @endif
+                    @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'analytics'))
+                        <div><span class="ops-icon cyan"><i class="fa-solid fa-microphone-lines"></i></span><div><b>{{ number_format($stats['voice_requests']) }}</b><small>درخواست صوتی ثبت‌شده</small></div></div>
+                        <div><span class="ops-icon purple"><i class="fa-solid fa-wave-square"></i></span><div><b>{{ number_format($stats['voice_seconds']) }}</b><small>ثانیه پردازش صوت</small></div></div>
+                    @endif
+                    @if($console->sectionAllowed(auth()->user(), 'announcements'))
+                        <div><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>{{ number_format($announcements->where('is_active', true)->count()) }}</b><small>اعلان فعال</small></div></div>
+                    @endif
                 </div>
             </article>
             @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
@@ -367,7 +369,7 @@
 @if($console->sectionAllowed(auth()->user(), 'access'))<a href="{{ route('admin.access') }}"><span class="ops-icon purple"><i class="fa-solid fa-user-shield"></i></span><div><b>RBAC</b><small>نقش‌ها و مجوزهای granular</small></div></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'organizations'))<a href="{{ route('admin.organizations') }}"><span class="ops-icon"><i class="fa-solid fa-building"></i></span><div><b>{{ number_format($stats['organizations']) }}</b><small>سازمان · {{ number_format($stats['teams']) }} تیم</small></div></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'integrations'))<a href="{{ route('admin.integrations') }}"><span class="ops-icon cyan"><i class="fa-solid fa-plug"></i></span><div><b>Integrations</b><small>Gemini · Voice · Canva OAuth</small></div></a>@endif
-@if($console->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}"><span class="ops-icon orange"><i class="fa-solid fa-chart-line"></i></span><div><b>{{ number_format($stats['voice_requests']) }}</b><small>{{ number_format($stats['voice_seconds']) }} ثانیه صوت ثبت‌شده</small></div></a>@endif
+@if($console->sectionAllowed(auth()->user(), 'analytics'))<a href="{{ route('admin.analytics') }}"><span class="ops-icon orange"><i class="fa-solid fa-chart-line"></i></span><div><b>Analytics</b><small>گزارش عملکرد و استفاده از سرویس‌ها</small></div></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'audit'))<a href="{{ route('admin.audit') }}"><span class="ops-icon"><i class="fa-solid fa-shield-halved"></i></span><div><b>{{ number_format($stats['audit_events']) }}</b><small>رویداد ممیزی</small></div></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><span class="ops-icon purple"><i class="fa-solid fa-wallet"></i></span><div><b>Finance</b><small>تراکنش، کیف پول و پرداخت</small></div></a>@endif
 @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><span class="ops-icon cyan"><i class="fa-solid fa-envelope"></i></span><div><b>Email</b><small>تنظیم و تست ایمیل</small></div></a>@endif
