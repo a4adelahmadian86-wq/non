@@ -2,7 +2,7 @@
 
 @section('content')
 <link rel="stylesheet" href="{{ asset('css/messenger.css') }}?v=20261110">
-<div class="fm-page" dir="rtl" id="fm-chat" data-poll-url="{{ route('messenger.poll', $conversation) }}" data-send-url="{{ route('messenger.send', $conversation) }}" data-last-id="{{ $messages->getCollection()->last()?->id ?? 0 }}">
+<div class="fm-page" dir="rtl" id="fm-chat" data-poll-url="{{ route('messenger.poll', $conversation) }}" data-send-url="{{ route('messenger.send', $conversation) }}" data-last-id="{{ $messages->getCollection()->last()?->id ?? 0 }}" data-current-user-id="{{ auth()->id() }}">
     <header class="fm-chat-header"><a href="{{ route('messenger.index') }}">← همه گفت‌وگوها</a><div><h1>{{ $conversation->title ?: ($conversation->participants->firstWhere('id', '!=', auth()->id())?->name ?? 'گفت‌وگوی خصوصی') }}</h1><p>{{ $conversation->participants->count() }} عضو</p></div></header>
     <main class="fm-chat-panel">
         <div class="fm-messages" id="fm-messages">
