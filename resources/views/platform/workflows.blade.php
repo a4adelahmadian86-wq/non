@@ -94,6 +94,8 @@
                         <span class="wf-status">{{ $w->enabled ? 'فعال' : 'خاموش' }}</span>
                         @if($canRunWorkflows)
                             <form method="post" action="{{ route('platform.workflows.run', $w->id) }}">@csrf<button class="wf-btn alt" type="submit">اجرای دستی</button></form>
+                        @else
+                            <span class="wf-status">فقط مشاهده</span>
                         @endif
                     </div>
                 </article>
