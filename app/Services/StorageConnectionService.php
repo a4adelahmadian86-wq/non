@@ -28,6 +28,7 @@ class StorageConnectionService
         $adapter = new S3CompatibleAdapter([
             'key' => $credentials['key'] ?? null,
             'secret' => $credentials['secret'] ?? null,
+            'session_token' => $credentials['session_token'] ?? null,
             'bucket' => $volume->bucket ?: ($credentials['bucket'] ?? null),
             'region' => $volume->region ?: ($credentials['region'] ?? 'us-east-1'),
             'endpoint' => $volume->endpoint ?: ($credentials['endpoint'] ?? null),
