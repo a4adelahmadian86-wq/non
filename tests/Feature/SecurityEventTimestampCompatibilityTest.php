@@ -31,6 +31,19 @@ class SecurityEventTimestampCompatibilityTest extends TestCase
 
         $this->assertNotNull($event);
         $this->assertNotNull($event->created_at);
-        $this->assertNotNull($event->updated_at);
+
+        // Older middleware versions also write updated_at; the compatibility
+        // migration keeps those writes safe while current events remain append-only.
+        $legacyWriteId = DB::table('farast_security_events')->insertGetId([
+            'user_id' => $user->id,
+            'event' => 'legacy_timestamp_compatibility',
+            'ip' => '127.0.0.1',
+            'user_agent' => 'Compatibility test',
+            'meta' => json_encode(['source' => 'test']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertNotNull(DB::table('farast_security_events')->where('id', $legacyWriteId)->value('updated_at'));
     }
 }
