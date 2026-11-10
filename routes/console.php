@@ -9,7 +9,7 @@ use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
 
 
-use App\\Services\\StorageBackupService;
+use App\Services\StorageBackupService;
 
 Artisan::command('farast:storage-backup', function (StorageBackupService $backups) {
     $run = $backups->runWeekly();
