@@ -75,7 +75,7 @@ class StorageBackupRestoreService
                 $entry = (string) ($item['entry'] ?? '');
                 $logicalPath = (string) ($item['logical_path'] ?? '');
                 $source = $workspace.'/'.$entry;
-                if ($logicalPath === '' || ! is_file($source) || ! hash_equals((string) ($item['sha256'] ?? ''), (string) hash_file('sha256', $source))) {
+                if (! str_starts_with($entry, 'managed/') || str_contains($entry, '..') || $logicalPath === '' || ! is_file($source) || ! hash_equals((string) ($item['sha256'] ?? ''), (string) hash_file('sha256', $source))) {
                     throw new RuntimeException('Managed backup entry failed integrity verification.');
                 }
 
@@ -121,7 +121,7 @@ class StorageBackupRestoreService
                 $path = (string) ($item['path'] ?? '');
                 $entry = (string) ($item['entry'] ?? '');
                 $source = $workspace.'/'.$entry;
-                if (! in_array($diskName, ['private', 'public', 'farast_remote'], true) || $path === '' || ! is_file($source)
+                if (! str_starts_with($entry, 'legacy/') || str_contains($entry, '..') || ! in_array($diskName, ['private', 'public', 'farast_remote'], true) || $path === '' || ! is_file($source)
                     || ! hash_equals((string) ($item['sha256'] ?? ''), (string) hash_file('sha256', $source))) {
                     throw new RuntimeException('Legacy backup entry failed integrity verification.');
                 }
@@ -153,11 +153,13 @@ class StorageBackupRestoreService
             if (! is_dir($restoreDirectory) && ! mkdir($restoreDirectory, 0700, true) && ! is_dir($restoreDirectory)) {
                 throw new RuntimeException('Unable to create secure restore staging directory.');
             }
+            @chmod($restoreDirectory, 0700);
             $databaseOutput = $restoreDirectory.'/backup-'.$run->id.'-database.dump';
             if (! copy($databaseDump, $databaseOutput)) {
                 throw new RuntimeException('Unable to preserve database dump for manual restoration.');
             }
 
+            @chmod($databaseOutput, 0600);
             $restored['database_dump'] = $databaseOutput;
             return $restored;
         } finally {
