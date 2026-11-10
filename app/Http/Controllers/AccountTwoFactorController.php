@@ -45,7 +45,11 @@ class AccountTwoFactorController extends Controller
 
         RateLimiter::clear($key);
         $request->session()->put('auth.two_factor_passed', true);
-        $this->recordEvent($request, 'two_factor_challenge_passed');
+        $usedRecoveryCode = $this->isRecoveryCode($data['code'], $totp);
+        $this->recordEvent($request, $usedRecoveryCode ? 'two_factor_recovery_code_used' : 'two_factor_challenge_passed');
+        if ($usedRecoveryCode) {
+            $this->notify($user, 'security_two_factor_recovery_used', 'یک کد بازیابی مصرف شد', 'برای ورود به حساب شما از یکی از کدهای بازیابی تأیید دومرحله‌ای استفاده شد. تعداد کدهای باقی‌مانده را در مرکز امنیت بررسی کنید.', ['url' => route('platform.security')]);
+        }
 
         return redirect()->intended(route('editor'))->with('status', 'تأیید دومرحله‌ای با موفقیت انجام شد.');
     }
@@ -80,12 +84,14 @@ class AccountTwoFactorController extends Controller
         }
 
         $user = $request->user();
-        $user->forceFill([
-            'two_factor_secret' => Crypt::encryptString($secret),
-            'two_factor_enabled_at' => now(),
-        ])->save();
+        $codes = DB::transaction(function () use ($user, $secret, $totp) {
+            $user->forceFill([
+                'two_factor_secret' => Crypt::encryptString($secret),
+                'two_factor_enabled_at' => now(),
+            ])->save();
 
-        $codes = $this->replaceRecoveryCodes($user, $totp);
+            return $this->replaceRecoveryCodes($user, $totp);
+        });
         $request->session()->forget(['farast.two_factor.pending_secret', 'farast.two_factor.pending_at']);
         $request->session()->put('auth.two_factor_passed', true);
 
@@ -110,7 +116,10 @@ class AccountTwoFactorController extends Controller
             throw ValidationException::withMessages(['code' => 'کد تأیید معتبر نیست.']);
         }
 
-        $codes = $this->replaceRecoveryCodes($user, $totp);
+        $codes = DB::transaction(fn () => $this->replaceRecoveryCodes($user, $totp));
+        if ($this->isRecoveryCode((string) $request->input('code'), $totp)) {
+            $this->recordEvent($request, 'two_factor_recovery_code_used');
+        }
         $this->recordEvent($request, 'two_factor_recovery_codes_regenerated');
         $this->notify($user, 'security_two_factor_recovery_regenerated', 'کدهای بازیابی تازه شدند', 'کدهای بازیابی قبلی دیگر معتبر نیستند. کدهای تازه را در مکانی امن ذخیره کنید.', ['url' => route('platform.security')]);
 
@@ -132,12 +141,17 @@ class AccountTwoFactorController extends Controller
             throw ValidationException::withMessages(['code' => 'کد تأیید معتبر نیست.']);
         }
 
-        $user->forceFill([
-            'two_factor_secret' => null,
-            'two_factor_enabled_at' => null,
-        ])->save();
+        DB::transaction(function () use ($user) {
+            $user->forceFill([
+                'two_factor_secret' => null,
+                'two_factor_enabled_at' => null,
+            ])->save();
 
-        DB::table('farast_two_factor_recovery_codes')->where('user_id', $user->id)->delete();
+            DB::table('farast_two_factor_recovery_codes')->where('user_id', $user->id)->delete();
+        });
+        if ($this->isRecoveryCode((string) $request->input('code'), $totp)) {
+            $this->recordEvent($request, 'two_factor_recovery_code_used');
+        }
         $request->session()->put('auth.two_factor_passed', true);
         $request->session()->forget(['farast.two_factor.pending_secret', 'farast.two_factor.pending_at']);
 
@@ -178,6 +192,11 @@ class AccountTwoFactorController extends Controller
             ->where('id', $recovery->id)
             ->whereNull('used_at')
             ->update(['used_at' => now(), 'updated_at' => now()]) === 1;
+    }
+
+    private function isRecoveryCode(string $code, LocalTotpService $totp): bool
+    {
+        return strlen($totp->normalizeRecoveryCode($code)) >= 12;
     }
 
     private function replaceRecoveryCodes(User $user, LocalTotpService $totp): array
