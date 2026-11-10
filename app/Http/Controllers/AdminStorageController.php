@@ -23,7 +23,7 @@ class AdminStorageController extends Controller
 
     public function index()
     {
-        $volumes = StorageVolume::withCount(['files' => fn ($query) => $query->where('status', 'active'), 'replicas' => fn ($query) => $query->where('status', 'active')])->withSum(['files' => fn ($query) => $query->where('status', 'active')], 'size_bytes')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
+        $volumes = StorageVolume::withCount(['files' => fn ($query) => $query->where('status', 'active'), 'replicas' => fn ($query) => $query->where('status', 'active'), 'backups' => fn ($query) => $query->where('status', 'completed')])->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
         $drives = collect(self::DRIVES)->map(function (array $definition, string $key) use ($volumes) {
             $items = $volumes->get($key, collect());
             return [
@@ -68,6 +68,13 @@ class AdminStorageController extends Controller
             return back()->withErrors(['connection_json' => 'درایور اعلام‌شده پشتیبانی نمی‌شود.'])->withInput($request->except('connection_json'));
         }
 
+        $credentials = (array) ($connection['credentials'] ?? []);
+        foreach (['key', 'secret', 'bucket', 'region', 'endpoint', 'use_path_style_endpoint', 'session_token', 'timeout', 'connect_timeout'] as $key) {
+            if (array_key_exists($key, $connection) && ! array_key_exists($key, $credentials)) {
+                $credentials[$key] = $connection[$key];
+            }
+        }
+
         $endpoint = $connection['endpoint'] ?? ($credentials['endpoint'] ?? null);
         if ($driver === 's3' && ! $endpoint && ! empty($connection['region'])) {
             $endpoint = 'https://s3.'.trim((string) $connection['region']).'.amazonaws.com';
@@ -80,13 +87,6 @@ class AdminStorageController extends Controller
         $name = trim((string) ($connection['name'] ?? ($endpointHost !== '' ? $endpointHost : $detectedProvider)));
         if ($name === '') {
             return back()->withErrors(['connection_json' => 'نام سرویس در اطلاعات اتصال مشخص نشده است.'])->withInput($request->except('connection_json'));
-        }
-
-        $credentials = (array) ($connection['credentials'] ?? []);
-        foreach (['key', 'secret', 'bucket', 'region', 'endpoint', 'use_path_style_endpoint'] as $key) {
-            if (array_key_exists($key, $connection) && ! array_key_exists($key, $credentials)) {
-                $credentials[$key] = $connection[$key];
-            }
         }
 
         $volume = StorageVolume::create([
@@ -142,7 +142,7 @@ class AdminStorageController extends Controller
 
     public function destroy(StorageVolume $volume)
     {
-        abort_if($volume->files()->exists(), 409, 'ابتدا فایل‌های این فضا را منتقل کنید؛ فضای دارای فایل حذف نمی‌شود.');
+        abort_if($volume->files()->exists() || $volume->replicas()->exists() || $volume->backups()->exists(), 409, 'این فضا هنوز فایل اصلی، نسخه آینه‌ای یا بکاپ دارد؛ ابتدا محتوا را منتقل کنید.');
         $volume->delete();
         return redirect()->route('admin.storage.index')->with('status', 'اتصال حذف شد.');
     }
