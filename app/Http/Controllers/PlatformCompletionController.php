@@ -103,7 +103,7 @@ class PlatformCompletionController extends Controller {
   $canDeleteWorkflows=$authorization->allows($r->user(),'workflows.manage')
    ||$authorization->allows($r->user(),'automation.manage')
    ||$authorization->allows($r->user(),'workflows.delete');
-  abort_unless($authorization->allows($r->user(),'workflows.view')||$canEditWorkflows||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit,403);
+  abort_unless($authorization->allows($r->user(),'workflows.view')||$canEditWorkflows||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit||$canDeleteWorkflows,403);
 
   $editingWorkflow=null;
   if($r->filled('edit')){
