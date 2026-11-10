@@ -24,6 +24,7 @@
                     <div class="storage-metric"><small>تعداد فایل</small><b>{{ number_format($drive['files']) }}</b></div>
                 </div>
                 <div class="storage-progress"><span style="width:{{ $percent }}%"></span></div>
+                <div class="storage-muted">شمارش فایل‌ها بر اساس موجودی مدیریت‌شده توسط سایت است؛ ظرفیت و سهمیه‌ای که API ارائه‌دهنده اعلام نکند، نامشخص باقی می‌ماند.</div>
                 <div class="storage-muted">فضای آزاد: {{ $drive['capacity'] ? \Illuminate\Support\Number::fileSize(max(0,$drive['capacity']-$drive['used'])) : 'ظرفیت اعلام نشده' }}</div>
                 <div class="storage-volumes">
                     @forelse($drive['volumes'] as $volume)
