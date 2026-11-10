@@ -133,7 +133,7 @@ class StorageManager
                 $volume->decrement('reserved_files');
             });
 
-            if ($oldVolumeId && $oldKey && $oldVolumeId !== $volume->id) {
+            if ($oldVolumeId && $oldKey) {
                 try {
                     $old = StorageVolume::find($oldVolumeId);
                     if ($old) {
