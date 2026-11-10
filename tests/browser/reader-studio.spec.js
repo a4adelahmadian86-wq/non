@@ -15,5 +15,8 @@ test('studio exposes favorites immediately, applies saved styles and supports sh
   await expect(page.locator('[aria-label="جابجایی صفحه"]')).toHaveAttribute('aria-pressed','true');
   await page.locator('[aria-label="تعویض سریع ابزار"]').click();
   await expect(page.locator('[aria-label="جابجایی صفحه"]')).toHaveAttribute('aria-pressed','false');
+  await page.locator('[aria-label="نمایش دوصفحه‌ای"]').click();
+  await expect(page.locator('[aria-label="نمایش دوصفحه‌ای"]')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('[data-reader-root]')).toHaveClass(/farast-reader-two-page/);
   await page.reload();
 });
