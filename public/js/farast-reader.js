@@ -59,8 +59,9 @@
   const currentPosition=()=>({section:itemIndex,page:isPdf()?pdfPage:1});
   const samePosition=(a,b)=>Boolean(a&&b&&a.section===b.section&&a.page===b.page);
   const persistReaderState=()=>{
-    try{localStorage.setItem(storageKey,JSON.stringify(readerState));}catch(_){}
+    const raw=JSON.stringify(readerState);try{localStorage.setItem(storageKey,raw);}catch(_){}window.FarastReaderDurableStore?.set(storageKey,raw).catch(()=>{});
   };
+  const restoreDurableReaderState=async()=>{if(!window.FarastReaderDurableStore)return;try{let legacy=null;try{legacy=localStorage.getItem(storageKey);}catch(_){}const raw=await window.FarastReaderDurableStore.migrate(storageKey,legacy);if(raw){const stored=JSON.parse(raw);if(stored&&typeof stored==='object'){const saved=stored.progress,bookmarks=Array.isArray(stored.bookmarks)?stored.bookmarks:[];readerState={progress:saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null,bookmarks:bookmarks.filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100)};}}await window.FarastReaderDurableStore.requestPersistence();}catch(_){}};
   const remoteStateUrl=root.dataset.readerStateUrl||'';
   let remoteSyncTimer=null;
   const queueRemoteSync=()=>{
@@ -84,12 +85,14 @@
       const response=await fetch(remoteStateUrl,{credentials:'same-origin',headers:{'Accept':'application/json'}});
       if(!response.ok)return;
       const remote=await response.json();
-      if(remote.updated_at){
+      const hasLocalState=Boolean(readerState.progress||readerState.bookmarks.length);
+      if(remote.updated_at&&!hasLocalState){
         const saved=remote.progress;
         readerState.progress=saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null;
         readerState.bookmarks=(Array.isArray(remote.bookmarks)?remote.bookmarks:[])
           .filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100);
-      }else if(readerState.progress||readerState.bookmarks.length){
+      }else if(hasLocalState){
+        // Device-local IndexedDB state is canonical; remote state is only a fallback for a new device.
         queueRemoteSync();
       }
       persistReaderState();
@@ -811,7 +814,7 @@
   setZoomLabel();
   renderBookmarks();
   refreshBookmarkButton();
-  loadRemoteReaderState().finally(()=>showItem(0)).then(()=>{
+  restoreDurableReaderState().then(()=>loadRemoteReaderState()).finally(()=>showItem(0)).then(()=>{
     restoringInitial=false;
     refreshResumeButton();
     refreshBookmarkButton();

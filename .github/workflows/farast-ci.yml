@@ -84,6 +84,50 @@ jobs:
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
+  reader-browser-regression:
+    if: ${{ always() && needs.laravel.result == 'failure' }}
+    needs: [laravel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
+          coverage: none
+      - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: bash -n scripts/prepare-reader-assets.sh && bash scripts/prepare-reader-assets.sh
+      - run: printf '%s\\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+      - run: php artisan key:generate
+      - run: touch database/database.sqlite
+      - run: php artisan migrate --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-reader-e2e php artisan db:seed --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-reader-server.log 2>&1 &
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/up >/dev/null && exit 0; sleep 1; done; cat /tmp/farast-reader-server.log; exit 1
+      - run: npm init -y
+      - run: npm install --no-save @playwright/test@1.55.0
+      - run: npx playwright install chromium
+      - run: npx playwright test tests/browser/reader-experience.spec.js tests/browser/reader-annotations.spec.js tests/browser/reader-ink-pressure.spec.js tests/browser/reader-storage.spec.js tests/browser/reader-studio.spec.js --workers=1
+        env:
+          FARAST_E2E_URL: http://127.0.0.1:8000
+      - if: always()
+        run: test -f /tmp/farast-reader-server.log && cat /tmp/farast-reader-server.log || true
+
   document-audio-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 25

@@ -8,7 +8,7 @@
     <a class="farast-reader-back" href="{{ route('store.product', $product->slug) }}" aria-label="بازگشت به محصول"><i class="fa-solid fa-arrow-right"></i><span>بازگشت</span></a>
     <div class="farast-reader-heading">
       <strong>{{ $product->title }}</strong>
-      <span><i class="fa-solid fa-shield-halved"></i> مطالعه امن · {{ $previews->count() }} بخش</span>
+      <span><i class="fa-solid fa-shield-halved"></i> FARAST PDF Studio · مطالعه امن · {{ $previews->count() }} بخش</span>
     </div>
     <div class="farast-reader-account"><i class="fa-solid fa-user-shield"></i><span>{{ $readerWatermark }}</span></div>
   </header>
@@ -156,9 +156,13 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader.js?v=20261109fitpage4"></script>
-<script src="/js/farast-reader-personal-tools.js?v=20261109pdfanchors2" defer></script>
+<script src="/js/farast-reader-storage.js?v=20261110durable5"></script>
+<script src="/js/farast-reader.js?v=20261110durable2"></script>
+<script src="/js/farast-reader-personal-tools.js?v=20261110durable2" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
 <script src="/js/farast-reader-document-audio.js?v=20261108readiness1" defer></script>
+<script src="/js/farast-reader-annotations.js?v=20261110durable5" defer></script>
+<script src="/js/farast-reader-studio.js?v=20261110durable2" defer></script>
+<script src="/js/farast-reader-ink-pressure.js?v=20261110durable4" defer></script>
 @endpush
