@@ -24,7 +24,7 @@ class MessengerController extends Controller
             }])
             ->orderByDesc('last_message_at')->orderByDesc('id')->paginate(30);
 
-        $users = User::query()->whereKeyNot($userId)->orderBy('name')->limit(200)->get(['id', 'name', 'email']);
+        $users = User::query()->where('id', '!=', $userId)->orderBy('name')->limit(200)->get(['id', 'name', 'email']);
 
         return view('messenger.index', compact('conversations', 'users'));
     }
@@ -138,6 +138,18 @@ class MessengerController extends Controller
             return $message;
         });
 
+        foreach ($conversation->participants()->where('users.id', '!=', $request->user()->id)->get() as $recipient) {
+            app(\\App\\Services\\NotificationService::class)->push(
+                (int) $recipient->id,
+                'message_received',
+                'پیام جدید در فراست',
+                Str::limit($body !== '' ? $body : 'یک فایل برای شما ارسال شد', 180),
+                ['url' => route('messenger.show', $conversation), 'conversation_id' => $conversation->id, 'message_id' => $message->id],
+                false,
+                'conversation:'.$conversation->id.':message:'.$message->id.':user:'.$recipient->id,
+            );
+        }
+
         return response()->json([
             'ok' => true,
             'message' => [
@@ -146,9 +158,10 @@ class MessengerController extends Controller
                 'created_at' => $message->created_at?->toIso8601String(),
                 'user_id' => $message->user_id,
                 'user_name' => $request->user()->name,
-                'attachments' => collect($message->attachments ?? [])->map(fn ($a) => [
+                'attachments' => collect($message->attachments ?? [])->map(fn ($a, $i) => [
                     'name' => $a['name'] ?? 'پیوست',
                     'size' => $a['size'] ?? 0,
+                    'url' => route('messenger.attachment', [$conversation, $message, $i]),
                 ])->values(),
             ],
         ], 201);
@@ -171,7 +184,10 @@ class MessengerController extends Controller
             'user_id' => $m->user_id,
             'user_name' => $m->user?->name ?? 'کاربر حذف‌شده',
             'created_at' => $m->created_at?->toIso8601String(),
-            'attachments' => collect($m->attachments ?? [])->map(fn ($a) => ['name' => $a['name'] ?? 'پیوست'])->values(),
+            'attachments' => collect($m->attachments ?? [])->map(fn ($a, $i) => [
+                'name' => $a['name'] ?? 'پیوست',
+                'url' => route('messenger.attachment', [$conversation, $m, $i]),
+            ])->values(),
         ])]);
     }
 
