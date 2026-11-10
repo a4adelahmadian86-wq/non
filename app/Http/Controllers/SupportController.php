@@ -181,6 +181,21 @@ class SupportController extends Controller
             'source' => 'dashboard',
         ], $request->file('attachment'));
 
+        try {
+            app(\App\Services\WorkflowEngine::class)->dispatch(
+                'ticket.created',
+                [
+                    'user_id' => (int) $request->user()->id,
+                    'customer_id' => (int) $request->user()->id,
+                    'ticket_id' => (int) $ticket->id,
+                    'status' => (string) $ticket->status,
+                ],
+                'ticket:'.$ticket->id.':created',
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
         return redirect()->route('support.show', $ticket)->with('status', 'تیکت '.$ticket->displayCode().' ثبت شد.');
     }
 
