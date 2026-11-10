@@ -7,6 +7,8 @@ use App\Models\StoreCourseLesson;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductImage;
+use App\Models\StorageManagedFile;
+use App\Services\Storage\StorageManager;
 use App\Services\AuditEventService;
 use App\Services\ProductSupervisorClient;
 use App\Services\ProductSupervisorSnapshotBuilder;
