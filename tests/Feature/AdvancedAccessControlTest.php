@@ -605,6 +605,22 @@ class AdvancedAccessControlTest extends TestCase
         $this->grant($localRole, 'access.audit', 'team');
         $this->assign($supervisor, $localRole, 'team', $localTeam->id);
 
+        $orphan = $this->user('09140000324');
+        DB::table('team_user')->insert([
+            'team_id' => $localTeam->id,
+            'user_id' => $orphan->id,
+            'team_role' => 'member',
+        ]);
+        $userViewRole = $this->role('local-team-user-view', 'team', $localTeam->id);
+        $this->grant($userViewRole, 'users.view', 'team');
+        $this->assign($supervisor, $userViewRole, 'team', $localTeam->id);
+
+        $this->assertNotContains(
+            $orphan->id,
+            app(AdminConsoleService::class)->visibleUserIds($supervisor, 'users.view') ?? [],
+            'A user with no organization must not inherit a team scope from an inconsistent membership pivot.'
+        );
+
         $this->assertTrue($authorization->allowsFor($supervisor, 'access.audit', [
             'organization_id' => $organizationA->id,
             'team_id' => $localTeam->id,
