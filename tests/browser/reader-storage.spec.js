@@ -1,13 +1,15 @@
 const {test,expect}=require('@playwright/test');
 const path=require('path');
-test('reader data survives local storage clearing through the durable IndexedDB layer',async({page})=>{
+test('reader data survives clearing localStorage and reloading through IndexedDB',async({page})=>{
  await page.goto('/');
  await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
  const key='farast-reader:test-durable-record';
  await page.evaluate(async key=>{
   await window.FarastReaderDurableStore.set(key,JSON.stringify({progress:{section:2,page:7},bookmarks:[{section:2,page:4}]}));
   localStorage.setItem(key,'legacy-stale-value');
-  localStorage.removeItem(key);
+  const canonical=await window.FarastReaderDurableStore.migrate(key,localStorage.getItem(key));
+  if(canonical!==JSON.stringify({progress:{section:2,page:7},bookmarks:[{section:2,page:4}]}))throw new Error('Legacy data replaced the durable canonical record');
+  localStorage.clear();
  },key);
  await page.reload();
  await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
@@ -32,4 +34,29 @@ test('storage persistence capability is reported without blocking reader data',a
  expect(result).toHaveProperty('persisted');
  await page.evaluate(()=>window.FarastReaderDurableStore.set('farast-reader:after-persist-request','ok'));
  await expect.poll(()=>page.evaluate(()=>window.FarastReaderDurableStore.restore('farast-reader:after-persist-request'))).toBe('ok');
+});
+
+test('separate reader features can migrate into the same durable device store',async({page})=>{
+ await page.goto('/');
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ const records={
+  'farast-reader:annotations:v1:42':JSON.stringify([{id:'note-1',type:'note',text:'یادداشت'}]),
+  'farast-reader:pressure-ink:v1:42':JSON.stringify([{id:'stroke-1',points:[{x:.1,y:.1},{x:.2,y:.2}]}]),
+  'farast.reader.personal-tools.v1:42':JSON.stringify({font:'serif',size:120,notes:[{id:'n1',note:'مهم'}]}),
+  'farast-reader:studio-favorites:v1:42':JSON.stringify([{id:'pen-blue',tool:'pen'}]),
+  'farast-reader:v1:42':JSON.stringify({progress:{section:1,page:8},bookmarks:[{section:1,page:4}]})
+ };
+ await page.evaluate(async records=>{
+  for(const [key,value] of Object.entries(records)){
+   localStorage.setItem(key,value);
+   await window.FarastReaderDurableStore.migrate(key,value);
+  }
+  localStorage.clear();
+ },records);
+ const restored=await page.evaluate(async keys=>{
+  const values={};
+  for(const key of keys)values[key]=await window.FarastReaderDurableStore.restore(key);
+  return values;
+ },Object.keys(records));
+ for(const [key,value] of Object.entries(records))expect(restored[key]).toBe(value);
 });
