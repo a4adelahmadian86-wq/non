@@ -253,7 +253,7 @@ class StoreController extends Controller
         return redirect()->route('store', ['category' => $cat->slug]);
     }
 
-    public function preview(StoreProductPreview $preview)
+    public function preview(StoreProductPreview $preview, StorageManager $storage)
     {
         $preview->load('product');
         abort_unless($preview->is_active && $preview->product && $preview->product->status === 'published' && $preview->product->published_at?->lte(now()), 404);
@@ -263,8 +263,8 @@ class StoreController extends Controller
             abort_unless(StoreLibraryItem::query()->where('user_id', $user->id)->where('product_id', $preview->product_id)->whereNull('revoked_at')->exists(), 403);
             abort(404, 'نسخه کامل فایل از مسیر پیش‌نمایش ارائه نمی‌شود؛ از خوانشگر صفحه‌ای استفاده کنید.');
         }
-        $disk = Storage::disk($preview->disk ?: 'private');
-        abort_unless($disk->exists($preview->path), 404);
+        $previewDisk = $preview->disk ?: 'private';
+        abort_unless($storage->exists($previewDisk, $preview->path), 404);
 
         $headers = [
             'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
@@ -285,7 +285,7 @@ class StoreController extends Controller
             $headers['Content-Disposition'] = 'inline; filename="farast-workbook-preview.html"';
             $headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
 
-            $html = $disk->get($preview->path);
+            $html = $storage->get($previewDisk, $preview->path);
             abort_unless(is_string($html), 404);
             $user = request()->user();
             $identity = $user
@@ -315,10 +315,10 @@ class StoreController extends Controller
 
         abort_unless(!in_array($kind, ['docx', 'xlsx'], true), 409, 'این پیش‌نمایش هنوز آماده‌سازی نشده است؛ نسخهٔ آماده را دوباره بارگذاری کنید.');
         $headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
-        return $disk->response($preview->path, null, $headers);
+        return response($storage->get($previewDisk, $preview->path), 200, array_merge($headers, ['Content-Type' => $preview->mime ?: 'application/octet-stream']));
     }
 
-    public function previewAudio(StoreProductPreview $preview)
+    public function previewAudio(StoreProductPreview $preview, StorageManager $storage)
     {
         $preview->load('product');
         abort_unless(
@@ -343,9 +343,16 @@ class StoreController extends Controller
             );
         }
 
-        $disk = Storage::disk($preview->audio_disk ?: 'private');
-        abort_unless($disk->exists($preview->audio_path), 404);
-        $size = (int) $disk->size($preview->audio_path);
+        $audioDisk = $preview->audio_disk ?: 'private';
+        abort_unless($storage->exists($audioDisk, $preview->audio_path), 404);
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-preview-audio');
+        try {
+            $storage->downloadTo($audioDisk, $preview->audio_path, $temporary);
+        } catch (\\Throwable $exception) {
+            @unlink($temporary);
+            throw $exception;
+        }
+        $size = (int) filesize($temporary);
         abort_unless($size > 0, 404);
 
         $start = 0;
@@ -357,6 +364,7 @@ class StoreController extends Controller
                 if ($matches[1] === '' && $matches[2] !== '') {
                     $suffixLength = (int) $matches[2];
                     if ($suffixLength <= 0) {
+                        @unlink($temporary);
                         return response('', 416, ['Content-Range' => 'bytes */'.$size, 'Accept-Ranges' => 'bytes']);
                     }
                     $suffix = min($size, $suffixLength);
@@ -393,8 +401,8 @@ class StoreController extends Controller
             $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
         }
 
-        return response()->stream(function () use ($disk, $preview, $start, $length) {
-            $stream = $disk->readStream($preview->audio_path);
+        return response()->stream(function () use ($temporary, $start, $length) {
+            $stream = fopen($temporary, 'rb');
             if (! is_resource($stream)) {
                 return;
             }
@@ -421,6 +429,7 @@ class StoreController extends Controller
                 }
             } finally {
                 fclose($stream);
+                @unlink($temporary);
             }
         }, $status, $headers);
     }
