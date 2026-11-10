@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\SiteSetting;
 use App\Services\CrmAudienceService;
 use App\Services\MarketingSignalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -61,6 +62,7 @@ class MarketingConsentAndSignalsTest extends TestCase
     public function test_marketing_signal_retention_command_prunes_only_old_marketing_events(): void
     {
         $user = $this->user('09151112006', true);
+        SiteSetting::write('marketing_signal_retention_days', 30);
         DB::table('farast_workflow_events')->insert([
             [
                 'event_type' => 'marketing.product_viewed',
@@ -69,8 +71,8 @@ class MarketingConsentAndSignalsTest extends TestCase
                 'context' => json_encode(['product_id' => 12]),
                 'matched_workflows' => 0,
                 'processed_at' => null,
-                'created_at' => now()->subDays(91),
-                'updated_at' => now()->subDays(91),
+                'created_at' => now()->subDays(31),
+                'updated_at' => now()->subDays(31),
             ],
             [
                 'event_type' => 'marketing.product_viewed',
@@ -84,7 +86,7 @@ class MarketingConsentAndSignalsTest extends TestCase
             ],
         ]);
 
-        \Illuminate\Support\Facades\Artisan::call('store:marketing:prune-signals --days=90 --limit=100');
+        \Illuminate\Support\Facades\Artisan::call('store:marketing:prune-signals --limit=100');
 
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'retention-old-'.$user->id]);
         $this->assertDatabaseHas('farast_workflow_events', ['idempotency_key' => 'retention-recent-'.$user->id]);
