@@ -121,6 +121,11 @@ class AdminStoreCouponController extends Controller
             ->where('created_at', '>=', $measurementSince)
             ->when($visibleIds !== null, fn ($query) => $query->whereIn('user_id', $visibleIds))
             ->count();
+        $offerClicks = DB::table('farast_workflow_events')
+            ->where('event_type', 'marketing.offer_clicked')
+            ->where('created_at', '>=', $measurementSince)
+            ->when($visibleIds !== null, fn ($query) => $query->whereIn('user_id', $visibleIds))
+            ->count();
         $redeemedOffersInWindow = (clone $base)
             ->where('status', 'redeemed')
             ->where('offered_at', '>=', $measurementSince)
@@ -148,6 +153,8 @@ class AdminStoreCouponController extends Controller
             'stats' => [
                 'total' => $totalOffers,
                 'offer_views' => (int) $offerViews,
+                'offer_clicks' => (int) $offerClicks,
+                'view_to_click_rate' => $offerViews > 0 ? round($offerClicks * 100 / $offerViews, 1) : 0,
                 'view_to_redemption_rate' => $offerViews > 0 ? round($redeemedOffersInWindow * 100 / $offerViews, 1) : 0,
                 'measurement_window_days' => $measurementWindowDays,
                 'redeemed' => $redeemed,
