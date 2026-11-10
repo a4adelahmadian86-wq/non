@@ -172,12 +172,31 @@ class SupportTicketService
             && Schema::hasColumn('ticket_messages', 'attachments')) {
             $file = $options['attachment'];
             $path = $file->store('ticket-attachments/'.$ticket->id, 'private');
+            try {
+                $inspection = app(UploadSecurityService::class)->inspect($path, (string) $file->getMimeType(), 8 * 1024 * 1024);
+                if (empty($inspection['safe'])) throw new \\RuntimeException('پیوست تیکت از بررسی امنیتی عبور نکرد.');
+                $managed = app(StorageManager::class)->adoptExistingPrivate(
+                    $path,
+                    $file->getClientOriginalName(),
+                    (string) ($inspection['mime'] ?? $file->getMimeType()),
+                    (int) $file->getSize(),
+                    'support',
+                    Ticket::class,
+                    (int) $ticket->id
+                );
+                \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
+            } catch (\\Throwable $exception) {
+                \\Illuminate\\Support\\Facades\\Storage::disk('private')->delete($path);
+                throw $exception;
+            }
             $payload['attachments'] = [[
-                'path' => $path,
-                'disk' => 'private',
+                'path' => $managed['path'],
+                'disk' => $managed['disk'],
+                'managed_file_id' => $managed['managed_file_id'],
                 'name' => $file->getClientOriginalName(),
                 'size' => $file->getSize(),
-                'mime' => $file->getMimeType(),
+                'mime' => $inspection['mime'] ?? $file->getMimeType(),
+                'sha256' => $inspection['checksum'] ?? null,
             ]];
         }
 
