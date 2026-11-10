@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\SiteSetting;
 use App\Models\StoreCategory;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreOrderItem;
@@ -66,6 +67,17 @@ class SmartDiscountMarketingServiceTest extends TestCase
         Carbon::setTestNow(now()->addMinutes(2));
         $signals->record($user, 'product_viewed', $product->id);
         $signals->record($user, 'wishlist_added', $product->id);
+    }
+
+    public function test_live_score_threshold_prevents_offer_until_the_new_threshold_is_met(): void
+    {
+        SiteSetting::write('smart_discount_score_threshold', 6);
+        $user = $this->user();
+        $product = $this->product();
+
+        $this->createQualifiedSignals($user, $product);
+
+        $this->assertDatabaseCount('store_coupon_assignments', 0);
     }
 
     public function test_a_single_product_view_never_generates_a_discount_offer(): void
