@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreProduct;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -25,6 +26,17 @@ class StoreCouponRedemptionService
             return;
         }
 
+        $assignment = null;
+        $assignmentId = (int) ($snapshot['coupon_assignment_id'] ?? 0);
+        if ($assignmentId > 0) {
+            // Serialize against marketing-consent withdrawal before locking the
+            // assignment and coupon; a withdrawn offer must never be redeemed.
+            $offerOwner = User::query()->whereKey($order->user_id)->lockForUpdate()->first();
+            if (! $offerOwner || ! $offerOwner->marketing_consent) {
+                throw new RuntimeException('رضایت بازاریابی این پیشنهاد لغو شده و امکان استفاده از آن وجود ندارد.');
+            }
+        }
+
         $coupon = StoreCoupon::query()
             ->whereRaw('UPPER(code) = ?', [$code])
             ->lockForUpdate()
@@ -33,9 +45,6 @@ class StoreCouponRedemptionService
         if (! $coupon) {
             throw new RuntimeException('کد تخفیف ثبت‌شده برای این سفارش دیگر در دسترس نیست؛ پرداخت انجام نشد.');
         }
-
-        $assignment = null;
-        $assignmentId = (int) ($snapshot['coupon_assignment_id'] ?? 0);
         if ($assignmentId > 0) {
             $assignment = StoreCouponAssignment::query()->whereKey($assignmentId)->lockForUpdate()->first();
             if (! $assignment
