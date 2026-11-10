@@ -38,6 +38,24 @@ class CommunicationCenterTest extends TestCase
             ->assertSee('پیام‌رسان داخلی');
     }
 
+    public function test_customer_can_use_shared_center_without_internal_messenger_access(): void
+    {
+        $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+        FarastNotification::create([
+            'user_id' => $customer->id,
+            'type' => 'ticket_reply',
+            'title' => 'پاسخ پشتیبانی مشتری',
+            'body' => 'پاسخ جدید برای درخواست شما ثبت شد.',
+        ]);
+
+        $this->actingAs($customer)->get(route('platform.communications'))
+            ->assertOk()
+            ->assertSee('مرکز ارتباطات فراست')
+            ->assertSee('پاسخ پشتیبانی مشتری')
+            ->assertDontSee('پیام‌رسان داخلی')
+            ->assertDontSee('گفت‌وگوهای داخلی');
+    }
+
     public function test_non_admin_cannot_open_staff_communication_center(): void
     {
         $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
