@@ -209,6 +209,9 @@ class StorageCoreTest extends TestCase
         );
 
         $this->get('/storage/managed/'.$private['managed_file_id'])->assertNotFound();
+        $storage = app(StorageManager::class);
+        $storage->delete($stored['disk'], $stored['path']);
+        $storage->delete($private['disk'], $private['path']);
     }
 
 }
