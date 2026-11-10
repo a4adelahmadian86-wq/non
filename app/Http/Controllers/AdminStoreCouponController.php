@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
+use App\Models\SiteSetting;
+use App\Models\StoreProduct;
 use App\Services\AdminConsoleService;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
@@ -64,15 +66,19 @@ class AdminStoreCouponController extends Controller
         $attributedRevenue = (int) (clone $attributedOrders)->sum('orders.total_rials');
         $redeemedDiscountCost = (int) (clone $attributedOrders)->sum('orders.discount_rials');
 
-        $genericCoupons = StoreCoupon::query()
-            ->whereNotIn('id', StoreCouponAssignment::query()->select('coupon_id'))
-            ->latest('id')
-            ->limit(20)
-            ->get();
+        $canManageGlobalCoupons = $visibleIds === null;
+        $genericCoupons = $canManageGlobalCoupons
+            ? StoreCoupon::query()
+                ->whereNotIn('id', StoreCouponAssignment::query()->select('coupon_id'))
+                ->latest('id')
+                ->limit(20)
+                ->get()
+            : collect();
 
         return view('admin.store-coupons.index', [
             'assignments' => $assignments->latest('offered_at')->paginate(25)->withQueryString(),
             'genericCoupons' => $genericCoupons,
+            'canManageGlobalCoupons' => $canManageGlobalCoupons,
             'filters' => ['status' => $status, 'q' => $request->query('q')],
             'stats' => [
                 'total' => $totalOffers,
@@ -81,9 +87,52 @@ class AdminStoreCouponController extends Controller
                 'expired' => $expired,
                 'revoked' => $revoked,
                 'conversion_rate' => $totalOffers > 0 ? round($redeemed * 100 / $totalOffers, 1) : 0,
-                'discount_cost_rials' => $redeemedDiscountCost,\n                'attributed_revenue_rials' => $attributedRevenue,\n                'attributed_orders' => $attributedOrderCount,
+                'discount_cost_rials' => $redeemedDiscountCost,
+                'attributed_revenue_rials' => $attributedRevenue,
+                'attributed_orders' => $attributedOrderCount,
+                'products_missing_cost' => StoreProduct::query()->published()->whereNull('cost_price_rials')->count(),
             ],
+,
+            'settings' => [
+                'score_threshold' => (int) SiteSetting::read('smart_discount_score_threshold', 5),
+                'signal_window_days' => (int) SiteSetting::read('smart_discount_signal_window_days', 14),
+                'cooldown_days' => (int) SiteSetting::read('smart_discount_cooldown_days', 7),
+                'offer_valid_hours' => (int) SiteSetting::read('smart_discount_offer_valid_hours', 48),
+                'max_discount_percent' => (int) SiteSetting::read('smart_discount_max_discount_percent', 10),
+                'abandonment_hours' => (int) SiteSetting::read('smart_discount_abandonment_hours', 2),
+                'retention_days' => (int) SiteSetting::read('marketing_signal_retention_days', 30),
+            ],        ]);
+    }
+
+    public function saveSettings(Request $request, AdminConsoleService $console)
+    {
+        $this->visibleUserIds($request, $console);
+        $this->assertGlobalCouponManagement($request);
+        $data = $request->validate([
+            'score_threshold' => ['required', 'integer', 'min:1', 'max:12'],
+            'signal_window_days' => ['required', 'integer', 'min:1', 'max:60'],
+            'cooldown_days' => ['required', 'integer', 'min:1', 'max:90'],
+            'offer_valid_hours' => ['required', 'integer', 'min:1', 'max:168'],
+            'max_discount_percent' => ['required', 'integer', 'min:1', 'max:50'],
+            'abandonment_hours' => ['required', 'integer', 'min:1', 'max:72'],
+            'retention_days' => ['required', 'integer', 'min:7', 'max:180'],
         ]);
+        DB::transaction(function () use ($data): void {
+            foreach ($data as $key => $value) {
+                SiteSetting::write(match ($key) {
+                    'score_threshold' => 'smart_discount_score_threshold',
+                    'signal_window_days' => 'smart_discount_signal_window_days',
+                    'cooldown_days' => 'smart_discount_cooldown_days',
+                    'offer_valid_hours' => 'smart_discount_offer_valid_hours',
+                    'max_discount_percent' => 'smart_discount_max_discount_percent',
+                    'abandonment_hours' => 'smart_discount_abandonment_hours',
+                    'retention_days' => 'marketing_signal_retention_days',
+                }, $value);
+            }
+        });
+        app(AuditLogService::class)->record($request->user()->id, 'store.smart_coupon.settings_updated', $request->ip(), $data);
+
+        return redirect()->route('admin.store-coupons.index')->with('status', 'قواعد موتور پیشنهاد هوشمند ذخیره شد.');
     }
 
     private function assertGlobalCouponManagement(Request $request): void
