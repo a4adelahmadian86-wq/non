@@ -63,6 +63,43 @@ class AdminDashboardShellIntegrityTest extends TestCase
         $this->assertSame(1, substr_count($html, 'id="platform-control"'));
     }
 
+    public function test_dashboard_support_card_breaks_down_customer_replies_and_open_tickets(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $customer = User::factory()->create();
+
+        DB::table('tickets')->insert([
+            [
+                'user_id' => $customer->id,
+                'subject' => 'Customer replied',
+                'status' => 'user_replied',
+                'priority' => 'normal',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $customer->id,
+                'subject' => 'New ticket',
+                'status' => 'open',
+                'priority' => 'normal',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $customer->id,
+                'subject' => 'Waiting for customer',
+                'status' => 'pending',
+                'priority' => 'normal',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.index'))
+            ->assertOk()
+            ->assertSee('1 پاسخ جدید مشتری · 1 تیکت باز');
+    }
+
     public function test_dashboard_product_summary_uses_real_catalog_counts(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
