@@ -13,7 +13,6 @@ use App\Models\User;
 use App\Services\StoreCouponRedemptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
