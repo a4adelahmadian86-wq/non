@@ -7,7 +7,9 @@ use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductPublicationReview;
 use App\Jobs\ProcessProductDocument;
+use App\Jobs\RunProductPublicationReview;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
@@ -255,6 +257,20 @@ class AdminStoreController extends Controller
             $fieldEvidence = $contentGenerator->validateFieldEvidence($product, $submittedFieldEvidence);
         }
         $data = $this->validated($request, $product);
+        $publicationRequested = $request->boolean('submit_for_publication') || (($data['status'] ?? null) === 'published');
+        $publicationReviewId = null;
+        $requesterId = auth()->id();
+        if ($publicationRequested) {
+            // A submitted product is never made public in this request. It enters the
+            // supervised publication queue and remains private until the workflow finishes.
+            $data['status'] = 'pending_review';
+            $data['published_at'] = null;
+            $supervisorSettings = (array) data_get($data, 'metadata.ai_supervisor', data_get($product->metadata, 'ai_supervisor', []));
+            $supervisorSettings['enabled'] = true;
+            $supervisorSettings['mode'] = 'review_gate';
+            $supervisorSettings['checks'] = array_fill_keys(['content', 'pricing', 'seo', 'media', 'policy', 'course'], true);
+            $data['metadata'] = array_replace_recursive((array) ($data['metadata'] ?? $product->metadata ?? []), ['ai_supervisor' => $supervisorSettings]);
+        }
         $tagIds = $data['tag_ids'] ?? [];
         $aiTagNames = $request->validate([
             'ai_content_tag_names' => 'nullable|array|max:10',
@@ -276,7 +292,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
+        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence, $publicationRequested, $requesterId, &$publicationReviewId) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -439,9 +455,29 @@ class AdminStoreController extends Controller
                 'status' => $lockedProduct->status,
                 'price_rials' => $lockedProduct->price_rials,
             ]);
+
+            if ($publicationRequested) {
+                $review = StoreProductPublicationReview::create([
+                    'product_id' => $lockedProduct->id,
+                    'requested_by' => $requesterId,
+                    'status' => 'queued',
+                    'auto_publish' => (bool) data_get($lockedProduct->metadata, 'ai_supervisor.auto_publish', false),
+                ]);
+                $publicationReviewId = $review->id;
+                $this->audit('store.product.publication_submitted', $lockedProduct, [
+                    'publication_review_id' => $review->id,
+                    'auto_publish_requested' => $review->auto_publish,
+                ]);
+            }
         });
 
-        return back()->with('status', 'محصول به‌روزرسانی شد.');
+        if ($publicationRequested && $publicationReviewId) {
+            RunProductPublicationReview::dispatch($publicationReviewId)->afterCommit();
+        }
+
+        return back()->with('status', $publicationRequested
+            ? 'محصول ثبت شد و تا پایان بررسی هوش مصنوعی و تأیید لازم، در صف انتشار خصوصی باقی می‌ماند.'
+            : 'محصول به‌روزرسانی شد.');
     }
 
     public function destroy(StoreProduct $product)

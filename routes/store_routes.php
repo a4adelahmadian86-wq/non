@@ -43,6 +43,8 @@ Route::middleware(['auth'])->group(function () {
 Route::get('/wallet/top-up/zarinpal/callback',[\App\Http\Controllers\WalletController::class,'topUpCallback'])->middleware('throttle:30,10')->name('wallet.topup.callback');
 
 Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('/store/{product}/publication/approve', [AdminStoreController::class, 'approvePublication'])->middleware('throttle:10,10')->name('store.publication.approve');
+    Route::post('/store/{product}/publication/retry', [AdminStoreController::class, 'retryPublicationReview'])->middleware('throttle:5,10')->name('store.publication.retry');
     Route::post('/store/{product}/ai-supervisor/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'review'])->middleware('throttle:5,10')->name('store.ai-supervisor.review');
     Route::post('/store/{product}/ai-supervisor/files/{file}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewFile'])->middleware('throttle:5,10')->name('store.ai-supervisor.files.review');
     Route::post('/store/{product}/ai-supervisor/images/{image}/review', [\App\Http\Controllers\AdminProductSupervisorController::class, 'reviewImage'])->middleware('throttle:5,10')->name('store.ai-supervisor.images.review');

@@ -267,7 +267,13 @@
         </div>
       </section>
 
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
+      <div class="product-editor-actions">
+        <button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button>
+        @if($isEdit)
+          <button type="submit" name="submit_for_publication" value="1" class="store-primary-btn" style="background:#176b55">ثبت نهایی و ورود به صف انتشار</button>
+        @endif
+        <span>{{ $isEdit ? 'ثبت نهایی محصول را منتشر نمی‌کند؛ ابتدا ناظر هوشمند آن را بررسی می‌کند.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span>
+      </div>
     </form>
     @if(!$isEdit && $product->type !== 'course')
       <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">
