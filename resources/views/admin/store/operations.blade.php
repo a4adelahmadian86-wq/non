@@ -55,10 +55,14 @@
             @if($document->product)
               <a href="{{ route('admin.store.edit', $document->product) }}">مشاهده محصول</a>
             @endif
-            <form method="post" action="{{ route('admin.store.operations.documents.retry', $document) }}" onsubmit="return confirm('سلامت و یکسانی نسخه فایل دوباره بررسی و سند وارد صف شود؟')">
-              @csrf
-              <button type="submit" class="store-outline-btn">بررسی و تلاش مجدد</button>
-            </form>
+            @if($supervisorConfigured)
+              <form method="post" action="{{ route('admin.store.operations.documents.retry', $document) }}" onsubmit="return confirm('سلامت و یکسانی نسخه فایل دوباره بررسی و سند وارد صف شود؟')">
+                @csrf
+                <button type="submit" class="store-outline-btn">بررسی و تلاش مجدد</button>
+              </form>
+            @else
+              <span class="ops-note">تا اتصال ناظر محصول برقرار نشود، تلاش مجدد غیرفعال است.</span>
+            @endif
           </div>
         </article>
       @empty

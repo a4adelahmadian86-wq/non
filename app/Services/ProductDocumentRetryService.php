@@ -13,12 +13,18 @@ class ProductDocumentRetryService
 {
     private const RETRYABLE_STATUSES = ['failed', 'stale', 'awaiting_provider'];
 
-    public function __construct(private readonly AuditEventService $audit)
-    {
+    public function __construct(
+        private readonly AuditEventService $audit,
+        private readonly ProductSupervisorClient $supervisor,
+    ) {
     }
 
     public function retry(int $documentId, ?int $actorId): void
     {
+        if (! $this->supervisor->configured()) {
+            $this->reject('سرویس ناظر و استخراج محصول هنوز پیکربندی نشده است؛ ابتدا اتصال زیرساخت را کامل کنید.');
+        }
+
         $document = StoreProductDocument::query()->with('file')->findOrFail($documentId);
         $file = $document->file;
 

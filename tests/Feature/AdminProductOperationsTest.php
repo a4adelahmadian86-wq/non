@@ -72,6 +72,7 @@ class AdminProductOperationsTest extends TestCase
     public function test_admin_can_retry_a_failed_document_after_private_source_hash_is_verified(): void
     {
         Queue::fake();
+        config(['services.product_supervisor.url' => 'https://supervisor.example.test', 'services.product_supervisor.token' => 'test-token']);
         $document = $this->document();
 
         $this->actingAs($this->admin())
@@ -92,6 +93,7 @@ class AdminProductOperationsTest extends TestCase
     public function test_retry_rejects_changed_source_bytes_without_dispatching_a_job(): void
     {
         Queue::fake();
+        config(['services.product_supervisor.url' => 'https://supervisor.example.test', 'services.product_supervisor.token' => 'test-token']);
         $document = $this->document();
         Storage::disk('private')->put($document->file->path, 'changed source bytes');
 
@@ -108,6 +110,7 @@ class AdminProductOperationsTest extends TestCase
     public function test_retry_never_requeues_pending_or_processing_documents(): void
     {
         Queue::fake();
+        config(['services.product_supervisor.url' => 'https://supervisor.example.test', 'services.product_supervisor.token' => 'test-token']);
         $document = $this->document('processing');
 
         $this->actingAs($this->admin())
