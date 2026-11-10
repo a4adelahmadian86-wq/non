@@ -123,9 +123,27 @@ class StorageManager
 
     public function delete(string $disk, string $path): void
     {
-        $volumeId = null;
-        if (str_starts_with($disk, 'storage_volume:')) {
-            $volumeId = (int) substr($disk, 15);
+        $volumeId = str_starts_with($disk, 'storage_volume:') ? (int) substr($disk, 15) : null;
+        $managed = StorageManagedFile::query()
+            ->when($volumeId, fn ($q) => $q->where('storage_volume_id', $volumeId), fn ($q) => $q->whereNull('storage_volume_id'))
+            ->where('file_key', $path)
+            ->whereNotIn('status', ['deleted'])
+            ->first();
+
+        $snapshotInProgress = StorageBackupRun::query()
+            ->where('source_name', 'snapshot_lock')
+            ->where('status', 'running')
+            ->where('started_at', '>=', now()->subHours(3))
+            ->exists();
+
+        if ($managed && $snapshotInProgress) {
+            $metadata = (array) $managed->metadata;
+            $metadata['delete_after_snapshot'] = true;
+            $managed->update(['status' => 'delete_pending', 'metadata' => $metadata]);
+            return;
+        }
+
+        if ($volumeId) {
             $volume = StorageVolume::find($volumeId);
             if ($volume) {
                 if ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $path));
@@ -135,16 +153,24 @@ class StorageManager
             Storage::disk($disk ?: 'private')->delete($path);
         }
 
-        $managed = StorageManagedFile::query()
-            ->when($volumeId, fn ($q) => $q->where('storage_volume_id', $volumeId), fn ($q) => $q->whereNull('storage_volume_id'))
-            ->where('file_key', $path)
-            ->whereNotIn('status', ['deleted'])
-            ->first();
         if ($managed) {
-            if ($volumeId && $managed->volume) $managed->volume->decrement('used_bytes', (int) $managed->size_bytes);
+            if ($volumeId && $managed->volume) {
+                $managed->volume->decrement('used_bytes', (int) $managed->size_bytes);
                 $managed->volume->decrement('object_count');
+            }
             $managed->update(['status' => 'deleted']);
         }
+    }
+
+    public function cleanupDeferredDeletes(int $limit = 100): int
+    {
+        if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(3))->exists()) return 0;
+        $files = StorageManagedFile::query()->where('status', 'delete_pending')->orderBy('id')->limit(max(1, $limit))->get();
+        foreach ($files as $file) {
+            $disk = (string) data_get($file->metadata, 'disk', $file->storage_volume_id ? 'storage_volume:'.$file->storage_volume_id : 'private');
+            $this->delete($disk, $file->file_key);
+        }
+        return $files->count();
     }
 
     public function downloadTo(string $disk, string $path, string $target): void
