@@ -146,6 +146,7 @@ class MessengerController extends Controller
         }
 
         $attachments = [];
+        $sourcePathsToDelete = [];
         foreach ($files as $file) {
             $path = $file->store('messenger/'.$conversation->id, 'private');
             try {
@@ -176,7 +177,7 @@ class MessengerController extends Controller
                 Conversation::class,
                 (int) $conversation->id
             );
-            Storage::disk('private')->delete($path);
+            $sourcePathsToDelete[] = $path;
             $attachments[] = [
                 'path' => $managed['path'],
                 'disk' => $managed['disk'],
@@ -205,6 +206,10 @@ class MessengerController extends Controller
 
             return $message;
         });
+
+        foreach ($sourcePathsToDelete as $sourcePath) {
+            Storage::disk('private')->delete($sourcePath);
+        }
 
         foreach ($attachments as $attachment) {
             if (! empty($attachment['managed_file_id'])) {
