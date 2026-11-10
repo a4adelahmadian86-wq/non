@@ -1,10 +1,10 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\Order;
-use App\\Models\\SiteSetting;
-use Illuminate\\Support\\Facades\\DB;
+use App\Models\Order;
+use App\Models\SiteSetting;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Serializes first-party monthly coupon-budget decisions for offer issuance
