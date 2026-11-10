@@ -255,7 +255,13 @@ class EditorController extends Controller
             ]);
             $storage->bindReference((int) $managed['managed_file_id'], FarastStorageObject::class, (int) $asset->id);
         } catch (\Throwable $exception) {
-            if ($managed) $storage->delete((string) $managed['disk'], (string) $managed['path']);
+            if ($managed) {
+                try {
+                    $storage->delete((string) $managed['disk'], (string) $managed['path']);
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
             Storage::disk('private')->delete($temporaryPath);
             throw $exception;
         }
