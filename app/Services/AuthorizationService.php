@@ -86,7 +86,7 @@ class AuthorizationService
             ];
         }
 
-        if ($this->hasLegacyGrant($user, $permissionId)) {
+        if ($this->hasLegacyGrantForContext($user, $permissionId, $context)) {
             return ['allowed' => true, 'reason' => 'legacy_role_grant', 'source' => 'legacy_role', 'permission' => $permission];
         }
 
@@ -179,6 +179,27 @@ class AuthorizationService
         }
 
         return isset($this->legacyPermissionIds[$user->role][$permissionId]);
+    }
+
+    private function hasLegacyGrantForContext(User $user, int $permissionId, array $context): bool
+    {
+        if (! $this->hasLegacyGrant($user, $permissionId)) {
+            return false;
+        }
+
+        $scope = request()->attributes->get('farast.scope');
+        if (! in_array($scope, ['global', 'organization', 'team', 'own'], true)) {
+            $scope = \App\Http\Middleware\ResolveAdminScope::scopeFor($user);
+        }
+
+        // A supervisor with no managed team is effectively personal-scope.
+        if ($scope === 'team'
+            && ! $user->teams()->exists()
+            && ! \App\Models\Team::query()->where('supervisor_id', $user->id)->exists()) {
+            $scope = 'own';
+        }
+
+        return $this->scopeMatches($user, $scope, null, $context);
     }
 
     /** Load active direct overrides once per user/request, not once per permission. */
