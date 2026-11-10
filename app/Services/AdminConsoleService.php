@@ -102,7 +102,10 @@ class AdminConsoleService
         }
 
         $permission ??= request()->attributes->get('farast.section_permission');
-        if (! is_string($permission) || $permission === '' || $ids === []) {
+        if (! is_string($permission) || $permission === '') {
+            $permission = 'users.view';
+        }
+        if ($ids === []) {
             return $ids;
         }
 
@@ -168,7 +171,10 @@ class AdminConsoleService
         }
 
         $permission ??= request()->attributes->get('farast.section_permission');
-        if (! is_string($permission) || $permission === '' || $ids === []) {
+        if (! is_string($permission) || $permission === '') {
+            $permission = 'team.view';
+        }
+        if ($ids === []) {
             return $ids;
         }
 
@@ -210,7 +216,10 @@ class AdminConsoleService
         }
 
         $permission ??= request()->attributes->get('farast.section_permission');
-        if (! is_string($permission) || $permission === '' || $ids === []) {
+        if (! is_string($permission) || $permission === '') {
+            $permission = 'organization.manage';
+        }
+        if ($ids === []) {
             return $ids;
         }
 
