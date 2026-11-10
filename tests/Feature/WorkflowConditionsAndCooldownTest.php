@@ -159,6 +159,28 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_manual_run_can_create_a_follow_up_only_for_the_authenticated_owner(): void
+    {
+        $owner = $this->owner('09140000212');
+        $workflow = $this->workflow($owner, [
+            'steps' => json_encode([[
+                'action' => 'create_follow_up',
+                'title' => 'Manual owner follow-up',
+                'description' => 'Created from a manual workflow run',
+                'priority' => 'normal',
+            ]], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $this->actingAs($owner)->postJson('/workspace/workflows/'.$workflow.'/run')->assertOk();
+
+        $this->assertDatabaseHas('crm_follow_up_tasks', [
+            'customer_id' => $owner->id,
+            'assigned_to' => $owner->id,
+            'created_by' => $owner->id,
+            'title' => 'Manual owner follow-up',
+        ]);
+    }
+
     public function test_manual_run_cannot_forge_business_context_to_bypass_workflow_conditions(): void
     {
         $owner = $this->owner('09140000204');
