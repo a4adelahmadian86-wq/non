@@ -114,10 +114,9 @@
               @endif
             </div>
             @forelse($product->course->sections as $section)
-              @php($visibleLessons = $section->lessons->where('is_published',true))
-              @if($visibleLessons->isNotEmpty())
-                <div class="course-public-section"><strong>{{ $loop->iteration }}. {{ $section->title }}</strong><span>{{ $visibleLessons->count() }} جلسه</span></div>
-                @foreach($visibleLessons as $lesson)
+              @if($section->lessons->where('is_published',true)->isNotEmpty())
+                <div class="course-public-section"><strong>{{ $loop->iteration }}. {{ $section->title }}</strong><span>{{ $section->lessons->where('is_published',true)->count() }} جلسه</span></div>
+                @foreach($section->lessons->where('is_published',true) as $lesson)
                   <div class="course-public-lesson">
                     <i class="fa-solid fa-{{ $lesson->lesson_type==='video'?'play':($lesson->lesson_type==='audio'?'headphones':'file-lines') }}"></i>
                     <span>{{ $lesson->title }}</span>
