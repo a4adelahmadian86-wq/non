@@ -16,7 +16,7 @@ const open=()=>{
  return databasePromise;
 };
 const transaction=(mode,work)=>open().then(db=>new Promise((resolve,reject)=>{
- let result;const tx=db.transaction(STORE,mode),store=tx.objectStore(STORE);
+ let result;let tx;try{tx=db.transaction(STORE,mode,{durability:'strict'});}catch(_){tx=db.transaction(STORE,mode);}const store=tx.objectStore(STORE);
  try{result=work(store);}catch(error){reject(error);return;}
  tx.oncomplete=()=>resolve(result&&typeof result==='object'&&'result'in result?(result.result??null):(result??null));
  tx.onerror=()=>reject(tx.error||new Error('IndexedDB transaction failed'));
