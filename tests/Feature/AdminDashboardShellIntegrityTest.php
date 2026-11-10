@@ -42,6 +42,7 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee(route('admin.store.index'))
             ->assertDontSee('hero-orbit')
             ->assertSee('تیکت‌های نیازمند پیگیری')
+            ->assertSee('پاسخ جدید مشتری')
             ->assertSee(route('admin.support.management'))
             ->assertSee('درآمد ماه جاری')
             ->assertSee(route('admin.finance'));
