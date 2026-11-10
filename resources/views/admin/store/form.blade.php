@@ -28,13 +28,14 @@
       </section>
     @endif
 
-    <div class="product-workflow {{ $isEdit ? 'has-media' : '' }}" aria-label="مراحل آماده‌سازی محصول">
+    <div class="product-workflow {{ $isEdit ? 'has-media' : 'has-upload' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
-      @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه و فایل</b><small>کاور و دارایی‌ها</small></a>@endif
-      <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۴' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
-      <a href="#product-ai-supervisor"><span>{{ $isEdit ? '۶' : '۵' }}</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
+      @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه</b><small>کاور و تصاویر</small></a>
+      @else<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
+      <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۵' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
+      <a href="#product-ai-supervisor"><span>۶</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
@@ -266,8 +267,17 @@
         </div>
       </section>
 
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ایجاد پیش‌نویس و ادامه تکمیل' }}</button><span>اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.</span></div>
+      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
     </form>
+    @if(!$isEdit && $product->type !== 'course')
+      <section class="store-panel product-upload-next-step" id="product-upload-step" aria-labelledby="product-upload-step-title">
+        <div class="product-editor-heading"><div><span>گام چهارم · فایل اصلی</span><h2 id="product-upload-step-title">انتخاب و بارگذاری فایل محصول</h2></div><span class="product-editor-step">مرحله بعد از ذخیره</span></div>
+        <p>برای اینکه فایل به همین محصول متصل شود و در فضای خصوصی قرنطینه، بررسی و پردازش شود، ابتدا پیش‌نویس محصول را ذخیره کنید. بلافاصله پس از ذخیره، به همین بخش در صفحه محصول منتقل می‌شوید و می‌توانید یک یا چند فایل را انتخاب کنید.</p>
+        <ul><li>انتخاب چند فایل یا کشیدن و رها کردن</li><li>بررسی نوع، ساختار، حجم و هش فایل پیش از تأیید</li><li>تعیین فایل اصلی و نگهداری خصوصی</li><li>نمایش وضعیت مطالعه، استخراج صفحات و تولید صوت پس از ذخیره</li></ul>
+        <button type="submit" form="productEditorForm" class="store-primary-btn">ذخیره پیش‌نویس و ورود به انتخاب فایل</button>
+      </section>
+    @endif
+
     @if($isEdit)
       <form id="productSupervisorReviewForm" method="post" action="{{ route('admin.store.ai-supervisor.review', $product) }}">@csrf</form>
     @endif
@@ -315,7 +325,7 @@
     @if($isEdit && $product->type==='course')
       <div class="store-panel product-next-step"><div><strong>مرحله بعد: طراحی برنامه آموزشی</strong><p>فصل‌ها، جلسات، ویدئوها، فایل‌های ضمیمه و تنظیمات گواهی را مدیریت کنید.</p></div><a class="store-primary-btn" href="{{ route('admin.store.course.edit',$product) }}">ورود به مدیریت دوره <i class="fa-solid fa-arrow-left"></i></a></div>
     @elseif($isEdit)
-      <div class="store-panel product-files-panel">
+      <div class="store-panel product-files-panel" id="product-files">
         <div class="product-editor-heading"><div><span>محتوای قابل دریافت</span><h2>فایل‌های محصول</h2></div><span class="product-editor-step">اسکن امنیتی الزامی</span></div>
         <p>فایل‌ها در فضای خصوصی نگهداری می‌شوند. فقط فایل اصلیِ اسکن‌شده و فعال پس از خرید قابل دریافت خواهد بود.</p>
         <div class="product-file-list">@forelse($product->files->where('purpose','product_download') as $file)
@@ -471,7 +481,7 @@
 .product-readiness>p{margin:12px 0 0;color:var(--st-muted);font-size:.65rem}
 @media(max-width:760px){.product-readiness-list{grid-template-columns:repeat(2,minmax(0,1fr))}.product-readiness{padding:14px}}
 
-.product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}.product-workflow.has-media{grid-template-columns:repeat(6,minmax(0,1fr))}
+.product-workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px}.product-workflow.has-media,.product-workflow.has-upload{grid-template-columns:repeat(6,minmax(0,1fr))}
 .product-workflow a{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;align-items:center;gap:2px 10px;padding:13px;border:1px solid var(--st-line);border-radius:14px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,box-shadow .18s}
 .product-workflow a:hover,.product-workflow a:focus-visible{border-color:#9bb9e7;box-shadow:0 5px 18px rgba(35,91,170,.08);outline:none}
 .product-workflow a>span{grid-row:span 2;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#edf4ff;color:#2868c8;font-weight:900}
@@ -565,6 +575,7 @@
 .product-related-auto{padding:14px;border:1px solid var(--st-line);border-radius:12px;background:#fbfcfe}
 .product-related-auto>strong{font-size:.78rem}.product-related-auto>small{display:block;margin-top:8px;color:var(--st-muted);font-size:.66rem;line-height:1.8}
 .product-related-auto-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.product-related-auto-list span{padding:7px 10px;border:1px solid #dce7f4;border-radius:99px;background:#fff;font-size:.68rem;color:#405875}.product-related-auto-list small{margin-right:5px;color:#73849b}
+.product-upload-next-step{display:grid;gap:12px;margin-top:16px;padding:20px;border:1px solid #dce7f4;border-radius:16px;background:linear-gradient(145deg,#f7faff,#fff)}.product-upload-next-step p,.product-upload-next-step li{font-size:.74rem;line-height:1.9;color:#526780}.product-upload-next-step ul{margin:0;padding-right:20px}.product-upload-next-step button{justify-self:start;min-height:44px}
 .product-wizard-progress{display:grid;gap:4px;padding:12px 15px;border:1px solid #dce7f4;border-radius:12px;background:#f6f9fd;color:#405875}
 .product-wizard-progress strong{font-size:.76rem}.product-wizard-progress span{font-size:.66rem;color:var(--st-muted)}
 @media(max-width:650px){.product-wizard-panel{padding:13px}.product-wizard-actions button{flex:1}.product-workflow{overflow-x:auto}}
