@@ -241,6 +241,53 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('1 منتشرشده');
     }
 
+    public function test_dashboard_audit_feed_never_exposes_events_outside_the_actor_scope(): void
+    {
+        $organizationA = Organization::create([
+            'name' => 'Dashboard Audit Scope A',
+            'slug' => 'dashboard-audit-scope-a',
+            'status' => 'active',
+        ]);
+        $organizationB = Organization::create([
+            'name' => 'Dashboard Audit Scope B',
+            'slug' => 'dashboard-audit-scope-b',
+            'status' => 'active',
+        ]);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organizationA->id,
+        ]);
+        $inside = User::factory()->create(['organization_id' => $organizationA->id]);
+        $outside = User::factory()->create(['organization_id' => $organizationB->id]);
+
+        DB::table('audit_logs')->insert([
+            [
+                'user_id' => $inside->id,
+                'action' => 'dashboard.scope_inside',
+                'ip' => '127.0.0.1',
+                'meta' => json_encode(['probe' => 'inside']),
+                'created_at' => now()->subMinute(),
+                'updated_at' => now()->subMinute(),
+            ],
+            [
+                'user_id' => $outside->id,
+                'action' => 'dashboard.scope_outside',
+                'ip' => '127.0.0.2',
+                'meta' => json_encode(['probe' => 'outside']),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $this->actingAs($admin)->get(route('admin.index'))
+            ->assertOk()
+            ->assertSee('Dashboard Scope Inside')
+            ->assertDontSee('Dashboard Scope Outside');
+    }
+
     public function test_dashboard_product_summary_respects_seller_scope(): void
     {
         $organizationA = Organization::create([
