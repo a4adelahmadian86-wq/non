@@ -116,6 +116,7 @@ class StoreCartController extends Controller
                     'tax_rate' => $taxRate,
                     'cart_items' => $payload['items'],
                     'coupon_code' => $payload['coupon_code'],
+                    'coupon_redemption_pending' => (bool) $payload['coupon_code'],
                 ],
                 'free_pages_applied' => 0,
                 'terms_accepted_at' => now(),
