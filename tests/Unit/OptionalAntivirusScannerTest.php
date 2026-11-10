@@ -34,6 +34,41 @@ class OptionalAntivirusScannerTest extends TestCase
         }
     }
 
+    public function test_clamav_success_is_recorded_as_a_real_clean_scan(): void
+    {
+        $binary = tempnam(sys_get_temp_dir(), 'farast-clamav-');
+        file_put_contents($binary, "#!/bin/sh\\nif [ \\"\\$1\\" = \\"--version\\" ]; then echo 'ClamAV 1.4.0'; exit 0; fi\\nexit 0\\n");
+        chmod($binary, 0700);
+        config(['services.clamav.binary' => $binary]);
+
+        try {
+            $result = app(OptionalAntivirusScanner::class)->scan('/tmp/sample-upload');
+
+            $this->assertSame('clean', $result['status']);
+            $this->assertSame('clamav', $result['engine']);
+            $this->assertStringContainsString('ClamAV 1.4.0', $result['version']);
+            $this->assertNotEmpty($result['scanned_at']);
+        } finally {
+            @unlink($binary);
+        }
+    }
+
+    public function test_clamav_detection_is_never_reported_as_clean(): void
+    {
+        $binary = tempnam(sys_get_temp_dir(), 'farast-clamav-');
+        file_put_contents($binary, "#!/bin/sh\\nif [ \\"\\$1\\" = \\"--version\\" ]; then echo 'ClamAV 1.4.0'; exit 0; fi\\nexit 1\\n");
+        chmod($binary, 0700);
+        config(['services.clamav.binary' => $binary]);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('antivirus_malware_detected');
+            app(OptionalAntivirusScanner::class)->scan('/tmp/sample-upload');
+        } finally {
+            @unlink($binary);
+        }
+    }
+
     public function test_only_admin_or_explicitly_granted_role_can_request_optional_scan(): void
     {
         $admin = User::create([
