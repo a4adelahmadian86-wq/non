@@ -147,6 +147,9 @@ class AdminAccessCenterController extends Controller
                 ];
                 $assignments = DB::table('farast_user_roles')
                     ->where('role_id', $role)
+                    ->where(function ($query) {
+                        $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
                     ->lockForUpdate()
                     ->get();
 
