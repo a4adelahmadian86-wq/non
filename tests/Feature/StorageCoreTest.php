@@ -13,7 +13,7 @@ class StorageCoreTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_critical_uploads_only_use_iran_primary_volume(): void
+    protected function tearDown(): void\n    {\n        foreach (StorageVolume::query()->pluck('id') as $id) File::deleteDirectory(storage_path('app/storage-volumes/'.$id));\n        parent::tearDown();\n    }\n\n    public function test_critical_uploads_only_use_iran_primary_volume(): void
     {
         $foreign = StorageVolume::create([
             'drive_key' => 'foreign_primary', 'name' => 'Foreign', 'driver' => 'local',
