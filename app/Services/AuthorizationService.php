@@ -337,13 +337,13 @@ class AuthorizationService
         if ($scope === 'team') {
             // A team identifier is not enough when the record also declares an
             // organization: both boundaries must agree with the authenticated user.
-            if ($hasResourceContext
-                && array_key_exists('organization_id', $context)
-                && $context['organization_id'] !== null
-                && $context['organization_id'] !== ''
-                && ($user->organization_id === null
-                    || (int) $context['organization_id'] !== (int) $user->organization_id)) {
-                return false;
+            if ($hasResourceContext && array_key_exists('organization_id', $context)) {
+                if ($context['organization_id'] === null
+                    || $context['organization_id'] === ''
+                    || $user->organization_id === null
+                    || (int) $context['organization_id'] !== (int) $user->organization_id) {
+                    return false;
+                }
             }
 
             // A record must belong to an explicitly shared team. Cache the
