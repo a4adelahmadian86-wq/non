@@ -43,6 +43,7 @@ class MessengerController extends Controller
         $ids = collect($data['participant_ids'])->map(fn ($id) => (int) $id)
             ->reject(fn ($id) => $id === (int) $request->user()->id)->unique()->sort()->values();
         abort_if($ids->isEmpty(), 422, 'حداقل یک مخاطب دیگر انتخاب کنید.');
+        abort_if($data['type'] === 'direct' && $ids->count() !== 1, 422, 'گفت‌وگوی خصوصی فقط یک مخاطب دارد؛ برای چند نفر گروه بسازید.');
         abort_unless(User::query()->whereIn('id', $ids)->where('is_blocked', false)->count() === $ids->count(), 422, 'یکی از مخاطبان انتخاب‌شده در دسترس نیست.');
         abort_if($data['type'] === 'group' && blank($data['title']), 422, 'عنوان گروه الزامی است.');
 
