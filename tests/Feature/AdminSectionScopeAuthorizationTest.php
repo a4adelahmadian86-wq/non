@@ -198,6 +198,32 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->get('/admin/access')->assertForbidden();
     }
 
+    public function test_organization_manager_without_finance_permission_sees_no_financial_aggregates(): void
+    {
+        $organization = Organization::create(['name' => 'Finance Redaction Org', 'slug' => 'finance-redaction-org', 'status' => 'active']);
+        $manager = $this->makeUser('09123456792', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $member = $this->makeUser('09123456793', User::ROLE_EMPLOYEE, $organization->id);
+
+        $order = $this->makePaidOrder($member, 7500);
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'test',
+            'transaction_id' => 'FINANCE-REDACTION',
+            'amount_rials' => 7500,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        Wallet::create(['user_id' => $member->id, 'balance_rials' => 1200]);
+
+        $this->actingAs($manager)->get('/admin')->assertOk()
+            ->assertViewHas('stats', fn (array $stats): bool =>
+                $stats['revenue_total'] === 0 && $stats['wallet_balance'] === 0
+            );
+
+        $this->get('/admin/analytics')->assertOk()
+            ->assertViewHas('stats', fn (array $stats): bool => $stats['revenue'] === 0);
+    }
+
     public function test_team_supervisor_analytics_is_limited_to_managed_team_members(): void
     {
         $organizationA = Organization::create(['name' => 'Team Org A', 'slug' => 'team-org-a', 'status' => 'active']);
