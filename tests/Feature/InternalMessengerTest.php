@@ -33,6 +33,10 @@ class InternalMessengerTest extends TestCase
             'user_id' => $sender->id,
             'body' => 'سلام، این یک پیام داخلی است.',
         ]);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $recipient->id,
+            'type' => 'message_received',
+        ]);
 
         $this->actingAs($recipient)->get(route('messenger.show', $conversation))->assertOk();
     }
