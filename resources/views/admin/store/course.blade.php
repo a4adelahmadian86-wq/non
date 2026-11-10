@@ -84,8 +84,28 @@
                       <form method="post" action="{{ route('admin.store.course.resources.delete',[$product,$lesson,$resource]) }}" onsubmit="return confirm('منبع حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="course-danger-link">حذف</button></form>
                     </div>
                   @empty <p>هنوز منبعی برای این جلسه ثبت نشده است.</p> @endforelse
-                  <form method="post" action="{{ route('admin.store.course.resources.upload',[$product,$lesson]) }}" enctype="multipart/form-data" class="course-resource-upload">@csrf<input type="file" name="file" required accept=".pdf,.zip,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mp3,.m4a,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"><button type="submit" class="store-outline-btn">بارگذاری منبع امن</button></form>
-                  <small>حداکثر بارگذاری ۲۵۶ مگابایت؛ بررسی هوشمند هر منبع تا ۲۵ مگابایت. فایل پس از اسکن اصلی در فضای خصوصی ثبت می‌شود.</small>
+                  <form method="post" enctype="multipart/form-data" class="course-resource-upload" data-course-resource-ingestion
+                    data-preflight-url="{{ route('admin.store.course.resources.preflight',[$product,$lesson]) }}"
+                    data-confirm-url-template="{{ route('admin.store.course.resources.confirm',[$product,$lesson,'__INGESTION__']) }}"
+                    data-cancel-url-template="{{ route('admin.store.course.resources.cancel',[$product,$lesson,'__INGESTION__']) }}">
+                    @csrf
+                    <input type="file" name="file" required data-course-ingestion-input accept=".pdf,.zip,.tar,.tar.gz,.tar.bz2,.docx,.xlsx,.pptx,.txt,.csv,.md,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
+                    <button type="submit" class="store-outline-btn">بررسی و بارگذاری منبع</button>
+                    <p class="course-ingestion-status" data-course-ingestion-status role="status" aria-live="polite"></p>
+                    <div class="course-ingestion-progress" data-course-ingestion-progress hidden><span data-course-ingestion-progress-bar></span></div>
+                    <div class="course-ingestion-modal" data-course-ingestion-modal hidden>
+                      <div class="course-ingestion-dialog" role="dialog" aria-modal="true" aria-label="بررسی منبع آموزشی">
+                        <h3>گزارش بررسی اولیه منبع</h3>
+                        <p>فایل هنوز در قرنطینه خصوصی است. جزئیات را بررسی کنید و سپس ذخیره نهایی را تأیید یا لغو کنید.</p>
+                        <div data-course-ingestion-report></div>
+                        <div class="course-ingestion-actions">
+                          <button type="button" class="store-outline-btn" data-course-ingestion-cancel>لغو و پاک‌سازی</button>
+                          <button type="button" class="store-primary-btn" data-course-ingestion-confirm disabled>تأیید و ذخیره منبع</button>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+                  <small>فرمت‌ها ابتدا در قرنطینه خصوصی بررسی می‌شوند؛ فقط پس از تأیید شما به منابع جلسه افزوده خواهند شد. سقف بارگذاری ۲۵۶ مگابایت و سقف پردازش فعلی ۲۵ مگابایت است.</small>
                 </div>
                 <form method="post" action="{{ route('admin.store.course.lessons.delete',[$product,$lesson]) }}" onsubmit="return confirm('جلسه و تمام منابع آن حذف شوند؟')">@csrf @method('DELETE')<button type="submit" class="course-danger-link">حذف جلسه</button></form>
               </div>
@@ -117,4 +137,22 @@
 <style>
 .course-admin{max-width:1120px}.course-admin .store-section-head p,.course-curriculum-head p{color:var(--st-muted);font-size:.8rem;margin:5px 0 0}.course-admin .store-panel{padding:22px}.course-panel-title,.course-curriculum-head,.course-section-top{display:flex;align-items:center;justify-content:space-between;gap:14px}.course-panel-title span:first-child{color:var(--st-blue);font-size:.7rem;font-weight:800}.course-panel-title h2,.course-curriculum-head h2{margin:3px 0;font-size:1.1rem}.course-pill{background:#edf4ff;color:var(--st-blue);border-radius:99px;padding:6px 12px;font-size:.72rem;font-weight:800}.course-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:18px 0}.course-fields label,.course-lesson-form label{display:grid;gap:7px;font-size:.78rem;font-weight:700;color:#40536d}.course-fields input,.course-fields select,.course-inline-fields input,.course-inline-fields select,.course-section-edit input,.course-lesson-form input,.course-lesson-form select,.course-lesson-form textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid var(--st-line);border-radius:10px;background:#fff;color:var(--st-ink);font:inherit;font-size:.8rem;box-sizing:border-box}.course-toggles{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 18px}.course-toggles label{display:flex;align-items:center;gap:8px;font-size:.78rem;color:#4c607a}.course-curriculum-head{margin:28px 0 14px}.course-counts{display:flex;align-items:center;gap:6px;color:var(--st-muted);font-size:.72rem}.course-counts b{background:#edf4ff;color:var(--st-blue);padding:5px 9px;border-radius:8px;margin-right:8px}.course-add-section,.course-add-lesson{display:grid;gap:12px}.course-add-section>strong,.course-add-lesson>strong{font-size:.84rem}.course-inline-fields{display:grid;grid-template-columns:2fr 2fr .7fr;gap:9px}.course-add-lesson .course-inline-fields{grid-template-columns:1.5fr 1fr 2fr 1fr}.course-section-card{margin-top:14px}.course-section-number{width:38px;height:38px;border-radius:12px;background:#edf4ff;color:var(--st-blue);display:grid;place-items:center;font-weight:900}.course-section-meta{flex:1}.course-section-meta h3{margin:0;font-size:.92rem}.course-section-meta span{font-size:.7rem;color:var(--st-muted)}.course-danger-link{border:0;background:none;color:#bf3434;font:inherit;font-size:.75rem;cursor:pointer}.course-section-edit{display:grid;grid-template-columns:1.3fr 2fr .6fr auto;gap:8px;margin:16px 0}.course-lessons{display:grid;gap:8px}.course-lesson{border:1px solid var(--st-line);border-radius:12px;overflow:hidden}.course-lesson summary{display:flex;align-items:center;gap:10px;padding:12px;cursor:pointer;list-style:none}.course-lesson summary::-webkit-details-marker{display:none}.course-lesson-icon{width:30px;height:30px;border-radius:9px;background:#f1f5fa;display:grid;place-items:center;color:#526a88}.course-lesson-title{font-size:.78rem;font-weight:800;flex:1}.course-lesson-meta{font-size:.68rem;color:var(--st-muted)}.course-lesson-body{padding:14px;border-top:1px solid var(--st-line);display:grid;gap:14px}.course-lesson-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.course-wide{grid-column:1/-1}.course-resources{background:#f8fafd;border:1px solid var(--st-line);border-radius:12px;padding:14px;display:grid;gap:9px}.course-resources>strong{font-size:.8rem}.course-resource-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:8px 0;border-bottom:1px solid var(--st-line);font-size:.74rem}.course-resource-row small{display:block;color:var(--st-muted);font-size:.66rem}.course-resource-row .product-asset-review{flex-basis:100%;background:#f5f8fc;border:1px solid var(--st-line);border-radius:9px;padding:9px}.course-resource-row .product-asset-review-list,.course-resource-row .product-asset-review-warnings{margin:7px 0 0;padding-right:18px;font-size:.65rem;line-height:1.7}.course-resource-row .product-asset-review-list li,.course-resource-row .product-asset-review-warnings li{margin:4px 0}.course-resource-row .product-asset-review-list span,.course-resource-row .product-asset-review-list small{display:block}.course-resource-upload{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.course-resources>p,.course-resources>small{color:var(--st-muted);font-size:.7rem}.course-add-lesson{border-top:1px dashed var(--st-line);padding-top:16px;margin-top:18px}.course-empty{text-align:center;padding:42px}.course-empty i{font-size:1.8rem;color:var(--st-blue)}.course-empty h3{margin:10px 0 5px}.course-empty p{font-size:.78rem;color:var(--st-muted)}@media(max-width:760px){.course-fields,.course-lesson-form{grid-template-columns:1fr}.course-inline-fields,.course-add-lesson .course-inline-fields,.course-section-edit{grid-template-columns:1fr}.course-curriculum-head{align-items:flex-start;flex-direction:column}.course-lesson summary{flex-wrap:wrap}.course-lesson-meta{width:100%;padding-right:40px}.course-admin .store-panel{padding:15px}}
 </style>
+@endpush
+
+@push('styles')
+<style>
+.course-ingestion-status{flex-basis:100%;margin:0;font-size:.7rem;color:var(--st-muted)}.course-ingestion-status.is-error{color:#b91c1c}
+.course-ingestion-progress{height:7px;flex-basis:100%;background:#e7edf5;border-radius:99px;overflow:hidden}.course-ingestion-progress span{display:block;width:0;height:100%;background:var(--st-blue);transition:width .15s}
+.course-ingestion-modal{position:fixed;inset:0;z-index:10000;background:#0f172a99;display:grid;place-items:center;padding:18px}.course-ingestion-modal[hidden]{display:none}
+.course-ingestion-dialog{width:min(760px,100%);max-height:min(85vh,800px);overflow:auto;background:#fff;border-radius:16px;padding:22px;box-shadow:0 24px 80px #0f172a55}
+.course-ingestion-dialog h3{margin:0 0 8px;font-size:1rem}.course-ingestion-dialog>p{font-size:.75rem;color:var(--st-muted);line-height:1.8}
+.course-ingestion-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.course-ingestion-grid>div{display:grid;gap:4px;padding:9px;background:#f7f9fc;border-radius:8px;min-width:0}
+.course-ingestion-grid small{font-size:.65rem;color:var(--st-muted)}.course-ingestion-grid b{font-size:.7rem;overflow-wrap:anywhere}
+.course-ingestion-dialog h4{margin:14px 0 5px;font-size:.75rem}.course-ingestion-dialog ul{margin:5px 0;padding-right:20px;font-size:.7rem;line-height:1.8}
+.course-ingestion-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:18px}
+@media(max-width:760px){.course-ingestion-grid{grid-template-columns:1fr}.course-ingestion-actions button{flex:1}}
+</style>
+@endpush
+@push('scripts')
+<script src="/js/course-resource-ingestion.js?v=20261110course1" defer></script>
 @endpush
