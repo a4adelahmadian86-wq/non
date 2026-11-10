@@ -269,6 +269,33 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_team_role_assignment_cannot_cross_organization_boundaries(): void
+    {
+        $organizationA = Organization::create(['name' => 'Team Assignment Org A', 'slug' => 'team-assignment-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Team Assignment Org B', 'slug' => 'team-assignment-org-b', 'status' => 'active']);
+        $admin = $this->user('09140000131', User::ROLE_ADMIN);
+        $target = $this->user('09140000132', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $teamOwner = $this->user('09140000133', User::ROLE_TEAM_SUPERVISOR, $organizationB->id);
+        $foreignTeam = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Foreign Organization Team',
+            'slug' => 'foreign-organization-team',
+            'supervisor_id' => $teamOwner->id,
+        ]);
+        $roleId = $this->role('foreign-organization-team-role', 'team', $foreignTeam->id);
+
+        $this->actingAs($admin)->post('/admin/access-center/users/'.$target->id.'/roles', [
+            'role_id' => $roleId,
+            'scope_type' => 'team',
+            'scope_id' => $foreignTeam->id,
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseMissing('farast_user_roles', [
+            'user_id' => $target->id,
+            'role_id' => $roleId,
+        ]);
+    }
+
     public function test_regular_team_membership_does_not_create_team_management_scope(): void
     {
         $organization = Organization::create(['name' => 'Member Scope Org', 'slug' => 'member-scope-org', 'status' => 'active']);
