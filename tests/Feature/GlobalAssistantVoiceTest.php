@@ -31,6 +31,11 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.ai_gateway.url' => 'https://voice.example.test',
             'services.ai_gateway.token' => 'render-shared-voice-token',
         ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true, 'tts_ready' => true, 'chat_ready' => true,
+            ], 200),
+        ]);
         $response = $this->actingAs(User::factory()->create())
             ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
 
@@ -46,7 +51,11 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertSame(120, $payload['exp'] - $payload['iat']);
         $this->assertNotEmpty($payload['nonce']);
         $this->assertStringNotContainsString((string) config('app.key'), $response->getContent());
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer render-shared-voice-token')
+        );
     }
 
     public function test_render_asr_token_is_used_for_live_stream_signing_when_primary_secret_is_blank(): void
