@@ -15,13 +15,13 @@ class MarketingSignalService
      * Store a minimal first-party signal only after explicit account consent.
      * Repeated identical actions are coalesced within one minute.
      */
-    public function record(User $user, string $event, ?int $productId = null, ?string $idempotencyScope = null): bool
+    public function record(User $user, string $event, ?int $productId = null, ?string $idempotencyScope = null, array $extraContext = []): bool
     {
         if (! $user->exists || ! in_array($event, self::ALLOWED_EVENTS, true) || ! Schema::hasTable('farast_workflow_events')) {
             return false;
         }
 
-        $inserted = DB::transaction(function () use ($user, $event, $productId, $idempotencyScope): bool {
+        $inserted = DB::transaction(function () use ($user, $event, $productId, $idempotencyScope, $extraContext): bool {
             $currentUser = User::query()->whereKey($user->id)->lockForUpdate()->first();
             if (! $currentUser || ! $currentUser->marketing_consent) {
                 return false;
@@ -36,7 +36,7 @@ class MarketingSignalService
                 'event_type' => 'marketing.'.$event,
                 'idempotency_key' => $key,
                 'user_id' => $user->id,
-                'context' => json_encode(array_filter(['product_id' => $productId], static fn ($value) => $value !== null), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'context' => json_encode(array_merge(array_filter(['product_id' => $productId], static fn ($value) => $value !== null), $extraContext), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'matched_workflows' => 0,
                 'processed_at' => null,
                 'created_at' => now(),
