@@ -25,7 +25,7 @@ class Conversation extends Model
     public function participants(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'conversation_participants')
-            ->withPivot(['role', 'last_read_message_id', 'read_at', 'muted_at', 'archived_at', 'joined_at'])
+            ->withPivot(['role', 'last_read_message_id', 'read_at', 'muted_at', 'archived_at', 'joined_at', 'last_active_at', 'typing_until'])
             ->withTimestamps();
     }
 
@@ -36,7 +36,7 @@ class Conversation extends Model
 
     public function scopeVisibleTo(Builder $query, int $userId): Builder
     {
-        return $query->whereHas('participants', fn (Builder $q) => $q->where('users.id', $userId));
+        return $query->whereHas('participants', fn (Builder $q) => $q->where('users.id', $userId)->whereNull('conversation_participants.archived_at'));
     }
 
     public function unreadCountFor(int $userId): int
