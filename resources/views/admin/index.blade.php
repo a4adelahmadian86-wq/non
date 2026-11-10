@@ -1,30 +1,14 @@
-@extends('layouts.app')
-@section('content')
-<div class="farast-admin" dir="rtl">
-    @include('admin.partials.sidebar')
-
-    <main class="farast-admin-main">
-        <header class="farast-admin-topbar">
-            <div class="farast-admin-heading">
-                <div class="farast-admin-kicker"><span></span> MASTER CONTROL</div>
-                <h1>مرکز عملیات فراست</h1>
-                <p>وضعیت واقعی محصول، کاربران، AI و کنترل‌های اجرایی را از یک فضای واحد مدیریت کنید.</p>
-            </div>
-            <div class="farast-admin-top-actions">
-                <a href="/" target="_blank" class="admin-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده سایت</a>
-                <div class="farast-admin-user"><span>م</span><div><b>{{ auth()->user()->name ?: 'کاربر کنسول' }}</b><small>{{ auth()->user()->mobile }}</small></div><form method="post" action="{{ route('logout') }}">@csrf<button aria-label="خروج"><i class="fa-solid fa-right-from-bracket"></i></button></form></div>
-            </div>
-        </header>
-
-        @if(session('status'))
+@extends('layouts.admin')
+@section('admin-content')
+@if(session('status'))
             <div class="farast-admin-toast"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>
         @endif
 
         <section id="overview" class="admin-command-hero">
             <div class="hero-copy">
                 <div class="hero-badge"><i class="fa-solid fa-shield-halved"></i> محیط مدیریت امن</div>
-                <h2>یک داشبورد برای دیدن، تصمیم‌گیری و کنترل</h2>
-                <p>اطلاعات این صفحه از داده‌های واقعی سیستم خوانده می‌شود؛ داشبورد نقش کنسول عملیات را دارد، نه مجموعه‌ای از تب‌های نمایشی.</p>
+                <h1>مرکز عملیات فراست</h1>
+                <p>نمای یکپارچه کاربران، اسناد، پروژه‌ها، سرویس‌ها و رخدادهای ثبت‌شده؛ دسترسی هر بخش بر اساس نقش و دامنهٔ شما اعمال می‌شود.</p>
                 <div class="hero-actions">
                     @if($console->sectionAllowed(auth()->user(), 'store'))<a class="admin-primary" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-plus"></i> افزودن محصول</a><a class="admin-outline" href="{{ route('admin.store.index') }}"><i class="fa-solid fa-boxes-stacked"></i> مرکز محصولات</a>@endif
                     @if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-outline" href="{{ route('admin.crm.projects.index') }}"><i class="fa-solid fa-diagram-project"></i> پروژه‌ها و پرونده‌های مشتریان</a><a class="admin-outline" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif
@@ -45,7 +29,7 @@
 
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
-                <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="live-pill"><i></i> زنده</span></div>
+                <div class="admin-panel-head"><div><span class="panel-eyebrow">OPERATIONAL SNAPSHOT</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="status-chip">به‌روزرسانی در {{ now()->format('H:i') }}</span></div>
                 <div class="ops-grid">
                     <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
@@ -63,6 +47,25 @@
             </article>
 @endif
         </section>
+
+@if($console->sectionAllowed(auth()->user(), 'audit'))
+        <section id="recent-activity" class="admin-panel admin-panel-wide">
+            <div class="admin-panel-head">
+                <div><span class="panel-eyebrow">AUDIT TRAIL</span><h2>فعالیت‌های اخیر</h2><p>آخرین رخدادهای ثبت‌شده در دفتر ممیزی، متناسب با دامنهٔ دسترسی شما.</p></div>
+                <a class="panel-link" href="{{ route('admin.audit') }}">مشاهده دفتر ممیزی <i class="fa-solid fa-arrow-left"></i></a>
+            </div>
+            <div class="admin-activity-list">
+                @forelse($recentAudit as $event)
+                    <article class="admin-activity-row">
+                        <span class="admin-activity-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                        <div><strong>{{ \Illuminate\Support\Str::headline(str_replace(['.', '_'], ' ', $event->action)) }}</strong><small>{{ $event->actor_name ?: 'سامانه' }} · {{ \Illuminate\Support\Carbon::parse($event->created_at)->format('Y/m/d H:i') }}</small></div>
+                    </article>
+                @empty
+                    <div class="admin-empty">هنوز رخداد قابل‌نمایشی در این دامنه ثبت نشده است.</div>
+                @endforelse
+            </div>
+        </section>
+@endif
 
 @if($console->sectionAllowed(auth()->user(), 'settings'))
         <section id="ai-settings" class="admin-section admin-panel-wide">
@@ -211,11 +214,6 @@
         </section>
 @endif
 
-        <section class="admin-footer-actions">
-            @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><div><b>مرکز مالی</b><small>کیف پول، مالیات و درگاه</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-        </section>
     @if($scope === 'global')
         <section class="admin-section admin-panel-wide" id="system-health">
             <div class="admin-panel-head">
@@ -231,8 +229,6 @@
             <p class="health-footnote">محیط: {{ $systemHealth['env'] }} · PHP {{ $systemHealth['php'] }} · Laravel {{ $systemHealth['laravel'] }} · Debug: {{ $systemHealth['debug'] ? 'روشن' : 'خاموش' }}</p>
         </section>
         @endif
-        </main>
-</div>
 @if($console->sectionAllowed(auth()->user(), 'access') || $console->sectionAllowed(auth()->user(), 'organizations') || $console->sectionAllowed(auth()->user(), 'integrations') || $console->sectionAllowed(auth()->user(), 'analytics') || $console->sectionAllowed(auth()->user(), 'audit') || $console->sectionAllowed(auth()->user(), 'finance') || $console->sectionAllowed(auth()->user(), 'emails') || $console->sectionAllowed(auth()->user(), 'social'))
 <section class="admin-section admin-panel-wide" id="platform-control">
 <div class="admin-panel-head"><div><span class="panel-eyebrow">FARAST CONTROL CENTER</span><h2>مدیریت کامل پلتفرم</h2><p>ماژول‌های عملیاتی واقعی از همین کنسول قابل دسترسی‌اند؛ وضعیت‌های «planned» بدون مسیر عملیاتی به‌عنوان قابلیت کامل معرفی نمی‌شوند.</p></div></div>
@@ -256,6 +252,13 @@
 .farast-admin-nav-create-product i{color:#70b4ff;font-size:1rem}
 .farast-admin-nav-create-product b{margin-inline-start:auto;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#2e73d2;color:white;font-size:1rem}
 .farast-admin-nav a[aria-current="page"]{outline:1px solid rgba(111,174,255,.22)}
+.hero-copy h1{font-size:25px;line-height:1.55;margin:13px 0 7px;letter-spacing:-.5px}
+.admin-activity-list{display:grid;gap:0}
+.admin-activity-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-top:1px solid #edf1f7;min-width:0}
+.admin-activity-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#edf4ff;color:#315fae}
+.admin-activity-row>div{display:grid;gap:4px;min-width:0}
+.admin-activity-row strong{font-size:11px;color:#253550;overflow-wrap:anywhere}
+.admin-activity-row small{font-size:10px;color:#8390a5}
 @media(max-width:760px){.farast-admin-nav-create-product{margin-inline:8px}}
 </style>
 @endpush
