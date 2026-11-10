@@ -25,7 +25,7 @@ test('annotation workspace persists text highlights and supports undo',async({pa
   await expect(page.locator('.farast-annotation-stamp')).toHaveText('APPROVED');
   const before=await page.locator('.farast-annotation-stamp').boundingBox();
   await page.locator('[data-tool="move"]').click();
-  await page.mouse.move(before.x+10,before.y+10);await page.mouse.down();await page.mouse.move(before.x+65,before.y+45);await page.mouse.up();
+  const center={x:before.x+before.width/2,y:before.y+before.height/2};await page.mouse.move(center.x,center.y);await page.mouse.down();await page.mouse.move(center.x+60,center.y+45);await page.mouse.up();
   const after=await page.locator('.farast-annotation-stamp').boundingBox();
   expect(after.x).toBeGreaterThan(before.x+20);
   await page.locator('[data-action="list"]').click();
