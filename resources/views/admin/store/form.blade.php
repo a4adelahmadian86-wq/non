@@ -366,7 +366,7 @@
           <div class="product-ingestion-folder-action"><button type="button" class="store-outline-btn" data-ingestion-folder-pick>انتخاب یک پوشه</button><small>فایل‌های پوشه به‌صورت فهرست قابل بازبینی اضافه می‌شوند.</small></div>
           <label class="product-ingestion-primary"><input type="checkbox" data-ingestion-primary checked> اولین فایل، فایل اصلی محصول باشد</label>
           <div class="product-ingestion-queue" data-ingestion-queue aria-live="polite"></div>
-          <div class="product-ingestion-global-drop" data-ingestion-global hidden><span><i class="fa-solid fa-cloud-arrow-down"></i></span><b>فایل را رها کنید تا بررسی اولیه آغاز شود</b><small>هنوز چیزی ذخیره یا منتشر نمی‌شود.</small></div>
+          <div class="product-ingestion-global-drop" data-ingestion-global hidden><span><i class="fa-solid fa-cloud-arrow-down"></i></span><b>فایل را رها کنید تا پنجره بازبینی باز شود</b><small>هنوز چیزی ذخیره یا منتشر نمی‌شود.</small></div>
           <div class="product-ingestion-modal" data-ingestion-modal hidden role="dialog" aria-modal="true" aria-labelledby="ingestion-modal-title">
             <div class="product-ingestion-dialog">
               <div class="product-ingestion-modal-head"><span class="product-ingestion-icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>بررسی داخلی فراست</small><h3 id="ingestion-modal-title">گزارش بررسی فایل</h3><p data-ingestion-filename></p></div><button type="button" data-ingestion-close aria-label="بستن پنجره">×</button></div>
