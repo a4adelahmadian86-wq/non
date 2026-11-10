@@ -66,8 +66,9 @@ class AdminController extends Controller
         } elseif ($statusFilter === 'admins') {
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
+        $sectionPermissionContext = request()->attributes->get('farast.section_permission');
         $canViewUsers = $console->sectionAllowed($actor, 'users');
-        $userVisibleIds = $canViewUsers ? $console->visibleUserIds($actor) : [];
+        $userVisibleIds = $canViewUsers ? $console->visibleUserIds($actor, 'users.view') : [];
         if ($canViewUsers && $userVisibleIds !== null) {
             $usersQuery->whereIn('id', $userVisibleIds);
         }
@@ -76,6 +77,22 @@ class AdminController extends Controller
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
         $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
         $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
+        $canViewFinance = $console->sectionAllowed($actor, 'finance');
+        $canViewSupport = $console->sectionAllowed($actor, 'support');
+        $canViewAudit = $console->sectionAllowed($actor, 'audit');
+        $canViewDocuments = $console->sectionAllowed($actor, 'documents');
+        $canViewAi = $console->sectionAllowed($actor, 'ai');
+        $canViewOrganizations = $console->sectionAllowed($actor, 'organizations');
+        request()->attributes->set('farast.section_permission', $sectionPermissionContext);
+
+        // Each sensitive dashboard aggregate is filtered with its own permission,
+        // not whichever navigation section happened to be checked most recently.
+        $financeVisibleIds = $canViewFinance ? $console->visibleUserIds($actor, 'finance.view') : [];
+        $supportVisibleIds = $canViewSupport ? $console->visibleUserIds($actor, 'support.manage') : [];
+        $auditVisibleIds = $canViewAudit ? $console->visibleUserIds($actor, 'audit.view') : [];
+        $analyticsVisibleIds = $canViewAnalytics ? $console->visibleUserIds($actor, 'reports.team') : [];
+        $documentVisibleIds = $canViewDocuments ? $console->visibleUserIds($actor, 'documents.view') : [];
+        $aiVisibleIds = $canViewAi ? $console->visibleUserIds($actor, 'ai.view') : [];
 
         $settings = [];
         if ($globalScope) {
@@ -229,29 +246,29 @@ class AdminController extends Controller
         };
 
         $ticketStats = collect();
-        if (Schema::hasTable('tickets')) {
+        if ($canViewSupport && Schema::hasTable('tickets')) {
             $tq = Ticket::query();
-            if ($visibleIds !== null) {
-                $tq->whereIn('user_id', $visibleIds);
+            if ($supportVisibleIds !== null) {
+                $tq->whereIn('user_id', $supportVisibleIds);
             }
             $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         }
 
         $visibleTeamIds = $console->visibleTeamIds($actor);
         $visibleOrganizationIds = $console->visibleOrganizationIds($actor);
-        $paidPaymentsQuery = function () use ($visibleIds) {
+        $paidPaymentsQuery = function () use ($financeVisibleIds) {
             $query = DB::table('payments')->where('payments.status', 'paid');
-            if ($visibleIds !== null) {
+            if ($financeVisibleIds !== null) {
                 $query->join('orders', 'orders.id', '=', 'payments.order_id')
-                    ->whereIn('orders.user_id', $visibleIds);
+                    ->whereIn('orders.user_id', $financeVisibleIds);
             }
 
             return $query;
         };
-        $walletBalanceQuery = function () use ($visibleIds) {
+        $walletBalanceQuery = function () use ($financeVisibleIds) {
             $query = DB::table('wallets');
-            if ($visibleIds !== null) {
-                $query->whereIn('user_id', $visibleIds);
+            if ($financeVisibleIds !== null) {
+                $query->whereIn('user_id', $financeVisibleIds);
             }
 
             return $query;
@@ -294,8 +311,8 @@ class AdminController extends Controller
                     ->orderByDesc('documents')
                     ->limit(5);
 
-                if ($visibleIds !== null) {
-                    $tcq->whereIn('dashboard_documents.user_id', $visibleIds);
+                if ($analyticsVisibleIds !== null) {
+                    $tcq->whereIn('dashboard_documents.user_id', $analyticsVisibleIds);
                 }
 
                 $topConsumers = $tcq->get();
@@ -326,15 +343,15 @@ class AdminController extends Controller
                 'blocked_users' => $visibleIds === null
                     ? User::where('is_blocked', true)->count()
                     : User::whereIn('id', $visibleIds)->where('is_blocked', true)->count(),
-                'documents' => $documentCount(),
-                'new_documents_week' => $documentCount($weekAgo),
+                'documents' => $canViewDocuments ? $documentCount() : 0,
+                'new_documents_week' => $canViewDocuments ? $documentCount($weekAgo) : 0,
                 // Project workspace is the canonical bridge between customer requests, documents, billing and human tasks.
                 'projects' => $scopedCount('farast_projects'),
                 'active_projects' => $scopedCount('farast_projects', ['status' => 'active']),
-                'ai' => $scopedCount('ai_interactions'),
-                'ai_today' => Schema::hasTable('ai_interactions')
-                    && ($visibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
-                    ? (($visibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $visibleIds))->whereDate('created_at', today())->count())
+                'ai' => $canViewAi ? $scopedCount('ai_interactions') : 0,
+                'ai_today' => $canViewAi && Schema::hasTable('ai_interactions')
+                    && ($aiVisibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
+                    ? (($aiVisibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $aiVisibleIds))->whereDate('created_at', today())->count())
                     : 0,
                 // Voice usage has no user attribution in its schema; expose it only in the global scope.
                 'voice_seconds' => $visibleIds === null && Schema::hasTable('voice_provider_usage') ? (int) DB::table('voice_provider_usage')->sum('audio_seconds') : 0,
@@ -354,14 +371,14 @@ class AdminController extends Controller
                         ? DB::table('audit_logs')->count()
                         : DB::table('audit_logs')->whereIn('user_id', $visibleIds)->count())
                     : 0,
-                'revenue_month' => Schema::hasTable('payments')
+                'revenue_month' => $canViewFinance && Schema::hasTable('payments')
                     ? (int) $paidPaymentsQuery()->where('payments.created_at', '>=', $monthAgo)->sum('payments.amount_rials')
                     : 0,
-                'revenue_total' => Schema::hasTable('payments')
+                'revenue_total' => $canViewFinance && Schema::hasTable('payments')
                     ? (int) $paidPaymentsQuery()->sum('payments.amount_rials')
                     : 0,
-                'tickets_open' => (int) ($ticketStats['open'] ?? 0) + (int) ($ticketStats['user_replied'] ?? 0),
-                'wallet_balance' => Schema::hasTable('wallets') ? (int) $walletBalanceQuery()->sum('balance_rials') : 0,
+                'tickets_open' => $canViewSupport ? ((int) ($ticketStats['open'] ?? 0) + (int) ($ticketStats['user_replied'] ?? 0)) : 0,
+                'wallet_balance' => $canViewFinance && Schema::hasTable('wallets') ? (int) $walletBalanceQuery()->sum('balance_rials') : 0,
             ],
             'charts' => [
                 'labels' => $chartDays,
