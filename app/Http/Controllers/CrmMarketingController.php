@@ -66,17 +66,22 @@ class CrmMarketingController extends Controller
         ]);
     }
 
-    public function segments(Request $request, AdminConsoleService $console)
+    public function segments(Request $request, AdminConsoleService $console, CrmAudienceService $audiences)
     {
         $ownerIds = $this->ownerScope($request, $console);
+        $visibleIds = $console->visibleUserIds($request->user());
         $query = DB::table('crm_customer_segments');
         if ($ownerIds !== null) {
             $query->whereIn('created_by', $ownerIds);
         }
 
-        return response()->json([
-            'data' => $query->orderByDesc('created_at')->paginate(25),
-        ]);
+        $segments = $query->orderByDesc('created_at')->paginate(25)->through(function ($segment) use ($audiences, $visibleIds) {
+            $filters = json_decode((string) $segment->filters, true) ?: [];
+            $segment->audience_count = $audiences->query($filters, $visibleIds)->count();
+            return $segment;
+        });
+
+        return response()->json(['data' => $segments]);
     }
 
     public function storeSegment(Request $request, AdminConsoleService $console)
