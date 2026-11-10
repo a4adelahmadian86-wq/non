@@ -113,6 +113,7 @@ class AdminStoreCouponController extends Controller
             }, 'store_order_items.id', 'order_item_id');
 
         $canManageGlobalCoupons = $visibleIds === null;
+        $monthlyBudgetCap = max(0, (int) SiteSetting::read('store_coupon_monthly_budget_rials', 0));
         $monthlyBudgetSpent = Order::query()
             ->where('status', 'paid')
             ->whereNotNull('paid_at')
@@ -147,6 +148,8 @@ class AdminStoreCouponController extends Controller
                 'items_missing_historical_cost' => $itemsMissingHistoricalCost,
                 'products_missing_cost' => StoreProduct::query()->published()->whereNull('cost_price_rials')->count(),
                 'monthly_budget_spent_rials' => (int) $monthlyBudgetSpent,
+                'monthly_budget_cap_rials' => $monthlyBudgetCap,
+                'monthly_budget_remaining_rials' => $monthlyBudgetCap > 0 ? max(0, $monthlyBudgetCap - (int) $monthlyBudgetSpent) : null,
             ],
             'settings' => [
                 'score_threshold' => (int) SiteSetting::read('smart_discount_score_threshold', 5),
@@ -156,7 +159,7 @@ class AdminStoreCouponController extends Controller
                 'max_discount_percent' => (int) SiteSetting::read('smart_discount_max_discount_percent', 10),
                 'abandonment_hours' => (int) SiteSetting::read('smart_discount_abandonment_hours', 2),
                 'retention_days' => (int) SiteSetting::read('marketing_signal_retention_days', 90),
-                'monthly_budget_rials' => (int) SiteSetting::read('store_coupon_monthly_budget_rials', 0),
+                'monthly_budget_rials' => $monthlyBudgetCap,
             ],
         ]);
     }
