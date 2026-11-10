@@ -242,18 +242,27 @@ class AuthorizationService
     private function scopeMatches(User $user, ?string $scope, mixed $scopeId, array $context): bool
     {
         $scope = $scope ?: 'own';
+        $hasResourceContext = $context !== [];
 
         if ($scope === 'global') {
             return true;
         }
 
         if ($scope === 'own') {
-            $ownerId = $context['owner_id'] ?? $context['user_id'] ?? $context['resource_user_id'] ?? null;
-            return $ownerId === null || (int) $ownerId === (int) $user->id;
+            if (! $hasResourceContext) {
+                return true; // Navigation-level visibility; record checks must provide an owner.
+            }
+            $ownerId = $context['owner_id'] ?? $context['resource_user_id'] ?? $context['user_id'] ?? null;
+
+            return $ownerId !== null && (int) $ownerId === (int) $user->id;
         }
 
         if ($scope === 'organization') {
+            if ($hasResourceContext && ! array_key_exists('organization_id', $context)) {
+                return false;
+            }
             $organizationId = $context['organization_id'] ?? $scopeId ?? $user->organization_id;
+
             return $organizationId !== null
                 && $user->organization_id !== null
                 && (int) $organizationId === (int) $user->organization_id
@@ -261,6 +270,9 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
+            if ($hasResourceContext && ! array_key_exists('team_id', $context)) {
+                return false;
+            }
             $teamId = $context['team_id'] ?? $scopeId;
             if ($teamId !== null && $scopeId !== null && (int) $teamId !== (int) $scopeId) {
                 return false;
