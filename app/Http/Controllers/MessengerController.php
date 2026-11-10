@@ -216,10 +216,7 @@ class MessengerController extends Controller
 
         foreach ($attachments as $attachment) {
             if (! empty($attachment['managed_file_id'])) {
-                StorageManagedFile::whereKey($attachment['managed_file_id'])->update([
-                    'source_type' => ConversationMessage::class,
-                    'source_id' => $message->id,
-                ]);
+                $storage->bindReference((int) $attachment['managed_file_id'], ConversationMessage::class, (int) $message->id);
             }
         }
 
