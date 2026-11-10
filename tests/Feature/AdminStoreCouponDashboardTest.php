@@ -147,6 +147,7 @@ class AdminStoreCouponDashboardTest extends TestCase
             ->assertSee('مصرف بودجه تخفیف در ماه جاری')
             ->assertSee('سقف بودجه تخفیف ماهانه (ریال)')
             ->assertSee('نمایش پیشنهادها')
+            ->assertSee('تعامل با پیشنهاد')
             ->assertSee('تبدیل نمایش به خرید');
     }
 
