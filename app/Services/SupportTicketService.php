@@ -67,6 +67,9 @@ class SupportTicketService
             if (Schema::hasColumn('tickets', 'related_product_id')) {
                 $payload['related_product_id'] = $data['related_product_id'] ?? null;
             }
+            if (Schema::hasColumn('tickets', 'related_order_id')) {
+                $payload['related_order_id'] = $data['related_order_id'] ?? null;
+            }
             if (Schema::hasColumn('tickets', 'source')) {
                 $payload['source'] = $data['source'] ?? ($user ? 'dashboard' : 'widget');
             }
@@ -94,7 +97,7 @@ class SupportTicketService
                 'notify' => false,
             ]);
 
-            $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
+            $ticket = $ticket->fresh(['messages', 'user', 'relatedProduct', 'relatedOrder', 'assignee']);
             $this->sla->applyTargets($ticket);
 
             return $ticket->fresh(['messages', 'user', 'relatedProduct', 'assignee']);
