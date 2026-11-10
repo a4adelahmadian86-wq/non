@@ -96,6 +96,8 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('data-ingestion-confirm', false)
             ->assertSee('data-ingestion-folder', false)
             ->assertSee('data-ingestion-selected', false)
+            ->assertSee('data-ingestion-antivirus', false)
+            ->assertSee('اسکن تکمیلی آنتی‌ویروس (اختیاری)')
             ->assertSee('بررسی امن فایل')
             ->assertSee('بررسی ساختار و امنیت');
     }
