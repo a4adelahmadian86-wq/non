@@ -30,8 +30,8 @@ class AdminStorageController extends Controller
                 'key' => $key, 'title' => $definition['title'], 'region' => $definition['region'],
                 'kind' => $definition['kind'], 'volumes' => $items,
                 'capacity' => $items->isNotEmpty() && $items->every(fn ($v) => $v->capacity_bytes !== null) ? $items->sum('capacity_bytes') : null,
-                'used' => $items->sum('files_sum_size_bytes'),
-                'files' => $items->sum('files_count'),
+                'used' => $items->sum('used_bytes'),
+                'files' => $items->sum('files_count') + $items->sum('replicas_count') + $items->sum('backups_count'),
                 'healthy' => $items->where('status', 'healthy')->count(),
             ];
         });
@@ -121,8 +121,10 @@ class AdminStorageController extends Controller
 
     public function show(StorageVolume $volume)
     {
-        $files = $volume->files()->with('replicaVolume')->where('status', 'active')->latest()->paginate(50);
-        return view('admin.storage.volume', compact('volume', 'files'));
+        $files = $volume->files()->with('replicaVolume')->where('status', 'active')->latest()->paginate(50, ['*'], 'files_page');
+        $replicaFiles = \\App\\Models\\StorageManagedFile::query()->with('volume')->where('replicated_to_volume_id', $volume->id)->where('status', 'active')->latest()->paginate(50, ['*'], 'replicas_page');
+        $backups = $volume->backups()->where('status', 'completed')->latest()->paginate(30, ['*'], 'backups_page');
+        return view('admin.storage.volume', compact('volume', 'files', 'replicaFiles', 'backups'));
     }
 
     public function verify(StorageVolume $volume, StorageConnectionService $connections)
