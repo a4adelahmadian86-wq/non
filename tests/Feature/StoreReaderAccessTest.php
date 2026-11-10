@@ -126,7 +126,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('نسخه محصول: 3.0')
             ->assertDontSee('نسخه فایل اصلی: 2.4');
 
-        $product->update(['version' => null, 'license_type' => null]);
+        $product->update(['version' => null, 'license_type' => '']);
         StoreProductFile::query()->where('product_id', $product->id)->update(['version' => null]);
         $this->get(route('store.product', $product->slug))
             ->assertOk()
