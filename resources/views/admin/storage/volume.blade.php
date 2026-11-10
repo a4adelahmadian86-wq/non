@@ -17,6 +17,16 @@
             <form method="post" action="{{ route('admin.storage.destroy',$volume) }}" onsubmit="return confirm('این اتصال حذف شود؟')">@csrf @method('DELETE')<button class="btn">حذف اتصال</button></form>
         </div>
     </div>
+    @if($volume->drive_key === 'foreign_backup' || $volume->drive_key === 'iran_backup')
+    <div class="storage-detail-card">
+        <h2>نسخه‌های پشتیبان این هاست</h2>
+        <div style="overflow:auto"><table><thead><tr><th>شناسه</th><th>نوع</th><th>کلید نسخه</th><th>حجم</th><th>SHA-256</th><th>وضعیت</th><th>شروع</th><th>پایان</th></tr></thead><tbody>
+        @forelse($backups as $backup)
+            <tr><td>#{{ $backup->id }}</td><td>{{ $backup->backup_type }}</td><td><code>{{ $backup->object_key ?: '—' }}</code></td><td>{{ \\Illuminate\\Support\\Number::fileSize($backup->size_bytes) }}</td><td><code>{{ $backup->checksum ?: '—' }}</code></td><td>{{ $backup->status }}</td><td>{{ optional($backup->started_at)->format('Y-m-d H:i') ?: '—' }}</td><td>{{ optional($backup->completed_at)->format('Y-m-d H:i') ?: '—' }}</td></tr>
+        @empty<tr><td colspan="8">هنوز نسخه پشتیبانی روی این هاست ثبت نشده است.</td></tr>@endforelse
+        </tbody></table></div>
+    </div>
+    @endif
     <div class="storage-detail-card">
         <h2>فایل‌های ثبت‌شده روی این هاست</h2>
         <div style="overflow:auto"><table><thead><tr><th>نام فایل</th><th>کلید فایل</th><th>حجم</th><th>نوع</th><th>MIME</th><th>منبع</th><th>شناسه مرتبط</th><th>SHA-256</th><th>وضعیت</th><th>تاریخ</th></tr></thead><tbody>
