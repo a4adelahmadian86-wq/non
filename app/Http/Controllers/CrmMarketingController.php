@@ -49,6 +49,9 @@ class CrmMarketingController extends Controller
             'registered_before' => 'nullable|date|after_or_equal:registered_after',
             'min_orders' => 'nullable|integer|min:1|max:1000',
             'paid_customer' => 'sometimes|boolean',
+            'signal_event' => 'nullable|in:product_viewed,wishlist_added,cart_added,cart_abandoned,coupon_attempted',
+            'signal_product_id' => 'nullable|integer|exists:store_products,id',
+            'signal_window_days' => 'nullable|integer|min:1|max:90',
         ]);
     }
 
@@ -80,7 +83,11 @@ class CrmMarketingController extends Controller
             'registered_before' => 'nullable|date|after_or_equal:registered_after',
             'min_orders' => 'nullable|integer|min:1|max:1000',
             'paid_customer' => 'sometimes|boolean',
+            'signal_event' => 'nullable|in:product_viewed,wishlist_added,cart_added,cart_abandoned,coupon_attempted',
+            'signal_product_id' => 'nullable|integer|exists:store_products,id',
+            'signal_window_days' => 'nullable|integer|min:1|max:90',
         ])->validate();
+        abort_unless(empty($filters['signal_product_id']) || ! empty($filters['signal_event']), 422, 'برای فیلتر محصول باید نوع سیگنال رفتاری نیز مشخص شود.');
 
         $id = DB::table('crm_customer_segments')->insertGetId([
             'name' => trim($data['name']),
@@ -103,6 +110,7 @@ class CrmMarketingController extends Controller
     {
         $visibleIds = $this->scope($request, $console);
         $filters = $this->filters($request);
+        abort_unless(empty($filters['signal_product_id']) || ! empty($filters['signal_event']), 422, 'برای فیلتر محصول باید نوع سیگنال رفتاری نیز مشخص شود.');
 
         return response()->json([
             'audience_count' => $audiences->query($filters, $visibleIds)->count(),
