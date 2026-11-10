@@ -10,6 +10,7 @@ Route::middleware(['auth', 'admin', 'admin.section:access'])
         Route::get('/', [AdminAccessCenterController::class, 'index'])->name('index');
         Route::post('/roles', [AdminAccessCenterController::class, 'storeRole'])->middleware('throttle:20,10')->name('roles.store');
         Route::put('/roles/{role}', [AdminAccessCenterController::class, 'updateRole'])->whereNumber('role')->middleware('throttle:30,10')->name('roles.update');
+        Route::delete('/roles/{role}', [AdminAccessCenterController::class, 'destroyRole'])->whereNumber('role')->middleware('throttle:10,10')->name('roles.destroy');
         Route::post('/roles/{role}/permissions', [AdminAccessCenterController::class, 'syncPermissions'])->whereNumber('role')->middleware('throttle:20,10')->name('roles.permissions');
         Route::post('/users/{user}/roles', [AdminAccessCenterController::class, 'assignRole'])->whereNumber('user')->middleware('throttle:20,10')->name('users.roles.store');
         Route::delete('/users/{user}/roles/{assignment}', [AdminAccessCenterController::class, 'revokeRole'])->whereNumber('user')->whereNumber('assignment')->middleware('throttle:30,10')->name('users.roles.destroy');
