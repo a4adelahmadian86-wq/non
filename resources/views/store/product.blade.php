@@ -83,8 +83,8 @@
           </div>
         @endif
 
-        @if($hasPreview)
-          <section class="store-product-sample" id="store-product-sample" aria-label="نمونه قابل مطالعه">
+        <section class="store-product-sample" id="store-product-preview" aria-label="پیش‌نمایش محصول">
+          @if($hasPreview)
             <div>
               <strong><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه قابل مطالعه</strong>
               <span>نمونه امن محصول آماده شده است؛ محتوای آن فقط با انتخاب شما در خوانشگر باز می‌شود.</span>
@@ -92,8 +92,13 @@
             <a class="store-primary-btn" href="{{ route('store.reader', $product->slug) }}">
               <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> مشاهده نمونه
             </a>
-          </section>
-        @endif
+          @else
+            <div>
+              <strong><i class="fa-solid fa-file-circle-check" aria-hidden="true"></i> پیش‌نمایش محصول</strong>
+              <span>برای این محصول نمونه عمومی قابل مشاهده‌ای فعال نشده است.</span>
+            </div>
+          @endif
+        </section>
 
         <article class="store-panel" id="store-product-description">
           <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
