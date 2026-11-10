@@ -68,7 +68,7 @@ class AuthorizationService
             return ['allowed' => false, 'reason' => 'unknown_permission', 'source' => null, 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
-        if (! $this->scopeMatches($user, $this->baseScope($user), null, $context)) {
+        if (! $this->scopeMatches($user, $baseScope, null, $context)) {
             return ['allowed' => false, 'reason' => 'outside_base_scope', 'source' => null, 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
@@ -134,8 +134,9 @@ class AuthorizationService
             return true;
         }
 
+        $baseScope = $this->baseScope($user);
         $contextKey = $context ? hash('sha256', json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') : 'navigation';
-        $cacheKey = $user->id.'|'.$user->role.'|'.($user->organization_id ?? 'none').'|'.(int) $user->is_blocked.'|'.$permission.'|'.$contextKey;
+        $cacheKey = $user->id.'|'.$user->role.'|'.($user->organization_id ?? 'none').'|'.(int) $user->is_blocked.'|'.$baseScope.'|'.$permission.'|'.$contextKey;
         if (array_key_exists($cacheKey, $this->decisionCache)) {
             return $this->decisionCache[$cacheKey];
         }
