@@ -161,6 +161,40 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_workflow_engine_rejects_manual_runs_for_another_users_workflow(): void
+    {
+        $caller = $this->owner('09140000213');
+        $actualOwner = $this->owner('09140000214');
+        $workflow = $this->workflow($actualOwner, [
+            'steps' => json_encode([[
+                'action' => 'create_follow_up',
+                'title' => 'Must not be created cross-account',
+                'description' => 'Owner isolation test',
+                'priority' => 'normal',
+            ]], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        try {
+            app(WorkflowEngine::class)->run($workflow, [
+                'user_id' => $caller->id,
+                'customer_id' => $caller->id,
+                'manual_run' => true,
+            ], null, true);
+            $this->fail('A user must not run another account owner workflow.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('owner does not match', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflow,
+            'status' => 'failed',
+        ]);
+        $this->assertDatabaseMissing('crm_follow_up_tasks', [
+            'customer_id' => $caller->id,
+            'title' => 'Must not be created cross-account',
+        ]);
+    }
+
     public function test_manual_run_can_create_a_follow_up_only_for_the_authenticated_owner(): void
     {
         $owner = $this->owner('09140000212');
