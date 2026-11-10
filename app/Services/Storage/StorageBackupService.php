@@ -90,6 +90,11 @@ class StorageBackupService
                     $target->increment('object_count');
                     $results[] = ['volume_id' => $target->id, 'status' => 'completed', 'object_key' => $objectKey];
                 } catch (\Throwable $exception) {
+                    try {
+                        $this->storage->delete($this->storage->volumeDisk($target), $objectKey);
+                    } catch (\Throwable $cleanupException) {
+                        report($cleanupException);
+                    }
                     $run->update(['status' => 'failed', 'object_key' => $objectKey, 'completed_at' => now(), 'error_message' => mb_substr($exception->getMessage(), 0, 1000)]);
                     $target->update(['status' => 'error', 'last_checked_at' => now()]);
                     $results[] = ['volume_id' => $target->id, 'status' => 'failed'];
