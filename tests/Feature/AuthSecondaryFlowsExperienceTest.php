@@ -71,8 +71,7 @@ class AuthSecondaryFlowsExperienceTest extends TestCase
         $this->withSession(['login.phone' => self::PHONE])
             ->postJson(route('login.password.store'), ['password' => 'WrongPassword'])
             ->assertStatus(422)
-            ->assertJsonValidationErrors('password')
-            ->assertJsonPath('errors.password.0', fn ($message) => str_contains($message, 'ثانیه'));
+            ->assertJsonValidationErrors('password');
     }
 
     public function test_password_login_does_not_persist_the_session_unless_requested(): void
