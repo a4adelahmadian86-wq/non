@@ -114,9 +114,16 @@ class AdminStoreCouponController extends Controller
 
         $canManageGlobalCoupons = $visibleIds === null;
         $monthlyBudgetCap = max(0, (int) SiteSetting::read('store_coupon_monthly_budget_rials', 0));
+        $measurementWindowDays = max(7, min(180, (int) SiteSetting::read('marketing_signal_retention_days', 90)));
+        $measurementSince = now()->subDays($measurementWindowDays);
         $offerViews = DB::table('farast_workflow_events')
             ->where('event_type', 'marketing.offer_viewed')
+            ->where('created_at', '>=', $measurementSince)
             ->when($visibleIds !== null, fn ($query) => $query->whereIn('user_id', $visibleIds))
+            ->count();
+        $redeemedOffersInWindow = (clone $base)
+            ->where('status', 'redeemed')
+            ->where('offered_at', '>=', $measurementSince)
             ->count();
         $monthlyBudgetSpent = Order::query()
             ->where('status', 'paid')
@@ -141,7 +148,8 @@ class AdminStoreCouponController extends Controller
             'stats' => [
                 'total' => $totalOffers,
                 'offer_views' => (int) $offerViews,
-                'view_to_redemption_rate' => $offerViews > 0 ? round($redeemed * 100 / $offerViews, 1) : 0,
+                'view_to_redemption_rate' => $offerViews > 0 ? round($redeemedOffersInWindow * 100 / $offerViews, 1) : 0,
+                'measurement_window_days' => $measurementWindowDays,
                 'redeemed' => $redeemed,
                 'offered' => $offered,
                 'expired' => $expired,
