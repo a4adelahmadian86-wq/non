@@ -113,6 +113,18 @@ class SmartDiscountMarketingService
                 return null;
             }
 
+            // Never issue a second code for the same user/product while an
+            // earlier offer is still redeemable, even if the configured cooldown
+            // is shorter than the offer validity period.
+            if (StoreCouponAssignment::query()
+                ->where('user_id', $lockedUser->id)
+                ->where('product_id', $productId)
+                ->where('status', 'offered')
+                ->where('expires_at', '>', now())
+                ->exists()) {
+                return null;
+            }
+
             // Cooldown is product-specific: an offer for one item must not
             // suppress a genuinely separate buying opportunity for another item.
             if (StoreCouponAssignment::query()
