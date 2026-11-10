@@ -211,7 +211,7 @@ class StoreController extends Controller
     public function trackSmartOfferInteraction(Request $request, StoreCouponAssignment $assignment, MarketingSignalService $signals)
     {
         abort_unless(
-            $assignment->user_id === (int) $request->user()->id
+            (int) $assignment->user_id === (int) $request->user()->id
                 && $request->user()->marketing_consent
                 && $assignment->status === 'offered'
                 && $assignment->expires_at?->isFuture()
