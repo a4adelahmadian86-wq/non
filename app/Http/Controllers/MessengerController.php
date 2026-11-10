@@ -206,6 +206,15 @@ class MessengerController extends Controller
             return $message;
         });
 
+        foreach ($attachments as $attachment) {
+            if (! empty($attachment['managed_file_id'])) {
+                StorageManagedFile::whereKey($attachment['managed_file_id'])->update([
+                    'source_type' => ConversationMessage::class,
+                    'source_id' => $message->id,
+                ]);
+            }
+        }
+
         DB::table('conversation_participants')->where('conversation_id', $conversation->id)->update(['archived_at' => null, 'updated_at' => now()]);
 
         foreach ($conversation->participants()->where('users.id', '!=', $request->user()->id)->get() as $recipient) {
