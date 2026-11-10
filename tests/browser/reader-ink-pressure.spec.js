@@ -1,0 +1,21 @@
+const { test, expect } = require('@playwright/test');
+test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and supports undo/redo',async({page})=>{
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="pressure-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Pressure ink test</span></div></div></article></section>');
+  await page.addStyleTag({path:require('path').join(__dirname,'../../public/css/farast-reader-annotations.css')});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-ink-pressure.js')});
+  await page.locator('[data-tool="pen"]').click();
+  const layer=page.locator('.farast-pressure-ink-layer').first(),rect=await page.locator('.farast-pdf-document').boundingBox();
+  const send=(type,x,y,pressure,pointerType='pen')=>layer.dispatchEvent(type,{bubbles:true,cancelable:true,pointerId:pointerType==='pen'?9:10,pointerType,pressure,clientX:rect.x+x,clientY:rect.y+y,tiltX:20,tiltY:10});
+  await send('pointerdown',80,80,.18);await send('pointermove',120,105,.82);await send('pointerup',150,120,.45);
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[0]);
+  expect(saved.points.map(p=>p.p)).toContain(.18);expect(saved.points.map(p=>p.p)).toContain(.82);expect(saved.smoothing).toBe(true);
+  await send('pointerdown',180,160,.5,'mouse');await send('pointermove',220,185,.5,'mouse');await send('pointerup',250,200,.5,'mouse');
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
+  const fallback=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[1].points.map(p=>p.p));
+  expect(fallback.every(p=>p===.5)).toBeTruthy();
+  await page.locator('[data-pressure-action="undo"]').click();await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
+  await page.locator('[data-pressure-action="redo"]').click();await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
+});
