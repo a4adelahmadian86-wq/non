@@ -101,9 +101,18 @@ class StoreCartService
             throw new \RuntimeException('ظرفیت استفاده از این کد تمام شده است.');
         }
 
+        $cart = $this->current($request);
+        $cartPayload = $this->payload($cart);
+        if ((int) $cartPayload['subtotal_rials'] <= 0) {
+            throw new \\RuntimeException('ابتدا یک محصول به سبد خرید اضافه کنید.');
+        }
+        if ($coupon->min_subtotal_rials !== null && (int) $cartPayload['subtotal_rials'] < (int) $coupon->min_subtotal_rials) {
+            throw new \\RuntimeException('حداقل مبلغ سبد برای استفاده از این کد تخفیف رعایت نشده است.');
+        }
+
         $request->session()->put('store_coupon_code', $coupon->code);
 
-        return $this->payload($this->current($request), $request);
+        return $this->payload($cart, $request);
     }
 
     public function clearCoupon(Request $request): array
@@ -145,19 +154,30 @@ class StoreCartService
         if ($request) {
             $couponCode = $request->session()->get('store_coupon_code');
             if ($couponCode) {
-                $coupon = StoreCoupon::where('code', $couponCode)->where('is_active', true)->first();
-                if ($coupon && $subtotal > 0) {
+                $coupon = StoreCoupon::where('code', $couponCode)
+                    ->where('is_active', true)
+                    ->where(function ($query) {
+                        $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                    })
+                    ->where(function ($query) {
+                        $query->whereNull('ends_at')->orWhere('ends_at', '>=', now());
+                    })
+                    ->first();
+
+                $hasRemainingUses = $coupon
+                    && ($coupon->max_uses === null || (int) $coupon->used_count < (int) $coupon->max_uses);
+                $meetsMinimum = $coupon
+                    && ($coupon->min_subtotal_rials === null || $subtotal >= (int) $coupon->min_subtotal_rials);
+
+                if ($coupon && $hasRemainingUses && $meetsMinimum && $subtotal > 0) {
                     if ($coupon->type === 'percent') {
                         $discount = (int) floor($subtotal * min(100, max(0, (int) $coupon->value)) / 100);
                     } else {
                         $discount = min($subtotal, max(0, (int) $coupon->value));
                     }
-                    if ($coupon->min_subtotal_rials && $subtotal < $coupon->min_subtotal_rials) {
-                        $discount = 0;
-                        $couponCode = null;
-                    }
                 } else {
                     $couponCode = null;
+                    $request->session()->forget('store_coupon_code');
                 }
             }
         }
