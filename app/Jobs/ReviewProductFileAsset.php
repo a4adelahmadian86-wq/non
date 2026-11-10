@@ -42,6 +42,16 @@ class ReviewProductFileAsset implements ShouldQueue
             return;
         }
 
+        $existingReview = (array) data_get($product->metadata, 'ai_supervisor.asset_reviews.file:'.$file->id, []);
+        if (($existingReview['status'] ?? null) === 'completed'
+            && hash_equals((string) $file->sha256, (string) ($existingReview['sha256'] ?? ''))) {
+            $this->dispatchPublicationIfWaiting($product);
+            return;
+        }
+        if (($existingReview['status'] ?? null) === 'reviewing' && $this->attempts() <= 1) {
+            return;
+        }
+
         if (! $supervisor->configured()) {
             $this->storeReview($product, [
                 'status' => 'awaiting_supervisor',
