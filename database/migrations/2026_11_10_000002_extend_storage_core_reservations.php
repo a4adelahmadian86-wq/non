@@ -13,7 +13,7 @@ return new class extends Migration {
         });
 
         Schema::table('storage_managed_files', function (Blueprint $table) {
-            $table->string('logical_path', 1024)->nullable()->unique()->after('storage_volume_id');
+            $table->string('logical_path', 512)->nullable()->unique()->after('storage_volume_id');
             $table->foreignId('owner_user_id')->nullable()->after('product_id')->constrained('users')->nullOnDelete();
         });
     }
