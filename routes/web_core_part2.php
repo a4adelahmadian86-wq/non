@@ -111,10 +111,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/discussions/{discussion}/reply', [ContentDiscussionController::class, 'reply'])->middleware(['admin.section:store', 'throttle:20,10'])->name('discussions.reply');
 
     // Store coupon operations: consent-aware smart offers and public coupon inventory.
-    Route::get('/store-coupons', [\\App\\Http\\Controllers\\AdminStoreCouponController::class, 'index'])->middleware('admin.section:marketing')->name('store-coupons.index');
-    Route::post('/store-coupons', [\\App\\Http\\Controllers\\AdminStoreCouponController::class, 'store'])->middleware(['admin.section:marketing', 'throttle:10,10'])->name('store-coupons.store');
-    Route::patch('/store-coupons/{coupon}/toggle', [\\App\\Http\\Controllers\\AdminStoreCouponController::class, 'toggle'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.toggle');
-    Route::post('/store-coupons/assignments/{assignment}/revoke', [\\App\\Http\\Controllers\\AdminStoreCouponController::class, 'revokeAssignment'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.assignments.revoke');
+    Route::get('/store-coupons', [\App\Http\Controllers\AdminStoreCouponController::class, 'index'])->middleware('admin.section:marketing')->name('store-coupons.index');
+    Route::post('/store-coupons', [\App\Http\Controllers\AdminStoreCouponController::class, 'store'])->middleware(['admin.section:marketing', 'throttle:10,10'])->name('store-coupons.store');
+    Route::patch('/store-coupons/{coupon}/toggle', [\App\Http\Controllers\AdminStoreCouponController::class, 'toggle'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.toggle');
+    Route::post('/store-coupons/assignments/{assignment}/revoke', [\App\Http\Controllers\AdminStoreCouponController::class, 'revokeAssignment'])->middleware(['admin.section:marketing', 'throttle:20,10'])->name('store-coupons.assignments.revoke');
 
     // CRM marketing: saved segments and explicitly dispatched in-app campaigns.
     Route::get('/crm/marketing/segments', [CrmMarketingController::class, 'segments'])->middleware('admin.section:marketing')->name('crm.marketing.segments.index');
