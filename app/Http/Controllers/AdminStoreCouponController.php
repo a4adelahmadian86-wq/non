@@ -69,9 +69,34 @@ class AdminStoreCouponController extends Controller
             ->where('store_coupon_assignments.status', 'redeemed')
             ->where('orders.status', 'paid')
             ->whereNotNull('orders.paid_at');
-        $attributedOrderCount = (clone $attributedOrders)->distinct()->count('orders.id');
-        $attributedRevenue = (int) (clone $attributedOrders)->sum('store_order_items.total_rials');
-        $redeemedDiscountCost = (int) (clone $attributedOrders)->sum('store_order_items.discount_rials');
+        $attributedItems = (clone $attributedOrders)
+            ->select([
+                'orders.id as order_id',
+                'store_order_items.total_rials',
+                'store_order_items.discount_rials',
+                'store_order_items.quantity',
+                'store_order_items.product_snapshot',
+            ])
+            ->get();
+        $attributedOrderCount = $attributedItems->pluck('order_id')->unique()->count();
+        $attributedRevenue = (int) $attributedItems->sum('total_rials');
+        $redeemedDiscountCost = (int) $attributedItems->sum('discount_rials');
+        $knownGrossProfit = 0;
+        $itemsMissingHistoricalCost = 0;
+
+        foreach ($attributedItems as $item) {
+            $snapshot = is_array($item->product_snapshot)
+                ? $item->product_snapshot
+                : (json_decode((string) $item->product_snapshot, true) ?: []);
+            $cost = $snapshot['cost_price_rials'] ?? null;
+
+            if (! array_key_exists('cost_price_rials', $snapshot) || $cost === null || ! is_numeric($cost) || (int) $cost < 0) {
+                $itemsMissingHistoricalCost++;
+                continue;
+            }
+
+            $knownGrossProfit += (int) $item->total_rials - ((int) $cost * (int) $item->quantity);
+        }
 
         $canManageGlobalCoupons = $visibleIds === null;
         $genericCoupons = $canManageGlobalCoupons
@@ -97,6 +122,8 @@ class AdminStoreCouponController extends Controller
                 'discount_cost_rials' => $redeemedDiscountCost,
                 'attributed_revenue_rials' => $attributedRevenue,
                 'attributed_orders' => $attributedOrderCount,
+                'known_gross_profit_rials' => $knownGrossProfit,
+                'items_missing_historical_cost' => $itemsMissingHistoricalCost,
                 'products_missing_cost' => StoreProduct::query()->published()->whereNull('cost_price_rials')->count(),
             ],
             'settings' => [
