@@ -69,8 +69,9 @@ class DashboardQueueHealthService
             $oldestCreatedAt = (clone $readyQuery)->min('created_at');
             $failed = null;
             $failed24h = null;
+            $failedTableAvailable = Schema::connection($failedConnection)->hasTable($failedTable);
 
-            if (Schema::connection($failedConnection)->hasTable($failedTable)) {
+            if ($failedTableAvailable) {
                 $failedJobs = DB::connection($failedConnection)->table($failedTable);
                 $failed = (int) (clone $failedJobs)->count();
                 if (Schema::connection($failedConnection)->hasColumn($failedTable, 'failed_at')) {
@@ -81,7 +82,9 @@ class DashboardQueueHealthService
             }
 
             return array_replace($snapshot, [
-                'status' => ($failed ?? 0) > 0 ? 'attention' : ($queued > 0 ? 'queued' : 'clear'),
+                'status' => ! $failedTableAvailable
+                    ? 'misconfigured'
+                    : (($failed ?? 0) > 0 ? 'attention' : ($queued > 0 ? 'queued' : 'clear')),
                 'queued' => $queued,
                 'ready' => $ready,
                 'reserved' => $reserved,
