@@ -34,7 +34,7 @@ class AdminStorageController extends Controller
                 'kind' => $definition['kind'], 'volumes' => $items,
                 'capacity' => $items->isNotEmpty() && $items->every(fn ($v) => $v->capacity_bytes !== null) ? $items->sum('capacity_bytes') : null,
                 'used' => (int) $items->sum('used_bytes'),
-                'files' => (int) ($files->file_count ?? 0),
+                'files' => (int) $items->sum('object_count') + (int) ($files->pending_count ?? 0),
                 'pending' => (int) ($files->pending_count ?? 0),
                 'healthy' => $items->where('status', 'healthy')->count(),
             ];
