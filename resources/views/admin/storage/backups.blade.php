@@ -5,6 +5,8 @@
     <div class="storage-detail-card">
         <h1>تاریخچه پشتیبان‌گیری</h1>
         <p class="muted">گزارش اجرای بکاپ‌ها، مقصد، حجم، checksum و خطاها</p>
+        <form method="post" action="{{ route('admin.storage.backups.run') }}" style="margin:14px 0">@csrf<button type="submit" class="btn">اجرای بکاپ فوری</button></form>
+        <p class="muted">اجرای دستی در صف پردازش قرار می‌گیرد؛ برای اجرای آن، Worker صف backups باید فعال باشد.</p>
         <div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>نوع بکاپ</th><th>مقصد</th><th>وضعیت</th><th>حجم</th><th>Checksum</th><th>شروع</th><th>پایان</th><th>خطا</th></tr></thead><tbody>
         @forelse($backups as $backup)
             <tr>
