@@ -239,6 +239,61 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('1 منتشرشده');
     }
 
+    public function test_dashboard_product_summary_respects_seller_scope(): void
+    {
+        $organizationA = Organization::create([
+            'name' => 'Dashboard Product Scope A',
+            'slug' => 'dashboard-product-scope-a',
+            'status' => 'active',
+        ]);
+        $organizationB = Organization::create([
+            'name' => 'Dashboard Product Scope B',
+            'slug' => 'dashboard-product-scope-b',
+            'status' => 'active',
+        ]);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organizationA->id,
+        ]);
+        $insideSeller = User::factory()->create(['organization_id' => $organizationA->id]);
+        $outsideSeller = User::factory()->create(['organization_id' => $organizationB->id]);
+        $categoryId = DB::table('store_categories')->insertGetId([
+            'name' => 'Scoped Dashboard Category',
+            'slug' => 'scoped-dashboard-category',
+            'is_active' => true,
+            'sort_order' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([
+            ['seller_id' => $insideSeller->id, 'slug' => 'inside-scope-product', 'sku' => 'SCOPE-IN-001'],
+            ['seller_id' => $outsideSeller->id, 'slug' => 'outside-scope-product', 'sku' => 'SCOPE-OUT-001'],
+        ] as $product) {
+            DB::table('store_products')->insert([
+                'category_id' => $categoryId,
+                'seller_id' => $product['seller_id'],
+                'title' => $product['slug'],
+                'slug' => $product['slug'],
+                'sku' => $product['sku'],
+                'type' => 'digital_file',
+                'price_rials' => 100000,
+                'status' => 'published',
+                'published_at' => now()->subMinute(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $this->actingAs($admin)->get(route('admin.index'))
+            ->assertOk()
+            ->assertSee('کاتالوگ محصولات')
+            ->assertSee('1 منتشرشده · 0 پیش‌نویس');
+    }
+
     public function test_dashboard_activity_feed_displays_real_audit_events_and_links_to_the_audit_ledger(): void
     {
         $admin = User::factory()->create([
