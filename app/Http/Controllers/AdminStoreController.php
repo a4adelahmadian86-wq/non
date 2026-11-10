@@ -1227,6 +1227,7 @@ class AdminStoreController extends Controller
         $ownedPrefix = 'storage/store/product-images/'.$product->id.'/';
         if (Str::startsWith($path, $ownedPrefix)) {
             Storage::disk('public')->delete(Str::after($path, 'storage/'));
+            Storage::disk('managed')->delete(Str::after($path, 'storage/'));
         }
 
         return back()->with('status', 'تصویر گالری حذف شد.');
