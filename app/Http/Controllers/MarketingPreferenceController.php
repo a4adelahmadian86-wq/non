@@ -1,9 +1,9 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Services\\MarketingSignalService;
-use Illuminate\\Http\\Request;
+use App\Services\MarketingSignalService;
+use Illuminate\Http\Request;
 
 class MarketingPreferenceController extends Controller
 {

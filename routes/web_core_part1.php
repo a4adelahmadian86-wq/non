@@ -169,6 +169,6 @@ Route::middleware('auth')->group(function(){
 
 // Explicit, user-controlled first-party marketing preferences.
 Route::middleware('auth')->group(function () {
-    Route::get('/account/marketing-preferences', [\\App\\Http\\Controllers\\MarketingPreferenceController::class, 'edit'])->name('account.marketing-preferences.edit');
-    Route::put('/account/marketing-preferences', [\\App\\Http\\Controllers\\MarketingPreferenceController::class, 'update'])->middleware('throttle:10,10')->name('account.marketing-preferences.update');
+    Route::get('/account/marketing-preferences', [\App\Http\Controllers\MarketingPreferenceController::class, 'edit'])->name('account.marketing-preferences.edit');
+    Route::put('/account/marketing-preferences', [\App\Http\Controllers\MarketingPreferenceController::class, 'update'])->middleware('throttle:10,10')->name('account.marketing-preferences.update');
 });

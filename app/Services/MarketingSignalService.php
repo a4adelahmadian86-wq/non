@@ -1,10 +1,10 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\User;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class MarketingSignalService
 {
