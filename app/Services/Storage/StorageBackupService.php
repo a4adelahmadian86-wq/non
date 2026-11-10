@@ -119,7 +119,7 @@ class StorageBackupService
         $manifest = [
             'created_at' => now()->toIso8601String(),
             'application' => config('app.name'),
-            'database_driver' => config('database.default'),
+            'database_driver' => config('database.connections.'.config('database.default').'.driver', config('database.default')),
             'storage_policy' => 'farast-storage-core-v1',
         ];
         $this->addDirectory($zip, storage_path('app/private'), 'private');
