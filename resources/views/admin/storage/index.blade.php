@@ -29,7 +29,7 @@
                 <div class="storage-volumes">
                     @forelse($drive['volumes'] as $volume)
                         <a class="storage-volume" href="{{ route('admin.storage.volume', $volume) }}">
-                            <span><strong>{{ $volume->name }}</strong><br><small>{{ $volume->provider ?: $volume->driver }} · {{ number_format($volume->files_count) }} فایل</small></span>
+                            <span><strong>{{ $volume->name }}</strong><br><small>{{ $volume->provider ?: $volume->driver }} · {{ number_format($volume->object_count ?? $volume->files_count) }} فایل</small></span>
                             <span class="storage-status {{ $volume->status === 'healthy' ? 'healthy' : '' }}">{{ $volume->status === 'healthy' ? 'سالم' : ($volume->status === 'error' ? 'خطا' : 'بررسی‌نشده') }}</span>
                         </a>
                     @empty
