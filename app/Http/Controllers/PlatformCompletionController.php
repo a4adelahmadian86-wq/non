@@ -88,8 +88,7 @@ class PlatformCompletionController extends Controller {
   $authorization=app(AuthorizationService::class);
   $canManageWorkflows=$authorization->allows($r->user(),'workflows.manage')
    ||$authorization->allows($r->user(),'automation.manage')
-   ||$authorization->allows($r->user(),'workflows.create')
-   ||$authorization->allows($r->user(),'workflows.edit');
+   ||$authorization->allows($r->user(),'workflows.create');
   $canRunWorkflows=$authorization->allows($r->user(),'workflows.manage')
    ||$authorization->allows($r->user(),'automation.manage')
    ||$authorization->allows($r->user(),'workflows.run')
@@ -98,7 +97,7 @@ class PlatformCompletionController extends Controller {
    ||$authorization->allows($r->user(),'automation.manage')
    ||$authorization->allows($r->user(),'workflows.audit')
    ||$authorization->allows($r->user(),'automation.audit');
-  abort_unless($authorization->allows($r->user(),'workflows.view')||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit,403);
+  abort_unless($authorization->allows($r->user(),'workflows.view')||$authorization->allows($r->user(),'workflows.edit')||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit,403);
   $items=DB::table('farast_workflows')->where('user_id',$r->user()->id)->orderByDesc('updated_at')->get();
   $runs=$canViewWorkflowAudit?DB::table('farast_workflow_runs as runs')
    ->join('farast_workflows as workflows','workflows.id','=','runs.workflow_id')
