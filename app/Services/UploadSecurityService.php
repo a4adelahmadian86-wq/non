@@ -81,6 +81,7 @@ class UploadSecurityService
             'archive_entry_count' => 0,
             'findings' => [],
             'warnings' => [],
+            'metadata_notes' => [],
             'storage' => 'private',
         ];
 
@@ -142,7 +143,7 @@ class UploadSecurityService
         } elseif ($inspection['detected_type'] === 'image') {
             $inspection['dimensions'] = $this->inspectImage($absolutePath);
         } elseif ($inspection['detected_type'] === 'office') {
-            $inspection['warnings'][] = 'تعداد صفحات سند آفیس تا زمان تبدیل کنترل‌شده به PDF قطعی نیست.';
+            $inspection['metadata_notes'][] = 'تعداد صفحات سند آفیس تا زمان تبدیل کنترل‌شده به PDF قطعی نیست.';
         }
 
         $inspection['safe'] = $inspection['risk_level'] !== 'blocked';
