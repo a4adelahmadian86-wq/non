@@ -86,11 +86,9 @@ class AdminAccessCenterController extends Controller
         ]);
 
         $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
-        $base = Str::slug($data['name']) ?: 'custom-role';
-        $key = 'custom-'.$base;
-        if (DB::table('farast_roles')->where('key', $key)->exists()) {
-            $key .= '-'.Str::lower(Str::random(6));
-        }
+        $base = mb_substr(Str::slug($data['name']) ?: 'custom-role', 0, 90);
+        // Random suffix avoids concurrent slug collisions without a check-then-insert race.
+        $key = 'custom-'.$base.'-'.Str::lower(Str::random(8));
 
         DB::transaction(function () use ($request, $data, $scopeId, $key): void {
             $roleId = DB::table('farast_roles')->insertGetId([
