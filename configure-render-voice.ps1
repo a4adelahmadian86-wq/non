@@ -47,7 +47,7 @@ function Test-RenderVoiceToken([string]$Value) {
 $existingToken = ''
 foreach ($line in Get-Content -LiteralPath $envPath) {
     if ($line -match '^\s*FARAST_VOICE_TOKEN\s*=(.*)$') {
-        $existingToken = Normalize-VoiceToken($matches[1].Trim().Trim('"').Trim("'"))
+        $existingToken = Normalize-VoiceToken ($matches[1].Trim().Trim('"').Trim("'"))
     }
 }
 
@@ -109,20 +109,20 @@ foreach ($line in Get-Content -LiteralPath $envPath) { $lines.Add($line) }
 # older duplicate later in .env from overriding the newly verified credential.
 function Set-EnvValue([string]$Key, [string]$Value) {
     $pattern = '^\s*' + [regex]::Escape($Key) + '\s*='
-    $matches = [System.Collections.Generic.List[int]]::new()
+    $matchIndexes = [System.Collections.Generic.List[int]]::new()
     for ($index = 0; $index -lt $lines.Count; $index++) {
-        if ($lines[$index] -match $pattern) { $matches.Add($index) }
+        if ($lines[$index] -match $pattern) { $matchIndexes.Add($index) }
     }
 
-    if ($matches.Count -eq 0) {
+    if ($matchIndexes.Count -eq 0) {
         $lines.Add("$Key=$Value")
         return
     }
 
-    $first = $matches[0]
+    $first = $matchIndexes[0]
     $lines[$first] = "$Key=$Value"
-    for ($position = $matches.Count - 1; $position -ge 1; $position--) {
-        $lines.RemoveAt($matches[$position])
+    for ($position = $matchIndexes.Count - 1; $position -ge 1; $position--) {
+        $lines.RemoveAt($matchIndexes[$position])
     }
 }
 
