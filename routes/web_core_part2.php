@@ -123,6 +123,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/storage/backups/run', [\App\Http\Controllers\AdminStorageController::class, 'requestBackup'])->middleware(['admin.section:storage', 'throttle:2,10'])->name('storage.backups.run');
     Route::post('/storage/volumes', [\App\Http\Controllers\AdminStorageController::class, 'store'])->middleware(['admin.section:storage', 'throttle:5,10'])->name('storage.store');
     Route::get('/storage/volumes/{volume}', [\App\Http\Controllers\AdminStorageController::class, 'show'])->middleware('admin.section:storage')->name('storage.volume');
+    Route::get('/storage/files/{file}/download', [\App\Http\Controllers\AdminStorageController::class, 'downloadFile'])->middleware('admin.section:storage')->name('storage.files.download');
     Route::post('/storage/volumes/{volume}/verify', [\App\Http\Controllers\AdminStorageController::class, 'verify'])->middleware(['admin.section:storage', 'throttle:5,10'])->name('storage.verify');
     Route::post('/storage/volumes/{volume}/toggle', [\App\Http\Controllers\AdminStorageController::class, 'toggle'])->middleware('admin.section:storage')->name('storage.toggle');
     Route::delete('/storage/volumes/{volume}', [\App\Http\Controllers\AdminStorageController::class, 'destroy'])->middleware('admin.section:storage')->name('storage.destroy');
