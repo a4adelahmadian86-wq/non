@@ -70,6 +70,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspace/workflows', [PlatformCompletionController::class, 'workflow'])->name('platform.workflows');
     Route::post('/workspace/workflows', [PlatformCompletionController::class, 'saveWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.save');
     Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.run');
+    Route::delete('/workspace/workflows/{id}', [PlatformCompletionController::class, 'deleteWorkflow'])->whereNumber('id')->middleware('throttle:10,1')->name('platform.workflows.destroy');
     Route::get('/workspace/security', [AccountSecurityController::class, 'index'])->name('platform.security');
     Route::post('/workspace/security/sessions/{session}/revoke', [AccountSecurityController::class, 'revoke'])->whereNumber('session')->middleware('throttle:10,10')->name('platform.security.sessions.revoke');
     Route::post('/workspace/security/sessions/{session}/block-device', [AccountSecurityController::class, 'blockDevice'])->whereNumber('session')->middleware('throttle:5,10')->name('platform.security.devices.block');
