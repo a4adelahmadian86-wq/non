@@ -69,7 +69,7 @@ class AdminCourseResourceIngestionTest extends TestCase
         [$product, $lesson] = $this->courseLesson();
         $admin = $this->admin();
 
-        $this->actingAs($admin)->postJson(
+        $this->actingAs($admin)->post(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
             ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'A safe course handout with learning notes.')],
             ['Accept' => 'application/json']
@@ -105,7 +105,7 @@ class AdminCourseResourceIngestionTest extends TestCase
         [$product, $lesson] = $this->courseLesson('tamper');
         $admin = $this->admin();
 
-        $this->actingAs($admin)->postJson(
+        $this->actingAs($admin)->post(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
             ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'original course handout')],
             ['Accept' => 'application/json']
@@ -128,7 +128,7 @@ class AdminCourseResourceIngestionTest extends TestCase
         [$product, $lesson] = $this->courseLesson('cancel');
         $admin = $this->admin();
 
-        $this->actingAs($admin)->postJson(
+        $this->actingAs($admin)->post(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
             ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'temporary resource')],
             ['Accept' => 'application/json']
@@ -151,7 +151,7 @@ class AdminCourseResourceIngestionTest extends TestCase
         [$product, $lesson] = $this->courseLesson('reject');
         $admin = $this->admin();
 
-        $this->actingAs($admin)->postJson(
+        $this->actingAs($admin)->post(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
             ['file' => UploadedFile::fake()->createWithContent('payload.php', '<?php echo 1;')],
             ['Accept' => 'application/json']
