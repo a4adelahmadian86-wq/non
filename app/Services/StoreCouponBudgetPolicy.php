@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\SiteSetting;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -47,7 +48,7 @@ class StoreCouponBudgetPolicy
         return (int) $spent + $reserved + max(0, $candidateDiscountRials) <= $cap;
     }
 
-    public function reservedAmount(?int $excludeAssignmentId = null, ?\\Illuminate\\Support\\Carbon $at = null): int
+    public function reservedAmount(?int $excludeAssignmentId = null, ?Carbon $at = null): int
     {
         $at = $at ?: now();
 
