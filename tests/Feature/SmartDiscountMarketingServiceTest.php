@@ -16,6 +16,7 @@ use App\Services\SmartDiscountMarketingService;
 use App\Services\StoreCouponRedemptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SmartDiscountMarketingServiceTest extends TestCase
