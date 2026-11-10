@@ -81,7 +81,7 @@ class AdvancedAccessControlTest extends TestCase
     {
         $organizationA = Organization::create(['name' => 'Access A', 'slug' => 'access-a', 'status' => 'active']);
         $organizationB = Organization::create(['name' => 'Access B', 'slug' => 'access-b', 'status' => 'active']);
-        $employee = $this->user('09140000101', User::ROLE_EMPLOYEE, $organizationA->id);
+        $employee = $this->user('09140000101', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
         $roleId = $this->role('custom-org-auditor', 'organization', $organizationA->id);
 
         $this->grant($roleId, 'access.audit', 'organization');
@@ -152,17 +152,31 @@ class AdvancedAccessControlTest extends TestCase
 
         $authorization = app(AuthorizationService::class);
         $this->assertTrue($authorization->allowsFor($employee, 'access.audit', [
+            'owner_id' => $employee->id,
             'order_kind' => 'typing',
             'amount_rials' => 1500,
         ]));
         $this->assertFalse($authorization->allowsFor($employee, 'access.audit', [
+            'owner_id' => $employee->id,
             'order_kind' => 'store',
             'amount_rials' => 1500,
         ]));
         $this->assertFalse($authorization->allowsFor($employee, 'access.audit', [
+            'owner_id' => $employee->id,
             'order_kind' => 'typing',
             'amount_rials' => 900,
         ]));
+    }
+
+    public function test_record_level_legacy_grants_fail_closed_without_an_owner_attribute(): void
+    {
+        $employee = $this->user('09140000109');
+        $authorization = app(AuthorizationService::class);
+
+        $this->assertTrue($authorization->allows($employee, 'documents.view'));
+        $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['status' => 'active']));
+        $this->assertTrue($authorization->allowsFor($employee, 'documents.view', ['owner_id' => $employee->id, 'status' => 'active']));
+        $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['owner_id' => $employee->id + 1, 'status' => 'active']));
     }
 
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
