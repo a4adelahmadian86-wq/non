@@ -138,7 +138,7 @@ class AdminStorageController extends Controller
 
     public function show(StorageVolume $volume)
     {
-        $files = $volume->files()->latest()->paginate(50);
+        $files = $volume->files()->whereNotIn('status', ['deleted'])->latest()->paginate(50);
         $backups = StorageBackupRun::where('storage_volume_id', $volume->id)->latest()->limit(30)->get();
         return view('admin.storage.volume', compact('volume', 'files', 'backups'));
     }
@@ -183,7 +183,7 @@ class AdminStorageController extends Controller
 
     public function destroy(StorageVolume $volume)
     {
-        $hasManagedFiles = $volume->files()->exists();
+        $hasManagedFiles = $volume->files()->whereNotIn('status', ['deleted'])->exists();
         $hasProviderObjects = (int) $volume->object_count > 0;
         $hasBackups = StorageBackupRun::query()->where('storage_volume_id', $volume->id)->exists();
 
@@ -193,6 +193,7 @@ class AdminStorageController extends Controller
             'این هاست هنوز فایل یا نسخه پشتیبان دارد. ابتدا اطلاعات را به مقصد دیگری منتقل و خالی بودن کامل هاست را تأیید کنید.'
         );
 
+        $volume->files()->where('status', 'deleted')->update(['storage_volume_id' => null]);
         $volume->delete();
         return redirect()->route('admin.storage.index')->with('status', 'اتصال حذف شد.');
     }
