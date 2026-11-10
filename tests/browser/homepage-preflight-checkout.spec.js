@@ -3,6 +3,7 @@ const { test, expect } = require('@playwright/test');
 test('homepage file intake sends a deposit quote to checkout after explicit acceptance', async ({ page }) => {
   let accepted = 0;
   let created = 0;
+  let acceptedProjectId = null;
 
   await page.route('**/editor/upload', route => route.fulfill({
     status: 200,
@@ -38,6 +39,7 @@ test('homepage file intake sends a deposit quote to checkout after explicit acce
 
   await page.route('**/editor/preflight/accept', async route => {
     accepted += 1;
+    acceptedProjectId = route.request().postDataJSON()?.project_id ?? null;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -71,6 +73,7 @@ test('homepage file intake sends a deposit quote to checkout after explicit acce
 
   expect(created).toBe(1);
   expect(accepted).toBe(1);
+  expect(acceptedProjectId).toBe(91);
 });
 
 
