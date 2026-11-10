@@ -1042,67 +1042,72 @@ class AdminStoreController extends Controller
         return back()->with('status', 'صوت و زمان‌بندی همگام‌سازی برای این پیش‌نمایش ذخیره شد.');
     }
 
-    public function uploadCover(Request $request, StoreProduct $product, UploadSecurityService $security)
+    public function uploadCover(Request $request, StoreProduct $product, UploadSecurityService $security, StorageManager $storage)
     {
         $request->validate(['cover' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192']);
         $upload = $request->file('cover');
         $temporaryPath = $upload->store('store/quarantine/covers/'.$product->id, 'private');
-        $storagePath = null;
+        $managed = null;
 
         try {
             $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
                 'image/jpeg', 'image/png', 'image/webp',
             ]);
-            abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ کاور ذخیره نشد.');
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن امنیتی آماده نیست؛ کاور ذخیره نشد.');
             abort_unless(hash_equals($inspection['checksum'], (string) hash_file('sha256', $upload->getRealPath())), 409, 'محتوای کاور هنگام انتقال تغییر کرده است.');
 
-            $extension = strtolower($upload->guessExtension() ?: 'jpg');
-            $filename = Str::random(32).'.'.$extension;
-            $storagePath = 'store/covers/'.$product->id.'/'.$filename;
-            $publicPath = 'storage/'.$storagePath;
-            $stored = Storage::disk('public')->putFileAs('store/covers/'.$product->id, $upload, $filename);
-            if (! $stored) {
-                throw new \RuntimeException('cover_public_storage_failed');
-            }
+            $managed = $storage->storeUploadedFile(
+                $upload,
+                StorageManager::CRITICAL,
+                'store-cover',
+                StoreProduct::class,
+                (int) $product->id,
+                (int) $product->id,
+                'public'
+            );
+            $publicPath = 'storage/managed/'.$managed['managed_file_id'];
 
-            $oldPath = DB::transaction(function () use ($product, $publicPath, $inspection) {
+            $oldPath = DB::transaction(function () use ($product, $publicPath, $inspection, $managed, $storage) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $oldPath = (string) $lockedProduct->cover_path;
                 $metadata = $lockedProduct->metadata ?? [];
                 $supervisorMeta = (array) data_get($metadata, 'ai_supervisor', []);
                 $assetReviews = (array) data_get($supervisorMeta, 'asset_reviews', []);
                 unset($assetReviews['cover']);
-                if ($assetReviews === []) {
-                    unset($supervisorMeta['asset_reviews']);
-                } else {
-                    $supervisorMeta['asset_reviews'] = $assetReviews;
-                }
+                if ($assetReviews === []) unset($supervisorMeta['asset_reviews']);
+                else $supervisorMeta['asset_reviews'] = $assetReviews;
                 $metadata['ai_supervisor'] = $supervisorMeta;
                 $lockedProduct->update(['cover_path' => $publicPath, 'metadata' => $metadata]);
-                $this->audit('store.product.cover_updated', $lockedProduct, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum']]);
-
+                $storage->bindReference((int) $managed['managed_file_id'], StoreProduct::class, (int) $lockedProduct->id, (int) $lockedProduct->id);
+                $this->audit('store.product.cover_updated', $lockedProduct, ['mime' => $inspection['mime'], 'sha256' => $inspection['checksum'], 'managed_file_id' => $managed['managed_file_id']]);
                 return $oldPath;
             });
-            if ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
+
+            if (preg_match('#^storage/managed/([0-9]+)$#', $oldPath, $matches)) {
+                $oldManaged = StorageManagedFile::find((int) $matches[1]);
+                if ($oldManaged) {
+                    $oldDisk = (string) data_get($oldManaged->metadata, 'disk', $oldManaged->storage_volume_id ? 'storage_volume:'.$oldManaged->storage_volume_id : 'private');
+                    $storage->delete($oldDisk, $oldManaged->file_key);
+                }
+            } elseif ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
                 Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
             }
         } catch (Throwable $exception) {
+            if ($managed) {
+                $disk = (string) ($managed['disk'] ?? 'private');
+                $storage->delete($disk, (string) $managed['path']);
+            }
             Storage::disk('private')->delete($temporaryPath);
-            if ($storagePath) {
-                Storage::disk('public')->delete($storagePath);
-            }
-            if ($exception instanceof ValidationException) {
-                throw $exception;
-            }
+            if ($exception instanceof ValidationException) throw $exception;
+            report($exception);
             abort(503, 'بارگذاری کاور به دلیل ناموفق بودن بررسی امنیتی یا ذخیره‌سازی متوقف شد.');
         }
 
         Storage::disk('private')->delete($temporaryPath);
-
-        return back()->with('status', 'کاور محصول پس از اسکن امنیتی ذخیره شد.');
+        return back()->with('status', 'کاور محصول در فضای ذخیره‌سازی مرکزی ایران ثبت شد.');
     }
 
-    public function uploadImage(Request $request, StoreProduct $product, UploadSecurityService $security)
+    public function uploadImage(Request $request, StoreProduct $product, UploadSecurityService $security, StorageManager $storage)
     {
         $data = $request->validate([
             'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192',
@@ -1110,25 +1115,27 @@ class AdminStoreController extends Controller
         ]);
         $upload = $request->file('image');
         $temporaryPath = $upload->store('store/quarantine/product-images/'.$product->id, 'private');
-        $publicPath = null;
+        $managed = null;
 
         try {
             $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
                 'image/jpeg', 'image/png', 'image/webp',
             ]);
-            abort_unless($inspection['safe'] ?? false, 503, 'اسکن ضدبدافزار آماده نیست؛ تصویر ذخیره نشد.');
+            abort_unless($inspection['safe'] ?? false, 503, 'اسکن امنیتی آماده نیست؛ تصویر ذخیره نشد.');
             abort_unless(hash_equals($inspection['checksum'], (string) hash_file('sha256', $upload->getRealPath())), 409, 'محتوای تصویر هنگام انتقال تغییر کرده است.');
 
-            $extension = strtolower($upload->guessExtension() ?: 'jpg');
-            $filename = Str::random(32).'.'.$extension;
-            $directory = 'store/product-images/'.$product->id;
-            $stored = Storage::disk('public')->putFileAs($directory, $upload, $filename);
-            if (! $stored) {
-                throw new \RuntimeException('product_image_storage_failed');
-            }
-            $publicPath = 'storage/'.$directory.'/'.$filename;
+            $managed = $storage->storeUploadedFile(
+                $upload,
+                StorageManager::CRITICAL,
+                'store-product-image',
+                StoreProductImage::class,
+                null,
+                (int) $product->id,
+                'public'
+            );
+            $publicPath = 'storage/managed/'.$managed['managed_file_id'];
 
-            DB::transaction(function () use ($product, $data, $publicPath, $inspection) {
+            DB::transaction(function () use ($product, $data, $publicPath, $inspection, $managed, $storage) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $sort = (int) ($lockedProduct->images()->max('sort_order') ?? 0) + 1;
                 $image = $lockedProduct->images()->create([
@@ -1138,26 +1145,24 @@ class AdminStoreController extends Controller
                     'sort_order' => $sort,
                     'is_active' => true,
                 ]);
+                $storage->bindReference((int) $managed['managed_file_id'], StoreProductImage::class, (int) $image->id, (int) $lockedProduct->id);
                 $this->audit('store.product.image_uploaded', $lockedProduct, [
                     'image_id' => $image->id,
+                    'managed_file_id' => $managed['managed_file_id'],
                     'mime' => $inspection['mime'],
                     'sha256' => $inspection['checksum'],
                 ]);
             });
         } catch (Throwable $exception) {
+            if ($managed) $storage->delete((string) ($managed['disk'] ?? 'private'), (string) $managed['path']);
             Storage::disk('private')->delete($temporaryPath);
-            if ($publicPath) {
-                Storage::disk('public')->delete(Str::after($publicPath, 'storage/'));
-            }
-            if ($exception instanceof ValidationException) {
-                throw $exception;
-            }
+            if ($exception instanceof ValidationException) throw $exception;
+            report($exception);
             abort(503, 'بارگذاری تصویر به دلیل ناموفق بودن بررسی امنیتی یا ذخیره‌سازی متوقف شد.');
         }
 
         Storage::disk('private')->delete($temporaryPath);
-
-        return back()->with('status', 'تصویر گالری پس از اسکن امنیتی اضافه شد.');
+        return back()->with('status', 'تصویر گالری در فضای ذخیره‌سازی مرکزی ایران ثبت شد.');
     }
 
     public function deleteImage(StoreProduct $product, StoreProductImage $image)
