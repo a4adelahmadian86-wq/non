@@ -559,9 +559,23 @@ class AdminStoreController extends Controller
             ? 'tar.gz'
             : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower(pathinfo($ingestion->original_name, PATHINFO_EXTENSION)));
         $finalPath = 'store/products/'.$product->id.'/'.Str::uuid().'.'.$finalExtension;
-        if (! $disk->move($ingestion->staging_path, $finalPath)) {
-            throw new \RuntimeException('product_file_storage_move_failed');
+        $sourceStream = $disk->readStream($ingestion->staging_path);
+        abort_unless(is_resource($sourceStream), 410, 'خواندن فایل تأییدشده ممکن نیست.');
+        try {
+            $stored = Storage::disk('managed')->put($finalPath, $sourceStream, [
+                'farast_classification' => 'critical',
+                'farast_source_type' => 'product_download',
+                'farast_source_id' => $product->id,
+                'farast_product_id' => $product->id,
+                'farast_owner_user_id' => auth()->id(),
+                'farast_original_name' => $ingestion->original_name,
+                'mimetype' => $ingestion->mime,
+            ]);
+        } finally {
+            fclose($sourceStream);
         }
+        abort_unless($stored, 503, 'ذخیره فایل در زیرساخت مرکزی ممکن نشد.');
+        $disk->delete($ingestion->staging_path);
 
         try {
             [$fileRecord, $productRequiresRepublish] = DB::transaction(function () use ($product, $ingestion, $inspection, $finalPath) {
@@ -606,7 +620,7 @@ class AdminStoreController extends Controller
                     'product_id' => $lockedProduct->id,
                     'purpose' => 'product_download',
                     'version' => $lockedProduct->version,
-                    'disk' => 'private',
+                    'disk' => 'managed',
                     'path' => $finalPath,
                     'original_name' => $lockedIngestion->original_name,
                     'mime' => $inspection['mime'],
@@ -653,7 +667,7 @@ class AdminStoreController extends Controller
                 return [$record, $productRequiresRepublish];
             });
         } catch (Throwable $exception) {
-            $disk->delete($finalPath);
+            Storage::disk('managed')->delete($finalPath);
             throw $exception;
         }
 
