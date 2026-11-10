@@ -394,12 +394,19 @@ class PaymentController extends Controller
                     'pages' => (int) ($snapshot['estimated_pages'] ?? 1),
                     'accepted_at' => now()->toIso8601String(),
                     'deposit_order_id' => $locked->id,
+                    'project_id' => (int) ($snapshot['project_id'] ?? 0) ?: null,
                 ]);
             });
 
-            $this->dispatchPaidOrderWorkflow($order->fresh());
+            $paidDeposit = $order->fresh();
+            $projectId = (int) data_get($paidDeposit->pricing_snapshot, 'project_id', 0);
+            $project = $projectId > 0
+                ? FarastProject::query()->whereKey($projectId)->where('user_id', auth()->id())->first()
+                : null;
+            $this->dispatchPaidOrderWorkflow($paidDeposit);
 
-            return redirect()->route('editor')->with('status', 'پیش‌پرداخت ثبت شد؛ فایل آماده ورود به ویرایشگر است.');
+            return redirect()->route('editor', $project ? ['project' => $project->id] : [])
+                ->with('status', 'پیش‌پرداخت ثبت شد؛ فایل آماده ورود به ویرایشگر است.');
         } catch (\RuntimeException $e) {
             return back()->withErrors(['payment' => $e->getMessage()]);
         }
