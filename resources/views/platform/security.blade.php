@@ -59,6 +59,22 @@
     </section>
 
     <section class="security-panel">
+        <div class="security-panel-heading"><div><h2>تغییر رمز عبور</h2><p>برای امنیت بیشتر، رمز جدید حداقل ۱۲ نویسه داشته باشد.</p></div></div>
+        <form method="post" action="{{ route('platform.security.password.update') }}" class="security-password-form">
+            @csrf
+            <label>رمز عبور فعلی<input type="password" name="current_password" autocomplete="current-password" required></label>
+            <label>رمز عبور جدید<input type="password" name="password" autocomplete="new-password" minlength="12" required></label>
+            <label>تکرار رمز عبور جدید<input type="password" name="password_confirmation" autocomplete="new-password" minlength="12" required></label>
+            <button type="submit">تغییر رمز و خروج از سایر دستگاه‌ها</button>
+        </form>
+        <form method="post" action="{{ route('platform.security.sessions.revoke-all') }}" class="security-revoke-all" onsubmit="return confirm('از همه دستگاه‌ها، از جمله همین دستگاه، خارج می‌شوید. ادامه می‌دهید؟')">
+            @csrf
+            <label for="revokeAllPassword">خروج از تمام دستگاه‌ها (نیازمند رمز عبور فعلی)</label>
+            <div><input id="revokeAllPassword" type="password" name="current_password" autocomplete="current-password" required><button type="submit">خروج از همه دستگاه‌ها</button></div>
+        </form>
+    </section>
+
+    <section class="security-panel">
         <div class="security-panel-heading"><div><h2>رخدادهای امنیتی اخیر</h2><p>ورودها و تغییرات مهم مرتبط با حساب شما</p></div></div>
         @if($events->isEmpty())
             <div class="security-empty"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><strong>رخداد ثبت‌شده‌ای وجود ندارد</strong></div>
