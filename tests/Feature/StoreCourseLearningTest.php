@@ -182,6 +182,40 @@ class StoreCourseLearningTest extends TestCase
             ->assertSee('فصل اول');
     }
 
+    public function test_course_completion_counts_only_lessons_released_by_the_drip_schedule(): void
+    {
+        $user = $this->makeUser();
+        [$product, $course, $section, $firstLesson] = $this->makeCourse('drip-completion-course', 10000);
+        $course->update(['drip_enabled' => true]);
+        StoreCourseLesson::create([
+            'section_id' => $section->id,
+            'title' => 'جلسه آینده',
+            'slug' => 'drip-completion-future-lesson',
+            'lesson_type' => 'article',
+            'content' => 'این جلسه هنوز آزاد نشده است.',
+            'is_published' => true,
+            'drip_after_days' => 3,
+            'sort_order' => 2,
+        ]);
+        $this->grantCourse($user, $product);
+
+        $this->actingAs($user)
+            ->postJson(route('store.course.progress', [$product, $firstLesson]), ['completed' => true])
+            ->assertOk()
+            ->assertJson(['ok' => true, 'completed' => true]);
+
+        $enrollment = StoreCourseEnrollment::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+
+        $this->assertNotNull($enrollment->fresh()->completed_at);
+        $this->actingAs($user)
+            ->get(route('store.course.learn', $product))
+            ->assertOk()
+            ->assertSee('۱۰۰٪');
+    }
+
     public function test_drip_released_lesson_cannot_be_opened_before_its_release_day(): void
     {
         $user = $this->makeUser();
