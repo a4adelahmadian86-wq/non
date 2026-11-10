@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\FarastNotification;
 use App\Models\Order;
+use App\Models\StoreCategory;
+use App\Models\StoreCouponAssignment;
+use App\Models\StoreProduct;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -218,7 +221,7 @@ class CrmMarketingCampaignTest extends TestCase
 
         $campaign = $this->getJson('/admin/crm/marketing/campaigns')->assertOk();
         $campaign->assertJsonPath('data.data.0.offer_count', 1);
-        $this->assertSame(0, (int) DB::table('crm_marketing_campaigns')->where('id', $campaignId)->value('budget_cap_rials') === 0);
+        $this->assertSame(10000, (int) DB::table('crm_marketing_campaigns')->where('id', $campaignId)->value('budget_cap_rials'));
     }
 
 
