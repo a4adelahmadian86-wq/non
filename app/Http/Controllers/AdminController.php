@@ -332,19 +332,19 @@ class AdminController extends Controller
             'announcements' => $canManageAnnouncements ? Announcement::latest()->limit(20)->get() : collect(),
             'console' => $console,
             'scope' => $scope,
-            'scopeSummary' => $console->scopeSummary($actor),
+            'scopeSummary' => $console->scopeSummary($actor, $canViewUsers),
             'allowedSections' => $allowedSections,
             'stats' => [
-                'users' => $totalScopedUsers,
-                'active_users' => $visibleIds === null
+                'users' => $canViewUsers ? $totalScopedUsers : 0,
+                'active_users' => ! $canViewUsers ? 0 : ($visibleIds === null
                     ? User::where('is_blocked', false)->count()
-                    : User::whereIn('id', $visibleIds)->where('is_blocked', false)->count(),
-                'new_users_week' => $visibleIds === null
+                    : User::whereIn('id', $visibleIds)->where('is_blocked', false)->count()),
+                'new_users_week' => ! $canViewUsers ? 0 : ($visibleIds === null
                     ? User::where('created_at', '>=', $weekAgo)->count()
-                    : User::whereIn('id', $visibleIds)->where('created_at', '>=', $weekAgo)->count(),
-                'blocked_users' => $visibleIds === null
+                    : User::whereIn('id', $visibleIds)->where('created_at', '>=', $weekAgo)->count()),
+                'blocked_users' => ! $canViewUsers ? 0 : ($visibleIds === null
                     ? User::where('is_blocked', true)->count()
-                    : User::whereIn('id', $visibleIds)->where('is_blocked', true)->count(),
+                    : User::whereIn('id', $visibleIds)->where('is_blocked', true)->count()),
                 'documents' => $canViewDocuments ? $documentCount() : 0,
                 'new_documents_week' => $canViewDocuments ? $documentCount($weekAgo) : 0,
                 // Project workspace is the canonical bridge between customer requests, documents, billing and human tasks.
