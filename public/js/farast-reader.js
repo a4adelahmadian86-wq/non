@@ -38,28 +38,82 @@
   const faNumber=n=>Number(n).toLocaleString('fa-IR');
   const productKey=String(root.dataset.productId||location.pathname);
   const storageKey='farast-reader:v1:'+productKey;
+  const durableStorage=(()=>{
+    let opening;
+    const open=()=>{
+      if(!('indexedDB' in window))return Promise.reject(new Error('IndexedDB unavailable'));
+      if(!opening)opening=new Promise((resolve,reject)=>{
+        const request=indexedDB.open('farast-reader-local-v1',1);
+        request.onupgradeneeded=()=>{
+          if(!request.result.objectStoreNames.contains('documents'))request.result.createObjectStore('documents',{keyPath:'id'});
+        };
+        request.onsuccess=()=>resolve(request.result);
+        request.onerror=()=>reject(request.error||new Error('IndexedDB open failed'));
+        request.onblocked=()=>reject(new Error('IndexedDB upgrade blocked'));
+      });
+      return opening;
+    };
+    const read=async id=>{
+      const db=await open();
+      return new Promise((resolve,reject)=>{
+        const request=db.transaction('documents','readonly').objectStore('documents').get(id);
+        request.onsuccess=()=>resolve(request.result||null);
+        request.onerror=()=>reject(request.error||new Error('IndexedDB read failed'));
+      });
+    };
+    const write=async(id,value)=>{
+      const db=await open();
+      return new Promise((resolve,reject)=>{
+        const transaction=db.transaction('documents','readwrite');
+        transaction.objectStore('documents').put({id,value,updatedAt:Date.now()});
+        transaction.oncomplete=()=>resolve(true);
+        transaction.onerror=()=>reject(transaction.error||new Error('IndexedDB write failed'));
+        transaction.onabort=()=>reject(transaction.error||new Error('IndexedDB write aborted'));
+      });
+    };
+    const requestPersistence=async()=>{
+      try{return await navigator.storage?.persist?.()??false;}catch(_){return false;}
+    };
+    return {read,write,requestPersistence};
+  })();
+  let localStateChanged=false;
   const resumeButton=root.querySelector('#reader-resume');
   const bookmarkButton=root.querySelector('#reader-bookmark-toggle');
   const bookmarksOpenButton=root.querySelector('#reader-bookmarks-open');
   const bookmarksPanel=root.querySelector('#reader-bookmarks-panel');
   let restoringInitial=true;
+  const normalizeReaderState=value=>{
+    const stored=value&&typeof value==='object'?value:{};
+    const saved=stored.progress;
+    const bookmarks=Array.isArray(stored.bookmarks)?stored.bookmarks:[];
+    return {
+      progress:saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null,
+      bookmarks:bookmarks.filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100)
+    };
+  };
   let readerState={progress:null,bookmarks:[]};
-  try{
-    const stored=JSON.parse(localStorage.getItem(storageKey)||'null');
-    if(stored&&typeof stored==='object'){
-      const saved=stored.progress;
-      const bookmarks=Array.isArray(stored.bookmarks)?stored.bookmarks:[];
-      readerState={
-        progress:saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null,
-        bookmarks:bookmarks.filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100)
-      };
-    }
-  }catch(_){readerState={progress:null,bookmarks:[]};}
-
+  try{readerState=normalizeReaderState(JSON.parse(localStorage.getItem(storageKey)||'null'));}catch(_){}
   const currentPosition=()=>({section:itemIndex,page:isPdf()?pdfPage:1});
   const samePosition=(a,b)=>Boolean(a&&b&&a.section===b.section&&a.page===b.page);
   const persistReaderState=()=>{
-    try{localStorage.setItem(storageKey,JSON.stringify(readerState));}catch(_){}
+    localStateChanged=true;
+    const snapshot={progress:readerState.progress,bookmarks:[...readerState.bookmarks]};
+    try{localStorage.setItem(storageKey,JSON.stringify(snapshot));}catch(_){}
+    durableStorage.write(storageKey,snapshot).catch(()=>{});
+  };
+  const loadDurableReaderState=async()=>{
+    let durable=false;
+    try{
+      await durableStorage.requestPersistence();
+      const record=await durableStorage.read(storageKey);
+      if(record&&record.value&&!localStateChanged)readerState=normalizeReaderState(record.value);
+      else if(!record)await durableStorage.write(storageKey,readerState);
+      durable=true;
+    }catch(_){}
+    root.dispatchEvent(new CustomEvent('farast:reader-storage-ready',{detail:{durable}}));
+    renderBookmarks();
+    refreshResumeButton();
+    refreshBookmarkButton();
   };
   const remoteStateUrl=root.dataset.readerStateUrl||'';
   let remoteSyncTimer=null;
@@ -811,7 +865,7 @@
   setZoomLabel();
   renderBookmarks();
   refreshBookmarkButton();
-  loadRemoteReaderState().finally(()=>showItem(0)).then(()=>{
+  loadDurableReaderState().then(()=>loadRemoteReaderState()).finally(()=>showItem(0)).then(()=>{
     restoringInitial=false;
     refreshResumeButton();
     refreshBookmarkButton();
