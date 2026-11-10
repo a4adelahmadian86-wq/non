@@ -161,4 +161,6 @@
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
 <script src="/js/farast-reader-document-audio.js?v=20261108readiness1" defer></script>
+<script src="/js/farast-reader-annotations.js?v=20261110professional1" defer></script>
+<script src="/js/farast-reader-ink-pressure.js?v=20261110pressure1" defer></script>
 @endpush
