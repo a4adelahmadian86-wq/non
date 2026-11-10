@@ -549,7 +549,7 @@ class SupportController extends Controller
         ]);
     }
 
-    public function attachment(Request $request, Ticket $ticket, TicketMessage $message, int $index)
+    public function attachment(Request $request, Ticket $ticket, TicketMessage $message, int $index, StorageManager $storage)
     {
         $this->authorize('view', $ticket);
         abort_unless((int) $message->ticket_id === (int) $ticket->id, 404);
@@ -562,20 +562,27 @@ class SupportController extends Controller
         $path = (string) ($attachment['path'] ?? '');
         abort_unless($path !== '', 404);
         $diskName = (string) ($attachment['disk'] ?? 'public');
-        abort_unless(in_array($diskName, ['private', 'public'], true), 404);
-
-        $disk = Storage::disk($diskName);
-        abort_unless($disk->exists($path), 404);
+        $isManagedVolume = preg_match('/^storage_volume:[0-9]+$/', $diskName) === 1;
+        abort_unless(in_array($diskName, ['private', 'public'], true) || $isManagedVolume, 404);
 
         $filename = basename((string) ($attachment['name'] ?? 'attachment'));
         $filename = preg_replace('/[\r\n"]+/', '_', $filename) ?: 'attachment';
-
-        return $disk->download($path, $filename, [
+        $headers = [
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
             'Content-Type' => 'application/octet-stream',
-        ]);
+            'Content-Disposition' => 'attachment; filename="'.addslashes($filename).'"',
+        ];
+
+        if ($isManagedVolume) {
+            abort_unless($storage->exists($diskName, $path), 404);
+            return response($storage->get($diskName, $path), 200, $headers);
+        }
+
+        $disk = Storage::disk($diskName);
+        abort_unless($disk->exists($path), 404);
+        return $disk->download($path, $filename, $headers);
     }
 
     public static function claimGuestTickets(User $user): int
