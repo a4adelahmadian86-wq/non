@@ -22,6 +22,11 @@ return [
         'file_timeout' => max(300, min(540, (int) env('FARAST_PRODUCT_SUPERVISOR_FILE_TIMEOUT', 540))),
     ],
 
+    'clamav' => [
+        'binary' => env('CLAMAV_BINARY', ''),
+        'timeout' => max(10, min(300, (int) env('CLAMAV_TIMEOUT', 120))),
+    ],
+
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
