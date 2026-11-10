@@ -10,7 +10,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/support-report', SupportReportController::class)->name('support.report');
 });
 
-Route::middleware(['auth'])->group(function () {\n    Route::get('/workspace/communications', CommunicationCenterController::class)->name('platform.communications');
+Route::middleware(['auth'])->group(function () {
+    Route::get('/workspace/communications', CommunicationCenterController::class)->name('platform.communications');
     Route::get('/support/tickets/{ticket}/messages/{message}/attachments/{index}', [SupportController::class, 'attachment'])->whereNumber('index')->middleware('throttle:60,10')->name('support.attachment');
     Route::post('/support/tickets/{ticket}/csat', [SupportController::class, 'csat'])->name('support.csat');
 });
