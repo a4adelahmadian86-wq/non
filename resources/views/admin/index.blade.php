@@ -29,7 +29,7 @@
 
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
-                <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="live-pill"><i></i> زنده</span></div>
+                <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="status-chip">وضعیت در زمان بارگذاری</span></div>
                 <div class="ops-grid">
                     <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
@@ -47,6 +47,25 @@
             </article>
 @endif
         </section>
+
+@if($console->sectionAllowed(auth()->user(), 'audit'))
+        <section id="recent-activity" class="admin-panel admin-panel-wide">
+            <div class="admin-panel-head">
+                <div><span class="panel-eyebrow">AUDIT TRAIL</span><h2>فعالیت‌های اخیر</h2><p>آخرین رخدادهای ثبت‌شده در دفتر ممیزی، متناسب با دامنهٔ دسترسی شما.</p></div>
+                <a class="panel-link" href="{{ route('admin.audit') }}">مشاهده دفتر ممیزی <i class="fa-solid fa-arrow-left"></i></a>
+            </div>
+            <div class="admin-activity-list">
+                @forelse($recentAudit as $event)
+                    <article class="admin-activity-row">
+                        <span class="admin-activity-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                        <div><strong>{{ \Illuminate\Support\Str::headline(str_replace(['.', '_'], ' ', $event->action)) }}</strong><small>{{ $event->actor_name ?: 'سامانه' }} · {{ \Illuminate\Support\Carbon::parse($event->created_at)->format('Y/m/d H:i') }}</small></div>
+                    </article>
+                @empty
+                    <div class="admin-empty">هنوز رخداد قابل‌نمایشی در این دامنه ثبت نشده است.</div>
+                @endforelse
+            </div>
+        </section>
+@endif
 
 @if($console->sectionAllowed(auth()->user(), 'settings'))
         <section id="ai-settings" class="admin-section admin-panel-wide">
@@ -195,11 +214,6 @@
         </section>
 @endif
 
-        <section class="admin-footer-actions">
-            @if($console->sectionAllowed(auth()->user(), 'finance'))<a href="{{ route('admin.finance') }}"><i class="fa-solid fa-wallet"></i><div><b>مرکز مالی</b><small>کیف پول، مالیات و درگاه</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'emails'))<a href="{{ route('admin.emails') }}"><i class="fa-solid fa-envelope"></i><div><b>مرکز ایمیل</b><small>ارسال، تنظیمات و لاگ‌ها</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-            @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><i class="fa-solid fa-share-nodes"></i><div><b>شبکه‌های اجتماعی</b><small>مدیریت لینک‌ها و حضور اجتماعی</small></div><i class="fa-solid fa-arrow-left"></i></a>@endif
-        </section>
     @if($scope === 'global')
         <section class="admin-section admin-panel-wide" id="system-health">
             <div class="admin-panel-head">
@@ -238,6 +252,12 @@
 .farast-admin-nav-create-product i{color:#70b4ff;font-size:1rem}
 .farast-admin-nav-create-product b{margin-inline-start:auto;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#2e73d2;color:white;font-size:1rem}
 .farast-admin-nav a[aria-current="page"]{outline:1px solid rgba(111,174,255,.22)}
+.admin-activity-list{display:grid;gap:0}
+.admin-activity-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-top:1px solid #edf1f7;min-width:0}
+.admin-activity-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#edf4ff;color:#315fae}
+.admin-activity-row>div{display:grid;gap:4px;min-width:0}
+.admin-activity-row strong{font-size:11px;color:#253550;overflow-wrap:anywhere}
+.admin-activity-row small{font-size:10px;color:#8390a5}
 @media(max-width:760px){.farast-admin-nav-create-product{margin-inline:8px}}
 </style>
 @endpush
