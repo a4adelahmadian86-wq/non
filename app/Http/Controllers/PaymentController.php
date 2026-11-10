@@ -335,10 +335,25 @@ class PaymentController extends Controller
         try {
             DB::transaction(function () use ($order, $request) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
-                if ($locked->status === 'deposit_paid') return;
+                $snapshot = $locked->pricing_snapshot ?: [];
+                if ($locked->status === 'deposit_paid') {
+                    $path = (string) ($snapshot['source_path'] ?? '');
+                    $hash = (string) ($snapshot['source_hash'] ?? '');
+                    abort_unless($path !== '' && Storage::disk('private')->exists($path), 404, 'فایل مربوط به این برآورد پیدا نشد.');
+                    abort_unless(hash_equals($hash, hash('sha256', Storage::disk('private')->get($path))), 409, 'فایل پس از برآورد تغییر کرده است.');
+                    $request->session()->put('typing_preflight_deposit_order', $locked->id);
+                    $request->session()->put('typing_preflight_accepted', [
+                        'path' => $path,
+                        'hash' => $hash,
+                        'pages' => (int) ($snapshot['estimated_pages'] ?? 1),
+                        'accepted_at' => now()->toIso8601String(),
+                        'deposit_order_id' => $locked->id,
+                        'project_id' => (int) ($snapshot['project_id'] ?? 0) ?: null,
+                    ]);
+                    return;
+                }
                 abort_unless($locked->isDeposit() && $locked->status === 'deposit_pending', 409, 'وضعیت بیعانه معتبر نیست.');
 
-                $snapshot = $locked->pricing_snapshot ?: [];
                 $path = (string) ($snapshot['source_path'] ?? '');
                 $hash = (string) ($snapshot['source_hash'] ?? '');
                 abort_unless($path !== '' && Storage::disk('private')->exists($path), 404, 'فایل مربوط به این برآورد پیدا نشد.');
