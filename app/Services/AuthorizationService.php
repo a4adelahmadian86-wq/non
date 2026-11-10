@@ -301,9 +301,18 @@ class AuthorizationService
             if (! $hasResourceContext) {
                 return true; // Navigation-level visibility; record checks must provide an owner.
             }
-            $ownerId = $context['owner_id'] ?? $context['resource_user_id'] ?? $context['user_id'] ?? null;
 
-            return $ownerId !== null && (int) $ownerId === (int) $user->id;
+            // Prefer an explicit owner field. A null owner is not permission to
+            // fall through to an unrelated actor/user_id attribute.
+            $ownerId = null;
+            foreach (['owner_id', 'resource_user_id', 'user_id'] as $ownerField) {
+                if (array_key_exists($ownerField, $context)) {
+                    $ownerId = $context[$ownerField];
+                    break;
+                }
+            }
+
+            return $ownerId !== null && $ownerId !== '' && (int) $ownerId === (int) $user->id;
         }
 
         if ($scope === 'organization') {
