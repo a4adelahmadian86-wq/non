@@ -121,10 +121,10 @@ class AccountSecuritySessionsTest extends TestCase
         $this->actingAs($user)->post(route('logout'))->assertRedirect(route('home'));
 
         $this->assertGuest();
-        $this->assertNotNull(DB::table('farast_account_sessions')
-            ->where('user_id', $user->id)
-            ->where('session_key', $sessionKey)
-            ->value('revoked_at'));
+        $this->assertDatabaseHas('farast_security_events', [
+            'user_id' => $user->id,
+            'event' => 'logout',
+        ]);
     }
 
 }
