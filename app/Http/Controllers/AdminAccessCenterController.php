@@ -136,34 +136,37 @@ class AdminAccessCenterController extends Controller
             abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل ویرایش نیست.');
 
             // A scope change must not leave existing assignments broader than the role.
-            // Validate every live assignment before mutating the role so scope edits are atomic.
-            $updatedRoleScope = (object) [
-                'scope_type' => $data['scope_type'],
-                'scope_id' => $scopeId,
-            ];
-            $assignments = DB::table('farast_user_roles')
-                ->where('role_id', $role)
-                ->lockForUpdate()
-                ->get();
+            // Validate every assignment only when the scope itself is changing.
+            $oldScopeId = $record->scope_id !== null ? (int) $record->scope_id : null;
+            if ($record->scope_type !== $data['scope_type'] || $oldScopeId !== $scopeId) {
+                $updatedRoleScope = (object) [
+                    'scope_type' => $data['scope_type'],
+                    'scope_id' => $scopeId,
+                ];
+                $assignments = DB::table('farast_user_roles')
+                    ->where('role_id', $role)
+                    ->lockForUpdate()
+                    ->get();
 
-            foreach ($assignments as $assignment) {
-                abort_if(
-                    self::SCOPE_RANK[$assignment->scope_type] < self::SCOPE_RANK[$data['scope_type']],
-                    409,
-                    'ابتدا انتساب‌های گسترده‌تر را محدود یا لغو کنید؛ دامنه جدید نقش با آن‌ها سازگار نیست.'
-                );
+                foreach ($assignments as $assignment) {
+                    abort_if(
+                        self::SCOPE_RANK[$assignment->scope_type] < self::SCOPE_RANK[$data['scope_type']],
+                        409,
+                        'ابتدا انتساب‌های گسترده‌تر را محدود یا لغو کنید؛ دامنه جدید نقش با آن‌ها سازگار نیست.'
+                    );
 
-                $target = User::query()->find($assignment->user_id);
-                abort_unless($target, 409, 'یکی از کاربران دارای انتساب معتبر نیست.');
+                    $target = User::query()->find($assignment->user_id);
+                    abort_unless($target, 409, 'یکی از کاربران دارای انتساب معتبر نیست.');
 
-                $assignmentScopeId = $assignment->scope_id !== null ? (int) $assignment->scope_id : null;
-                $this->assertRoleAssignmentWithinRoleScope(
-                    $target,
-                    $updatedRoleScope,
-                    $assignment->scope_type,
-                    $assignmentScopeId
-                );
-                $this->assertUserBelongsToScope($target, $assignment->scope_type, $assignmentScopeId);
+                    $assignmentScopeId = $assignment->scope_id !== null ? (int) $assignment->scope_id : null;
+                    $this->assertRoleAssignmentWithinRoleScope(
+                        $target,
+                        $updatedRoleScope,
+                        $assignment->scope_type,
+                        $assignmentScopeId
+                    );
+                    $this->assertUserBelongsToScope($target, $assignment->scope_type, $assignmentScopeId);
+                }
             }
 
             DB::table('farast_roles')->where('id', $role)->update([
