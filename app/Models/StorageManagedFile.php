@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class StorageManagedFile extends Model
 {
     protected $fillable = [
-        'storage_volume_id', 'drive_key', 'file_key', 'original_name', 'mime',
+        'storage_volume_id', 'logical_path', 'drive_key', 'file_key', 'original_name', 'mime',
         'size_bytes', 'checksum', 'classification', 'source_module', 'source_type',
         'source_id', 'product_id', 'visibility', 'status', 'replicated_to_volume_id', 'metadata',
     ];
