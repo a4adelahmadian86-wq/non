@@ -44,4 +44,29 @@ class AdminDashboardShellIntegrityTest extends TestCase
         $this->assertSame(1, substr_count($html, 'class="farast-admin-nav"'));
         $this->assertSame(1, substr_count($html, 'id="platform-control"'));
     }
+    public function test_dashboard_activity_feed_displays_real_audit_events_and_links_to_the_audit_ledger(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'name' => 'Activity Feed Admin',
+        ]);
+
+        DB::table('audit_logs')->insert([
+            'user_id' => $admin->id,
+            'action' => 'dashboard.integration_probe',
+            'ip' => '127.0.0.1',
+            'meta' => json_encode(['source' => 'feature-test']),
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.index'));
+
+        $response->assertOk()
+            ->assertSee('فعالیت‌های اخیر')
+            ->assertSee('Dashboard Integration Probe')
+            ->assertSee('Activity Feed Admin')
+            ->assertSee(route('admin.audit'));
+    }
+
 }
