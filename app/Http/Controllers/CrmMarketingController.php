@@ -12,6 +12,7 @@ use App\Models\StoreProduct;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\StoreCouponMarginPolicy;
+use App\Services\StoreCouponBudgetPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -250,6 +251,9 @@ class CrmMarketingController extends Controller
 
             $incentiveProduct = null;
             $budgetCommitted = 0;
+            if (empty($record->incentive_product_id) && $record->incentive_discount_percent !== null) {
+                abort(409, 'محصول هدف کمپین حذف شده یا دیگر در دسترس نیست.');
+            }
             if (! empty($record->incentive_product_id)) {
                 $incentiveProduct = StoreProduct::query()->published()
                     ->whereKey($record->incentive_product_id)->lockForUpdate()->first();
@@ -319,7 +323,11 @@ class CrmMarketingController extends Controller
                             app(StoreCouponMarginPolicy::class)->maximumDiscount($incentiveProduct, (int) $incentiveProduct->price_rials, 1)
                         );
 
+                        $monthlyBudgetAllows = $discount > 0
+                            && app(StoreCouponBudgetPolicy::class)->allows($discount);
+
                         if (! $alreadyPurchased && ! $overlappingOffer && ! $recentOffer && $discount > 0
+                            && $monthlyBudgetAllows
                             && $budgetCommitted + $discount <= (int) $record->budget_cap_rials) {
                             do {
                                 $code = 'FARAST'.Str::upper(Str::random(12));
