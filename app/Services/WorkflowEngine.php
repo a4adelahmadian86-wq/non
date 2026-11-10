@@ -51,6 +51,23 @@ class WorkflowEngine
                     throw new \RuntimeException('Workflow owner does not match the trusted event or authenticated user.');
                 }
 
+                if ($eventWorkflowId !== null) {
+                    $eventMapping = DB::table('farast_workflow_event_workflows as mapping')
+                        ->join('farast_workflow_events as event', 'event.id', '=', 'mapping.event_id')
+                        ->where('mapping.id', $eventWorkflowId)
+                        ->where('mapping.workflow_id', $workflowId)
+                        ->where('mapping.status', 'running')
+                        ->lockForUpdate()
+                        ->first(['event.id as event_id', 'event.user_id', 'event.event_type']);
+
+                    if (! $eventMapping
+                        || (int) $eventMapping->user_id !== (int) $userId
+                        || (int) ($context['event_id'] ?? 0) !== (int) $eventMapping->event_id
+                        || ($context['event_type'] ?? null) !== $eventMapping->event_type) {
+                        throw new \RuntimeException('Workflow run does not match its claimed trusted event.');
+                    }
+                }
+
                 $steps = json_decode((string) $workflow->steps, true);
                 if (! is_array($steps) || count($steps) < 1 || count($steps) > 20) {
                     throw new \RuntimeException('Workflow steps are invalid.');
