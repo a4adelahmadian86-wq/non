@@ -346,6 +346,14 @@ class SmartDiscountMarketingServiceTest extends TestCase
             'user_id' => $user->id,
             'event_type' => 'marketing.offer_viewed',
         ]);
+
+        $this->postJson(route('store.smart-offer.interaction', $assignment))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'user_id' => $user->id,
+            'event_type' => 'marketing.offer_clicked',
+        ]);
     }
 
     public function test_opt_out_revokes_outstanding_smart_offers_and_deactivates_their_codes(): void
