@@ -12,8 +12,15 @@ class StorageConnectionService
 
     public function verify(StorageVolume $volume): array
     {
+        $inventory = null;
+        $inventoryError = null;
         if ($volume->driver === 's3') {
             $result = $this->s3->probe($volume);
+            try {
+                $inventory = $this->s3->inventory($volume);
+            } catch (\\Throwable $exception) {
+                $inventoryError = mb_substr($exception->getMessage(), 0, 400);
+            }
         } elseif ($volume->driver === 'local') {
             $root = storage_path('app/storage-volumes/'.$volume->id);
             if (! is_dir($root) && ! mkdir($root, 0775, true) && ! is_dir($root)) {
@@ -28,6 +35,7 @@ class StorageConnectionService
                 @unlink($probe);
             }
             $result = ['read' => true, 'write' => true, 'delete' => true];
+            $inventory = $this->localInventory($root);
         } else {
             throw new RuntimeException('درایور این سرویس هنوز پشتیبانی نمی‌شود.');
         }
@@ -36,9 +44,30 @@ class StorageConnectionService
             'status' => 'healthy',
             'last_checked_at' => now(),
             'last_success_at' => now(),
-            'capabilities' => $result,
+            'capabilities' => array_merge($result, ['list' => $inventory !== null]),
+            'used_bytes' => $inventory['used_bytes'] ?? $volume->used_bytes,
+            'object_count' => $inventory['object_count'] ?? $volume->object_count,
+            'metadata' => array_merge((array) $volume->metadata, [
+                'inventory_checked_at' => now()->toIso8601String(),
+                'inventory_error' => $inventoryError,
+            ]),
         ])->save();
 
         return $result;
+    }
+
+    private function localInventory(string $root): array
+    {
+        $count = 0;
+        $bytes = 0;
+        if (! is_dir($root)) return ['object_count' => 0, 'used_bytes' => 0];
+        $iterator = new \\RecursiveIteratorIterator(new \\RecursiveDirectoryIterator($root, \\FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            if ($file->isFile() && ! str_starts_with($file->getFilename(), '.farast-health-')) {
+                $count++;
+                $bytes += $file->getSize();
+            }
+        }
+        return ['object_count' => $count, 'used_bytes' => $bytes];
     }
 }
