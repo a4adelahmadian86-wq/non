@@ -23,14 +23,19 @@ class AdminStorageController extends Controller
     public function index()
     {
         $volumes = StorageVolume::withCount('files')->withSum('files', 'size_bytes')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
-        $drives = collect(self::DRIVES)->map(function (array $definition, string $key) use ($volumes) {
+        $inventory = StorageManagedFile::query()->where('status', '!=', 'deleted')
+            ->selectRaw('drive_key, COUNT(*) as file_count, COALESCE(SUM(size_bytes), 0) as bytes_used, SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as pending_count', ['pending_transfer', 'transfer_error'])
+            ->groupBy('drive_key')->get()->keyBy('drive_key');
+        $drives = collect(self::DRIVES)->map(function (array $definition, string $key) use ($volumes, $inventory) {
             $items = $volumes->get($key, collect());
+            $files = $inventory->get($key);
             return [
                 'key' => $key, 'title' => $definition['title'], 'region' => $definition['region'],
                 'kind' => $definition['kind'], 'volumes' => $items,
                 'capacity' => $items->isNotEmpty() && $items->every(fn ($v) => $v->capacity_bytes !== null) ? $items->sum('capacity_bytes') : null,
-                'used' => $items->sum('files_sum_size_bytes'),
-                'files' => $items->sum('files_count'),
+                'used' => (int) ($files->bytes_used ?? 0),
+                'files' => (int) ($files->file_count ?? 0),
+                'pending' => (int) ($files->pending_count ?? 0),
                 'healthy' => $items->where('status', 'healthy')->count(),
             ];
         });
