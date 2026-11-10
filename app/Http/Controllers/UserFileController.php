@@ -48,9 +48,12 @@ class UserFileController extends Controller
     public function select(UserFile $file, Request $request)
     {
         abort_unless($file->user_id === $request->user()->id, 403);
-        abort_unless(Storage::disk($file->disk ?: 'private')->exists($file->path), 404, 'فایل در فضای نگهداری موجود نیست.');
-
-        $bytes = Storage::disk($file->disk ?: 'private')->get($file->path);
+        if ($file->status === 'remote' && $file->remote_path) {
+            $bytes = $this->readArchivedUserFile($file);
+        } else {
+            abort_unless(Storage::disk($file->disk ?: 'private')->exists($file->path), 404, 'فایل در فضای نگهداری موجود نیست.');
+            $bytes = Storage::disk($file->disk ?: 'private')->get($file->path);
+        }
         $sourcePath = 'typing/'.$request->user()->id.'/'.Str::uuid().'-'.basename($file->path);
         Storage::disk('private')->put($sourcePath, $bytes);
 
@@ -80,6 +83,43 @@ class UserFileController extends Controller
         if ($file->remote_path) Storage::disk('farast_remote')->delete($file->remote_path);
         $file->delete();
         return response()->json(['ok' => true]);
+    }
+
+    private function readArchivedUserFile(UserFile $file): string
+    {
+        $archiveStream = Storage::disk('farast_remote')->readStream($file->remote_path);
+        abort_unless(is_resource($archiveStream), 404, 'نسخه آرشیوی فایل موجود نیست.');
+        $archiveTemp = tmpfile();
+        abort_unless(is_resource($archiveTemp), 503, 'فضای موقت برای بازکردن فایل آرشیوی در دسترس نیست.');
+
+        try {
+            stream_copy_to_stream($archiveStream, $archiveTemp);
+            $archivePath = stream_get_meta_data($archiveTemp)['uri'] ?? null;
+            abort_unless(is_string($archivePath), 503);
+            $zip = new \ZipArchive();
+            abort_unless($zip->open($archivePath) === true, 404, 'آرشیو فایل قابل بازکردن نیست.');
+            try {
+                $entry = $file->original_name;
+                if ($zip->locateName($entry) === false) {
+                    $entry = $zip->getNameIndex(0) ?: '';
+                }
+                abort_unless($entry !== '', 404, 'فایل در آرشیو پیدا نشد.');
+                $stream = $zip->getStream($entry);
+                abort_unless(is_resource($stream), 404, 'خواندن فایل آرشیوی ممکن نیست.');
+                try {
+                    $bytes = stream_get_contents($stream);
+                    abort_unless(is_string($bytes), 404);
+                    return $bytes;
+                } finally {
+                    fclose($stream);
+                }
+            } finally {
+                $zip->close();
+            }
+        } finally {
+            fclose($archiveStream);
+            fclose($archiveTemp);
+        }
     }
 
     private function present(UserFile $file): array
