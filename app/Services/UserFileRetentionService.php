@@ -22,6 +22,7 @@ class UserFileRetentionService
             ->get()
             ->each(function (UserFile $file) use (&$count) {
                 try {
+                    $oldPath = $file->path;
                     $stored = $this->storage->adoptExistingPrivate(
                         $file->path,
                         $file->original_name,
@@ -40,6 +41,7 @@ class UserFileRetentionService
                         'remote_expires_at' => null,
                         'transferred_at' => now(),
                     ]);
+                    Storage::disk('private')->delete($oldPath);
                     $count++;
                 } catch (\Throwable $exception) {
                     report($exception);
