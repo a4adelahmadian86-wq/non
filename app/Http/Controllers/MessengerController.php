@@ -261,9 +261,17 @@ class MessengerController extends Controller
     public function markRead(Request $request, Conversation $conversation, ?int $messageId = null)
     {
         $this->authorizeParticipant($request, $conversation);
+        $participant = DB::table('conversation_participants')
+            ->where('conversation_id', $conversation->id)->where('user_id', $request->user()->id)
+            ->first(['last_read_message_id']);
+        $targetMessageId = max(
+            (int) ($participant->last_read_message_id ?? 0),
+            (int) ($messageId ?: ($conversation->messages()->max('id') ?? 0)),
+        );
+
         DB::table('conversation_participants')
             ->where('conversation_id', $conversation->id)->where('user_id', $request->user()->id)
-            ->update(['last_read_message_id' => $messageId ?: (int) ($conversation->messages()->max('id') ?? 0), 'read_at' => now(), 'last_active_at' => now(), 'updated_at' => now()]);
+            ->update(['last_read_message_id' => $targetMessageId, 'read_at' => now(), 'last_active_at' => now(), 'updated_at' => now()]);
 
         return response()->json(['ok' => true]);
     }
