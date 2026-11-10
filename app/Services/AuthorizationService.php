@@ -307,10 +307,15 @@ class AuthorizationService
         }
 
         if ($scope === 'organization') {
-            if ($hasResourceContext && ! array_key_exists('organization_id', $context)) {
+            // Record-level checks must use the record's actual organization.
+            // Never infer ownership from the user's organization or the role scope
+            // when the resource attribute is absent or explicitly null.
+            if ($hasResourceContext && (! array_key_exists('organization_id', $context) || $context['organization_id'] === null || $context['organization_id'] === '')) {
                 return false;
             }
-            $organizationId = $context['organization_id'] ?? $scopeId ?? $user->organization_id;
+            $organizationId = $hasResourceContext
+                ? $context['organization_id']
+                : ($scopeId ?? $user->organization_id);
 
             return $organizationId !== null
                 && $user->organization_id !== null
@@ -319,10 +324,12 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
-            if ($hasResourceContext && ! array_key_exists('team_id', $context)) {
+            // As with organizations, a team-scoped grant must not silently
+            // substitute its own scope ID for a missing resource team_id.
+            if ($hasResourceContext && (! array_key_exists('team_id', $context) || $context['team_id'] === null || $context['team_id'] === '')) {
                 return false;
             }
-            $teamId = $context['team_id'] ?? $scopeId;
+            $teamId = $hasResourceContext ? $context['team_id'] : $scopeId;
             if ($teamId !== null && $scopeId !== null && (int) $teamId !== (int) $scopeId) {
                 return false;
             }
