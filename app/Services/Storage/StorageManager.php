@@ -36,7 +36,7 @@ class StorageManager
                 $this->writeToVolume($volume, $key, $file->getRealPath());
                 try {
                     return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
-                } catch (\\Throwable $exception) {
+                } catch (\Throwable $exception) {
                     if ($volume->driver === 's3') $this->s3->delete($volume, $key);
                     else @unlink($this->localVolumePath($volume, $key));
                     throw $exception;
@@ -183,7 +183,7 @@ class StorageManager
             ->where('status', 'healthy')
             ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$bytes]))
             ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $bytes))
-            ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('(SELECT COUNT(*) FROM storage_managed_files WHERE storage_managed_files.storage_volume_id = storage_volumes.id AND storage_managed_files.status != ?) < storage_volumes.file_limit', ['deleted']))
+            ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
             ->orderBy('priority')
             ->first();
     }
