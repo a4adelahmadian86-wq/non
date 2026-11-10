@@ -223,14 +223,12 @@ class CheckoutPaymentClarityTest extends TestCase
                 'project_id' => $project->id,
             ]);
 
-        $response->assertOk()
-            ->assertJsonPath('action', 'deposit')
-            ->assertJsonPath('order_id', fn ($id) => is_int($id) || ctype_digit((string) $id));
-
+        $response->assertOk()->assertJsonPath('action', 'deposit');
         $orderId = (int) $response->json('order_id');
+        $this->assertGreaterThan(0, $orderId);
         $order = Order::findOrFail($orderId);
         $this->assertSame($project->id, (int) data_get($order->pricing_snapshot, 'project_id'));
-        $this->assertSame($project->id, (int) data_get(session('typing_preflight_deposit_order'), 'project_id', $project->id));
+        $this->assertSame($orderId, (int) session('typing_preflight_deposit_order'));
     }
 
 }
