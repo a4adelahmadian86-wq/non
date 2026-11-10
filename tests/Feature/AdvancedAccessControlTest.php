@@ -221,6 +221,7 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['status' => 'active']));
         $this->assertTrue($authorization->allowsFor($employee, 'documents.view', ['owner_id' => $employee->id, 'status' => 'active']));
         $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['owner_id' => $employee->id + 1, 'status' => 'active']));
+        $this->assertFalse($authorization->allowsFor($employee, 'documents.view', ['owner_id' => null, 'user_id' => $employee->id, 'status' => 'active']));
     }
 
     public function test_an_admin_request_scope_cannot_leak_into_another_users_permission_decision(): void
