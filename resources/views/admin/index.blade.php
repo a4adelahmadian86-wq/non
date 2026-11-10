@@ -1,22 +1,6 @@
-@extends('layouts.app')
-@section('content')
-<div class="farast-admin" dir="rtl">
-    @include('admin.partials.sidebar')
-
-    <main class="farast-admin-main">
-        <header class="farast-admin-topbar">
-            <div class="farast-admin-heading">
-                <div class="farast-admin-kicker"><span></span> MASTER CONTROL</div>
-                <h1>مرکز عملیات فراست</h1>
-                <p>وضعیت واقعی محصول، کاربران، AI و کنترل‌های اجرایی را از یک فضای واحد مدیریت کنید.</p>
-            </div>
-            <div class="farast-admin-top-actions">
-                <a href="/" target="_blank" class="admin-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> مشاهده سایت</a>
-                <div class="farast-admin-user"><span>م</span><div><b>{{ auth()->user()->name ?: 'کاربر کنسول' }}</b><small>{{ auth()->user()->mobile }}</small></div><form method="post" action="{{ route('logout') }}">@csrf<button aria-label="خروج"><i class="fa-solid fa-right-from-bracket"></i></button></form></div>
-            </div>
-        </header>
-
-        @if(session('status'))
+@extends('layouts.admin')
+@section('admin-content')
+@if(session('status'))
             <div class="farast-admin-toast"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>
         @endif
 
@@ -245,8 +229,6 @@
 @if($console->sectionAllowed(auth()->user(), 'social'))<a href="{{ route('admin.social') }}"><span class="ops-icon orange"><i class="fa-solid fa-bullhorn"></i></span><div><b>Content</b><small>اعلان و شبکه‌های اجتماعی</small></div></a>@endif
 </div></section>
 @endif
-    </main>
-</div>
 @endsection
 
 
