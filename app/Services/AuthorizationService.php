@@ -54,21 +54,22 @@ class AuthorizationService
      */
     public function explain(?User $user, string $permission, array $context = []): array
     {
+        $contextLevel = $context === [] ? 'navigation_only' : 'resource';
         if (! $user || $user->is_blocked) {
-            return ['allowed' => false, 'reason' => 'inactive_or_blocked', 'source' => null, 'permission' => $permission];
+            return ['allowed' => false, 'reason' => 'inactive_or_blocked', 'source' => null, 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
         if ($user->isAdmin()) {
-            return ['allowed' => true, 'reason' => 'system_administrator', 'source' => 'system', 'permission' => $permission];
+            return ['allowed' => true, 'reason' => 'system_administrator', 'source' => 'system', 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
         $permissionId = $this->permissionId($permission);
         if (! $permissionId) {
-            return ['allowed' => false, 'reason' => 'unknown_permission', 'source' => null, 'permission' => $permission];
+            return ['allowed' => false, 'reason' => 'unknown_permission', 'source' => null, 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
         if (! $this->scopeMatches($user, $this->baseScope($user), null, $context)) {
-            return ['allowed' => false, 'reason' => 'outside_base_scope', 'source' => null, 'permission' => $permission];
+            return ['allowed' => false, 'reason' => 'outside_base_scope', 'source' => null, 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
         $matching = array_values(array_filter(
@@ -86,13 +87,14 @@ class AuthorizationService
                 'reason' => 'direct_'.$override->effect.'_override',
                 'source' => 'user_override',
                 'permission' => $permission,
+                'context_level' => $contextLevel,
                 'override_id' => (int) $override->id,
                 'scope' => $override->scope_type,
             ];
         }
 
         if ($this->hasLegacyGrantForContext($user, $permissionId, $context)) {
-            return ['allowed' => true, 'reason' => 'legacy_role_grant', 'source' => 'legacy_role', 'permission' => $permission];
+            return ['allowed' => true, 'reason' => 'legacy_role_grant', 'source' => 'legacy_role', 'permission' => $permission, 'context_level' => $contextLevel];
         }
 
         $grant = $this->dynamicGrant($user, $permissionId, $context);
@@ -102,6 +104,7 @@ class AuthorizationService
             'reason' => $grant ? 'assigned_role_grant' : 'no_matching_grant',
             'source' => $grant ? 'assigned_role' : null,
             'permission' => $permission,
+            'context_level' => $contextLevel,
             'role_id' => $grant ? (int) $grant->role_id : null,
             'scope' => $grant?->permission_scope_type,
         ];
