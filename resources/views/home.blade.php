@@ -63,7 +63,7 @@
     <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero-copy">
             <span class="home-kicker"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> فضای یکپارچه فراست</span>
-            <h1 id="home-title">هر چیزی برای کار با محتوا و سند، از یک نقطه</h1>
+            <h1 id="home-title">از فایل خام تا سند آماده؛ از یک مسیر روشن</h1>
             <p>فراست دو مسیر روشن پیش روی شما می‌گذارد: محصولات دیجیتال و آموزشی را پیدا کنید، یا فایل و گفتار خود را به سندی قابل ویرایش تبدیل کنید؛ از شروع تا خروجی، در یک محیط منسجم.</p>
             <div class="home-hero-actions">
                 <a class="home-hero-cta home-hero-cta--primary" href="#homeDiscovery"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> شروع کار با فایل</a>
@@ -252,6 +252,38 @@
             <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
             <span>برآورد هزینه بر اساس محتوای واقعی فایل انجام می‌شود؛ جزئیات و مبلغ پیش از تأیید به شما نمایش داده می‌شود.</span>
             <a href="{{ route('pricing') }}">روش محاسبه هزینه</a>
+        </div>
+    </section>
+
+    <section class="home-use-cases" aria-labelledby="home-use-cases-title">
+        <div class="home-section-heading">
+            <div>
+                <span class="home-kicker">فراست در کارهای روزمره</span>
+                <h2 id="home-use-cases-title">برای کاری که همین امروز باید انجام دهید</h2>
+                <p>به‌جای جست‌وجو میان ابزارهای پراکنده، از نزدیک‌ترین مسیر به نیازتان شروع کنید.</p>
+            </div>
+        </div>
+        <div class="home-use-case-grid">
+            <a class="home-use-case" href="#homeDiscovery" data-home-intent="zero">
+                <span class="home-use-case__icon"><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i></span>
+                <span class="home-use-case__body"><strong>مقاله و پژوهش</strong><small>ساخت و قالب‌بندی متن‌های علمی و پژوهشی</small></span>
+                <span class="home-use-case__arrow"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i></span>
+            </a>
+            <a class="home-use-case" href="#homeDiscovery" data-home-intent="zero">
+                <span class="home-use-case__icon"><i class="fa-solid fa-file-signature" aria-hidden="true"></i></span>
+                <span class="home-use-case__body"><strong>رزومه و اسناد رسمی</strong><small>شروع یک سند اداری با قالب مناسب</small></span>
+                <span class="home-use-case__arrow"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i></span>
+            </a>
+            <a class="home-use-case" href="#homeDiscovery" data-home-intent="file">
+                <span class="home-use-case__icon"><i class="fa-solid fa-file-image" aria-hidden="true"></i></span>
+                <span class="home-use-case__body"><strong>PDF و تصویر اسکن‌شده</strong><small>استخراج متن و ادامه ویرایش در سند</small></span>
+                <span class="home-use-case__arrow"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i></span>
+            </a>
+            <a class="home-use-case" href="#homeDiscovery" data-home-intent="service">
+                <span class="home-use-case__icon"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i></span>
+                <span class="home-use-case__body"><strong>یادداشت و گفتار</strong><small>تبدیل گفتار به متن قابل بازبینی</small></span>
+                <span class="home-use-case__arrow"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i></span>
+            </a>
         </div>
     </section>
 
