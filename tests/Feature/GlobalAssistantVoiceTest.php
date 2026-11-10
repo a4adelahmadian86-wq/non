@@ -36,6 +36,13 @@ class GlobalAssistantVoiceTest extends TestCase
                 'asr_ready' => true, 'tts_ready' => true, 'chat_ready' => true,
             ], 200),
         ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true,
+                'tts_ready' => true,
+                'chat_ready' => true,
+            ], 200),
+        ]);
         $response = $this->actingAs(User::factory()->create())
             ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
 
@@ -142,7 +149,8 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('provider', 'render')
             ->assertJsonPath('endpointing', 'server-vad');
         $this->assertStringNotContainsString('render-shared-voice-token', $response->getContent());
-        Http::assertNothingSent();
+        Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer render-shared-voice-token'));
     }
 
     public function test_render_stream_token_fails_closed_when_render_rejects_the_shared_token(): void
