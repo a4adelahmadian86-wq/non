@@ -115,7 +115,6 @@ class ProductLifecycleHealthService
                 ->join('store_product_files as files', 'files.id', '=', 'documents.product_file_id')
                 ->where(function ($query): void {
                     $query->where('files.disk', '<>', 'private')
-                        ->orWhere('files.is_active', false)
                         ->orWhere('files.scan_status', '<>', 'clean')
                         ->orWhereNotIn('files.purpose', ['product_download', 'lesson_resource']);
                 })
