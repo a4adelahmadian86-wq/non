@@ -17,7 +17,11 @@ class StorageConnectionService
         $credentials = (array) ($volume->credentials ?? []);
 
         if ($volume->driver === 'local') {
-            $adapter = new LocalFilesystemAdapter(storage_path('app/storage-volumes/'.$volume->id));
+            $root = storage_path('app/storage-volumes/'.$volume->id);
+            if (! is_dir($root) && ! mkdir($root, 0750, true) && ! is_dir($root)) {
+                throw new RuntimeException('Unable to create local storage volume directory.');
+            }
+            $adapter = new LocalFilesystemAdapter($root);
             return new LaravelFilesystemAdapter(new Filesystem($adapter, ['visibility' => 'private']), $adapter, ['throw' => true]);
         }
 
