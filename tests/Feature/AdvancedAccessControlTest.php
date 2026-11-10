@@ -376,7 +376,7 @@ class AdvancedAccessControlTest extends TestCase
                 'customer_id' => $outside->id,
             ], null, true);
             $this->fail('A workflow must not create CRM follow-ups outside its owner\'s organization scope.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('outside the authorized customer scope', $exception->getMessage());
         }
 
