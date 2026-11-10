@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StoreProductDocument;
 use App\Services\ProductDocumentRetryService;
+use App\Services\ProductLifecycleHealthService;
 use App\Services\ProductSupervisorClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -11,7 +12,7 @@ use Illuminate\Http\Request;
 
 class AdminProductOperationsController extends Controller
 {
-    public function index(ProductSupervisorClient $supervisor)
+    public function index(ProductSupervisorClient $supervisor, ProductLifecycleHealthService $lifecycleHealth)
     {
         $statuses = ['pending', 'processing', 'completed', 'extracted', 'partial', 'failed', 'stale', 'awaiting_provider'];
         $documentStats = array_fill_keys($statuses, 0);
@@ -45,6 +46,7 @@ class AdminProductOperationsController extends Controller
             'documentStats' => $documentStats,
             'documents' => $documents,
             'queueStats' => $queueStats,
+            'lifecycleHealth' => $lifecycleHealth->snapshot(),
             'supervisorConfigured' => $supervisor->configured(),
             'audioConfigured' => $audioConfigured,
             'queueDriver' => config('queue.default'),

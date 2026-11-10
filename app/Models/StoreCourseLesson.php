@@ -22,9 +22,20 @@ class StoreCourseLesson extends Model
     ];
 
     public function section(): BelongsTo { return $this->belongsTo(StoreCourseSection::class, 'section_id'); }
+
     public function resources(): HasMany
     {
         return $this->hasMany(StoreProductFile::class, 'course_lesson_id')
             ->where('purpose', 'lesson_resource')->orderBy('id');
+    }
+
+    /**
+     * Match the storefront's lesson visibility contract.
+     * Drip scheduling controls when an enrolled learner can open a lesson,
+     * not whether the lesson is part of the published course curriculum.
+     */
+    public function scopePublishable($query)
+    {
+        return $query->where('is_published', true);
     }
 }
