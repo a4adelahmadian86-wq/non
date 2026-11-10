@@ -64,6 +64,11 @@ jobs:
           while IFS= read -r -d '' file; do
             if ! php -l "$file"; then
               echo "---- Compiled Blade context: $file ----"
+              echo "---- Compiled Blade source mapping ----"
+              tail -n 3 "$file" || true
+              echo "---- Compiled Blade context (first 80 lines) ----"
+              nl -ba "$file" | sed -n '1,80p'
+              echo "---- Compiled Blade context (lines 175-215) ----"
               nl -ba "$file" | sed -n '175,215p'
               exit 1
             fi
