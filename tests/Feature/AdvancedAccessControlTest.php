@@ -477,6 +477,14 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_blocked_platform_admin_cannot_open_access_administration(): void
+    {
+        $admin = $this->user('09140000135', User::ROLE_ADMIN);
+        $admin->forceFill(['is_blocked' => true])->save();
+
+        $this->actingAs($admin)->get('/admin/access-center')->assertForbidden();
+    }
+
     public function test_sensitive_permissions_cannot_be_granted_as_direct_user_overrides(): void
     {
         $admin = $this->user('09140000131', User::ROLE_ADMIN);
