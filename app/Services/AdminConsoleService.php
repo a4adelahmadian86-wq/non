@@ -112,13 +112,19 @@ class AdminConsoleService
             ->with('teams:id')
             ->whereIn('id', $ids)
             ->get(['id', 'organization_id']);
+        $supervisedTeams = Team::query()
+            ->whereIn('supervisor_id', $candidates->pluck('id'))
+            ->get(['id', 'supervisor_id'])
+            ->groupBy('supervisor_id');
 
         $visible = [];
         foreach ($candidates as $candidate) {
+            $memberTeamIds = $candidate->teams->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $supervisedTeamIds = ($supervisedTeams->get($candidate->id) ?? collect())->pluck('id')->map(fn ($id) => (int) $id)->all();
             $context = [
                 'owner_id' => (int) $candidate->id,
                 'organization_id' => $candidate->organization_id,
-                'team_ids' => $candidate->teams->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'team_ids' => array_values(array_unique(array_merge($memberTeamIds, $supervisedTeamIds))),
             ];
 
             if ($this->authorization->allowsFor($user, $permission, $context)) {
