@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\FarastProject;
 use App\Services\CapabilityService;
 use App\Services\DeclineMessageService;
 use App\Services\FreeQuotaService;
@@ -79,11 +80,17 @@ class TypingPreflightController extends Controller
         FreeQuotaService $free,
         CapabilityService $capabilities,
     ) {
-        $request->validate(['accept' => ['accepted']]);
+        $data = $request->validate([
+            'accept' => ['accepted'],
+            'project_id' => ['nullable', 'integer'],
+        ]);
         $quoted = $request->session()->get('typing_preflight_quote');
         abort_unless(is_array($quoted), 422, 'برآورد اولیه پیدا نشد. فایل را دوباره بررسی کنید.');
 
         $user = $request->user();
+        $project = !empty($data['project_id'])
+            ? FarastProject::query()->whereKey((int) $data['project_id'])->where('user_id', $user->id)->firstOrFail()
+            : null;
         $caps = $capabilities->forUser($user);
         abort_unless($caps['active'] && $caps['can_type'], 403);
 
@@ -112,6 +119,9 @@ class TypingPreflightController extends Controller
                 ->first(fn (Order $order) => ($order->pricing_snapshot['source_hash'] ?? null) === $hash);
 
             if ($existing && $existing->status === 'deposit_paid') {
+                if ($project) {
+                    $existing->update(['pricing_snapshot' => array_merge($existing->pricing_snapshot ?? [], ['project_id' => $project->id])]);
+                }
                 $request->session()->put('typing_preflight_deposit_order', $existing->id);
                 $request->session()->put('typing_preflight_accepted', [
                     'path' => $path,
@@ -119,9 +129,10 @@ class TypingPreflightController extends Controller
                     'pages' => $pages,
                     'accepted_at' => now()->toIso8601String(),
                     'deposit_order_id' => $existing->id,
+                    'project_id' => $project?->id,
                 ]);
 
-                return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor')]);
+                return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor', $project ? ['project' => $project->id] : [])]);
             }
 
             $order = $existing ?: Order::create([
@@ -138,6 +149,7 @@ class TypingPreflightController extends Controller
                     'source_hash' => $hash,
                     'source_name' => $quoted['name'] ?? null,
                     'source_mime' => $mime,
+                    'project_id' => $project?->id,
                     'estimated_pages' => $pages,
                     'estimated_subtotal_rials' => $subtotal,
                     'estimated_discount_rials' => $discount,
@@ -152,6 +164,9 @@ class TypingPreflightController extends Controller
                 'terms_accepted_at' => now(),
             ]);
 
+            if ($project && (int) data_get($order->pricing_snapshot, 'project_id', 0) !== (int) $project->id) {
+                $order->update(['pricing_snapshot' => array_merge($order->pricing_snapshot ?? [], ['project_id' => $project->id])]);
+            }
             $request->session()->put('typing_preflight_deposit_order', $order->id);
 
             return response()->json([
@@ -167,9 +182,10 @@ class TypingPreflightController extends Controller
             'hash' => $hash,
             'pages' => $pages,
             'accepted_at' => now()->toIso8601String(),
+            'project_id' => $project?->id,
         ]);
 
-        return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor')]);
+        return response()->json(['ok' => true, 'action' => 'editor', 'editor_url' => route('editor', $project ? ['project' => $project->id] : [])]);
     }
 
     public function decline(Request $request, DeclineMessageService $messages)
