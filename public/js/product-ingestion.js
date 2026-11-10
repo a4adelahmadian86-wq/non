@@ -176,10 +176,15 @@
       '<div class="product-ingestion-warning">' + escapeHtml(item) + '</div>'
     ).join('');
 
+    const hasWarnings = inspection.risk_level === 'warning' || findings.length > 0 || warnings.length > 0;
     report.innerHTML =
       '<h4>خلاصه بررسی سایت، بدون استفاده از هوش مصنوعی</h4>' +
       '<div class="product-ingestion-report-grid">' + grid + '</div>' + archive + notes +
-      '<p><strong>نتیجه بررسی:</strong> ' + (inspection.safe ? 'ساختار فایل از کنترل‌های ایستای داخلی عبور کرده است.' : 'فایل برای ذخیره‌سازی پذیرفته نشده است.') + '</p>';
+      '<p><strong>نتیجه بررسی:</strong> ' + (!inspection.safe
+        ? 'فایل برای ذخیره‌سازی پذیرفته نشده است.'
+        : (hasWarnings
+          ? 'بررسی اولیه انجام شد، اما بعضی محتواها کامل بررسی نشده‌اند. ذخیره با وضعیت هشدار انجام می‌شود و فایل تا بررسی مجدد، پاک و آماده انتشار محسوب نمی‌شود.'
+          : 'ساختار فایل از کنترل‌های ایستای داخلی عبور کرده است.')) + '</p>';
   };
 
   const processNext = async () => {
@@ -221,7 +226,10 @@
       renderReport(payload);
       setStep('review', ['received', 'upload', 'inspect']);
       confirmButton.disabled = !payload.inspection?.safe;
-      confirmButton.textContent = 'تأیید و ذخیره فایل';
+      const hasWarnings = payload.inspection?.risk_level === 'warning'
+        || (payload.inspection?.findings || []).length > 0
+        || (payload.inspection?.warnings || []).length > 0;
+      confirmButton.textContent = hasWarnings ? 'ذخیره با وضعیت هشدار' : 'تأیید و ذخیره فایل';
       cancelButton.textContent = 'رد فایل';
       if (!payload.inspection?.safe) {
         showError('این فایل از بررسی ایستای داخلی عبور نکرد و ذخیره نخواهد شد.');
