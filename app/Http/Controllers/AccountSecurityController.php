@@ -64,6 +64,7 @@ class AccountSecurityController extends Controller
         abort_if(hash_equals(hash('sha256', $request->session()->getId()), $record->session_key), 422, 'برای خروج از نشست فعلی از دکمه خروج استفاده کنید.');
 
         $this->revokeRecord($record);
+        $this->rotateRememberToken($request->user());
         $this->recordEvent($request, 'session_revoked', ['device' => $record->device_label]);
         $this->notify($request->user(), 'security_session_revoked', 'یک نشست از حساب شما خارج شد', 'یک نشست از مرکز امنیت حساب شما لغو شد.', ['url' => route('platform.security')]);
 
@@ -154,6 +155,9 @@ class AccountSecurityController extends Controller
 
         if ($others->isNotEmpty()) {
             EditorSession::where('user_id', $request->user()->id)->delete();
+            // Invalidate persistent recaller cookies so revoked browsers cannot
+            // silently recreate their session; already active sessions remain.
+            $this->rotateRememberToken($request->user());
         }
 
         $this->recordEvent($request, 'other_sessions_revoked', ['count' => $others->count()]);
