@@ -38,41 +38,56 @@ class AdminStorageController extends Controller
         return view('admin.storage.index', compact('drives'));
     }
 
-    public function backups()\n    {\n        $backups = StorageBackupRun::with('volume')->latest()->paginate(30);\n        return view('admin.storage.backups', compact('backups'));\n    }\n\n    public function store(Request $request, StorageConnectionService $connections)
+    public function backups()
+    {
+        $backups = StorageBackupRun::with('volume')->latest()->paginate(30);
+        return view('admin.storage.backups', compact('backups'));
+    }
+
+    public function store(Request $request, StorageConnectionService $connections)
     {
         $data = $request->validate([
             'drive_key' => ['required', Rule::in(array_keys(self::DRIVES))],
-            'name' => ['required', 'string', 'max:120'],
-            'driver' => ['required', Rule::in(['s3', 'local'])],
-            'provider' => ['nullable', 'string', 'max:120'],
-            'region' => ['nullable', 'string', 'max:80'],
-            'endpoint' => ['nullable', 'url', 'max:500'],
-            'bucket' => ['nullable', 'string', 'max:190'],
-            'credentials_json' => ['required_if:driver,s3', 'nullable', 'string', 'max:12000'],
-            'capacity_bytes' => ['nullable', 'integer', 'min:1'],
-            'file_limit' => ['nullable', 'integer', 'min:1'],
-            'max_file_bytes' => ['nullable', 'integer', 'min:1'],
-            'priority' => ['nullable', 'integer', 'min:1', 'max:10000'],
+            'connection_json' => ['required', 'string', 'max:16000'],
         ]);
 
-        $credentials = [];
-        if ($data['driver'] === 's3') {
-            $credentials = json_decode((string) ($data['credentials_json'] ?? ''), true);
-            if (! is_array($credentials) || json_last_error() !== JSON_ERROR_NONE) {
-                return back()->withErrors(['credentials_json' => 'اطلاعات اتصال باید JSON معتبر باشد.'])->withInput($request->except('credentials_json'));
+        $connection = json_decode($data['connection_json'], true);
+        if (! is_array($connection) || json_last_error() !== JSON_ERROR_NONE) {
+            return back()->withErrors(['connection_json' => 'اطلاعات اتصال باید JSON معتبر باشد.'])->withInput($request->except('connection_json'));
+        }
+
+        $driver = (string) ($connection['driver'] ?? 's3');
+        if (! in_array($driver, ['s3', 'local'], true)) {
+            return back()->withErrors(['connection_json' => 'درایور اعلام‌شده پشتیبانی نمی‌شود.'])->withInput($request->except('connection_json'));
+        }
+
+        $name = trim((string) ($connection['name'] ?? $connection['provider'] ?? 'فضای ذخیره‌سازی جدید'));
+        if ($name === '') {
+            return back()->withErrors(['connection_json' => 'نام سرویس در اطلاعات اتصال مشخص نشده است.'])->withInput($request->except('connection_json'));
+        }
+
+        $credentials = (array) ($connection['credentials'] ?? []);
+        foreach (['key', 'secret', 'bucket', 'region', 'endpoint', 'use_path_style_endpoint'] as $key) {
+            if (array_key_exists($key, $connection) && ! array_key_exists($key, $credentials)) {
+                $credentials[$key] = $connection[$key];
             }
         }
 
         $volume = StorageVolume::create([
-            'drive_key' => $data['drive_key'], 'name' => $data['name'],
-            'provider' => $data['provider'] ?? null, 'driver' => $data['driver'],
-            'region' => $data['region'] ?? null, 'endpoint' => $data['endpoint'] ?? ($credentials['endpoint'] ?? null),
-            'bucket' => $data['bucket'] ?? ($credentials['bucket'] ?? null),
+            'drive_key' => $data['drive_key'],
+            'name' => mb_substr($name, 0, 120),
+            'provider' => isset($connection['provider']) ? mb_substr((string) $connection['provider'], 0, 120) : null,
+            'driver' => $driver,
+            'region' => isset($connection['region']) ? mb_substr((string) $connection['region'], 0, 80) : null,
+            'endpoint' => $connection['endpoint'] ?? ($credentials['endpoint'] ?? null),
+            'bucket' => $connection['bucket'] ?? ($credentials['bucket'] ?? null),
             'credentials' => $credentials,
-            'capacity_bytes' => $data['capacity_bytes'] ?? null,
-            'file_limit' => $data['file_limit'] ?? null,
-            'max_file_bytes' => $data['max_file_bytes'] ?? null,
-            'priority' => $data['priority'] ?? 100, 'status' => 'unverified',
+            'capacity_bytes' => isset($connection['capacity_bytes']) ? max(1, (int) $connection['capacity_bytes']) : null,
+            'file_limit' => isset($connection['file_limit']) ? max(1, (int) $connection['file_limit']) : null,
+            'max_file_bytes' => isset($connection['max_file_bytes']) ? max(1, (int) $connection['max_file_bytes']) : null,
+            'priority' => max(1, min(10000, (int) ($connection['priority'] ?? 100))),
+            'status' => 'unverified',
+            'metadata' => ['provider_metadata' => (array) ($connection['metadata'] ?? [])],
         ]);
 
         try {
