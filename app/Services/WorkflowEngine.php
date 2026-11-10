@@ -9,18 +9,8 @@ class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
 
-    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null): int
+    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false): int
     {
-        $workflow = DB::table('farast_workflows')->where('id', $workflowId)->first();
-        if (! $workflow || ! $workflow->enabled) {
-            throw new \RuntimeException('Workflow is disabled or missing.');
-        }
-
-        $steps = json_decode($workflow->steps, true);
-        if (! is_array($steps)) {
-            throw new \RuntimeException('Workflow steps are invalid.');
-        }
-
         $runId = DB::table('farast_workflow_runs')->insertGetId([
             'workflow_id' => $workflowId,
             'status' => 'running',
@@ -31,7 +21,25 @@ class WorkflowEngine
         ]);
 
         try {
-            DB::transaction(function () use ($steps, $context, $workflow, $runId, $eventWorkflowId): void {
+            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual): void {
+                // Serialize execution against workflow edits, disabling and deletion.
+                $workflow = DB::table('farast_workflows')
+                    ->where('id', $workflowId)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $workflow || ! $workflow->enabled) {
+                    throw new \RuntimeException('Workflow is disabled or missing.');
+                }
+
+                $steps = json_decode((string) $workflow->steps, true);
+                if (! is_array($steps) || count($steps) < 1 || count($steps) > 20) {
+                    throw new \RuntimeException('Workflow steps are invalid.');
+                }
+
+                if ($manual && ! app(WorkflowConditionEvaluator::class)->matches($workflow->conditions ?? null, $context)) {
+                    throw new \RuntimeException('Manual execution cannot satisfy this workflow condition without a trusted domain event.');
+                }
+
                 foreach ($steps as $stepIndex => $step) {
                     if (! is_array($step)) {
                         throw new \InvalidArgumentException('Workflow step must be an object.');
@@ -62,8 +70,10 @@ class WorkflowEngine
             });
         } catch (\Throwable $exception) {
             DB::table('farast_workflow_runs')->where('id', $runId)->update([
-                'status' => 'failed', 'error' => mb_substr($exception->getMessage(), 0, 4000),
-                'finished_at' => now(), 'updated_at' => now(),
+                'status' => 'failed',
+                'error' => mb_substr($exception->getMessage(), 0, 4000),
+                'finished_at' => now(),
+                'updated_at' => now(),
             ]);
             throw $exception;
         }
@@ -176,7 +186,7 @@ class WorkflowEngine
 
     private function processEvent(object $event, array $context): int
     {
-        DB::transaction(function () use ($event): void {
+        DB::transaction(function () use ($event, $context): void {
             $lockedEvent = DB::table('farast_workflow_events')->where('id', $event->id)->lockForUpdate()->first();
             if (! $lockedEvent || $lockedEvent->status === 'completed') {
                 return;
@@ -185,7 +195,9 @@ class WorkflowEngine
             $hasMappings = DB::table('farast_workflow_event_workflows')
                 ->where('event_id', $event->id)->exists();
 
-            if (! $hasMappings) {
+            // Freeze the matching set once. An event with no matching workflow must
+            // not unexpectedly start running a workflow created hours later.
+            if (! $hasMappings && empty($lockedEvent->matched_at)) {
                 $workflows = DB::table('farast_workflows')
                     ->where('user_id', (int) $lockedEvent->user_id)
                     ->where('trigger_type', $lockedEvent->event_type)
@@ -193,20 +205,50 @@ class WorkflowEngine
                     ->orderBy('id')
                     ->get();
 
+                $eventContext = array_merge($context, ['event_type' => $lockedEvent->event_type]);
                 foreach ($workflows as $workflow) {
-                    DB::table('farast_workflow_event_workflows')->insertOrIgnore([
+                    // Lock the workflow row so concurrent events cannot both pass
+                    // its cooldown window and enqueue duplicate executions.
+                    $current = DB::table('farast_workflows')
+                        ->where('id', $workflow->id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $current || ! $current->enabled) {
+                        continue;
+                    }
+
+                    if (! app(WorkflowConditionEvaluator::class)->matches($current->conditions ?? null, $eventContext)) {
+                        continue;
+                    }
+
+                    $cooldown = max(0, min(86400, (int) ($current->cooldown_seconds ?? 0)));
+                    if ($cooldown > 0 && ! empty($current->last_triggered_at)
+                        && \Illuminate\Support\Carbon::parse($current->last_triggered_at)->gt(now()->subSeconds($cooldown))) {
+                        continue;
+                    }
+
+                    $inserted = DB::table('farast_workflow_event_workflows')->insertOrIgnore([
                         'event_id' => $event->id,
-                        'workflow_id' => $workflow->id,
+                        'workflow_id' => $current->id,
                         'status' => 'pending',
                         'attempts' => 0,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
+
+                    if ($inserted > 0) {
+                        DB::table('farast_workflows')->where('id', $current->id)->update([
+                            'last_triggered_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
                 }
             }
 
             DB::table('farast_workflow_events')->where('id', $event->id)->update([
                 'status' => 'processing',
+                'matched_at' => $lockedEvent->matched_at ?: now(),
                 'attempts' => DB::raw('attempts + 1'),
                 'matched_workflows' => DB::table('farast_workflow_event_workflows')->where('event_id', $event->id)->count(),
                 'updated_at' => now(),
