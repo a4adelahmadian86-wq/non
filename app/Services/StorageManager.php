@@ -81,7 +81,7 @@ class StorageManager
         $existing = StorageManagedFile::query()->where('logical_path', $logicalPath)->first();
         $classification = $this->classificationFor($logicalPath, $config);
         $drive = $this->driveFor($classification);
-        $volume = $this->reserveVolume($drive, $size);
+        $volume = $this->reserveVolume($drive, $size, $existing);
         $objectKey = 'objects/'.now()->format('Y/m').'/'.Str::uuid().'-'.basename($logicalPath);
         $disk = $this->connections->disk($volume);
         $committed = false;
@@ -203,9 +203,9 @@ class StorageManager
         }
     }
 
-    private function reserveVolume(string $drive, int $size): StorageVolume
+    private function reserveVolume(string $drive, int $size, ?StorageManagedFile $existing = null): StorageVolume
     {
-        return DB::transaction(function () use ($drive, $size) {
+        return DB::transaction(function () use ($drive, $size, $existing) {
             $candidates = StorageVolume::query()
                 ->where('drive_key', $drive)
                 ->where('is_active', true)
@@ -220,10 +220,12 @@ class StorageManager
                 if ($volume->max_file_bytes !== null && $size > $volume->max_file_bytes) {
                     continue;
                 }
-                if ($volume->capacity_bytes !== null && ($volume->used_bytes + $volume->reserved_bytes + $size) > $volume->capacity_bytes) {
+                $replacedBytes = $existing && $existing->storage_volume_id === $volume->id ? (int) $existing->size_bytes : 0;
+                if ($volume->capacity_bytes !== null && ($volume->used_bytes - $replacedBytes + $volume->reserved_bytes + $size) > $volume->capacity_bytes) {
                     continue;
                 }
-                if ($volume->file_limit !== null && ($volume->files_count + $volume->replicas_count + $volume->backups_count + $volume->reserved_files + 1) > $volume->file_limit) {
+                $additionalFiles = $existing && $existing->storage_volume_id === $volume->id ? 0 : 1;
+                if ($volume->file_limit !== null && ($volume->files_count + $volume->replicas_count + $volume->backups_count + $volume->reserved_files + $additionalFiles) > $volume->file_limit) {
                     continue;
                 }
                 $volume->increment('reserved_bytes', $size);
