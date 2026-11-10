@@ -105,10 +105,10 @@ class StoreCartService
         $cart = $this->current($request);
         $cartPayload = $this->payload($cart);
         if ((int) $cartPayload['subtotal_rials'] <= 0) {
-            throw new \\RuntimeException('ابتدا یک محصول به سبد خرید اضافه کنید.');
+            throw new \RuntimeException('ابتدا یک محصول به سبد خرید اضافه کنید.');
         }
         if ($coupon->min_subtotal_rials !== null && (int) $cartPayload['subtotal_rials'] < (int) $coupon->min_subtotal_rials) {
-            throw new \\RuntimeException('حداقل مبلغ سبد برای استفاده از این کد تخفیف رعایت نشده است.');
+            throw new \RuntimeException('حداقل مبلغ سبد برای استفاده از این کد تخفیف رعایت نشده است.');
         }
 
         $request->session()->put('store_coupon_code', $coupon->code);
