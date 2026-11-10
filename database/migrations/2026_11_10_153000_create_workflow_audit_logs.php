@@ -32,11 +32,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (Schema::hasTable('farast_workflow_audit_logs')
-            && DB::table('farast_workflow_audit_logs')->exists()) {
-            throw new RuntimeException('Refusing to drop populated workflow audit history.');
-        }
-
-        Schema::dropIfExists('farast_workflow_audit_logs');
+        // Intentionally non-destructive: these migrations may adopt pre-existing
+        // tables/columns and contain live access, automation, or audit data.
+        // Schema retirement must be an explicit, separately reviewed operation.
     }
 };
