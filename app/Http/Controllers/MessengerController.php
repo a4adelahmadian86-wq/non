@@ -16,23 +16,36 @@ class MessengerController extends Controller
 {
     public function index(Request $request)
     {
+        $access = app(MessengerAccessService::class);
+        $access->assertCanUse($request->user());
         $userId = (int) $request->user()->id;
         $conversations = Conversation::query()
             ->visibleTo($userId)
             ->with('participants:id,name')
+            ->when(! $request->user()->isAdmin(), function ($query) use ($request) {
+                $query->whereDoesntHave('participants', function ($participants) use ($request) {
+                    $participants->where('users.role', '!=', User::ROLE_ADMIN)
+                        ->where(function ($scope) use ($request) {
+                            $scope->whereNull('users.organization_id')
+                                ->orWhere('users.organization_id', '!=', $request->user()->organization_id);
+                        });
+                });
+            })
             ->withCount(['messages as unread_messages_count' => function ($q) use ($userId) {
                 $q->where('user_id', '!=', $userId)
                     ->whereRaw('conversation_messages.id > COALESCE((SELECT last_read_message_id FROM conversation_participants WHERE conversation_participants.conversation_id = conversation_messages.conversation_id AND conversation_participants.user_id = ? LIMIT 1), 0)', [$userId]);
             }])
             ->orderByDesc('last_message_at')->orderByDesc('id')->paginate(30);
 
-        $users = User::query()->where('id', '!=', $userId)->where('is_blocked', false)->orderBy('name')->limit(200)->get(['id', 'name', 'email']);
+        $users = $access->usersFor($request->user())->orderBy('name')->limit(200)->get(['id', 'name', 'email']);
 
         return view('messenger.index', compact('conversations', 'users'));
     }
 
     public function store(Request $request)
     {
+        $access = app(MessengerAccessService::class);
+        $access->assertCanUse($request->user());
         $data = $request->validate([
             'type' => ['required', 'in:direct,group'],
             'participant_ids' => ['required', 'array', 'min:1', 'max:49'],
@@ -44,8 +57,12 @@ class MessengerController extends Controller
             ->reject(fn ($id) => $id === (int) $request->user()->id)->unique()->sort()->values();
         abort_if($ids->isEmpty(), 422, 'حداقل یک مخاطب دیگر انتخاب کنید.');
         abort_if($data['type'] === 'direct' && $ids->count() !== 1, 422, 'گفت‌وگوی خصوصی فقط یک مخاطب دارد؛ برای چند نفر گروه بسازید.');
-        abort_unless(User::query()->whereIn('id', $ids)->where('is_blocked', false)->count() === $ids->count(), 422, 'یکی از مخاطبان انتخاب‌شده در دسترس نیست.');
-        abort_if($data['type'] === 'group' && blank($data['title']), 422, 'عنوان گروه الزامی است.');
+        $recipientUsers = User::query()->whereIn('id', $ids)->where('is_blocked', false)->get();
+        abort_unless($recipientUsers->count() === $ids->count() && $recipientUsers->every(fn (User $candidate) => $access->canInvite($request->user(), $candidate)), 422, 'یکی از مخاطبان انتخاب‌شده خارج از محدوده سازمانی یا در دسترس نیست.');
+        if ($data['type'] === 'group') {
+            abort_if(blank($data['title']), 422, 'عنوان گروه الزامی است.');
+            abort_unless($access->canCreateGroup($request->user(), $recipientUsers->push($request->user())), 422, 'اعضای گروه باید از یک سازمان باشند.');
+        }
 
         $allIds = $ids->push((int) $request->user()->id)->unique()->sort()->values();
         $directKey = $data['type'] === 'direct' ? hash('sha256', $allIds->implode(':')) : null;
@@ -99,7 +116,7 @@ class MessengerController extends Controller
             && $conversation->participants()->where('users.id', $request->user()->id)->wherePivot('role', 'owner')->exists();
         $existingIds = $conversation->participants()->pluck('users.id')->all();
         $availableUsers = $isGroupOwner
-            ? User::query()->where('is_blocked', false)->whereNotIn('id', $existingIds)->orderBy('name')->limit(200)->get(['id', 'name', 'email'])
+            ? app(MessengerAccessService::class)->usersFor($request->user())->whereNotIn('id', $existingIds)->orderBy('name')->limit(200)->get(['id', 'name', 'email'])
             : collect();
 
         return view('messenger.show', compact('conversation', 'messages', 'isGroupOwner', 'availableUsers', 'latestMessageId'));
@@ -314,7 +331,10 @@ class MessengerController extends Controller
         $existing = $conversation->participants()->pluck('users.id')->map(fn ($id) => (int) $id);
         $newIds = collect($data['participant_ids'])->map(fn ($id) => (int) $id)->unique()->diff($existing)->values();
         abort_if($newIds->isEmpty(), 422, 'مخاطب جدیدی انتخاب نشده است.');
-        abort_unless(User::query()->whereIn('id', $newIds)->where('is_blocked', false)->count() === $newIds->count(), 422, 'یکی از مخاطبان انتخاب‌شده در دسترس نیست.');
+        $newUsers = User::query()->whereIn('id', $newIds)->where('is_blocked', false)->get();
+        $access = app(MessengerAccessService::class);
+        abort_unless($newUsers->count() === $newIds->count() && $newUsers->every(fn (User $candidate) => $access->canInvite($request->user(), $candidate)), 422, 'یکی از مخاطبان انتخاب‌شده در دسترس نیست.');
+        abort_unless($access->canAddToGroup($request->user(), $conversation, $newUsers), 422, 'اعضای گروه باید از یک سازمان باشند.');
 
         $now = now();
         $pivot = $newIds->mapWithKeys(fn ($id) => [$id => [
@@ -368,5 +388,6 @@ class MessengerController extends Controller
     private function authorizeParticipant(Request $request, Conversation $conversation): void
     {
         abort_unless($conversation->participants()->where('users.id', $request->user()->id)->whereNull('conversation_participants.archived_at')->exists(), 404);
+        app(MessengerAccessService::class)->assertConversationScope($request->user(), $conversation);
     }
 }
