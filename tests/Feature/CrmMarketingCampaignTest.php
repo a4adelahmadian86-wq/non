@@ -157,4 +157,69 @@ class CrmMarketingCampaignTest extends TestCase
             'name' => 'همه مشتریان', 'filters' => [],
         ])->assertCreated()->assertJsonPath('audience_count', 1);
     }
+
+    public function test_campaign_issues_product_specific_offers_with_margin_and_budget_caps_only_to_consented_customers(): void
+    {
+        $admin = $this->user('09151110021');
+        $first = $this->user('09151110022', User::ROLE_EMPLOYEE);
+        $first->forceFill(['marketing_consent' => true, 'marketing_consent_updated_at' => now()])->save();
+        $second = $this->user('09151110023', User::ROLE_EMPLOYEE);
+        $second->forceFill(['marketing_consent' => true, 'marketing_consent_updated_at' => now()])->save();
+        $optedOut = $this->user('09151110024', User::ROLE_EMPLOYEE);
+
+        $category = StoreCategory::create([
+            'name' => 'دسته مشوق کمپین',
+            'slug' => 'campaign-incentive-category',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول مشوق کمپین',
+            'slug' => 'campaign-incentive-product',
+            'sku' => 'CAMPAIGN-INCENTIVE-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'cost_price_rials' => 50000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->postJson('/admin/crm/marketing/segments', [
+            'name' => 'مخاطبان دارای رضایت',
+            'filters' => [],
+        ])->assertCreated()->assertJsonPath('audience_count', 2);
+        $segmentId = DB::table('crm_customer_segments')->where('created_by', $admin->id)->value('id');
+
+        $this->postJson('/admin/crm/marketing/campaigns', [
+            'name' => 'کمپین مشوق محصول',
+            'segment_id' => $segmentId,
+            'title' => 'پیشنهاد ویژه',
+            'body' => 'برای شما یک پیشنهاد ویژه داریم.',
+            'incentive_product_id' => $product->id,
+            'incentive_discount_percent' => 10,
+            'incentive_valid_hours' => 48,
+            'budget_cap_rials' => 10000,
+        ])->assertCreated()->assertJsonPath('audience_count', 2);
+
+        $campaignId = DB::table('crm_marketing_campaigns')->where('name', 'کمپین مشوق محصول')->value('id');
+        $this->postJson('/admin/crm/marketing/campaigns/'.$campaignId.'/send')
+            ->assertOk()
+            ->assertJsonPath('recipient_count', 2);
+
+        $assignments = StoreCouponAssignment::query()->where('campaign_id', $campaignId)->with('coupon')->get();
+        $this->assertCount(1, $assignments, 'The campaign budget must reserve no more than one 10,000 rial offer.');
+        $this->assertSame(10000, (int) $assignments->first()->coupon->value);
+        $this->assertContains((int) $assignments->first()->user_id, [$first->id, $second->id]);
+        $this->assertDatabaseMissing('crm_campaign_recipients', [
+            'campaign_id' => $campaignId,
+            'user_id' => $optedOut->id,
+        ]);
+        $this->assertSame(2, DB::table('crm_campaign_recipients')->where('campaign_id', $campaignId)->count());
+
+        $campaign = $this->getJson('/admin/crm/marketing/campaigns')->assertOk();
+        $campaign->assertJsonPath('data.data.0.offer_count', 1);
+        $this->assertSame(0, (int) DB::table('crm_marketing_campaigns')->where('id', $campaignId)->value('budget_cap_rials') === 0);
+    }
+
+
 }
