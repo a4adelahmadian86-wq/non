@@ -45,7 +45,7 @@ class AdminStorageController extends Controller
 
     public function backups()
     {
-        $backups = StorageBackupRun::with('volume')->latest()->paginate(30);
+        $backups = StorageBackupRun::with('volume')->where('source_name', '!=', 'snapshot_lock')->latest()->paginate(30);
         return view('admin.storage.backups', compact('backups'));
     }
 
