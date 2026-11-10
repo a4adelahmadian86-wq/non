@@ -1,18 +1,34 @@
 @extends('layouts.app')
 @push('head')
-<meta name="description" content="{{ $product->seo_description ?: \Illuminate\Support\Str::limit(strip_tags($product->short_description ?: $product->description ?: $product->title), 155) }}">
+@php
+    $shareDescription = $product->seo_description
+        ?: $product->short_description
+        ?: \Illuminate\Support\Str::limit(strip_tags($product->description ?: $product->title), 155);
+    $socialImagePath = $product->cover_path ?: $product->images->first()?->path;
+@endphp
+<meta name="description" content="{{ $shareDescription }}">
 <meta property="og:title" content="{{ $product->seo_title ?: $product->title }}">
-<meta property="og:description" content="{{ $product->seo_description ?: $product->short_description }}">
+<meta property="og:description" content="{{ $shareDescription }}">
 <meta property="og:type" content="product">
 <meta property="og:url" content="{{ request()->url() }}">
+@if($socialImagePath)
+<meta property="og:image" content="{{ asset($socialImagePath) }}">
+<meta property="og:image:alt" content="{{ $product->title }}">
+@endif
+<meta name="twitter:card" content="{{ $socialImagePath ? 'summary_large_image' : 'summary' }}">
+<meta name="twitter:title" content="{{ $product->seo_title ?: $product->title }}">
+<meta name="twitter:description" content="{{ $shareDescription }}">
+@if($socialImagePath)
+<meta name="twitter:image" content="{{ asset($socialImagePath) }}">
+@endif
 @php
     $ratingCount = array_sum($ratingBreakdown);
     $productStructuredData = [
         '@context' => 'https://schema.org',
         '@type' => 'Product',
         'name' => $product->title,
-        'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description), 300),
-        'image' => $product->cover_path ? [asset($product->cover_path)] : [],
+        'description' => $product->seo_description ?: $product->short_description ?: \Illuminate\Support\Str::limit(strip_tags($product->description ?: $product->title), 300),
+        'image' => collect([$product->cover_path])->filter()->merge($product->images->pluck('path'))->filter()->unique()->map(fn ($imagePath) => asset($imagePath))->values()->all(),
         'sku' => $product->sku,
         'url' => request()->url(),
         'offers' => [
@@ -48,13 +64,17 @@
       <span>{{ $product->title }}</span>
     </div>
 
-    <div class="store-product-overview">
-      <span class="store-product-overview-mark"><i class="fa-solid fa-gem"></i></span>
-      <div><span class="store-product-overview-kicker">انتخاب هوشمندانه با فراست</span><strong>مشخصات محصول و شرایط دریافت را پیش از خرید بررسی کنید.</strong></div>
-    </div>
     <nav class="store-product-jump" aria-label="دسترسی سریع به بخش‌های محصول">
-      <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
-      @if($product->type === 'course' && $product->course)<a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>@endif
+      @if(filled($product->description) || filled($product->short_description))
+        <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
+      @endif
+      @if($hasPreview)
+        <a href="#store-product-sample"><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه</a>
+      @endif
+      @if($product->type === 'course' && $product->course)
+        <a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>
+      @endif
+      <a href="#store-product-details"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> مشخصات</a>
       <a href="#store-buy-card"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> قیمت و خرید</a>
       <a href="#store-discussions"><i class="fa-regular fa-comments" aria-hidden="true"></i> نظرها و پرسش‌ها</a>
     </nav>
@@ -93,18 +113,29 @@
               <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> مشاهده نمونه
             </a>
           </section>
+        @else
+          <span id="store-product-sample" aria-hidden="true"></span>
         @endif
 
-        <article class="store-panel" id="store-product-description">
-          <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
-          <div class="body">{!! nl2br(e($product->description ?: $product->short_description ?: 'توضیحی ثبت نشده است.')) !!}</div>
-        </article>
+        @if(filled($product->description) || filled($product->short_description))
+          <article class="store-panel" id="store-product-description">
+            <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
+            <div class="body">{!! nl2br(e($product->description ?: $product->short_description)) !!}</div>
+          </article>
+        @else
+          <span id="store-product-description" aria-hidden="true"></span>
+        @endif
         @if($product->type === 'course' && $product->course)
           <div class="store-panel course-public-curriculum" id="store-product-curriculum">
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
             <div class="course-public-meta">
               @if($product->course->instructor_name)<span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>@endif
-              <span><i class="fa-solid fa-signal"></i> سطح: {{ ['beginner'=>'مقدماتی','intermediate'=>'متوسط','advanced'=>'پیشرفته','all'=>'همه سطوح'][$product->course->level] ?? 'مقدماتی' }}</span>
+              @php
+                $courseLevelLabels = ['beginner' => 'مقدماتی', 'intermediate' => 'متوسط', 'advanced' => 'پیشرفته', 'all' => 'همه سطوح'];
+              @endphp
+              @if(isset($courseLevelLabels[$product->course->level]))
+                <span><i class="fa-solid fa-signal"></i> سطح: {{ $courseLevelLabels[$product->course->level] }}</span>
+              @endif
               @if($product->course->duration_minutes)<span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>@endif
             </div>
             @forelse($product->course->sections as $section)
@@ -187,31 +218,33 @@
           <p class="store-login-hint"><a href="{{ route('login') }}">وارد شوید</a> تا علاقه‌مندی و خرید ثبت شود.</p>
         @endauth
 
-        <div class="meta">
-          <span><i class="fa-solid fa-code-branch"></i> نسخه {{ $product->version ?: '1.0' }}</span>
-          @if($product->type !== 'course' && $product->files->isNotEmpty())
-            @php
-              $deliveryFile = $product->files->first();
-              $fileExtension = strtoupper(pathinfo((string) $deliveryFile->original_name, PATHINFO_EXTENSION));
-              $fileSizeBytes = (int) $deliveryFile->size_bytes;
-              $fileSizeLabel = $fileSizeBytes >= 1048576
-                  ? number_format($fileSizeBytes / 1048576, 2).' مگابایت'
-                  : ($fileSizeBytes >= 1024 ? number_format($fileSizeBytes / 1024, 1).' کیلوبایت' : number_format($fileSizeBytes).' بایت');
-            @endphp
-            @php
-              $deliveryDetails = array_filter([
-                  $fileExtension !== '' ? 'فرمت فایل: '.$fileExtension : null,
-                  $fileSizeBytes > 0 ? 'حجم فایل: '.$fileSizeLabel : null,
-              ]);
-            @endphp
-            @if($deliveryDetails)
-              <span><i class="fa-solid fa-file-lines"></i> {{ implode(' · ', $deliveryDetails) }}</span>
-            @endif
+        <div class="meta" id="store-product-details">
+          @php
+            $deliveryFile = $product->type !== 'course' ? $product->files->first() : null;
+            $productVersion = filled($product->version) ? trim((string) $product->version) : null;
+            $fileVersion = filled($deliveryFile?->version) ? trim((string) $deliveryFile->version) : null;
+            $licenseValue = filled($product->license_type) ? trim((string) $product->license_type) : null;
+            $licenseLabel = $licenseValue === 'standard' ? 'استاندارد' : null;
+            $fileExtension = $deliveryFile ? strtoupper(pathinfo((string) $deliveryFile->original_name, PATHINFO_EXTENSION)) : null;
+            $fileSizeBytes = $deliveryFile ? (int) $deliveryFile->size_bytes : 0;
+          @endphp
+          @if($productVersion)
+            <span><i class="fa-solid fa-code-branch"></i> نسخه محصول: {{ $productVersion }}</span>
+          @endif
+          @if($fileVersion)
+            <span><i class="fa-solid fa-code-branch"></i> نسخه فایل اصلی: {{ $fileVersion }}</span>
+          @endif
+          @if($fileExtension)
+            <span><i class="fa-solid fa-file-lines"></i> فرمت فایل: {{ $fileExtension }}</span>
+          @endif
+          @if($fileSizeBytes > 0)
+            <span><i class="fa-solid fa-hard-drive"></i> حجم فایل: {{ $fileSizeBytes >= 1048576 ? number_format($fileSizeBytes / 1048576, 2).' مگابایت' : ($fileSizeBytes >= 1024 ? number_format($fileSizeBytes / 1024, 1).' کیلوبایت' : number_format($fileSizeBytes).' بایت') }}</span>
           @endif
           <span><i class="fa-solid fa-shield-halved"></i> {{ $product->type === 'course' ? 'دسترسی به دوره در کتابخانه آموزشی' : (($product->download_policy ?? 'signed') === 'reader_only' ? 'مطالعه در خوانشگر پس از پرداخت' : 'دریافت در کتابخانه پس از پرداخت') }}</span>
-          <span><i class="fa-solid fa-file-contract"></i> مجوز {{ $product->license_type ?: 'شخصی' }}</span>
+          @if($licenseLabel)
+            <span><i class="fa-solid fa-file-contract"></i> مجوز استفاده: {{ $licenseLabel }}</span>
+          @endif
         </div>
-        <div class="store-product-assurance"><i class="fa-solid fa-circle-check"></i><span><strong>پیش از خرید، شرایط محصول را بررسی کنید</strong><small>جزئیات دریافت و مجوز استفاده در همین بخش مشخص شده‌اند.</small></span></div>
       </aside>
     </div>
 
@@ -228,7 +261,7 @@
 
     @if($alsoViewed->count())
       <section class="store-shelf">
-        <div class="store-shelf-head"><h2>بر اساس بازدیدهای اخیر شما</h2><span>مارکتینگ هوشمند</span></div>
+        <div class="store-shelf-head"><h2>بر اساس بازدیدهای اخیر شما</h2><span>از سابقه بازدید شما</span></div>
         <div class="store-shelf-track">
           @foreach($alsoViewed as $p)
             @include('store.partials.card', ['product' => $p])
@@ -289,6 +322,9 @@
 .store-product-gallery img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
 
 .course-public-curriculum{margin-top:14px}.course-public-meta{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px}.course-public-meta span{font-size:.7rem;color:var(--st-muted);background:#f4f7fc;border-radius:8px;padding:7px 9px}.course-public-section{display:flex;justify-content:space-between;gap:12px;padding:11px 10px;background:#f6f9fd;border:1px solid var(--st-line);border-radius:9px;margin-top:10px}.course-public-section strong{font-size:.78rem}.course-public-section span{font-size:.68rem;color:var(--st-muted)}.course-public-lesson{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #edf1f6;font-size:.75rem}.course-public-lesson>span{flex:1}.course-public-lesson>i{color:var(--st-blue)}.course-public-lesson small{font-size:.64rem;color:var(--st-muted);background:#f0f4fa;border-radius:99px;padding:4px 7px}.course-public-lesson .course-preview-link{font-size:.64rem;color:#0f8d68;background:#e8f8f1;border-radius:99px;padding:4px 8px;text-decoration:none;white-space:nowrap}
+/* Product detail navigation and mobile purchase priority */
+#store-product-sample,#store-product-description,#store-product-curriculum,#store-product-details,#store-buy-card,#store-discussions{scroll-margin-top:112px}
+@media(max-width:960px){.store-detail-grid>.store-buy-card{order:-1}}
 </style>
 @endpush
 @push('scripts')
