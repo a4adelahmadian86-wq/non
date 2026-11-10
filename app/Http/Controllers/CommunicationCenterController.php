@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Conversation;
 use App\Models\FarastNotification;
 use App\Models\Ticket;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use App\Services\CapabilityService;
 use App\Services\MessengerAccessService;
 use App\Services\NotificationService;
