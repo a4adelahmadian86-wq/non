@@ -360,7 +360,7 @@
           <div class="product-ingestion-dropzone" data-ingestion-pick tabindex="0" role="button" aria-label="انتخاب یا رها کردن فایل محصول">
             <span class="product-ingestion-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
             <strong>فایل را اینجا رها کنید یا برای انتخاب کلیک کنید</strong>
-            <span>می‌توانید فایل را روی هر قسمت از همین صفحه بکشید و رها کنید.</span>
+            <span>می‌توانید فایل یا پوشه را روی هر قسمت از همین صفحه بکشید و رها کنید.</span>
             <small>PDF، Word، Excel، PowerPoint، تصویر، صوت، ویدئو، ZIP، TAR و متن · حداکثر ۵۰ مگابایت برای هر فایل</small>
           </div>
           <div class="product-ingestion-folder-action"><button type="button" class="store-outline-btn" data-ingestion-folder-pick>انتخاب یک پوشه</button><small>فایل‌های پوشه به‌صورت فهرست قابل بازبینی اضافه می‌شوند.</small></div>
