@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StorageManagedFile;
 use App\Models\StoreProductIngestion;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductImage;
@@ -14,6 +15,7 @@ use App\Models\StoreTag;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\ProductRelatedProductsService;
 use App\Services\UploadSecurityService;
+use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -563,8 +565,20 @@ class AdminStoreController extends Controller
             throw new \RuntimeException('product_file_storage_move_failed');
         }
 
+        $managed = $storage->adoptExistingPrivate(
+            $finalPath,
+            $ingestion->original_name,
+            (string) $inspection['mime'],
+            (int) $inspection['size'],
+            'products',
+            StoreProductFile::class,
+            null,
+            (int) $product->id,
+            StorageManager::CRITICAL
+        );
+
         try {
-            [$fileRecord, $productRequiresRepublish] = DB::transaction(function () use ($product, $ingestion, $inspection, $finalPath) {
+            [$fileRecord, $productRequiresRepublish] = DB::transaction(function () use ($product, $ingestion, $inspection, $finalPath, $managed) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $lockedIngestion = StoreProductIngestion::query()->whereKey($ingestion->id)->lockForUpdate()->firstOrFail();
                 abort_unless($lockedIngestion->status === 'inspected' && $lockedIngestion->expires_at?->isFuture(), 409, 'این مرحله قبلاً تأیید یا منقضی شده است.');
