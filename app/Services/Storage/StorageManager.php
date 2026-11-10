@@ -30,26 +30,34 @@ class StorageManager
         $drive = $classification === self::CRITICAL ? 'iran_primary' : 'foreign_primary';
         $key = trim($sourceModule, '/').'/'.now()->format('Y/m').'/'.Str::uuid().'-'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.strtolower($file->getClientOriginalExtension());
         $checksum = hash_file('sha256', $file->getRealPath());
-        $volume = $this->selectVolume($drive, (int) $file->getSize());
+        $volumes = $this->selectVolumes($drive, (int) $file->getSize());
 
-        if ($volume) {
+        // Fail over only within the policy-selected drive. A critical file can
+        // never spill into a foreign region, and a non-critical file cannot
+        // consume the Iranian primary pool.
+        foreach ($volumes as $volume) {
             try {
                 $this->writeToVolume($volume, $key, $file->getRealPath());
                 try {
                     return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
-                } catch (\Throwable $exception) {
+                } catch (\\Throwable $exception) {
                     if ($volume->driver === 's3') $this->s3->delete($volume, $key);
                     else @unlink($this->localVolumePath($volume, $key));
                     throw $exception;
                 }
-            } catch (\Throwable $exception) {
+            } catch (\\Throwable $exception) {
                 try {
                     if ($volume->driver === 's3') $this->s3->delete($volume, $key);
                     elseif ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $key));
-                } catch (\Throwable $cleanupException) {
+                } catch (\\Throwable $cleanupException) {
                     report($cleanupException);
                 }
-                $volume->forceFill(['status' => 'error', 'last_checked_at' => now(), 'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($exception->getMessage(), 0, 400)])])->save();
+                $volume->forceFill([
+                    'status' => 'error',
+                    'last_checked_at' => now(),
+                    'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($exception->getMessage(), 0, 400)]),
+                ])->save();
+                report($exception);
             }
         }
 
@@ -208,7 +216,7 @@ class StorageManager
         return 'storage_volume:'.$volume->id;
     }
 
-    private function selectVolume(string $drive, int $bytes): ?StorageVolume
+    private function selectVolumes(string $drive, int $bytes)
     {
         return StorageVolume::query()
             ->where('drive_key', $drive)
@@ -218,7 +226,8 @@ class StorageManager
             ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $bytes))
             ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
             ->orderBy('priority')
-            ->first();
+            ->orderBy('used_bytes')
+            ->get();
     }
 
     private function localVolumePath(StorageVolume $volume, string $key): string
