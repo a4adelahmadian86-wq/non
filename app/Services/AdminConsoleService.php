@@ -98,14 +98,8 @@ class AdminConsoleService
         $requiredRank = $rank[$def['min_scope']] ?? 3;
         $allowed = $userRank <= $requiredRank;
 
-        if ($allowed) {
-            // Downstream list/query helpers use this exact section permission
-            // to apply custom role scopes and direct deny overrides per record.
-            if ($this->requestContextBelongsTo($user)) {
-                request()->attributes->set('farast.section_permission', (string) $def['permission']);
-            }
-        }
-
+        // Keep this method pure: it is also called repeatedly while rendering
+        // navigation. The active route's permission is set by EnsureAdminSection.
         return $allowed;
     }
     /**
