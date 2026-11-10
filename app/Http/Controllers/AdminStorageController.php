@@ -98,7 +98,7 @@ class AdminStorageController extends Controller
             'name' => mb_substr($name, 0, 120),
             'provider' => mb_substr((string) $detectedProvider, 0, 120),
             'driver' => $driver,
-            'region' => isset($connection['region']) ? mb_substr((string) $connection['region'], 0, 80) : null,
+            'region' => isset($connection['region']) ? mb_substr((string) $connection['region'], 0, 80) : (isset($credentials['region']) ? mb_substr((string) $credentials['region'], 0, 80) : null),
             'endpoint' => $endpoint,
             'bucket' => $connection['bucket'] ?? ($credentials['bucket'] ?? null),
             'credentials' => $credentials,
