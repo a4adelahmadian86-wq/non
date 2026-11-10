@@ -541,6 +541,99 @@ class AdminStoreController extends Controller
         return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
     }
 
+    public function preflightNewProductFile(Request $request, UploadSecurityService $security)
+    {
+        $request->validate([
+            'file' => 'required|file|max:51200',
+            'security_scan' => 'nullable|boolean',
+        ]);
+        $category = StoreCategory::query()->where('is_active', true)->orderBy('sort_order')->first();
+        abort_if(! $category, 422, 'برای شروع ورود فایل، ابتدا دست‌کم یک دسته‌بندی فعال ایجاد کنید.');
+
+        $originalName = basename(str_replace('\\', '/', $request->file('file')->getClientOriginalName()));
+        $title = trim((string) preg_replace('/\.[^.]+$/u', '', $originalName));
+        $title = mb_substr($title !== '' ? $title : 'محصول جدید', 0, 220);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => $title,
+            'slug' => $this->uniqueSlug($title, Str::slug($title) ?: null),
+            'sku' => $this->uniqueSku(),
+            'type' => 'digital_file',
+            'price_rials' => 0,
+            'status' => 'draft',
+            'published_at' => null,
+            'metadata' => [
+                'file_first_intake' => [
+                    'enabled' => true,
+                    'owner_id' => (int) auth()->id(),
+                    'created_at' => now()->toISOString(),
+                ],
+            ],
+        ]);
+
+        try {
+            $response = $this->preflightFile($request, $product, $security);
+            if ($response->getStatusCode() >= 400) {
+                $product->delete();
+                return $response;
+            }
+            $payload = $response->getData(true);
+            $payload['product_id'] = (int) $product->id;
+            $payload['next_url'] = route('admin.store.edit', $product);
+            return response()->json($payload, $response->getStatusCode());
+        } catch (Throwable $exception) {
+            $product->delete();
+            throw $exception;
+        }
+    }
+
+    public function confirmNewProductFile(
+        Request $request,
+        StoreProduct $product,
+        string $ingestionId,
+        UploadSecurityService $security,
+        StorageManager $storage
+    ) {
+        abort_unless(
+            (bool) data_get($product->metadata, 'file_first_intake.enabled', false)
+                && (int) data_get($product->metadata, 'file_first_intake.owner_id') === (int) auth()->id(),
+            404
+        );
+        abort_unless($product->status === 'draft', 409, 'پیش‌نویس ورود فایل دیگر قابل تغییر نیست.');
+
+        $response = $this->confirmFileUpload($request, $product, $ingestionId, $security, $storage);
+        $payload = $response->getData(true);
+        $payload['next_url'] = route('admin.store.edit', $product);
+
+        return response()->json($payload, $response->getStatusCode());
+    }
+
+    public function cancelNewProductIntake(Request $request, StoreProduct $product, string $ingestionId)
+    {
+        abort_unless(
+            (bool) data_get($product->metadata, 'file_first_intake.enabled', false)
+                && (int) data_get($product->metadata, 'file_first_intake.owner_id') === (int) auth()->id(),
+            404
+        );
+
+        $ingestion = StoreProductIngestion::query()
+            ->whereKey($ingestionId)
+            ->where('product_id', $product->id)
+            ->where('user_id', auth()->id())
+            ->where('status', 'inspected')
+            ->firstOrFail();
+        Storage::disk($ingestion->staging_disk ?: 'private')->delete($ingestion->staging_path);
+        $ingestion->delete();
+
+        if (! $product->files()->exists()
+            && ! StoreProductIngestion::query()->where('product_id', $product->id)->where('status', 'inspected')->exists()) {
+            $this->audit('store.product.file_first_intake_cancelled', $product, ['reason' => 'no_file_confirmed']);
+            $product->delete();
+        }
+
+        return response()->json(['success' => true]);
+    }
+
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها را در بخش منابع هر جلسه بارگذاری کنید.');
