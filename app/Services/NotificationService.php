@@ -175,6 +175,7 @@ class NotificationService
                     ->orWhere('type', 'like', 'billing_%');
             }),
             'community' => $query->where('type', 'like', 'discussion_%'),
+            'communications' => $query->where('type', 'like', 'message_%'),
             'security' => $query->where('type', 'like', 'security_%'),
             'announcement' => $query->where('type', 'like', 'announcement_%')->where('type', '!=', 'announcement_campaign'),
             'marketing' => $query->where(function (Builder $w) {
