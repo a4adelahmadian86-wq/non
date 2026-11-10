@@ -1144,6 +1144,7 @@ class AdminStoreController extends Controller
         $upload = $request->file('image');
         $temporaryPath = $upload->store('store/quarantine/product-images/'.$product->id, 'private');
         $publicPath = null;
+        $managedPath = null;
 
         try {
             $inspection = $security->inspect($temporaryPath, $upload->getMimeType(), 8 * 1024 * 1024, [
@@ -1155,9 +1156,22 @@ class AdminStoreController extends Controller
             $extension = strtolower($upload->guessExtension() ?: 'jpg');
             $filename = Str::random(32).'.'.$extension;
             $directory = 'store/product-images/'.$product->id;
+            $managedPath = $directory.'/'.$filename;
+            $managedStored = Storage::disk('managed')->putFileAs($directory, $upload, $filename, [
+                'farast_classification' => 'critical',
+                'farast_source_type' => 'product_gallery_image',
+                'farast_source_id' => $product->id,
+                'farast_product_id' => $product->id,
+                'farast_owner_user_id' => auth()->id(),
+                'farast_original_name' => $upload->getClientOriginalName(),
+                'mimetype' => $inspection['mime'],
+            ]);
+            if (! $managedStored) {
+                throw new \RuntimeException('product_image_managed_storage_failed');
+            }
             $stored = Storage::disk('public')->putFileAs($directory, $upload, $filename);
             if (! $stored) {
-                throw new \RuntimeException('product_image_storage_failed');
+                throw new \RuntimeException('product_image_public_cache_failed');
             }
             $publicPath = 'storage/'.$directory.'/'.$filename;
 
@@ -1181,6 +1195,9 @@ class AdminStoreController extends Controller
             Storage::disk('private')->delete($temporaryPath);
             if ($publicPath) {
                 Storage::disk('public')->delete(Str::after($publicPath, 'storage/'));
+            }
+            if ($managedPath) {
+                Storage::disk('managed')->delete($managedPath);
             }
             if ($exception instanceof ValidationException) {
                 throw $exception;
