@@ -26,6 +26,21 @@ class StoreCatalogDiscoveryTest extends TestCase
             ->assertSee('name="price"', false);
     }
 
+    public function test_storefront_prioritizes_catalog_and_uses_a_compact_public_footer(): void
+    {
+        $this->get('/store')
+            ->assertOk()
+            ->assertSee('store-hero--focused', false)
+            ->assertSee('aria-label="جستجوی محصولات فروشگاه"', false)
+            ->assertSee('store-product-grid', false)
+            ->assertSee('farast-footer-compact', false)
+            ->assertSee(route('trust'), false)
+            ->assertDontSee('store-feature-row', false)
+            ->assertDontSee('store-hero-visual', false)
+            ->assertDontSee('store-shelf-track', false)
+            ->assertDontSee('farast-footer-cta', false);
+    }
+
     public function test_catalog_filters_courses_and_digital_products_without_losing_category_counts(): void
     {
         $category = StoreCategory::create([
