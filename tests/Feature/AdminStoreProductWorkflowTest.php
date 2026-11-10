@@ -10,6 +10,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
 use App\Models\StoreProductDocumentPage;
 use App\Models\StoreProductImage;
+use App\Models\StorageManagedFile;
 use App\Models\StoreTag;
 use App\Models\User;
 use App\Services\UploadSecurityService;
@@ -403,8 +404,13 @@ class AdminStoreProductWorkflowTest extends TestCase
         $image = StoreProductImage::query()->where('product_id', $product->id)->firstOrFail();
         $this->assertSame('نمای محصول', $image->alt);
         $this->assertTrue($image->is_active);
-        $this->assertStringStartsWith('storage/store/product-images/'.$product->id.'/', $image->path);
-        Storage::disk('public')->assertExists(str_replace('storage/', '', $image->path));
+        $this->assertStringStartsWith('storage/managed/', $image->path);
+        $managed = StorageManagedFile::query()
+            ->where('source_type', StoreProductImage::class)
+            ->where('source_id', $image->id)
+            ->firstOrFail();
+        $disk = (string) data_get($managed->metadata, 'disk', 'private');
+        $this->assertTrue(app(\App\Services\Storage\StorageManager::class)->exists($disk, $managed->file_key));
     }
 
     public function test_gallery_image_deletion_removes_only_the_owned_public_asset(): void
