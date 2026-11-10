@@ -7,8 +7,8 @@
         <section id="overview" class="admin-command-hero">
             <div class="hero-copy">
                 <div class="hero-badge"><i class="fa-solid fa-shield-halved"></i> محیط مدیریت امن</div>
-                <h2>یک داشبورد برای دیدن، تصمیم‌گیری و کنترل</h2>
-                <p>اطلاعات این صفحه از داده‌های واقعی سیستم خوانده می‌شود؛ داشبورد نقش کنسول عملیات را دارد، نه مجموعه‌ای از تب‌های نمایشی.</p>
+                <h1>مرکز عملیات فراست</h1>
+                <p>نمای یکپارچه کاربران، اسناد، پروژه‌ها، سرویس‌ها و رخدادهای ثبت‌شده؛ دسترسی هر بخش بر اساس نقش و دامنهٔ شما اعمال می‌شود.</p>
                 <div class="hero-actions">
                     @if($console->sectionAllowed(auth()->user(), 'store'))<a class="admin-primary" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-plus"></i> افزودن محصول</a><a class="admin-outline" href="{{ route('admin.store.index') }}"><i class="fa-solid fa-boxes-stacked"></i> مرکز محصولات</a>@endif
                     @if($console->sectionAllowed(auth()->user(), 'users'))<a class="admin-outline" href="{{ route('admin.crm.projects.index') }}"><i class="fa-solid fa-diagram-project"></i> پروژه‌ها و پرونده‌های مشتریان</a><a class="admin-outline" href="#users"><i class="fa-solid fa-users"></i> مدیریت کاربران</a>@endif
@@ -29,7 +29,7 @@
 
         <section id="operations" class="admin-section-grid">
             <article class="admin-panel operations-panel">
-                <div class="admin-panel-head"><div><span class="panel-eyebrow">LIVE CONTROL</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="status-chip">وضعیت در زمان بارگذاری</span></div>
+                <div class="admin-panel-head"><div><span class="panel-eyebrow">OPERATIONAL SNAPSHOT</span><h2>وضعیت عملیات</h2><p>شاخص‌هایی که برای تصمیم‌های روزمره مدیر مهم هستند.</p></div><span class="status-chip">به‌روزرسانی در {{ now()->format('H:i') }}</span></div>
                 <div class="ops-grid">
                     <div><span class="ops-icon"><i class="fa-solid fa-user-check"></i></span><div><b>{{ number_format($stats['active_users']) }}</b><small>کاربر فعال در دامنه</small></div></div>
                     <div><span class="ops-icon purple"><i class="fa-solid fa-file-circle-check"></i></span><div><b>{{ number_format($stats['documents']) }}</b><small>سند موجود</small></div></div>
@@ -252,6 +252,7 @@
 .farast-admin-nav-create-product i{color:#70b4ff;font-size:1rem}
 .farast-admin-nav-create-product b{margin-inline-start:auto;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#2e73d2;color:white;font-size:1rem}
 .farast-admin-nav a[aria-current="page"]{outline:1px solid rgba(111,174,255,.22)}
+.hero-copy h1{font-size:25px;line-height:1.55;margin:13px 0 7px;letter-spacing:-.5px}
 .admin-activity-list{display:grid;gap:0}
 .admin-activity-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-top:1px solid #edf1f7;min-width:0}
 .admin-activity-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#edf4ff;color:#315fae}
