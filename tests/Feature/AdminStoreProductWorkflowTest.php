@@ -133,7 +133,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('ویرایش محصول')
             ->assertDontSee('data-ingestion-security-scan', false);
 
-        $this->assertFalse(app(\App\Services\\AuthorizationService::class)->allows($staff, 'store.security_scan_bypass'));
+        $this->assertFalse(app(\App\Services\AuthorizationService::class)->allows($staff, 'store.security_scan_bypass'));
     }
 
 
