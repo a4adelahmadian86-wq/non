@@ -104,11 +104,6 @@ class StorageMigrationService
             ->each(function (UserFile $file) use (&$count): void {
                 $sourceDisk = $file->disk ?: 'private';
                 $sourcePath = $file->path;
-                if ($file->status === 'remote' && $file->remote_path) {
-                    // Older archived user files are ZIP containers; keep them untouched for
-                    // now rather than changing their download semantics without extraction.
-                    return;
-                }
                 if ($this->copyToManaged($sourceDisk, $sourcePath, 'non_critical', 'user_file', $file->id, null, $file->user_id, $file->original_name, $file->mime)) {
                     $file->update([
                         'disk' => 'managed',
@@ -133,6 +128,7 @@ class StorageMigrationService
                 if ($count >= $limit) return false;
                 $attachments = (array) ($message->attachments ?? []);
                 $changed = false;
+                $sourcePathsToDelete = [];
                 foreach ($attachments as $index => $attachment) {
                     if ($count >= $limit) break;
                     if (! is_array($attachment) || ($attachment['disk'] ?? 'private') !== 'private' || empty($attachment['path'])) {
@@ -146,11 +142,14 @@ class StorageMigrationService
                     $attachments[$index]['disk'] = 'managed';
                     $attachments[$index]['storage_managed_file_id'] = $managed?->id;
                     $changed = true;
-                    Storage::disk('private')->delete($path);
+                    $sourcePathsToDelete[] = $path;
                     $count++;
                 }
                 if ($changed) {
                     $message->update(['attachments' => array_values($attachments)]);
+                    foreach ($sourcePathsToDelete as $oldPath) {
+                        Storage::disk('private')->delete($oldPath);
+                    }
                 }
             }
             return $count < $limit;
