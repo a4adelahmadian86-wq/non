@@ -71,7 +71,7 @@ jobs:
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
 
   reader-browser-regression:
-    if: ${{ needs.laravel.result == 'failure' }}
+    if: ${{ always() && needs.laravel.result == 'failure' }}
     needs: [laravel]
     runs-on: ubuntu-latest
     timeout-minutes: 25
