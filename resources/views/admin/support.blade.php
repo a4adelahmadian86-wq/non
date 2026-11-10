@@ -193,11 +193,16 @@
                 </div>
             </header>
 
-            @if($active->topicLabel() || ($active->relatedProduct ?? null) || $active->serviceLabel())
+            @if($active->topicLabel() || ($active->relatedProduct ?? null) || $active->serviceLabel() || ($active->relatedOrder ?? null))
             <div style="padding:10px 18px;background:#f8fafc;border-bottom:1px solid var(--sd-line);display:flex;flex-wrap:wrap;gap:12px;font-size:.8rem;color:var(--sd-muted)">
                 @if($active->topicLabel())<span>حوزه: <b style="color:var(--sd-ink)">{{ $active->topicLabel() }}</b></span>@endif
                 @if($active->serviceLabel())<span>خدمت: <b style="color:var(--sd-ink)">{{ $active->serviceLabel() }}</b></span>@endif
                 @if($active->relatedProduct ?? null)<span>محصول: <b style="color:var(--sd-ink)">{{ $active->relatedProduct->title }}</b></span>@endif
+                @if(($active->relatedOrder ?? null) && (int) $active->relatedOrder->user_id === (int) $active->user_id)
+                    <span>سفارش مرتبط: <b style="color:var(--sd-ink)">#{{ $active->relatedOrder->id }}</b></span>
+                    <span>وضعیت سفارش: <b style="color:var(--sd-ink)">{{ $active->relatedOrder->status }}</b></span>
+                    <span>مبلغ: <b style="color:var(--sd-ink)">{{ number_format((int) $active->relatedOrder->total_rials) }} ریال</b></span>
+                @endif
             </div>
             @endif
 
