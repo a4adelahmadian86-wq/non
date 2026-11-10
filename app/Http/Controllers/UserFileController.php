@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\UserFile;
 use App\Services\CapabilityService;
 use App\Services\PricingService;
+use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -96,9 +97,8 @@ class UserFileController extends Controller
         return round($bytes / 1073741824, 2).' گیگابایت';
     }
 
-    private function estimatePages(?string $mime, string $name, string $path): int
+    private function estimatePages(?string $mime, string $name, string $bytes): int
     {
-        $bytes = Storage::disk('private')->get($path);
         if ($mime === 'application/pdf' || Str::endsWith(strtolower($name), '.pdf')) {
             $count = preg_match_all('/\/Type\s*\/Page\b/u', $bytes, $m) ?: 0;
             return max(1, $count);
