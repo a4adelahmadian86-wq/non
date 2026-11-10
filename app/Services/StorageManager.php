@@ -202,7 +202,7 @@ class StorageManager
                 ->where('is_active', true)
                 ->where('status', 'healthy')
                 ->orderBy('priority')
-                ->withCount(['files' => fn ($query) => $query->where('status', 'active')])
+                ->withCount(['files' => fn ($query) => $query->where('status', 'active'), 'replicas' => fn ($query) => $query->where('status', 'active'), 'backups' => fn ($query) => $query->where('status', 'completed')])
                 ->orderBy('used_bytes')
                 ->lockForUpdate()
                 ->get();
@@ -214,7 +214,7 @@ class StorageManager
                 if ($volume->capacity_bytes !== null && ($volume->used_bytes + $volume->reserved_bytes + $size) > $volume->capacity_bytes) {
                     continue;
                 }
-                if ($volume->file_limit !== null && ($volume->files_count + $volume->reserved_files + 1) > $volume->file_limit) {
+                if ($volume->file_limit !== null && ($volume->files_count + $volume->replicas_count + $volume->backups_count + $volume->reserved_files + 1) > $volume->file_limit) {
                     continue;
                 }
                 $volume->increment('reserved_bytes', $size);
@@ -441,7 +441,7 @@ class StorageManager
             foreach ($query->lockForUpdate()->get() as $volume) {
                 if ($volume->max_file_bytes !== null && $record->size_bytes > $volume->max_file_bytes) continue;
                 if ($volume->capacity_bytes !== null && ($volume->used_bytes + $volume->reserved_bytes + $record->size_bytes) > $volume->capacity_bytes) continue;
-                if ($volume->file_limit !== null && ($volume->files_count + $volume->reserved_files + 1) > $volume->file_limit) continue;
+                if ($volume->file_limit !== null && ($volume->files_count + $volume->replicas_count + $volume->backups_count + $volume->reserved_files + 1) > $volume->file_limit) continue;
                 $volume->increment('reserved_bytes', $record->size_bytes);
                 $volume->increment('reserved_files');
                 return $volume;
