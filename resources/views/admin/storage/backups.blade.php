@@ -3,8 +3,10 @@
 @section('admin-content')
 <div class="storage-detail" dir="rtl">
     <div class="storage-detail-card">
-        <h1>تاریخچه پشتیبان‌گیری</h1>
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h1>تاریخچه پشتیبان‌گیری</h1></div><form method="post" action="{{ route('admin.storage.backups.run') }}" onsubmit="return confirm('تهیه بکاپ کامل اکنون اجرا شود؟ این عملیات ممکن است زمان‌بر باشد.')">@csrf<button class="btn" type="submit">اجرای بکاپ کامل</button></form></div>
         <p class="muted">گزارش اجرای بکاپ‌ها، مقصد، حجم، checksum و خطاها</p>
+        @if(session('status'))<p style="color:#176b40">{{ session('status') }}</p>@endif
+        @if(session('warning'))<p style="color:#9a5b00">{{ session('warning') }}</p>@endif
         <div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>نوع بکاپ</th><th>مقصد</th><th>وضعیت</th><th>حجم</th><th>Checksum</th><th>شروع</th><th>پایان</th><th>خطا</th></tr></thead><tbody>
         @forelse($backups as $backup)
             <tr>
