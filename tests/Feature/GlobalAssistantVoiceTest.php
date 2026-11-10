@@ -123,11 +123,6 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.ai_gateway.token' => 'render-shared-voice-token',
         ]);
 
-        Http::fake([
-            'https://voice.example.test/v1/status' => Http::response([
-                'asr_ready' => true, 'tts_ready' => true, 'chat_ready' => true,
-            ], 200),
-        ]);
         $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
 
         $response->assertOk()
@@ -138,13 +133,10 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('provider', 'render')
             ->assertJsonPath('endpointing', 'server-vad');
         $this->assertStringNotContainsString('render-shared-voice-token', $response->getContent());
-        Http::assertSent(fn (ClientRequest $request) =>
-            $request->url() === 'https://voice.example.test/v1/status'
-            && $request->hasHeader('Authorization', 'Bearer render-shared-voice-token')
-        );
+        Http::assertNothingSent();
     }
 
-    public function test_render_live_voice_status_fails_closed_when_render_rejects_the_shared_token(): void
+    public function test_render_stream_token_fails_closed_when_render_rejects_the_shared_token(): void
     {
         config([
             'services.voice.local_only' => false,
@@ -161,13 +153,13 @@ class GlobalAssistantVoiceTest extends TestCase
             'https://voice.example.test/v1/status' => Http::response(['detail' => 'Unauthorized'], 401),
         ]);
 
-        $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
 
-        $response->assertOk()
-            ->assertJsonPath('mode', 'none')
-            ->assertJsonPath('gateway', false)
-            ->assertJsonPath('reason', 'render_voice_auth_failed')
-            ->assertJsonPath('message', 'سرویس Render توکن اتصال Laravel را نپذیرفت (HTTP 401). مقدار فعلی FARAST_VOICE_TOKEN باید با توکن همین سرویس Voice-typing یکسان باشد؛ میکروفون فعال نشده است.');
+        $response->assertStatus(503)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('code', 'render_voice_auth_failed')
+            ->assertJsonPath('message', 'سرویس Render توکن اتصال Laravel را نپذیرفت (HTTP 401). مقدار فعلی FARAST_VOICE_TOKEN باید با توکن همین سرویس Voice-typing یکسان باشد. میکروفون هنوز فعال نشده است.');
         Http::assertSentCount(1);
         Http::assertSent(fn (ClientRequest $request) =>
             $request->url() === 'https://voice.example.test/v1/status'
@@ -235,7 +227,7 @@ class GlobalAssistantVoiceTest extends TestCase
         $this->assertStringNotContainsString('chat-only-token', $tokenResponse->getContent());
     }
 
-    public function test_render_stream_token_is_signed_without_a_redundant_remote_status_preflight(): void
+    public function test_render_stream_token_is_signed_only_after_remote_status_authentication(): void
     {
         config([
             'services.voice.local_only' => false,
@@ -247,6 +239,11 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.ai_gateway.token' => 'wrong-laravel-token',
         ]);
 
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true, 'tts_ready' => true, 'chat_ready' => true,
+            ], 200),
+        ]);
         $response = $this->actingAs(User::factory()->create())
             ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
 
@@ -254,10 +251,14 @@ class GlobalAssistantVoiceTest extends TestCase
         [$encoded, $signature] = explode('.', (string) $response->json('token'), 2);
         $this->assertSame(hash_hmac('sha256', $encoded, 'wrong-laravel-token'), $signature);
         $this->assertStringNotContainsString('wrong-laravel-token', $response->getContent());
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer wrong-laravel-token')
+        );
     }
 
-    public function test_render_stream_token_does_not_repeat_the_browser_readiness_check(): void
+    public function test_render_stream_token_checks_remote_auth_after_the_browser_readiness_check(): void
     {
         config([
             'services.voice.local_only' => false,
@@ -269,11 +270,20 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.ai_gateway.token' => 'render-shared-token',
         ]);
 
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true, 'tts_ready' => true, 'chat_ready' => true,
+            ], 200),
+        ]);
         $response = $this->actingAs(User::factory()->create())
             ->postJson('/assistant/voice/stream-token', ['locale' => 'fa-IR']);
 
         $response->assertOk()->assertJsonPath('ok', true);
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer render-shared-token')
+        );
     }
 
     public function test_local_live_gateway_status_identifies_server_only_persian_mode(): void
