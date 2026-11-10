@@ -575,8 +575,6 @@ class AdminStoreController extends Controller
             fclose($sourceStream);
         }
         abort_unless($stored, 503, 'ذخیره فایل در زیرساخت مرکزی ممکن نشد.');
-        $disk->delete($ingestion->staging_path);
-
         try {
             [$fileRecord, $productRequiresRepublish] = DB::transaction(function () use ($product, $ingestion, $inspection, $finalPath) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
@@ -670,6 +668,8 @@ class AdminStoreController extends Controller
             Storage::disk('managed')->delete($finalPath);
             throw $exception;
         }
+
+        $disk->delete($ingestion->staging_path);
 
         $documentId = (int) DB::table('store_product_documents')
             ->where('product_file_id', $fileRecord->id)
