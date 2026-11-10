@@ -107,7 +107,6 @@ class AdminDashboardShellIntegrityTest extends TestCase
                 'status' => 'completed',
                 'priority' => 'normal',
                 'due_at' => now()->subDay(),
-                'completed_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -279,7 +278,10 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ],
         ]);
 
-        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        config([
+            'farast_admin.scope_override_key' => 'dashboard_scope_override',
+            'farast_admin.sections.audit.min_scope' => 'organization',
+        ]);
         SiteSetting::write('dashboard_scope_override', 'organization');
 
         $this->actingAs($admin)->get(route('admin.index'))
@@ -334,7 +336,10 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ]);
         }
 
-        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        config([
+            'farast_admin.scope_override_key' => 'dashboard_scope_override',
+            'farast_admin.sections.store.min_scope' => 'organization',
+        ]);
         SiteSetting::write('dashboard_scope_override', 'organization');
 
         $this->actingAs($admin)->get(route('admin.index'))
