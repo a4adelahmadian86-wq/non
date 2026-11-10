@@ -17,7 +17,7 @@
 
     <nav aria-label="دسته‌بندی‌های مدیریت">
         <details class="farast-admin-nav-group" open>
-            <summary><span><i class="fa-solid fa-gauge-high"></i><b>عملیات</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
+            <summary aria-label="عملیات" title="عملیات"><span><i class="fa-solid fa-gauge-high"></i><b>عملیات</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
             <div class="farast-admin-nav-group__items">
                 <a href="{{ route('admin.index') }}" @if(request()->routeIs('admin.index')) class="is-active" aria-current="page" @endif><i class="fa-solid fa-grid-2"></i><span>نمای کلی عملیات</span></a>
             </div>
@@ -25,7 +25,7 @@
 
         @if($adminConsole->sectionAllowed(auth()->user(), 'store') || $adminConsole->sectionAllowed(auth()->user(), 'users') || $adminConsole->sectionAllowed(auth()->user(), 'marketing'))
             <details class="farast-admin-nav-group" @if($catalogActive || $customersActive) open @endif>
-                <summary><span><i class="fa-solid fa-boxes-stacked"></i><b>محصولات و مشتریان</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
+                <summary aria-label="محصولات و مشتریان" title="محصولات و مشتریان"><span><i class="fa-solid fa-boxes-stacked"></i><b>محصولات و مشتریان</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
                 <div class="farast-admin-nav-group__items">
                     @if($adminConsole->sectionAllowed(auth()->user(), 'store'))
                         <a href="{{ route('admin.store.index') }}" @if(request()->routeIs('admin.store.index', 'admin.store.edit')) class="is-active" aria-current="page" @endif><i class="fa-solid fa-boxes-stacked"></i><span>محصولات و دوره‌ها</span></a>
@@ -49,7 +49,7 @@
 
         @if($adminConsole->sectionAllowed(auth()->user(), 'finance') || $adminConsole->sectionAllowed(auth()->user(), 'plans'))
             <details class="farast-admin-nav-group" @if($financeActive) open @endif>
-                <summary><span><i class="fa-solid fa-wallet"></i><b>مالی و اشتراک</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
+                <summary aria-label="مالی و اشتراک" title="مالی و اشتراک"><span><i class="fa-solid fa-wallet"></i><b>مالی و اشتراک</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
                 <div class="farast-admin-nav-group__items">
                     @if($adminConsole->sectionAllowed(auth()->user(), 'finance'))
                         <a href="{{ route('admin.finance') }}" @if(request()->routeIs('admin.finance')) class="is-active" aria-current="page" @endif><i class="fa-solid fa-wallet"></i><span>مالی و پرداخت‌ها</span></a>
@@ -63,7 +63,7 @@
 
         @if($adminConsole->sectionAllowed(auth()->user(), 'integrations') || $adminConsole->sectionAllowed(auth()->user(), 'settings') || $adminConsole->sectionAllowed(auth()->user(), 'pricing') || $adminConsole->sectionAllowed(auth()->user(), 'voice') || $adminConsole->sectionAllowed(auth()->user(), 'ai_providers'))
             <details class="farast-admin-nav-group" @if($configurationActive) open @endif>
-                <summary><span><i class="fa-solid fa-sliders"></i><b>پیکربندی پلتفرم</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
+                <summary aria-label="پیکربندی پلتفرم" title="پیکربندی پلتفرم"><span><i class="fa-solid fa-sliders"></i><b>پیکربندی پلتفرم</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
                 <div class="farast-admin-nav-group__items">
                     @if($adminConsole->sectionAllowed(auth()->user(), 'integrations'))
                         <a href="{{ route('admin.integrations') }}" @if(request()->routeIs('admin.integrations')) class="is-active" aria-current="page" @endif><i class="fa-solid fa-plug"></i><span>یکپارچه‌سازی سرویس‌ها</span></a>
@@ -86,7 +86,7 @@
 
         @if($adminConsole->sectionAllowed(auth()->user(), 'analytics') || $adminConsole->sectionAllowed(auth()->user(), 'audit') || $adminConsole->sectionAllowed(auth()->user(), 'access') || $adminConsole->sectionAllowed(auth()->user(), 'organizations'))
             <details class="farast-admin-nav-group" @if($governanceActive) open @endif>
-                <summary><span><i class="fa-solid fa-shield-halved"></i><b>حاکمیت و تحلیل</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
+                <summary aria-label="حاکمیت و تحلیل" title="حاکمیت و تحلیل"><span><i class="fa-solid fa-shield-halved"></i><b>حاکمیت و تحلیل</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
                 <div class="farast-admin-nav-group__items">
                     @if($adminConsole->sectionAllowed(auth()->user(), 'analytics'))
                         <a href="{{ route('admin.analytics') }}" @if(request()->routeIs('admin.analytics')) class="is-active" aria-current="page" @endif><i class="fa-solid fa-chart-line"></i><span>تحلیل و گزارش</span></a>
@@ -106,7 +106,7 @@
 
         @if($adminConsole->sectionAllowed(auth()->user(), 'announcements') || $adminConsole->sectionAllowed(auth()->user(), 'support_admin') || $adminConsole->sectionAllowed(auth()->user(), 'cms') || $adminConsole->sectionAllowed(auth()->user(), 'emails') || $adminConsole->sectionAllowed(auth()->user(), 'social'))
             <details class="farast-admin-nav-group" @if($communicationActive) open @endif>
-                <summary><span><i class="fa-solid fa-comments"></i><b>ارتباطات و محتوا</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
+                <summary aria-label="ارتباطات و محتوا" title="ارتباطات و محتوا"><span><i class="fa-solid fa-comments"></i><b>ارتباطات و محتوا</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
                 <div class="farast-admin-nav-group__items">
                     @if($adminConsole->sectionAllowed(auth()->user(), 'announcements'))
                         <a href="{{ route('admin.announcements.index') }}" @if(request()->routeIs('admin.announcements.*')) class="is-active" aria-current="page" @endif><i class="fa-solid fa-bullhorn"></i><span>محتوا و اعلان‌ها</span></a>
