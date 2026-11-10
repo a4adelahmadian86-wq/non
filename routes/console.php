@@ -33,6 +33,38 @@ Artisan::command('farast:storage-backup:password {run_id}', function (\App\Servi
     $this->line($restore->password((int) $this->argument('run_id')));
 })->purpose('Reveal the decryption password for a completed backup from the CLI');
 
+Artisan::command('farast:storage-replicate-pending {--limit=100}', function () {
+    $volumes = \\App\\Models\\StorageVolume::query()
+        ->where('drive_key', 'iran_primary')
+        ->where('is_active', true)
+        ->where('status', 'healthy')
+        ->get(['id', 'provider']);
+    $providers = $volumes->pluck('provider')->filter()->unique()->count();
+    if ($providers < 2) {
+        $this->info('A second healthy Iranian provider is not configured; replicas remain pending.');
+        return 0;
+    }
+
+    $ids = \\App\\Models\\StorageManagedFile::query()
+        ->where('drive_key', 'iran_primary')
+        ->where('classification', 'critical')
+        ->where('status', 'active')
+        ->whereNull('replicated_to_volume_id')
+        ->orderBy('id')
+        ->limit(max(1, min(500, (int) $this->option('limit'))))
+        ->pluck('id');
+
+    foreach ($ids as $id) {
+        \\App\\Jobs\\ReplicateStorageFile::dispatch((int) $id);
+    }
+    $this->info('Queued '.$ids->count().' critical storage replica job(s).');
+    return 0;
+})->purpose('Queue missing same-region replicas for critical stored files');
+
+Schedule::command('farast:storage-replicate-pending --limit=100')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
 Schedule::command('farast:storage-backup')
     ->weeklyOn(0, '02:30')
     ->withoutOverlapping();
