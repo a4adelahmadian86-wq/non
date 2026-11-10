@@ -640,7 +640,7 @@ class UploadSecurityService
         $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         $metadata = [
             'extension' => $extension ?: null,
-            'mime' => (new \\finfo(FILEINFO_MIME_TYPE))->buffer($bytes) ?: null,
+            'mime' => (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes) ?: null,
             'page_count' => null,
             'author' => null,
             'created_at' => null,
@@ -655,7 +655,7 @@ class UploadSecurityService
                 try {
                     file_put_contents($tempPath, $bytes, LOCK_EX);
                     $metadata['page_count'] = $this->countPdfPages($tempPath);
-                } catch (\\Throwable) {
+                } catch (\Throwable) {
                     $metadata['page_count'] = null;
                 } finally {
                     @unlink($tempPath);
@@ -664,9 +664,9 @@ class UploadSecurityService
         } elseif ($extension === 'xml' && str_ends_with(str_replace(chr(92), '/', $name), 'docProps/core.xml')) {
             $previous = libxml_use_internal_errors(true);
             try {
-                $document = new \\DOMDocument();
+                $document = new \DOMDocument();
                 if ($document->loadXML($bytes, LIBXML_NONET | LIBXML_NOBLANKS)) {
-                    $xpath = new \\DOMXPath($document);
+                    $xpath = new \DOMXPath($document);
                     $creator = $xpath->query('//*[local-name()="creator"]')?->item(0)?->textContent;
                     $created = $xpath->query('//*[local-name()="created"]')?->item(0)?->textContent;
                     $metadata['author'] = $creator ? mb_substr(trim($creator), 0, 160) : null;
