@@ -6,6 +6,11 @@ use App\Models\StoreCategory;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
+use App\Jobs\ReviewProductForPublication;
+use App\Services\ProductSupervisorClient;
+use App\Services\ProductSupervisorSnapshotBuilder;
+use App\Services\ProductPublicationReadiness;
+use App\Services\AuthorizationService;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
 use App\Models\StoreProductDocumentPage;
@@ -1150,6 +1155,143 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame($file->sha256, $document->source_sha256);
         $this->assertSame('queued', $document->processing_status);
         Queue::assertPushed(ProcessProductDocument::class, fn ($job) => $job->documentId === $document->id);
+    }
+
+
+    public function test_final_product_submission_is_queued_and_never_published_before_supervisor_review(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول در صف انتشار',
+            'slug' => 'queued-publication-product',
+            'sku' => 'TEST-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'status' => 'draft',
+            'short_description' => 'توضیح کوتاه',
+        ]);
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/primary.pdf',
+            'original_name' => 'primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 100,
+            'sha256' => str_repeat('a', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.edit', $product))
+            ->put(route('admin.store.update', $product), $this->payload($category, [
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'status' => 'published',
+            ]))
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHas('status');
+
+        $saved = $product->fresh();
+        $this->assertSame('draft', $saved->status);
+        $this->assertNull($saved->published_at);
+        $this->assertSame('queued', data_get($saved->metadata, 'publication_workflow.status'));
+        $this->assertSame($admin->id, data_get($saved->metadata, 'publication_workflow.submitted_by'));
+        Queue::assertPushed(ReviewProductForPublication::class, fn ($job) => $job->productId === $product->id);
+    }
+
+    public function test_ai_correction_always_requires_manual_approval_even_for_an_administrator(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'عنوان اغراق‌آمیز و نادرست',
+            'slug' => 'corrected-publication-product',
+            'sku' => 'CORRECTED-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'status' => 'draft',
+            'metadata' => [
+                'publication_workflow' => ['status' => 'queued', 'submitted_by' => $admin->id],
+                'ai_supervisor' => ['checks' => ['content' => true, 'pricing' => true, 'seo' => true, 'media' => true, 'policy' => true]],
+            ],
+        ]);
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/primary.pdf',
+            'original_name' => 'primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 100,
+            'sha256' => str_repeat('b', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+
+        $firstReview = [
+            'review_id' => 'review-before-correction',
+            'product_id' => (string) $product->id,
+            'verdict' => 'needs_changes',
+            'score' => 55,
+            'summary' => 'عنوان محصول اغراق‌آمیز است.',
+            'findings' => [],
+            'suggested_edits' => ['title' => 'عنوان دقیق و اصلاح‌شده'],
+            'model' => 'test-supervisor',
+            'generated_at' => now()->toISOString(),
+        ];
+        $secondReview = [
+            'review_id' => 'review-after-correction',
+            'product_id' => (string) $product->id,
+            'verdict' => 'approved',
+            'score' => 92,
+            'summary' => 'اصلاحات بررسی شد؛ انتشار نیازمند تأیید انسانی است.',
+            'findings' => [],
+            'suggested_edits' => [],
+            'model' => 'test-supervisor',
+            'generated_at' => now()->toISOString(),
+        ];
+        $supervisor = \Mockery::mock(ProductSupervisorClient::class);
+        $supervisor->shouldReceive('configured')->once()->andReturn(true);
+        $supervisor->shouldReceive('review')->twice()->andReturn($firstReview, $secondReview);
+
+        (new ReviewProductForPublication($product->id))->handle(
+            $supervisor,
+            app(ProductSupervisorSnapshotBuilder::class),
+            app(ProductKnowledgeService::class),
+            app(ProductPublicationReadiness::class),
+            app(AuthorizationService::class)
+        );
+
+        $saved = $product->fresh();
+        $this->assertSame('عنوان دقیق و اصلاح‌شده', $saved->title);
+        $this->assertSame('draft', $saved->status);
+        $this->assertSame('awaiting_manual_approval', data_get($saved->metadata, 'publication_workflow.status'));
+        $this->assertTrue((bool) data_get($saved->metadata, 'publication_workflow.correction_applied'));
+        $this->assertSame('approved', data_get($saved->metadata, 'publication_workflow.ai_verdict'));
+
+        $this->from(route('admin.store.edit', $product))
+            ->actingAs($admin)
+            ->post(route('admin.store.publication.approve', $product))
+            ->assertRedirect(route('admin.store.edit', $product))
+            ->assertSessionHas('status');
+
+        $this->assertSame('published', $product->fresh()->status);
+        $this->assertSame('published', data_get($product->fresh()->metadata, 'publication_workflow.status'));
+        $this->assertSame($admin->id, data_get($product->fresh()->metadata, 'publication_workflow.approved_by'));
     }
 
 }
