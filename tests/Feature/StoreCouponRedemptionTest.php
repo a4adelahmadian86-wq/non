@@ -401,4 +401,54 @@ class StoreCouponRedemptionTest extends TestCase
     }
 
 
+    public function test_generic_redemption_cannot_spend_budget_reserved_by_active_smart_offers(): void
+    {
+        SiteSetting::write('store_coupon_monthly_budget_rials', 15000);
+
+        $user = User::create(['name' => 'Reserved Budget QA', 'mobile' => '09123456787', 'password' => 'secret']);
+        $reservedCoupon = StoreCoupon::create([
+            'code' => 'BUDGETRESERVED', 'type' => 'fixed', 'value' => 10000,
+            'max_uses' => 1, 'used_count' => 0, 'is_active' => true,
+        ]);
+        StoreCouponAssignment::create([
+            'coupon_id' => $reservedCoupon->id,
+            'user_id' => $user->id,
+            'product_id' => null,
+            'status' => 'offered',
+            'score' => 6,
+            'reason_codes' => ['wishlist_interest'],
+            'offered_at' => now(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $checkoutCoupon = StoreCoupon::create([
+            'code' => 'BUDGETCHECKOUT', 'type' => 'fixed', 'value' => 6000,
+            'max_uses' => 1, 'used_count' => 0, 'is_active' => true,
+        ]);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100000,
+            'discount_rials' => 6000,
+            'tax_rials' => 0,
+            'total_rials' => 94000,
+            'status' => 'pending',
+            'pricing_snapshot' => [
+                'kind' => 'store',
+                'coupon_code' => $checkoutCoupon->code,
+                'coupon_redemption_pending' => true,
+            ],
+        ]);
+
+        try {
+            app(StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
+            $this->fail('A generic coupon must not consume budget already reserved by an active smart offer.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('رزرو شده', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $checkoutCoupon->fresh()->used_count);
+        $this->assertTrue((bool) $order->fresh()->pricing_snapshot['coupon_redemption_pending']);
+    }
+
+
 }
