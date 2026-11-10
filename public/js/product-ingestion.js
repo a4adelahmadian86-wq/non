@@ -172,14 +172,18 @@
 
     const findings = Array.isArray(inspection.findings) ? inspection.findings : [];
     const warnings = Array.isArray(inspection.warnings) ? inspection.warnings : [];
+    const metadataNotes = Array.isArray(inspection.metadata_notes) ? inspection.metadata_notes : [];
     const notes = [...findings, ...warnings].map((item) =>
       '<div class="product-ingestion-warning">' + escapeHtml(item) + '</div>'
+    ).join('');
+    const infoNotes = metadataNotes.map((item) =>
+      '<div class="product-ingestion-info">' + escapeHtml(item) + '</div>'
     ).join('');
 
     const hasWarnings = inspection.risk_level === 'warning' || findings.length > 0 || warnings.length > 0;
     report.innerHTML =
       '<h4>خلاصه بررسی سایت، بدون استفاده از هوش مصنوعی</h4>' +
-      '<div class="product-ingestion-report-grid">' + grid + '</div>' + archive + notes +
+      '<div class="product-ingestion-report-grid">' + grid + '</div>' + archive + notes + infoNotes +
       '<p><strong>نتیجه بررسی:</strong> ' + (!inspection.safe
         ? 'فایل برای ذخیره‌سازی پذیرفته نشده است.'
         : (hasWarnings
