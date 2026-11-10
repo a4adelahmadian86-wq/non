@@ -14,6 +14,42 @@ class OptionalAntivirusScanner
         return $binary !== '' && $this->resolveBinary($binary) !== null;
     }
 
+    public function scanStream($stream): array
+    {
+        if (! is_resource($stream)) {
+            throw new RuntimeException('antivirus_source_unavailable');
+        }
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-antivirus-');
+        if (! is_string($temporaryPath) || $temporaryPath === '') {
+            throw new RuntimeException('antivirus_temporary_file_unavailable');
+        }
+
+        $target = fopen($temporaryPath, 'wb');
+        if (! is_resource($target)) {
+            @unlink($temporaryPath);
+            throw new RuntimeException('antivirus_temporary_file_unavailable');
+        }
+
+        try {
+            $bytes = stream_copy_to_stream($stream, $target);
+            fflush($target);
+            if (! is_int($bytes) || $bytes < 1) {
+                throw new RuntimeException('antivirus_source_unavailable');
+            }
+            fclose($target);
+            $target = null;
+            @chmod($temporaryPath, 0600);
+
+            return $this->scan($temporaryPath);
+        } finally {
+            if (is_resource($target)) {
+                fclose($target);
+            }
+            @unlink($temporaryPath);
+        }
+    }
+
     public function scan(string $path): array
     {
         $configured = trim((string) config('services.clamav.binary', ''));
