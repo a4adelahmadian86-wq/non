@@ -142,6 +142,8 @@
       [pageLabel, inspection.page_count ?? 'در این مرحله قابل تعیین نیست'],
       ['تعداد برگه‌های Excel', inspection.sheet_count ?? '—'],
       ['ساختار تکمیلی سند', partsLabel],
+      ['پدیدآورنده', inspection.author || 'در فراداده فایل ثبت نشده است'],
+      ['تاریخ ایجاد', inspection.created_at || 'ثبت نشده است'],
       ['ابعاد تصویر', inspection.dimensions ? inspection.dimensions.width + ' × ' + inspection.dimensions.height : '—'],
       ['تعداد اعضای آرشیو', inspection.archive_entry_count ?? 0],
       ['حجم بازشده آرشیو', inspection.archive_expanded_bytes ? formatBytes(inspection.archive_expanded_bytes) : '—'],
@@ -467,7 +469,7 @@
     if (!selectedView) return;
     const files = [state.current, ...state.queue].filter(Boolean);
     const rows = files.map((file, index) => {
-      const relative = file.webkitRelativePath || file.name;
+      const relative = file.webkitRelativePath || file.relativePath || file.name;
       return '<div><strong>' + escapeHtml(relative) + '</strong><small>' + formatBytes(file.size) +
         ' · ' + escapeHtml(fileExtension(file.name).toUpperCase() || 'نامشخص') +
         (file.lastModified ? ' · ' + new Intl.DateTimeFormat('fa-IR').format(new Date(file.lastModified)) : '') +
@@ -553,7 +555,7 @@
     if (entry.isFile) {
       return new Promise(resolve => entry.file(file => {
         try {
-          Object.defineProperty(file, 'webkitRelativePath', {value: prefix + file.name, configurable: true});
+          Object.defineProperty(file, 'relativePath', {value: prefix + file.name, configurable: true});
         } catch (_) {}
         resolve([file]);
       }, () => resolve([])));
