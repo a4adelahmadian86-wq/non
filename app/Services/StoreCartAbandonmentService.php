@@ -4,12 +4,13 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\StoreCartItem;
+use App\Models\SiteSetting;
 
 class StoreCartAbandonmentService
 {
     public function process(int $limit = 200): int
     {
-        $cutoff = now()->subHours(2);
+        $abandonmentHours = max(1, min(72, (int) SiteSetting::read('smart_discount_abandonment_hours', 2)));\n        $cutoff = now()->subHours($abandonmentHours);
         $items = StoreCartItem::query()
             ->whereNull('marketing_abandoned_at')
             ->where('updated_at', '<=', $cutoff)
