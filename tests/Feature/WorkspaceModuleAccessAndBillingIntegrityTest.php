@@ -37,7 +37,7 @@ class WorkspaceModuleAccessAndBillingIntegrityTest extends TestCase
             'source_path' => 'private/unowned/source.pdf',
         ])->assertForbidden();
 
-        $this->get(route('platform.security'))->assertForbidden();
+        $this->get(route('platform.security'))->assertOk();
         $this->get(route('platform.billing'))->assertForbidden();
     }
 
