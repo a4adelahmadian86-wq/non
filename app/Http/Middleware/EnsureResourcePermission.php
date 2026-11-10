@@ -25,7 +25,13 @@ class EnsureResourcePermission
         $context = [
             'resource_id' => $resource->getKey(),
             'resource_type' => $resource::class,
-            'owner_id' => $attributes['owner_id'] ?? $attributes['user_id'] ?? $attributes['created_by'] ?? null,
+            // Preserve an explicitly-null owner_id: falling through to user_id
+            // could grant access to a record whose authoritative owner is absent.
+            'owner_id' => array_key_exists('owner_id', $attributes)
+                ? $attributes['owner_id']
+                : (array_key_exists('user_id', $attributes)
+                    ? $attributes['user_id']
+                    : ($attributes['created_by'] ?? null)),
             'organization_id' => $attributes['organization_id'] ?? null,
             'team_id' => $attributes['team_id'] ?? null,
             'status' => $attributes['status'] ?? null,
