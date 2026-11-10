@@ -122,7 +122,16 @@ class StorageBackupRestoreService
                     $restored['skipped']++;
                     continue;
                 }
-                if (! $target->put($path, fopen($source, 'rb'))) {
+                $legacyStream = fopen($source, 'rb');
+                if (! is_resource($legacyStream)) {
+                    throw new RuntimeException('Unable to open legacy restore source: '.$path);
+                }
+                try {
+                    $ok = $target->put($path, $legacyStream);
+                } finally {
+                    fclose($legacyStream);
+                }
+                if (! $ok) {
                     throw new RuntimeException('Unable to restore legacy file: '.$path);
                 }
                 $restored['legacy']++;
