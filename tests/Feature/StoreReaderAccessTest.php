@@ -806,4 +806,12 @@ class StoreReaderAccessTest extends TestCase
             ->assertDontSee('نسخه فایل اصلی:');
     }
 
+    public function test_product_detail_blade_compiles_to_valid_php(): void
+    {
+        $source = file_get_contents(resource_path('views/store/product.blade.php'));
+        $compiled = app('blade.compiler')->compileString($source);
+        token_get_all($compiled, TOKEN_PARSE);
+        $this->assertTrue(true);
+    }
+
 }
