@@ -120,7 +120,8 @@ class AdminStoreProductWorkflowTest extends TestCase
             'status' => 'draft',
         ]);
 
-        $this->actingAs($admin)
+        $this->from(route('admin.store.edit', $product))
+            ->actingAs($admin)
             ->put(route('admin.store.update', $product), $this->payload($category, [
                 'sku' => $product->sku,
                 'submit_for_publication' => '1',
