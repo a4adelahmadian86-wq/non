@@ -167,8 +167,9 @@ class AdminAccessCenterController extends Controller
     public function destroyRole(Request $request, int $role)
     {
         $this->ensurePlatformAdmin($request);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
 
-        DB::transaction(function () use ($request, $role): void {
+        DB::transaction(function () use ($request, $role, $data): void {
             $record = DB::table('farast_roles')->where('id', $role)->lockForUpdate()->first();
             abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل حذف نیست.');
             abort_if(
@@ -179,7 +180,7 @@ class AdminAccessCenterController extends Controller
 
             DB::table('farast_role_permissions')->where('role_id', $role)->delete();
             DB::table('farast_roles')->where('id', $role)->delete();
-            $this->audit($request, 'role.deleted', null, $role, null, (array) $record, null);
+            $this->audit($request, 'role.deleted', null, $role, null, (array) $record, ['reason' => $data['reason']]);
         });
 
         app(AuthorizationService::class)->forgetUser();
@@ -287,6 +288,7 @@ class AdminAccessCenterController extends Controller
 
             $this->audit($request, 'user.role.assigned', $target->id, $role->id, null, null, [
                 'assignment_id' => $id,
+                'reason' => $data['reason'],
                 'scope' => $data['scope_type'],
                 'scope_id' => $scopeId,
                 'starts_at' => $data['starts_at'] ?? null,
@@ -304,9 +306,10 @@ class AdminAccessCenterController extends Controller
     public function revokeRole(Request $request, int $user, int $assignment)
     {
         $this->ensurePlatformAdmin($request);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
         $target = User::query()->findOrFail($user);
 
-        DB::transaction(function () use ($request, $target, $assignment): void {
+        DB::transaction(function () use ($request, $target, $assignment, $data): void {
             $record = DB::table('farast_user_roles')
                 ->where('id', $assignment)
                 ->where('user_id', $target->id)
@@ -315,7 +318,7 @@ class AdminAccessCenterController extends Controller
             abort_unless($record, 404);
 
             DB::table('farast_user_roles')->where('id', $assignment)->delete();
-            $this->audit($request, 'user.role.revoked', $target->id, (int) $record->role_id, null, (array) $record, null);
+            $this->audit($request, 'user.role.revoked', $target->id, (int) $record->role_id, null, (array) $record, ['reason' => $data['reason']]);
         });
 
         app(AuthorizationService::class)->forgetUser($target->id);
@@ -384,9 +387,10 @@ class AdminAccessCenterController extends Controller
     public function revokeOverride(Request $request, int $user, int $override)
     {
         $this->ensurePlatformAdmin($request);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
         $target = User::query()->findOrFail($user);
 
-        DB::transaction(function () use ($request, $target, $override): void {
+        DB::transaction(function () use ($request, $target, $override, $data): void {
             $record = DB::table('farast_user_permission_overrides')
                 ->where('id', $override)
                 ->where('user_id', $target->id)
@@ -395,7 +399,7 @@ class AdminAccessCenterController extends Controller
             abort_unless($record, 404);
 
             DB::table('farast_user_permission_overrides')->where('id', $override)->delete();
-            $this->audit($request, 'user.permission.override.revoked', $target->id, null, (int) $record->permission_id, (array) $record, null);
+            $this->audit($request, 'user.permission.override.revoked', $target->id, null, (int) $record->permission_id, (array) $record, ['reason' => $data['reason']]);
         });
 
         app(AuthorizationService::class)->forgetUser($target->id);
