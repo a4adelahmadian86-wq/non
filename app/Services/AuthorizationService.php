@@ -333,24 +333,38 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
-            // As with organizations, a team-scoped grant must not silently
-            // substitute its own scope ID for a missing resource team_id.
-            if ($hasResourceContext && (! array_key_exists('team_id', $context) || $context['team_id'] === null || $context['team_id'] === '')) {
-                return false;
-            }
-            $teamId = $hasResourceContext ? $context['team_id'] : $scopeId;
-            if ($teamId !== null && $scopeId !== null && (int) $teamId !== (int) $scopeId) {
-                return false;
-            }
-            if ($teamId !== null) {
-                return $user->teams()->where('teams.id', (int) $teamId)->exists()
-                    || \App\Models\Team::query()->where('id', (int) $teamId)->where('supervisor_id', $user->id)->exists();
+            // Record-level checks must prove that the resource itself belongs
+            // to at least one team in which the actor has an explicit membership.
+            if ($hasResourceContext) {
+                if (isset($context['team_ids']) && is_array($context['team_ids'])) {
+                    $resourceTeamIds = array_values(array_filter(array_map('intval', $context['team_ids']), fn ($id) => $id > 0));
+                } elseif (array_key_exists('team_id', $context) && $context['team_id'] !== null && $context['team_id'] !== '') {
+                    $resourceTeamIds = [(int) $context['team_id']];
+                } else {
+                    return false;
+                }
+            } elseif ($scopeId !== null) {
+                $resourceTeamIds = [(int) $scopeId];
+            } else {
+                $resourceTeamIds = $user->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
+                $resourceTeamIds = array_merge($resourceTeamIds, \App\Models\Team::query()->where('supervisor_id', $user->id)->pluck('id')->map(fn ($id) => (int) $id)->all());
             }
 
-            return $user->teams()->exists()
-                || \App\Models\Team::query()->where('supervisor_id', $user->id)->exists();
+            foreach (array_unique($resourceTeamIds) as $teamId) {
+                if ($teamId < 1 || ($scopeId !== null && (int) $scopeId !== $teamId)) {
+                    continue;
+                }
+
+                $actorBelongsToTeam = $user->teams()->where('teams.id', $teamId)->exists()
+                    || \App\Models\Team::query()->where('id', $teamId)->where('supervisor_id', $user->id)->exists();
+
+                if ($actorBelongsToTeam) {
+                    return true;
+                }
+            }
+
+            return false;
         }
-
         return false;
     }
 
