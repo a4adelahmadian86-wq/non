@@ -189,7 +189,7 @@ class UploadSecurityServiceTest extends TestCase
         Storage::disk('private')->put('quarantine/traversal-structural.zip', file_get_contents($temporary));
         @unlink($temporary);
 
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('upload_archive_path_or_link_rejected');
         app(UploadSecurityService::class)->inspect('quarantine/traversal-structural.zip', 'application/zip', null, null, false);
     }
@@ -201,7 +201,7 @@ class UploadSecurityServiceTest extends TestCase
         $pdf->SetFont('Arial', '', 12);
         $pdf->AddPage();
         $pdf->Cell(0, 10, 'Valid document');
-        $bytes = $pdf->Output('S')."\\n% /OpenAction /JavaScript";
+        $bytes = $pdf->Output('S')."\n% /OpenAction /JavaScript";
         Storage::disk('private')->put('quarantine/active-structural.pdf', $bytes);
 
         $result = app(UploadSecurityService::class)->inspect('quarantine/active-structural.pdf', 'application/pdf', null, null, false);
