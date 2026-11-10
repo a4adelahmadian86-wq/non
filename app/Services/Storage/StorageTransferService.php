@@ -115,7 +115,15 @@ class StorageTransferService
                     $target->increment('used_bytes', (int) $file->size_bytes);
                     $target->increment('object_count');
                 });
-                $source->delete($file->file_key);
+                try {
+                    $source->delete($file->file_key);
+                } catch (\\Throwable $cleanupException) {
+                    report($cleanupException);
+                    $file->update(['metadata' => array_merge((array) $file->metadata, [
+                        'staging_cleanup_pending' => true,
+                        'staging_cleanup_error' => mb_substr($cleanupException->getMessage(), 0, 300),
+                    ])]);
+                }
                 $moved++;
             } catch (\Throwable $exception) {
                 if ($uploaded) {
