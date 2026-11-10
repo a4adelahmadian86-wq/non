@@ -270,7 +270,7 @@
       <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
     </form>
     @if(!$isEdit && $product->type !== 'course')
-      <section class="store-panel product-upload-next-step" id="product-upload-step" aria-labelledby="product-upload-step-title">
+      <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">
         <div class="product-editor-heading"><div><span>گام چهارم · فایل اصلی</span><h2 id="product-upload-step-title">انتخاب و بارگذاری فایل محصول</h2></div><span class="product-editor-step">مرحله بعد از ذخیره</span></div>
         <p>برای اینکه فایل به همین محصول متصل شود و در فضای خصوصی قرنطینه، بررسی و پردازش شود، ابتدا پیش‌نویس محصول را ذخیره کنید. بلافاصله پس از ذخیره، به همین بخش در صفحه محصول منتقل می‌شوید و می‌توانید یک یا چند فایل را انتخاب کنید.</p>
         <ul><li>انتخاب چند فایل یا کشیدن و رها کردن</li><li>بررسی نوع، ساختار، حجم و هش فایل پیش از تأیید</li><li>تعیین فایل اصلی و نگهداری خصوصی</li><li>نمایش وضعیت مطالعه، استخراج صفحات و تولید صوت پس از ذخیره</li></ul>
@@ -596,8 +596,17 @@
     deliveryPolicyField.hidden = !isDigitalFile;
     deliveryPolicySelect.disabled = !isDigitalFile;
   };
+  const uploadStep = document.querySelector('[data-product-upload-step]');
+  const uploadNav = document.querySelector('[data-product-upload-nav]');
+  const syncUploadStep = () => {
+    const isDigitalFile = typeSelect?.value === 'digital_file';
+    if (uploadStep) uploadStep.hidden = !isDigitalFile;
+    if (uploadNav) uploadNav.hidden = !isDigitalFile;
+  };
   typeSelect?.addEventListener('change', syncDeliveryPolicy);
+  typeSelect?.addEventListener('change', syncUploadStep);
   syncDeliveryPolicy();
+  syncUploadStep();
 
   const price = form.querySelector('[name="price_rials"]');
   const pricePreview = form.querySelector('[data-price-preview]');
