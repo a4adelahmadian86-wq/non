@@ -95,6 +95,7 @@
     state.current = file;
     state.ingestionId = null;
     state.archiveEntries = [];
+    if (antivirusInput) antivirusInput.checked = false;
     filename.textContent = file.webkitRelativePath || file.name;
     setProgress(0, '', false);
     report.innerHTML = '<p>فایل انتخاب شد. پیش از انتقال به قرنطینه، فهرست و مشخصات اولیه را بررسی کنید؛ هنوز چیزی آپلود یا ذخیره نشده است.</p>';
@@ -491,6 +492,7 @@
   const renderSelectedFiles = () => {
     if (!selectedView) return;
     const files = [state.current, ...state.queue].filter(Boolean);
+    const totalBytes = files.reduce((total, file) => total + (Number(file.size) || 0), 0);
     const rows = files.map((file, index) => {
       const relative = file.webkitRelativePath || file.relativePath || file.name;
       return '<div><strong>' + escapeHtml(relative) + '</strong><small>' + formatBytes(file.size) +
@@ -511,7 +513,7 @@
         '</dl></div>'
       : '';
     selectedView.innerHTML = files.length
-      ? '<strong>فهرست انتخاب‌شده · ' + files.length + ' فایل</strong>' + rows + currentDetails + errors
+      ? '<strong>فهرست انتخاب‌شده · ' + files.length + ' فایل</strong><div class="product-ingestion-aggregate"><span>تعداد فایل‌ها: <b>' + files.length + '</b></span><span>حجم کل: <b>' + formatBytes(totalBytes) + '</b></span><span>تعداد فایل‌های آرشیو: <b>پس از بررسی هر آرشیو مشخص می‌شود</b></span></div>' + rows + currentDetails + errors
       : errors;
   };
 
