@@ -311,7 +311,7 @@
         </div>
     </section>
 
-    <main class="home-discovery" id="homeDiscovery">
+    <section class="home-discovery" id="homeDiscovery" aria-labelledby="discovery-title">
         <section class="discovery-panel" aria-labelledby="discovery-title">
             <div class="discovery-heading">
                 <span class="home-kicker">شروع هوشمند</span>
@@ -363,7 +363,7 @@
             </div>
         </section>
         @endif
-    </main>
+    </section>
 
     <section class="home-faq" aria-labelledby="home-faq-title">
         <div class="home-section-heading home-section-heading--center">
