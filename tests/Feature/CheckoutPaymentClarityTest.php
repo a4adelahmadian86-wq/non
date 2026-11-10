@@ -101,4 +101,66 @@ class CheckoutPaymentClarityTest extends TestCase
             ->assertDontSee('100,000 ریال')
             ->assertSee(route('checkout.zarinpal', $storeOrder), false);
     }
+    public function test_paid_typing_deposit_returns_to_the_original_project_and_restores_upload_acceptance(): void
+    {
+        \\Illuminate\\Support\\Facades\\Storage::fake('private');
+
+        $user = User::create([
+            'name' => 'Deposit QA',
+            'mobile' => '09123456780',
+            'password' => 'secret',
+        ]);
+
+        $project = \\App\\Models\\FarastProject::create([
+            'user_id' => $user->id,
+            'name' => 'پروژه آزمون فایل',
+            'project_type' => 'typing',
+            'workflow' => 'source_file',
+            'template_code' => 'simple_typing',
+            'status' => 'active',
+            'context' => ['source_type' => 'printed'],
+            'billing_state' => ['status' => 'estimated'],
+            'output_state' => ['status' => 'locked'],
+            'estimated_pages' => 3,
+            'estimated_price_rials' => 90000,
+        ]);
+
+        $path = 'typing/'.$user->id.'/homepage-source.pdf';
+        $bytes = '%PDF-1.4 deposit project continuity test';
+        \\Illuminate\\Support\\Facades\\Storage::disk('private')->put($path, $bytes);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'document_id' => null,
+            'subtotal_rials' => 30000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 30000,
+            'status' => 'deposit_pending',
+            'pricing_snapshot' => [
+                'kind' => 'typing_deposit',
+                'source_path' => $path,
+                'source_hash' => hash('sha256', $bytes),
+                'estimated_pages' => 3,
+                'project_id' => $project->id,
+                'deposit_credit_rials' => 30000,
+            ],
+        ]);
+
+        Wallet::create(['user_id' => $user->id, 'balance_rials' => 50000]);
+
+        $response = $this->actingAs($user)->post(route('checkout.wallet', $order), [
+            'accept_terms' => '1',
+        ]);
+
+        $response->assertRedirect(route('editor', ['project' => $project->id]));
+        $this->assertSame($order->id, session('typing_preflight_deposit_order'));
+        $this->assertSame($project->id, session('typing_preflight_accepted.project_id'));
+        $this->assertSame($path, session('typing_preflight_accepted.path'));
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'deposit_paid',
+        ]);
+    }
+
 }
