@@ -31,7 +31,7 @@ class UserFileController extends Controller
         $path = $stored['path'];
         $now = now();
         try {
-            $record = \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($file, $path, $stored, $bytes, $pages, $quote, $now, $storage) {
+            $record = \Illuminate\\Support\\Facades\\DB::transaction(function () use ($file, $path, $stored, $bytes, $pages, $quote, $now, $storage) {
                 $record = UserFile::create([
                     'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
                     'disk' => $stored['disk'], 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
@@ -43,7 +43,7 @@ class UserFileController extends Controller
                 $storage->bindReference((int) $stored['managed_file_id'], UserFile::class, (int) $record->id);
                 return $record;
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             $storage->delete($stored['disk'], $path);
             throw $exception;
         }
@@ -61,9 +61,9 @@ class UserFileController extends Controller
             $sourceHash = hash_file('sha256', $temporary);
             $sourcePath = 'typing/'.$request->user()->id.'/'.Str::uuid().'-'.basename($file->path);
             $stream = fopen($temporary, 'rb');
-            if (! is_resource($stream)) throw new \\RuntimeException('editor_source_stream_unavailable');
+            if (! is_resource($stream)) throw new \RuntimeException('editor_source_stream_unavailable');
             try {
-                if (! Storage::disk('private')->writeStream($sourcePath, $stream)) throw new \\RuntimeException('editor_selection_copy_failed');
+                if (! Storage::disk('private')->writeStream($sourcePath, $stream)) throw new \RuntimeException('editor_selection_copy_failed');
             } finally {
                 fclose($stream);
             }
@@ -141,7 +141,7 @@ class UserFileController extends Controller
             return max(1, $pages);
         }
         if (in_array($mime, ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'], true) && class_exists('ZipArchive')) {
-            $zip = new \\ZipArchive();
+            $zip = new \ZipArchive();
             $pages = 1;
             if ($zip->open($path) === true) {
                 $xml = $zip->getFromName('word/document.xml') ?: '';
