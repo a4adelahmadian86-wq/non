@@ -100,6 +100,12 @@ class TrackAuthenticatedSession
             ->where('last_activity', '<', now()->subDays(30))
             ->delete();
 
+        // Keep a bounded security history instead of retaining device metadata forever.
+        DB::table('farast_security_events')
+            ->where('user_id', $user->id)
+            ->where('created_at', '<', now()->subDays(180))
+            ->delete();
+
         return $next($request);
     }
 
