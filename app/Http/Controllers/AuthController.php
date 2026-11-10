@@ -165,6 +165,19 @@ class AuthController extends Controller
         $user = User::where('mobile', $phone)->first();
         if (! $user || $user->is_blocked || ! $user->password || ! Hash::check($data['password'], $user->password)) {
             RateLimiter::hit($attemptKey, 600);
+
+            if ($user && \Illuminate\Support\Facades\Schema::hasTable('farast_security_events')) {
+                DB::table('farast_security_events')->insert([
+                    'user_id' => $user->id,
+                    'event' => 'login_failed',
+                    'ip' => $request->ip(),
+                    'user_agent' => substr((string) $request->userAgent(), 0, 4000),
+                    'meta' => json_encode(['reason' => 'invalid_credentials_or_blocked'], JSON_UNESCAPED_UNICODE),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
             throw ValidationException::withMessages(['password' => 'اطلاعات ورود صحیح نیست. رمز عبور را بررسی کنید.']);
         }
 
