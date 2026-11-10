@@ -7,6 +7,7 @@ use App\Models\FarastNotification;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Services\CapabilityService;
 use App\Services\MessengerAccessService;
 use App\Services\NotificationService;
