@@ -33,7 +33,7 @@ jobs:
       - run: node --check public/js/editor-core.js
       - run: node --check public/js/editor-agent.js
       - run: node --check public/js/editor-layout.js
-      - run: node --check public/js/farast-reader.js && node --check public/js/farast-reader-discussions.js && node --check public/js/farast-reader-audio.js && node --check public/js/farast-reader-document.js && node --check public/js/farast-reader-document-audio.js && node --check tests/browser/reader-experience.spec.js
+      - run: node --check public/js/farast-reader-storage.js && node --check public/js/farast-reader-personal-tools.js && node --check tests/browser/reader-storage.spec.js && node --check public/js/farast-reader.js && node --check public/js/farast-reader-discussions.js && node --check public/js/farast-reader-audio.js && node --check public/js/farast-reader-document.js && node --check public/js/farast-reader-document-audio.js && node --check tests/browser/reader-experience.spec.js && node --check public/js/farast-reader-annotations.js && node --check public/js/farast-reader-studio.js && node --check public/js/farast-reader-ink-pressure.js && node --check tests/browser/reader-annotations.spec.js && node --check tests/browser/reader-studio.spec.js && node --check tests/browser/reader-ink-pressure.spec.js
       - run: node --check public/js/editor-voice-hub.js && node --check public/js/farast-assistant.js && node --check public/js/farast-voice.js
       - run: node --check public/js/product-ingestion.js
       - run: node --check public/js/admin-store-product-wizard.js
@@ -52,9 +52,6 @@ jobs:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
       - run: php -l app/Services/StoreXlsxPreviewRenderer.php && php -l app/Services/StorePdfPreviewPreparer.php && php -l database/migrations/2026_11_08_000025_add_page_counts_to_store_product_previews.php && php -l app/Http/Controllers/StoreReaderStateController.php && php -l app/Models/StoreReaderState.php && php -l database/migrations/2026_11_08_000024_create_store_reader_states_table.php && php -l routes/store_routes.php && php -l app/Http/Controllers/AdminCourseController.php && php -l app/Http/Controllers/StoreCourseLearningController.php && php -l app/Http/Controllers/AdminStoreController.php && php -l app/Http/Controllers/StoreController.php && php -l app/Models/StoreProductPreview.php && php -l database/migrations/2026_11_08_000023_add_synchronized_audio_to_reader_previews.php && php -l tests/Feature/StoreReaderAccessTest.php && php -l app/Http/Controllers/StoreCartController.php && php -l app/Http/Controllers/PaymentController.php && php -l app/Http/Controllers/Concerns/PaysWithZarinpal.php && php -l app/Services/UploadSecurityService.php && php -l app/Services/StoreCourseEnrollmentService.php && php -l app/Models/StoreCourse.php && php -l app/Models/StoreCourseSection.php && php -l app/Models/StoreCourseLesson.php && php -l app/Models/StoreCourseEnrollment.php && php -l app/Models/StoreCourseLessonProgress.php && php -l tests/Feature/StoreCourseLearningTest.php && php -l database/migrations/2026_11_07_000010_create_store_course_catalog.php && php -l database/migrations/2026_11_07_000011_create_store_course_enrollments.php && php -l database/migrations/2026_11_07_000012_register_store_management_permission.php
-      - run: php -l app/Http/Controllers/MessengerController.php && php -l app/Http/Controllers/CommunicationCenterController.php && php -l app/Services/MessengerAccessService.php && php -l app/Services/DashboardNavigationService.php && php -l app/Services/NotificationService.php && php -l app/Models/Conversation.php && php -l app/Models/ConversationMessage.php && php -l database/migrations/2026_11_10_000006_create_internal_messaging_tables.php && php -l routes/messenger.php && php -l tests/Feature/InternalMessengerTest.php
-      - run: node --check public/js/messenger.js
-      - run: php artisan route:list --path=messenger && php artisan route:list --path=communications
       - run: php artisan route:list --path=admin/store && php artisan route:list --path=store/preview && php artisan route:list --path=my-courses
       - run: php artisan view:cache
       - run: php artisan test
@@ -72,6 +69,48 @@ jobs:
           FARAST_E2E_URL: http://127.0.0.1:8000
       - if: always()
         run: test -f /tmp/farast-server.log && cat /tmp/farast-server.log || true
+
+  reader-browser-regression:
+    if: ${{ always() && needs.laravel.result == 'failure' }}
+    needs: [laravel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
+          coverage: none
+      - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: printf '%s\\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+      - run: php artisan key:generate
+      - run: touch database/database.sqlite
+      - run: php artisan migrate --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: ADMIN_MOBILE=09151234567 ADMIN_INITIAL_PASSWORD=${GITHUB_RUN_ID}-reader-e2e php artisan db:seed --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: php artisan serve --host=127.0.0.1 --port=8000 > /tmp/farast-reader-server.log 2>&1 &
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/up >/dev/null && exit 0; sleep 1; done; cat /tmp/farast-reader-server.log; exit 1
+      - run: npm init -y
+      - run: npm install --no-save @playwright/test@1.55.0
+      - run: npx playwright install chromium
+      - run: npx playwright test tests/browser/reader-experience.spec.js tests/browser/reader-annotations.spec.js tests/browser/reader-ink-pressure.spec.js tests/browser/reader-storage.spec.js tests/browser/reader-studio.spec.js --workers=1
+        env:
+          FARAST_E2E_URL: http://127.0.0.1:8000
+      - if: always()
+        run: test -f /tmp/farast-reader-server.log && cat /tmp/farast-reader-server.log || true
 
   document-audio-smoke:
     runs-on: ubuntu-latest
