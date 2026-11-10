@@ -325,7 +325,7 @@ class AdvancedAccessControlTest extends TestCase
         $member = $this->user('09140000342', User::ROLE_EMPLOYEE, $organizationA->id);
         $outside = $this->user('09140000343', User::ROLE_EMPLOYEE, $organizationB->id);
 
-        $workflowColumns = \\Illuminate\\Support\\Facades\\Schema::getColumnListing('farast_workflows');
+        $workflowColumns = \Illuminate\\Support\\Facades\\Schema::getColumnListing('farast_workflows');
         $workflowPayload = array_intersect_key([
             'user_id' => $manager->id,
             'name' => 'Scoped CRM follow-up',
@@ -338,7 +338,7 @@ class AdvancedAccessControlTest extends TestCase
             'updated_at' => now(),
         ], array_flip($workflowColumns));
         $workflowId = DB::table('farast_workflows')->insertGetId($workflowPayload);
-        $engine = app(\\App\\Services\\WorkflowEngine::class);
+        $engine = app(\App\\Services\\WorkflowEngine::class);
 
         $successfulRun = $engine->run($workflowId, [
             'user_id' => $member->id,
@@ -359,7 +359,7 @@ class AdvancedAccessControlTest extends TestCase
                 'customer_id' => $outside->id,
             ], null, true);
             $this->fail('A workflow must not create CRM follow-ups outside its owner's organization scope.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('outside the authorized customer scope', $exception->getMessage());
         }
 
