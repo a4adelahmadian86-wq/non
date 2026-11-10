@@ -253,7 +253,7 @@
                 [number(item.redeemed_offer_count), 'تبدیل نمایش ' + number(item.view_to_redemption_rate) + '٪'],
                 [number(item.attributed_revenue_rials) + ' ریال', ''],
                 [number(item.redeemed_discount_rials) + ' ریال', ''],
-                [number(item.reserved_discount_rials) + ' ریال', 'مانده ' + (item.budget_remaining_rials === null ? 'بدون سقف' : number(item.budget_remaining_rials) + ' ریال')],
+                [item.incentive_product_id ? number(item.reserved_discount_rials) + ' ریال' : '—', item.incentive_product_id ? 'مانده ' + number(item.budget_remaining_rials) + ' ریال' : 'بدون مشوق مالی'],
             ];
             metrics.forEach(metric => {
                 const cell = document.createElement('td');
