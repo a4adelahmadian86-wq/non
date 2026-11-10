@@ -83,9 +83,12 @@ class StoreCartService
 
     public function applyCoupon(Request $request, string $code): array
     {
-        $code = Str::upper(trim($code));
+        $code = mb_strtoupper(trim($code));
+        if ($code === '' || mb_strlen($code) > 40) {
+            throw new \RuntimeException('کد تخفیف را به‌درستی وارد کنید.');
+        }
         $coupon = StoreCoupon::query()
-            ->where('code', $code)
+            ->whereRaw('UPPER(code) = ?', [$code])
             ->where('is_active', true)
             ->where(function ($q) {
                 $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
@@ -100,6 +103,11 @@ class StoreCartService
         }
         if ($coupon->max_uses !== null && $coupon->used_count >= $coupon->max_uses) {
             throw new \RuntimeException('ظرفیت استفاده از این کد تمام شده است.');
+        }
+        if (! in_array($coupon->type, ['percent', 'fixed'], true)
+            || (int) $coupon->value <= 0
+            || ($coupon->type === 'percent' && (int) $coupon->value > 100)) {
+            throw new \RuntimeException('تنظیمات این کد تخفیف معتبر نیست.');
         }
 
         $cart = $this->current($request);
@@ -155,7 +163,8 @@ class StoreCartService
         if ($request) {
             $couponCode = $request->session()->get('store_coupon_code');
             if ($couponCode) {
-                $coupon = StoreCoupon::where('code', $couponCode)
+                $couponCode = mb_strtoupper(trim((string) $couponCode));
+                $coupon = StoreCoupon::whereRaw('UPPER(code) = ?', [$couponCode])
                     ->where('is_active', true)
                     ->where(function ($query) {
                         $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
@@ -171,11 +180,9 @@ class StoreCartService
                     && ($coupon->min_subtotal_rials === null || $subtotal >= (int) $coupon->min_subtotal_rials);
 
                 if ($coupon && $hasRemainingUses && $meetsMinimum && $subtotal > 0) {
-                    if ($coupon->type === 'percent') {
-                        $discount = (int) floor($subtotal * min(100, max(0, (int) $coupon->value)) / 100);
-                    } else {
-                        $discount = min($subtotal, max(0, (int) $coupon->value));
-                    }
+                    $discount = $coupon->type === 'percent'
+                        ? (int) floor($subtotal * (int) $coupon->value / 100)
+                        : min($subtotal, (int) $coupon->value);
                 } else {
                     $couponCode = null;
                     $request->session()->forget('store_coupon_code');

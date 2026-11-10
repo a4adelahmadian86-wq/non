@@ -136,4 +136,55 @@ class StoreCouponRedemptionTest extends TestCase
         $this->assertSame(1, $coupon->fresh()->used_count);
     }
 
+    public function test_pending_redemption_rejects_coupon_that_was_deactivated_before_payment(): void
+    {
+        $user = User::create(['name' => 'Inactive Coupon QA', 'mobile' => '09123456783', 'password' => 'secret']);
+        $coupon = StoreCoupon::create(['code' => 'INACTIVE10', 'type' => 'percent', 'value' => 10, 'is_active' => false]);
+        $order = Order::create([
+            'user_id' => $user->id, 'subtotal_rials' => 100000, 'discount_rials' => 10000,
+            'tax_rials' => 0, 'total_rials' => 90000, 'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $coupon->code, 'coupon_redemption_pending' => true],
+        ]);
+
+        try {
+            app(StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
+            $this->fail('An inactive coupon must not be redeemed.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('اعتبار زمانی', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $coupon->fresh()->used_count);
+        $this->assertTrue((bool) $order->fresh()->pricing_snapshot['coupon_redemption_pending']);
+    }
+
+    public function test_pending_redemption_rechecks_minimum_subtotal_and_rejects_invalid_coupon_configuration(): void
+    {
+        $user = User::create(['name' => 'Coupon Rules QA', 'mobile' => '09123456784', 'password' => 'secret']);
+        $coupon = StoreCoupon::create([
+            'code' => 'MINLATER10', 'type' => 'percent', 'value' => 10,
+            'min_subtotal_rials' => 200000, 'is_active' => true,
+        ]);
+        $order = Order::create([
+            'user_id' => $user->id, 'subtotal_rials' => 100000, 'discount_rials' => 10000,
+            'tax_rials' => 0, 'total_rials' => 90000, 'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $coupon->code, 'coupon_redemption_pending' => true],
+        ]);
+
+        try {
+            app(StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
+            $this->fail('The minimum subtotal must be rechecked before redemption.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('حداقل مبلغ', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $coupon->fresh()->used_count);
+    }
+
+    public function test_coupon_codes_are_normalized_when_saved(): void
+    {
+        $coupon = StoreCoupon::create(['code' => '  lowerCase-10 ', 'type' => 'percent', 'value' => 10]);
+
+        $this->assertSame('LOWERCASE-10', $coupon->fresh()->code);
+    }
+
 }

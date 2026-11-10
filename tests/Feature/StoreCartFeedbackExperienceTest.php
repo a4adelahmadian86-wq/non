@@ -183,4 +183,37 @@ class StoreCartFeedbackExperienceTest extends TestCase
             ->assertOk()
             ->assertSee('store-product-grid', false);
     }
+    public function test_coupon_code_is_case_insensitive_and_normalized(): void
+    {
+        $product = $this->createCartTestProduct(50000);
+        StoreCoupon::create([
+            'code' => '  mixedCase20 ', 'type' => 'percent', 'value' => 20, 'is_active' => true,
+        ]);
+
+        $this->postJson(route('cart.add', $product))->assertOk();
+        $this->postJson(route('cart.coupon'), ['code' => ' mixedcase20 '])
+            ->assertOk()
+            ->assertJsonPath('coupon_code', 'MIXEDCASE20')
+            ->assertJsonPath('discount_rials', 10000);
+    }
+
+    public function test_coupon_with_invalid_percentage_is_rejected_instead_of_silently_capped(): void
+    {
+        $product = $this->createCartTestProduct(50000);
+        StoreCoupon::create([
+            'code' => 'INVALID150', 'type' => 'percent', 'value' => 150, 'is_active' => true,
+        ]);
+
+        $this->postJson(route('cart.add', $product))->assertOk();
+        $this->postJson(route('cart.coupon'), ['code' => 'INVALID150'])
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('message', 'تنظیمات این کد تخفیف معتبر نیست.');
+
+        $this->getJson(route('cart.summary'))
+            ->assertOk()
+            ->assertJsonPath('coupon_code', null)
+            ->assertJsonPath('discount_rials', 0);
+    }
+
 }
