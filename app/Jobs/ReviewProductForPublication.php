@@ -63,6 +63,39 @@ class ReviewProductForPublication implements ShouldQueue
             return;
         }
 
+        if ($product->type === 'digital_file') {
+            $assetReviews = (array) data_get($product->metadata, 'ai_supervisor.asset_reviews', []);
+            $pendingAssetFiles = [];
+            foreach ($product->files()->where('purpose', 'product_download')->where('is_active', true)->get() as $assetFile) {
+                if ((int) $assetFile->size_bytes > 25 * 1024 * 1024) {
+                    continue;
+                }
+                $assetReview = (array) ($assetReviews['file:'.$assetFile->id] ?? []);
+                $isFresh = ($assetReview['status'] ?? null) === 'completed'
+                    && filled($assetReview['sha256'] ?? null)
+                    && hash_equals((string) $assetFile->sha256, (string) $assetReview['sha256']);
+                if (! $isFresh) {
+                    $pendingAssetFiles[] = [
+                        'file' => $assetFile,
+                        'status' => $assetReview['status'] ?? null,
+                    ];
+                }
+            }
+
+            if ($pendingAssetFiles !== []) {
+                $this->storeWorkflow($product, [
+                    'status' => 'awaiting_assets',
+                    'last_error_code' => null,
+                ]);
+                foreach ($pendingAssetFiles as $pending) {
+                    if ($pending['status'] !== 'reviewing') {
+                        ReviewProductFileAsset::dispatch((int) $product->id, (int) $pending['file']->id);
+                    }
+                }
+                return;
+            }
+        }
+
         $settings = (array) data_get($product->metadata, 'ai_supervisor', []);
         $settings['enabled'] = true;
         $settings['mode'] = 'review_gate';
