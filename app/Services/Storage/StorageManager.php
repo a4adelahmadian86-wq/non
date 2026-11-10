@@ -269,6 +269,7 @@ class StorageManager
             'storage_volume_id' => $volume?->id,
             'drive_key' => $classification === self::CRITICAL ? 'iran_primary' : 'foreign_primary',
             'file_key' => $key,
+            'file_key_hash' => hash('sha256', $key),
             'original_name' => $file->getClientOriginalName(),
             'mime' => $file->getMimeType(),
             'size_bytes' => (int) $file->getSize(),
