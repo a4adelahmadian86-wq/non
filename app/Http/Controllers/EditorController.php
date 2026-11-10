@@ -199,7 +199,7 @@ class EditorController extends Controller
         ]);
     }
 
-    public function uploadAsset(Request $request, CapabilityService $capabilities, \App\Services\UploadSecurityService $security)
+    public function uploadAsset(Request $request, CapabilityService $capabilities, \\App\\Services\\UploadSecurityService $security, StorageManager $storage)
     {
         abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
 
@@ -215,12 +215,50 @@ class EditorController extends Controller
         $file = $data['asset'];
         $resourceId = 'asset-'.Str::uuid()->toString();
         $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
-        $path = $file->storeAs(
-            'editor-assets/'.$request->user()->id.'/'.$document->id,
-            $resourceId.'.'.$extension,
+        $temporaryPath = $file->store(
+            'editor-assets/quarantine/'.$request->user()->id.'/'.$document->id,
             'private'
         );
-        try { $security->inspect($path, $file->getMimeType(), 20 * 1024 * 1024); \App\Models\FarastStorageObject::create(['user_id'=>$request->user()->id,'document_id'=>$document->farast_document_id,'disk'=>'private','path'=>$path,'mime'=>$file->getMimeType(),'size'=>Storage::disk('private')->size($path),'checksum'=>hash('sha256',Storage::disk('private')->get($path)),'status'=>'quarantined','classification'=>'editor_asset','provenance'=>['pipeline'=>'upload_security','scan'=>'required']]); } catch (\Throwable $e) { Storage::disk('private')->delete($path); throw $e; }
+        $managed = null;
+
+        try {
+            $inspection = $security->inspect($temporaryPath, $file->getMimeType(), 20 * 1024 * 1024);
+            $managed = $storage->adoptExistingPrivate(
+                $temporaryPath,
+                $file->getClientOriginalName(),
+                (string) ($inspection['mime'] ?? $file->getMimeType()),
+                (int) $file->getSize(),
+                'editor',
+                FarastStorageObject::class,
+                null,
+                null,
+                StorageManager::NON_CRITICAL
+            );
+
+            $asset = FarastStorageObject::create([
+                'user_id' => $request->user()->id,
+                'document_id' => $document->farast_document_id,
+                'disk' => $managed['disk'],
+                'path' => $managed['path'],
+                'mime' => $inspection['mime'] ?? $file->getMimeType(),
+                'size' => $file->getSize(),
+                'checksum' => $inspection['checksum'],
+                'status' => 'quarantined',
+                'classification' => 'editor_asset',
+                'provenance' => [
+                    'pipeline' => 'upload_security',
+                    'scan' => 'required',
+                    'managed_file_id' => $managed['managed_file_id'],
+                ],
+            ]);
+            $storage->bindReference((int) $managed['managed_file_id'], FarastStorageObject::class, (int) $asset->id);
+        } catch (\\Throwable $exception) {
+            if ($managed) $storage->delete((string) $managed['disk'], (string) $managed['path']);
+            Storage::disk('private')->delete($temporaryPath);
+            throw $exception;
+        }
+
+        Storage::disk('private')->delete($temporaryPath);
 
         return response()->json([
             'ok' => true,
@@ -229,7 +267,7 @@ class EditorController extends Controller
                 'type' => 'image',
                 'mime' => $file->getMimeType(),
                 'name' => $file->getClientOriginalName(),
-                'storage_path' => $path,
+                'storage_path' => $managed['path'],
                 'url' => '/editor/documents/'.$document->id.'/assets/'.$resourceId,
                 'width' => 0,
                 'height' => 0,
