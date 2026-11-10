@@ -17,7 +17,7 @@ class StorageTransferService
 {
     public function __construct(private readonly S3CompatibleAdapter $s3) {}
 
-    private function syncSourceReference(StorageManagedFile $file, string $disk): void
+    public function syncSourceReference(StorageManagedFile $file, string $disk): void
     {
         if (! $file->source_id || ! $file->source_type) return;
         $reference = match ($file->source_type) {
@@ -30,10 +30,14 @@ class StorageTransferService
         if (! $reference) return;
 
         if ($reference instanceof UserFile) {
+            $isRemote = str_starts_with($disk, 'storage_volume:');
             $reference->update([
-                'disk' => $disk, 'path' => $file->file_key, 'status' => 'remote',
-                'remote_path' => $file->file_key, 'local_expires_at' => null,
-                'remote_expires_at' => null, 'transferred_at' => now(),
+                'disk' => $disk, 'path' => $file->file_key,
+                'status' => $isRemote ? 'remote' : 'pending_transfer',
+                'remote_path' => $isRemote ? $file->file_key : null,
+                'local_expires_at' => null,
+                'remote_expires_at' => null,
+                'transferred_at' => $isRemote ? now() : null,
             ]);
             return;
         }
@@ -53,6 +57,25 @@ class StorageTransferService
         }
         unset($attachment);
         if ($changed) $reference->update(['attachments' => $attachments]);
+    }
+
+    public function rebindToStaging(StorageManagedFile $file, string $stagingPath): void
+    {
+        DB::transaction(function () use ($file, $stagingPath) {
+            $metadata = (array) $file->metadata;
+            $metadata['disk'] = 'private';
+            $metadata['staging_disk'] = 'private';
+            $metadata['target_drive'] = $file->drive_key;
+            $metadata['reference_pending'] = false;
+            $metadata['restored_at'] = now()->toIso8601String();
+            $file->update([
+                'storage_volume_id' => null,
+                'file_key' => $stagingPath,
+                'status' => 'pending_transfer',
+                'metadata' => $metadata,
+            ]);
+            $this->syncSourceReference($file->fresh(), 'private');
+        });
     }
 
     public function transferPending(int $limit = 100): int
