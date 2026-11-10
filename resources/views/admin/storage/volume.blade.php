@@ -19,7 +19,7 @@
     <div class="storage-detail-card">
         <h2>فایل‌های ثبت‌شده روی این هاست</h2>
         <div style="overflow:auto"><table><thead><tr><th>نام فایل</th><th>حجم</th><th>نوع</th><th>منبع</th><th>شناسه مرتبط</th><th>وضعیت</th><th>تاریخ</th></tr></thead><tbody>
-        @forelse($files as $file)<tr><td>{{ $file->original_name }}</td><td>{{ \Illuminate\Support\Number::fileSize($file->size_bytes) }}</td><td>{{ $file->classification }}</td><td>{{ $file->source_module ?: '—' }}</td><td>{{ $file->product_id ?: ($file->source_id ?: '—') }}</td><td>{{ $file->status }}</td><td>{{ $file->created_at->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="7">هنوز فایلی از طریق هسته مدیریت ذخیره‌سازی در این فضا ثبت نشده است.</td></tr>@endforelse
+        @forelse($files as $file)<tr><td>{{ $file->original_name }}</td><td>{{ \Illuminate\Support\Number::fileSize($file->size_bytes) }}</td><td>{{ $file->classification }}</td><td>{{ $file->source_module ?: '—' }}</td><td>@if($file->product_id)<a href="{{ route('admin.store.edit', $file->product_id) }}">محصول #{{ $file->product_id }}</a>@elseif($file->source_id){{ $file->source_module }} #{{ $file->source_id }}@else—@endif</td><td>{{ $file->status }}</td><td>{{ $file->created_at->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="7">هنوز فایلی از طریق هسته مدیریت ذخیره‌سازی در این فضا ثبت نشده است.</td></tr>@endforelse
         </tbody></table></div>
         {{ $files->links() }}
     </div>
