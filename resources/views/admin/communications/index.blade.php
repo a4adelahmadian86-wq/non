@@ -18,6 +18,31 @@
         </div>
     </header>
 
+    <section class="ac-panel" aria-label="جست‌وجوی یکپارچه">
+        <h2><i class="fa-solid fa-magnifying-glass"></i> جست‌وجوی ارتباطات</h2>
+        <form method="GET" action="{{ $isAdmin ? route('admin.communications.index') : route('platform.communications') }}" style="display:flex;gap:9px;flex-wrap:wrap">
+            <input type="search" name="q" value="{{ $searchTerm }}" minlength="2" maxlength="120" placeholder="جست‌وجو در تیکت‌ها، پیام‌های مجاز، گفت‌وگوها و اعلان‌ها…" aria-label="عبارت جست‌وجو" style="flex:1;min-width:220px;border:1px solid #dbe3ee;border-radius:10px;padding:11px 13px;font:inherit">
+            <button class="ac-btn primary" type="submit"><i class="fa-solid fa-magnifying-glass"></i> جست‌وجو</button>
+            @if($searchTerm !== '')
+                <a class="ac-btn" href="{{ $isAdmin ? route('admin.communications.index') : route('platform.communications') }}">پاک‌کردن</a>
+            @endif
+        </form>
+        @if($searchTerm !== '')
+            <div class="ac-list" style="margin-top:12px">
+                @forelse($searchResults as $result)
+                    <a class="ac-item" href="{{ $result['url'] }}">
+                        <span class="ac-icon"><i class="fa-solid {{ $result['kind']==='ticket'?'fa-ticket':($result['kind']==='conversation'?'fa-comments':'fa-bell') }}"></i></span>
+                        <span class="ac-copy"><strong>{{ $result['title'] }}</strong><small>{{ $result['body'] }}</small></span>
+                        <span class="ac-meta">{{ $result['at']?->timezone(config('app.timezone'))->diffForHumans() }}</span>
+                    </a>
+                @empty
+                    <div class="ac-empty">{{ mb_strlen($searchTerm) < 2 ? 'برای جست‌وجو حداقل دو نویسه وارد کنید.' : 'نتیجه‌ای در بخش‌هایی که به آن‌ها دسترسی دارید پیدا نشد.' }}</div>
+                @endforelse
+            </div>
+            <div class="ac-footer"><span>{{ number_format($searchResults->count()) }} نتیجه</span><span>نتایج فقط از داده‌های قابل‌دسترسی شما نمایش داده می‌شوند.</span></div>
+        @endif
+    </section>
+
     <section class="ac-stats" aria-label="خلاصه ارتباطات">
         <div class="ac-stat"><strong>{{ number_format($stats['tickets_needing_reply']) }}</strong><span>{{ $isAdmin ? 'تیکت نیازمند پاسخ' : 'پاسخ جدید پشتیبانی' }}</span></div>
         <div class="ac-stat"><strong>{{ number_format($stats['tickets_open']) }}</strong><span>تیکت باز</span></div>
