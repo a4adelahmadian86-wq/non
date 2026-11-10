@@ -9,6 +9,7 @@ use App\Models\SiteSetting;
 use App\Models\StoreProduct;
 use App\Services\AdminConsoleService;
 use App\Services\AuditLogService;
+use App\Services\StoreCouponBudgetPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -147,7 +148,7 @@ class AdminStoreCouponController extends Controller
             ->whereNotNull('pricing_snapshot->coupon_redeemed_at')
             ->whereNotNull('pricing_snapshot->coupon_code')
             ->sum('discount_rials');
-        $monthlyBudgetReserved = app(\\App\\Services\\StoreCouponBudgetPolicy::class)->reservedAmount();
+        $monthlyBudgetReserved = app(StoreCouponBudgetPolicy::class)->reservedAmount();
         $genericCoupons = $canManageGlobalCoupons
             ? StoreCoupon::query()
                 ->whereNotIn('id', StoreCouponAssignment::query()->select('coupon_id'))
