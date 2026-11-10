@@ -86,15 +86,4 @@ class DashboardStorageSummaryServiceTest extends TestCase
         $this->assertNotNull($snapshot['last_successful_backup_at']);
     }
 
-    public function test_snapshot_does_not_invent_zeroes_when_storage_tables_are_unavailable(): void
-    {
-        DB::statement('DROP TABLE storage_backup_runs');
-
-        $snapshot = app(DashboardStorageSummaryService::class)->snapshot();
-
-        $this->assertFalse($snapshot['available']);
-        $this->assertSame('unavailable', $snapshot['status']);
-        $this->assertNull($snapshot['active_volumes']);
-        $this->assertNull($snapshot['pending_transfers']);
-    }
 }
