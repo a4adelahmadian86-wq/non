@@ -203,8 +203,13 @@ class AuthorizationService
 
         // A supervisor with no managed team is effectively personal-scope.
         if ($scope === 'team'
-            && ! $user->teams()->wherePivot('team_role', 'manager')->exists()
-            && ! \App\Models\Team::query()->where('supervisor_id', $user->id)->exists()) {
+            && ! $user->organization_id) {
+            return 'own';
+        }
+
+        if ($scope === 'team'
+            && ! $user->teams()->where('teams.organization_id', $user->organization_id)->wherePivot('team_role', 'manager')->exists()
+            && ! \App\Models\Team::query()->where('organization_id', $user->organization_id)->where('supervisor_id', $user->id)->exists()) {
             return 'own';
         }
 
@@ -371,12 +376,16 @@ class AuthorizationService
         if (! array_key_exists($user->id, $this->teamIdsByUser)) {
             // Ordinary membership is not management authority. Only manager
             // memberships and explicitly supervised teams enter the actor scope.
-            $memberIds = $user->teams()
-                ->wherePivot('team_role', 'manager')
-                ->pluck('teams.id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
+            $memberIds = $user->organization_id
+                ? $user->teams()
+                    ->where('teams.organization_id', $user->organization_id)
+                    ->wherePivot('team_role', 'manager')
+                    ->pluck('teams.id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
             $supervisedIds = \App\Models\Team::query()
+                ->where('organization_id', $user->organization_id)
                 ->where('supervisor_id', $user->id)
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
