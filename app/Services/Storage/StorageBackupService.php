@@ -15,8 +15,7 @@ class StorageBackupService
 
     public function runWeekly(): array
     {
-        $password = (string) config('app.key');
-        $backupKey = (string) env('FARAST_BACKUP_ENCRYPTION_KEY', '');
+        $backupKey = (string) config('storage_management.backup.encryption_key', '');
         if ($backupKey === '') throw new RuntimeException('برای بکاپ رمزنگاری‌شده، FARAST_BACKUP_ENCRYPTION_KEY باید تنظیم شود.');
         if (! class_exists(ZipArchive::class)) throw new RuntimeException('افزونه ZipArchive برای ساخت بکاپ لازم است.');
 
@@ -28,7 +27,7 @@ class StorageBackupService
         try {
             $this->createArchive($archivePath, $work, $backupKey);
             $targets = StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')->orderBy('priority')->get();
-            if (filter_var(env('FARAST_ENABLE_IRAN_BACKUP', false), FILTER_VALIDATE_BOOLEAN)) {
+            if ((bool) config('storage_management.backup.enable_iran_replica', false)) {
                 $targets = $targets->concat(StorageVolume::query()->where('drive_key', 'iran_backup')->where('is_active', true)->where('status', 'healthy')->orderBy('priority')->get());
             }
             if ($targets->isEmpty()) {
