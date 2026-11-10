@@ -25,6 +25,7 @@
         <article><span>سود ناخالص قابل محاسبه</span><strong>{{ number_format((int) floor($stats['known_gross_profit_rials'] / 10)) }}</strong><small>تومان · فقط با بهای تمام‌شده ثبت‌شده هنگام خرید</small></article>
         <article><span>اقلام فاقد بهای تاریخی</span><strong>{{ number_format($stats['items_missing_historical_cost']) }}</strong><small>سود این اقلام محاسبه یا تخمین زده نمی‌شود</small></article>
         <article><span>محصولات منتشرشده بدون بهای تمام‌شده فعلی</span><strong>{{ number_format($stats['products_missing_cost']) }}</strong><small>برای این محصولات پیشنهاد خودکار صادر نمی‌شود</small></article>
+        <article><span>مصرف بودجه تخفیف در ماه جاری</span><strong>{{ number_format((int) floor($stats['monthly_budget_spent_rials'] / 10)) }}</strong><small>تومان · مصرف واقعی سفارش‌های پرداخت‌شده</small></article>
     </div>
 
     @if($canManageGlobalCoupons)
@@ -39,6 +40,7 @@
             <label>حداکثر تخفیف خودکار (%)<input type="number" name="max_discount_percent" min="1" max="50" value="{{ old('max_discount_percent',$settings['max_discount_percent']) }}" required></label>
             <label>تشخیص سبد رهاشده پس از (ساعت)<input type="number" name="abandonment_hours" min="1" max="72" value="{{ old('abandonment_hours',$settings['abandonment_hours']) }}" required></label>
             <label>نگهداری سیگنال‌ها (روز)<input type="number" name="retention_days" min="7" max="180" value="{{ old('retention_days',$settings['retention_days']) }}" required></label>
+            <label>سقف بودجه تخفیف ماهانه (ریال)<input type="number" name="monthly_budget_rials" min="0" max="999999999999999" value="{{ old('monthly_budget_rials',$settings['monthly_budget_rials']) }}" required><small>صفر = بدون سقف؛ پس از تکمیل بودجه، مصرف همه کدها متوقف می‌شود.</small></label>
             <button type="submit">ذخیره قواعد موتور</button>
         </form>
     </section>
