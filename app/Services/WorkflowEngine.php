@@ -9,18 +9,8 @@ class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
 
-    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null): int
+    public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false): int
     {
-        $workflow = DB::table('farast_workflows')->where('id', $workflowId)->first();
-        if (! $workflow || ! $workflow->enabled) {
-            throw new \RuntimeException('Workflow is disabled or missing.');
-        }
-
-        $steps = json_decode($workflow->steps, true);
-        if (! is_array($steps)) {
-            throw new \RuntimeException('Workflow steps are invalid.');
-        }
-
         $runId = DB::table('farast_workflow_runs')->insertGetId([
             'workflow_id' => $workflowId,
             'status' => 'running',
@@ -31,7 +21,25 @@ class WorkflowEngine
         ]);
 
         try {
-            DB::transaction(function () use ($steps, $context, $workflow, $runId, $eventWorkflowId): void {
+            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual): void {
+                // Serialize execution against workflow edits, disabling and deletion.
+                $workflow = DB::table('farast_workflows')
+                    ->where('id', $workflowId)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $workflow || ! $workflow->enabled) {
+                    throw new \RuntimeException('Workflow is disabled or missing.');
+                }
+
+                $steps = json_decode((string) $workflow->steps, true);
+                if (! is_array($steps) || count($steps) < 1 || count($steps) > 20) {
+                    throw new \RuntimeException('Workflow steps are invalid.');
+                }
+
+                if ($manual && ! app(WorkflowConditionEvaluator::class)->matches($workflow->conditions ?? null, $context)) {
+                    throw new \RuntimeException('Manual execution cannot satisfy this workflow condition without a trusted domain event.');
+                }
+
                 foreach ($steps as $stepIndex => $step) {
                     if (! is_array($step)) {
                         throw new \InvalidArgumentException('Workflow step must be an object.');
@@ -62,8 +70,10 @@ class WorkflowEngine
             });
         } catch (\Throwable $exception) {
             DB::table('farast_workflow_runs')->where('id', $runId)->update([
-                'status' => 'failed', 'error' => mb_substr($exception->getMessage(), 0, 4000),
-                'finished_at' => now(), 'updated_at' => now(),
+                'status' => 'failed',
+                'error' => mb_substr($exception->getMessage(), 0, 4000),
+                'finished_at' => now(),
+                'updated_at' => now(),
             ]);
             throw $exception;
         }
