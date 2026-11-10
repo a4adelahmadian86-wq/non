@@ -6,45 +6,6 @@
   if (!toolbar) return;
   const product = root.dataset.productId || location.pathname;
   const storageKey = 'farast.reader.personal-tools.v1:' + product;
-  const durableStorage = (() => {
-    let opening;
-    const open = () => {
-      if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB unavailable'));
-      if (!opening) opening = new Promise((resolve, reject) => {
-        const request = indexedDB.open('farast-reader-local-v1', 1);
-        request.onupgradeneeded = () => {
-          if (!request.result.objectStoreNames.contains('documents')) request.result.createObjectStore('documents', { keyPath: 'id' });
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
-        request.onblocked = () => reject(new Error('IndexedDB upgrade blocked'));
-      });
-      return opening;
-    };
-    const read = async id => {
-      const db = await open();
-      return new Promise((resolve, reject) => {
-        const request = db.transaction('documents', 'readonly').objectStore('documents').get(id);
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => reject(request.error || new Error('IndexedDB read failed'));
-      });
-    };
-    const write = async (id, value) => {
-      const db = await open();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction('documents', 'readwrite');
-        transaction.objectStore('documents').put({ id, value, updatedAt: Date.now() });
-        transaction.oncomplete = () => resolve(true);
-        transaction.onerror = () => reject(transaction.error || new Error('IndexedDB write failed'));
-        transaction.onabort = () => reject(transaction.error || new Error('IndexedDB write aborted'));
-      });
-    };
-    const requestPersistence = async () => {
-      try { return await navigator.storage?.persist?.() ?? false; } catch (_) { return false; }
-    };
-    return { read, write, requestPersistence };
-  })();
-  let localStateChanged = false;
   const defaults = { light: false, font: 'system', size: 100, lineHeight: 1.7, measure: 'normal', paragraphSpacing: 1, focusMode: false, readingRuler: false, highlightColor: 'yellow', highlights: [], notes: [], inkStrokes: [] };
   let state = { ...defaults };
   try {
@@ -58,28 +19,18 @@
     while (points > 60000 && limited.length > 1) points -= limited.shift().points.length;
     return limited;
   };
-  const normalizeState = value => {
-    const next = { ...defaults, ...(value && typeof value === 'object' ? value : {}) };
-    next.light = !!next.light;
-    next.font = ['system','sans','serif','mono','dyslexic'].includes(next.font) ? next.font : 'system';
-    next.size = Math.min(160, Math.max(80, Number(next.size) || 100));
-    next.lineHeight = [1.4, 1.6, 1.7, 1.9, 2.1].includes(Number(next.lineHeight)) ? Number(next.lineHeight) : 1.7;
-    next.measure = ['narrow', 'normal', 'wide'].includes(next.measure) ? next.measure : 'normal';
-    next.paragraphSpacing = [0.5, 1, 1.5, 2].includes(Number(next.paragraphSpacing)) ? Number(next.paragraphSpacing) : 1;
-    next.focusMode = !!next.focusMode;
-    next.readingRuler = !!next.readingRuler;
-    next.highlights = Array.isArray(next.highlights) ? next.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
-    next.notes = Array.isArray(next.notes) ? next.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
-    next.inkStrokes = limitInkStrokes(next.inkStrokes);
-    return next;
-  };
-  state = normalizeState(state);
-  const persist = () => {
-    localStateChanged = true;
-    const snapshot = { ...state, highlights: [...state.highlights], notes: [...state.notes], inkStrokes: [...state.inkStrokes] };
-    try { localStorage.setItem(storageKey, JSON.stringify(snapshot)); } catch (_) {}
-    durableStorage.write(storageKey, snapshot).catch(() => announce('ذخیره‌سازی پایدار مرورگر در دسترس نیست؛ فضای محلی موقتاً استفاده می‌شود.'));
-  };
+  state.light = !!state.light;
+  state.font = ['system','sans','serif','mono','dyslexic'].includes(state.font) ? state.font : 'system';
+  state.size = Math.min(160, Math.max(80, Number(state.size) || 100));
+  state.lineHeight = [1.4, 1.6, 1.7, 1.9, 2.1].includes(Number(state.lineHeight)) ? Number(state.lineHeight) : 1.7;
+  state.measure = ['narrow', 'normal', 'wide'].includes(state.measure) ? state.measure : 'normal';
+  state.paragraphSpacing = [0.5, 1, 1.5, 2].includes(Number(state.paragraphSpacing)) ? Number(state.paragraphSpacing) : 1;
+  state.focusMode = !!state.focusMode;
+  state.readingRuler = !!state.readingRuler;
+  state.highlights = Array.isArray(state.highlights) ? state.highlights.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && Number.isFinite(Number(x.page))).slice(-500) : [];
+  state.notes = Array.isArray(state.notes) ? state.notes.filter(x => x && typeof x.quote === 'string' && x.quote.length <= 2000 && typeof x.note === 'string' && x.note.length <= 4000 && Number.isFinite(Number(x.page))).slice(-500) : [];
+  state.inkStrokes = limitInkStrokes(state.inkStrokes);
+  const persist = () => { try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) { announce('فضای ذخیره‌سازی مرورگر در دسترس نیست.'); } };
   const announce = message => { status.textContent = message; };
   const group = document.createElement('div');
   group.className = 'farast-reader-toolgroup farast-reader-personal-tools';
@@ -614,24 +565,4 @@
 
   renderNotes();
   renderHighlights();
-  (async () => {
-    let durable = false;
-    try {
-      await durableStorage.requestPersistence();
-      const record = await durableStorage.read(storageKey);
-      if (record && record.value && !localStateChanged) {
-        state = normalizeState(record.value);
-        applyPrefs();
-        renderNotes();
-        renderHighlights();
-        refreshInk();
-      } else if (!record) {
-        await durableStorage.write(storageKey, state);
-      }
-      durable = true;
-    } catch (_) {
-      // Keep the legacy localStorage copy as a compatibility fallback.
-    }
-    root.dispatchEvent(new CustomEvent('farast:reader-storage-ready', { detail: { durable } }));
-  })();
 })();
