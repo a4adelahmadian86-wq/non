@@ -136,7 +136,7 @@ class StoreCourseLearningController extends Controller
         return response()->json(['ok' => true, 'completed' => (bool) $progress->completed_at]);
     }
 
-    public function resource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file)
+    public function resource(Request $request, StoreProduct $product, StoreCourseLesson $lesson, StoreProductFile $file, StorageManager $storage)
     {
         $enrollment = $this->enrollment($request, $product);
         abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
@@ -150,15 +150,17 @@ class StoreCourseLearningController extends Controller
             404
         );
 
-        $disk = Storage::disk($file->disk ?: 'private');
-        abort_unless($disk->exists($file->path), 404);
+        $disk = $file->disk ?: 'private';
+        abort_unless($storage->exists($disk, $file->path), 404);
+        $bytes = $storage->get($disk, $file->path);
         if ($file->sha256) {
-            $actualHash = hash_file('sha256', $disk->path($file->path));
-            abort_unless(is_string($actualHash) && hash_equals((string) $file->sha256, $actualHash), 409, 'محتوای منبع آموزشی پس از اسکن امنیتی تغییر کرده است.');
+            $actualHash = hash('sha256', $bytes);
+            abort_unless(hash_equals((string) $file->sha256, $actualHash), 409, 'محتوای منبع آموزشی پس از اسکن امنیتی تغییر کرده است.');
         }
 
         $inline = str_starts_with((string) $file->mime, 'video/') || str_starts_with((string) $file->mime, 'audio/');
-        return $disk->response($file->path, $file->original_name ?: basename($file->path), [
+        return response($bytes, 200, [
+            'Content-Type' => $file->mime ?: 'application/octet-stream',
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
