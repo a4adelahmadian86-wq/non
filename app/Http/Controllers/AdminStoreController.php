@@ -998,7 +998,20 @@ class AdminStoreController extends Controller
                 409,
                 'محتوای صوت هنگام انتقال تغییر کرده است.'
             );
-            abort_unless(Storage::disk('private')->copy($quarantinePath, $path), 503, 'ذخیره فایل صوتی ممکن نشد.');
+            $audioStream = Storage::disk('private')->readStream($quarantinePath);
+            abort_unless(is_resource($audioStream), 503, 'خواندن فایل صوتی ممکن نشد.');
+            try {
+                abort_unless(Storage::disk('managed')->put($path, $audioStream, [
+                    'farast_classification' => 'critical',
+                    'farast_source_type' => 'product_reader_audio',
+                    'farast_source_id' => $product->id,
+                    'farast_product_id' => $product->id,
+                    'farast_owner_user_id' => auth()->id(),
+                    'mimetype' => $mime,
+                ]), 503, 'ذخیره فایل صوتی در زیرساخت مرکزی ممکن نشد.');
+            } finally {
+                fclose($audioStream);
+            }
 
             [$oldDisk, $oldPath] = DB::transaction(function () use ($product, $preview, $path, $mime, $timings) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
@@ -1009,7 +1022,7 @@ class AdminStoreController extends Controller
                     ->firstOrFail();
                 $old = [$lockedPreview->audio_disk ?: 'private', $lockedPreview->audio_path];
                 $lockedPreview->forceFill([
-                    'audio_disk' => 'private',
+                    'audio_disk' => 'managed',
                     'audio_path' => $path,
                     'audio_mime' => $mime,
                     'audio_timing' => $timings,
@@ -1028,7 +1041,7 @@ class AdminStoreController extends Controller
             }
         } catch (Throwable $exception) {
             if (! $databaseCommitted) {
-                Storage::disk('private')->delete($path);
+                Storage::disk('managed')->delete($path);
             }
             if ($exception instanceof ValidationException) {
                 throw $exception;
