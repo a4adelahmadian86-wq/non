@@ -221,7 +221,9 @@ class CrmMarketingCampaignTest extends TestCase
         $this->assertSame(2, DB::table('crm_campaign_recipients')->where('campaign_id', $campaignId)->count());
 
         $campaign = $this->getJson('/admin/crm/marketing/campaigns')->assertOk();
-        $campaign->assertJsonPath('data.data.0.offer_count', 1);
+        $campaign->assertJsonPath('data.data.0.offer_count', 1)
+            ->assertJsonPath('data.data.0.reserved_discount_rials', 10000)
+            ->assertJsonPath('data.data.0.budget_remaining_rials', 0);
         $this->assertSame(10000, (int) DB::table('crm_marketing_campaigns')->where('id', $campaignId)->value('budget_cap_rials'));
     }
 
