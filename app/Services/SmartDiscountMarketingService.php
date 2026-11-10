@@ -112,8 +112,11 @@ class SmartDiscountMarketingService
                 return null;
             }
 
+            // Cooldown is product-specific: an offer for one item must not
+            // suppress a genuinely separate buying opportunity for another item.
             if (StoreCouponAssignment::query()
                 ->where('user_id', $lockedUser->id)
+                ->where('product_id', $productId)
                 ->where('offered_at', '>=', now()->subDays($offerCooldownDays))
                 ->exists()) {
                 return null;
