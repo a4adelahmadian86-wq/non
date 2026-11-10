@@ -40,16 +40,16 @@ class StorageManager
                 $this->writeToVolume($volume, $key, $file->getRealPath());
                 try {
                     return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
-                } catch (\\Throwable $exception) {
+                } catch (\Throwable $exception) {
                     if ($volume->driver === 's3') $this->s3->delete($volume, $key);
                     else @unlink($this->localVolumePath($volume, $key));
                     throw $exception;
                 }
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 try {
                     if ($volume->driver === 's3') $this->s3->delete($volume, $key);
                     elseif ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $key));
-                } catch (\\Throwable $cleanupException) {
+                } catch (\Throwable $cleanupException) {
                     report($cleanupException);
                 }
                 $volume->forceFill([
