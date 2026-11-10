@@ -55,7 +55,10 @@ class StorageManager
     {
         if (str_starts_with($disk, 'storage_volume:')) {
             $volume = StorageVolume::find((int) substr($disk, 15));
-            return $volume ? $this->s3->exists($volume, $path) : false;
+            if (! $volume) return false;
+            return $volume->driver === 'local'
+                ? is_file($this->localVolumePath($volume, $path))
+                : $this->s3->exists($volume, $path);
         }
         return Storage::disk($disk ?: 'private')->exists($path);
     }
@@ -64,6 +67,11 @@ class StorageManager
     {
         if (str_starts_with($disk, 'storage_volume:')) {
             $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+            if ($volume->driver === 'local') {
+                $contents = @file_get_contents($this->localVolumePath($volume, $path));
+                if ($contents === false) throw new RuntimeException('فایل در فضای ذخیره‌سازی موجود نیست.');
+                return $contents;
+            }
             return $this->s3->getContents($volume, $path);
         }
         return Storage::disk($disk ?: 'private')->get($path);
@@ -73,7 +81,10 @@ class StorageManager
     {
         if (str_starts_with($disk, 'storage_volume:')) {
             $volume = StorageVolume::find((int) substr($disk, 15));
-            if ($volume) $this->s3->delete($volume, $path);
+            if ($volume) {
+                if ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $path));
+                else $this->s3->delete($volume, $path);
+            }
             return;
         }
         Storage::disk($disk ?: 'private')->delete($path);
@@ -96,11 +107,18 @@ class StorageManager
             ->first();
     }
 
+    private function localVolumePath(StorageVolume $volume, string $key): string
+    {
+        $root = storage_path('app/storage-volumes/'.$volume->id);
+        $path = $root.'/'.ltrim($key, '/');
+        abort_unless(str_starts_with($path, $root.'/'), 400);
+        return $path;
+    }
+
     private function writeToVolume(StorageVolume $volume, string $key, string $localPath): void
     {
         if ($volume->driver === 'local') {
-            $root = storage_path('app/storage-volumes/'.$volume->id);
-            $target = $root.'/'.$key;
+            $target = $this->localVolumePath($volume, $key);
             if (! is_dir(dirname($target))) mkdir(dirname($target), 0775, true);
             if (! copy($localPath, $target)) throw new RuntimeException('کپی فایل روی فضای محلی هاست ناموفق بود.');
             return;
