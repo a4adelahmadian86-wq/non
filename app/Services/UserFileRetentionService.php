@@ -32,6 +32,7 @@ class UserFileRetentionService
                         UserFile::class,
                         (int) $file->id
                     );
+                    $this->storage->bindReference((int) $stored['managed_file_id'], UserFile::class, (int) $file->id);
                     $file->update([
                         'path' => $stored['path'],
                         'disk' => $stored['disk'],
