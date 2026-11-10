@@ -1,0 +1,102 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
+use App\Services\Storage\StorageManager;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Tests\TestCase;
+
+class StorageCoreTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_critical_uploads_only_use_iran_primary_volume(): void
+    {
+        $foreign = StorageVolume::create([
+            'drive_key' => 'foreign_primary', 'name' => 'Foreign', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+        $iran = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 100,
+        ]);
+
+        $stored = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('critical.txt', 'iran-only'),
+            StorageManager::CRITICAL,
+            'test'
+        );
+
+        $this->assertSame($iran->id, $stored['volume_id']);
+        $this->assertNotSame($foreign->id, $stored['volume_id']);
+        $this->assertSame('iran-only', app(StorageManager::class)->get($stored['disk'], $stored['path']));
+    }
+
+    public function test_non_critical_uploads_use_foreign_volume(): void
+    {
+        $foreign = StorageVolume::create([
+            'drive_key' => 'foreign_primary', 'name' => 'Foreign', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $stored = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('editor.txt', 'foreign-preferred'),
+            StorageManager::NON_CRITICAL,
+            'editor'
+        );
+
+        $this->assertSame($foreign->id, $stored['volume_id']);
+        $this->assertSame('foreign-preferred', app(StorageManager::class)->get($stored['disk'], $stored['path']));
+    }
+
+    public function test_uploads_are_staged_locally_when_no_remote_target_is_healthy(): void
+    {
+        $stored = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('staged.txt', 'keep-me'),
+            StorageManager::NON_CRITICAL,
+            'test'
+        );
+
+        $this->assertNull($stored['volume_id']);
+        $this->assertSame('private', $stored['disk']);
+        $this->assertSame('pending_transfer', $stored['status']);
+        $this->assertTrue(app(StorageManager::class)->exists($stored['disk'], $stored['path']));
+        $this->assertDatabaseHas('storage_managed_files', [
+            'id' => $stored['managed_file_id'],
+            'status' => 'pending_transfer',
+            'storage_volume_id' => null,
+        ]);
+    }
+
+    public function test_deleting_a_managed_file_releases_volume_usage_and_object_count(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Iran', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+        $storage = app(StorageManager::class);
+        $stored = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('delete.txt', 'delete-me'),
+            StorageManager::CRITICAL,
+            'test'
+        );
+
+        $volume->refresh();
+        $this->assertSame(9, $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+
+        $storage->delete($stored['disk'], $stored['path']);
+        $volume->refresh();
+
+        $this->assertSame(0, $volume->used_bytes);
+        $this->assertSame(0, $volume->object_count);
+        $this->assertDatabaseHas('storage_managed_files', ['id' => $stored['managed_file_id'], 'status' => 'deleted']);
+    }
+}
