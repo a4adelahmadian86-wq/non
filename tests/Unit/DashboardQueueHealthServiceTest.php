@@ -47,6 +47,24 @@ class DashboardQueueHealthServiceTest extends TestCase
         $this->assertGreaterThanOrEqual(180, $snapshot['oldest_ready_seconds']);
     }
 
+    public function test_database_queue_reports_missing_failed_jobs_table_as_misconfigured(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'queue.connections.database.connection' => null,
+            'queue.connections.database.table' => 'jobs',
+            'queue.failed.database' => null,
+            'queue.failed.table' => 'failed_jobs',
+        ]);
+        Schema::dropIfExists('failed_jobs');
+
+        $snapshot = app(DashboardQueueHealthService::class)->snapshot();
+
+        $this->assertSame('misconfigured', $snapshot['status']);
+        $this->assertNull($snapshot['failed']);
+        $this->assertSame(0, $snapshot['queued']);
+    }
+
     public function test_sync_queue_is_reported_as_immediate_without_inventing_backlog(): void
     {
         config(['queue.default' => 'sync']);
