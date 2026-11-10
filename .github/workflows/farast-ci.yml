@@ -64,9 +64,15 @@ jobs:
         run: |
           set -euo pipefail
           while IFS= read -r -d '' file; do
-            if ! php -l "$file"; then
-              echo "---- Compiled Blade context: $file ----"
-              nl -ba "$file" | sed -n '175,215p'
+            if ! php -l "$file" > /tmp/farast-php-lint.out 2>&1; then
+              cat /tmp/farast-php-lint.out
+              line=$(sed -n 's/.*on line \\([0-9][0-9]*\\).*/\\1/p' /tmp/farast-php-lint.out | head -n 1)
+              if [ -n "$line" ]; then
+                start=$((line > 4 ? line - 4 : 1))
+                end=$((line + 4))
+                echo "---- Compiled Blade context: $file:$line ----"
+                nl -ba "$file" | sed -n "${start},${end}p"
+              fi
               exit 1
             fi
           done < <(find storage/framework/views -type f -name '*.php' -print0)
