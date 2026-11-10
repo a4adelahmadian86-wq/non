@@ -256,7 +256,12 @@ class AdvancedAccessControlTest extends TestCase
         $this->actingAs($admin)->get('/admin')->assertOk();
         $this->assertSame('global', request()->attributes->get('farast.scope'));
 
-        $visibleIds = app(AdminConsoleService::class)->visibleUserIds($manager, 'users.view');
+        request()->attributes->set('farast.section_permission', 'finance.view');
+        $console = app(AdminConsoleService::class);
+        $this->assertTrue($console->sectionAllowed($manager, 'users'));
+        $this->assertSame('finance.view', request()->attributes->get('farast.section_permission'));
+
+        $visibleIds = $console->visibleUserIds($manager, 'users.view');
 
         $this->assertIsArray($visibleIds, 'A global request scope must not turn another user\'s scope into an unrestricted result.');
         $this->assertContains($manager->id, $visibleIds);
