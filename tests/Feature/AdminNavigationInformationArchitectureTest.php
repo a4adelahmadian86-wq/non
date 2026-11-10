@@ -25,8 +25,9 @@ class AdminNavigationInformationArchitectureTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('admin.index'));
 
+        $this->assertSame(6, substr_count($response->getContent(), 'class="farast-admin-nav-group"'));
+
         $response->assertOk()
-            ->assertSame(6, substr_count($response->getContent(), 'class="farast-admin-nav-group"'))
             ->assertSee('aria-label="دسته‌بندی‌های مدیریت"', false)
             ->assertSee('class="farast-admin-nav-group"', false)
             ->assertSee('عملیات')
