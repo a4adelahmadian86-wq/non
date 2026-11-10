@@ -50,11 +50,9 @@
 
     <div class="store-product-overview">
       <span class="store-product-overview-mark"><i class="fa-solid fa-gem"></i></span>
-      <div><span class="store-product-overview-kicker">انتخاب هوشمندانه با فراست</span><strong>جزئیات را ببینید، نمونه را بررسی کنید، با اطمینان انتخاب کنید.</strong></div>
-      @if($hasPreview)<span class="store-product-preview-pill"><i class="fa-solid fa-eye"></i> پیش‌نمایش فعال</span>@endif
+      <div><span class="store-product-overview-kicker">انتخاب هوشمندانه با فراست</span><strong>مشخصات محصول و شرایط دریافت را پیش از خرید بررسی کنید.</strong></div>
     </div>
     <nav class="store-product-jump" aria-label="دسترسی سریع به بخش‌های محصول">
-      <a href="#store-product-preview"><i class="fa-solid fa-eye" aria-hidden="true"></i> پیش‌نمایش</a>
       <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
       @if($product->type === 'course' && $product->course)<a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>@endif
       <a href="#store-buy-card"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> قیمت و خرید</a>
@@ -62,52 +60,35 @@
     </nav>
     <div class="store-detail-grid">
       <section>
-        <div class="store-detail-cover">
-          @if($product->cover_path)
-            <img src="{{ asset($product->cover_path) }}" alt="{{ $product->title }}">
-          @else
-            <span>FARAST</span>
-          @endif
-        </div>
-        @php($galleryImages = $product->images->where('is_active', true))
+        @php($galleryImages = $product->images->where('is_active', true)->values())
         @if($galleryImages->isNotEmpty())
-          <div class="store-product-gallery" aria-label="گالری تصاویر محصول">
-            @foreach($galleryImages as $image)
-              <button type="button" class="store-gallery-open" data-gallery-src="{{ asset($image->path) }}" data-gallery-alt="{{ $image->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر {{ $loop->iteration }}"><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy"><span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی</span></button>
-            @endforeach
+          @php($mainGalleryImage = $galleryImages->first())
+          <div class="store-product-media" aria-label="تصاویر اختصاصی محصول">
+            <button type="button" class="store-detail-cover store-gallery-open" data-gallery-src="{{ asset($mainGalleryImage->path) }}" data-gallery-alt="{{ $mainGalleryImage->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر اصلی محصول">
+              <img src="{{ asset($mainGalleryImage->path) }}" alt="{{ $mainGalleryImage->alt ?: $product->title }}" fetchpriority="high">
+              <span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی تصویر</span>
+            </button>
+            @if($galleryImages->count() > 1)
+              <div class="store-product-gallery" aria-label="سایر تصاویر اختصاصی محصول">
+                @foreach($galleryImages->skip(1) as $image)
+                  <button type="button" class="store-gallery-open" data-gallery-src="{{ asset($image->path) }}" data-gallery-alt="{{ $image->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر {{ $loop->iteration + 1 }}"><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy"><span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی</span></button>
+                @endforeach
+              </div>
+            @endif
           </div>
         @endif
 
-        <div class="store-panel" id="store-product-preview">
-          <div class="store-panel-head">
-            <h2>نمونه رایگان / پیش‌نمایش</h2>
-            @if($hasPreview)
-              <a class="store-primary-btn" href="{{ route('store.reader', $product->slug) }}">
-                <i class="fa-solid fa-book-open"></i> مطالعه نمونه
-              </a>
-            @endif
-          </div>
-          @if($showPreviews->isNotEmpty())
-            <div class="store-preview-grid">
-              @foreach($showPreviews as $preview)
-                <a href="{{ route('store.reader', $product->slug) }}" title="باز کردن خوانشگر">
-                  @if(($preview->kind ?? '') === 'pdf' || str_contains((string)$preview->mime, 'pdf'))
-                    <div class="store-preview-pdf">PDF · ص {{ $preview->page_number ?: $loop->iteration }}</div>
-                  @else
-                    <img src="{{ route('store.preview',$preview) }}" alt="پیش‌نمایش {{ $loop->iteration }}" loading="lazy">
-                  @endif
-                  <small>صفحه {{ $preview->page_number ?: $loop->iteration }}</small>
-                </a>
-              @endforeach
+        @if($hasPreview)
+          <section class="store-product-sample" id="store-product-sample" aria-label="نمونه قابل مطالعه">
+            <div>
+              <strong><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه قابل مطالعه</strong>
+              <span>{{ $showPreviews->count() }} صفحه نمونه آماده است؛ محتوای نمونه هنگام درخواست شما باز می‌شود.</span>
             </div>
-            <p class="store-preview-note">این صفحات فقط نمونه هستند. فایل کامل پس از خرید در «کتابخانه من» قرار می‌گیرد.</p>
-          @else
-            <div class="store-preview-empty">
-              <strong>نمونه هنوز آپلود نشده</strong>
-              <p>مدیر فروشگاه باید از پنل ادمین تصویر/صفحه پیش‌نمایش اضافه کند. تا آن زمان فقط توضیحات و خرید فعال است.</p>
-            </div>
-          @endif
-        </div>
+            <a class="store-primary-btn" href="{{ route('store.reader', $product->slug) }}">
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> مشاهده نمونه
+            </a>
+          </section>
+        @endif
 
         <article class="store-panel" id="store-product-description">
           <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
@@ -203,9 +184,8 @@
           @endif
           <span><i class="fa-solid fa-shield-halved"></i> {{ $product->type === 'course' ? 'دسترسی به دوره در کتابخانه آموزشی' : (($product->download_policy ?? 'signed') === 'reader_only' ? 'مطالعه در خوانشگر پس از پرداخت' : 'دریافت در کتابخانه پس از پرداخت') }}</span>
           <span><i class="fa-solid fa-file-contract"></i> مجوز {{ $product->license_type ?: 'شخصی' }}</span>
-          @if($hasPreview)<span><i class="fa-solid fa-eye"></i> نمونه قابل مطالعه</span>@endif
         </div>
-        <div class="store-product-assurance"><i class="fa-solid fa-circle-check"></i><span><strong>پیش از خرید، مشخصات را بررسی کنید</strong><small>فرمت، مجوز و نمونه‌های قابل مشاهده در همین صفحه درج شده‌اند.</small></span></div>
+        <div class="store-product-assurance"><i class="fa-solid fa-circle-check"></i><span><strong>پیش از خرید، شرایط محصول را بررسی کنید</strong><small>جزئیات دریافت و مجوز استفاده در همین بخش مشخص شده‌اند.</small></span></div>
       </aside>
     </div>
 
@@ -238,10 +218,23 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261110product6">
+<link rel="stylesheet" href="/css/store.css?v=20261110product7">
 <link rel="stylesheet" href="/css/content-discussions.css?v=20261109community4">
 <style>
 
+
+.store-product-media{display:grid;gap:10px;margin:0 0 14px}
+.store-detail-cover.store-gallery-open{width:100%;height:min(420px,55vw);padding:0;border:1px solid var(--st-line);border-radius:var(--st-radius);background:#f5f7fa;cursor:zoom-in}
+.store-detail-cover.store-gallery-open img{display:block;width:100%;height:100%;object-fit:contain}
+.store-detail-cover.store-gallery-open>span{opacity:0}
+.store-detail-cover.store-gallery-open:hover>span,.store-detail-cover.store-gallery-open:focus-visible>span{opacity:1}
+.store-product-sample{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 14px;padding:13px 15px;border:1px solid #dfe8f4;border-radius:13px;background:#f8fafd}
+.store-product-sample>div{display:grid;gap:4px;min-width:0}
+.store-product-sample strong{display:flex;align-items:center;gap:8px;color:#294568;font-size:.78rem}
+.store-product-sample strong i{color:#3975c8}
+.store-product-sample span{color:#718198;font-size:.68rem;line-height:1.7}
+.store-product-sample .store-primary-btn{white-space:nowrap}
+@media(max-width:560px){.store-detail-cover.store-gallery-open{height:min(360px,78vw)}.store-product-sample{align-items:stretch}.store-product-sample .store-primary-btn{justify-content:center;width:100%}}
 
 .store-product-rating{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:8px 0 14px;padding:9px 11px;border:1px solid #e5ebf4;border-radius:11px;background:#f8fafd;font-size:.7rem}
 .store-product-rating__score{display:inline-flex;align-items:center;gap:5px;color:#9a6500;font-weight:900;font-variant-numeric:tabular-nums}
