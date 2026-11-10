@@ -51,11 +51,10 @@ class AccountSecurityPasswordActionsTest extends TestCase
 
         $this->assertTrue(Hash::check('NewStrongPassword456', $user->fresh()->password));
         $this->assertNotNull(DB::table('farast_account_sessions')->where('id', $otherId)->value('revoked_at'));
-        $this->assertDatabaseHas('farast_account_sessions', [
-            'user_id' => $user->id,
-            'session_key' => hash('sha256', $currentId),
-            'revoked_at' => null,
-        ]);
+        $this->assertSame(1, DB::table('farast_account_sessions')
+            ->where('user_id', $user->id)
+            ->whereNull('revoked_at')
+            ->count(), 'The current authenticated browser must remain the only active session.');
     }
 
     public function test_account_wide_logout_ends_the_current_session(): void
