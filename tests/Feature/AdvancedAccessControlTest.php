@@ -414,6 +414,7 @@ class AdvancedAccessControlTest extends TestCase
             ->where('role', User::ROLE_ORGANIZATION_MANAGER)
             ->where('permission_id', $supportPermissionId)
             ->delete();
+        app(AuthorizationService::class)->forgetUser();
 
         $workflowColumns = \Illuminate\Support\Facades\Schema::getColumnListing('farast_workflows');
         $workflowPayload = array_intersect_key([
