@@ -125,4 +125,26 @@ class ProductPublicationReadinessContractTest extends TestCase
 
         $this->assertFalse(app(ProductPublicationReadiness::class)->hasReadyPrimaryReader($product));
     }
+
+    public function test_reader_publication_rejects_a_document_owned_by_a_different_product(): void
+    {
+        $product = $this->product('publication-wrong-owner');
+        $otherProduct = $this->product('publication-other-owner');
+        $file = $this->readyDocument($product);
+        $file->document()->update(['product_id' => $otherProduct->id]);
+        $product->load('files.document.pages');
+
+        $this->assertFalse(app(ProductPublicationReadiness::class)->hasReadyPrimaryReader($product));
+    }
+
+    public function test_reader_publication_requires_the_selected_file_to_be_primary(): void
+    {
+        $product = $this->product('publication-non-primary');
+        $file = $this->readyDocument($product);
+        $file->update(['is_primary' => false]);
+        $product->load('files.document.pages');
+
+        $this->assertFalse(app(ProductPublicationReadiness::class)->hasReadyPrimaryReader($product));
+    }
+
 }
