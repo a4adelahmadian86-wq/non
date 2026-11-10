@@ -191,7 +191,10 @@ class AuthorizationService
 
     private function baseScope(User $user): string
     {
-        $scope = request()->attributes->get('farast.scope');
+        $requestUser = request()->user();
+        $scope = $requestUser && (int) $requestUser->id === (int) $user->id
+            ? request()->attributes->get('farast.scope')
+            : null;
         if (! in_array($scope, ['global', 'organization', 'team', 'own'], true)) {
             $scope = \App\Http\Middleware\ResolveAdminScope::scopeFor($user);
         }
