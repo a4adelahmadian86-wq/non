@@ -128,8 +128,8 @@ class StoreCartService
             }
             $assignedProduct = StoreProduct::query()->find($assignment->product_id);
             $assignedQuantity = (int) $cart->items->where('product_id', $assignment->product_id)->sum('quantity');
-            $safeDiscountCap = $assignedProduct && $assignedProduct->cost_price_rials !== null
-                ? max(0, ((int) $assignedProduct->price_rials - (int) $assignedProduct->cost_price_rials - max(0, (int) $assignedProduct->marketing_min_margin_rials)) * $assignedQuantity)
+            $safeDiscountCap = $assignedProduct
+                ? app(StoreCouponMarginPolicy::class)->maximumDiscount($assignedProduct, null, $assignedQuantity)
                 : 0;
             if ($coupon->type !== 'fixed' || (int) $coupon->value > $safeDiscountCap) {
                 throw new \RuntimeException('شرایط سودآوری محصول تغییر کرده و این پیشنهاد دیگر قابل استفاده نیست.');
@@ -216,8 +216,8 @@ class StoreCartService
                             }
                         }
                         $assignedProduct = StoreProduct::query()->find($assignment->product_id);
-                        $safeDiscountCap = $assignedProduct && $assignedProduct->cost_price_rials !== null
-                            ? max(0, ((int) $assignedProduct->price_rials - (int) $assignedProduct->cost_price_rials - max(0, (int) $assignedProduct->marketing_min_margin_rials)) * $eligibleQuantity)
+                        $safeDiscountCap = $assignedProduct
+                            ? app(StoreCouponMarginPolicy::class)->maximumDiscount($assignedProduct, null, $eligibleQuantity)
                             : 0;
                         $validAssignment = $coupon->type === 'fixed'
                             && (int) $coupon->value <= $safeDiscountCap
