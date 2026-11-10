@@ -143,82 +143,131 @@ class CrmMarketingController extends Controller
             $query->whereIn('crm_marketing_campaigns.created_by', $ownerIds);
         }
 
-        return response()->json([
-            'data' => $query->orderByDesc('crm_marketing_campaigns.created_at')
-                ->paginate(25, [
-                    'crm_marketing_campaigns.*',
-                    'crm_customer_segments.name as segment_name',
-                ])
-                ->through(function ($campaign) {
-                    $assignmentIds = DB::table('store_coupon_assignments')
-                        ->where('campaign_id', $campaign->id)->pluck('id')->map(fn ($id) => (int) $id);
-                    $campaign->offer_count = $assignmentIds->count();
-                    $campaign->redeemed_offer_count = DB::table('store_coupon_assignments')
-                        ->where('campaign_id', $campaign->id)->where('status', 'redeemed')->count();
-                    $campaign->redeemed_discount_rials = (int) DB::table('store_coupon_assignments as assignments')
-                        ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
-                        ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
-                        ->where('assignments.campaign_id', $campaign->id)
-                        ->where('assignments.status', 'redeemed')
-                        ->where('orders.status', 'paid')
-                        ->whereNotNull('orders.paid_at')
-                        ->sum('store_coupons.value');
-                    $campaign->reserved_discount_rials = (int) DB::table('store_coupon_assignments as assignments')
-                        ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
-                        ->where('assignments.campaign_id', $campaign->id)
-                        ->where('assignments.status', 'offered')
-                        ->where('assignments.expires_at', '>', now())
-                        ->where('store_coupons.is_active', true)
-                        ->sum('store_coupons.value');
-                    $campaign->budget_remaining_rials = (int) ($campaign->budget_cap_rials ?? 0) > 0
-                        ? max(0, (int) $campaign->budget_cap_rials - (int) $campaign->redeemed_discount_rials - (int) $campaign->reserved_discount_rials)
-                        : null;
-                    $campaign->attributed_revenue_rials = (int) DB::table('store_coupon_assignments as assignments')
-                        ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
-                        ->join('store_order_items', function ($join) {
-                            $join->on('store_order_items.order_id', '=', 'orders.id')
-                                ->on('store_order_items.product_id', '=', 'assignments.product_id');
-                        })
-                        ->where('assignments.campaign_id', $campaign->id)
-                        ->where('assignments.status', 'redeemed')
-                        ->where('orders.status', 'paid')
-                        ->whereNotNull('orders.paid_at')
-                        ->sum('store_order_items.total_rials');
+        $page = $query->orderByDesc('crm_marketing_campaigns.created_at')
+            ->paginate(25, [
+                'crm_marketing_campaigns.*',
+                'crm_customer_segments.name as segment_name',
+            ]);
+        $campaignIds = $page->getCollection()->pluck('id')->map(fn ($id) => (int) $id)->values();
 
-                    $viewed = [];
-                    $clicked = [];
-                    if ($assignmentIds->isNotEmpty()) {
-                        $events = DB::table('farast_workflow_events')
-                            ->whereIn('event_type', ['marketing.offer_viewed', 'marketing.offer_clicked'])
-                            ->get(['event_type', 'context']);
-                        foreach ($events as $event) {
-                            $context = is_array($event->context) ? $event->context : json_decode((string) $event->context, true);
-                            $assignmentId = (int) (is_array($context) ? ($context['assignment_id'] ?? 0) : 0);
-                            if ($assignmentId > 0 && $assignmentIds->contains($assignmentId)) {
-                                if ($event->event_type === 'marketing.offer_viewed') {
-                                    $viewed[$assignmentId] = true;
-                                } else {
-                                    $clicked[$assignmentId] = true;
-                                }
-                            }
-                        }
-                    }
-                    $campaign->offer_view_count = count($viewed);
-                    $campaign->offer_click_count = count($clicked);
-                    $campaign->viewed_redeemed_offer_count = ! empty($viewed)
-                        ? DB::table('store_coupon_assignments')
-                            ->where('campaign_id', $campaign->id)
-                            ->where('status', 'redeemed')
-                            ->whereIn('id', array_keys($viewed))
-                            ->count()
-                        : 0;
-                    $campaign->view_to_click_rate = $campaign->offer_view_count > 0
-                        ? round($campaign->offer_click_count * 100 / $campaign->offer_view_count, 1) : 0;
-                    $campaign->view_to_redemption_rate = $campaign->offer_view_count > 0
-                        ? round($campaign->viewed_redeemed_offer_count * 100 / $campaign->offer_view_count, 1) : 0;
-                    return $campaign;
-                }),
-        ]);
+        if ($campaignIds->isEmpty()) {
+            return response()->json(['data' => $page]);
+        }
+
+        // Batch campaign metrics for the current page. Avoid a query per campaign
+        // and scan the retained interaction ledger only once per dashboard request.
+        $assignments = DB::table('store_coupon_assignments')
+            ->whereIn('campaign_id', $campaignIds)
+            ->get(['id', 'campaign_id', 'status']);
+        $assignmentCampaignMap = $assignments->mapWithKeys(
+            fn ($assignment) => [(int) $assignment->id => (int) $assignment->campaign_id]
+        );
+
+        $redeemedStats = DB::table('store_coupon_assignments as assignments')
+            ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
+            ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
+            ->whereIn('assignments.campaign_id', $campaignIds)
+            ->where('assignments.status', 'redeemed')
+            ->where('orders.status', 'paid')
+            ->whereNotNull('orders.paid_at')
+            ->groupBy('assignments.campaign_id')
+            ->selectRaw('assignments.campaign_id, COUNT(*) as redeemed_offer_count, SUM(store_coupons.value) as redeemed_discount_rials')
+            ->get()
+            ->keyBy(fn ($row) => (int) $row->campaign_id);
+
+        $reservedStats = DB::table('store_coupon_assignments as assignments')
+            ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
+            ->whereIn('assignments.campaign_id', $campaignIds)
+            ->where('assignments.status', 'offered')
+            ->where('assignments.expires_at', '>', now())
+            ->where('store_coupons.is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('store_coupons.ends_at')->orWhere('store_coupons.ends_at', '>', now());
+            })
+            ->groupBy('assignments.campaign_id')
+            ->selectRaw('assignments.campaign_id, SUM(store_coupons.value) as reserved_discount_rials')
+            ->get()
+            ->keyBy(fn ($row) => (int) $row->campaign_id);
+
+        $revenueStats = DB::table('store_coupon_assignments as assignments')
+            ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
+            ->join('store_order_items', function ($join) {
+                $join->on('store_order_items.order_id', '=', 'orders.id')
+                    ->on('store_order_items.product_id', '=', 'assignments.product_id');
+            })
+            ->whereIn('assignments.campaign_id', $campaignIds)
+            ->where('assignments.status', 'redeemed')
+            ->where('orders.status', 'paid')
+            ->whereNotNull('orders.paid_at')
+            ->groupBy('assignments.campaign_id')
+            ->selectRaw('assignments.campaign_id, SUM(store_order_items.total_rials) as attributed_revenue_rials')
+            ->get()
+            ->keyBy(fn ($row) => (int) $row->campaign_id);
+
+        $viewedByCampaign = [];
+        $clickedByCampaign = [];
+        if ($assignmentCampaignMap->isNotEmpty()) {
+            $events = DB::table('farast_workflow_events')
+                ->whereIn('event_type', ['marketing.offer_viewed', 'marketing.offer_clicked'])
+                ->get(['event_type', 'context']);
+            foreach ($events as $event) {
+                $context = is_array($event->context)
+                    ? $event->context
+                    : json_decode((string) $event->context, true);
+                $assignmentId = (int) (is_array($context) ? ($context['assignment_id'] ?? 0) : 0);
+                $campaignId = $assignmentCampaignMap->get($assignmentId);
+                if (! $campaignId) {
+                    continue;
+                }
+
+                if ($event->event_type === 'marketing.offer_viewed') {
+                    $viewedByCampaign[$campaignId][$assignmentId] = true;
+                } else {
+                    $clickedByCampaign[$campaignId][$assignmentId] = true;
+                }
+            }
+        }
+
+        $page->getCollection()->transform(function ($campaign) use (
+            $assignments,
+            $redeemedStats,
+            $reservedStats,
+            $revenueStats,
+            $viewedByCampaign,
+            $clickedByCampaign
+        ) {
+            $campaignId = (int) $campaign->id;
+            $campaignAssignments = $assignments->where('campaign_id', $campaignId);
+            $redeemed = $redeemedStats->get($campaignId);
+            $reserved = $reservedStats->get($campaignId);
+            $revenue = $revenueStats->get($campaignId);
+            $viewed = $viewedByCampaign[$campaignId] ?? [];
+            $clicked = $clickedByCampaign[$campaignId] ?? [];
+
+            $campaign->offer_count = $campaignAssignments->count();
+            $campaign->redeemed_offer_count = (int) ($redeemed->redeemed_offer_count ?? 0);
+            $campaign->redeemed_discount_rials = (int) ($redeemed->redeemed_discount_rials ?? 0);
+            $campaign->reserved_discount_rials = (int) ($reserved->reserved_discount_rials ?? 0);
+            $campaign->attributed_revenue_rials = (int) ($revenue->attributed_revenue_rials ?? 0);
+            $campaign->budget_remaining_rials = (int) ($campaign->budget_cap_rials ?? 0) > 0
+                ? max(0, (int) $campaign->budget_cap_rials - $campaign->redeemed_discount_rials - $campaign->reserved_discount_rials)
+                : null;
+
+            $campaign->offer_view_count = count($viewed);
+            $campaign->offer_click_count = count($clicked);
+            $viewedRedeemed = $campaignAssignments
+                ->filter(fn ($assignment) => $assignment->status === 'redeemed' && isset($viewed[(int) $assignment->id]))
+                ->count();
+            $campaign->viewed_redeemed_offer_count = $viewedRedeemed;
+            $campaign->view_to_click_rate = $campaign->offer_view_count > 0
+                ? round($campaign->offer_click_count * 100 / $campaign->offer_view_count, 1) : 0;
+            $campaign->view_to_redemption_rate = $campaign->offer_view_count > 0
+                ? round($viewedRedeemed * 100 / $campaign->offer_view_count, 1) : 0;
+
+            return $campaign;
+        });
+
+        return response()->json(['data' => $page]);
     }
 
     public function storeCampaign(Request $request, AdminConsoleService $console, CrmAudienceService $audiences)
