@@ -131,7 +131,6 @@ class TrackAuthenticatedSession
             'user_agent' => $agent,
             'meta' => json_encode($meta, JSON_UNESCAPED_UNICODE),
             'created_at' => now(),
-            'updated_at' => now(),
         ]);
     }
 }
