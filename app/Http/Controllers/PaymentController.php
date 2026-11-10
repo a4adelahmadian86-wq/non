@@ -203,7 +203,7 @@ class PaymentController extends Controller
                     return;
                 }
                 if ($locked->status !== 'pending') {
-                    throw new \\RuntimeException('وضعیت این سفارش اجازه پرداخت مجدد نمی‌دهد.');
+                    throw new \RuntimeException('وضعیت این سفارش اجازه پرداخت مجدد نمی‌دهد.');
                 }
 
                 $items = $locked->storeItems()->with(['product.files'])->lockForUpdate()->get();
