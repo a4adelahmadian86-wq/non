@@ -97,7 +97,7 @@ class AccountSecuritySessionsTest extends TestCase
             ->where('session_key', $sessionKey)
             ->update(['last_activity' => now()->subYears(3)->subMinute()]);
 
-        $this->get(route('platform.security'))
+        $this->actingAs($user)->get(route('platform.security'))
             ->assertRedirect(route('login'));
 
         $this->assertGuest();
@@ -118,7 +118,7 @@ class AccountSecuritySessionsTest extends TestCase
         $this->actingAs($user)->get(route('platform.security'))->assertOk();
         $sessionKey = hash('sha256', $this->app['session']->getId());
 
-        $this->post(route('logout'))->assertRedirect(route('home'));
+        $this->actingAs($user)->post(route('logout'))->assertRedirect(route('home'));
 
         $this->assertGuest();
         $this->assertNotNull(DB::table('farast_account_sessions')
