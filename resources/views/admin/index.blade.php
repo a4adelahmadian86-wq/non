@@ -30,6 +30,13 @@
             <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>{{ number_format($stats['new_users_week']) }} ثبت‌نام در ۷ روز · {{ number_format($stats['blocked_users']) }} مسدود</small></article>
             <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>{{ number_format($stats['new_documents_week']) }} سند جدید در ۷ روز اخیر</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
+            @if(($messengerSummary['available'] ?? false) && ($messengerSummary['status'] ?? '') === 'available')
+            <a class="metric-card metric-cyan dashboard-metric-link" href="{{ route('messenger.index') }}">
+                <div class="metric-top"><span>پیام‌های خوانده‌نشده</span><i class="fa-solid fa-comments"></i></div>
+                <strong>{{ number_format($messengerSummary['unread_messages'] ?? 0) }}</strong>
+                <small>پیام جدید در گفت‌وگوهای قابل دسترس</small>
+            </a>
+            @endif
             @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
             <article class="metric-card metric-green"><div class="metric-top"><span>اعتبارنامه Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'ثبت شده' : 'ثبت نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
             @endif
@@ -383,6 +390,9 @@
 .admin-activity-row small{font-size:10px;color:#8390a5}
 @media(max-width:760px){.farast-admin-nav-create-product{margin-inline:8px}}
 
+.dashboard-metric-link{display:block;color:inherit;text-decoration:none;transition:transform .18s ease,border-color .18s ease}
+.dashboard-metric-link:hover{transform:translateY(-2px);border-color:rgba(79,141,247,.45)}
+.dashboard-metric-link:focus-visible{outline:2px solid #70b4ff;outline-offset:3px}
 .dashboard-trend-panel{min-width:0}
 .dashboard-trend-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0 0 14px;color:var(--admin-muted,#9aa9bd);font-size:.82rem}
 .dashboard-trend-legend span{display:inline-flex;align-items:center;gap:7px}
