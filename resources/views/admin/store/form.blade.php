@@ -634,6 +634,7 @@
 .product-wizard-progress{display:grid;gap:4px;padding:12px 15px;border:1px solid #dce7f4;border-radius:12px;background:#f6f9fd;color:#405875}
 .product-wizard-progress strong{font-size:.76rem}.product-wizard-progress span{font-size:.66rem;color:var(--st-muted)}
 @media(max-width:650px){.product-wizard-panel{padding:13px}.product-wizard-actions button{flex:1}.product-workflow{overflow-x:auto}}
+.product-file-first-step{display:grid;gap:1rem}.product-file-first-step>p{line-height:1.95;color:var(--muted,#64748b);margin:0}.product-file-first-points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem 1.25rem;list-style:none;padding:0;margin:0}.product-file-first-points li{position:relative;padding-inline-start:1.4rem;line-height:1.8}.product-file-first-points li:before{content:"✓";position:absolute;inset-inline-start:0;color:var(--success,#15803d);font-weight:800}@media(max-width:720px){.product-file-first-points{grid-template-columns:1fr}}
 </style>
 @endpush
 
