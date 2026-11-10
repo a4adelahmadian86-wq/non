@@ -28,7 +28,7 @@ return Application::configure(basePath:dirname(__DIR__))
     ->withExceptions(function(Exceptions $exceptions):void{
         $exceptions->shouldRenderJsonWhen(fn($request)=>$request->is('api/*')||$request->expectsJson());
         $exceptions->context(fn()=>['farast_request_id'=>request()?->header('X-Request-Id'),'farast_correlation_id'=>request()?->header('X-Correlation-Id')]);
-        $exceptions->render(function (\\Throwable $exception, Request $request) {
+        $exceptions->render(function (\Throwable $exception, Request $request) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return null;
             }
@@ -38,11 +38,11 @@ return Application::configure(basePath:dirname(__DIR__))
             // unexpected server exceptions; otherwise 403/404/419/422/429
             // responses are incorrectly converted into HTTP 500.
             if (
-                $exception instanceof \\Illuminate\\Validation\\ValidationException
-                || $exception instanceof \\Illuminate\\Auth\\AuthenticationException
-                || $exception instanceof \\Illuminate\\Auth\\Access\\AuthorizationException
-                || $exception instanceof \\Illuminate\\Database\\Eloquent\\ModelNotFoundException
-                || ($exception instanceof \\Symfony\\Component\\HttpKernel\\Exception\\HttpExceptionInterface
+                $exception instanceof \Illuminate\Validation\ValidationException
+                || $exception instanceof \Illuminate\Auth\AuthenticationException
+                || $exception instanceof \Illuminate\Auth\Access\AuthorizationException
+                || $exception instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                || ($exception instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
                     && $exception->getStatusCode() !== 500)
             ) {
                 return null;
