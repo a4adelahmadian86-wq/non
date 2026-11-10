@@ -101,8 +101,8 @@ class CommunicationCenterController extends Controller
         $feed = collect()
             ->merge($tickets->map(fn (Ticket $ticket) => [
                 'kind' => 'ticket',
-                'title' => $ticket->displayCode().' — '.$ticket->subject,
-                'body' => $ticket->displayName().' · '.$ticket->statusLabel().' · '.$ticket->priorityLabel(),
+                'title' => $ticket->displayCode().' — '.$ticket->subject.($ticket->relatedOrder && (int) $ticket->relatedOrder->user_id === (int) $ticket->user_id ? ' · سفارش #'.$ticket->relatedOrder->id : ''),
+                'body' => $ticket->displayName().' · '.$ticket->statusLabel().' · '.$ticket->priorityLabel().($ticket->relatedOrder && (int) $ticket->relatedOrder->user_id === (int) $ticket->user_id ? ' · '.number_format((int) $ticket->relatedOrder->total_rials).' ریال' : ''),
                 'url' => $isAdmin
                     ? route('admin.support.management', ['ticket' => $ticket->id])
                     : route('support.show', $ticket),
