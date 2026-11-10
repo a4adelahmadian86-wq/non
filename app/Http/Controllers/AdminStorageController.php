@@ -72,7 +72,16 @@ class AdminStorageController extends Controller
             return back()->withErrors(['connection_json' => 'درایور اعلام‌شده پشتیبانی نمی‌شود.'])->withInput($request->except('connection_json'));
         }
 
-        $name = trim((string) ($connection['name'] ?? $connection['provider'] ?? 'فضای ذخیره‌سازی جدید'));
+        $endpoint = $connection['endpoint'] ?? ($credentials['endpoint'] ?? null);
+        if ($driver === 's3' && ! $endpoint && ! empty($connection['region'])) {
+            $endpoint = 'https://s3.'.trim((string) $connection['region']).'.amazonaws.com';
+        }
+        if ($driver === 's3' && (empty($credentials['key']) || empty($credentials['secret']) || empty($connection['bucket'] ?? $credentials['bucket'] ?? null) || empty($endpoint))) {
+            return back()->withErrors(['connection_json' => 'برای اتصال S3، آدرس سرویس، Bucket، Access Key و Secret Key لازم است.'])->withInput($request->except('connection_json'));
+        }
+        $detectedProvider = $connection['provider'] ?? ($driver === 's3' ? $connections->detectProvider($endpoint) : 'فضای محلی');
+        $endpointHost = (string) parse_url((string) $endpoint, PHP_URL_HOST);
+        $name = trim((string) ($connection['name'] ?? ($endpointHost !== '' ? $endpointHost : $detectedProvider)));
         if ($name === '') {
             return back()->withErrors(['connection_json' => 'نام سرویس در اطلاعات اتصال مشخص نشده است.'])->withInput($request->except('connection_json'));
         }
@@ -87,15 +96,15 @@ class AdminStorageController extends Controller
         $volume = StorageVolume::create([
             'drive_key' => $data['drive_key'],
             'name' => mb_substr($name, 0, 120),
-            'provider' => isset($connection['provider']) ? mb_substr((string) $connection['provider'], 0, 120) : null,
+            'provider' => mb_substr((string) $detectedProvider, 0, 120),
             'driver' => $driver,
             'region' => isset($connection['region']) ? mb_substr((string) $connection['region'], 0, 80) : null,
-            'endpoint' => $connection['endpoint'] ?? ($credentials['endpoint'] ?? null),
+            'endpoint' => $endpoint,
             'bucket' => $connection['bucket'] ?? ($credentials['bucket'] ?? null),
             'credentials' => $credentials,
-            'capacity_bytes' => isset($connection['capacity_bytes']) ? max(1, (int) $connection['capacity_bytes']) : null,
-            'file_limit' => isset($connection['file_limit']) ? max(1, (int) $connection['file_limit']) : null,
-            'max_file_bytes' => isset($connection['max_file_bytes']) ? max(1, (int) $connection['max_file_bytes']) : null,
+            'capacity_bytes' => null,
+            'file_limit' => null,
+            'max_file_bytes' => null,
             'priority' => max(1, min(10000, (int) ($connection['priority'] ?? 100))),
             'status' => 'unverified',
             'metadata' => ['provider_metadata' => (array) ($connection['metadata'] ?? [])],
