@@ -17,7 +17,7 @@ class CommunicationSearchService
      * Search only records the current actor can already open. This is a read
      * model over the existing domain stores; it never creates a second index.
      */
-    public function search(User $actor, string $term, bool $canSupport, bool $canUseMessenger, int $limit = 30): Collection
+    public function search(User $actor, string $term, bool $canSupport, bool $canUseMessenger, int $limit = 30, ?bool $canManageAllTickets = null): Collection
     {
         $term = trim($term);
         if (mb_strlen($term) < 2) {
@@ -26,7 +26,7 @@ class CommunicationSearchService
 
         $limit = max(1, min($limit, 50));
         $results = collect();
-        $isAdmin = $actor->isAdmin();
+        $isAdmin = $canManageAllTickets ?? $actor->isAdmin();
         $pattern = '%'.$term.'%';
 
         if ($canSupport) {
