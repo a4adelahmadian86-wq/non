@@ -129,7 +129,9 @@
           <div class="store-panel course-public-curriculum" id="store-product-curriculum">
             <div class="store-panel-head"><h2>سرفصل‌ها و برنامه آموزشی</h2><span>{{ $product->course->sections->sum(fn($section)=>$section->lessons->where('is_published',true)->count()) }} جلسه منتشرشده</span></div>
             <div class="course-public-meta">
-              @php($courseLevelLabels = ['beginner' => 'مقدماتی', 'intermediate' => 'متوسط', 'advanced' => 'پیشرفته', 'all' => 'همه سطوح'])
+              @php
+                $courseLevelLabels = ['beginner' => 'مقدماتی', 'intermediate' => 'متوسط', 'advanced' => 'پیشرفته', 'all' => 'همه سطوح'];
+              @endphp
               @if($product->course->instructor_name)
                 <span><i class="fa-solid fa-chalkboard-user"></i> مدرس: {{ $product->course->instructor_name }}</span>
               @endif
@@ -231,7 +233,9 @@
           @endif
           @if($deliveryFile)
             <span><i class="fa-solid fa-file-lines"></i> فرمت فایل: {{ strtoupper(pathinfo((string) $deliveryFile->original_name, PATHINFO_EXTENSION)) ?: 'نامشخص' }}</span>
-            @php($fileSizeBytes = (int) $deliveryFile->size_bytes)
+            @php
+              $fileSizeBytes = (int) $deliveryFile->size_bytes;
+            @endphp
             @if($fileSizeBytes > 0)
               <span><i class="fa-solid fa-hard-drive"></i> حجم فایل: {{ $fileSizeBytes >= 1048576 ? number_format($fileSizeBytes / 1048576, 2).' مگابایت' : ($fileSizeBytes >= 1024 ? number_format($fileSizeBytes / 1024, 1).' کیلوبایت' : number_format($fileSizeBytes).' بایت') }}</span>
             @endif
