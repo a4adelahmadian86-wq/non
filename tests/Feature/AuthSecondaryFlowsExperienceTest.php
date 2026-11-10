@@ -50,7 +50,42 @@ class AuthSecondaryFlowsExperienceTest extends TestCase
             ->assertSee('id="loginPassword"', false)
             ->assertSee('autocomplete="current-password"', false)
             ->assertSee('for="loginPassword"', false)
+            ->assertSee('id="toggleLoginPassword"', false)
+            ->assertSee('name="remember"', false)
             ->assertSee(route('password.request'), false);
+    }
+
+
+    public function test_password_login_limits_guesses_per_phone_and_ip(): void
+    {
+        $this->makeUser();
+        $key = 'farast:login:password:'.hash('sha256', self::PHONE.'|127.0.0.1');
+        RateLimiter::clear($key);
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->withSession(['login.phone' => self::PHONE])
+                ->postJson(route('login.password.store'), ['password' => 'WrongPassword'])
+                ->assertStatus(422);
+        }
+
+        $this->withSession(['login.phone' => self::PHONE])
+            ->postJson(route('login.password.store'), ['password' => 'WrongPassword'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('password')
+            ->assertJsonPath('errors.password.0', fn ($message) => str_contains($message, 'ثانیه'));
+    }
+
+    public function test_password_login_does_not_persist_the_session_unless_requested(): void
+    {
+        $user = $this->makeUser();
+        $key = 'farast:login:password:'.hash('sha256', self::PHONE.'|127.0.0.1');
+        RateLimiter::clear($key);
+
+        $this->withSession(['login.phone' => self::PHONE])
+            ->post(route('login.password.store'), ['password' => 'OldStrongPass123'])
+            ->assertRedirect(route('editor'));
+
+        $this->assertAuthenticatedAs($user->fresh());
     }
 
     public function test_email_login_and_otp_pages_expose_accessible_fields_and_feedback(): void
