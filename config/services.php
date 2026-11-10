@@ -14,6 +14,11 @@ return [
         'model' => env('FARAST_AI_GATEWAY_MODEL', 'farast-general'),
     ],
 
+    'clamav' => [
+        'binary' => env('CLAMAV_BINARY', ''),
+        'timeout' => max(10, min(300, (int) env('CLAMAV_TIMEOUT', 120))),
+    ],
+
     // Isolated product-quality supervisor. This never uses the existing voice/AI gateway.
     'product_supervisor' => [
         'url' => env('FARAST_PRODUCT_SUPERVISOR_URL', ''),
