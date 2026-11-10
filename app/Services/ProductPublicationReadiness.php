@@ -22,8 +22,30 @@ class ProductPublicationReadiness
                 ->exists();
             if (! $hasPrimary) {
                 $blockers[] = 'فایل اصلی محصول هنوز اعتبارسنجی ساختاری را با موفقیت طی نکرده است.';
-            } elseif (($product->download_policy ?? 'signed') === 'reader_only' && ! $this->hasReadyPrimaryReader($product)) {
-                $blockers[] = 'برای سیاست مطالعه آنلاین، نسخه خوانشگر آماده و معتبر نیست.';
+            } else {
+                if (($product->download_policy ?? 'signed') === 'reader_only' && ! $this->hasReadyPrimaryReader($product)) {
+                    $blockers[] = 'برای سیاست مطالعه آنلاین، نسخه خوانشگر آماده و معتبر نیست.';
+                }
+
+                $assetReviews = (array) data_get($product->metadata, 'ai_supervisor.asset_reviews', []);
+                $activeFiles = $product->files()
+                    ->where('purpose', 'product_download')
+                    ->where('is_active', true)
+                    ->get();
+                foreach ($activeFiles as $assetFile) {
+                    if ((int) $assetFile->size_bytes > 25 * 1024 * 1024) {
+                        continue;
+                    }
+                    $assetReview = (array) ($assetReviews['file:'.$assetFile->id] ?? []);
+                    $freshReview = ($assetReview['status'] ?? null) === 'completed'
+                        && filled($assetReview['sha256'] ?? null)
+                        && hash_equals((string) $assetFile->sha256, (string) $assetReview['sha256']);
+                    if (! $freshReview) {
+                        $blockers[] = 'بررسی خودکار ناظر برای فایل «'.$assetFile->original_name.'» هنوز کامل نشده است.';
+                    } elseif (($assetReview['security_gate'] ?? null) === 'blocked') {
+                        $blockers[] = 'ناظر هوشمند فایل «'.$assetFile->original_name.'» را از نظر امنیتی مسدود کرده است.';
+                    }
+                }
             }
         } elseif ($product->type === 'course') {
             $course = $product->course()->first();
