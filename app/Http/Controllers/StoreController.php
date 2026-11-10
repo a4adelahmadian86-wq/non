@@ -353,7 +353,7 @@ class StoreController extends Controller
             throw $exception;
         }
         $size = (int) filesize($temporary);
-        abort_unless($size > 0, 404);
+        if ($size < 1) { @unlink($temporary); abort(404); }
 
         $start = 0;
         $end = $size - 1;
@@ -404,6 +404,7 @@ class StoreController extends Controller
         return response()->stream(function () use ($temporary, $start, $length) {
             $stream = fopen($temporary, 'rb');
             if (! is_resource($stream)) {
+                @unlink($temporary);
                 return;
             }
             try {
