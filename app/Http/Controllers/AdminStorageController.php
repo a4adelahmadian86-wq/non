@@ -185,15 +185,15 @@ class AdminStorageController extends Controller
     {
         $hasManagedFiles = $volume->files()->whereNotIn('status', ['deleted'])->exists();
         $hasProviderObjects = (int) $volume->object_count > 0;
-        $hasBackups = StorageBackupRun::query()->where('storage_volume_id', $volume->id)->exists();
 
         abort_if(
-            $hasManagedFiles || $hasProviderObjects || $hasBackups,
+            $hasManagedFiles || $hasProviderObjects,
             409,
             'این هاست هنوز فایل یا نسخه پشتیبان دارد. ابتدا اطلاعات را به مقصد دیگری منتقل و خالی بودن کامل هاست را تأیید کنید.'
         );
 
         $volume->files()->where('status', 'deleted')->update(['storage_volume_id' => null]);
+        StorageBackupRun::query()->where('storage_volume_id', $volume->id)->update(['storage_volume_id' => null]);
         $volume->delete();
         return redirect()->route('admin.storage.index')->with('status', 'اتصال حذف شد.');
     }
