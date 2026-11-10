@@ -19,7 +19,7 @@ class RunStorageBackupJob implements ShouldQueue
 
     public function __construct(public readonly int $requestRunId)
     {
-        $this->onQueue('backups');
+        $this->onConnection('backups')->onQueue('backups');
     }
 
     public function handle(StorageBackupService $backup): void
