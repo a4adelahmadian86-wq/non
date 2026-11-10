@@ -47,7 +47,7 @@ return [
         'settings'      => ['permission' => 'settings.manage',    'min_scope' => 'global'],
         'pricing'       => ['permission' => 'billing.manage',     'min_scope' => 'global'],
         'ai_providers'  => ['permission' => 'ai.manage',          'min_scope' => 'global'],
-        'support_admin' => ['permission' => 'support.manage',     'min_scope' => 'global'],
+        'support_admin' => ['permission' => 'support.manage',     'min_scope' => 'team'],
     ],
 
     // ترتیب سلسله‌مراتب دامنه (هرچه عدد بزرگ‌تر، محدودتر).

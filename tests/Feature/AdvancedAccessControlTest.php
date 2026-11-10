@@ -5,7 +5,13 @@ namespace Tests\Feature;
 use App\Models\Organization;
 use App\Models\Permission;
 use App\Models\Team;
+use App\Models\Ticket;
 use App\Models\User;
+use App\Http\Middleware\EnsureResourcePermission;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use App\Services\AdminConsoleService;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -239,6 +245,212 @@ class AdvancedAccessControlTest extends TestCase
         ));
     }
 
+    public function test_admin_console_never_reuses_an_admin_request_scope_for_another_user(): void
+    {
+        $organizationA = Organization::create(['name' => 'Scope Isolation A', 'slug' => 'scope-isolation-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Scope Isolation B', 'slug' => 'scope-isolation-b', 'status' => 'active']);
+        $admin = $this->user('09140000311', User::ROLE_ADMIN);
+        $manager = $this->user('09140000312', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $member = $this->user('09140000313', User::ROLE_EMPLOYEE, $organizationA->id);
+        $outside = $this->user('09140000314', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $this->actingAs($admin)->get('/admin')->assertOk();
+        $this->assertSame('global', request()->attributes->get('farast.scope'));
+        $this->assertSame('dashboard.view', request()->attributes->get('farast.section_permission'));
+
+        request()->attributes->set('farast.section_permission', 'dashboard.view');
+        app(AdminConsoleService::class)->allowedSections($admin);
+        $this->assertSame('dashboard.view', request()->attributes->get('farast.section_permission'));
+
+        request()->attributes->set('farast.section_permission', 'finance.view');
+        $console = app(AdminConsoleService::class);
+        $this->assertTrue($console->sectionAllowed($manager, 'users'));
+        $this->assertSame('finance.view', request()->attributes->get('farast.section_permission'));
+
+        $visibleIds = $console->visibleUserIds($manager, 'users.view');
+
+        $this->assertIsArray($visibleIds, 'A global request scope must not turn another user\'s scope into an unrestricted result.');
+        $this->assertContains($manager->id, $visibleIds);
+        $this->assertContains($member->id, $visibleIds);
+        $this->assertNotContains($outside->id, $visibleIds);
+    }
+
+    public function test_support_console_filters_ticket_records_stats_and_actions_by_organization_scope(): void
+    {
+        $organizationA = Organization::create(['name' => 'Support Org A', 'slug' => 'support-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Support Org B', 'slug' => 'support-org-b', 'status' => 'active']);
+        $manager = $this->user('09140000331', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $member = $this->user('09140000332', User::ROLE_EMPLOYEE, $organizationA->id);
+        $agent = $this->user('09140000333', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $outside = $this->user('09140000334', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $insideTicket = Ticket::create([
+            'user_id' => $member->id,
+            'ticket_code' => 'TK-SCOPE-INSIDE',
+            'subject' => 'Inside organization ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outside->id,
+            'ticket_code' => 'TK-SCOPE-OUTSIDE',
+            'subject' => 'Outside organization ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $response = $this->actingAs($manager)->get('/admin/support-management')->assertOk();
+        $response->assertViewHas('tickets', function ($tickets) use ($insideTicket, $outsideTicket): bool {
+            $ids = $tickets->getCollection()->pluck('id')->all();
+
+            return in_array($insideTicket->id, $ids, true) && ! in_array($outsideTicket->id, $ids, true);
+        });
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['open'] === 1);
+
+        $this->post('/admin/tickets/'.$insideTicket->id.'/assign', ['assigned_to' => $agent->id])->assertRedirect();
+        $this->assertDatabaseHas('tickets', ['id' => $insideTicket->id, 'assigned_to' => $agent->id]);
+
+        $this->post('/admin/tickets/'.$insideTicket->id.'/assign', ['assigned_to' => $outside->id])->assertForbidden();
+        $this->post('/admin/tickets/'.$outsideTicket->id.'/status', ['status' => 'closed'])->assertForbidden();
+        $this->assertDatabaseHas('tickets', ['id' => $outsideTicket->id, 'status' => 'open']);
+    }
+
+    public function test_workflow_follow_up_respects_the_workflow_owners_customer_scope(): void
+    {
+        $organizationA = Organization::create(['name' => 'Workflow Owner Org', 'slug' => 'workflow-owner-org', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Workflow Foreign Org', 'slug' => 'workflow-foreign-org', 'status' => 'active']);
+        $manager = $this->user('09140000341', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $member = $this->user('09140000342', User::ROLE_EMPLOYEE, $organizationA->id);
+        $outside = $this->user('09140000343', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $workflowColumns = \Illuminate\Support\Facades\Schema::getColumnListing('farast_workflows');
+        $workflowPayload = array_intersect_key([
+            'user_id' => $manager->id,
+            'name' => 'Scoped CRM follow-up',
+            'trigger_type' => 'ticket.created',
+            'steps' => json_encode([
+                ['action' => 'notify', 'title' => 'رویداد مشتری', 'message' => 'یک رویداد در محدوده سازمان شما ثبت شد.'],
+                ['action' => 'create_follow_up', 'title' => 'پیگیری مشتری'],
+            ], JSON_UNESCAPED_UNICODE),
+            'enabled' => true,
+            'conditions' => null,
+            'cooldown_seconds' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], array_flip($workflowColumns));
+        $workflowId = DB::table('farast_workflows')->insertGetId($workflowPayload);
+        $engine = app(\App\Services\WorkflowEngine::class);
+
+        $matched = $engine->dispatch('ticket.created', [
+            'user_id' => $member->id,
+            'customer_id' => $member->id,
+        ], 'ticket:scope-member:created');
+
+        $this->assertSame(1, $matched, 'An organization manager workflow should process an authorized member event.');
+        $this->assertDatabaseHas('crm_follow_up_tasks', [
+            'customer_id' => $member->id,
+            'assigned_to' => $manager->id,
+            'created_by' => $manager->id,
+            'title' => 'پیگیری مشتری',
+        ]);
+        $this->assertDatabaseHas('farast_notifications', [
+            'user_id' => $manager->id,
+            'type' => 'workflow',
+            'title' => 'رویداد مشتری',
+        ]);
+        $this->assertDatabaseMissing('farast_notifications', [
+            'user_id' => $member->id,
+            'title' => 'رویداد مشتری',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:scope-member:created',
+            'status' => 'completed',
+            'matched_workflows' => 1,
+        ]);
+
+        $outsideMatched = $engine->dispatch('ticket.created', [
+            'user_id' => $outside->id,
+            'customer_id' => $outside->id,
+        ], 'ticket:scope-outside:created');
+
+        $this->assertSame(0, $outsideMatched, 'A workflow must not be selected for a customer outside its owner\'s organization.');
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:scope-outside:created',
+            'status' => 'completed',
+            'matched_workflows' => 0,
+        ]);
+
+        try {
+            $engine->run($workflowId, [
+                'user_id' => $outside->id,
+                'customer_id' => $outside->id,
+            ], null, true);
+            $this->fail('A workflow must not create CRM follow-ups outside its owner\'s organization scope.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('outside the authorized customer scope', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('crm_follow_up_tasks', ['customer_id' => $outside->id]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflowId,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflowId,
+            'status' => 'failed',
+        ]);
+    }
+
+    public function test_scoped_workflow_requires_the_domain_permission_for_cross_user_events(): void
+    {
+        $organization = Organization::create(['name' => 'Workflow Permission Org', 'slug' => 'workflow-permission-org', 'status' => 'active']);
+        $manager = $this->user('09140000351', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $member = $this->user('09140000352', User::ROLE_EMPLOYEE, $organization->id);
+
+        $supportPermissionId = DB::table('permissions')->where('key', 'support.manage')->value('id');
+        DB::table('role_permissions')
+            ->where('role', User::ROLE_ORGANIZATION_MANAGER)
+            ->where('permission_id', $supportPermissionId)
+            ->delete();
+        app(AuthorizationService::class)->forgetUser();
+
+        $workflowColumns = \Illuminate\Support\Facades\Schema::getColumnListing('farast_workflows');
+        $workflowPayload = array_intersect_key([
+            'user_id' => $manager->id,
+            'name' => 'Permission-gated ticket workflow',
+            'trigger_type' => 'ticket.created',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'نباید ارسال شود']], JSON_UNESCAPED_UNICODE),
+            'enabled' => true,
+            'conditions' => null,
+            'cooldown_seconds' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], array_flip($workflowColumns));
+        $workflowId = DB::table('farast_workflows')->insertGetId($workflowPayload);
+
+        $this->assertTrue(app(AuthorizationService::class)->allows($manager, 'workflows.manage'));
+        $this->assertFalse(app(AuthorizationService::class)->allows($manager, 'support.manage'));
+
+        $matched = app(\App\Services\WorkflowEngine::class)->dispatch('ticket.created', [
+            'user_id' => $member->id,
+            'customer_id' => $member->id,
+        ], 'ticket:permission-gated:created');
+
+        $this->assertSame(0, $matched);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:permission-gated:created',
+            'status' => 'completed',
+            'matched_workflows' => 0,
+        ]);
+        $this->assertDatabaseMissing('farast_workflow_event_workflows', ['workflow_id' => $workflowId]);
+        $this->assertDatabaseMissing('farast_notifications', [
+            'user_id' => $manager->id,
+            'title' => 'نباید ارسال شود',
+        ]);
+    }
+
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
     {
         $employee = $this->user('09140000105');
@@ -409,6 +621,93 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_team_permission_does_not_cross_the_users_organization_through_a_malformed_membership(): void
+    {
+        $organizationA = Organization::create(['name' => 'Actor Organization', 'slug' => 'actor-organization', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Foreign Organization', 'slug' => 'foreign-organization', 'status' => 'active']);
+        $supervisor = $this->user('09140000321', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $foreignTeam = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Foreign Supervised Team',
+            'slug' => 'foreign-supervised-team',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $roleId = $this->role('foreign-org-team-grant', 'team', $foreignTeam->id);
+        $this->grant($roleId, 'access.audit', 'team');
+        $this->assign($supervisor, $roleId, 'team', $foreignTeam->id);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertFalse($authorization->allowsFor($supervisor, 'access.audit', [
+            'organization_id' => $organizationB->id,
+            'team_id' => $foreignTeam->id,
+            'owner_id' => null,
+        ]));
+
+        $localTeam = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Local Team With Mismatched Record Org',
+            'slug' => 'local-team-mismatched-record-org',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $localRole = $this->role('local-team-scope-grant', 'team', $localTeam->id);
+        $this->grant($localRole, 'access.audit', 'team');
+        $this->assign($supervisor, $localRole, 'team', $localTeam->id);
+
+        $orphan = $this->user('09140000324');
+        $orphan->teams()->attach($localTeam->id, ['team_role' => 'member']);
+        $userViewRole = $this->role('local-team-user-view', 'team', $localTeam->id);
+        $this->grant($userViewRole, 'users.view', 'team');
+        $this->assign($supervisor, $userViewRole, 'team', $localTeam->id);
+
+        $this->assertNotContains(
+            $orphan->id,
+            app(AdminConsoleService::class)->visibleUserIds($supervisor, 'users.view') ?? [],
+            'A user with no organization must not inherit a team scope from an inconsistent membership pivot.'
+        );
+
+        $this->assertTrue($authorization->allowsFor($supervisor, 'access.audit', [
+            'organization_id' => $organizationA->id,
+            'team_id' => $localTeam->id,
+            'owner_id' => null,
+        ]));
+        $this->assertFalse($authorization->allowsFor($supervisor, 'access.audit', [
+            'organization_id' => $organizationB->id,
+            'team_id' => $localTeam->id,
+            'owner_id' => null,
+        ]));
+        $this->assertNotContains(
+            $foreignTeam->id,
+            app(AdminConsoleService::class)->visibleTeamIds($supervisor, 'team.view') ?? []
+        );
+    }
+
+    public function test_role_assignment_rejects_a_team_outside_the_target_users_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Target Organization', 'slug' => 'target-organization', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Other Target Organization', 'slug' => 'other-target-organization', 'status' => 'active']);
+        $admin = $this->user('09140000322', User::ROLE_ADMIN);
+        $supervisor = $this->user('09140000323', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $foreignTeam = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Out of Organization Team',
+            'slug' => 'out-of-organization-team',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $roleId = $this->role('out-of-org-assignment-role', 'team', $foreignTeam->id);
+
+        $this->actingAs($admin)->post('/admin/access-center/users/'.$supervisor->id.'/roles', [
+            'role_id' => $roleId,
+            'scope_type' => 'team',
+            'scope_id' => $foreignTeam->id,
+            'reason' => 'Cross-organization assignment regression test',
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseMissing('farast_user_roles', [
+            'user_id' => $supervisor->id,
+            'role_id' => $roleId,
+        ]);
+    }
+
     public function test_team_scoped_role_cannot_be_assigned_to_a_different_team(): void
     {
         $organization = Organization::create(['name' => 'Team Scope Org', 'slug' => 'team-scope-org', 'status' => 'active']);
@@ -454,6 +753,86 @@ class AdvancedAccessControlTest extends TestCase
         ])->assertServerError();
 
         $this->assertDatabaseMissing('farast_roles', ['name' => 'نقش بدون ممیزی']);
+    }
+
+    public function test_resource_middleware_does_not_fall_through_from_null_owner_to_creator_fields(): void
+    {
+        $employee = $this->user('09140000301');
+        $middleware = app(EnsureResourcePermission::class);
+
+        $resource = new class extends Model {
+            protected $guarded = [];
+        };
+        $resource->setRawAttributes([
+            'id' => 501,
+            'owner_id' => null,
+            'user_id' => $employee->id,
+            'created_by' => $employee->id,
+        ], true);
+
+        $request = Request::create('/resource/501', 'GET');
+        $route = new Route(['GET'], '/resource/{resource}', static fn () => null);
+        $route->setParameter('resource', $resource);
+        $request->setRouteResolver(static fn () => $route);
+        $request->setUserResolver(static fn () => $employee);
+
+        try {
+            $middleware->handle($request, static fn () => response('unexpectedly allowed'), 'documents.view');
+            $this->fail('An explicitly null owner must not fall through to user_id or created_by.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
+    public function test_resource_middleware_does_not_treat_creator_attribution_as_ownership(): void
+    {
+        $employee = $this->user('09140000303');
+        $middleware = app(EnsureResourcePermission::class);
+
+        $resource = new class extends Model {
+            protected $guarded = [];
+        };
+        $resource->setRawAttributes([
+            'id' => 503,
+            'created_by' => $employee->id,
+        ], true);
+
+        $request = Request::create('/resource/503', 'GET');
+        $route = new Route(['GET'], '/resource/{resource}', static fn () => null);
+        $route->setParameter('resource', $resource);
+        $request->setRouteResolver(static fn () => $route);
+        $request->setUserResolver(static fn () => $employee);
+
+        try {
+            $middleware->handle($request, static fn () => response('unexpectedly allowed'), 'documents.view');
+            $this->fail('A creator attribution is not sufficient proof of resource ownership.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
+    public function test_resource_middleware_uses_legacy_owner_field_only_when_primary_field_is_absent(): void
+    {
+        $employee = $this->user('09140000302');
+        $middleware = app(EnsureResourcePermission::class);
+
+        $resource = new class extends Model {
+            protected $guarded = [];
+        };
+        $resource->setRawAttributes([
+            'id' => 502,
+            'user_id' => $employee->id,
+        ], true);
+
+        $request = Request::create('/resource/502', 'GET');
+        $route = new Route(['GET'], '/resource/{resource}', static fn () => null);
+        $route->setParameter('resource', $resource);
+        $request->setRouteResolver(static fn () => $route);
+        $request->setUserResolver(static fn () => $employee);
+
+        $response = $middleware->handle($request, static fn () => response('allowed'), 'documents.view');
+
+        $this->assertSame('allowed', $response->getContent());
     }
 
     public function test_advanced_access_center_is_only_available_to_the_platform_admin(): void

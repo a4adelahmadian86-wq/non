@@ -335,6 +335,17 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
+            // A team identifier is not enough when the record also declares an
+            // organization: both boundaries must agree with the authenticated user.
+            if ($hasResourceContext && array_key_exists('organization_id', $context)) {
+                if ($context['organization_id'] === null
+                    || $context['organization_id'] === ''
+                    || $user->organization_id === null
+                    || (int) $context['organization_id'] !== (int) $user->organization_id) {
+                    return false;
+                }
+            }
+
             // A record must belong to an explicitly shared team. Cache the
             // actor's memberships once per request to keep list filtering bounded.
             if ($hasResourceContext) {
@@ -369,13 +380,24 @@ class AuthorizationService
     private function teamIdsForUser(User $user): array
     {
         if (! array_key_exists($user->id, $this->teamIdsByUser)) {
-            $memberIds = $user->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
-            $supervisedIds = \App\Models\Team::query()
-                ->where('supervisor_id', $user->id)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
-            $this->teamIdsByUser[$user->id] = array_values(array_unique(array_merge($memberIds, $supervisedIds)));
+            // Team membership is subordinate to the user's organization. A stale
+            // or malformed cross-organization pivot must never expand scope.
+            if (! $user->organization_id) {
+                $this->teamIdsByUser[$user->id] = [];
+            } else {
+                $memberIds = $user->teams()
+                    ->where('teams.organization_id', $user->organization_id)
+                    ->pluck('teams.id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $supervisedIds = \App\Models\Team::query()
+                    ->where('supervisor_id', $user->id)
+                    ->where('organization_id', $user->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $this->teamIdsByUser[$user->id] = array_values(array_unique(array_merge($memberIds, $supervisedIds)));
+            }
         }
 
         return $this->teamIdsByUser[$user->id];

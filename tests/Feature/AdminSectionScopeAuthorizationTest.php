@@ -168,6 +168,7 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         });
 
         $analytics = $this->get('/admin/analytics')->assertOk();
+        $this->assertFalse(app(\\App\\Services\\AuthorizationService::class)->allows($supervisor, 'finance.view'));
         $analytics->assertViewHas('stats', function (array $stats): bool {
             return $stats['users'] === 2
                 && $stats['active_users'] === 2
@@ -271,7 +272,7 @@ class AdminSectionScopeAuthorizationTest extends TestCase
 
         $analytics = $this->actingAs($supervisor)->get('/admin/analytics')->assertOk();
         $analytics->assertViewHas('stats', function (array $stats): bool {
-            return $stats['users'] === 2 && $stats['revenue'] === 1200;
+            return $stats['users'] === 2 && $stats['revenue'] === 0;
         });
 
         $this->get('/admin/organizations')->assertForbidden();

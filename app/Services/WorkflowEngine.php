@@ -2,12 +2,21 @@
 
 namespace App\Services;
 
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
+
+    private const EVENT_SCOPE_PERMISSIONS = [
+        'document.saved' => 'documents.view',
+        'ticket.created' => 'support.manage',
+        'order.paid' => 'billing.view',
+        'order.deposit_paid' => 'billing.view',
+    ];
 
     public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false): int
     {
@@ -235,14 +244,22 @@ class WorkflowEngine
             // Freeze the matching set once. An event with no matching workflow must
             // not unexpectedly start running a workflow created hours later.
             if (! $hasMappings && empty($lockedEvent->matched_at)) {
+                $subjectId = filter_var($context['customer_id'] ?? $lockedEvent->user_id, FILTER_VALIDATE_INT);
+                $subject = $subjectId && $subjectId > 0 ? User::query()->find((int) $subjectId) : null;
                 $workflows = DB::table('farast_workflows')
-                    ->where('user_id', (int) $lockedEvent->user_id)
                     ->where('trigger_type', $lockedEvent->event_type)
                     ->where('enabled', true)
                     ->orderBy('id')
                     ->get();
 
                 $eventContext = array_merge($context, ['event_type' => $lockedEvent->event_type]);
+                $authorization = app(AuthorizationService::class);
+                $workflowOwners = User::query()
+                    ->whereIn('id', $workflows->pluck('user_id')->unique()->values())
+                    ->get()
+                    ->keyBy('id');
+                $subjectContext = $subject ? $this->userResourceContext($subject) : [];
+
                 foreach ($workflows as $workflow) {
                     // Lock the workflow row so concurrent events cannot both pass
                     // its cooldown window and enqueue duplicate executions.
@@ -251,7 +268,18 @@ class WorkflowEngine
                         ->lockForUpdate()
                         ->first();
 
-                    if (! $current || ! $current->enabled) {
+                    if (! $current || ! $current->enabled || ! $subject) {
+                        continue;
+                    }
+
+                    $workflowOwner = $workflowOwners->get((int) $current->user_id);
+                    if (! $workflowOwner || ! $this->workflowCanProcessEvent(
+                        $authorization,
+                        $workflowOwner,
+                        $subject,
+                        (string) $lockedEvent->event_type,
+                        $subjectContext
+                    )) {
                         continue;
                     }
 
@@ -368,6 +396,59 @@ class WorkflowEngine
         return $completedNow;
     }
 
+    private function workflowCanProcessEvent(
+        AuthorizationService $authorization,
+        User $owner,
+        User $subject,
+        string $eventType,
+        array $subjectContext
+    ): bool {
+        $canRun = $authorization->allows($owner, 'workflows.run')
+            || $authorization->allows($owner, 'workflows.manage')
+            || $authorization->allows($owner, 'automation.run')
+            || $authorization->allows($owner, 'automation.manage');
+
+        if (! $canRun) {
+            return false;
+        }
+
+        // A user's own workflow can process their own event. Cross-user events
+        // require the explicit domain permission and the full record scope.
+        if ((int) $owner->id === (int) $subject->id) {
+            return true;
+        }
+
+        $permission = self::EVENT_SCOPE_PERMISSIONS[$eventType] ?? null;
+
+        return $permission !== null
+            && $authorization->allowsFor($owner, $permission, $subjectContext);
+    }
+
+    private function userResourceContext(User $user): array
+    {
+        $teamIds = [];
+        if ($user->organization_id) {
+            $teamIds = $user->teams()
+                ->where('teams.organization_id', $user->organization_id)
+                ->pluck('teams.id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $supervisedTeamIds = Team::query()
+                ->where('supervisor_id', $user->id)
+                ->where('organization_id', $user->organization_id)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $teamIds = array_values(array_unique(array_merge($teamIds, $supervisedTeamIds)));
+        }
+
+        return [
+            'owner_id' => (int) $user->id,
+            'organization_id' => $user->organization_id,
+            'team_ids' => $teamIds,
+        ];
+    }
+
     private function step(array $step, array $context, int $ownerId, int $runId, int $stepIndex): void
     {
         $action = (string) ($step['action'] ?? '');
@@ -376,10 +457,10 @@ class WorkflowEngine
         }
 
         if ($action === 'notify') {
-            $targetUserId = (int) ($context['user_id'] ?? $ownerId);
-            if ($targetUserId !== $ownerId) {
-                throw new \RuntimeException('Workflow notification target must be its owner.');
-            }
+            // Domain event user_id identifies the customer/actor, not the
+            // workflow creator. Notifications from a scoped workflow go to
+            // its owner; event subjects are never implicit notification targets.
+            $targetUserId = $ownerId;
             $notification = app(NotificationService::class)->push(
                 $targetUserId,
                 'workflow',
@@ -400,9 +481,17 @@ class WorkflowEngine
                 throw new \RuntimeException('CRM follow-up target is missing.');
             }
             $customerId = (int) $context['customer_id'];
-            if ($customerId !== $ownerId) {
-                throw new \RuntimeException('Workflow cannot create a follow-up for another user.');
+            $owner = User::query()->find($ownerId);
+            $customer = User::query()->find($customerId);
+            if (! $owner || ! $customer) {
+                throw new \RuntimeException('Workflow follow-up owner or customer no longer exists.');
             }
+
+            $customerContext = $this->userResourceContext($customer);
+            if (! app(AuthorizationService::class)->allowsFor($owner, 'users.view', $customerContext)) {
+                throw new \RuntimeException('Workflow owner cannot create a follow-up outside the authorized customer scope.');
+            }
+
             DB::table('crm_follow_up_tasks')->insert([
                 'customer_id' => $customerId, 'assigned_to' => $ownerId, 'created_by' => $ownerId,
                 'title' => mb_substr((string) ($step['title'] ?? 'پیگیری خودکار'), 0, 180),

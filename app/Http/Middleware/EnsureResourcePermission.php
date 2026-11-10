@@ -16,6 +16,22 @@ class EnsureResourcePermission
     {
     }
 
+    /**
+     * Resolve ownership using the first ownership column defined by the model.
+     * An explicitly null primary owner is meaningful and must fail closed; it
+     * must never fall through to a different ownership column.
+     */
+    private function ownerIdFromAttributes(array $attributes): mixed
+    {
+        foreach (['owner_id', 'resource_user_id', 'user_id'] as $field) {
+            if (array_key_exists($field, $attributes)) {
+                return $attributes[$field];
+            }
+        }
+
+        return null;
+    }
+
     public function handle(Request $request, Closure $next, string $permission, string $parameter = 'resource')
     {
         $resource = $request->route($parameter);
@@ -25,17 +41,37 @@ class EnsureResourcePermission
         $context = [
             'resource_id' => $resource->getKey(),
             'resource_type' => $resource::class,
-            'owner_id' => $attributes['owner_id'] ?? $attributes['user_id'] ?? $attributes['created_by'] ?? null,
-            'organization_id' => $attributes['organization_id'] ?? null,
+            'owner_id' => $this->ownerIdFromAttributes($attributes),
             'team_id' => $attributes['team_id'] ?? null,
             'status' => $attributes['status'] ?? null,
         ];
+        if (array_key_exists('organization_id', $attributes)) {
+            $context['organization_id'] = $attributes['organization_id'];
+        } elseif (! empty($attributes['team_id'])) {
+            $teamOrganizationId = Team::query()->whereKey($attributes['team_id'])->value('organization_id');
+            if ($teamOrganizationId !== null) {
+                $context['organization_id'] = $teamOrganizationId;
+            }
+        }
 
         if ($resource instanceof User) {
             $context['owner_id'] = $resource->id;
             $context['organization_id'] = $resource->organization_id;
-            $memberTeamIds = $resource->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
-            $supervisedTeamIds = Team::query()->where('supervisor_id', $resource->id)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $memberTeamIds = $resource->organization_id
+                ? $resource->teams()
+                    ->where('teams.organization_id', $resource->organization_id)
+                    ->pluck('teams.id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
+            $supervisedTeamIds = $resource->organization_id
+                ? Team::query()
+                    ->where('supervisor_id', $resource->id)
+                    ->where('organization_id', $resource->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
             $context['team_ids'] = array_values(array_unique(array_merge($memberTeamIds, $supervisedTeamIds)));
         } elseif ($resource instanceof Organization) {
             $context['organization_id'] = $resource->id;

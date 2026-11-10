@@ -8,6 +8,8 @@ use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
 use App\Services\CapabilityService;
+use App\Services\AdminConsoleService;
+use App\Services\AuthorizationService;
 use App\Services\SupportTicketService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -276,12 +278,18 @@ class SupportController extends Controller
 
     public function adminIndex(Request $request)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $actor = $request->user();
+        $console = app(AdminConsoleService::class);
+        $console->authorizeAction($actor, 'support_admin');
+        $visibleUserIds = $console->visibleUserIds($actor, 'support.manage');
 
         $query = Ticket::with([
             'messages' => fn ($q) => $q->orderBy('created_at'),
             'user', 'relatedProduct', 'assignee',
         ]);
+        if ($visibleUserIds !== null) {
+            $query->whereIn('tickets.user_id', $visibleUserIds);
+        }
 
         if ($request->filled('status') && $request->status !== 'all') {
             if ($request->status === 'needs_reply') {
@@ -357,25 +365,36 @@ class SupportController extends Controller
 
         $active = null;
         if ($request->filled('ticket')) {
-            $active = Ticket::with(['messages' => fn ($q) => $q->orderBy('created_at'), 'user', 'relatedProduct', 'assignee'])
-                ->find($request->integer('ticket'));
+            $activeQuery = Ticket::with(['messages' => fn ($q) => $q->orderBy('created_at'), 'user', 'relatedProduct', 'assignee'])
+                ->whereKey($request->integer('ticket'));
+            if ($visibleUserIds !== null) {
+                $activeQuery->whereIn('tickets.user_id', $visibleUserIds);
+            }
+            $active = $activeQuery->first();
         }
         if (! $active) {
             $active = $tickets->getCollection()->first();
         }
 
+        $scopedCount = function ($ticketQuery) use ($visibleUserIds): int {
+            if ($visibleUserIds !== null) {
+                $ticketQuery->whereIn('tickets.user_id', $visibleUserIds);
+            }
+
+            return $ticketQuery->count();
+        };
+
         $stats = [
-            'needs_reply' => Ticket::needsReply()->count(),
-            'open' => Ticket::where('status', 'open')->count(),
-            'user_replied' => Ticket::where('status', 'user_replied')->count(),
-            'answered' => Ticket::where('status', 'answered')->count(),
-            'pending' => Ticket::where('status', 'pending')->count(),
-            'closed' => Ticket::where('status', 'closed')->count(),
-            'high' => Ticket::where('priority', 'high')->whereNotIn('status', ['closed'])->count(),
-        
-            'sla_breached' => Ticket::query()->slaBreached()->count(),
+            'needs_reply' => $scopedCount(Ticket::query()->needsReply()),
+            'open' => $scopedCount(Ticket::query()->where('status', 'open')),
+            'user_replied' => $scopedCount(Ticket::query()->where('status', 'user_replied')),
+            'answered' => $scopedCount(Ticket::query()->where('status', 'answered')),
+            'pending' => $scopedCount(Ticket::query()->where('status', 'pending')),
+            'closed' => $scopedCount(Ticket::query()->where('status', 'closed')),
+            'high' => $scopedCount(Ticket::query()->where('priority', 'high')->whereNotIn('status', ['closed'])),
+            'sla_breached' => $scopedCount(Ticket::query()->slaBreached()),
             'sla_at_risk' => (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at') && Schema::hasColumn('tickets', 'sla_resolve_due_at'))
-                ? Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
+                ? $scopedCount(Ticket::query()->whereNotIn('status', ['closed', 'pending'])->where(function ($q) {
                     $warn = (int) config('support.warn_before_minutes', 30);
                     if (Schema::hasColumn('tickets', 'first_response_at') && Schema::hasColumn('tickets', 'sla_first_due_at')) {
                         $q->where(function ($w) use ($warn) {
@@ -387,11 +406,18 @@ class SupportController extends Controller
                             $w->whereNotNull('sla_resolve_due_at')->where('sla_resolve_due_at', '>', now())->where('sla_resolve_due_at', '<=', now()->addMinutes($warn));
                         });
                     }
-                })->count()
+                }))
                 : 0,
         ];
 
-        $agents = User::query()->where('role', User::ROLE_ADMIN)->limit(40)->get(['id', 'name', 'email', 'mobile']);
+        $agentQuery = User::query();
+        if ($visibleUserIds !== null) {
+            $agentQuery->whereIn('id', $visibleUserIds);
+        }
+        $authorization = app(AuthorizationService::class);
+        $agents = $agentQuery->limit(100)->get(['id', 'name', 'email', 'mobile', 'role', 'is_blocked'])
+            ->filter(fn (User $agent) => $authorization->allows($agent, 'support.manage'))
+            ->values();
 
         $canned = config('support.canned_replies', [
             'سلام، پیام شما دریافت شد. در حال بررسی هستیم و به‌زودی پاسخ می‌دهیم.',
@@ -405,8 +431,7 @@ class SupportController extends Controller
 
     public function adminReply(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-        $this->authorize('manage', $ticket);
+        app(AdminConsoleService::class)->authorizeAction($request->user(), 'support_admin', $ticket->user_id);
 
         $data = $request->validate([
             'body' => 'required|string|max:8000',
@@ -432,8 +457,7 @@ class SupportController extends Controller
 
     public function adminStatus(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-        $this->authorize('manage', $ticket);
+        app(AdminConsoleService::class)->authorizeAction($request->user(), 'support_admin', $ticket->user_id);
 
         $data = $request->validate([
             'status' => 'required|in:'.implode(',', SupportTicketService::STATUSES),
@@ -446,14 +470,18 @@ class SupportController extends Controller
 
     public function adminAssign(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-        $this->authorize('assign', $ticket);
+        app(AdminConsoleService::class)->authorizeAction($request->user(), 'support_admin', $ticket->user_id);
 
         $data = $request->validate([
             'assigned_to' => 'nullable|integer|exists:users,id',
         ]);
 
-        $agent = ! empty($data['assigned_to']) ? User::find($data['assigned_to']) : null;
+        $agent = null;
+        if (! empty($data['assigned_to'])) {
+            $agent = User::query()->findOrFail($data['assigned_to']);
+            app(AdminConsoleService::class)->authorizeAction($request->user(), 'support_admin', $agent->id);
+            abort_unless(app(AuthorizationService::class)->allows($agent, 'support.manage'), 422, 'کاربر انتخاب‌شده کارشناس مجاز پشتیبانی نیست.');
+        }
         $this->tickets->assign($ticket, $agent, auth()->user());
 
         return back()->with('status', 'ارجاع تیکت ذخیره شد.');
@@ -462,8 +490,7 @@ class SupportController extends Controller
 
     public function adminMeta(Request $request, Ticket $ticket)
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-        $this->authorize('manage', $ticket);
+        app(AdminConsoleService::class)->authorizeAction($request->user(), 'support_admin', $ticket->user_id);
 
         $data = $request->validate([
             'priority' => 'nullable|in:'.implode(',', SupportTicketService::PRIORITIES),

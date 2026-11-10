@@ -37,6 +37,44 @@ class AdminConsoleService
     }
 
     /**
+     * Request-derived scope and section state belong only to the authenticated
+     * subject. Never reuse one user's request context while evaluating another.
+     */
+    private function requestContextBelongsTo(?User $user): bool
+    {
+        $requestUser = request()->user();
+
+        return $user !== null && $requestUser !== null
+            && (int) $requestUser->id === (int) $user->id;
+    }
+
+    private function effectiveScope(?User $user): string
+    {
+        if (! $user) {
+            return self::SCOPE_OWN;
+        }
+
+        $scope = $this->requestContextBelongsTo($user)
+            ? request()->attributes->get('farast.scope')
+            : null;
+
+        return in_array($scope, [self::SCOPE_GLOBAL, self::SCOPE_ORGANIZATION, self::SCOPE_TEAM, self::SCOPE_OWN], true)
+            ? $scope
+            : self::scopeOf($user);
+    }
+
+    private function requestSectionPermission(?User $user): ?string
+    {
+        if (! $this->requestContextBelongsTo($user)) {
+            return null;
+        }
+
+        $permission = request()->attributes->get('farast.section_permission');
+
+        return is_string($permission) && $permission !== '' ? $permission : null;
+    }
+
+    /**
      * آیا بخش X برای کاربر مجاز است؟ (مجوز RBAC + حداقل دامنه لازم)
      */
     public function sectionAllowed(?User $user, string $section): bool
@@ -45,7 +83,7 @@ class AdminConsoleService
             return false;
         }
 
-        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        $scope = $this->effectiveScope($user);
         $def = config("farast_admin.sections.$section");
         if (! is_array($def)) {
             return $user->isAdmin() && $scope === self::SCOPE_GLOBAL;
@@ -60,12 +98,8 @@ class AdminConsoleService
         $requiredRank = $rank[$def['min_scope']] ?? 3;
         $allowed = $userRank <= $requiredRank;
 
-        if ($allowed) {
-            // Downstream list/query helpers use this exact section permission
-            // to apply custom role scopes and direct deny overrides per record.
-            request()->attributes->set('farast.section_permission', (string) $def['permission']);
-        }
-
+        // Keep this method pure: it is also called repeatedly while rendering
+        // navigation. The active route's permission is set by EnsureAdminSection.
         return $allowed;
     }
     /**
@@ -95,13 +129,13 @@ class AdminConsoleService
             return [];
         }
 
-        $scope = request()->attributes->get('farast.scope');
-        $ids = ResolveAdminScope::visibleUserIds($user, is_string($scope) ? $scope : null);
+        $scope = $this->effectiveScope($user);
+        $ids = ResolveAdminScope::visibleUserIds($user, $scope);
         if ($ids === null) {
             return null;
         }
 
-        $permission ??= request()->attributes->get('farast.section_permission');
+        $permission ??= $this->requestSectionPermission($user);
         if (! is_string($permission) || $permission === '') {
             $permission = 'users.view';
         }
@@ -112,18 +146,30 @@ class AdminConsoleService
         // Base role scope is only the outer boundary. Custom role assignments
         // and direct deny overrides must also be enforced on every listed user.
         $candidates = User::query()
-            ->with('teams:id')
+            ->with('teams:id,organization_id')
             ->whereIn('id', $ids)
             ->get(['id', 'organization_id']);
         $supervisedTeams = Team::query()
             ->whereIn('supervisor_id', $candidates->pluck('id'))
-            ->get(['id', 'supervisor_id'])
+            ->get(['id', 'supervisor_id', 'organization_id'])
             ->groupBy('supervisor_id');
 
         $visible = [];
         foreach ($candidates as $candidate) {
-            $memberTeamIds = $candidate->teams->pluck('id')->map(fn ($id) => (int) $id)->all();
-            $supervisedTeamIds = ($supervisedTeams->get($candidate->id) ?? collect())->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $memberTeamIds = $candidate->organization_id
+                ? $candidate->teams
+                    ->where('organization_id', (int) $candidate->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
+            $supervisedTeamIds = $candidate->organization_id
+                ? ($supervisedTeams->get($candidate->id) ?? collect())
+                    ->where('organization_id', (int) $candidate->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+                : [];
             $context = [
                 'owner_id' => (int) $candidate->id,
                 'organization_id' => $candidate->organization_id,
@@ -146,7 +192,7 @@ class AdminConsoleService
             return [];
         }
 
-        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        $scope = $this->effectiveScope($user);
         if ($scope === self::SCOPE_GLOBAL) {
             return null;
         }
@@ -155,22 +201,29 @@ class AdminConsoleService
                 ? Team::query()->where('organization_id', $user->organization_id)->pluck('id')->map(fn ($id) => (int) $id)->all()
                 : [];
         } elseif ($scope === self::SCOPE_TEAM) {
-            $ids = Team::query()
-                ->where('supervisor_id', $user->id)
-                ->orWhereIn('id', function ($query) use ($user) {
-                    $query->select('team_id')
-                        ->from('team_user')
-                        ->where('user_id', $user->id)
-                        ->where('team_role', 'manager');
-                })
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
+            if (! $user->organization_id) {
+                $ids = [];
+            } else {
+                $ids = Team::query()
+                    ->where('organization_id', $user->organization_id)
+                    ->where(function ($query) use ($user) {
+                        $query->where('supervisor_id', $user->id)
+                            ->orWhereIn('id', function ($membership) use ($user) {
+                                $membership->select('team_id')
+                                    ->from('team_user')
+                                    ->where('user_id', $user->id)
+                                    ->where('team_role', 'manager');
+                            });
+                    })
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+            }
         } else {
             return [];
         }
 
-        $permission ??= request()->attributes->get('farast.section_permission');
+        $permission ??= $this->requestSectionPermission($user);
         if (! is_string($permission) || $permission === '') {
             $permission = 'team.view';
         }
@@ -202,7 +255,7 @@ class AdminConsoleService
             return [];
         }
 
-        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        $scope = $this->effectiveScope($user);
         if ($scope === self::SCOPE_GLOBAL) {
             return null;
         }
@@ -215,7 +268,7 @@ class AdminConsoleService
             return [];
         }
 
-        $permission ??= request()->attributes->get('farast.section_permission');
+        $permission ??= $this->requestSectionPermission($user);
         if (! is_string($permission) || $permission === '') {
             $permission = 'organization.manage';
         }
@@ -281,7 +334,7 @@ class AdminConsoleService
      */
     public function scopeSummary(?User $user, bool $includeUserCount = true): array
     {
-        $scope = $user ? (request()->attributes->get('farast.scope') ?? self::scopeOf($user)) : self::SCOPE_OWN;
+        $scope = $this->effectiveScope($user);
         $visibleIds = $includeUserCount ? $this->visibleUserIds($user, 'users.view') : [];
 
         return [
