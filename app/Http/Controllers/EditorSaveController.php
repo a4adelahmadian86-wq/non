@@ -55,7 +55,7 @@ class EditorSaveController extends Controller
         try {
             $workflows->dispatch(
                 'document.saved',
-                ['user_id' => $request->user()->id, 'document_id' => $result['document_id'], 'revision' => $result['revision']],
+                ['user_id' => $request->user()->id, 'customer_id' => $request->user()->id, 'document_id' => $result['document_id'], 'revision' => $result['revision']],
                 'document:'.$result['document_id'].':revision:'.$result['revision'],
             );
         } catch (\Throwable $exception) {
