@@ -72,6 +72,7 @@ class AdminStoreCouponController extends Controller
         $attributedItems = (clone $attributedOrders)
             ->select([
                 'orders.id as order_id',
+                'orders.discount_rials as order_discount_rials',
                 'store_order_items.total_rials',
                 'store_order_items.discount_rials',
                 'store_order_items.quantity',
@@ -79,8 +80,8 @@ class AdminStoreCouponController extends Controller
             ])
             ->get();
         $attributedOrderCount = $attributedItems->pluck('order_id')->unique()->count();
-        $attributedRevenue = (int) $attributedItems->sum('total_rials');
-        $redeemedDiscountCost = (int) $attributedItems->sum('discount_rials');
+        $attributedRevenue = 0;
+        $redeemedDiscountCost = 0;
         $knownGrossProfit = 0;
         $itemsMissingHistoricalCost = 0;
 
@@ -88,14 +89,22 @@ class AdminStoreCouponController extends Controller
             $snapshot = is_array($item->product_snapshot)
                 ? $item->product_snapshot
                 : (json_decode((string) $item->product_snapshot, true) ?: []);
-            $cost = $snapshot['cost_price_rials'] ?? null;
+            $hasFinancialSnapshot = ! empty($snapshot['cost_snapshot_captured_at']);
+            $itemDiscount = $hasFinancialSnapshot
+                ? (int) $item->discount_rials
+                : (int) $item->order_discount_rials;
+            $itemRevenue = max(0, (int) $item->total_rials - ($hasFinancialSnapshot ? 0 : $itemDiscount));
 
+            $attributedRevenue += $itemRevenue;
+            $redeemedDiscountCost += $itemDiscount;
+
+            $cost = $snapshot['cost_price_rials'] ?? null;
             if (! array_key_exists('cost_price_rials', $snapshot) || $cost === null || ! is_numeric($cost) || (int) $cost < 0) {
                 $itemsMissingHistoricalCost++;
                 continue;
             }
 
-            $knownGrossProfit += (int) $item->total_rials - ((int) $cost * (int) $item->quantity);
+            $knownGrossProfit += $itemRevenue - ((int) $cost * (int) $item->quantity);
         }
 
         $canManageGlobalCoupons = $visibleIds === null;
