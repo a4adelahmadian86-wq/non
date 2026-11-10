@@ -49,7 +49,12 @@ class ProductLifecycleHealthService
         (clone $published)
             ->where('type', 'digital_file')
             ->where('download_policy', 'reader_only')
-            ->with(['files.document' => fn ($query) => $query->withCount('pages')])
+            ->with(['files' => fn ($query) => $query
+                ->where('purpose', 'product_download')
+                ->where('is_active', true)
+                ->where('is_primary', true)
+                ->where('scan_status', 'clean')
+                ->with(['document' => fn ($documentQuery) => $documentQuery->withCount('pages')])])
             ->orderBy('id')
             ->chunkById(100, function ($products) use (&$readerOnlyWithoutReadyDocument): void {
                 foreach ($products as $product) {
