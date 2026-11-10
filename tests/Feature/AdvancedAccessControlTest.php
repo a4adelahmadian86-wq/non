@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Organization;
 use App\Models\Permission;
 use App\Models\Team;
+use App\Models\Ticket;
 use App\Models\User;
 use App\Http\Middleware\EnsureResourcePermission;
 use Illuminate\Database\Eloquent\Model;
@@ -272,6 +273,48 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertContains($manager->id, $visibleIds);
         $this->assertContains($member->id, $visibleIds);
         $this->assertNotContains($outside->id, $visibleIds);
+    }
+
+    public function test_support_console_filters_ticket_records_stats_and_actions_by_organization_scope(): void
+    {
+        $organizationA = Organization::create(['name' => 'Support Org A', 'slug' => 'support-org-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Support Org B', 'slug' => 'support-org-b', 'status' => 'active']);
+        $manager = $this->user('09140000331', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $member = $this->user('09140000332', User::ROLE_EMPLOYEE, $organizationA->id);
+        $agent = $this->user('09140000333', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $outside = $this->user('09140000334', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $insideTicket = Ticket::create([
+            'user_id' => $member->id,
+            'ticket_code' => 'TK-SCOPE-INSIDE',
+            'subject' => 'Inside organization ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $outsideTicket = Ticket::create([
+            'user_id' => $outside->id,
+            'ticket_code' => 'TK-SCOPE-OUTSIDE',
+            'subject' => 'Outside organization ticket',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $response = $this->actingAs($manager)->get('/admin/support-management')->assertOk();
+        $response->assertViewHas('tickets', function ($tickets) use ($insideTicket, $outsideTicket): bool {
+            $ids = $tickets->getCollection()->pluck('id')->all();
+
+            return in_array($insideTicket->id, $ids, true) && ! in_array($outsideTicket->id, $ids, true);
+        });
+        $response->assertViewHas('stats', fn (array $stats): bool => $stats['open'] === 1);
+
+        $this->post('/admin/tickets/'.$insideTicket->id.'/assign', ['assigned_to' => $agent->id])->assertRedirect();
+        $this->assertDatabaseHas('tickets', ['id' => $insideTicket->id, 'assigned_to' => $agent->id]);
+
+        $this->post('/admin/tickets/'.$insideTicket->id.'/assign', ['assigned_to' => $outside->id])->assertForbidden();
+        $this->post('/admin/tickets/'.$outsideTicket->id.'/status', ['status' => 'closed'])->assertForbidden();
+        $this->assertDatabaseHas('tickets', ['id' => $outsideTicket->id, 'status' => 'open']);
     }
 
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
