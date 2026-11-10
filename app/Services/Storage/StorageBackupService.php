@@ -70,8 +70,16 @@ class StorageBackupService
                 $objectKey = 'weekly/'.now()->format('Y/m/d').'/farast-'.now()->format('Ymd-His').'-'.$run->id.'.zip';
                 try {
                     $this->storage->uploadBackup($target, $objectKey, $archivePath);
-                    if (! $this->storage->exists($this->storage->volumeDisk($target), $objectKey)) {
+                    $targetDisk = $this->storage->volumeDisk($target);
+                    if (! $this->storage->exists($targetDisk, $objectKey)) {
                         throw new RuntimeException('تأیید وجود فایل بکاپ در مقصد ناموفق بود.');
+                    }
+                    $verificationPath = $work.'/verify-'.$run->id;
+                    $this->storage->downloadTo($targetDisk, $objectKey, $verificationPath);
+                    $remoteChecksum = hash_file('sha256', $verificationPath);
+                    @unlink($verificationPath);
+                    if (! is_string($remoteChecksum) || ! hash_equals($checksum, $remoteChecksum)) {
+                        throw new RuntimeException('Checksum نسخه پشتیبان پس از انتقال با فایل اصلی مطابقت ندارد.');
                     }
                     $run->update([
                         'status' => 'completed', 'object_key' => $objectKey,
