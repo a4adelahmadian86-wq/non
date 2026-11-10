@@ -71,7 +71,8 @@ class AdminCourseResourceIngestionTest extends TestCase
 
         $this->actingAs($admin)->postJson(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
-            ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'A safe course handout with learning notes.')]
+            ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'A safe course handout with learning notes.')],
+            ['Accept' => 'application/json']
         )->assertCreated()->assertJsonPath('success', true);
 
         $ingestion = StoreProductIngestion::query()->where('product_id', $product->id)->firstOrFail();
@@ -106,7 +107,8 @@ class AdminCourseResourceIngestionTest extends TestCase
 
         $this->actingAs($admin)->postJson(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
-            ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'original course handout')]
+            ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'original course handout')],
+            ['Accept' => 'application/json']
         )->assertCreated();
 
         $ingestion = StoreProductIngestion::query()->firstOrFail();
@@ -128,7 +130,8 @@ class AdminCourseResourceIngestionTest extends TestCase
 
         $this->actingAs($admin)->postJson(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
-            ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'temporary resource')]
+            ['file' => UploadedFile::fake()->createWithContent('handout.txt', 'temporary resource')],
+            ['Accept' => 'application/json']
         )->assertCreated();
 
         $ingestion = StoreProductIngestion::query()->firstOrFail();
@@ -150,7 +153,8 @@ class AdminCourseResourceIngestionTest extends TestCase
 
         $this->actingAs($admin)->postJson(
             route('admin.store.course.resources.preflight', [$product, $lesson]),
-            ['file' => UploadedFile::fake()->createWithContent('payload.php', '<?php echo 1;')]
+            ['file' => UploadedFile::fake()->createWithContent('payload.php', '<?php echo 1;')],
+            ['Accept' => 'application/json']
         )->assertStatus(422);
 
         $this->assertSame(0, StoreProductIngestion::query()->count());
