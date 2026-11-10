@@ -126,7 +126,7 @@ class StoreController extends Controller
                     ->first();
 
                 if ($smartOffer) {
-                    app(MarketingSignalService::class)->record($request->user(), 'offer_viewed', (int) $product->id);
+                    app(MarketingSignalService::class)->record($request->user(), 'offer_viewed', (int) $product->id, 'assignment-'.$smartOffer->id, ['assignment_id' => $smartOffer->id]);
                 }
             }
         }
@@ -223,7 +223,8 @@ class StoreController extends Controller
             $request->user(),
             'offer_clicked',
             (int) $assignment->product_id,
-            'assignment-'.$assignment->id
+            'assignment-'.$assignment->id,
+            ['assignment_id' => $assignment->id]
         );
 
         return response()->json(['ok' => true]);
