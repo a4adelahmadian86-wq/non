@@ -49,9 +49,14 @@ class MigrateLegacyEditorAssets extends Command
         $private = Storage::disk('private');
         if (! $private->exists($oldPath)) throw new RuntimeException('فایل محلی دارایی ویرایشگر پیدا نشد.');
 
+        $document = $object->document_id ? FarastDocument::find($object->document_id) : null;
+        $resource = collect((array) data_get($document?->content_json, 'resources', []))
+            ->first(fn ($row) => is_array($row) && (string) ($row['storage_path'] ?? '') === $oldPath);
+        $originalName = is_array($resource) && ! empty($resource['name']) ? (string) $resource['name'] : basename($oldPath);
+
         $managed = $storage->adoptExistingPrivate(
             $oldPath,
-            basename($oldPath),
+            $originalName,
             (string) $object->mime,
             (int) $object->size,
             'editor',
