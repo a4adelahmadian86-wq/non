@@ -10,7 +10,7 @@ test('pressure-aware ink records real stylus pressure and falls back safely for 
   const layer=page.locator('.farast-pressure-ink-layer').first();
   await expect(layer).toBeAttached();
   const rect=await page.locator('.farast-pdf-document').boundingBox();
-  const send=(type,x,y,pressure)=>layer.dispatchEvent(type,new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:9,pointerType:'pen',pressure,clientX:rect.x+x,clientY:rect.y+y}));
+  const send=(type,x,y,pressure)=>layer.dispatchEvent(type,{bubbles:true,cancelable:true,pointerId:9,pointerType:'pen',pressure,clientX:rect.x+x,clientY:rect.y+y});
   await send('pointerdown',80,80,.18);
   await send('pointermove',120,105,.82);
   await send('pointerup',150,120,.45);
