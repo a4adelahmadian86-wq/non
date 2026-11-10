@@ -36,6 +36,8 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('dashboard-trend-chart', false)
             ->assertSee('dashboard-trend-sr-only', false)
             ->assertSee('صف پردازش')
+            ->assertSee('پیام‌های خوانده‌نشده')
+            ->assertSee(route('messenger.index'))
             ->assertDontSee('hero-orbit')
             ->assertSee('تیکت‌های نیازمند پیگیری')
             ->assertSee(route('admin.support.management'))
