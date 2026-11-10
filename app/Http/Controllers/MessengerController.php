@@ -221,8 +221,8 @@ class MessengerController extends Controller
         $presence = $conversation->participants()->where('users.id', '!=', $request->user()->id)->get(['users.id', 'users.name'])
             ->map(fn ($participant) => [
                 'name' => $participant->name,
-                'online' => $participant->pivot->last_active_at && $participant->pivot->last_active_at->gt(now()->subMinutes(2)),
-                'typing' => $participant->pivot->typing_until && $participant->pivot->typing_until->gt(now()),
+                'online' => filled($participant->pivot->last_active_at) && Carbon::parse($participant->pivot->last_active_at)->gt(now()->subMinutes(2)),
+                'typing' => filled($participant->pivot->typing_until) && Carbon::parse($participant->pivot->typing_until)->gt(now()),
             ])->values();
 
         return response()->json(['presence' => $presence, 'messages' => $messages->map(fn ($m) => [
