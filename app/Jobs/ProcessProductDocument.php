@@ -6,6 +6,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
+use App\Services\Storage\StorageManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,7 +29,7 @@ class ProcessProductDocument implements ShouldQueue
         $this->onQueue('documents');
     }
 
-    public function handle(ProductSupervisorClient $supervisor): void
+    public function handle(ProductSupervisorClient $supervisor, StorageManager $storage): void
     {
         $document = StoreProductDocument::query()
             ->with(['file.product.category', 'file.product.tags'])
@@ -45,14 +46,28 @@ class ProcessProductDocument implements ShouldQueue
 
         $file = $document->file;
         $product = $document->product;
-        $disk = Storage::disk($file->disk ?: 'private');
-        if (! $disk->exists($file->path)) {
-            $document->update(['processing_status' => 'failed', 'failure_code' => 'source_file_missing']);
-            return;
+        $sourceDisk = $file->disk ?: 'private';
+        $sourceTemporaryPath = null;
+        if (str_starts_with($sourceDisk, 'storage_volume:')) {
+            $sourceTemporaryPath = tempnam(sys_get_temp_dir(), 'farast-product-source');
+            try {
+                $storage->downloadTo($sourceDisk, $file->path, $sourceTemporaryPath);
+            } catch (\Throwable $exception) {
+                @unlink($sourceTemporaryPath);
+                $document->update(['processing_status' => 'failed', 'failure_code' => 'source_file_unavailable']);
+                throw $exception;
+            }
+            $stream = fopen($sourceTemporaryPath, 'rb');
+        } else {
+            $disk = Storage::disk($sourceDisk);
+            if (! $disk->exists($file->path)) {
+                $document->update(['processing_status' => 'failed', 'failure_code' => 'source_file_missing']);
+                return;
+            }
+            $stream = $disk->readStream($file->path);
         }
-
-        $stream = $disk->readStream($file->path);
         if (! is_resource($stream)) {
+            if ($sourceTemporaryPath) @unlink($sourceTemporaryPath);
             $document->update(['processing_status' => 'failed', 'failure_code' => 'source_stream_unavailable']);
             return;
         }
@@ -151,6 +166,7 @@ class ProcessProductDocument implements ShouldQueue
                 fclose($reviewStream);
             }
             fclose($stream);
+            if ($sourceTemporaryPath) @unlink($sourceTemporaryPath);
         }
 
         $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 300) : [];
