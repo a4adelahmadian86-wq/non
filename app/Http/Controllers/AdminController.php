@@ -79,6 +79,23 @@ class AdminController extends Controller
         $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
         $canViewStore = $console->sectionAllowed($actor, 'store');
         $storeProductStats = ['total' => 0, 'published' => 0, 'draft' => 0, 'archived' => 0];
+        $followUpStats = ['open' => 0, 'overdue' => 0, 'due_today' => 0];
+        if ($canViewUsers && Schema::hasTable('crm_follow_up_tasks')) {
+            $followUpQuery = DB::table('crm_follow_up_tasks');
+            if ($visibleIds !== null) {
+                $followUpQuery->whereIn('customer_id', $visibleIds);
+            }
+            $followUpRow = (clone $followUpQuery)
+                ->selectRaw("SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open_count")
+                ->selectRaw("SUM(CASE WHEN status = 'open' AND due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END) as overdue_count", [now()])
+                ->selectRaw("SUM(CASE WHEN status = 'open' AND due_at >= ? AND due_at <= ? THEN 1 ELSE 0 END) as due_today_count", [today()->startOfDay(), today()->endOfDay()])
+                ->first();
+            $followUpStats = [
+                'open' => (int) ($followUpRow->open_count ?? 0),
+                'overdue' => (int) ($followUpRow->overdue_count ?? 0),
+                'due_today' => (int) ($followUpRow->due_today_count ?? 0),
+            ];
+        }
         if ($canViewStore && Schema::hasTable('store_products')) {
             $productStatusCounts = DB::table('store_products')
                 ->select('status', DB::raw('COUNT(*) as aggregate'))
@@ -332,6 +349,7 @@ class AdminController extends Controller
             'allowedSections' => $allowedSections,
             'messengerSummary' => $messengerSummary,
             'storeProductStats' => $storeProductStats,
+            'followUpStats' => $followUpStats,
             'stats' => [
                 'users' => $totalScopedUsers,
                 'active_users' => $visibleIds === null
