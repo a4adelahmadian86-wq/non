@@ -1,0 +1,175 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\StoreCategory;
+use App\Models\StoreCoupon;
+use App\Models\StoreCouponAssignment;
+use App\Models\StoreProduct;
+use App\Models\User;
+use App\Services\AuthorizationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class AdminStoreCouponDashboardTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['farast_admin.multi_role_console' => true]);
+        app(AuthorizationService::class)->syncDefaults();
+    }
+
+    private function admin(): User
+    {
+        return User::create([
+            'name' => 'Coupon Dashboard Admin',
+            'email' => 'coupon-admin@example.test',
+            'mobile' => '09151119991',
+            'password' => 'secret',
+            'role' => User::ROLE_ADMIN,
+        ]);
+    }
+
+    private function product(): StoreProduct
+    {
+        $category = StoreCategory::create([
+            'name' => 'دسته کوپن داشبورد',
+            'slug' => 'coupon-dashboard-category',
+            'is_active' => true,
+        ]);
+
+        return StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول داشبورد تخفیف',
+            'slug' => 'coupon-dashboard-product',
+            'sku' => 'COUPON-DASHBOARD-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+    }
+
+    public function test_dashboard_shows_real_smart_assignments_and_coupon_cost_metrics(): void
+    {
+        $admin = $this->admin();
+        $customer = User::create([
+            'name' => 'مشتری پیشنهاد',
+            'email' => 'coupon-customer@example.test',
+            'mobile' => '09151119992',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $product = $this->product();
+        $coupon = StoreCoupon::create([
+            'code' => 'SMARTDASH10',
+            'type' => 'fixed',
+            'value' => 12000,
+            'max_uses' => 1,
+            'used_count' => 1,
+            'is_active' => true,
+        ]);
+        StoreCouponAssignment::create([
+            'coupon_id' => $coupon->id,
+            'user_id' => $customer->id,
+            'product_id' => $product->id,
+            'status' => 'redeemed',
+            'score' => 6,
+            'reason_codes' => ['wishlist_interest', 'cart_intent'],
+            'offered_at' => now()->subDay(),
+            'expires_at' => now()->addDay(),
+            'redeemed_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store-coupons.index'))
+            ->assertOk()
+            ->assertSee('مرکز هوشمند کدهای تخفیف')
+            ->assertSee('SMARTDASH10')
+            ->assertSee('مشتری پیشنهاد')
+            ->assertSee('استفاده موفق')
+            ->assertSee('۱٬۲۰۰', false);
+    }
+
+    public function test_admin_can_create_normalized_public_coupon_and_toggle_it(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->post(route('admin.store-coupons.store'), [
+            'code' => '  welcome_15 ',
+            'type' => 'percent',
+            'value' => 15,
+            'max_uses' => 25,
+            'description' => 'کمپین خوش‌آمدگویی',
+        ])->assertRedirect(route('admin.store-coupons.index'));
+
+        $coupon = StoreCoupon::query()->where('code', 'WELCOME_15')->firstOrFail();
+        $this->assertSame(0, $coupon->used_count);
+        $this->assertTrue($coupon->is_active);
+
+        $this->patch(route('admin.store-coupons.toggle', $coupon->id))
+            ->assertRedirect(route('admin.store-coupons.index'));
+        $this->assertFalse((bool) $coupon->fresh()->is_active);
+    }
+
+    public function test_public_coupon_creation_rejects_invalid_percentage_and_non_admin_access(): void
+    {
+        $admin = $this->admin();
+        $this->actingAs($admin)->from(route('admin.store-coupons.index'))
+            ->post(route('admin.store-coupons.store'), [
+                'code' => 'INVALID150',
+                'type' => 'percent',
+                'value' => 150,
+            ])->assertRedirect(route('admin.store-coupons.index'))
+            ->assertSessionHasErrors('value');
+
+        $employee = User::create([
+            'name' => 'Coupon Dashboard Employee',
+            'email' => 'coupon-employee@example.test',
+            'mobile' => '09151119993',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $this->actingAs($employee)->get(route('admin.store-coupons.index'))->assertForbidden();
+    }
+
+    public function test_admin_can_revoke_an_unused_smart_offer_and_disable_its_coupon(): void
+    {
+        $admin = $this->admin();
+        $customer = User::create([
+            'name' => 'مشتری پیشنهاد قابل ابطال',
+            'email' => 'coupon-revoke@example.test',
+            'mobile' => '09151119994',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $product = $this->product();
+        $coupon = StoreCoupon::create([
+            'code' => 'SMARTREVOKE',
+            'type' => 'fixed',
+            'value' => 5000,
+            'max_uses' => 1,
+            'is_active' => true,
+        ]);
+        $assignment = StoreCouponAssignment::create([
+            'coupon_id' => $coupon->id,
+            'user_id' => $customer->id,
+            'product_id' => $product->id,
+            'status' => 'offered',
+            'score' => 5,
+            'reason_codes' => ['cart_abandoned'],
+            'offered_at' => now(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.store-coupons.assignments.revoke', $assignment->id))
+            ->assertRedirect(route('admin.store-coupons.index'));
+
+        $this->assertSame('revoked', $assignment->fresh()->status);
+        $this->assertFalse((bool) $coupon->fresh()->is_active);
+    }
+}
