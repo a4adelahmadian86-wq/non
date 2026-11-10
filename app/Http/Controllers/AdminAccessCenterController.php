@@ -244,13 +244,7 @@ class AdminAccessCenterController extends Controller
             );
 
             $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
-            if (in_array($role->scope_type, ['organization', 'team'], true)) {
-                abort_unless(
-                    $role->scope_id !== null && (int) $role->scope_id === (int) $scopeId,
-                    422,
-                    'محدوده انتساب باید با محدوده تعریف‌شده نقش سازگار باشد.'
-                );
-            }
+            $this->assertRoleAssignmentWithinRoleScope($target, $role, $data['scope_type'], $scopeId);
             $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
 
             $existing = DB::table('farast_user_roles')->where('user_id', $target->id)
@@ -399,6 +393,51 @@ class AdminAccessCenterController extends Controller
             'permission' => $permission,
             'decision' => $authorization->explain($target, $permission),
         ]);
+    }
+
+    /**
+     * Ensure the selected assignment is contained by the role's declared scope.
+     * A narrower assignment is valid only when the target and its referenced
+     * team actually belong to the parent role scope.
+     */
+    private function assertRoleAssignmentWithinRoleScope(User $target, object $role, string $assignmentScope, ?int $assignmentScopeId): void
+    {
+        if ($role->scope_type === 'global') {
+            return;
+        }
+
+        if ($role->scope_type === 'organization') {
+            $organizationId = (int) $role->scope_id;
+            abort_unless($target->organization_id && (int) $target->organization_id === $organizationId, 422, 'کاربر عضو سازمان محدوده نقش نیست.');
+
+            if ($assignmentScope === 'organization') {
+                abort_unless($assignmentScopeId === $organizationId, 422, 'محدوده انتساب باید با سازمان نقش یکسان باشد.');
+            } elseif ($assignmentScope === 'team') {
+                abort_unless(
+                    $assignmentScopeId !== null
+                    && Team::query()->whereKey($assignmentScopeId)->where('organization_id', $organizationId)->exists(),
+                    422,
+                    'تیم انتخاب‌شده خارج از سازمان تعریف‌شده برای نقش است.'
+                );
+            }
+
+            return;
+        }
+
+        if ($role->scope_type === 'team') {
+            $teamId = (int) $role->scope_id;
+            $belongs = $target->teams()->where('teams.id', $teamId)->exists()
+                || Team::query()->whereKey($teamId)->where('supervisor_id', $target->id)->exists();
+            abort_unless($belongs, 422, 'کاربر عضو تیم محدوده نقش نیست.');
+
+            if ($assignmentScope === 'team') {
+                abort_unless($assignmentScopeId === $teamId, 422, 'محدوده انتساب باید با تیم تعریف‌شده برای نقش یکسان باشد.');
+            }
+
+            return;
+        }
+
+        abort_unless($role->scope_type === 'own' && $assignmentScope === 'own', 422, 'محدوده انتساب با نقش سازگار نیست.');
     }
 
     private function validatedScopeId(string $scope, mixed $scopeId): ?int
