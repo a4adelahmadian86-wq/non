@@ -139,7 +139,9 @@ class AdminStoreCouponController extends Controller
             'canManageGlobalCoupons' => $canManageGlobalCoupons,
             'filters' => ['status' => $status, 'q' => $request->query('q')],
             'stats' => [
-                'total' => $totalOffers,\n                'offer_views' => (int) $offerViews,\n                'view_to_redemption_rate' => $offerViews > 0 ? round($redeemed * 100 / $offerViews, 1) : 0,
+                'total' => $totalOffers,
+                'offer_views' => (int) $offerViews,
+                'view_to_redemption_rate' => $offerViews > 0 ? round($redeemed * 100 / $offerViews, 1) : 0,
                 'redeemed' => $redeemed,
                 'offered' => $offered,
                 'expired' => $expired,
