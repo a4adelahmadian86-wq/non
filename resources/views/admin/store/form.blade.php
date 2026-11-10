@@ -251,6 +251,8 @@
               </select>
               <small>این انتخاب، سیاست مورد انتظار را ذخیره می‌کند؛ تا زمان اتصال سرویس ناظر اختصاصی، هیچ تصمیم خودکاری درباره انتشار اعمال نمی‌شود.</small>
             </label>
+            <label class="product-field product-field-wide product-field-check"><input type="checkbox" name="ai_supervisor[auto_publish]" value="1" @checked(old('ai_supervisor.auto_publish', data_get($product->metadata, 'ai_supervisor.auto_publish', false)))> در صورت تأیید ناظر و تکمیل همه الزامات، انتشار خودکار مجاز است</label>
+            <small class="product-help">اگر ناظر ایرادی بیابد و اصلاحی انجام دهد، حتی با فعال بودن این گزینه انتشار خودکار انجام نمی‌شود و تأیید مدیر لازم است.</small>
             <label class="product-field product-field-wide">دستورالعمل اختصاصی ناظر
               <textarea name="ai_supervisor[instructions]" rows="3" maxlength="4000" placeholder="مثلاً ادعاهای آموزشی را با محتوای واقعی دوره تطبیق بده و از وعده‌های قطعی درآمد خودداری کن.">{{ old('ai_supervisor.instructions', data_get($product->metadata, 'ai_supervisor.instructions', '')) }}</textarea>
               <small>قواعد اختصاصی این محصول؛ دستورالعمل عمومی سامانه را جایگزین نمی‌کند.</small>
@@ -284,6 +286,33 @@
       </section>
     @endif
 
+    @if($isEdit && $publicationReview)
+      <section class="store-panel product-publication-review" id="product-publication-review" aria-labelledby="publication-review-title">
+        <div class="product-editor-heading"><div><span>گردش‌کار انتشار</span><h2 id="publication-review-title">وضعیت ناظر و تأیید نهایی</h2></div><span class="product-editor-step">{{ $publicationReview->status === 'published' ? 'منتشرشده' : ($publicationReview->status === 'awaiting_manager' ? 'در انتظار مدیر' : ($publicationReview->status === 'reviewing' || $publicationReview->status === 'queued' ? 'در حال بررسی' : 'نیازمند اقدام')) }}</span></div>
+        <p>{{ $publicationReview->summary ?: 'گزارش ناظر هنوز آماده نشده است.' }}</p>
+        @if($publicationReview->verdict)
+          <p>نتیجه ناظر: <strong>{{ ['approved'=>'تأیید ناظر','needs_changes'=>'نیازمند اصلاح','blocked'=>'دارای مانع'][$publicationReview->verdict] ?? $publicationReview->verdict }}</strong> · امتیاز {{ $publicationReview->score ?? '—' }} از ۱۰۰</p>
+        @endif
+        @if(is_array($publicationReview->findings_json) && count($publicationReview->findings_json))
+          <div class="product-ai-findings">
+            @foreach($publicationReview->findings_json as $finding)
+              <article class="severity-{{ $finding['severity'] ?? 'info' }}"><div><b>{{ $finding['title'] ?? 'یافته ناظر' }}</b><span>{{ $finding['severity'] ?? 'info' }}</span></div><p>{{ $finding['detail'] ?? '' }}</p><small>پیشنهاد: {{ $finding['recommendation'] ?? '' }}</small></article>
+            @endforeach
+          </div>
+        @endif
+        @if($publicationReview->status === 'awaiting_manager')
+          <form method="post" action="{{ route('admin.store.publication.approve', $product) }}" style="margin-top:14px">@csrf<button type="submit" class="store-primary-btn">تأیید انسانی و انتشار محصول</button></form>
+        @elseif(in_array($publicationReview->status, ['failed', 'stale'], true))
+          <form method="post" action="{{ route('admin.store.publication.retry', $product) }}" style="margin-top:14px">@csrf<button type="submit" class="store-outline-btn">اجرای دوباره بررسی ناظر</button></form>
+        @elseif($publicationReview->status === 'needs_correction')
+          <p class="product-ai-no-result">اصلاح امن خودکار از سوی ناظر ارائه نشد. ابتدا ایرادهای بالا را در اطلاعات محصول اصلاح و سپس ثبت نهایی را دوباره انجام دهید.</p>
+        @endif
+        @if($publicationReview->corrections_json)
+          <details><summary>مشاهده اصلاحات اعمال‌شده توسط ناظر</summary><pre>{{ json_encode($publicationReview->corrections_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre></details>
+        @endif
+        <small class="product-help">هیچ محصولی پیش از تأیید ناظر و عبور از کنترل‌های قطعی در فروشگاه عمومی قرار نمی‌گیرد.</small>
+      </section>
+    @endif
     @if($isEdit)
       <form id="productSupervisorReviewForm" method="post" action="{{ route('admin.store.ai-supervisor.review', $product) }}">@csrf</form>
     @endif

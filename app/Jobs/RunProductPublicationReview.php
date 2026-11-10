@@ -200,7 +200,10 @@ class RunProductPublicationReview implements ShouldQueue
             return;
         }
 
+        $review->loadMissing('requester');
         $canAutoPublish = $review->auto_publish
+            && $review->requester
+            && app(AuthorizationService::class)->allows($review->requester, 'store.manage')
             && ! $critical
             && $this->canPublish($freshProduct, $readiness);
         DB::transaction(function () use ($review, $freshProduct, $result, $findings, $snapshotHash, $canAutoPublish) {
