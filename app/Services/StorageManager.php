@@ -268,7 +268,7 @@ class StorageManager
     {
         $path = str_replace('\\', '/', trim($path));
         $path = ltrim($path, '/');
-        if ($path === '' || str_contains($path, '../') || $path === '..' || str_contains($path, "\0")) {
+        if ($path === '' || in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true) || str_contains($path, "\0")) {
             throw new RuntimeException('Invalid managed storage path.');
         }
         return $path;
@@ -343,6 +343,9 @@ class StorageManager
 
     public function directoryExists(string $path): bool
     {
+        if (trim($path) === '') {
+            return StorageManagedFile::query()->where('status', 'active')->exists();
+        }
         $prefix = rtrim($this->normalize($path), '/').'/';
         return StorageManagedFile::query()->where('logical_path', 'like', addcslashes($prefix, '%_').'%')->where('status', 'active')->exists()
             || \Illuminate\Support\Facades\Storage::disk('private')->directoryExists($path);
@@ -375,7 +378,15 @@ class StorageManager
 
     public function copy(string $source, string $destination): void
     {
-        $this->write($destination, $this->read($source), new Config());
+        $stream = $this->readStream($source);
+        if (! is_resource($stream)) {
+            throw new RuntimeException('Unable to open source stream for copy.');
+        }
+        try {
+            $this->writeStream($destination, $stream, new Config());
+        } finally {
+            fclose($stream);
+        }
     }
 
     public function move(string $source, string $destination): void
