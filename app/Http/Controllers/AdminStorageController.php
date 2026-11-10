@@ -108,7 +108,8 @@ class AdminStorageController extends Controller
     public function show(StorageVolume $volume)
     {
         $files = $volume->files()->latest()->paginate(50);
-        return view('admin.storage.volume', compact('volume', 'files'));
+        $backups = StorageBackupRun::where('storage_volume_id', $volume->id)->latest()->limit(30)->get();
+        return view('admin.storage.volume', compact('volume', 'files', 'backups'));
     }
 
     public function verify(StorageVolume $volume, StorageConnectionService $connections)
