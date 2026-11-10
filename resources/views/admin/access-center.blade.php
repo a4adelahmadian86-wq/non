@@ -205,10 +205,10 @@
 
     <section class="ac-card" style="margin-top:16px">
         <h2>تاریخچه امنیت و دسترسی</h2>
-        <div class="ac-table-wrap"><table class="ac-table"><thead><tr><th>زمان</th><th>عامل</th><th>کاربر هدف</th><th>رویداد</th><th>نقش</th></tr></thead><tbody>
+        <div class="ac-table-wrap"><table class="ac-table"><thead><tr><th>زمان</th><th>عامل</th><th>کاربر هدف</th><th>رویداد</th><th>نقش</th><th>دلیل</th></tr></thead><tbody>
             @forelse($auditLogs as $log)
-                <tr><td>{{ $log->created_at }}</td><td>{{ $log->actor_id ?: 'سیستم' }}</td><td>{{ $log->subject_user_id ?: '—' }}</td><td dir="ltr">{{ $log->action }}</td><td>{{ $log->role_id ?: '—' }}</td></tr>
-            @empty<tr><td colspan="5">هنوز رویدادی ثبت نشده است.</td></tr>@endforelse
+                <tr><td>{{ $log->created_at }}</td><td>{{ $log->actor_id ?: 'سیستم' }}</td><td>{{ $log->subject_user_id ?: '—' }}</td><td dir="ltr">{{ $log->action }}</td><td>{{ $log->role_id ?: '—' }}</td><td>{{ data_get(json_decode((string) $log->after_state, true) ?: [], 'reason', '—') }}</td></tr>
+            @empty<tr><td colspan="6">هنوز رویدادی ثبت نشده است.</td></tr>@endforelse
         </tbody></table></div>
     </section>
 </div>
