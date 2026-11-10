@@ -30,15 +30,23 @@ class UserFileController extends Controller
         $stored = $storage->storeUploadedFile($file, StorageManager::NON_CRITICAL, 'editor', UserFile::class, null, null, 'private');
         $path = $stored['path'];
         $now = now();
-        $record = UserFile::create([
-            'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
-            'disk' => $stored['disk'], 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
-            'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'],
-            'status' => $stored['volume_id'] ? 'remote' : 'pending_transfer',
-            'uploaded_at' => $now, 'local_expires_at' => null, 'remote_expires_at' => null,
-            'remote_path' => $stored['volume_id'] ? $path : null,
-        ]);
-        $storage->bindReference($stored['managed_file_id'], UserFile::class, (int) $record->id);
+        try {
+            $record = \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($file, $path, $stored, $bytes, $pages, $quote, $now, $storage) {
+                $record = UserFile::create([
+                    'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
+                    'disk' => $stored['disk'], 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
+                    'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'],
+                    'status' => $stored['volume_id'] ? 'remote' : 'pending_transfer',
+                    'uploaded_at' => $now, 'local_expires_at' => null, 'remote_expires_at' => null,
+                    'remote_path' => $stored['volume_id'] ? $path : null,
+                ]);
+                $storage->bindReference((int) $stored['managed_file_id'], UserFile::class, (int) $record->id);
+                return $record;
+            });
+        } catch (\\Throwable $exception) {
+            $storage->delete($stored['disk'], $path);
+            throw $exception;
+        }
         return response()->json(['ok' => true, 'file' => $this->present($record), 'estimate' => $quote]);
     }
 
@@ -145,4 +153,5 @@ class UserFileController extends Controller
         }
         return 1;
     }
-}}
+}
+
