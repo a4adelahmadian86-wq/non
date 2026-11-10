@@ -30,6 +30,7 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('id="platform-control"', false)
             ->assertSee('class="farast-admin-main"', false)
             ->assertSee('class="hero-quick-stats"', false)
+            ->assertSee('به‌روزرسانی در')
             ->assertDontSee('hero-orbit')
             ->assertSee('تیکت‌های نیازمند پیگیری')
             ->assertSee(route('admin.support.management'))
