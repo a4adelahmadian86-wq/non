@@ -436,10 +436,10 @@ class WorkflowEngine
         }
 
         if ($action === 'notify') {
-            $targetUserId = (int) ($context['user_id'] ?? $ownerId);
-            if ($targetUserId !== $ownerId) {
-                throw new \RuntimeException('Workflow notification target must be its owner.');
-            }
+            // Domain event user_id identifies the customer/actor, not the
+            // workflow creator. Notifications from a scoped workflow go to
+            // its owner; event subjects are never implicit notification targets.
+            $targetUserId = $ownerId;
             $notification = app(NotificationService::class)->push(
                 $targetUserId,
                 'workflow',
