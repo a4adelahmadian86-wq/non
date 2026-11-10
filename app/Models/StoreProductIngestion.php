@@ -11,7 +11,7 @@ class StoreProductIngestion extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'id','product_id','user_id','status','staging_disk','staging_path','original_name',
+        'id','product_id','course_lesson_id','user_id','status','staging_disk','staging_path','original_name',
         'mime','size_bytes','sha256','inspection_json','is_primary','expires_at','confirmed_at',
     ];
 
@@ -26,6 +26,11 @@ class StoreProductIngestion extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(StoreProduct::class, 'product_id');
+    }
+
+    public function courseLesson(): BelongsTo
+    {
+        return $this->belongsTo(StoreCourseLesson::class, 'course_lesson_id');
     }
 
     public function user(): BelongsTo
