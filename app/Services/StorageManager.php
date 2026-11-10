@@ -161,6 +161,7 @@ class StorageManager
                 ->where('is_active', true)
                 ->where('status', 'healthy')
                 ->orderBy('priority')
+                ->withCount(['files' => fn ($query) => $query->where('status', 'active')])
                 ->orderBy('used_bytes')
                 ->lockForUpdate()
                 ->get();
