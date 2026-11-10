@@ -82,7 +82,7 @@
           <section class="store-product-sample" id="store-product-sample" aria-label="نمونه قابل مطالعه">
             <div>
               <strong><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه قابل مطالعه</strong>
-              <span>{{ $showPreviews->count() }} صفحه نمونه آماده است؛ محتوای نمونه هنگام درخواست شما باز می‌شود.</span>
+              <span>نمونه امن محصول آماده شده است؛ محتوای آن فقط با انتخاب شما در خوانشگر باز می‌شود.</span>
             </div>
             <a class="store-primary-btn" href="{{ route('store.reader', $product->slug) }}">
               <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> مشاهده نمونه
@@ -218,7 +218,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261110product7">
+<link rel="stylesheet" href="/css/store.css?v=20261110product6">
 <link rel="stylesheet" href="/css/content-discussions.css?v=20261109community4">
 <style>
 
