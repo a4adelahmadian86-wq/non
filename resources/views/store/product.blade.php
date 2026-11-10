@@ -154,6 +154,16 @@
           @endif
         </div>
 
+        @if($smartOffer && $smartOffer->coupon)
+          <section class="store-smart-offer" aria-label="پیشنهاد اختصاصی فراست">
+            <div class="store-smart-offer__heading"><i class="fa-solid fa-sparkles" aria-hidden="true"></i><strong>پیشنهاد اختصاصی برای شما</strong><span>ویژه همین محصول</span></div>
+            <p>با توجه به علاقه‌مندی شما به این محصول، این پیشنهاد اختصاصی برای مدت محدود فعال شده است.</p>
+            <div class="store-smart-offer__value"><strong>{{ number_format((int) $smartOffer->coupon->value / 10) }} تومان</strong><span>تخفیف اختصاصی</span></div>
+            <div class="store-smart-offer__code"><code>{{ $smartOffer->coupon->code }}</code><button type="button" data-copy-smart-coupon="{{ $smartOffer->coupon->code }}"><i class="fa-regular fa-copy" aria-hidden="true"></i> کپی کد</button></div>
+            <small>مهلت استفاده تا {{ $smartOffer->expires_at?->format('Y/m/d H:i') }} · فقط برای حساب شما و همین محصول</small>
+          </section>
+        @endif
+
         <button type="button" class="add-to-cart" data-product-id="{{ $product->id }}" aria-live="polite">
           <i class="fa-solid fa-bag-shopping"></i>
           {{ (int)$product->price_rials===0 ? 'افزودن (رایگان)' : 'افزودن به سبد' }}
@@ -237,6 +247,19 @@
 <style>
 
 
+.store-smart-offer{display:grid;gap:9px;margin:13px 0;padding:14px;border:1px solid #b9d7f5;border-radius:14px;background:linear-gradient(145deg,#f1f7ff,#fbfdff);color:#294568}
+.store-smart-offer__heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#245d9e;font-size:.8rem}
+.store-smart-offer__heading>i{color:#397bd0}
+.store-smart-offer__heading>span{margin-inline-start:auto;padding:4px 8px;border-radius:99px;background:#e2efff;color:#3569a5;font-size:.62rem;font-weight:800}
+.store-smart-offer p{margin:0;color:#60758f;font-size:.7rem;line-height:1.8}
+.store-smart-offer__value{display:flex;align-items:baseline;gap:7px}
+.store-smart-offer__value strong{font-size:1.25rem;color:#176a52;font-variant-numeric:tabular-nums}
+.store-smart-offer__value span,.store-smart-offer>small{font-size:.65rem;color:#71839a}
+.store-smart-offer__code{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px dashed #a9c5e4;border-radius:9px;background:#fff}
+.store-smart-offer__code code{font-size:.9rem;font-weight:900;letter-spacing:.06em;color:#244c7b}
+.store-smart-offer__code button{border:0;border-radius:7px;padding:7px 10px;background:#e8f1fc;color:#285f9e;font:inherit;font-size:.67rem;font-weight:800;cursor:pointer}
+.store-smart-offer__code button:disabled{opacity:.65;cursor:default}
+@media(max-width:560px){.store-smart-offer__code{align-items:stretch}.store-smart-offer__code button{white-space:nowrap}}
 .store-product-media{display:grid;gap:10px;margin:0 0 14px}
 .store-detail-cover.store-gallery-open{width:100%;height:min(420px,55vw);padding:0;border:1px solid var(--st-line);border-radius:var(--st-radius);background:#f5f7fa;cursor:zoom-in}
 .store-detail-cover.store-gallery-open img{display:block;width:100%;height:100%;object-fit:contain}
@@ -279,6 +302,17 @@
     if(typeof galleryDialog.showModal==='function')galleryDialog.showModal();
   }));
   galleryDialog?.addEventListener('click',event=>{if(event.target===galleryDialog)galleryDialog.close();});
+  document.querySelectorAll('[data-copy-smart-coupon]').forEach(button=>button.addEventListener('click',async()=>{
+    const code=button.dataset.copySmartCoupon||'';
+    if(!code)return;
+    try{
+      await navigator.clipboard.writeText(code);
+      button.innerHTML='<i class="fa-solid fa-check" aria-hidden="true"></i> کپی شد';
+      button.disabled=true;
+    }catch(error){
+      window.prompt('کد اختصاصی را کپی کنید:',code);
+    }
+  }));
   document.querySelector('[data-share-product]')?.addEventListener('click',async event=>{
     const button=event.currentTarget;
     const shareData={title:document.querySelector('.store-buy-card h1')?.textContent?.trim()||document.title,text:document.querySelector('.store-buy-card .lead')?.textContent?.trim()||'',url:window.location.href};
