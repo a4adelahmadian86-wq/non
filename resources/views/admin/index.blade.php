@@ -364,11 +364,12 @@
                         $storageStatusLabel = match ($storageHealth['status'] ?? 'unavailable') {
                             'healthy' => 'اتصال‌های ثبت‌شده سالم',
                             'attention' => 'نیازمند بررسی',
+                            'unconfigured' => 'فضای ذخیره‌سازی پیکربندی نشده',
                             default => 'اطلاعات در دسترس نیست',
                         };
                         $storageMetricClass = ($storageHealth['status'] ?? '') === 'healthy'
                             ? 'metric-green'
-                            : ((($storageHealth['status'] ?? '') === 'attention') ? 'metric-orange' : 'metric-violet');
+                            : (in_array(($storageHealth['status'] ?? ''), ['attention', 'unconfigured'], true) ? 'metric-orange' : 'metric-violet');
                     @endphp
                     <a class="metric-card {{ $storageMetricClass }} dashboard-metric-link" href="{{ route('admin.storage.index') }}">
                         <div class="metric-top"><span>ذخیره‌سازی و بکاپ</span><i class="fa-solid fa-hard-drive"></i></div>
