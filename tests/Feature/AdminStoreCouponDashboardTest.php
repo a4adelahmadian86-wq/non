@@ -260,6 +260,7 @@ class AdminStoreCouponDashboardTest extends TestCase
                 'max_discount_percent' => 10,
                 'abandonment_hours' => 2,
                 'retention_days' => 14,
+                'monthly_budget_rials' => 0,
             ])->assertRedirect(route('admin.store-coupons.index'))
             ->assertSessionHasErrors('retention_days');
     }
