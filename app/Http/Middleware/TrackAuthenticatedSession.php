@@ -85,6 +85,15 @@ class TrackAuthenticatedSession
                     // Keep the security event even when notifications are unavailable.
                 }
             }
+            // Retention cleanup runs once per newly observed session, not on every page request.
+            DB::table('farast_account_sessions')
+                ->where('user_id', $user->id)
+                ->where('last_activity', '<', now()->subDays(30))
+                ->delete();
+            DB::table('farast_security_events')
+                ->where('user_id', $user->id)
+                ->where('created_at', '<', now()->subDays(180))
+                ->delete();
         } else {
             DB::table('farast_account_sessions')
                 ->where('id', $tracked->id)
@@ -94,17 +103,6 @@ class TrackAuthenticatedSession
                     'updated_at' => now(),
                 ]);
         }
-
-        DB::table('farast_account_sessions')
-            ->where('user_id', $user->id)
-            ->where('last_activity', '<', now()->subDays(30))
-            ->delete();
-
-        // Keep a bounded security history instead of retaining device metadata forever.
-        DB::table('farast_security_events')
-            ->where('user_id', $user->id)
-            ->where('created_at', '<', now()->subDays(180))
-            ->delete();
 
         return $next($request);
     }
