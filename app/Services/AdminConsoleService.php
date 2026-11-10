@@ -270,7 +270,7 @@ class AdminConsoleService
     /**
      * خلاصهٔ دامنه برای نمایش/دیباگ (بدون نشت داده حساس).
      */
-    public function scopeSummary(?User $user): array
+    public function scopeSummary(?User $user, bool $includeUserCount = true): array
     {
         $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
 
@@ -278,9 +278,9 @@ class AdminConsoleService
             'scope' => $scope,
             'label' => ResolveAdminScope::scopeLabel($scope),
             'role' => $user?->role,
-            'visible_users' => $this->visibleUserIds($user) === null
+            'visible_users' => ! $includeUserCount ? null : ($this->visibleUserIds($user) === null
                 ? (Schema::hasTable('users') ? User::count() : null)
-                : count($this->visibleUserIds($user) ?? []),
+                : count($this->visibleUserIds($user) ?? [])),
         ];
     }
 }
