@@ -15,6 +15,9 @@ class ProductRelatedProductsService
     public function recommend(StoreProduct $product, int $limit = 8): Collection
     {
         $tagIds = $product->tags()->pluck('store_tags.id')->map(fn ($id) => (int) $id)->all();
+        if (! $product->category_id && $tagIds === []) {
+            return collect();
+        }
 
         $candidates = StoreProduct::query()
             ->where('id', '<>', $product->id)

@@ -172,9 +172,8 @@ class AdminStoreController extends Controller
         $data['status'] = 'draft';
         $data['published_at'] = null;
         $tagIds = $data['tag_ids'] ?? [];
-        $relatedIds = $data['related_product_ids'] ?? [];
         unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
-        $product = DB::transaction(function () use ($data, $tagIds, $relatedIds) {
+        $product = DB::transaction(function () use ($data, $tagIds) {
             $product = StoreProduct::create($data);
             if ($product->type === 'course') {
                 StoreCourse::firstOrCreate(['product_id' => $product->id]);
@@ -257,7 +256,6 @@ class AdminStoreController extends Controller
         }
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
-        $relatedIds = $data['related_product_ids'] ?? [];
         $aiTagNames = $request->validate([
             'ai_content_tag_names' => 'nullable|array|max:10',
             'ai_content_tag_names.*' => 'required|string|max:80',
@@ -278,7 +276,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
+        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -1271,8 +1269,6 @@ class AdminStoreController extends Controller
             'ai_content_field_evidence' => 'nullable|string|max:12000',
             'tag_ids' => 'sometimes|array|max:30',
             'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
-            'related_product_ids' => 'sometimes|array|max:12',
-            'related_product_ids.*' => 'integer|distinct|exists:store_products,id',
             'ai_supervisor.enabled' => 'nullable|boolean',
             'ai_supervisor.mode' => 'nullable|in:suggest,review_gate',
             'ai_supervisor.checks.content' => 'nullable|boolean',
@@ -1321,7 +1317,6 @@ class AdminStoreController extends Controller
             ]);
         }
         $data['tag_ids'] = $request->input('tag_ids', []);
-        $data['related_product_ids'] = array_values(array_filter($request->input('related_product_ids', []), fn ($id) => ! $product || (int) $id !== (int) $product->id));
         $data['featured'] = $request->boolean('featured');
         $data['sort_order'] = $data['sort_order'] ?? 0;
         $data['preview_pages'] = $data['preview_pages'] ?? 3;
