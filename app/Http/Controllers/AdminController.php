@@ -44,14 +44,6 @@ class AdminController extends Controller
         $search = trim((string) $request->query('q', ''));
         $statusFilter = $request->query('status');
 
-        // Aggregate counts remain available in the dashboard scope, while personal
-        // user records are loaded only for actors with users.view.
-        $scopeUsersQuery = User::query();
-        if ($visibleIds !== null) {
-            $scopeUsersQuery->whereIn('id', $visibleIds);
-        }
-        $totalScopedUsers = (clone $scopeUsersQuery)->count();
-
         $usersQuery = User::with('wallet')->latest();
         if ($search !== '') {
             $usersQuery->where(function ($q) use ($search) {
