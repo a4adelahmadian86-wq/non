@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\StorageBackupRun;
+use App\Models\StorageManagedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -120,7 +121,7 @@ class StorageBackupRestoreService
                 $path = (string) ($item['path'] ?? '');
                 $entry = (string) ($item['entry'] ?? '');
                 $source = $workspace.'/'.$entry;
-                if (! in_array($diskName, ['private', 'public'], true) || $path === '' || ! is_file($source)
+                if (! in_array($diskName, ['private', 'public', 'farast_remote'], true) || $path === '' || ! is_file($source)
                     || ! hash_equals((string) ($item['sha256'] ?? ''), (string) hash_file('sha256', $source))) {
                     throw new RuntimeException('Legacy backup entry failed integrity verification.');
                 }
