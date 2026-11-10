@@ -85,13 +85,30 @@ class PlatformCompletionController extends Controller {
  public function notifications(Request $r){return app(NotificationController::class)->index($r);}
  public function readNotification(Request $r,$id){return app(NotificationController::class)->read($r,(int)$id);}
  public function workflow(Request $r){
-  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.view'),403);
+  $authorization=app(AuthorizationService::class);
+  $canManageWorkflows=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.create');
+  $canRunWorkflows=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.run')
+   ||$authorization->allows($r->user(),'automation.run');
+  $canViewWorkflowAudit=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.audit')
+   ||$authorization->allows($r->user(),'automation.audit');
+  abort_unless($authorization->allows($r->user(),'workflows.view')||$authorization->allows($r->user(),'workflows.edit')||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit,403);
   $items=DB::table('farast_workflows')->where('user_id',$r->user()->id)->orderByDesc('updated_at')->get();
-  $canManageWorkflows=app(AuthorizationService::class)->allows($r->user(),'workflows.manage');
-  return view('platform.workflows',compact('items','canManageWorkflows'));
+  $runs=$canViewWorkflowAudit?DB::table('farast_workflow_runs as runs')
+   ->join('farast_workflows as workflows','workflows.id','=','runs.workflow_id')
+   ->where('workflows.user_id',$r->user()->id)
+   ->select('runs.id','runs.workflow_id','runs.status','runs.error','runs.started_at','runs.finished_at','workflows.name as workflow_name')
+   ->orderByDesc('runs.id')->limit(30)->get():collect();
+  return view('platform.workflows',compact('items','canManageWorkflows','canRunWorkflows','canViewWorkflowAudit','runs'));
  }
  public function saveWorkflow(Request $r){
-  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
+  $conditionFields=\App\Services\WorkflowConditionEvaluator::FIELDS;
+  $conditionOperators=\App\Services\WorkflowConditionEvaluator::OPERATORS;
   $x=$r->validate([
    'id'=>'nullable|integer|min:1',
    'name'=>'required|string|max:160',
@@ -103,11 +120,26 @@ class PlatformCompletionController extends Controller {
    'steps.*.description'=>'nullable|string|max:4000',
    'steps.*.priority'=>'nullable|in:low,normal,high',
    'steps.*.due_at'=>'nullable|date',
+   'conditions'=>'nullable|array|max:10',
+   'conditions.*.field'=>['required',\Illuminate\Validation\Rule::in($conditionFields)],
+   'conditions.*.operator'=>['required',\Illuminate\Validation\Rule::in($conditionOperators)],
+   'conditions.*.value'=>'nullable|string|max:500',
+   'cooldown_seconds'=>'nullable|integer|min:0|max:86400',
   ]);
+  $requiredPermission=!empty($x['id'])?'workflows.edit':'workflows.create';
+  $authorization=app(AuthorizationService::class);
+  abort_unless(
+   $authorization->allows($r->user(),$requiredPermission)
+   ||$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage'),
+   403
+  );
   $payload=[
    'name'=>$x['name'],
    'trigger_type'=>$x['trigger_type'],
-   'steps'=>json_encode($x['steps'],JSON_UNESCAPED_UNICODE),
+   'steps'=>json_encode(array_values($x['steps']),JSON_UNESCAPED_UNICODE),
+   'conditions'=>!empty($x['conditions'])?json_encode(array_values($x['conditions']),JSON_UNESCAPED_UNICODE):null,
+   'cooldown_seconds'=>(int)($x['cooldown_seconds']??0),
    'enabled'=>$r->boolean('enabled',true),
    'updated_at'=>now(),
   ];
@@ -125,7 +157,14 @@ class PlatformCompletionController extends Controller {
   return back()->with('status','گردش‌کار ذخیره شد.');
  }
  public function runWorkflow(Request $r,$id, \App\Services\WorkflowEngine $engine){
-  abort_unless(app(AuthorizationService::class)->allows($r->user(),'workflows.manage'),403);
+  $authorization=app(AuthorizationService::class);
+  abort_unless(
+   $authorization->allows($r->user(),'workflows.run')
+   ||$authorization->allows($r->user(),'automation.run')
+   ||$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage'),
+   403
+  );
   $w=DB::table('farast_workflows')->where('id',$id)->where('user_id',$r->user()->id)->first();
   abort_unless($w,404);
   abort_unless((bool)$w->enabled,409,'گردش‌کار غیرفعال است.');
