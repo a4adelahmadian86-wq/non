@@ -92,30 +92,30 @@ class AdminAccessCenterController extends Controller
             $key .= '-'.Str::lower(Str::random(6));
         }
 
-        $roleId = DB::table('farast_roles')->insertGetId([
-            'key' => $key,
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'scope_type' => $data['scope_type'],
-            'scope_id' => $scopeId,
-            'is_system' => false,
-            'is_active' => true,
-            'created_by' => $request->user()->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($request, $data, $scopeId, $key): void {
+            $roleId = DB::table('farast_roles')->insertGetId([
+                'key' => $key,
+                'name' => $data['name'],
+                'description' => $data['description'] ?? null,
+                'scope_type' => $data['scope_type'],
+                'scope_id' => $scopeId,
+                'is_system' => false,
+                'is_active' => true,
+                'created_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        $this->audit($request, 'role.created', null, $roleId, null, null, ['key' => $key, 'name' => $data['name'], 'scope' => $data['scope_type']]);
+            $this->audit($request, 'role.created', null, $roleId, null, null, [
+                'key' => $key, 'name' => $data['name'], 'scope' => $data['scope_type'], 'scope_id' => $scopeId,
+            ]);
+        });
 
         return back()->with('status', 'نقش سفارشی ایجاد شد؛ اکنون مجوزهای آن را تعیین کنید.');
     }
-
     public function updateRole(Request $request, int $role)
     {
         $this->ensurePlatformAdmin($request);
-        $record = DB::table('farast_roles')->where('id', $role)->first();
-        abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل ویرایش نیست.');
-
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -125,32 +125,42 @@ class AdminAccessCenterController extends Controller
         ]);
         $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
 
-        DB::table('farast_roles')->where('id', $role)->update([
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'scope_type' => $data['scope_type'],
-            'scope_id' => $scopeId,
-            'is_active' => (bool) $data['is_active'],
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($request, $role, $data, $scopeId): void {
+            $record = DB::table('farast_roles')->where('id', $role)->lockForUpdate()->first();
+            abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل ویرایش نیست.');
 
-        $this->audit($request, 'role.updated', null, $role, null, (array) $record, $data);
+            DB::table('farast_roles')->where('id', $role)->update([
+                'name' => $data['name'],
+                'description' => $data['description'] ?? null,
+                'scope_type' => $data['scope_type'],
+                'scope_id' => $scopeId,
+                'is_active' => (bool) $data['is_active'],
+                'updated_at' => now(),
+            ]);
+
+            $this->audit($request, 'role.updated', null, $role, null, (array) $record, [
+                ...$data,
+                'scope_id' => $scopeId,
+            ]);
+        });
+
+        app(AuthorizationService::class)->forgetUser();
 
         return back()->with('status', 'تنظیمات نقش ذخیره شد.');
     }
-
     public function destroyRole(Request $request, int $role)
     {
         $this->ensurePlatformAdmin($request);
-        $record = DB::table('farast_roles')->where('id', $role)->first();
-        abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل حذف نیست.');
-        abort_if(
-            DB::table('farast_user_roles')->where('role_id', $role)->exists(),
-            409,
-            'این نقش هنوز به کاربران اختصاص دارد؛ ابتدا همه انتساب‌های آن را لغو کنید.'
-        );
 
-        DB::transaction(function () use ($request, $role, $record): void {
+        DB::transaction(function () use ($request, $role): void {
+            $record = DB::table('farast_roles')->where('id', $role)->lockForUpdate()->first();
+            abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل حذف نیست.');
+            abort_if(
+                DB::table('farast_user_roles')->where('role_id', $role)->exists(),
+                409,
+                'این نقش هنوز به کاربران اختصاص دارد؛ ابتدا همه انتساب‌های آن را لغو کنید.'
+            );
+
             DB::table('farast_role_permissions')->where('role_id', $role)->delete();
             DB::table('farast_roles')->where('id', $role)->delete();
             $this->audit($request, 'role.deleted', null, $role, null, (array) $record, null);
@@ -160,23 +170,29 @@ class AdminAccessCenterController extends Controller
 
         return back()->with('status', 'نقش سفارشی حذف شد.');
     }
-
     public function syncPermissions(Request $request, int $role)
     {
         $this->ensurePlatformAdmin($request);
-        $record = DB::table('farast_roles')->where('id', $role)->first();
-        abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل ویرایش نیست.');
-
         $data = $request->validate([
             'permissions' => ['sometimes', 'array', 'max:250'],
             'permissions.*' => ['required', 'string', 'distinct', 'exists:permissions,key'],
             'scope_type' => ['nullable', Rule::in(self::SCOPES)],
         ]);
         $keys = array_values(array_unique($data['permissions'] ?? []));
-        $permissionIds = Permission::query()->whereIn('key', $keys)->pluck('id')->all();
-        $scope = $data['scope_type'] ?? $record->scope_type;
 
-        DB::transaction(function () use ($role, $permissionIds, $scope): void {
+        DB::transaction(function () use ($request, $role, $data, $keys): void {
+            $record = DB::table('farast_roles')->where('id', $role)->lockForUpdate()->first();
+            abort_unless($record && ! $record->is_system, 404, 'نقش سیستمی قابل ویرایش نیست.');
+
+            $scope = $data['scope_type'] ?? $record->scope_type;
+            $before = DB::table('farast_role_permissions as rp')
+                ->join('permissions as p', 'p.id', '=', 'rp.permission_id')
+                ->where('rp.role_id', $role)
+                ->orderBy('p.key')
+                ->pluck('p.key')
+                ->all();
+            $permissionIds = Permission::query()->whereIn('key', $keys)->pluck('id')->all();
+
             DB::table('farast_role_permissions')->where('role_id', $role)->delete();
             foreach ($permissionIds as $permissionId) {
                 DB::table('farast_role_permissions')->insert([
@@ -188,20 +204,22 @@ class AdminAccessCenterController extends Controller
                     'updated_at' => now(),
                 ]);
             }
+
+            $this->audit($request, 'role.permissions.synced', null, $role, null, [
+                'permissions' => $before,
+            ], [
+                'permissions' => $keys,
+                'scope' => $scope,
+            ]);
         });
 
         app(AuthorizationService::class)->forgetUser();
-        $this->audit($request, 'role.permissions.synced', null, $role, null, null, ['permissions' => $keys, 'scope' => $scope]);
 
         return back()->with('status', 'مجوزهای نقش به‌روزرسانی شد.');
     }
-
     public function assignRole(Request $request, int $user)
     {
         $this->ensurePlatformAdmin($request);
-        $target = User::query()->findOrFail($user);
-        abort_if($target->isAdmin(), 422, 'نقش مدیر اصلی از این مسیر قابل انتساب نیست.');
-
         $data = $request->validate([
             'role_id' => ['required', 'integer', 'exists:farast_roles,id'],
             'scope_type' => ['required', Rule::in(self::SCOPES)],
@@ -210,58 +228,89 @@ class AdminAccessCenterController extends Controller
             'expires_at' => ['nullable', 'date', 'after:starts_at'],
         ]);
 
-        $role = DB::table('farast_roles')->where('id', $data['role_id'])->where('is_active', true)->first();
-        abort_unless($role && ! $role->is_system, 422, 'فقط نقش سفارشی فعال قابل انتساب است.');
-        abort_if(self::SCOPE_RANK[$data['scope_type']] < self::SCOPE_RANK[$role->scope_type], 422, 'محدوده انتساب نمی‌تواند از محدوده تعریف‌شده نقش گسترده‌تر باشد.');
+        $targetId = (int) $user;
+        $assignmentId = DB::transaction(function () use ($request, $targetId, $data): int {
+            // Lock the subject row to serialize concurrent assignments for this account.
+            $target = User::query()->whereKey($targetId)->lockForUpdate()->firstOrFail();
+            abort_if($target->isAdmin(), 422, 'نقش مدیر اصلی از این مسیر قابل انتساب نیست.');
+            abort_if($target->is_blocked, 422, 'به حساب مسدود نمی‌توان نقش اختصاص داد.');
 
-        $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
-        $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
+            $role = DB::table('farast_roles')->where('id', $data['role_id'])->lockForUpdate()->first();
+            abort_unless($role && $role->is_active && ! $role->is_system, 422, 'فقط نقش سفارشی فعال قابل انتساب است.');
+            abort_if(
+                self::SCOPE_RANK[$data['scope_type']] < self::SCOPE_RANK[$role->scope_type],
+                422,
+                'محدوده انتساب نمی‌تواند از محدوده تعریف‌شده نقش گسترده‌تر باشد.'
+            );
 
-        $existing = DB::table('farast_user_roles')->where('user_id', $target->id)
-            ->where('role_id', $role->id)->where('scope_type', $data['scope_type'])
-            ->where('scope_id', $scopeId)->where(function ($query) {
-                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
-            })->exists();
-        abort_if($existing, 409, 'این نقش در همین محدوده قبلاً به کاربر اختصاص یافته است.');
+            $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
+            if (in_array($role->scope_type, ['organization', 'team'], true)) {
+                abort_unless(
+                    $role->scope_id !== null && (int) $role->scope_id === (int) $scopeId,
+                    422,
+                    'محدوده انتساب باید با محدوده تعریف‌شده نقش سازگار باشد.'
+                );
+            }
+            $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
 
-        $assignmentId = DB::table('farast_user_roles')->insertGetId([
-            'user_id' => $target->id,
-            'role_id' => $role->id,
-            'scope_type' => $data['scope_type'],
-            'scope_id' => $scopeId,
-            'starts_at' => $data['starts_at'] ?? null,
-            'expires_at' => $data['expires_at'] ?? null,
-            'assigned_by' => $request->user()->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            $existing = DB::table('farast_user_roles')->where('user_id', $target->id)
+                ->where('role_id', $role->id)->where('scope_type', $data['scope_type'])
+                ->where('scope_id', $scopeId)->where(function ($query) {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->exists();
+            abort_if($existing, 409, 'این نقش در همین محدوده قبلاً به کاربر اختصاص یافته است.');
 
-        app(AuthorizationService::class)->forgetUser($target->id);
-        $this->audit($request, 'user.role.assigned', $target->id, $role->id, null, null, ['assignment_id' => $assignmentId, 'scope' => $data['scope_type'], 'scope_id' => $scopeId]);
+            $id = DB::table('farast_user_roles')->insertGetId([
+                'user_id' => $target->id,
+                'role_id' => $role->id,
+                'scope_type' => $data['scope_type'],
+                'scope_id' => $scopeId,
+                'starts_at' => $data['starts_at'] ?? null,
+                'expires_at' => $data['expires_at'] ?? null,
+                'assigned_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->audit($request, 'user.role.assigned', $target->id, $role->id, null, null, [
+                'assignment_id' => $id,
+                'scope' => $data['scope_type'],
+                'scope_id' => $scopeId,
+                'starts_at' => $data['starts_at'] ?? null,
+                'expires_at' => $data['expires_at'] ?? null,
+            ]);
+
+            return $id;
+        });
+
+        app(AuthorizationService::class)->forgetUser($targetId);
 
         return back()->with('status', 'نقش با محدوده و زمان اعتبار مشخص به کاربر اختصاص یافت.');
     }
-
     public function revokeRole(Request $request, int $user, int $assignment)
     {
         $this->ensurePlatformAdmin($request);
         $target = User::query()->findOrFail($user);
-        $record = DB::table('farast_user_roles')->where('id', $assignment)->where('user_id', $target->id)->first();
-        abort_unless($record, 404);
 
-        DB::table('farast_user_roles')->where('id', $assignment)->delete();
+        DB::transaction(function () use ($request, $target, $assignment): void {
+            $record = DB::table('farast_user_roles')
+                ->where('id', $assignment)
+                ->where('user_id', $target->id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($record, 404);
+
+            DB::table('farast_user_roles')->where('id', $assignment)->delete();
+            $this->audit($request, 'user.role.revoked', $target->id, (int) $record->role_id, null, (array) $record, null);
+        });
+
         app(AuthorizationService::class)->forgetUser($target->id);
-        $this->audit($request, 'user.role.revoked', $target->id, (int) $record->role_id, null, (array) $record, null);
 
         return back()->with('status', 'نقش از کاربر لغو شد.');
     }
-
     public function storeOverride(Request $request, int $user)
     {
         $this->ensurePlatformAdmin($request);
-        $target = User::query()->findOrFail($user);
-        abort_if($target->isAdmin(), 422, 'برای مدیر اصلی مجوز مستقیم تعریف نمی‌شود.');
-
         $data = $request->validate([
             'permission' => ['required', 'string', 'exists:permissions,key'],
             'effect' => ['required', Rule::in(['allow', 'deny'])],
@@ -276,45 +325,69 @@ class AdminAccessCenterController extends Controller
             abort_if(in_array($data['permission'], self::SENSITIVE_DIRECT_GRANTS, true), 422, 'مجوزهای حساس باید از طریق نقش و با بازبینی کامل واگذار شوند.');
         }
 
+        $targetId = (int) $user;
         $permissionId = (int) Permission::query()->where('key', $data['permission'])->value('id');
-        $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
-        $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
+        $overrideId = DB::transaction(function () use ($request, $targetId, $data, $permissionId): int {
+            $target = User::query()->whereKey($targetId)->lockForUpdate()->firstOrFail();
+            abort_if($target->isAdmin(), 422, 'برای مدیر اصلی مجوز مستقیم تعریف نمی‌شود.');
+            abort_if($target->is_blocked, 422, 'برای حساب مسدود مجوز مستقیم تعریف نمی‌شود.');
 
-        $overrideId = DB::table('farast_user_permission_overrides')->insertGetId([
-            'user_id' => $target->id,
-            'permission_id' => $permissionId,
-            'effect' => $data['effect'],
-            'scope_type' => $data['scope_type'],
-            'scope_id' => $scopeId,
-            'conditions' => null,
-            'reason' => $data['reason'],
-            'starts_at' => $data['starts_at'] ?? null,
-            'expires_at' => $data['expires_at'] ?? null,
-            'created_by' => $request->user()->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            $scopeId = $this->validatedScopeId($data['scope_type'], $data['scope_id'] ?? null);
+            $this->assertUserBelongsToScope($target, $data['scope_type'], $scopeId);
 
-        app(AuthorizationService::class)->forgetUser($target->id);
-        $this->audit($request, 'user.permission.override.created', $target->id, null, $permissionId, null, ['override_id' => $overrideId, 'effect' => $data['effect'], 'scope' => $data['scope_type'], 'reason' => $data['reason']]);
+            $id = DB::table('farast_user_permission_overrides')->insertGetId([
+                'user_id' => $target->id,
+                'permission_id' => $permissionId,
+                'effect' => $data['effect'],
+                'scope_type' => $data['scope_type'],
+                'scope_id' => $scopeId,
+                'conditions' => null,
+                'reason' => $data['reason'],
+                'starts_at' => $data['starts_at'] ?? null,
+                'expires_at' => $data['expires_at'] ?? null,
+                'created_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->audit($request, 'user.permission.override.created', $target->id, null, $permissionId, null, [
+                'override_id' => $id,
+                'effect' => $data['effect'],
+                'scope' => $data['scope_type'],
+                'scope_id' => $scopeId,
+                'reason' => $data['reason'],
+                'starts_at' => $data['starts_at'] ?? null,
+                'expires_at' => $data['expires_at'] ?? null,
+            ]);
+
+            return $id;
+        });
+
+        app(AuthorizationService::class)->forgetUser($targetId);
 
         return back()->with('status', 'استثنای دسترسی کاربر ثبت شد.');
     }
-
     public function revokeOverride(Request $request, int $user, int $override)
     {
         $this->ensurePlatformAdmin($request);
         $target = User::query()->findOrFail($user);
-        $record = DB::table('farast_user_permission_overrides')->where('id', $override)->where('user_id', $target->id)->first();
-        abort_unless($record, 404);
 
-        DB::table('farast_user_permission_overrides')->where('id', $override)->delete();
+        DB::transaction(function () use ($request, $target, $override): void {
+            $record = DB::table('farast_user_permission_overrides')
+                ->where('id', $override)
+                ->where('user_id', $target->id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($record, 404);
+
+            DB::table('farast_user_permission_overrides')->where('id', $override)->delete();
+            $this->audit($request, 'user.permission.override.revoked', $target->id, null, (int) $record->permission_id, (array) $record, null);
+        });
+
         app(AuthorizationService::class)->forgetUser($target->id);
-        $this->audit($request, 'user.permission.override.revoked', $target->id, null, (int) $record->permission_id, (array) $record, null);
 
         return back()->with('status', 'استثنای دسترسی لغو شد.');
     }
-
     public function explain(Request $request, int $user, string $permission, AuthorizationService $authorization)
     {
         $this->ensurePlatformAdmin($request);
