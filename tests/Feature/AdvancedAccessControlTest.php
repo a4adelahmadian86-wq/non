@@ -403,6 +403,53 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_scoped_workflow_requires_the_domain_permission_for_cross_user_events(): void
+    {
+        $organization = Organization::create(['name' => 'Workflow Permission Org', 'slug' => 'workflow-permission-org', 'status' => 'active']);
+        $manager = $this->user('09140000351', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $member = $this->user('09140000352', User::ROLE_EMPLOYEE, $organization->id);
+
+        $supportPermissionId = DB::table('permissions')->where('key', 'support.manage')->value('id');
+        DB::table('role_permissions')
+            ->where('role', User::ROLE_ORGANIZATION_MANAGER)
+            ->where('permission_id', $supportPermissionId)
+            ->delete();
+
+        $workflowColumns = \Illuminate\Support\Facades\Schema::getColumnListing('farast_workflows');
+        $workflowPayload = array_intersect_key([
+            'user_id' => $manager->id,
+            'name' => 'Permission-gated ticket workflow',
+            'trigger_type' => 'ticket.created',
+            'steps' => json_encode([['action' => 'notify', 'title' => 'نباید ارسال شود']], JSON_UNESCAPED_UNICODE),
+            'enabled' => true,
+            'conditions' => null,
+            'cooldown_seconds' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], array_flip($workflowColumns));
+        $workflowId = DB::table('farast_workflows')->insertGetId($workflowPayload);
+
+        $this->assertTrue(app(AuthorizationService::class)->allows($manager, 'workflows.manage'));
+        $this->assertFalse(app(AuthorizationService::class)->allows($manager, 'support.manage'));
+
+        $matched = app(\App\Services\WorkflowEngine::class)->dispatch('ticket.created', [
+            'user_id' => $member->id,
+            'customer_id' => $member->id,
+        ], 'ticket:permission-gated:created');
+
+        $this->assertSame(0, $matched);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:permission-gated:created',
+            'status' => 'completed',
+            'matched_workflows' => 0,
+        ]);
+        $this->assertDatabaseMissing('farast_workflow_event_workflows', ['workflow_id' => $workflowId]);
+        $this->assertDatabaseMissing('farast_notifications', [
+            'user_id' => $manager->id,
+            'title' => 'نباید ارسال شود',
+        ]);
+    }
+
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
     {
         $employee = $this->user('09140000105');
