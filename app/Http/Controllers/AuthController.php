@@ -373,6 +373,7 @@ class AuthController extends Controller
         if (\Illuminate\Support\Facades\Schema::hasTable('sessions')) {
             DB::table('sessions')->where('user_id', $user->id)->delete();
         }
+        EditorSession::where('user_id', $user->id)->delete();
         if (\Illuminate\Support\Facades\Schema::hasTable('farast_security_events')) {
             DB::table('farast_security_events')->insert([
                 'user_id' => $user->id,
