@@ -45,8 +45,25 @@ class AdminStorageController extends Controller
 
     public function backups()
     {
-        $backups = StorageBackupRun::with('volume')->where('source_name', '!=', 'snapshot_lock')->latest()->paginate(30);
+        $backups = StorageBackupRun::with('volume')->whereNotIn('source_name', ['snapshot_lock', 'manual_request'])->latest()->paginate(30);
         return view('admin.storage.backups', compact('backups'));
+    }
+
+    public function requestBackup()
+    {
+        abort_unless(config('storage_management.backup.encryption_key'), 422, 'کلید رمزنگاری بکاپ تنظیم نشده است.');
+        abort_unless(StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')->exists(), 422, 'ابتدا حداقل یک هاست سالم در درایو بکاپ خارجی متصل کنید.');
+
+        $run = StorageBackupRun::create([
+            'backup_type' => 'manual',
+            'source_name' => 'manual_request',
+            'status' => 'queued',
+            'started_at' => now(),
+            'metadata' => ['request_only' => true],
+        ]);
+        RunStorageBackupJob::dispatch($run->id);
+
+        return back()->with('status', 'درخواست بکاپ در صف اجرا قرار گرفت.');
     }
 
     public function store(Request $request, StorageConnectionService $connections)
