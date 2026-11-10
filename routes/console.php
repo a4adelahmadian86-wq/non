@@ -18,6 +18,11 @@ Schedule::command('storage:transfer-pending --limit=100')
     ->everyMinute()
     ->withoutOverlapping(10);
 
+// Complete deletes that were intentionally deferred during a backup snapshot.
+Schedule::command('storage:cleanup-deferred-deletes --limit=100')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);
+
 // Encrypted weekly application backup to configured foreign backup volumes.
 Schedule::command('storage:backup-weekly')
     ->weeklyOn(0, '02:00')
