@@ -378,7 +378,7 @@
                             <small>{{ number_format($storageHealth['healthy_volumes'] ?? 0) }} از {{ number_format($storageHealth['active_volumes'] ?? 0) }} فضای فعال سالم · {{ number_format($storageHealth['pending_transfers'] ?? 0) }} انتقال در انتظار</small>
                             <small>{{ number_format($storageHealth['transfer_errors'] ?? 0) }} خطای انتقال · {{ number_format($storageHealth['failed_backups_24h'] ?? 0) }} بکاپ ناموفق در ۲۴ ساعت</small>
                             @if(filled($storageHealth['last_successful_backup_at'] ?? null))
-                                <small>آخرین بکاپ موفق: {{ \\Illuminate\\Support\\Carbon::parse($storageHealth['last_successful_backup_at'])->format('Y/m/d H:i') }}</small>
+                                <small>آخرین بکاپ موفق: {{ \Illuminate\Support\Carbon::parse($storageHealth['last_successful_backup_at'])->format('Y/m/d H:i') }}</small>
                             @else
                                 <small>هنوز بکاپ موفقی در سابقه ثبت نشده است.</small>
                             @endif
