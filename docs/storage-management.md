@@ -39,7 +39,8 @@ Use a separate API credential with only the required bucket permissions. The end
 ## Operational commands
 
 - `php artisan storage:transfer-pending --limit=100`
-- `php artisan storage:migrate-legacy-product-assets --limit=100` (one-time, resumable migration of existing public product covers/gallery images to the Iranian managed drive)
+- `php artisan storage:migrate-legacy-product-assets --limit=100`
+- `php artisan storage:migrate-legacy-editor-assets --limit=100` (resumable migration of existing private editor assets to foreign storage, including document and version resource references) (one-time, resumable migration of existing public product covers/gallery images to the Iranian managed drive)
 - `php artisan storage:backup-weekly`
 - `php artisan storage:check-volumes`
 - `php artisan storage:cleanup-deferred-deletes`
