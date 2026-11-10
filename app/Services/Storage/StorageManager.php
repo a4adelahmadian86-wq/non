@@ -134,7 +134,7 @@ class StorageManager
         $snapshotInProgress = StorageBackupRun::query()
             ->where('source_name', 'snapshot_lock')
             ->where('status', 'running')
-            ->where('started_at', '>=', now()->subHours(3))
+            ->where('started_at', '>=', now()->subHours(8))
             ->exists();
 
         if ($managed && $snapshotInProgress) {
@@ -165,7 +165,7 @@ class StorageManager
 
     public function cleanupDeferredDeletes(int $limit = 100): int
     {
-        if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(3))->exists()) return 0;
+        if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(8))->exists()) return 0;
         $files = StorageManagedFile::query()->where('status', 'delete_pending')->orderBy('id')->limit(max(1, $limit))->get();
         foreach ($files as $file) {
             $disk = (string) data_get($file->metadata, 'disk', $file->storage_volume_id ? 'storage_volume:'.$file->storage_volume_id : 'private');
