@@ -51,6 +51,7 @@ class WorkflowEngine
                 if ($eventWorkflowId !== null) {
                     $updated = DB::table('farast_workflow_event_workflows')
                         ->where('id', $eventWorkflowId)
+                        ->where('workflow_id', $workflowId)
                         ->where('status', 'running')
                         ->update([
                             'status' => 'completed',
