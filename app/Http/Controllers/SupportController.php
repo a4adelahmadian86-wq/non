@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreProduct;
 use App\Models\Ticket;
@@ -91,7 +92,7 @@ class SupportController extends Controller
 
                     return [
                         'id' => $order->id,
-                        'label' => '#'.$order->id.' — '.\\Illuminate\\Support\\Str::limit($summary, 52).' — '.$status.' — '.number_format((int) $order->total_rials).' ریال',
+                        'label' => '#'.$order->id.' — '.\Illuminate\Support\Str::limit($summary, 52).' — '.$status.' — '.number_format((int) $order->total_rials).' ریال',
                     ];
                 });
         }
