@@ -315,6 +315,32 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         $this->actingAs($user)->get($url)->assertForbidden();
     }
 
+    public function test_quarantined_files_cannot_be_issued_or_streamed_from_old_links(): void
+    {
+        Storage::fake('private');
+        $user = $this->makeUser('09123456784');
+        [$product, $file] = $this->makeProduct('quarantined-product');
+        [$libraryItem, $download, $token] = $this->makeDownload($user, $product, $file);
+
+        $file->update(['scan_status' => 'infected']);
+
+        $this->actingAs($user)
+            ->post(route('library.download.issue', $libraryItem))
+            ->assertNotFound();
+
+        $url = URL::temporarySignedRoute(
+            'store.download.stream',
+            now()->addMinutes(10),
+            ['download' => $download->id, 'token' => $token]
+        );
+
+        $this->get($url)->assertNotFound();
+        $this->assertDatabaseHas('store_downloads', [
+            'id' => $download->id,
+            'download_count' => 0,
+        ]);
+    }
+
     public function test_download_limit_stops_at_ten_successful_streams(): void
     {
         Storage::fake('private');
