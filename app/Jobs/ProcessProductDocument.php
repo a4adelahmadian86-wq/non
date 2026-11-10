@@ -6,6 +6,7 @@ use App\Models\StoreProductDocument;
 use App\Models\StoreProductPreview;
 use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
+use App\Services\Storage\StorageManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -51,7 +52,7 @@ class ProcessProductDocument implements ShouldQueue
             $sourceTemporaryPath = tempnam(sys_get_temp_dir(), 'farast-product-source');
             try {
                 $storage->downloadTo($sourceDisk, $file->path, $sourceTemporaryPath);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 @unlink($sourceTemporaryPath);
                 $document->update(['processing_status' => 'failed', 'failure_code' => 'source_file_unavailable']);
                 throw $exception;
