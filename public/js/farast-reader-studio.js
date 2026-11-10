@@ -19,7 +19,7 @@ const rail=document.createElement('aside');rail.className='farast-reader-studio-
 const railTools=[['select','fa-arrow-pointer','انتخاب متن'],['pen','fa-pen','قلم'],['highlight','fa-highlighter','هایلایت'],['eraser','fa-eraser','پاک‌کن'],['note','fa-note-sticky','یادداشت'],['rectangle','fa-square','مستطیل'],['stamp','fa-stamp','مهر']];
 railTools.forEach(([tool,icon,label])=>{const b=document.createElement('button');b.type='button';b.className='farast-studio-rail-button';b.dataset.railTool=tool;b.title=label;b.setAttribute('aria-label',label);b.setAttribute('aria-pressed',String(tool==='select'));b.innerHTML='<i class="fa-solid '+icon+'"></i>';b.addEventListener('click',()=>originalButton(tool)?.click());rail.append(b);});
 const railSeparator=document.createElement('span');railSeparator.className='farast-studio-rail-separator';rail.append(railSeparator);
-const railPan=makeAction('جابجایی صفحه','fa-hand','جابجایی صفحه');railPan.className='farast-studio-rail-button';railPan.addEventListener('click',()=>setPan(!panActive));rail.append(railPan);
+const railPan=makeAction('جابجایی صفحه','fa-hand','جابجایی صفحه از نوار شناور');railPan.className='farast-studio-rail-button';railPan.addEventListener('click',()=>setPan(!panActive));rail.append(railPan);
 stage.style.position='relative';stage.insertBefore(rail,stage.firstChild);
 const syncRail=()=>{rail.querySelectorAll('[data-rail-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.railTool===activeTool())));railPan.setAttribute('aria-pressed',String(panActive));};
 
