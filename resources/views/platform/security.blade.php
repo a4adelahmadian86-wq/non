@@ -229,6 +229,12 @@
                                 'device_unblocked' => 'رفع مسدودی دستگاه',
                                 'blocked_device_login_prevented' => 'جلوگیری از ورود دستگاه مسدود',
                                 'session_expired_three_years' => 'پایان نشست پس از سه سال عدم مراجعه',
+                                'two_factor_enabled' => 'فعال‌سازی تأیید دومرحله‌ای',
+                                'two_factor_disabled' => 'غیرفعال‌سازی تأیید دومرحله‌ای',
+                                'two_factor_challenge_passed' => 'تأیید دومرحله‌ای موفق',
+                                'two_factor_challenge_failed' => 'تلاش ناموفق تأیید دومرحله‌ای',
+                                'two_factor_recovery_code_used' => 'استفاده از کد بازیابی دومرحله‌ای',
+                                'two_factor_recovery_codes_regenerated' => 'تولید دوباره کدهای بازیابی',
                             ][$event->event] ?? 'رخداد امنیتی حساب' }}</strong>
                             <small>IP: {{ $event->ip ?: 'نامشخص' }} · {{ \Illuminate\Support\Carbon::parse($event->created_at)->format('Y/m/d H:i') }}</small>
                         </div>
