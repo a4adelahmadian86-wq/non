@@ -16,6 +16,9 @@
             <a href="{{ route('admin.crm.customers.index') }}" @if(request()->routeIs('admin.crm.customers.*')) aria-current="page" @endif><i class="fa-solid fa-address-card"></i><span>مدیریت مشتریان</span></a>
             <a href="{{ route('admin.crm.followups.index') }}" @if(request()->routeIs('admin.crm.followups.*')) aria-current="page" @endif><i class="fa-solid fa-calendar-check"></i><span>پیگیری‌ها</span></a>
         @endif
+        @if($adminConsole->sectionAllowed(auth()->user(), 'marketing'))
+            <a href="{{ route('admin.store-coupons.index') }}" @if(request()->routeIs('admin.store-coupons.*')) aria-current="page" @endif><i class="fa-solid fa-ticket"></i><span>کدهای تخفیف و پیشنهاد هوشمند</span></a>
+        @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'store'))
             <a href="{{ route('admin.store.index') }}" @if(request()->routeIs('admin.store.*')) aria-current="page" @endif><i class="fa-solid fa-boxes-stacked"></i><span>محصولات و دوره‌ها</span></a>
             <a href="{{ route('admin.store.operations') }}" @if(request()->routeIs('admin.store.operations*')) aria-current="page" @endif><i class="fa-solid fa-gears"></i><span>عملیات و پردازش محصولات</span></a>
