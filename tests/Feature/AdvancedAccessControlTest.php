@@ -311,7 +311,7 @@ class AdvancedAccessControlTest extends TestCase
             'reason' => 'Assign scoped audit role for operational review',
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('farast_user_roles'), [
+        $this->assertDatabaseHas('farast_user_roles', [
             'user_id' => $manager->id,
             'role_id' => $role->id,
             'scope_type' => 'organization',
