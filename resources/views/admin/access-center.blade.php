@@ -104,6 +104,10 @@
                         </div>
                         <button class="ac-button secondary" type="submit">ذخیره مشخصات نقش</button>
                     </form>
+                    <form method="post" action="{{ route('admin.access-center.roles.destroy', $role->id) }}" onsubmit="return confirm('این نقش فقط در صورت نداشتن انتساب قابل حذف است. ادامه می‌دهید؟')">
+                        @csrf @method('delete')
+                        <button class="ac-button danger" type="submit">حذف نقش سفارشی</button>
+                    </form>
                     <form method="post" action="{{ route('admin.access-center.roles.permissions', $role->id) }}">
                         @csrf
                         <label class="ac-field" style="max-width:260px;margin-top:12px">محدوده پیش‌فرض مجوزها
