@@ -25,7 +25,7 @@
         <article><span>سود ناخالص قابل محاسبه</span><strong>{{ number_format((int) floor($stats['known_gross_profit_rials'] / 10)) }}</strong><small>تومان · فقط با بهای تمام‌شده ثبت‌شده هنگام خرید</small></article>
         <article><span>اقلام فاقد بهای تاریخی</span><strong>{{ number_format($stats['items_missing_historical_cost']) }}</strong><small>سود این اقلام محاسبه یا تخمین زده نمی‌شود</small></article>
         <article><span>محصولات منتشرشده بدون بهای تمام‌شده فعلی</span><strong>{{ number_format($stats['products_missing_cost']) }}</strong><small>برای این محصولات پیشنهاد خودکار صادر نمی‌شود</small></article>
-        <article><span>مصرف بودجه تخفیف در ماه جاری</span><strong>{{ number_format((int) floor($stats['monthly_budget_spent_rials'] / 10)) }}</strong><small>تومان · مصرف واقعی سفارش‌های پرداخت‌شده</small></article>
+        <article><span>مصرف بودجه تخفیف در ماه جاری</span><strong>{{ number_format((int) floor($stats['monthly_budget_spent_rials'] / 10)) }}</strong><small>تومان · مصرف واقعی سفارش‌های پرداخت‌شده</small><small>@if($stats['monthly_budget_cap_rials'] > 0) مانده: {{ number_format((int) floor($stats['monthly_budget_remaining_rials'] / 10)) }} تومان از سقف ماهانه {{ number_format((int) floor($stats['monthly_budget_cap_rials'] / 10)) }} تومان @else سقف بودجه نامحدود است @endif</small></article>
     </div>
 
     @if($canManageGlobalCoupons)
