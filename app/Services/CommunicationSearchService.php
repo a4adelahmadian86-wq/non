@@ -17,7 +17,7 @@ class CommunicationSearchService
      * Search only records the current actor can already open. This is a read
      * model over the existing domain stores; it never creates a second index.
      */
-    public function search(User $actor, string $term, bool $canSupport, bool $canUseMessenger, int $limit = 30): Collection
+    public function search(User $actor, string $term, bool $canSupport, bool $canUseMessenger, int $limit = 30, ?bool $canManageAllTickets = null): Collection
     {
         $term = trim($term);
         if (mb_strlen($term) < 2) {
@@ -26,13 +26,14 @@ class CommunicationSearchService
 
         $limit = max(1, min($limit, 50));
         $results = collect();
+        $canManageAllTickets = $canManageAllTickets ?? $actor->isAdmin();
         $isAdmin = $actor->isAdmin();
         $pattern = '%'.$term.'%';
 
         if ($canSupport) {
             $tickets = Ticket::query()
                 ->with('user:id,name')
-                ->when(! $isAdmin, fn ($query) => $query->where('user_id', $actor->id))
+                ->when(! $canManageAllTickets, fn ($query) => $query->where('user_id', $actor->id))
                 ->where(function ($query) use ($pattern) {
                     $query->where('subject', 'like', $pattern)
                         ->orWhere('ticket_code', 'like', $pattern);
@@ -46,7 +47,7 @@ class CommunicationSearchService
                     'ticket',
                     $ticket->displayCode().' — '.$ticket->subject,
                     $ticket->displayName().' · '.$ticket->statusLabel(),
-                    $isAdmin
+                    $canManageAllTickets
                         ? route('admin.support.management', ['ticket' => $ticket->id])
                         : route('support.show', $ticket),
                     $ticket->updated_at,
@@ -57,12 +58,12 @@ class CommunicationSearchService
             $ticketMessages = TicketMessage::query()
                 ->with('ticket')
                 ->where('body', 'like', $pattern)
-                ->whereHas('ticket', function ($query) use ($actor, $isAdmin) {
-                    if (! $isAdmin) {
+                ->whereHas('ticket', function ($query) use ($actor, $canManageAllTickets) {
+                    if (! $canManageAllTickets) {
                         $query->where('user_id', $actor->id);
                     }
                 })
-                ->when(! $isAdmin, fn ($query) => $query->where(function ($visible) {
+                ->when(! $canManageAllTickets, fn ($query) => $query->where(function ($visible) {
                     $visible->where('is_internal', false)->orWhereNull('is_internal');
                 }))
                 ->orderByDesc('created_at')
