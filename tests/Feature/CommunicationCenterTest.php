@@ -7,6 +7,7 @@ use App\Models\ConversationMessage;
 use App\Models\FarastNotification;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
+use App\Models\SiteSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -220,6 +221,39 @@ class CommunicationCenterTest extends TestCase
             ->assertOk()
             ->assertSee(route('support.show', $ticket), false)
             ->assertDontSee(route('admin.support.management', ['ticket' => $ticket->id]), false);
+    }
+
+    public function test_admin_with_restricted_console_scope_cannot_see_global_support_records(): void
+    {
+        config(['farast_admin.scope_override_key' => 'communications_test_scope']);
+        SiteSetting::write('communications_test_scope', 'own');
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+        $other = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+
+        $ownTicket = Ticket::create([
+            'user_id' => $admin->id,
+            'subject' => 'تیکت شخصی مدیر محدودشده',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $otherTicket = Ticket::create([
+            'user_id' => $other->id,
+            'subject' => 'رکورد محرمانه خارج از دامنه',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('platform.communications', ['q' => 'رکورد محرمانه خارج از دامنه']))
+            ->assertOk()
+            ->assertSee('تیکت شخصی مدیر محدودشده')
+            ->assertDontSee('<strong>'.$otherTicket->displayCode().' — '.$otherTicket->subject.'</strong>', false)
+            ->assertSee(route('support.show', $ownTicket), false)
+            ->assertDontSee(route('admin.support.management', ['ticket' => $ownTicket->id]), false)
+            ->assertDontSee('پیام‌رسان داخلی');
     }
 
 }
