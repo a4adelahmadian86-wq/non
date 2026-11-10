@@ -1,5 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
+// These tests deliberately mock navigation and API endpoints; bypass the PWA service worker.
+test.use({ serviceWorkers: 'block' });
+
 test('homepage file intake sends a deposit quote to checkout after explicit acceptance', async ({ page }) => {
   let accepted = 0;
   let created = 0;
@@ -47,7 +50,7 @@ test('homepage file intake sends a deposit quote to checkout after explicit acce
     });
   });
 
-  await page.route('**/checkout/812', route => route.fulfill({
+  await page.route('**/checkout/812**', route => route.fulfill({
     status: 200,
     contentType: 'text/html',
     body: '<!doctype html><html lang="fa"><body><h1>Mock checkout reached</h1></body></html>',
