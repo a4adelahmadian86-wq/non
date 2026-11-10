@@ -126,6 +126,35 @@ class StorageManager
         }
     }
 
+    public function downloadTo(string $disk, string $path, string $target): void
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+            if ($volume->driver === 'local') {
+                $source = $this->localVolumePath($volume, $path);
+                if (! is_file($source) || ! copy($source, $target)) throw new RuntimeException('دریافت فایل از فضای محلی ناموفق بود.');
+                return;
+            }
+            $this->s3->downloadTo($volume, $path, $target);
+            return;
+        }
+
+        $stream = Storage::disk($disk ?: 'private')->readStream($path);
+        if (! is_resource($stream)) throw new RuntimeException('جریان فایل برای پشتیبان‌گیری در دسترس نیست.');
+        $output = fopen($target, 'wb');
+        try {
+            if (stream_copy_to_stream($stream, $output) === false) throw new RuntimeException('ذخیره جریان فایل ناموفق بود.');
+        } finally {
+            fclose($stream);
+            fclose($output);
+        }
+    }
+
+    public function uploadBackup(StorageVolume $volume, string $key, string $localPath): void
+    {
+        $this->writeToVolume($volume, $key, $localPath);
+    }
+
     public function volumeDisk(StorageVolume $volume): string
     {
         return 'storage_volume:'.$volume->id;
