@@ -11,6 +11,27 @@ class DashboardStorageSummaryServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_snapshot_warns_when_active_storage_has_no_successful_backup(): void
+    {
+        DB::table('storage_volumes')->insert([
+            'drive_key' => 'iran_primary',
+            'name' => 'Healthy but unbacked primary',
+            'driver' => 'local',
+            'status' => 'healthy',
+            'is_active' => true,
+            'used_bytes' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $snapshot = app(DashboardStorageSummaryService::class)->snapshot();
+
+        $this->assertTrue($snapshot['available']);
+        $this->assertSame('attention', $snapshot['status']);
+        $this->assertTrue($snapshot['backup_stale']);
+        $this->assertNull($snapshot['last_successful_backup_at']);
+    }
+
     public function test_snapshot_does_not_call_an_empty_storage_installation_healthy(): void
     {
         $snapshot = app(DashboardStorageSummaryService::class)->snapshot();
@@ -94,6 +115,7 @@ class DashboardStorageSummaryServiceTest extends TestCase
         $this->assertSame(1, $snapshot['transfer_errors']);
         $this->assertSame(1, $snapshot['failed_backups_24h']);
         $this->assertNotNull($snapshot['last_successful_backup_at']);
+        $this->assertFalse($snapshot['backup_stale']);
     }
 
 }
