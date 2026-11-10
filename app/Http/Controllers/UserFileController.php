@@ -38,7 +38,7 @@ class UserFileController extends Controller
             'uploaded_at' => $now, 'local_expires_at' => null, 'remote_expires_at' => null,
             'remote_path' => $stored['volume_id'] ? $path : null,
         ]);
-        StorageManagedFile::whereKey($stored['managed_file_id'])->update(['source_type' => UserFile::class, 'source_id' => $record->id]);
+        $storage->bindReference($stored['managed_file_id'], UserFile::class, (int) $record->id);
         return response()->json(['ok' => true, 'file' => $this->present($record), 'estimate' => $quote]);
     }
 
