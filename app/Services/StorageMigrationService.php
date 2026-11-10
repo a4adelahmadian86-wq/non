@@ -10,6 +10,7 @@ use App\Models\StoreProduct;
 use App\Models\StoreProductImage;
 use App\Models\StorageManagedFile;
 use App\Models\TicketMessage;
+use App\Models\ConversationMessage;
 use App\Models\UserFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -20,7 +21,7 @@ class StorageMigrationService
     public function migrateLegacy(int $limit = 100): array
     {
         $limit = max(1, min(500, $limit));
-        $counts = ['product_files' => 0, 'previews' => 0, 'artifacts' => 0, 'product_public_assets' => 0, 'user_files' => 0, 'support_attachments' => 0, 'editor_assets' => 0];
+        $counts = ['product_files' => 0, 'previews' => 0, 'artifacts' => 0, 'product_public_assets' => 0, 'user_files' => 0, 'support_attachments' => 0, 'messenger_attachments' => 0, 'editor_assets' => 0];
 
         if ($this->hasDedicatedVolume('iran_primary')) {
             $counts['product_files'] += $this->migrateProductFiles($limit);
@@ -32,6 +33,7 @@ class StorageMigrationService
         if ($this->hasDedicatedVolume('foreign_primary')) {
             $counts['user_files'] += $this->migrateUserFiles($limit);
             $counts['support_attachments'] += $this->migrateSupportAttachments($limit);
+            $counts['messenger_attachments'] += $this->migrateMessengerAttachments($limit);
             $counts['editor_assets'] += $this->migrateEditorAssets($limit);
         }
 
@@ -174,6 +176,44 @@ class StorageMigrationService
                         continue;
                     }
                     $managed = \App\Models\StorageManagedFile::query()->where('logical_path', $path)->first();
+                    $attachments[$index]['disk'] = 'managed';
+                    $attachments[$index]['storage_managed_file_id'] = $managed?->id;
+                    $changed = true;
+                    $sourcePathsToDelete[] = $path;
+                    $count++;
+                }
+                if ($changed) {
+                    $message->update(['attachments' => array_values($attachments)]);
+                    foreach ($sourcePathsToDelete as $oldPath) {
+                        Storage::disk('private')->delete($oldPath);
+                    }
+                }
+            }
+            return $count < $limit;
+        });
+        return $count;
+    }
+
+    private function migrateMessengerAttachments(int $limit): int
+    {
+        $count = 0;
+        ConversationMessage::query()->whereNotNull('attachments')->orderBy('id')->chunkById(100, function ($messages) use (&$count, $limit): bool {
+            foreach ($messages as $message) {
+                if ($count >= $limit) return false;
+                $attachments = (array) ($message->attachments ?? []);
+                $changed = false;
+                $sourcePathsToDelete = [];
+                foreach ($attachments as $index => $attachment) {
+                    if ($count >= $limit) break;
+                    if (! is_array($attachment) || ($attachment['disk'] ?? 'private') !== 'private' || empty($attachment['path'])) {
+                        continue;
+                    }
+                    $path = (string) $attachment['path'];
+                    if (! str_starts_with($path, 'messenger/')) continue;
+                    if (! $this->copyToManaged('private', $path, 'non_critical', 'messenger_attachment', $message->conversation_id, null, $message->user_id, $attachment['name'] ?? basename($path), $attachment['mime'] ?? null)) {
+                        continue;
+                    }
+                    $managed = StorageManagedFile::query()->where('logical_path', $path)->first();
                     $attachments[$index]['disk'] = 'managed';
                     $attachments[$index]['storage_managed_file_id'] = $managed?->id;
                     $changed = true;
