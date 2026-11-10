@@ -53,7 +53,7 @@
         <a href="#store-product-description"><i class="fa-solid fa-align-right" aria-hidden="true"></i> توضیحات</a>
       @endif
       @if($hasPreview)
-        <a href="#store-product-sample"><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه</a>
+        <a href="#store-product-preview"><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه</a>
       @endif
       @if($product->type === 'course' && $product->course)
         <a href="#store-product-curriculum"><i class="fa-solid fa-list-check" aria-hidden="true"></i> سرفصل‌ها</a>
@@ -88,7 +88,7 @@
         @endif
 
         @if($hasPreview)
-          <section class="store-product-sample" id="store-product-sample" aria-label="نمونه قابل مطالعه">
+          <section class="store-product-sample" id="store-product-preview" aria-label="نمونه قابل مطالعه">
             <div>
               <strong><i class="fa-solid fa-book-open" aria-hidden="true"></i> نمونه قابل مطالعه</strong>
               <span>نمونه امن محصول آماده شده است؛ محتوای آن فقط با انتخاب شما در خوانشگر باز می‌شود.</span>
@@ -104,6 +104,8 @@
             <h2>{{ $product->type === 'course' ? 'درباره این دوره' : 'درباره این فایل' }}</h2>
             <div class="body">{!! nl2br(e($product->description ?: $product->short_description)) !!}</div>
           </article>
+        @else
+          <span id="store-product-description" aria-hidden="true"></span>
         @endif
         @if($product->type === 'course' && $product->course)
           <div class="store-panel course-public-curriculum" id="store-product-curriculum">
