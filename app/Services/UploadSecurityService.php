@@ -24,7 +24,7 @@ class UploadSecurityService
         'jpg','jpeg','png','webp','gif','mp3','wav','ogg','flac','m4a','mp4','webm','mov',
     ];
 
-    public function inspect(string $path, ?string $expectedMime = null, ?int $maxBytes = null, ?array $allowedMimes = null): array
+    public function inspect(string $path, ?string $expectedMime = null, ?int $maxBytes = null, ?array $allowedMimes = null, bool $securityScan = true): array
     {
         $disk = Storage::disk('private');
         if (! $disk->exists($path)) {
@@ -71,8 +71,9 @@ class UploadSecurityService
             'mime' => $mime,
             'size' => $size,
             'checksum' => hash_file('sha256', $absolutePath),
-            'scan' => 'farast_static_v1',
-            'scan_label' => 'بررسی ایستای داخلی فراست',
+            'scan' => $securityScan ? 'farast_static_v1' : 'farast_structural_v1',
+            'security_scan_requested' => $securityScan,
+            'scan_label' => $securityScan ? 'بررسی ایستای داخلی فراست' : 'اعتبارسنجی ساختاری؛ اسکن امنیتی تکمیلی اجرا نشد',
             'risk_level' => 'low',
             'detected_type' => $this->detectType($extension, $header),
             'page_count' => null,
@@ -91,7 +92,7 @@ class UploadSecurityService
 
         if ($inspection['detected_type'] === 'archive') {
             if (in_array($extension, ['zip','docx','xlsx','pptx'], true)) {
-                $archive = $this->inspectZip($absolutePath);
+                $archive = $this->inspectZip($absolutePath, $securityScan);
                 $members = array_column($archive['archive_entries'], 'name');
                 $requiredOfficeMembers = [
                     'docx' => ['[Content_Types].xml', 'word/document.xml'],
@@ -123,7 +124,7 @@ class UploadSecurityService
                     }
                 }
             } else {
-                $archive = $this->inspectTar($absolutePath, $extension);
+                $archive = $this->inspectTar($absolutePath, $extension, $securityScan);
             }
             foreach ($archive['archive_entries'] ?? [] as $archiveEntry) {
                 if (str_ends_with((string) ($archiveEntry['name'] ?? ''), 'docProps/core.xml')) {
@@ -134,7 +135,7 @@ class UploadSecurityService
             }
             $inspection = array_merge($inspection, $archive);
         } elseif ($inspection['detected_type'] === 'pdf') {
-            if ($this->pdfContainsActiveContent($absolutePath)) {
+            if ($securityScan && $this->pdfContainsActiveContent($absolutePath)) {
                 throw new RuntimeException('upload_pdf_active_content_rejected');
             }
             $inspection['page_count'] = $this->countPdfPages($absolutePath);
@@ -148,7 +149,9 @@ class UploadSecurityService
 
         $inspection['safe'] = $inspection['risk_level'] !== 'blocked';
         $inspection['sandbox_required'] = true;
-        $inspection['security_notice'] = 'این نتیجه بررسی ایستای داخلی است و تضمین کشف همه بدافزارهای ناشناخته نیست. فایل هرگز اجرا نمی‌شود.';
+        $inspection['security_notice'] = $securityScan
+            ? 'این نتیجه بررسی ایستای داخلی است و تضمین کشف همه بدافزارهای ناشناخته نیست. فایل هرگز اجرا نمی‌شود.'
+            : 'اسکن امنیتی تکمیلی به انتخاب کاربر مجاز اجرا نشد؛ فقط اعتبارسنجی ساختار، نوع، امضا و محدودیت‌ها انجام شده است. فایل هرگز اجرا نمی‌شود.';
 
         return $inspection;
     }
@@ -286,7 +289,7 @@ class UploadSecurityService
         return ['width' => (int) $info[0], 'height' => (int) $info[1], 'pixels' => $pixels];
     }
 
-    private function inspectTar(string $path, string $extension): array
+    private function inspectTar(string $path, string $extension, bool $securityScan = true): array
     {
         $sourceSize = (int) filesize($path);
         if ($extension === 'tar') {
@@ -396,16 +399,18 @@ class UploadSecurityService
                     if (strlen($memberBytes) !== $entrySize) {
                         throw new RuntimeException('upload_tar_entry_truncated');
                     }
-                    $contentScan = 'checked';
-                    $memberFinding = $this->scanArchiveMemberContent($memberBytes, $normalized);
+                    $contentScan = $securityScan ? 'checked' : 'not_requested';
+                    $memberFinding = $securityScan ? $this->scanArchiveMemberContent($memberBytes, $normalized) : null;
                     if ($memberFinding !== null) {
                         $risk = 'warning';
                         $findings[] = $memberFinding;
                     }
                 } elseif ($type !== '5') {
-                    $contentScan = 'skipped_size_limit';
-                    $risk = 'warning';
-                    $findings[] = 'محتوای عضو بزرگ آرشیو به‌دلیل سقف بررسی ایستا به‌طور کامل خوانده نشد: '.$normalized;
+                    $contentScan = $securityScan ? 'skipped_size_limit' : 'not_requested';
+                    if ($securityScan) {
+                        $risk = 'warning';
+                        $findings[] = 'محتوای عضو بزرگ آرشیو به‌دلیل سقف بررسی ایستا به‌طور کامل خوانده نشد: '.$normalized;
+                    }
                 }
 
                 $entries[] = [
@@ -443,7 +448,7 @@ class UploadSecurityService
         ];
     }
 
-    private function inspectZip(string $path): array
+    private function inspectZip(string $path, bool $securityScan = true): array
     {
         $handle = fopen($path, 'rb');
         if (! is_resource($handle)) throw new RuntimeException('upload_archive_read_failed');
@@ -526,8 +531,8 @@ class UploadSecurityService
                 if ($meta['expanded'] <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES && $meta['compressed'] <= self::MAX_ARCHIVE_MEMBER_SCAN_BYTES) {
                     try {
                         $memberBytes = $this->readZipMemberForInspection($handle, $meta, $name, $size);
-                        $contentScan = 'checked';
-                        $memberFinding = $this->scanArchiveMemberContent($memberBytes, $normalized);
+                        $contentScan = $securityScan ? 'checked' : 'not_requested';
+                        $memberFinding = $securityScan ? $this->scanArchiveMemberContent($memberBytes, $normalized) : null;
                         if ($memberFinding !== null) {
                             $risk = 'warning';
                             $findings[] = $memberFinding;

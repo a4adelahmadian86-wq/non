@@ -353,7 +353,7 @@
           data-preflight-url="{{ route('admin.store.files.preflight',$product) }}"
           data-confirm-url-template="{{ route('admin.store.files.confirm',[$product,'__INGESTION__']) }}"
           data-cancel-url-template="{{ route('admin.store.files.cancel',[$product,'__INGESTION__']) }}"
-          data-status-url-template="{{ route('admin.store.files.processing',[$product,'__FILE__']) }}">
+          data-status-url-template="{{ route('admin.store.files.processing',[$product,'__FILE__']) }}" data-can-skip-security-scan="{{ !empty($canSkipSecurityScan) ? '1' : '0' }}">
           <input type="hidden" data-ingestion-csrf value="{{ csrf_token() }}">
           <input type="file" data-ingestion-input multiple hidden accept=".pdf,.zip,.tar,.tar.gz,.tar.bz2,.jpg,.jpeg,.png,.webp,.gif,.docx,.xlsx,.pptx,.txt,.csv,.md,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.webm,.mov">
           <input type="file" data-ingestion-folder multiple webkitdirectory directory hidden>
@@ -365,6 +365,10 @@
           </div>
           <div class="product-ingestion-folder-action"><button type="button" class="store-outline-btn" data-ingestion-folder-pick>انتخاب یک پوشه</button><small>فایل‌های پوشه به‌صورت فهرست قابل بازبینی اضافه می‌شوند.</small></div>
           <label class="product-ingestion-primary"><input type="checkbox" data-ingestion-primary checked> اولین فایل، فایل اصلی محصول باشد</label>
+          @if(!empty($canSkipSecurityScan))
+            <label class="product-ingestion-primary product-ingestion-security-option"><input type="checkbox" data-ingestion-security-scan> اجرای اسکن امنیتی تکمیلی برای این فایل (اختیاری؛ به‌صورت پیش‌فرض خاموش)</label>
+            <small class="product-ingestion-security-note">حتی در حالت خاموش، نوع فایل، امضا، ساختار آرشیو، مسیرهای ناامن، محدودیت حجم و صحت فایل کنترل می‌شود. این گزینه فقط اسکن ایستای تکمیلی را فعال می‌کند.</small>
+          @endif
           <div class="product-ingestion-queue" data-ingestion-queue aria-live="polite"></div>
           <div class="product-ingestion-global-drop" data-ingestion-global hidden><span><i class="fa-solid fa-cloud-arrow-down"></i></span><b>فایل را رها کنید تا پنجره بازبینی باز شود</b><small>هنوز چیزی ذخیره یا منتشر نمی‌شود.</small></div>
           <div class="product-ingestion-modal" data-ingestion-modal hidden role="dialog" aria-modal="true" aria-labelledby="ingestion-modal-title">
@@ -374,7 +378,7 @@
               <div class="product-ingestion-timeline" data-ingestion-timeline>
                 <div data-step="received" class="is-done"><i>✓</i><span>دریافت فایل</span></div>
                 <div data-step="upload"><i>2</i><span>انتقال امن به قرنطینه</span></div>
-                <div data-step="inspect"><i>3</i><span>بررسی ساختار و امنیت</span></div>
+                <div data-step="inspect"><i>3</i><span>اعتبارسنجی ساختار و اسکن انتخابی</span></div>
                 <div data-step="review"><i>4</i><span>تأیید گزارش توسط شما</span></div>
                 <div data-step="store"><i>5</i><span>ذخیره‌سازی هوشمند</span></div>
                 <div data-step="study"><i>6</i><span>مطالعه و تحلیل محتوا</span></div>
