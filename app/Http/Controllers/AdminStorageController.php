@@ -1,13 +1,13 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\StorageManagedFile;
-use App\\Models\\StorageVolume;
-use App\\Services\\StorageConnectionService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Validation\\Rule;
+use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
+use App\Services\StorageConnectionService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class AdminStorageController extends Controller
