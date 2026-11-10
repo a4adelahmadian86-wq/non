@@ -66,7 +66,10 @@ class CentralStorageRoutingTest extends TestCase
         Storage::forgetDisk('managed');
         Storage::disk('managed')->put('store/products/1/large.bin', '123456');
 
-        $this->assertDatabaseMissing('storage_managed_files', ['logical_path' => 'store/products/1/large.bin']);
+        $record = StorageManagedFile::query()->where('logical_path', 'store/products/1/large.bin')->firstOrFail();
+        $this->assertNotSame($volume->id, $record->storage_volume_id);
+        $this->assertSame('iran_primary', $record->drive_key);
+        $this->assertSame(0, (int) $volume->fresh()->used_bytes);
         $this->assertSame(0, (int) $volume->fresh()->reserved_bytes);
     }
 }
