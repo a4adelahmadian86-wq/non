@@ -269,6 +269,20 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_permission_explanation_labels_navigation_and_resource_context_separately(): void
+    {
+        $employee = $this->user('09140000134');
+        $authorization = app(AuthorizationService::class);
+
+        $navigation = $authorization->explain($employee, 'documents.view');
+        $resource = $authorization->explain($employee, 'documents.view', ['owner_id' => $employee->id]);
+
+        $this->assertSame('navigation_only', $navigation['context_level']);
+        $this->assertSame('resource', $resource['context_level']);
+        $this->assertTrue($navigation['allowed']);
+        $this->assertTrue($resource['allowed']);
+    }
+
     public function test_team_role_assignment_cannot_cross_organization_boundaries(): void
     {
         $organizationA = Organization::create(['name' => 'Team Assignment Org A', 'slug' => 'team-assignment-org-a', 'status' => 'active']);
