@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class AccountSecurityController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, \\App\\Services\\LocalTotpService $totp)
     {
         $user = $request->user();
         $currentKey = hash('sha256', $request->session()->getId());
@@ -43,11 +43,29 @@ class AccountSecurityController extends Controller
             ->limit(80)
             ->get();
 
+        $pendingSecret = (string) $request->session()->get('farast.two_factor.pending_secret', '');
+        $pendingAt = (int) $request->session()->get('farast.two_factor.pending_at', 0);
+        if ($pendingSecret !== '' && $pendingAt < now()->subMinutes(10)->timestamp) {
+            $request->session()->forget(['farast.two_factor.pending_secret', 'farast.two_factor.pending_at']);
+            $pendingSecret = '';
+        }
+
+        $accountLabel = $user->email ?: $user->mobile ?: ('user-'.$user->id);
+        $recoveryCodesRemaining = DB::table('farast_two_factor_recovery_codes')
+            ->where('user_id', $user->id)
+            ->whereNull('used_at')
+            ->count();
+
         return view('platform.security', [
             'sessions' => $sessions,
             'blockedDevices' => $blockedDevices,
             'events' => $events,
             'sessionLifetimeYears' => 3,
+            'twoFactorEnabled' => (bool) $user->two_factor_enabled_at,
+            'twoFactorEnabledAt' => $user->two_factor_enabled_at,
+            'twoFactorPendingSecret' => $pendingSecret,
+            'twoFactorProvisioningUri' => $pendingSecret !== '' ? $totp->provisioningUri($pendingSecret, (string) $accountLabel) : null,
+            'recoveryCodesRemaining' => $recoveryCodesRemaining,
         ]);
     }
 
