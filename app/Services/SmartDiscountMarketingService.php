@@ -1,0 +1,197 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Order;
+use App\Models\StoreCoupon;
+use App\Models\StoreCouponAssignment;
+use App\Models\StoreProduct;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+class SmartDiscountMarketingService
+{
+    private const SCORE_THRESHOLD = 5;
+    private const SIGNAL_WINDOW_DAYS = 14;
+    private const OFFER_COOLDOWN_DAYS = 7;
+    private const OFFER_VALID_HOURS = 48;
+    private const MAX_DISCOUNT_PERCENT = 10;
+
+    public function evaluate(User $user, int $productId): ?StoreCouponAssignment
+    {
+        if (! $user->marketing_consent || $productId <= 0) {
+            return null;
+        }
+
+        $product = StoreProduct::query()->published()->find($productId);
+        if (! $product || $product->cost_price_rials === null) {
+            return null;
+        }
+
+        if ($this->hasPurchased($user->id, $productId)) {
+            return null;
+        }
+
+        $signals = DB::table('farast_workflow_events')
+            ->where('user_id', $user->id)
+            ->whereIn('event_type', [
+                'marketing.product_viewed',
+                'marketing.wishlist_added',
+                'marketing.cart_added',
+                'marketing.coupon_attempted',
+                'marketing.cart_abandoned',
+            ])
+            ->where('created_at', '>=', now()->subDays(self::SIGNAL_WINDOW_DAYS))
+            ->get(['event_type', 'context']);
+
+        $counts = [
+            'marketing.product_viewed' => 0,
+            'marketing.wishlist_added' => 0,
+            'marketing.cart_added' => 0,
+            'marketing.coupon_attempted' => 0,
+            'marketing.cart_abandoned' => 0,
+        ];
+
+        foreach ($signals as $signal) {
+            $context = is_array($signal->context) ? $signal->context : json_decode((string) $signal->context, true);
+            if ((int) ($context['product_id'] ?? 0) === $productId && array_key_exists($signal->event_type, $counts)) {
+                $counts[$signal->event_type]++;
+            }
+        }
+
+        $score = min(3, $counts['marketing.product_viewed']);
+        $reasons = [];
+        if ($counts['marketing.product_viewed'] >= 2) {
+            $reasons[] = 'repeated_product_views';
+        }
+        if ($counts['marketing.wishlist_added'] > 0) {
+            $score += 3;
+            $reasons[] = 'wishlist_interest';
+        }
+        if ($counts['marketing.cart_added'] > 0) {
+            $score += 1;
+            $reasons[] = 'cart_intent';
+        }
+        if ($counts['marketing.cart_abandoned'] > 0) {
+            $score += 5;
+            $reasons[] = 'cart_abandoned';
+        }
+        if ($counts['marketing.coupon_attempted'] > 0) {
+            $score += 2;
+            $reasons[] = 'coupon_interest';
+        }
+
+        if ($score < self::SCORE_THRESHOLD) {
+            return null;
+        }
+
+        $price = (int) $product->price_rials;
+        $cost = (int) $product->cost_price_rials;
+        $minimumMargin = max(0, (int) $product->marketing_min_margin_rials);
+        $availableDiscount = $price - $cost - $minimumMargin;
+        $discount = min((int) floor($price * self::MAX_DISCOUNT_PERCENT / 100), $availableDiscount);
+
+        if ($price <= 0 || $cost < 0 || $availableDiscount <= 0 || $discount <= 0) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($user, $productId, $score, $reasons, $discount) {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->first();
+            if (! $lockedUser || ! $lockedUser->marketing_consent) {
+                return null;
+            }
+
+            if ($this->hasPurchased($lockedUser->id, $productId)) {
+                return null;
+            }
+
+            if (StoreCouponAssignment::query()
+                ->where('user_id', $lockedUser->id)
+                ->where('offered_at', '>=', now()->subDays(self::OFFER_COOLDOWN_DAYS))
+                ->exists()) {
+                return null;
+            }
+
+            $lockedProduct = StoreProduct::query()->published()->whereKey($productId)->lockForUpdate()->first();
+            if (! $lockedProduct || $lockedProduct->cost_price_rials === null) {
+                return null;
+            }
+
+            $currentAvailable = (int) $lockedProduct->price_rials
+                - (int) $lockedProduct->cost_price_rials
+                - max(0, (int) $lockedProduct->marketing_min_margin_rials);
+            $currentDiscount = min(
+                (int) floor((int) $lockedProduct->price_rials * self::MAX_DISCOUNT_PERCENT / 100),
+                $currentAvailable
+            );
+            if ($currentDiscount <= 0 || $currentDiscount !== $discount) {
+                return null;
+            }
+
+            $expiresAt = now()->addHours(self::OFFER_VALID_HOURS);
+            $code = $this->uniqueCode();
+
+            $coupon = StoreCoupon::create([
+                'code' => $code,
+                'type' => 'fixed',
+                'value' => $discount,
+                'min_subtotal_rials' => null,
+                'max_uses' => 1,
+                'used_count' => 0,
+                'is_active' => true,
+                'starts_at' => now(),
+                'ends_at' => $expiresAt,
+                'description' => 'پیشنهاد اختصاصی بازاریابی برای محصول '.$lockedProduct->title,
+            ]);
+
+            $assignment = StoreCouponAssignment::create([
+                'coupon_id' => $coupon->id,
+                'user_id' => $lockedUser->id,
+                'product_id' => $lockedProduct->id,
+                'status' => 'offered',
+                'score' => $score,
+                'reason_codes' => $reasons,
+                'offered_at' => now(),
+                'expires_at' => $expiresAt,
+            ]);
+
+            $notification = app(NotificationService::class)->pushToUser(
+                $lockedUser,
+                'marketing_discount_offer',
+                'یک پیشنهاد اختصاصی برای شما',
+                'برای محصول «'.$lockedProduct->title.'»، کد اختصاصی '.$coupon->code.' با تخفیف '.number_format($discount).' ریال دریافت کرده‌اید. این پیشنهاد تا ۴۸ ساعت معتبر است.',
+                [
+                    'coupon_code' => $coupon->code,
+                    'product_id' => $lockedProduct->id,
+                    'expires_at' => $expiresAt->toIso8601String(),
+                    'url' => route('store.product', $lockedProduct->slug),
+                ],
+                true,
+                'smart-discount-assignment-'.$assignment->id
+            );
+
+            $assignment->update(['notification_id' => $notification->id]);
+
+            return $assignment->fresh(['coupon', 'product']);
+        });
+    }
+
+    private function hasPurchased(int $userId, int $productId): bool
+    {
+        return Order::query()
+            ->where('user_id', $userId)
+            ->where('status', 'paid')
+            ->whereHas('storeItems', fn ($items) => $items->where('product_id', $productId))
+            ->exists();
+    }
+
+    private function uniqueCode(): string
+    {
+        do {
+            $code = 'FARAST'.Str::upper(Str::random(10));
+        } while (StoreCoupon::query()->where('code', $code)->exists());
+
+        return $code;
+    }
+}

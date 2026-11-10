@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use App\Services\WorkflowEngine;
+use App\Services\StoreCartAbandonmentService;
 
 Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
@@ -45,4 +46,14 @@ Schedule::command('farast:workflows:retry --limit=50')
 // Move legacy support attachments out of the public web root in bounded batches.
 Schedule::command('farast:secure-ticket-attachments --limit=100')
     ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+
+Artisan::command('store:carts:process-abandoned {--limit=200}', function (StoreCartAbandonmentService $service) {
+    $count = $service->process((int) $this->option('limit'));
+    $this->info("Recorded {$count} consented abandoned-cart signal(s).");
+})->purpose('Process consented abandoned store carts for smart discount marketing');
+
+Schedule::command('store:carts:process-abandoned --limit=200')
+    ->everyThirtyMinutes()
     ->withoutOverlapping();

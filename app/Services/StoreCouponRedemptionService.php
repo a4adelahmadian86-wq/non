@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\StoreCoupon;
+use App\Models\StoreCouponAssignment;
+use App\Models\StoreProduct;
 use RuntimeException;
 
 class StoreCouponRedemptionService
@@ -29,6 +31,38 @@ class StoreCouponRedemptionService
 
         if (! $coupon) {
             throw new RuntimeException('کد تخفیف ثبت‌شده برای این سفارش دیگر در دسترس نیست؛ پرداخت انجام نشد.');
+        }
+
+        $assignment = null;
+        $assignmentId = (int) ($snapshot['coupon_assignment_id'] ?? 0);
+        if ($assignmentId > 0) {
+            $assignment = StoreCouponAssignment::query()->whereKey($assignmentId)->lockForUpdate()->first();
+            if (! $assignment
+                || (int) $assignment->coupon_id !== (int) $coupon->id
+                || (int) $assignment->user_id !== (int) $order->user_id
+                || $assignment->status !== 'offered'
+                || ! $assignment->expires_at
+                || $assignment->expires_at->lte(now())
+                || ! $order->storeItems()->where('product_id', $assignment->product_id)->exists()
+                || (int) ($snapshot['coupon_product_id'] ?? 0) !== (int) $assignment->product_id
+                || $coupon->type !== 'fixed'
+                || (int) $order->discount_rials !== (int) $coupon->value
+                || Order::query()->where('user_id', $order->user_id)->where('status', 'paid')
+                    ->where('id', '!=', $order->id)
+                    ->whereHas('storeItems', fn ($items) => $items->where('product_id', $assignment->product_id))->exists()) {
+                throw new RuntimeException('این کد اختصاصی برای این سفارش معتبر نیست یا مهلت آن پایان یافته است.');
+            }
+        }
+
+        if ($assignment) {
+            $product = StoreProduct::query()->find($assignment->product_id);
+            $orderItem = $order->storeItems()->where('product_id', $assignment->product_id)->first();
+            $safeDiscountCap = $product && $product->cost_price_rials !== null && $orderItem
+                ? max(0, ((int) $orderItem->unit_price_rials - (int) $product->cost_price_rials - max(0, (int) $product->marketing_min_margin_rials)) * (int) $orderItem->quantity)
+                : 0;
+            if ((int) $coupon->value > $safeDiscountCap) {
+                throw new RuntimeException('حاشیه سود محصول پیش از پرداخت تغییر کرده و این کد دیگر قابل استفاده نیست.');
+            }
         }
 
         $now = now();
@@ -59,5 +93,9 @@ class StoreCouponRedemptionService
         $snapshot['coupon_redemption_pending'] = false;
         $snapshot['coupon_redeemed_at'] = now()->toIso8601String();
         $order->update(['pricing_snapshot' => $snapshot]);
+
+        if ($assignment) {
+            $assignment->update(['status' => 'redeemed', 'redeemed_at' => now()]);
+        }
     }
 }
