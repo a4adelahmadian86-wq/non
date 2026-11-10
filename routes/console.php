@@ -61,14 +61,13 @@ Schedule::command('store:carts:process-abandoned --limit=200')
     ->everyThirtyMinutes()
     ->withoutOverlapping();
 
-Artisan::command('store:marketing:prune-signals {--days=90} {--limit=5000}', function () {
+Artisan::command('store:marketing:prune-signals {--limit=5000}', function () {
     if (! Schema::hasTable('farast_workflow_events')) {
         $this->info('Marketing signal storage is not installed; nothing to prune.');
         return 0;
     }
 
-    $configuredDays = (int) ($this->option('days') ?: SiteSetting::read('marketing_signal_retention_days', 90));
-    $days = max(7, min(365, $configuredDays));
+    $days = max(7, min(180, (int) SiteSetting::read('marketing_signal_retention_days', 30)));
     $limit = max(100, min(20000, (int) $this->option('limit')));
     $ids = DB::table('farast_workflow_events')
         ->where('event_type', 'like', 'marketing.%')
