@@ -6,6 +6,7 @@ use App\Models\StorageManagedFile;
 use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -264,40 +265,42 @@ class StorageManager
         string $status,
         array $metadata = []
     ): array {
-        $disk = $volume ? $this->volumeDisk($volume) : 'private';
-        $record = StorageManagedFile::create([
-            'storage_volume_id' => $volume?->id,
-            'drive_key' => $classification === self::CRITICAL ? 'iran_primary' : 'foreign_primary',
-            'file_key' => $key,
-            'file_key_hash' => hash('sha256', $key),
-            'original_name' => $file->getClientOriginalName(),
-            'mime' => $file->getMimeType(),
-            'size_bytes' => (int) $file->getSize(),
-            'checksum' => $checksum,
-            'classification' => $classification,
-            'source_module' => $sourceModule,
-            'source_type' => $sourceType,
-            'source_id' => $sourceId,
-            'product_id' => $productId,
-            'visibility' => $visibility,
-            'status' => $status,
-            'metadata' => array_merge($metadata, ['disk' => $disk, 'original_extension' => $file->getClientOriginalExtension(), 'reference_pending' => true]),
-        ]);
+        return DB::transaction(function () use ($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, $status, $metadata): array {
+            $disk = $volume ? $this->volumeDisk($volume) : 'private';
+            $record = StorageManagedFile::create([
+                'storage_volume_id' => $volume?->id,
+                'drive_key' => $classification === self::CRITICAL ? 'iran_primary' : 'foreign_primary',
+                'file_key' => $key,
+                'file_key_hash' => hash('sha256', $key),
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $file->getMimeType(),
+                'size_bytes' => (int) $file->getSize(),
+                'checksum' => $checksum,
+                'classification' => $classification,
+                'source_module' => $sourceModule,
+                'source_type' => $sourceType,
+                'source_id' => $sourceId,
+                'product_id' => $productId,
+                'visibility' => $visibility,
+                'status' => $status,
+                'metadata' => array_merge($metadata, ['disk' => $disk, 'original_extension' => $file->getClientOriginalExtension(), 'reference_pending' => true]),
+            ]);
 
-        if ($volume) {
-            $volume->increment('used_bytes', (int) $file->getSize());
-            $volume->increment('object_count');
-        }
+            if ($volume) {
+                $volume->increment('used_bytes', (int) $file->getSize());
+                $volume->increment('object_count');
+            }
 
-        return [
-            'managed_file_id' => $record->id,
-            'disk' => $disk,
-            'path' => $key,
-            'volume_id' => $volume?->id,
-            'size_bytes' => (int) $file->getSize(),
-            'mime' => $file->getMimeType(),
-            'sha256' => $checksum,
-            'status' => $status,
-        ];
+            return [
+                'managed_file_id' => $record->id,
+                'disk' => $disk,
+                'path' => $key,
+                'volume_id' => $volume?->id,
+                'size_bytes' => (int) $file->getSize(),
+                'mime' => $file->getMimeType(),
+                'sha256' => $checksum,
+                'status' => $status,
+            ];
+        });
     }
 }
