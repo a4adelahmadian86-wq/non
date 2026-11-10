@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Organization;
 use App\Models\Permission;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -165,6 +166,49 @@ class AdvancedAccessControlTest extends TestCase
             'owner_id' => $employee->id,
             'order_kind' => 'typing',
             'amount_rials' => 900,
+        ]));
+    }
+
+    public function test_organization_and_team_scopes_fail_closed_when_resource_scope_is_null(): void
+    {
+        $organization = Organization::create(['name' => 'Null Scope Org', 'slug' => 'null-scope-org', 'status' => 'active']);
+        $organizationManager = $this->user('09140000114', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $organizationRole = $this->role('null-org-scope-role', 'organization', $organization->id);
+        $this->grant($organizationRole, 'access.audit', 'organization');
+        $this->assign($organizationManager, $organizationRole, 'organization', $organization->id);
+
+        $authorization = app(AuthorizationService::class);
+        $this->assertFalse($authorization->allowsFor($organizationManager, 'access.audit', [
+            'organization_id' => null,
+            'owner_id' => null,
+            'team_id' => null,
+        ]));
+        $this->assertTrue($authorization->allowsFor($organizationManager, 'access.audit', [
+            'organization_id' => $organization->id,
+            'owner_id' => null,
+            'team_id' => null,
+        ]));
+
+        $teamSupervisor = $this->user('09140000115', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $team = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Null Scope Team',
+            'slug' => 'null-scope-team',
+            'supervisor_id' => $teamSupervisor->id,
+        ]);
+        $teamRole = $this->role('null-team-scope-role', 'team', $team->id);
+        $this->grant($teamRole, 'access.audit', 'team');
+        $this->assign($teamSupervisor, $teamRole, 'team', $team->id);
+
+        $this->assertFalse($authorization->allowsFor($teamSupervisor, 'access.audit', [
+            'organization_id' => $organization->id,
+            'team_id' => null,
+            'owner_id' => null,
+        ]));
+        $this->assertTrue($authorization->allowsFor($teamSupervisor, 'access.audit', [
+            'organization_id' => $organization->id,
+            'team_id' => $team->id,
+            'owner_id' => null,
         ]));
     }
 
