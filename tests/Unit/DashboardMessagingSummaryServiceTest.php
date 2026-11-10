@@ -64,6 +64,85 @@ class DashboardMessagingSummaryServiceTest extends TestCase
         $this->assertSame(0, $service->snapshot($admin)['unread_messages']);
     }
 
+    public function test_non_admin_summary_excludes_conversations_with_foreign_organization_members(): void
+    {
+        $organizationA = DB::table('organizations')->insertGetId([
+            'name' => 'Organization A',
+            'slug' => 'dashboard-org-a',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $organizationB = DB::table('organizations')->insertGetId([
+            'name' => 'Organization B',
+            'slug' => 'dashboard-org-b',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $actor = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'organization_id' => $organizationA,
+        ]);
+        $colleague = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'organization_id' => $organizationA,
+        ]);
+        $foreignMember = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'organization_id' => $organizationB,
+        ]);
+
+        $createConversation = function (User $other, string $slug) use ($actor): int {
+            $conversationId = DB::table('conversations')->insertGetId([
+                'type' => 'direct',
+                'created_by' => $actor->id,
+                'last_message_preview' => $slug,
+                'last_message_at' => now(),
+                'is_locked' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('conversation_participants')->insert([
+                [
+                    'conversation_id' => $conversationId,
+                    'user_id' => $actor->id,
+                    'last_read_message_id' => null,
+                    'archived_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
+                [
+                    'conversation_id' => $conversationId,
+                    'user_id' => $other->id,
+                    'last_read_message_id' => null,
+                    'archived_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
+            ]);
+
+            DB::table('conversation_messages')->insert([
+                'conversation_id' => $conversationId,
+                'user_id' => $other->id,
+                'body' => $slug,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return $conversationId;
+        };
+
+        $createConversation($colleague, 'same-organization');
+        $createConversation($foreignMember, 'foreign-organization');
+
+        $snapshot = app(DashboardMessagingSummaryService::class)->snapshot($actor);
+
+        $this->assertTrue($snapshot['available']);
+        $this->assertSame(1, $snapshot['unread_messages']);
+    }
+
     public function test_snapshot_does_not_expose_messaging_counts_to_accounts_without_messenger_access(): void
     {
         $customer = User::factory()->create(['organization_id' => null]);
