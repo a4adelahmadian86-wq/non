@@ -197,9 +197,13 @@ class PaymentController extends Controller
 
             DB::transaction(function () use ($order, &$paidOrder) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+                // A repeated wallet request for an already-paid order is a no-op.
+                // Do not redispatch receipts, notifications, or post-payment workflows.
                 if ($locked->isPaid()) {
-                    $paidOrder = $locked->fresh();
                     return;
+                }
+                if ($locked->status !== 'pending') {
+                    throw new \\RuntimeException('وضعیت این سفارش اجازه پرداخت مجدد نمی‌دهد.');
                 }
 
                 $items = $locked->storeItems()->with(['product.files'])->lockForUpdate()->get();
