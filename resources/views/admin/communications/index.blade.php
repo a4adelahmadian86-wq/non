@@ -19,7 +19,7 @@
     </header>
 
     <section class="ac-stats" aria-label="خلاصه ارتباطات">
-        <div class="ac-stat"><strong>{{ number_format($stats['tickets_needing_reply']) }}</strong><span>تیکت نیازمند پاسخ</span></div>
+        <div class="ac-stat"><strong>{{ number_format($stats['tickets_needing_reply']) }}</strong><span>{{ $isAdmin ? 'تیکت نیازمند پاسخ' : 'پاسخ جدید پشتیبانی' }}</span></div>
         <div class="ac-stat"><strong>{{ number_format($stats['tickets_open']) }}</strong><span>تیکت باز</span></div>
         <div class="ac-stat"><strong>{{ number_format($stats['conversations_unread']) }}</strong><span>پیام خوانده‌نشده در گفت‌وگوها</span></div>
         <div class="ac-stat"><strong>{{ number_format($stats['notifications_unread']) }}</strong><span>اعلان خوانده‌نشده</span></div>
