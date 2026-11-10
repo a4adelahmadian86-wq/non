@@ -28,6 +28,13 @@ test('annotation workspace persists text highlights and supports undo',async({pa
   await page.mouse.move(before.x+10,before.y+10);await page.mouse.down();await page.mouse.move(before.x+65,before.y+45);await page.mouse.up();
   const after=await page.locator('.farast-annotation-stamp').boundingBox();
   expect(after.x).toBeGreaterThan(before.x+20);
+  await page.locator('[data-action="list"]').click();
+  await expect(page.locator('.farast-annotation-list-item')).toHaveCount(3);
+  await page.locator('.farast-annotation-list-item').first().getByRole('button',{name:'تکثیر حاشیه‌نویسی'}).click();
+  await expect(page.locator('.farast-annotation-list-item')).toHaveCount(4);
+  await page.locator('.farast-annotation-list-item').first().locator('input[type="checkbox"]').check();
+  await page.getByRole('button',{name:/حذف انتخاب‌شده‌ها/}).click();
+  await expect(page.locator('.farast-annotation-list-item')).toHaveCount(3);
 });
 test('annotation backup import rejects malformed records and confirms replacement',async({page})=>{
   await page.goto('/');
