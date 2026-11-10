@@ -90,12 +90,14 @@ class RestoreStorageBackup extends Command
             $this->restoreDirectory($extracted.'/public', storage_path('app/public'));
             $this->restoreDirectory($extracted.'/legacy-remote-archive', storage_path('app/remote-archive'));
 
+            DB::purge();
             $this->restoreDatabase($databaseDriver, $extracted.'/database/database.sql');
             DB::purge();
             DB::reconnect();
 
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
+            StorageManagedFile::query()->where('status', 'delete_pending')->update(['status' => 'deleted']);
 
             $this->newLine();
             $this->info('بازیابی پایگاه داده و فایل‌ها انجام شد.');
