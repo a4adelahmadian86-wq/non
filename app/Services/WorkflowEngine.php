@@ -38,7 +38,7 @@ class WorkflowEngine
         ]);
 
         try {
-            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual): void {
+            DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual, $userId): void {
                 // Serialize execution against workflow edits, disabling and deletion.
                 $workflow = DB::table('farast_workflows')
                     ->where('id', $workflowId)
