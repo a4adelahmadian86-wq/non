@@ -19,11 +19,33 @@
         </section>
 
         <section class="admin-metric-grid" aria-label="شاخص‌های اصلی">
-            <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>کل حساب‌های ثبت‌شده</small></article>
-            <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>سندهای ایجادشده</small></article>
+            <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>{{ number_format($stats['new_users_week']) }} ثبت‌نام در ۷ روز · {{ number_format($stats['blocked_users']) }} مسدود</small></article>
+            <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>{{ number_format($stats['new_documents_week']) }} سند جدید در ۷ روز اخیر</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
             @if($scope === 'global' && $console->sectionAllowed(auth()->user(), 'ai'))
             <article class="metric-card metric-green"><div class="metric-top"><span>اعتبارنامه Gemini</span><i class="fa-solid fa-circle-nodes"></i></div><strong class="metric-status">{{ $secretStatus['gemini'] ? 'ثبت شده' : 'ثبت نشده' }}</strong><small>{{ $settings['gemini_model'] }}</small></article>
+            @endif
+        </section>
+
+        <section class="admin-metric-grid admin-action-metrics" aria-label="اقدام‌های عملیاتی">
+            @if($console->sectionAllowed(auth()->user(), 'support_admin'))
+                <a class="metric-card metric-orange admin-action-metric" href="{{ route('admin.support.management') }}">
+                    <div class="metric-top"><span>تیکت‌های نیازمند پیگیری</span><i class="fa-solid fa-headset"></i></div>
+                    <strong>{{ number_format($stats['tickets_open']) }}</strong>
+                    <small>گفتگوهای باز یا پاسخ‌داده‌شده · مشاهده صف پشتیبانی</small>
+                </a>
+            @endif
+            @if($console->sectionAllowed(auth()->user(), 'finance'))
+                <a class="metric-card metric-green admin-action-metric" href="{{ route('admin.finance') }}">
+                    <div class="metric-top"><span>درآمد ماه جاری</span><i class="fa-solid fa-chart-line"></i></div>
+                    <strong>{{ number_format($stats['revenue_month']) }}</strong>
+                    <small>ریال · کل درآمد ثبت‌شده: {{ number_format($stats['revenue_total']) }} ریال</small>
+                </a>
+                <a class="metric-card metric-violet admin-action-metric" href="{{ route('admin.finance') }}">
+                    <div class="metric-top"><span>موجودی تجمیعی کیف پول</span><i class="fa-solid fa-wallet"></i></div>
+                    <strong>{{ number_format($stats['wallet_balance']) }}</strong>
+                    <small>ریال · مشاهده دفتر مالی و تراکنش‌ها</small>
+                </a>
             @endif
         </section>
 
@@ -253,6 +275,12 @@
 .farast-admin-nav-create-product b{margin-inline-start:auto;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#2e73d2;color:white;font-size:1rem}
 .farast-admin-nav a[aria-current="page"]{outline:1px solid rgba(111,174,255,.22)}
 .hero-copy h1{font-size:25px;line-height:1.55;margin:13px 0 7px;letter-spacing:-.5px}
+.admin-action-metrics{margin-top:-5px}
+.admin-action-metric{display:block;min-width:0;text-decoration:none;color:inherit;transition:transform .18s ease,box-shadow .18s ease}
+.admin-action-metric:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(16,35,70,.12)}
+.admin-action-metric:focus-visible{outline:2px solid #3679e8;outline-offset:3px}
+.admin-action-metric strong{display:block}
+
 .admin-activity-list{display:grid;gap:0}
 .admin-activity-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-top:1px solid #edf1f7;min-width:0}
 .admin-activity-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#edf4ff;color:#315fae}
