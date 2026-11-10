@@ -92,7 +92,9 @@ class MessengerController extends Controller
         $messages->setCollection($messages->getCollection()->reverse()->values());
 
         $conversation->load('participants:id,name');
-        $this->markRead($request, $conversation, (int) ($conversation->messages()->max('id') ?? 0));
+        $visibleThrough = (int) ($messages->getCollection()->last()?->id ?? 0);
+        $this->markRead($request, $conversation, $visibleThrough);
+        $latestMessageId = (int) ($conversation->messages()->max('id') ?? 0);
         $isGroupOwner = $conversation->type === 'group'
             && $conversation->participants()->where('users.id', $request->user()->id)->wherePivot('role', 'owner')->exists();
         $existingIds = $conversation->participants()->pluck('users.id')->all();
@@ -100,7 +102,7 @@ class MessengerController extends Controller
             ? User::query()->where('is_blocked', false)->whereNotIn('id', $existingIds)->orderBy('name')->limit(200)->get(['id', 'name', 'email'])
             : collect();
 
-        return view('messenger.show', compact('conversation', 'messages', 'isGroupOwner', 'availableUsers'));
+        return view('messenger.show', compact('conversation', 'messages', 'isGroupOwner', 'availableUsers', 'latestMessageId'));
     }
 
     public function send(Request $request, Conversation $conversation)
