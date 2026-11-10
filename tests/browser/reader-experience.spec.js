@@ -75,6 +75,7 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
     </section>
   `);
   await page.addStyleTag({ content: '.farast-reader-page-content img,.farast-reader-page-content iframe { transform: scale(var(--reader-zoom, 1)); transform-origin: top center; }.farast-reader-print-block{display:none}@media print{body *{visibility:hidden!important}.farast-reader-print-block{display:block!important;visibility:visible!important;position:fixed;inset:0;padding:48px;background:#fff;color:#111}.farast-reader-print-block *{visibility:visible!important}}' });
+  await page.addScriptTag({ url: new URL('/js/farast-reader-storage.js', page.url()).href });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
@@ -163,6 +164,23 @@ test.describe('FARAST sample reader interactions', () => {
     await resume.click();
     await expect(page.locator('#reader-page-number')).toHaveValue('2');
     await expect(resume).toBeHidden();
+  });
+
+  test('reading progress and bookmarks survive clearing localStorage', async ({ page }) => {
+    await mountReader(page);
+    await page.locator('#reader-next').click();
+    await page.locator('#reader-bookmark-toggle').click();
+    await expect.poll(() => page.evaluate(async () => {
+      const value = await window.FarastReaderDurableStore.restore('farast-reader:v1:reader-fixture');
+      return value ? JSON.parse(value).progress?.section : null;
+    })).toBe(1);
+    await page.evaluate(() => localStorage.clear());
+    await mountReader(page);
+    await expect(page.locator('#reader-resume')).toBeVisible();
+    await page.locator('#reader-bookmarks-open').click();
+    await expect(page.locator('#reader-bookmarks-panel button')).toHaveCount(1);
+    await page.locator('#reader-resume').click();
+    await expect(page.locator('#reader-page-number')).toHaveValue('2');
   });
 
   test('keeps page bookmarks across reader reloads and allows removing them', async ({ page }) => {
