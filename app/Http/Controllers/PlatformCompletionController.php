@@ -199,7 +199,7 @@ class PlatformCompletionController extends Controller {
   // supplied order, payment, ticket, document or organization attributes here.
   // Conditional workflows with business-data predicates must run from the
   // corresponding server-side domain event, not from a forged manual payload.
-  $context=['user_id'=>(int)$r->user()->id,'manual_run'=>true];
+  $context=['user_id'=>(int)$r->user()->id,'customer_id'=>(int)$r->user()->id,'manual_run'=>true];
   abort_unless(
    app(\App\Services\WorkflowConditionEvaluator::class)->matches($w->conditions??null,$context),
    409,
