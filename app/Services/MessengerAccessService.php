@@ -30,33 +30,43 @@ class MessengerAccessService
     public function usersFor(User $actor): Builder
     {
         $this->assertCanUse($actor);
+        $staffRoles = [User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR, User::ROLE_EMPLOYEE];
         $query = User::query()->where('id', '!=', $actor->id)->where('is_blocked', false);
 
-        if (! $actor->isAdmin()) {
-            $query->where(function (Builder $q) use ($actor) {
-                $q->where('organization_id', $actor->organization_id)
-                    ->orWhere('role', User::ROLE_ADMIN);
+        if ($actor->isAdmin()) {
+            return $query->where(function (Builder $q) use ($staffRoles) {
+                $q->where('role', User::ROLE_ADMIN)
+                    ->orWhere(function (Builder $staff) use ($staffRoles) {
+                        $staff->whereIn('role', $staffRoles)->whereNotNull('organization_id');
+                    });
             });
         }
 
-        return $query;
+        return $query->where(function (Builder $q) use ($actor, $staffRoles) {
+            $q->where('role', User::ROLE_ADMIN)
+                ->orWhere(function (Builder $staff) use ($actor, $staffRoles) {
+                    $staff->whereIn('role', $staffRoles)->where('organization_id', $actor->organization_id);
+                });
+        });
     }
 
     public function canInvite(User $actor, User $candidate): bool
     {
         if (! $this->canUse($actor) || $candidate->is_blocked) return false;
-        if ($actor->isAdmin()) return true;
+        if ($candidate->isAdmin()) return true;
 
-        return $candidate->isAdmin()
-            || ($candidate->organization_id !== null && (int) $candidate->organization_id === (int) $actor->organization_id);
+        $staffRoles = [User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR, User::ROLE_EMPLOYEE];
+        if (! in_array($candidate->role, $staffRoles, true) || $candidate->organization_id === null) return false;
+        return $actor->isAdmin() || (int) $candidate->organization_id === (int) $actor->organization_id;
     }
 
     public function canCreateGroup(User $actor, Collection $participants): bool
     {
         if (! $this->canUse($actor)) return false;
+        $staffRoles = [User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR, User::ROLE_EMPLOYEE];
         $members = $participants->reject(fn (User $user) => $user->isAdmin());
 
-        if ($members->contains(fn (User $user) => $user->organization_id === null)) return false;
+        if ($members->contains(fn (User $user) => ! in_array($user->role, $staffRoles, true) || $user->organization_id === null)) return false;
 
         return $members->pluck('organization_id')->unique()->count() <= 1;
     }
@@ -75,7 +85,8 @@ class MessengerAccessService
         $foreignMemberExists = $conversation->participants()
             ->where('users.role', '!=', User::ROLE_ADMIN)
             ->where(function (Builder $query) use ($actor) {
-                $query->whereNull('users.organization_id')
+                $query->whereNotIn('users.role', [User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR, User::ROLE_EMPLOYEE])
+                    ->orWhereNull('users.organization_id')
                     ->orWhere('users.organization_id', '!=', $actor->organization_id);
             })
             ->exists();
