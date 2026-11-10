@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 test('annotation workspace persists text highlights and supports undo',async({page})=>{
   await page.goto('/');
   await page.setContent('<section class="farast-reader" data-reader-root data-product-id="annotation-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>FARAST annotation sample</span></div></div></article></section>');
+  await page.addStyleTag({content:'.farast-pdf-document{position:relative;width:600px;height:800px;background:#fff}.farast-pdf-text-layer{position:absolute;inset:0}'});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
   await expect(page.locator('.farast-annotation-toolbar')).toBeVisible();
   await page.locator('.farast-pdf-text-layer span').evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
