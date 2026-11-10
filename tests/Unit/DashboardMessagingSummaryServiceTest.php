@@ -94,7 +94,7 @@ class DashboardMessagingSummaryServiceTest extends TestCase
             'organization_id' => $organizationB,
         ]);
         $unsupportedSameOrg = User::factory()->create([
-            'role' => User::ROLE_CUSTOMER,
+            'role' => User::ROLE_OBSERVER,
             'organization_id' => $organizationA,
         ]);
 
