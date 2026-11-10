@@ -30,6 +30,13 @@
             <article class="metric-card metric-blue"><div class="metric-top"><span>کاربران</span><i class="fa-solid fa-users"></i></div><strong>{{ number_format($stats['users']) }}</strong><small>{{ number_format($stats['new_users_week']) }} ثبت‌نام در ۷ روز · {{ number_format($stats['blocked_users']) }} مسدود</small></article>
             <article class="metric-card metric-violet"><div class="metric-top"><span>اسناد</span><i class="fa-solid fa-file-lines"></i></div><strong>{{ number_format($stats['documents']) }}</strong><small>{{ number_format($stats['new_documents_week']) }} سند جدید در ۷ روز اخیر</small></article>
             <article class="metric-card metric-cyan"><div class="metric-top"><span>تعامل AI</span><i class="fa-solid fa-sparkles"></i></div><strong>{{ number_format($stats['ai']) }}</strong><small>{{ number_format($stats['ai_today']) }} تعامل در امروز</small></article>
+            @if($console->sectionAllowed(auth()->user(), 'store'))
+            <a class="metric-card metric-violet dashboard-metric-link" href="{{ route('admin.store.index') }}">
+                <div class="metric-top"><span>کاتالوگ محصولات</span><i class="fa-solid fa-boxes-stacked"></i></div>
+                <strong>{{ number_format($storeProductStats['total'] ?? 0) }}</strong>
+                <small>{{ number_format($storeProductStats['published'] ?? 0) }} منتشرشده · {{ number_format($storeProductStats['draft'] ?? 0) }} پیش‌نویس</small>
+            </a>
+            @endif
             @if(($messengerSummary['available'] ?? false) && ($messengerSummary['status'] ?? '') === 'available')
             <a class="metric-card metric-cyan dashboard-metric-link" href="{{ route('messenger.index') }}">
                 <div class="metric-top"><span>پیام‌های خوانده‌نشده</span><i class="fa-solid fa-comments"></i></div>
