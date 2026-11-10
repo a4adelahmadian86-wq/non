@@ -24,16 +24,22 @@ class UserFileController extends Controller
         $request->validate(['file' => 'required|file|max:'.($limit * 1024).'|mimes:jpg,jpeg,png,webp,pdf,zip,doc,docx']);
         $file = $request->file('file');
         $bytes = $file->getSize() ?: 0;
-        $path = $file->store('user-files/'.auth()->id(), 'private');
-        $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $path);
+        $path = $file->store('user-files/'.auth()->id(), [
+            'disk' => 'managed',
+            'farast_classification' => 'non_critical',
+            'farast_source_type' => 'user_file',
+            'farast_source_id' => auth()->id(),
+            'farast_owner_user_id' => auth()->id(),
+            'farast_original_name' => $file->getClientOriginalName(),
+        ]);
+        $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $path, 'managed');
         $quote = $pricing->estimateByPages($pages);
         $now = now();
         $record = UserFile::create([
             'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
-            'disk' => 'private', 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
-            'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'], 'status' => 'local',
-            'uploaded_at' => $now, 'local_expires_at' => $now->copy()->addDays((int) env('FILES_TTL_DAYS', 14)),
-            'remote_expires_at' => $now->copy()->addDays(90),
+            'disk' => 'managed', 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
+            'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'], 'status' => 'managed',
+            'uploaded_at' => $now, 'local_expires_at' => null, 'remote_expires_at' => null,
         ]);
         return response()->json(['ok' => true, 'file' => $this->present($record), 'estimate' => $quote]);
     }
@@ -95,9 +101,9 @@ class UserFileController extends Controller
         return round($bytes / 1073741824, 2).' گیگابایت';
     }
 
-    private function estimatePages(?string $mime, string $name, string $path): int
+    private function estimatePages(?string $mime, string $name, string $path, string $disk = 'private'): int
     {
-        $bytes = Storage::disk('private')->get($path);
+        $bytes = Storage::disk($disk)->get($path);
         if ($mime === 'application/pdf' || Str::endsWith(strtolower($name), '.pdf')) {
             $count = preg_match_all('/\/Type\s*\/Page\b/u', $bytes, $m) ?: 0;
             return max(1, $count);
