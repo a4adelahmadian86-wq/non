@@ -16,6 +16,7 @@ use App\Models\WalletTransaction;
 use App\Models\VoiceProviderAccount;
 use App\Services\AdminConsoleService;
 use App\Services\DashboardQueueHealthService;
+use App\Services\DashboardStorageSummaryService;
 use App\Services\DashboardMessagingSummaryService;
 use App\Services\AuditLogService;
 use App\Services\CapabilityService;
@@ -465,6 +466,7 @@ class AdminController extends Controller
                 'db_ok' => $this->databaseReachable(),
                 'cache_ok' => $this->cacheReachable(),
                 'queue' => app(DashboardQueueHealthService::class)->snapshot(),
+                'storage' => app(DashboardStorageSummaryService::class)->snapshot(),
                 'env' => app()->environment(),
                 'debug' => (bool) config('app.debug'),
                 'storage_writable' => is_writable(storage_path()),
