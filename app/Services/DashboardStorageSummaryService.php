@@ -63,7 +63,13 @@ class DashboardStorageSummaryService
                 ->where('source_name', '!=', 'snapshot_lock');
             $failedBackups24h = (int) (clone $backupRuns)
                 ->where('status', 'failed')
-                ->where('created_at', '>=', now()->subDay())
+                ->where(function ($recent) {
+                    $recent->where('completed_at', '>=', now()->subDay())
+                        ->orWhere(function ($pending) {
+                            $pending->whereNull('completed_at')
+                                ->where('created_at', '>=', now()->subDay());
+                        });
+                })
                 ->count();
             $lastSuccessfulBackup = (clone $backupRuns)
                 ->where('status', 'completed')
@@ -77,7 +83,7 @@ class DashboardStorageSummaryService
 
             return [
                 'available' => true,
-                'status' => $attention ? 'attention' : 'healthy',
+                'status' => $active === 0 ? 'unconfigured' : ($attention ? 'attention' : 'healthy'),
                 'active_volumes' => $active,
                 'healthy_volumes' => $healthy,
                 'degraded_volumes' => $degraded,
