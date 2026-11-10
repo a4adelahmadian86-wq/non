@@ -208,6 +208,27 @@ class StoreController extends Controller
         return view('store.product', compact('product', 'related', 'alsoViewed', 'inWishlist', 'inLater', 'smartOffer', 'hasPreview', 'showPreviews', 'title', 'discussions', 'discussionCounts', 'averageRating', 'ratingBreakdown', 'discussionSort'));
     }
 
+    public function trackSmartOfferInteraction(Request $request, StoreCouponAssignment $assignment, MarketingSignalService $signals)
+    {
+        abort_unless(
+            $assignment->user_id === (int) $request->user()->id
+                && $request->user()->marketing_consent
+                && $assignment->status === 'offered'
+                && $assignment->expires_at?->isFuture()
+                && $assignment->coupon()->where('is_active', true)->exists(),
+            404
+        );
+
+        $signals->record(
+            $request->user(),
+            'offer_clicked',
+            (int) $assignment->product_id,
+            'assignment-'.$assignment->id
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
     public function coursePreview(StoreProduct $product, StoreCourseLesson $lesson)
     {
         abort_unless(
