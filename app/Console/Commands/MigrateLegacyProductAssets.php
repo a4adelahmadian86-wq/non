@@ -71,7 +71,7 @@ class MigrateLegacyProductAssets extends Command
         $mime = (string) ($disk->mimeType($relative) ?: mime_content_type($absolute));
         if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true)) throw new RuntimeException('نوع تصویر کاور قدیمی پشتیبانی نمی‌شود.');
 
-        $upload = new UploadedFile($absolute, basename($relative), $mime, UPLOAD_ERR_OK, true);
+        $upload = new UploadedFile($absolute, 'product-'.$product->id.'-cover.'.pathinfo($relative, PATHINFO_EXTENSION), $mime, UPLOAD_ERR_OK, true);
         $managed = $storage->storeUploadedFile($upload, StorageManager::CRITICAL, 'store-cover', StoreProduct::class, (int) $product->id, (int) $product->id, 'public');
         $newPath = 'storage/managed/'.$managed['managed_file_id'];
 
@@ -101,7 +101,7 @@ class MigrateLegacyProductAssets extends Command
         $mime = (string) ($disk->mimeType($relative) ?: mime_content_type($absolute));
         if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true)) throw new RuntimeException('نوع تصویر قدیمی پشتیبانی نمی‌شود.');
 
-        $upload = new UploadedFile($absolute, basename($relative), $mime, UPLOAD_ERR_OK, true);
+        $upload = new UploadedFile($absolute, 'product-'.$image->product_id.'-image-'.$image->id.'.'.pathinfo($relative, PATHINFO_EXTENSION), $mime, UPLOAD_ERR_OK, true);
         $managed = $storage->storeUploadedFile($upload, StorageManager::CRITICAL, 'store-product-image', StoreProductImage::class, (int) $image->id, (int) $image->product_id, 'public');
         $newPath = 'storage/managed/'.$managed['managed_file_id'];
 
