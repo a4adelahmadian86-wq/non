@@ -89,6 +89,9 @@ class PlatformCompletionController extends Controller {
   $canManageWorkflows=$authorization->allows($r->user(),'workflows.manage')
    ||$authorization->allows($r->user(),'automation.manage')
    ||$authorization->allows($r->user(),'workflows.create');
+  $canEditWorkflows=$authorization->allows($r->user(),'workflows.manage')
+   ||$authorization->allows($r->user(),'automation.manage')
+   ||$authorization->allows($r->user(),'workflows.edit');
   $canRunWorkflows=$authorization->allows($r->user(),'workflows.manage')
    ||$authorization->allows($r->user(),'automation.manage')
    ||$authorization->allows($r->user(),'workflows.run')
@@ -97,14 +100,26 @@ class PlatformCompletionController extends Controller {
    ||$authorization->allows($r->user(),'automation.manage')
    ||$authorization->allows($r->user(),'workflows.audit')
    ||$authorization->allows($r->user(),'automation.audit');
-  abort_unless($authorization->allows($r->user(),'workflows.view')||$authorization->allows($r->user(),'workflows.edit')||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit,403);
+  abort_unless($authorization->allows($r->user(),'workflows.view')||$canEditWorkflows||$canManageWorkflows||$canRunWorkflows||$canViewWorkflowAudit,403);
+
+  $editingWorkflow=null;
+  if($r->filled('edit')){
+   abort_unless($canEditWorkflows,403);
+   $editingWorkflow=DB::table('farast_workflows')
+    ->where('id',(int)$r->query('edit'))
+    ->where('user_id',$r->user()->id)
+    ->first();
+   abort_unless($editingWorkflow,404);
+  }
+  $showWorkflowBuilder=$canManageWorkflows||$editingWorkflow!==null;
+
   $items=DB::table('farast_workflows')->where('user_id',$r->user()->id)->orderByDesc('updated_at')->get();
   $runs=$canViewWorkflowAudit?DB::table('farast_workflow_runs as runs')
    ->join('farast_workflows as workflows','workflows.id','=','runs.workflow_id')
    ->where('workflows.user_id',$r->user()->id)
    ->select('runs.id','runs.workflow_id','runs.status','runs.error','runs.started_at','runs.finished_at','workflows.name as workflow_name')
    ->orderByDesc('runs.id')->limit(30)->get():collect();
-  return view('platform.workflows',compact('items','canManageWorkflows','canRunWorkflows','canViewWorkflowAudit','runs'));
+  return view('platform.workflows',compact('items','canManageWorkflows','canEditWorkflows','showWorkflowBuilder','editingWorkflow','canRunWorkflows','canViewWorkflowAudit','runs'));
  }
  public function saveWorkflow(Request $r){
   $conditionFields=\App\Services\WorkflowConditionEvaluator::FIELDS;
