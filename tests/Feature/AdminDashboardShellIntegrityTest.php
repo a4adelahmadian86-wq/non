@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Organization;
+use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -110,6 +112,59 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('پیگیری‌های معوق CRM')
             ->assertSee('1 موعد امروز · 2 باز')
             ->assertSee(route('admin.crm.followups.index'));
+    }
+
+    public function test_dashboard_crm_summary_respects_organization_scope(): void
+    {
+        $organizationA = Organization::create([
+            'name' => 'Dashboard Scope A',
+            'slug' => 'dashboard-scope-a',
+            'status' => 'active',
+        ]);
+        $organizationB = Organization::create([
+            'name' => 'Dashboard Scope B',
+            'slug' => 'dashboard-scope-b',
+            'status' => 'active',
+        ]);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'organization_id' => $organizationA->id,
+        ]);
+        $inside = User::factory()->create(['organization_id' => $organizationA->id]);
+        $outside = User::factory()->create(['organization_id' => $organizationB->id]);
+
+        DB::table('crm_follow_up_tasks')->insert([
+            [
+                'customer_id' => $inside->id,
+                'created_by' => $admin->id,
+                'assigned_to' => $admin->id,
+                'title' => 'داخل دامنه',
+                'status' => 'open',
+                'priority' => 'high',
+                'due_at' => now()->subHour(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'customer_id' => $outside->id,
+                'created_by' => $admin->id,
+                'assigned_to' => $admin->id,
+                'title' => 'خارج دامنه',
+                'status' => 'open',
+                'priority' => 'high',
+                'due_at' => now()->subHour(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
+        SiteSetting::write('dashboard_scope_override', 'organization');
+
+        $this->actingAs($admin)->get(route('admin.index'))
+            ->assertOk()
+            ->assertSee('0 موعد امروز · 1 باز')
+            ->assertSee('پیگیری‌های معوق CRM');
     }
 
     public function test_dashboard_support_card_breaks_down_customer_replies_and_open_tickets(): void
