@@ -759,4 +759,51 @@ class StoreReaderAccessTest extends TestCase
         $this->assertDatabaseMissing('content_discussions', ['id' => $pending->id]);
     }
 
+
+    public function test_product_detail_shows_only_recorded_product_and_file_metadata(): void
+    {
+        [$product] = $this->makePreviewFixture();
+        $product->update([
+            'version' => null,
+            'description' => null,
+            'short_description' => null,
+        ]);
+
+        StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '2.4',
+            'disk' => 'private',
+            'path' => 'store/products/'.$product->id.'/primary.pdf',
+            'original_name' => 'primary.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 2048,
+            'sha256' => str_repeat('a', 64),
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+        ]);
+
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee('نسخه فایل اصلی: 2.4')
+            ->assertSee('مجوز استفاده: استاندارد')
+            ->assertDontSee('نسخه محصول: 1.0')
+            ->assertDontSee('توضیحی ثبت نشده است.')
+            ->assertDontSee('انتخاب هوشمندانه با فراست');
+
+        $product->update(['version' => '3.0']);
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee('نسخه محصول: 3.0')
+            ->assertSee('نسخه فایل اصلی: 2.4');
+
+        $product->update(['version' => null]);
+        StoreProductFile::query()->where('product_id', $product->id)->update(['version' => null]);
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertDontSee('نسخه محصول:')
+            ->assertDontSee('نسخه فایل اصلی:');
+    }
+
 }
