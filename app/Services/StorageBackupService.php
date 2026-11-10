@@ -46,6 +46,7 @@ class StorageBackupService
         $password = Str::random(64);
         $zip = null;
         $uploadedObjectKey = null;
+        $reserved = false;
 
         try {
             if (! class_exists(ZipArchive::class) || ! defined(ZipArchive::class.'::EM_AES_256')) {
@@ -165,6 +166,8 @@ class StorageBackupService
 
             $size = (int) filesize($archivePath);
             $checksum = hash_file('sha256', $archivePath);
+            $this->reserveBackupSpace($target, $size);
+            $reserved = true;
             $objectKey = 'backups/weekly/'.now()->format('Y/m/d').'/farast-'.$run->id.'-'.Str::random(12).'.zip';
             $uploadedObjectKey = $objectKey;
             $destination = $this->connections->disk($target);
@@ -195,24 +198,35 @@ class StorageBackupService
                 throw new \RuntimeException('Backup destination checksum verification failed.');
             }
 
-            $run->update([
-                'status' => 'completed',
-                'object_key' => $objectKey,
-                'size_bytes' => $size,
-                'checksum' => $checksum,
-                'completed_at' => now(),
-                'metadata' => [
-                    'encryption' => 'zip-aes-256',
-                    'password_ciphertext' => Crypt::encryptString($password),
-                    'manifest_sha256' => hash('sha256', $manifestBytes),
-                    'managed_file_count' => count($manifest['managed_files']),
-                    'legacy_file_count' => count($manifest['legacy_files']),
-                    'database_included' => true,
-                ],
-            ]);
+            DB::transaction(function () use ($run, $target, $size, $checksum, $objectKey, $password, $manifest, $manifestBytes): void {
+                $lockedTarget = StorageVolume::query()->whereKey($target->id)->lockForUpdate()->firstOrFail();
+                $lockedTarget->increment('used_bytes', $size);
+                $lockedTarget->decrement('reserved_bytes', $size);
+                $lockedTarget->decrement('reserved_files');
+                $run->update([
+                    'status' => 'completed',
+                    'object_key' => $objectKey,
+                    'size_bytes' => $size,
+                    'checksum' => $checksum,
+                    'completed_at' => now(),
+                    'metadata' => [
+                        'encryption' => 'zip-aes-256',
+                        'password_ciphertext' => Crypt::encryptString($password),
+                        'manifest_sha256' => hash('sha256', $manifestBytes),
+                        'managed_file_count' => count($manifest['managed_files']),
+                        'legacy_file_count' => count($manifest['legacy_files']),
+                        'database_included' => true,
+                    ],
+                ]);
+            });
+            $reserved = false;
 
             $this->pruneOldBackups($target);
         } catch (Throwable $exception) {
+            if ($reserved && $target) {
+                $target->decrement('reserved_bytes', $size ?? 0);
+                $target->decrement('reserved_files');
+            }
             if ($uploadedObjectKey && $target) {
                 try { $this->connections->disk($target)->delete($uploadedObjectKey); } catch (Throwable $cleanupException) { report($cleanupException); }
             }
@@ -294,6 +308,28 @@ class StorageBackupService
         }
     }
 
+    private function reserveBackupSpace(StorageVolume $volume, int $size): void
+    {
+        DB::transaction(function () use ($volume, $size): void {
+            $locked = StorageVolume::query()->whereKey($volume->id)->lockForUpdate()->firstOrFail();
+            if ($locked->max_file_bytes !== null && $size > $locked->max_file_bytes) {
+                throw new \RuntimeException('Backup archive exceeds the provider maximum file size.');
+            }
+            if ($locked->capacity_bytes !== null && ($locked->used_bytes + $locked->reserved_bytes + $size) > $locked->capacity_bytes) {
+                throw new \RuntimeException('Backup volume does not have enough free capacity.');
+            }
+            $objectCount = $locked->files()->where('status', 'active')->count()
+                + $locked->replicas()->where('status', 'active')->count()
+                + $locked->backups()->where('status', 'completed')->count()
+                + $locked->reserved_files;
+            if ($locked->file_limit !== null && ($objectCount + 1) > $locked->file_limit) {
+                throw new \RuntimeException('Backup volume reached its file count limit.');
+            }
+            $locked->increment('reserved_bytes', $size);
+            $locked->increment('reserved_files');
+        });
+    }
+
     private function pruneOldBackups(StorageVolume $volume): void
     {
         $keep = max(1, min(52, (int) config('storage.backup.retention_count', 8)));
@@ -310,6 +346,7 @@ class StorageBackupService
             if ($old->object_key) {
                 $disk->delete($old->object_key);
             }
+            $volume->decrement('used_bytes', (int) $old->size_bytes);
             $old->delete();
         }
     }
