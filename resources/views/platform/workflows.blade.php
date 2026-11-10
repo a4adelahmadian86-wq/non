@@ -56,32 +56,8 @@
 
             <h3 style="font-size:12px;margin:18px 0 4px">شرایط اجرا</h3>
             <p class="wf-muted">همه شرط‌ها باید برقرار باشند. اگر شرطی تعریف نکنید، گردش‌کار برای هر رویداد از همان نوع اجرا می‌شود.</p>
-            <div id="workflow-conditions">
-                <div class="wf-condition" data-condition>
-                    <div class="wf-condition-head"><span>شرط ۱</span><button type="button" class="wf-btn remove" data-remove-condition>حذف شرط</button></div>
-                    <div class="wf-grid">
-                        <label class="wf-field">فیلد
-                            <select name="conditions[0][field]">
-                                <option value="order_kind">نوع سفارش</option><option value="amount_rials">مبلغ سفارش (ریال)</option>
-                                <option value="total_rials">مبلغ کل (ریال)</option><option value="status">وضعیت</option>
-                                <option value="event_type">نوع رویداد</option><option value="document_id">شناسه سند</option>
-                                <option value="ticket_id">شناسه تیکت</option><option value="product_id">شناسه محصول</option>
-                                <option value="organization_id">شناسه سازمان</option><option value="team_id">شناسه تیم</option>
-                            </select>
-                        </label>
-                        <label class="wf-field">عملگر
-                            <select name="conditions[0][operator]">
-                                <option value="equals">برابر است با</option><option value="not_equals">برابر نیست با</option>
-                                <option value="greater_than">بزرگ‌تر از</option><option value="greater_or_equal">بزرگ‌تر یا مساوی</option>
-                                <option value="less_than">کوچک‌تر از</option><option value="less_or_equal">کوچک‌تر یا مساوی</option>
-                                <option value="contains">شامل</option><option value="in">یکی از مقادیر</option>
-                                <option value="not_in">هیچ‌کدام از مقادیر</option><option value="exists">وجود دارد</option>
-                            </select>
-                        </label>
-                        <label class="wf-field wf-full">مقدار<input name="conditions[0][value]" maxlength="500" placeholder="برای چند مقدار، آن‌ها را با ویرگول جدا کنید"></label>
-                    </div>
-                </div>
-            </div>
+            <div id="workflow-conditions"></div>
+            <p class="wf-muted">هیچ شرطی تعریف نشده است؛ در این حالت تمام رویدادهای متناظر اجرا می‌شوند.</p>
             <div class="wf-actions"><button type="button" class="wf-btn alt" id="add-condition">افزودن شرط</button></div>
 
             <h3 style="font-size:12px;margin:20px 0 4px">اقدام‌های گردش‌کار</h3>
@@ -186,7 +162,7 @@
     const steps = document.getElementById('workflow-steps');
     const conditions = document.getElementById('workflow-conditions');
     let stepIndex = steps.querySelectorAll('[data-step]').length;
-    let conditionIndex = conditions.querySelectorAll('[data-condition]').length;
+    let conditionIndex = 0;
 
     const renumber = (container, selector, label) => {
         container.querySelectorAll(selector).forEach((item, index) => {
