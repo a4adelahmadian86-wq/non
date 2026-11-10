@@ -330,7 +330,12 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
         $file->update(['scan_status' => 'infected']);
 
         $this->actingAs($user)
-            ->post(route('library.download.issue', $libraryItem))
+            ->get(route('library'))
+            ->assertOk()
+            ->assertSee('فایل این محصول فعلاً در دسترس نیست.')
+            ->assertDontSee('data-library-download="'.$libraryItem->id.'"', false);
+
+        $this->post(route('library.download.issue', $libraryItem))
             ->assertNotFound();
 
         $url = URL::temporarySignedRoute(
