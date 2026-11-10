@@ -105,7 +105,7 @@ class AdminStoreCouponDashboardTest extends TestCase
             'discount_rials' => 12000,
             'tax_rials' => 0,
             'total_rials' => 88000,
-            'product_snapshot' => ['cost_price_rials' => 50000],
+            'product_snapshot' => ['cost_price_rials' => 50000, 'cost_snapshot_captured_at' => now()->toIso8601String()],
         ]);
         StoreOrderItem::create([
             'order_id' => $order->id,
@@ -182,9 +182,9 @@ class AdminStoreCouponDashboardTest extends TestCase
             'sku_snapshot' => $product->sku,
             'quantity' => 1,
             'unit_price_rials' => 100000,
-            'discount_rials' => 5000,
+            'discount_rials' => 0,
             'tax_rials' => 0,
-            'total_rials' => 95000,
+            'total_rials' => 100000,
             'product_snapshot' => [],
         ]);
         StoreCouponAssignment::create([
