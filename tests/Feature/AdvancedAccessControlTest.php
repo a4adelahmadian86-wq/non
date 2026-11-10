@@ -255,6 +255,7 @@ class AdvancedAccessControlTest extends TestCase
 
         $this->actingAs($admin)->get('/admin')->assertOk();
         $this->assertSame('global', request()->attributes->get('farast.scope'));
+        $this->assertSame('dashboard.view', request()->attributes->get('farast.section_permission'));
 
         request()->attributes->set('farast.section_permission', 'dashboard.view');
         app(AdminConsoleService::class)->allowedSections($admin);
