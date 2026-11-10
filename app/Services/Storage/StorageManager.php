@@ -42,6 +42,12 @@ class StorageManager
                     throw $exception;
                 }
             } catch (\Throwable $exception) {
+                try {
+                    if ($volume->driver === 's3') $this->s3->delete($volume, $key);
+                    elseif ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $key));
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
                 $volume->forceFill(['status' => 'error', 'last_checked_at' => now(), 'metadata' => array_merge((array) $volume->metadata, ['last_error' => mb_substr($exception->getMessage(), 0, 400)])])->save();
             }
         }
