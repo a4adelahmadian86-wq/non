@@ -38,6 +38,8 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('dashboard-trend-chart', false)
             ->assertSee('dashboard-trend-sr-only', false)
             ->assertSee('صف پردازش')
+            ->assertSee('ذخیره‌سازی و بکاپ')
+            ->assertSee(route('admin.storage.index'))
             ->assertSee('نمای تکمیلی عملیات')
             ->assertSee('کل پروژه‌های ثبت‌شده')
             ->assertSee('درخواست صوتی ثبت‌شده')
