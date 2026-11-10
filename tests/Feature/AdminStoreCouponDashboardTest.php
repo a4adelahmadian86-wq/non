@@ -8,6 +8,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
 use App\Models\StoreProduct;
+use App\Models\StoreOrderItem;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
