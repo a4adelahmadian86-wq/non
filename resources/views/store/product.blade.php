@@ -175,19 +175,11 @@
           <p class="store-login-hint"><a href="{{ route('login') }}">وارد شوید</a> تا علاقه‌مندی و خرید ثبت شود.</p>
         @endauth
 
-        @php
-          $deliveryFile = $product->files->first();
-          $fileExtension = $deliveryFile ? strtoupper(pathinfo((string) $deliveryFile->original_name, PATHINFO_EXTENSION)) : '';
-          $fileSizeBytes = (int) ($deliveryFile?->size_bytes ?? 0);
-          $fileSizeLabel = $fileSizeBytes >= 1048576
-              ? number_format($fileSizeBytes / 1048576, 2).' مگابایت'
-              : ($fileSizeBytes >= 1024 ? number_format($fileSizeBytes / 1024, 1).' کیلوبایت' : number_format($fileSizeBytes).' بایت');
-        @endphp
         <div class="meta">
           <span><i class="fa-solid fa-code-branch"></i> نسخه {{ $product->version ?: '1.0' }}</span>
-          @if($product->type !== 'course' && $deliveryFile)
-            <span><i class="fa-solid fa-file-lines"></i> فرمت فایل: {{ $fileExtension ?: 'نامشخص' }}</span>
-            <span><i class="fa-solid fa-hard-drive"></i> حجم فایل: {{ $fileSizeLabel }}</span>
+          @if($product->type !== 'course' && $product->files->isNotEmpty())
+            <span><i class="fa-solid fa-file-lines"></i> فرمت فایل: {{ strtoupper(pathinfo((string) $product->files->first()->original_name, PATHINFO_EXTENSION)) ?: 'نامشخص' }}</span>
+            <span><i class="fa-solid fa-hard-drive"></i> حجم فایل: {{ $product->files->first()->size_bytes >= 1048576 ? number_format($product->files->first()->size_bytes / 1048576, 2).' مگابایت' : ($product->files->first()->size_bytes >= 1024 ? number_format($product->files->first()->size_bytes / 1024, 1).' کیلوبایت' : number_format($product->files->first()->size_bytes).' بایت') }}</span>
           @endif
           <span><i class="fa-solid fa-shield-halved"></i> {{ $product->type === 'course' ? 'دسترسی به دوره در کتابخانه آموزشی' : (($product->download_policy ?? 'signed') === 'reader_only' ? 'مطالعه در خوانشگر پس از پرداخت' : 'دریافت در کتابخانه پس از پرداخت') }}</span>
           <span><i class="fa-solid fa-file-contract"></i> مجوز {{ $product->license_type ?: 'شخصی' }}</span>
