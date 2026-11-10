@@ -65,13 +65,14 @@ class StorageManager
         string $sourceModule,
         string $sourceType,
         ?int $sourceId = null,
-        ?int $productId = null
+        ?int $productId = null,
+        string $classification = self::NON_CRITICAL
     ): array {
         $disk = Storage::disk('private');
         if (! $disk->exists($path)) throw new RuntimeException('فایل موقت برای انتقال وجود ندارد.');
         $absolute = $disk->path($path);
         $upload = new UploadedFile($absolute, $originalName, $mime ?: null, UPLOAD_ERR_OK, true);
-        $stored = $this->storeUploadedFile($upload, self::NON_CRITICAL, $sourceModule, $sourceType, $sourceId, $productId, 'private');
+        $stored = $this->storeUploadedFile($upload, $classification, $sourceModule, $sourceType, $sourceId, $productId, 'private');
         return $stored;
     }
 
