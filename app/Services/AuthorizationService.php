@@ -15,6 +15,7 @@ class AuthorizationService
     private array $legacyPermissionIds = [];
     private array $overrideRowsByUser = [];
     private array $dynamicGrantsByUser = [];
+    private array $teamIdsByUser = [];
 
     public const PERMISSIONS = [
         'dashboard.view', 'users.view', 'users.create', 'users.edit', 'users.delete', 'users.suspend',
@@ -115,6 +116,7 @@ class AuthorizationService
         $this->legacyPermissionIds = [];
         $this->overrideRowsByUser = [];
         $this->dynamicGrantsByUser = [];
+        $this->teamIdsByUser = [];
     }
 
     private function decide(?User $user, string $permission, array $context): bool
@@ -333,8 +335,8 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
-            // Record-level checks must prove that the resource itself belongs
-            // to at least one team in which the actor has an explicit membership.
+            // A record must belong to an explicitly shared team. Cache the
+            // actor's memberships once per request to keep list filtering bounded.
             if ($hasResourceContext) {
                 if (isset($context['team_ids']) && is_array($context['team_ids'])) {
                     $resourceTeamIds = array_values(array_filter(array_map('intval', $context['team_ids']), fn ($id) => $id > 0));
@@ -346,19 +348,14 @@ class AuthorizationService
             } elseif ($scopeId !== null) {
                 $resourceTeamIds = [(int) $scopeId];
             } else {
-                $resourceTeamIds = $user->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
-                $resourceTeamIds = array_merge($resourceTeamIds, \App\Models\Team::query()->where('supervisor_id', $user->id)->pluck('id')->map(fn ($id) => (int) $id)->all());
+                $resourceTeamIds = $this->teamIdsForUser($user);
             }
 
+            $actorTeamIds = $this->teamIdsForUser($user);
             foreach (array_unique($resourceTeamIds) as $teamId) {
-                if ($teamId < 1 || ($scopeId !== null && (int) $scopeId !== $teamId)) {
-                    continue;
-                }
-
-                $actorBelongsToTeam = $user->teams()->where('teams.id', $teamId)->exists()
-                    || \App\Models\Team::query()->where('id', $teamId)->where('supervisor_id', $user->id)->exists();
-
-                if ($actorBelongsToTeam) {
+                if ($teamId > 0
+                    && ($scopeId === null || (int) $scopeId === $teamId)
+                    && in_array($teamId, $actorTeamIds, true)) {
                     return true;
                 }
             }
@@ -366,6 +363,22 @@ class AuthorizationService
             return false;
         }
         return false;
+    }
+
+    /** Cache the authenticated user's team memberships and supervised teams per request. */
+    private function teamIdsForUser(User $user): array
+    {
+        if (! array_key_exists($user->id, $this->teamIdsByUser)) {
+            $memberIds = $user->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
+            $supervisedIds = \App\Models\Team::query()
+                ->where('supervisor_id', $user->id)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $this->teamIdsByUser[$user->id] = array_values(array_unique(array_merge($memberIds, $supervisedIds)));
+        }
+
+        return $this->teamIdsByUser[$user->id];
     }
 
     /**
