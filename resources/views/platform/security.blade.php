@@ -5,7 +5,7 @@
     <header class="security-heading">
         <div>
             <span class="security-eyebrow">FARAST ACCOUNT PROTECTION</span>
-            <h1>مرکز نشست‌ها و امنیت حساب</h1>
+            <h1>مرکز امنیت حساب و مدیریت نشست‌ها</h1>
             <p>تمام دستگاه‌هایی که به حساب شما دسترسی دارند را بررسی و مدیریت کنید.</p>
         </div>
         <span class="security-shield"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
