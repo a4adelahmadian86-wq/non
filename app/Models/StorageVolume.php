@@ -33,7 +33,7 @@ class StorageVolume extends Model
 
     public function files(): HasMany
     {
-        return $this->hasMany(StorageManagedFile::class);
+        return $this->hasMany(StorageManagedFile::class)->where('status', '!=', 'deleted');
     }
 
     public function getFreeBytesAttribute(): ?int
