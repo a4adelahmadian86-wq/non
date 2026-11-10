@@ -23,7 +23,7 @@ const transaction=(mode,work)=>open().then(db=>new Promise((resolve,reject)=>{
  tx.onabort=()=>reject(tx.error||new Error('IndexedDB transaction aborted'));
 }));
 const get=key=>transaction('readonly',store=>{const request=store.get(String(key));return request;});
-const set=(key,value)=>transaction('readwrite',store=>store.put({key:String(key),value,updatedAt:Date.now()})).then(()=>true);
+const set=(key,value)=>transaction('readwrite',store=>store.put({key:String(key),value,updatedAt:Date.now()})).then(()=>true).catch(error=>{window.dispatchEvent(new CustomEvent('farast:storage-write-error',{detail:{key:String(key),message:error?.message||'IndexedDB write failed'}}));throw error;});
 const remove=key=>transaction('readwrite',store=>store.delete(String(key))).then(()=>true);
 const requestPersistence=()=>{
  if(persistPromise)return persistPromise;
@@ -32,6 +32,7 @@ const requestPersistence=()=>{
   try{if(navigator.storage?.persisted)persisted=await navigator.storage.persisted();if(!persisted&&navigator.storage?.persist){granted=await navigator.storage.persist();persisted=granted;}}catch(_){}
   const result={supported:!!navigator.storage?.persist,persisted,granted};
   if(!persisted)persistPromise=null;
+  window.dispatchEvent(new CustomEvent('farast:storage-persistence-status',{detail:result}));
   if(persisted)window.dispatchEvent(new Event('farast:storage-persistence-ready'));
   return result;
  })();

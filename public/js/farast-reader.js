@@ -3,6 +3,29 @@
   const root=document.querySelector('[data-reader-root]');
   if(!root)return;
 
+  // Make storage limitations visible instead of silently losing device-local changes.
+  const storageWarning=document.createElement('div');
+  storageWarning.className='farast-reader-storage-warning';
+  storageWarning.hidden=true;
+  storageWarning.setAttribute('role','status');
+  storageWarning.setAttribute('aria-live','polite');
+  storageWarning.style.cssText='flex-basis:100%;padding:8px 12px;border:1px solid rgba(234,88,12,.28);border-radius:8px;background:#fff7ed;color:#9a3412;font-size:.75rem;line-height:1.7';
+  const storageToolbar=root.querySelector('.farast-reader-toolbar');
+  (storageToolbar||root).prepend(storageWarning);
+  let storageWriteFailed=false;
+  window.addEventListener('farast:storage-persistence-status',event=>{
+    if(event.detail?.persisted===true&&!storageWriteFailed){storageWarning.hidden=true;return;}
+    if(event.detail?.persisted!==true){
+      storageWarning.textContent='ذخیره‌سازی پایدار مرورگر فعال نشده است. اطلاعات در IndexedDB نگه‌داری می‌شوند، اما ممکن است در پاک‌سازی داده‌های سایت یا کمبود فضای دستگاه حذف شوند.';
+      storageWarning.hidden=false;
+    }
+  });
+  window.addEventListener('farast:storage-write-error',()=>{
+    storageWriteFailed=true;
+    storageWarning.textContent='ذخیره‌سازی در IndexedDB ناموفق شد؛ تغییرات جدید ممکن است پایدار نشده باشند. فضای آزاد و مجوزهای مرورگر را بررسی کنید.';
+    storageWarning.hidden=false;
+  });
+
   const articles=[...root.querySelectorAll('.farast-reader-page-item')];
   const thumbsHost=root.querySelector('.farast-reader-thumbs');
   const pageInput=root.querySelector('#reader-page-number');
