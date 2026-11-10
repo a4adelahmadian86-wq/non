@@ -66,6 +66,29 @@ class S3CompatibleAdapter
         $this->request($volume, 'DELETE', $key);
     }
 
+    public function inventory(StorageVolume $volume): array
+    {
+        $count = 0;
+        $bytes = 0;
+        $token = null;
+        for ($page = 0; $page < 10000; $page++) {
+            $query = ['list-type' => '2', 'max-keys' => '1000'];
+            if ($token !== null) $query['continuation-token'] = $token;
+            $xml = (string) $this->request($volume, 'GET', '', $query)->getBody();
+            $document = simplexml_load_string($xml, \\SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
+            if ($document === false) throw new RuntimeException('پاسخ فهرست اشیای S3 قابل پردازش نیست.');
+            foreach ($document->xpath('//*[local-name()="Contents"]') ?: [] as $object) {
+                $count++;
+                $bytes += (int) ($object->Size ?? 0);
+            }
+            $truncated = (string) (($document->xpath('//*[local-name()="IsTruncated"]')[0] ?? 'false'));
+            $next = $document->xpath('//*[local-name()="NextContinuationToken"]');
+            $token = $next && isset($next[0]) ? (string) $next[0] : null;
+            if (strtolower($truncated) !== 'true' || $token === null || $token === '') break;
+        }
+        return ['object_count' => $count, 'used_bytes' => $bytes];
+    }
+
     public function probe(StorageVolume $volume): array
     {
         $key = '.farast-health/'.bin2hex(random_bytes(16)).'.txt';
