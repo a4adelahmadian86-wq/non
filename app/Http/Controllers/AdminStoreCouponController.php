@@ -55,11 +55,14 @@ class AdminStoreCouponController extends Controller
         $offered = (clone $base)->where('status', 'offered')->where('expires_at', '>', now())->count();
         $expired = (clone $base)->where('status', 'offered')->where('expires_at', '<=', now())->count();
         $revoked = (clone $base)->where('status', 'revoked')->count();
-        $redeemedDiscountCost = (int) DB::table('store_coupon_assignments')
-            ->join('store_coupons', 'store_coupons.id', '=', 'store_coupon_assignments.coupon_id')
+        $attributedOrders = DB::table('store_coupon_assignments')
+            ->join('orders', 'orders.id', '=', 'store_coupon_assignments.redeemed_order_id')
             ->when($visibleIds !== null, fn ($query) => $query->whereIn('store_coupon_assignments.user_id', $visibleIds))
             ->where('store_coupon_assignments.status', 'redeemed')
-            ->sum('store_coupons.value');
+            ->where('orders.status', 'paid');
+        $attributedOrderCount = (clone $attributedOrders)->count();
+        $attributedRevenue = (int) (clone $attributedOrders)->sum('orders.total_rials');
+        $redeemedDiscountCost = (int) (clone $attributedOrders)->sum('orders.discount_rials');
 
         $genericCoupons = StoreCoupon::query()
             ->whereNotIn('id', StoreCouponAssignment::query()->select('coupon_id'))
@@ -78,7 +81,7 @@ class AdminStoreCouponController extends Controller
                 'expired' => $expired,
                 'revoked' => $revoked,
                 'conversion_rate' => $totalOffers > 0 ? round($redeemed * 100 / $totalOffers, 1) : 0,
-                'discount_cost_rials' => $redeemedDiscountCost,
+                'discount_cost_rials' => $redeemedDiscountCost,\n                'attributed_revenue_rials' => $attributedRevenue,\n                'attributed_orders' => $attributedOrderCount,
             ],
         ]);
     }
