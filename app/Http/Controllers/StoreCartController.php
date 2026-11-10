@@ -134,7 +134,14 @@ class StoreCartController extends Controller
             ]);
 
             $orderItems = [];
-            foreach ($current->items as $item) {
+            $cartItems = $current->items->values();
+            $remainingDiscount = $discount;
+            $remainingTax = $tax;
+            $remainingSubtotal = $subtotal;
+            $remainingTaxable = $taxable;
+            $targetProductId = (int) ($payload['coupon_product_id'] ?? 0);
+
+            foreach ($cartItems as $index => $item) {
                 $product = $item->product;
                 if (! $product || ! app(StoreCartService::class)->isPurchasable($product)) {
                     throw new \RuntimeException('یکی از محصولات دیگر قابل خرید نیست.');
@@ -156,28 +163,57 @@ class StoreCartController extends Controller
                         throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
                     }
                 }
+
                 $unit = (int) $product->price_rials;
-                $line = $unit * (int) $item->quantity;
+                $quantity = (int) $item->quantity;
+                $line = $unit * $quantity;
+                $isLast = $index === $cartItems->count() - 1;
+
+                if ($targetProductId > 0) {
+                    $lineDiscount = (int) $product->id === $targetProductId
+                        ? min($line, $remainingDiscount)
+                        : 0;
+                } else {
+                    $lineDiscount = $isLast
+                        ? $remainingDiscount
+                        : min($line, $subtotal > 0 ? (int) floor($discount * $line / $subtotal) : 0);
+                }
+                $remainingDiscount -= $lineDiscount;
+
+                $lineTaxable = max(0, $line - $lineDiscount);
+                $lineTax = $isLast
+                    ? $remainingTax
+                    : min($remainingTax, $taxable > 0 ? (int) floor($tax * $lineTaxable / $taxable) : 0);
+                $remainingTax -= $lineTax;
+                $remainingSubtotal -= $line;
+                $remainingTaxable -= $lineTaxable;
+
                 $orderItem = StoreOrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'title_snapshot' => $product->title,
                     'sku_snapshot' => $product->sku,
-                    'quantity' => $item->quantity,
+                    'quantity' => $quantity,
                     'unit_price_rials' => $unit,
-                    'discount_rials' => 0,
-                    'tax_rials' => 0,
-                    'total_rials' => $line,
+                    'discount_rials' => $lineDiscount,
+                    'tax_rials' => $lineTax,
+                    'total_rials' => $lineTaxable,
                     'product_snapshot' => [
                         'title' => $product->title,
                         'sku' => $product->sku,
                         'version' => $product->version,
+                        'cost_price_rials' => $product->cost_price_rials === null ? null : (int) $product->cost_price_rials,
+                        'cost_snapshot_captured_at' => now()->toIso8601String(),
                         // Pin digital delivery to the exact asset chosen when the order was placed.
                         'file_id' => $file?->id,
                         'file_sha256' => $file?->sha256,
                     ],
                 ]);
                 $orderItems[] = [$orderItem, $product, $file];
+            }
+
+            if ($remainingDiscount !== 0 || $remainingTax !== 0 || $remainingSubtotal !== 0 || $remainingTaxable !== 0) {
+                throw new \RuntimeException('توزیع مالی سفارش با جمع مبالغ سبد مطابقت ندارد؛ سفارش ثبت نشد.');
             }
 
             $current->delete();
