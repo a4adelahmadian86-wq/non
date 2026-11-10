@@ -122,8 +122,10 @@ class StorageBackupService
                         'source_id' => $record->source_id,
                         'product_id' => $record->product_id,
                         'owner_user_id' => $record->owner_user_id,
+                        'original_name' => $record->original_name,
+                        'mime' => $record->mime,
+                        'classification' => $record->classification,
                     ];
-                    @unlink($local);
                 }
             });
 
@@ -149,7 +151,6 @@ class StorageBackupService
                         'sha256' => hash_file('sha256', $local),
                         'size_bytes' => filesize($local),
                     ];
-                    @unlink($local);
                 }
             }
 
