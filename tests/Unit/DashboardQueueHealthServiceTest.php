@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Services\DashboardQueueHealthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class DashboardQueueHealthServiceTest extends TestCase
