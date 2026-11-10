@@ -150,15 +150,18 @@
     }
     return { nodes, offsets, fullText };
   };
+  let lastSelectionRange = null;
+  document.addEventListener('selectionchange', () => {const selection=window.getSelection();if(selection?.rangeCount&&!selection.isCollapsed&&root.contains(selection.anchorNode)&&root.contains(selection.focusNode))lastSelectionRange=selection.getRangeAt(0).cloneRange();});
+  group.addEventListener('mousedown', event => {if(event.target.closest('[data-reader-note],[data-reader-highlight]'))event.preventDefault();});
   const getContext = () => {
     const selection = window.getSelection();
-    if (!selection || !selection.rangeCount || !selection.toString().trim() || !root.contains(selection.anchorNode) || !root.contains(selection.focusNode)) return null;
-    const range = selection.getRangeAt(0);
-    const page = selection.anchorNode.parentElement?.closest('.farast-reader-page-item');
-    const endPage = selection.focusNode.parentElement?.closest('.farast-reader-page-item');
-    if (!page || page !== endPage) return null;
+    const range = selection?.rangeCount&&!selection.isCollapsed?selection.getRangeAt(0):lastSelectionRange;
+    if (!range || !root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
     const startElement = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
     const endElement = range.endContainer instanceof Element ? range.endContainer : range.endContainer.parentElement;
+    const page = startElement?.closest('.farast-reader-page-item');
+    const endPage = endElement?.closest('.farast-reader-page-item');
+    if (!page || page !== endPage) return null;
     const startContinuousPage = startElement?.closest('.farast-pdf-cont-page');
     const endContinuousPage = endElement?.closest('.farast-pdf-cont-page');
     if (startContinuousPage !== endContinuousPage) return null;
