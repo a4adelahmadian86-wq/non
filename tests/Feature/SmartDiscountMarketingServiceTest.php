@@ -216,6 +216,7 @@ class SmartDiscountMarketingServiceTest extends TestCase
         app(StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
 
         $this->assertSame('redeemed', $assignment->fresh()->status);
+        $this->assertSame($order->id, $assignment->fresh()->redeemed_order_id);
         $this->assertNotNull($assignment->fresh()->redeemed_at);
         $this->assertSame(1, $assignment->coupon->fresh()->used_count);
     }
