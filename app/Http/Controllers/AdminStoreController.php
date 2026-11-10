@@ -468,7 +468,7 @@ class AdminStoreController extends Controller
             'security_scan' => 'nullable|boolean',
         ]);
         $antivirusRequested = $request->boolean('security_scan');
-        $canRequestAntivirus = app(\\App\\Services\\AuthorizationService::class)
+        $canRequestAntivirus = app(\App\Services\AuthorizationService::class)
             ->allows(auth()->user(), 'store.security_scan');
         abort_if($antivirusRequested && ! $canRequestAntivirus, 403, 'مجوز درخواست اسکن آنتی‌ویروس برای این حساب فعال نیست.');
 
@@ -507,7 +507,7 @@ class AdminStoreController extends Controller
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ایستای داخلی عبور نکرده است.');
             $antivirusResult = null;
             if ($antivirusRequested) {
-                $antivirusResult = app(\\App\\Services\\OptionalAntivirusScanner::class)
+                $antivirusResult = app(\App\Services\OptionalAntivirusScanner::class)
                     ->scan(Storage::disk('private')->path($path));
                 $inspection['antivirus'] = $antivirusResult;
             }
