@@ -70,7 +70,7 @@ class StorageTransferService
                 ->where('status', 'healthy')
                 ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [(int) $file->size_bytes]))
                 ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', (int) $file->size_bytes))
-                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('(SELECT COUNT(*) FROM storage_managed_files WHERE storage_managed_files.storage_volume_id = storage_volumes.id AND storage_managed_files.status != ?) < storage_volumes.file_limit', ['deleted']))
+                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
                 ->orderBy('priority')->first();
             if (! $target) return;
             $sourceDisk = (string) data_get($file->metadata, 'staging_disk', 'private');
