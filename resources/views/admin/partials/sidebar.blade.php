@@ -6,7 +6,7 @@
     $financeActive = request()->routeIs('admin.finance', 'admin.plans');
     $configurationActive = request()->routeIs('admin.integrations', 'admin.emails', 'admin.social', 'admin.cms');
     $governanceActive = request()->routeIs('admin.analytics', 'admin.audit', 'admin.access', 'admin.organizations');
-    $communicationActive = request()->routeIs('admin.announcements.*', 'admin.support.*');
+    $communicationActive = request()->routeIs('admin.announcements.*', 'admin.support.*', 'admin.cms', 'admin.emails', 'admin.social');
 @endphp
 <aside class="farast-admin-nav" aria-label="ناوبری مرکز عملیات">
     <div class="farast-admin-brand">
@@ -144,6 +144,10 @@
     };
     syncMode();
     mobile.addEventListener?.('change', syncMode);
+    groups.forEach(group => group.addEventListener('toggle', () => {
+        if (!mobile.matches || !group.open) return;
+        groups.forEach(other => { if (other !== group) other.removeAttribute('open'); });
+    }));
 })();
 </script>
 @endpush
