@@ -343,6 +343,7 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertContains($memberA->id, $visibleIds);
         $this->assertNotContains($memberB->id, $visibleIds);
         $this->assertNotContains($unassigned->id, $visibleIds);
+        $this->assertSame([$organization->id], app(AdminConsoleService::class)->visibleOrganizationIds($manager));
     }
 
     public function test_organization_role_cannot_be_assigned_outside_its_parent_organization(): void
