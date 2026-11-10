@@ -292,6 +292,7 @@ class AdvancedAccessControlTest extends TestCase
             'description' => 'مشاهده ممیزی در محدوده سازمان',
             'scope_type' => 'organization',
             'scope_id' => $organization->id,
+            'reason' => 'Create scoped audit role for organization oversight',
         ])->assertRedirect();
 
         $role = DB::table('farast_roles')->where('name', 'بازرس سازمان')->first();
@@ -300,15 +301,17 @@ class AdvancedAccessControlTest extends TestCase
         $this->post('/admin/access-center/roles/'.$role->id.'/permissions', [
             'scope_type' => 'organization',
             'permissions' => ['access.audit'],
+            'reason' => 'Grant audit visibility required by the role',
         ])->assertRedirect();
 
         $this->post('/admin/access-center/users/'.$manager->id.'/roles', [
             'role_id' => $role->id,
             'scope_type' => 'organization',
             'scope_id' => $organization->id,
+            'reason' => 'Assign scoped audit role for operational review',
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('farast_user_roles', [
+        $this->assertDatabaseHas('farast_user_roles'), [
             'user_id' => $manager->id,
             'role_id' => $role->id,
             'scope_type' => 'organization',
