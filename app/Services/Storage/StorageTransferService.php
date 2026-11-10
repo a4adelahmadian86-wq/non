@@ -3,6 +3,7 @@
 namespace App\Services\Storage;
 
 use App\Models\StorageManagedFile;
+use App\Models\FarastStorageObject;
 use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
 use App\Models\UserFile;
@@ -25,6 +26,7 @@ class StorageTransferService
             StoreProductFile::class => StoreProductFile::find($file->source_id),
             ConversationMessage::class => ConversationMessage::find($file->source_id),
             TicketMessage::class => TicketMessage::find($file->source_id),
+            FarastStorageObject::class => FarastStorageObject::find($file->source_id),
             default => null,
         };
         if (! $reference) return;
@@ -42,6 +44,11 @@ class StorageTransferService
             return;
         }
         if ($reference instanceof StoreProductFile) {
+            $reference->update(['disk' => $disk, 'path' => $file->file_key]);
+            return;
+        }
+
+        if ($reference instanceof FarastStorageObject) {
             $reference->update(['disk' => $disk, 'path' => $file->file_key]);
             return;
         }
