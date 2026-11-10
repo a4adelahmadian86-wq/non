@@ -87,7 +87,21 @@ class StoreController extends Controller
 
     public function product(Request $request, string $slug)
     {
-        $product = StoreProduct::with(['category', 'images', 'previews', 'tags', 'related', 'course.sections.lessons' => fn ($query) => $query->publishable()])
+        $product = StoreProduct::with([
+            'category',
+            'images',
+            'previews',
+            'tags',
+            'related',
+            'files' => fn ($query) => $query
+                ->where('purpose', 'product_download')
+                ->where('is_active', true)
+                ->whereIn('scan_status', ['clean', 'legacy'])
+                ->orderByDesc('is_primary')
+                ->orderByDesc('id')
+                ->select(['id', 'product_id', 'original_name', 'mime', 'size_bytes', 'version', 'is_primary', 'scan_status']),
+            'course.sections.lessons' => fn ($query) => $query->publishable(),
+        ])
             ->published()
             ->where('slug', $slug)
             ->firstOrFail();
