@@ -17,33 +17,35 @@ class UserFileController extends Controller
         return response()->json(['ok' => true, 'files' => $files]);
     }
 
-    public function upload(Request $request, PricingService $pricing, CapabilityService $capabilities)
+    public function upload(Request $request, PricingService $pricing, CapabilityService $capabilities, StorageManager $storage)
     {
         $caps = $capabilities->forUser(auth()->user());
         $limit = max(1, min((int) ($caps['max_file_mb'] ?? 50), 2048));
         $request->validate(['file' => 'required|file|max:'.($limit * 1024).'|mimes:jpg,jpeg,png,webp,pdf,zip,doc,docx']);
         $file = $request->file('file');
         $bytes = $file->getSize() ?: 0;
-        $path = $file->store('user-files/'.auth()->id(), 'private');
-        $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $path);
+        $stored = $storage->storeUploadedFile($file, StorageManager::NON_CRITICAL, 'editor', UserFile::class, null, null, 'private');
+        $path = $stored['path'];
+        $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $storage->get($stored['disk'], $path));
         $quote = $pricing->estimateByPages($pages);
         $now = now();
         $record = UserFile::create([
             'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
-            'disk' => 'private', 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
-            'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'], 'status' => 'local',
-            'uploaded_at' => $now, 'local_expires_at' => $now->copy()->addDays((int) env('FILES_TTL_DAYS', 14)),
-            'remote_expires_at' => $now->copy()->addDays(90),
+            'disk' => $stored['disk'], 'mime' => $file->getMimeType(), 'size_bytes' => $bytes,
+            'page_count' => $pages, 'estimated_price_rials' => $quote['price_rials'],
+            'status' => $stored['volume_id'] ? 'remote' : 'pending_transfer',
+            'uploaded_at' => $now, 'local_expires_at' => null, 'remote_expires_at' => null,
+            'remote_path' => $stored['volume_id'] ? $path : null,
         ]);
         return response()->json(['ok' => true, 'file' => $this->present($record), 'estimate' => $quote]);
     }
 
-    public function select(UserFile $file, Request $request)
+    public function select(UserFile $file, Request $request, StorageManager $storage)
     {
         abort_unless($file->user_id === $request->user()->id, 403);
-        abort_unless(Storage::disk($file->disk ?: 'private')->exists($file->path), 404, 'فایل در فضای نگهداری موجود نیست.');
+        abort_unless($storage->exists($file->disk ?: 'private', $file->path), 404, 'فایل در فضای نگهداری موجود نیست.');
 
-        $bytes = Storage::disk($file->disk ?: 'private')->get($file->path);
+        $bytes = $storage->get($file->disk ?: 'private', $file->path);
         $sourcePath = 'typing/'.$request->user()->id.'/'.Str::uuid().'-'.basename($file->path);
         Storage::disk('private')->put($sourcePath, $bytes);
 
@@ -66,11 +68,10 @@ class UserFileController extends Controller
         ]);
     }
 
-    public function destroy(UserFile $file)
+    public function destroy(UserFile $file, StorageManager $storage)
     {
         abort_unless($file->user_id === auth()->id(), 403);
-        Storage::disk($file->disk ?: 'private')->delete($file->path);
-        if ($file->remote_path) Storage::disk('farast_remote')->delete($file->remote_path);
+        $storage->delete($file->disk ?: 'private', $file->path);
         $file->delete();
         return response()->json(['ok' => true]);
     }
