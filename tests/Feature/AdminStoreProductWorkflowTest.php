@@ -1146,4 +1146,151 @@ class AdminStoreProductWorkflowTest extends TestCase
         Queue::assertPushed(ProcessProductDocument::class, fn ($job) => $job->documentId === $document->id);
     }
 
+
+    public function test_admin_can_update_and_deactivate_categories_without_detaching_products(): void
+    {
+        $admin = $this->admin();
+        $parent = $this->category();
+        $child = StoreCategory::create([
+            'parent_id' => $parent->id,
+            'name' => 'زیردسته اولیه',
+            'slug' => 'initial-child-category',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $child->id,
+            'title' => 'محصول متصل به زیردسته',
+            'slug' => 'product-in-child-category',
+            'sku' => 'CHILD-CATEGORY-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.store.taxonomy.categories.update', $child), [
+                'name' => 'زیردسته به‌روزشده',
+                'slug' => 'updated-child-category',
+                'parent_id' => $parent->id,
+                'description' => 'توضیح دسته',
+                'icon' => 'book',
+                'seo_title' => 'عنوان سئو',
+                'seo_description' => 'توضیح سئو',
+                'is_active' => 0,
+                'sort_order' => 12,
+            ])
+            ->assertRedirect(route('admin.store.taxonomy.index'));
+
+        $this->assertDatabaseHas('store_categories', [
+            'id' => $child->id,
+            'name' => 'زیردسته به‌روزشده',
+            'slug' => 'updated-child-category',
+            'parent_id' => $parent->id,
+            'is_active' => 0,
+            'sort_order' => 12,
+        ]);
+        $this->assertSame($child->id, $product->fresh()->category_id);
+    }
+
+    public function test_category_hierarchy_rejects_parent_cycles(): void
+    {
+        $admin = $this->admin();
+        $parent = $this->category();
+        $child = StoreCategory::create([
+            'parent_id' => $parent->id,
+            'name' => 'فرزند',
+            'slug' => 'cycle-child',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.taxonomy.index'))
+            ->put(route('admin.store.taxonomy.categories.update', $parent), [
+                'name' => $parent->name,
+                'slug' => $parent->slug,
+                'parent_id' => $child->id,
+                'description' => null,
+                'icon' => null,
+                'seo_title' => null,
+                'seo_description' => null,
+                'is_active' => 1,
+                'sort_order' => 0,
+            ])
+            ->assertRedirect(route('admin.store.taxonomy.index'))
+            ->assertSessionHasErrors('parent_id');
+
+        $this->assertNull($parent->fresh()->parent_id);
+    }
+
+    public function test_admin_can_rename_tags_and_cannot_delete_tags_attached_to_products(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $tag = StoreTag::create(['name' => 'نام اولیه', 'slug' => 'initial-tag']);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول دارای برچسب',
+            'slug' => 'tagged-product',
+            'sku' => 'TAGGED-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $product->tags()->attach($tag->id);
+
+        $this->actingAs($admin)
+            ->from(route('admin.store.taxonomy.index'))
+            ->delete(route('admin.store.taxonomy.tags.destroy', $tag))
+            ->assertRedirect(route('admin.store.taxonomy.index'))
+            ->assertSessionHasErrors('tag');
+
+        $this->actingAs($admin)
+            ->put(route('admin.store.taxonomy.tags.update', $tag), [
+                'name' => 'نام به‌روزشده',
+                'slug' => 'updated-tag',
+            ])
+            ->assertRedirect(route('admin.store.taxonomy.index'));
+
+        $this->assertDatabaseHas('store_tags', ['id' => $tag->id, 'name' => 'نام به‌روزشده', 'slug' => 'updated-tag']);
+        $this->assertSame([$tag->id], $product->fresh()->tags()->pluck('store_tags.id')->all());
+
+        $unusedTag = StoreTag::create(['name' => 'برچسب بلااستفاده', 'slug' => 'unused-tag']);
+        $this->actingAs($admin)
+            ->delete(route('admin.store.taxonomy.tags.destroy', $unusedTag))
+            ->assertRedirect(route('admin.store.taxonomy.index'));
+        $this->assertDatabaseMissing('store_tags', ['id' => $unusedTag->id]);
+    }
+
+    public function test_taxonomy_manager_shows_category_and_tag_usage_counts(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $child = StoreCategory::create([
+            'parent_id' => $category->id,
+            'name' => 'زیردسته شمارش',
+            'slug' => 'counted-child',
+            'is_active' => true,
+        ]);
+        $tag = StoreTag::create(['name' => 'برچسب شمارش', 'slug' => 'counted-tag']);
+        $product = StoreProduct::create([
+            'category_id' => $child->id,
+            'title' => 'محصول شمارش',
+            'slug' => 'counted-product',
+            'sku' => 'COUNTED-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $product->tags()->attach($tag->id);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.taxonomy.index'))
+            ->assertOk()
+            ->assertSee('مدیریت دسته‌بندی‌ها و برچسب‌ها')
+            ->assertSee('برچسب شمارش')
+            ->assertSee('زیردسته شمارش')
+            ->assertSee('1 محصول');
+    }
+
+
 }
