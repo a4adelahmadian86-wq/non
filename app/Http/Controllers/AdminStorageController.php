@@ -122,7 +122,7 @@ class AdminStorageController extends Controller
     public function show(StorageVolume $volume)
     {
         $files = $volume->files()->with('replicaVolume')->where('status', 'active')->latest()->paginate(50, ['*'], 'files_page');
-        $replicaFiles = \\App\\Models\\StorageManagedFile::query()->with('volume')->where('replicated_to_volume_id', $volume->id)->where('status', 'active')->latest()->paginate(50, ['*'], 'replicas_page');
+        $replicaFiles = \App\Models\StorageManagedFile::query()->with('volume')->where('replicated_to_volume_id', $volume->id)->where('status', 'active')->latest()->paginate(50, ['*'], 'replicas_page');
         $backups = $volume->backups()->where('status', 'completed')->latest()->paginate(30, ['*'], 'backups_page');
         return view('admin.storage.volume', compact('volume', 'files', 'replicaFiles', 'backups'));
     }
