@@ -478,3 +478,7 @@
  .store-hero--focused .store-search{gap:5px;padding:5px}
  .store-hero--focused .store-search button{padding-inline:12px}
 }
+
+.store-cart-count{display:inline-flex;align-items:center;margin-inline-start:7px;padding:3px 8px;border:1px solid #dfe8f4;border-radius:999px;background:#f6f9fd;color:#4e6380;font-size:.72em;font-weight:700}
+.store-cart-feedback:not(.is-error){border-color:#cfe9dc;background:#f1faf5;color:#24734e}
+.store-qty button:disabled{opacity:.5;cursor:wait}
