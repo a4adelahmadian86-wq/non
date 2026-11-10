@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -80,6 +81,78 @@ class AccountSecurityController extends Controller
         $this->recordEvent($request, 'other_sessions_revoked', ['count' => $others->count()]);
 
         return back()->with('status', $others->count().' نشست دیگر برای خروج امن علامت‌گذاری شد. نشست فعلی باز می‌ماند.');
+    }
+
+    public function changePassword(Request $request, \App\Services\EmailService $emailService)
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'string', 'min:12', 'confirmed', 'different:current_password'],
+        ], [
+            'password.min' => 'رمز عبور جدید باید حداقل ۱۲ نویسه داشته باشد.',
+            'password.confirmed' => 'تکرار رمز عبور با رمز جدید یکسان نیست.',
+            'password.different' => 'رمز عبور جدید باید با رمز فعلی متفاوت باشد.',
+        ]);
+
+        $user = $request->user();
+        $user->update(['password' => $data['password']]);
+        $this->rotateRememberToken($user);
+
+        $currentSessionId = $request->session()->getId();
+        $currentKey = hash('sha256', $currentSessionId);
+
+        DB::table('farast_account_sessions')
+            ->where('user_id', $user->id)
+            ->where('session_key', '!=', $currentKey)
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now(), 'updated_at' => now()]);
+
+        DB::table('sessions')
+            ->where('user_id', $user->id)
+            ->where('id', '!=', $currentSessionId)
+            ->delete();
+
+        $this->recordEvent($request, 'password_changed', ['method' => 'authenticated_account_security']);
+
+        try {
+            app(\App\Services\NotificationService::class)->pushToUser(
+                $user,
+                'security_password_changed',
+                'رمز عبور حساب شما تغییر کرد',
+                'رمز عبور حساب فراست تغییر کرد. نشست سایر دستگاه‌ها بسته شد. اگر این کار توسط شما انجام نشده، حساب را فوراً بررسی کنید.',
+                ['url' => route('platform.security')],
+            );
+        } catch (\Throwable) {
+        }
+
+        try {
+            $emailService->sendPasswordChanged($user);
+        } catch (\Throwable) {
+        }
+
+        return back()->with('status', 'رمز عبور تغییر کرد؛ نشست سایر دستگاه‌ها و ورودهای ماندگار قبلی لغو شدند.');
+    }
+
+    public function revokeAll(Request $request)
+    {
+        $this->confirmPassword($request);
+        $all = DB::table('farast_account_sessions')
+            ->where('user_id', $request->user()->id)
+            ->whereNull('revoked_at')
+            ->get();
+
+        foreach ($all as $record) {
+            $this->revokeRecord($record);
+        }
+
+        $this->rotateRememberToken($request->user());
+        $this->recordEvent($request, 'all_sessions_revoked', ['count' => $all->count()]);
+
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login')->with('status', 'خروج از همه دستگاه‌ها انجام شد. برای استفاده دوباره وارد شوید.');
     }
 
     private function confirmPassword(Request $request): void
