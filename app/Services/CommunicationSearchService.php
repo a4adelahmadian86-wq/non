@@ -10,6 +10,7 @@ use App\Models\TicketMessage;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 
 class CommunicationSearchService
 {
@@ -36,15 +37,19 @@ class CommunicationSearchService
                 ->where(function ($query) use ($pattern, $term) {
                     $query->where('subject', 'like', $pattern)
                         ->orWhere('ticket_code', 'like', $pattern);
+                    if (ctype_digit($term) && Schema::hasColumn('tickets', 'related_order_id')) {
+                        $query->orWhere('related_order_id', (int) $term);
+                    }
                 })
                 ->orderByDesc('updated_at')
                 ->limit($limit)
                 ->get();
 
             foreach ($tickets as $ticket) {
+                $relatedOrder = $ticket->relatedOrder && (int) $ticket->relatedOrder->user_id === (int) $ticket->user_id ? $ticket->relatedOrder : null;
                 $results->push($this->item(
                     'ticket',
-                    $ticket->displayCode().' — '.$ticket->subject.($ticket->relatedOrder ? ' · سفارش #'.$ticket->relatedOrder->id : ''),
+                    $ticket->displayCode().' — '.$ticket->subject.($relatedOrder ? ' · سفارش #'.$relatedOrder->id : ''),
                     $ticket->displayName().' · '.$ticket->statusLabel(),
                     $isAdmin
                         ? route('admin.support.management', ['ticket' => $ticket->id])
@@ -74,9 +79,10 @@ class CommunicationSearchService
                 if (! $ticket) {
                     continue;
                 }
+                $relatedOrder = $ticket->relatedOrder && (int) $ticket->relatedOrder->user_id === (int) $ticket->user_id ? $ticket->relatedOrder : null;
                 $results->push($this->item(
                     'ticket',
-                    'پیام در '.$ticket->displayCode().' — '.$ticket->subject.($ticket->relatedOrder ? ' · سفارش #'.$ticket->relatedOrder->id : ''),
+                    'پیام در '.$ticket->displayCode().' — '.$ticket->subject.($relatedOrder ? ' · سفارش #'.$relatedOrder->id : ''),
                     Str::limit(trim(strip_tags((string) $message->body)), 180),
                     $isAdmin
                         ? route('admin.support.management', ['ticket' => $ticket->id])
