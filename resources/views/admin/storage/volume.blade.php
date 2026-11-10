@@ -9,6 +9,9 @@
         <a href="{{ route('admin.storage.index') }}">← بازگشت به درایوها</a>
         <div class="storage-detail-head"><div><h1>{{ $volume->name }}</h1><p class="muted">{{ $volume->provider ?: $volume->driver }} · {{ $volume->region ?: 'منطقه نامشخص' }}</p></div><span>{{ $volume->status }}</span></div>
         <p>شناسه: #{{ $volume->id }} · درایو: {{ $volume->drive_key }} · آخرین بررسی: {{ optional($volume->last_checked_at)->format('Y-m-d H:i') ?: 'انجام نشده' }}</p>
+        <p>نوع اتصال: {{ strtoupper($volume->driver) }} · Bucket: {{ $volume->bucket ?: '—' }} · Endpoint: <span dir="ltr">{{ $volume->endpoint ?: '—' }}</span></p>
+        <p>آخرین اتصال موفق: {{ optional($volume->last_success_at)->format('Y-m-d H:i') ?: 'ثبت نشده' }} · قابلیت‌ها: {{ collect($volume->capabilities ?? [])->filter()->keys()->implode('، ') ?: 'هنوز تأیید نشده' }}</p>
+        @if(data_get($volume->metadata, 'last_error'))<p style="color:#b45309">آخرین خطا: {{ data_get($volume->metadata, 'last_error') }}</p>@endif
         <p>ظرفیت: {{ $volume->capacity_bytes ? \Illuminate\Support\Number::fileSize($volume->capacity_bytes) : 'نامشخص' }} · مصرف ثبت‌شده: {{ \Illuminate\Support\Number::fileSize($volume->used_bytes) }} · اشیای سرویس‌دهنده: {{ number_format($volume->object_count ?? $volume->files()->count()) }} · فایل‌های ثبت‌شده در سامانه: {{ number_format($volume->files()->count()) }}</p>
         <p>سقف تعداد فایل: {{ $volume->file_limit ? number_format($volume->file_limit) : 'اعلام نشده' }} · حداکثر حجم فایل: {{ $volume->max_file_bytes ? \Illuminate\Support\Number::fileSize($volume->max_file_bytes) : 'اعلام نشده' }} · اولویت تخصیص: {{ $volume->priority }}</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
