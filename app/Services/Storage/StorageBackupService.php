@@ -127,7 +127,17 @@ class StorageBackupService
         $this->addDirectory($zip, storage_path('app/remote-archive'), 'legacy-remote-archive');
         $this->addDatabaseDump($zip, $work);
         $managedCount = 0;
-        StorageManagedFile::query()->where('status', 'active')->whereNotNull('storage_volume_id')->with('volume')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount) {
+        StorageManagedFile::query()->whereIn('status', ['pending_transfer', 'transfer_error', 'delete_pending'])->whereNull('storage_volume_id')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount) {
+            foreach ($files as $file) {
+                $disk = (string) data_get($file->metadata, 'staging_disk', 'private');
+                $temporary = $work.'/staged-'.$file->id;
+                $this->storage->downloadTo($disk, $file->file_key, $temporary);
+                $entry = 'managed-staging/'.$file->id.'/'.basename($file->file_key);
+                $this->addEncryptedFile($zip, $temporary, $entry);
+                $managedCount++;
+            }
+        });
+        StorageManagedFile::query()->whereIn('status', ['active', 'delete_pending'])->whereNotNull('storage_volume_id')->with('volume')->orderBy('id')->chunkById(100, function ($files) use ($zip, $work, &$managedCount) {
             foreach ($files as $file) {
                 if (! $file->volume) continue;
                 $temporary = $work.'/managed-'.$file->id;
