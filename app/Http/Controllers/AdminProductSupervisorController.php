@@ -180,7 +180,7 @@ class AdminProductSupervisorController extends Controller
             if (! is_string($temporaryPath)) throw new \RuntimeException('temporary_asset_path_unavailable');
             try {
                 $storageManager->downloadTo($disk, $path, $temporaryPath);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 @unlink($temporaryPath);
                 throw $exception;
             }
