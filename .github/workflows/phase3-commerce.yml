@@ -2,7 +2,7 @@ name: FARAST Phase 3 Commerce Tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-recovery2
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 on:
   push:
