@@ -364,6 +364,10 @@ class CrmMarketingController extends Controller
                     ->where('assignments.campaign_id', $campaign)
                     ->where('assignments.status', 'offered')
                     ->where('assignments.expires_at', '>', now())
+                    ->where('store_coupons.is_active', true)
+                    ->where(function ($query) {
+                        $query->whereNull('store_coupons.ends_at')->orWhere('store_coupons.ends_at', '>', now());
+                    })
                     ->sum('store_coupons.value');
                 $budgetCommitted = (int) $spent + (int) $reserved;
             }
