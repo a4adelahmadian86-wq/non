@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 class TrackAuthenticatedSession
 {
     private const DEVICE_COOKIE = 'farast_device_key';
-    private const THREE_YEARS_MINUTES = 1578240;
+    private const DEVICE_COOKIE_MINUTES = 5256000;
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -195,7 +195,7 @@ class TrackAuthenticatedSession
             $response->headers->setCookie(cookie(
                 self::DEVICE_COOKIE,
                 $deviceKey,
-                self::THREE_YEARS_MINUTES,
+                self::DEVICE_COOKIE_MINUTES,
                 '/',
                 null,
                 $request->isSecure(),
