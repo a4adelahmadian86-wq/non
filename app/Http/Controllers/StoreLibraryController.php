@@ -26,7 +26,7 @@ class StoreLibraryController extends Controller
         return view('store.library', compact('items'));
     }
 
-    public function issue(Request $request, StoreLibraryItem $libraryItem)
+    public function issue(Request $request, StoreLibraryItem $libraryItem, StorageManager $storage)
     {
         abort_unless($libraryItem->user_id === $request->user()->id && $libraryItem->revoked_at === null, 404);
         $libraryItem->load(['file', 'product']);
@@ -42,8 +42,7 @@ class StoreLibraryController extends Controller
             'فایل فعال نیست.'
         );
 
-        $disk = Storage::disk($libraryItem->file->disk ?: 'private');
-        abort_unless($disk->exists($libraryItem->file->path), 404, 'فایل پیدا نشد.');
+        abort_unless($storage->exists($libraryItem->file->disk ?: 'private', $libraryItem->file->path), 404, 'فایل پیدا نشد.');
 
         $token = Str::random(64);
         $download = StoreDownload::create([
@@ -68,11 +67,11 @@ class StoreLibraryController extends Controller
         ]);
     }
 
-    public function stream(Request $request, StoreDownload $download)
+    public function stream(Request $request, StoreDownload $download, StorageManager $storage)
     {
         abort_unless($request->hasValidSignature(), 403);
 
-        $file = DB::transaction(function () use ($request, $download) {
+        $file = DB::transaction(function () use ($request, $download, $storage) {
             $lockedDownload = StoreDownload::query()->whereKey($download->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedDownload->expires_at && $lockedDownload->expires_at->isFuture(), 410);
             abort_unless((int) $lockedDownload->user_id === (int) $request->user()->id, 403);
@@ -105,10 +104,9 @@ class StoreLibraryController extends Controller
                 ->first();
             abort_unless($file, 404, 'فایل فعال نیست.');
 
-            $disk = Storage::disk($file->disk ?: 'private');
-            abort_unless($disk->exists($file->path), 404, 'فایل پیدا نشد.');
+            abort_unless($storage->exists($file->disk ?: 'private', $file->path), 404, 'فایل پیدا نشد.');
             if ($file->sha256) {
-                $actualHash = hash_file('sha256', $disk->path($file->path));
+                $actualHash = hash('sha256', $storage->get($file->disk ?: 'private', $file->path));
                 abort_unless(is_string($actualHash) && hash_equals((string) $file->sha256, $actualHash), 409, 'محتوای فایل پس از اسکن یا ثبت سفارش تغییر کرده است.');
             }
 
@@ -118,13 +116,12 @@ class StoreLibraryController extends Controller
             return $file;
         });
 
-        $disk = Storage::disk($file->disk ?: 'private');
-
-        return $disk->response($file->path, $file->original_name ?: basename($file->path), [
+        return response($storage->get($file->disk ?: 'private', $file->path), 200, [
+            'Content-Type' => $file->mime ?: 'application/octet-stream',
+            'Content-Disposition' => 'attachment; filename="'.addslashes($file->original_name ?: basename($file->path)).'"',
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
-            'Content-Disposition' => 'attachment',
         ]);
     }
 }
