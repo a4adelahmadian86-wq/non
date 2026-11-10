@@ -56,6 +56,32 @@ SH
         }
     }
 
+    public function test_storage_stream_can_be_scanned_without_a_local_storage_path(): void
+    {
+        $binary = tempnam(sys_get_temp_dir(), 'farast-clamav-');
+        file_put_contents($binary, <<<'SH'
+#!/bin/sh
+if [ "$1" = "--version" ]; then echo 'ClamAV 1.4.0'; exit 0; fi
+exit 0
+SH
+        );
+        chmod($binary, 0700);
+        config(['services.clamav.binary' => $binary]);
+
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, 'streamed private object content');
+        rewind($stream);
+
+        try {
+            $result = app(OptionalAntivirusScanner::class)->scanStream($stream);
+            $this->assertSame('clean', $result['status']);
+            $this->assertSame('clamav', $result['engine']);
+        } finally {
+            fclose($stream);
+            @unlink($binary);
+        }
+    }
+
     public function test_clamav_detection_is_never_treated_as_clean(): void
     {
         $source = tempnam(sys_get_temp_dir(), 'farast-source-');
