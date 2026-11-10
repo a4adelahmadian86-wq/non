@@ -56,6 +56,16 @@ class CommunicationCenterTest extends TestCase
             ->assertDontSee('گفت‌وگوهای داخلی');
     }
 
+    public function test_workspace_navigation_exposes_shared_center_but_hides_internal_messenger_from_customers(): void
+    {
+        $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+        $groups = app(\\App\\Services\\DashboardNavigationService::class)->forUser($customer);
+        $items = collect($groups)->flatMap(fn ($group) => $group['items']);
+
+        $this->assertTrue($items->contains(fn ($item) => $item['href'] === route('platform.communications')));
+        $this->assertFalse($items->contains(fn ($item) => $item['href'] === route('messenger.index')));
+    }
+
     public function test_non_admin_cannot_open_staff_communication_center(): void
     {
         $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
