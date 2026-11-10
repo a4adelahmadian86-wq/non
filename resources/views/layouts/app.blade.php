@@ -92,43 +92,32 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 @endif
 
 @if(!$isEditor&&!$isAdmin&&!$isDashboard)<aside class="farast-cart-drawer" id="farastCartDrawer" aria-hidden="true"><div class="farast-cart-head"><strong>سبد خرید</strong><button type="button" data-cart-close aria-label="بستن"><i class="fa-solid fa-xmark"></i></button></div><div class="farast-cart-body" id="farastCartBody"></div><div class="farast-cart-foot"><span>جمع</span><strong id="farastCartTotal">۰ تومان</strong><button type="button" id="farastCartCheckout" disabled>ادامه پرداخت</button></div></aside><div class="farast-cart-backdrop" id="farastCartBackdrop" hidden></div><div class="farast-connectivity" id="farastConnectivity" aria-live="polite" hidden><div class="farast-connectivity-card"><div class="farast-connectivity-copy"><strong id="farastConnectivityTitle">اتصال اینترنت در دسترس نیست</strong><span id="farastConnectivityMessage">بخش‌های ذخیره‌شده در دسترس می‌مانند.</span></div><button type="button" id="farastConnectivityRetry" aria-label="تلاش دوباره"><i class="fa-solid fa-rotate-right"></i></button></div></div><button type="button" id="farastSoundToggle" class="farast-sound-toggle" aria-label="فعال یا غیرفعال کردن صدای رابط" aria-pressed="false"><i class="fa-solid fa-volume-high"></i></button>@endif
-@if(!$isEditor&&!$isAdmin&&!$isDashboard)<footer class="site-footer" dir="rtl">
-  <div class="footer-glow" aria-hidden="true"></div>
-  <section class="farast-footer-cta" aria-labelledby="farast-footer-cta-title">
-    <div class="farast-footer-cta__copy">
-      <span class="farast-footer-cta__eyebrow"><i class="fa-solid fa-compass" aria-hidden="true"></i> قدم بعدی شما</span>
-      <h2 id="farast-footer-cta-title">برای خرید محصول آمده‌اید یا آماده‌سازی یک سند؟</h2>
-      <p>مسیر مناسب را انتخاب کنید و کارتان را در فراست ادامه دهید.</p>
-    </div>
-    <div class="farast-footer-cta__actions">
-      <a class="farast-footer-cta__primary" href="{{ route('editor') }}"><i class="fa-solid fa-file-pen" aria-hidden="true"></i> شروع با سند</a>
-      <a class="farast-footer-cta__secondary" href="{{ route('store') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> دیدن محصولات</a>
-    </div>
-  </section>
-  <div class="footer-top">
+@if(!$isEditor&&!$isAdmin&&!$isDashboard)<footer class="site-footer farast-site-footer" dir="rtl">
+  <div class="footer-top farast-footer-compact">
     <div class="footer-about">
-      <div class="footer-brand"><span class="brand-mark farast-symbol"><i></i><i></i><i></i><i></i><b></b></span><b>فراست</b></div>
-      <p>یک فضای یکپارچه برای نوشتن، تبدیل، ویرایش و مدیریت اسناد؛ در کنار کتابخانه‌ای از فایل‌ها و منابع دیجیتال.</p>
-      <div class="footer-social" aria-label="شبکه‌های اجتماعی">
-        @foreach($footerSocial as $social)
-          <a href="{{ $social['url'] }}" target="_blank" rel="noopener noreferrer" aria-label="{{ $social['title'] ?? $social['name'] ?? 'شبکه اجتماعی فراست' }}"><i class="{{ $social['icon'] ?? 'fa-solid fa-arrow-up-right-from-square' }}"></i></a>
-        @endforeach
-      </div>
-      <div class="footer-brand-note"><i class="fa-solid fa-sparkles"></i> از ایده تا نتیجه، همراه شما</div>
+      <a class="footer-brand" href="{{ route('home') }}" aria-label="فراست"><span class="brand-mark farast-symbol"><i></i><i></i><i></i><i></i><b></b></span><b>فراست</b></a>
+      <p>ابزارهای کار با سند و مجموعه‌ای از فایل‌ها و دوره‌های دیجیتال.</p>
+      @if(count($footerSocial))
+        <div class="footer-social" aria-label="شبکه‌های اجتماعی">
+          @foreach($footerSocial as $social)
+            <a href="{{ $social['url'] }}" target="_blank" rel="noopener noreferrer" aria-label="{{ $social['title'] ?? $social['name'] ?? 'شبکه اجتماعی فراست' }}"><i class="{{ $social['icon'] ?? 'fa-solid fa-arrow-up-right-from-square' }}"></i></a>
+          @endforeach
+        </div>
+      @endif
     </div>
-    <div class="footer-column"><h3>محصول</h3><a href="{{ route('store') }}">فروشگاه فایل</a><a href="{{ route('editor') }}">تایپ و خدمات</a><a href="{{ route('pricing') }}">قیمت‌گذاری</a><a href="{{ route('cart') }}">سبد خرید</a></div>
-    <div class="footer-column"><h3>دانش و راهنما</h3><a href="{{ route('blog') }}">مجله فراست</a><a href="/announcements">تازه‌ها و اطلاعیه‌ها</a><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a></div>
-    <div class="footer-column footer-column--account"><h3>حساب و پشتیبانی</h3><a href="{{ route('dashboard') }}">فضای کاربری</a><a href="/wallet">کیف پول</a><a href="/wishlist">علاقه‌مندی‌ها</a><a href="/support">مرکز پشتیبانی</a><a href="#" data-open-support>گفت‌وگو با پشتیبانی</a><div class="footer-trust-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>اطلاعات شفاف، مسیرهای ارتباطی روشن و دسترسی به شرایط خدمات</span></div></div>
+    <div class="footer-column"><h3>محصولات</h3><a href="{{ route('store') }}">فروشگاه</a><a href="{{ route('editor') }}">تایپ و ویرایش سند</a><a href="{{ route('pricing') }}">تعرفه خدمات</a></div>
+    <div class="footer-column"><h3>راهنما</h3><a href="{{ route('blog') }}">مجله فراست</a><a href="/announcements">اطلاعیه‌ها</a><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a></div>
+    <div class="footer-column"><h3>حساب کاربری</h3><a href="{{ route('dashboard') }}">فضای کاربری</a><a href="/wishlist">علاقه‌مندی‌ها</a><a href="/support">پشتیبانی</a></div>
   </div>
   <div class="footer-bottom farast-footer-bottom">
     <section class="farast-footer-trust" aria-labelledby="farast-footer-trust-title">
-      <div class="farast-footer-trust__heading"><span class="farast-footer-trust__icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span><div><strong id="farast-footer-trust-title">اعتبار و نمادهای اعتماد</strong><small>در حال حاضر نماد رسمی ثبت‌شده‌ای برای نمایش نداریم</small></div></div>
-      <a class="farast-footer-trust__link" href="{{ route('trust') }}">مشاهده وضعیت نمادها و اطلاعات شفافیت <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
+      <div class="farast-footer-trust__heading"><span class="farast-footer-trust__icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span><div><strong id="farast-footer-trust-title">اعتبار و نمادهای اعتماد</strong><small>وضعیت نمادهای رسمی و اطلاعات شفافیت</small></div></div>
+      <a class="farast-footer-trust__link" href="{{ route('trust') }}">مشاهده اطلاعات و وضعیت نمادها <i class="fa-solid fa-arrow-left" aria-hidden="true"></i></a>
     </section>
     <div class="farast-footer-bottom__meta">
       <span>© {{ now()->year }} فراست — تمامی حقوق محفوظ است.</span>
-      <div><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a><a href="/refund-policy">شرایط بازگشت وجه</a><a href="{{ route('blog') }}">مجله</a></div>
-      <a class="footer-back-top" href="#app-main"><i class="fa-solid fa-arrow-up"></i> بازگشت به بالا</a>
+      <div><a href="/refund-policy">بازگشت وجه</a><a href="/terms">قوانین</a><a href="/privacy">حریم خصوصی</a></div>
+      <a class="footer-back-top" href="#app-main"><i class="fa-solid fa-arrow-up"></i> بالا</a>
     </div>
   </div>
 </footer>@endif
