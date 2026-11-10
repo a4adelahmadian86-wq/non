@@ -140,6 +140,20 @@ class StoreCartFeedbackExperienceTest extends TestCase
         ]);
     }
 
+    public function test_cart_excludes_products_that_are_no_longer_published(): void
+    {
+        $product = $this->createCartTestProduct(25000);
+        $this->postJson(route('cart.add', $product))->assertOk();
+
+        $product->update(['published_at' => now()->addDay()]);
+
+        $this->getJson(route('cart.summary'))
+            ->assertOk()
+            ->assertJsonPath('items', [])
+            ->assertJsonPath('count', 0)
+            ->assertJsonPath('subtotal_rials', 0);
+    }
+
     public function test_storefront_product_discovery_page_loads(): void
     {
         $this->get(route('store'))
