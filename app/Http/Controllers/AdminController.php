@@ -15,6 +15,7 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\VoiceProviderAccount;
 use App\Services\AdminConsoleService;
+use App\Services\DashboardQueueHealthService;
 use App\Services\AuditLogService;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
@@ -419,7 +420,7 @@ class AdminController extends Controller
                 'driver' => config('database.default'),
                 'db_ok' => $this->databaseReachable(),
                 'cache_ok' => $this->cacheReachable(),
-                'queue_connection' => config('queue.default'),
+                'queue' => app(DashboardQueueHealthService::class)->snapshot(),
                 'env' => app()->environment(),
                 'debug' => (bool) config('app.debug'),
                 'storage_writable' => is_writable(storage_path()),
