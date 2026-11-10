@@ -1,6 +1,6 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
 use RuntimeException;
 
@@ -36,8 +36,8 @@ class LocalTotpService
 
     public function verify(string $secret, string $code, ?int $timestamp = null, int $window = 1): bool
     {
-        $code = preg_replace('/\\s+/', '', $code);
-        if (! preg_match('/^\\d{6}$/', $code)) {
+        $code = preg_replace('/\s+/', '', $code);
+        if (! preg_match('/^\d{6}$/', $code)) {
             return false;
         }
 
