@@ -454,9 +454,37 @@ class AdminStoreController extends Controller
         }
 
         $this->audit('store.product.deleted', $product, ['type' => $product->type]);
+        $managedPaths = \App\Models\StorageManagedFile::query()
+            ->where('product_id', $product->id)
+            ->where('status', 'active')
+            ->whereNotNull('logical_path')
+            ->pluck('logical_path')
+            ->all();
+        $coverPath = (string) $product->cover_path;
+        $publicImagePaths = $product->images()->pluck('path')->all();
+        $productId = (int) $product->id;
         $product->delete();
 
-        return redirect()->route('admin.store.index')->with('status', 'محصول حذف شد.');
+        foreach ($managedPaths as $managedPath) {
+            Storage::disk('managed')->delete($managedPath);
+        }
+        if (Str::startsWith($coverPath, 'storage/store/covers/'.$productId.'/')) {
+            $relative = Str::after($coverPath, 'storage/');
+            Storage::disk('public')->delete($relative);
+            Storage::disk('managed')->delete($relative);
+        }
+        foreach ($publicImagePaths as $imagePath) {
+            if (Str::startsWith($imagePath, 'storage/store/product-images/'.$productId.'/')) {
+                $relative = Str::after($imagePath, 'storage/');
+                Storage::disk('public')->delete($relative);
+                Storage::disk('managed')->delete($relative);
+            }
+        }
+        Storage::disk('private')->deleteDirectory('store/products/'.$productId);
+        Storage::disk('managed')->deleteDirectory('store/products/'.$productId);
+        Storage::disk('managed')->deleteDirectory('store/previews/'.$productId);
+
+        return redirect()->route('admin.store.index')->with('status', 'محصول و فایل‌های متعلق به آن حذف شدند.');
     }
 
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
@@ -465,7 +493,7 @@ class AdminStoreController extends Controller
         $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean']);
 
         $upload = $request->file('file');
-        $originalNameLower = strtolower(str_replace('\\', '/', $upload->getClientOriginalName()));
+        $originalNameLower = strtolower(str_replace('\', '/', $upload->getClientOriginalName()));
         $extension = str_ends_with($originalNameLower, '.tar.gz')
             ? 'tar.gz'
             : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower($upload->getClientOriginalExtension()));
@@ -484,7 +512,7 @@ class AdminStoreController extends Controller
             $old->delete();
         }
 
-        $safeName = mb_substr(basename(str_replace('\\', '/', $upload->getClientOriginalName())), 0, 255);
+        $safeName = mb_substr(basename(str_replace('\', '/', $upload->getClientOriginalName())), 0, 255);
         $path = $upload->storeAs(
             'store/quarantine/product-ingestions/'.$product->id,
             (string) Str::uuid().'.'.$extension,
@@ -1362,7 +1390,7 @@ class AdminStoreController extends Controller
                 $seo['focus_keyword'] = trim((string) $request->input('seo_focus_keyword', ''));
             }
             if ($request->has('seo_secondary_keywords')) {
-                $seo['secondary_keywords'] = collect(preg_split('/[,،\\n]+/u', (string) $request->input('seo_secondary_keywords', '')) ?: [])
+                $seo['secondary_keywords'] = collect(preg_split('/[,،\n]+/u', (string) $request->input('seo_secondary_keywords', '')) ?: [])
                     ->map(fn ($keyword) => trim($keyword))
                     ->filter()
                     ->unique(fn ($keyword) => mb_strtolower($keyword))
