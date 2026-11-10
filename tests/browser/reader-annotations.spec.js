@@ -29,3 +29,20 @@ test('annotation workspace persists text highlights and supports undo',async({pa
   const after=await page.locator('.farast-annotation-stamp').boundingBox();
   expect(after.x).toBeGreaterThan(before.x+20);
 });
+test('annotation backup import rejects malformed records and confirms replacement',async({page})=>{
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="annotation-import-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Import validation</span></div></div></article></section>');
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  const key='farast-reader:annotations:v1:annotation-import-test';
+  await page.evaluate(k=>localStorage.setItem(k,JSON.stringify([{id:'existing',type:'note',page:'0:1',x:.2,y:.2,text:'Keep me'}])),key);
+  await page.locator('[data-action="import"]').click();
+  await page.locator('[data-file]').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,items:[{id:'bad',type:'ink',page:'0:1',points:[{x:9,y:0}]}]}))});
+  await expect(page.locator('.farast-annotation-status')).toHaveText('فایل JSON معتبر نیست.');
+  await expect.poll(()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'[]')[0]?.id,key)).toBe('existing');
+  await page.locator('[data-action="import"]').click();
+  await page.locator('[data-file]').setInputFiles({name:'valid.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,items:[{id:'new-note',type:'note',page:'0:1',x:.3,y:.3,text:'Imported'}],pressureInk:[]}))});
+  await expect(page.locator('.farast-reader-text-dialog')).toBeVisible();
+  await expect(page.locator('.farast-reader-text-dialog')).toContainText('جایگزین');
+  await page.locator('.farast-reader-text-dialog button[type="submit"]').click();
+  await expect.poll(()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'[]')[0]?.id,key)).toBe('new-note');
+});
