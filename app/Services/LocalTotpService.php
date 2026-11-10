@@ -73,7 +73,7 @@ class LocalTotpService
     {
         $codes = [];
         for ($i = 0; $i < max(1, min(20, $count)); $i++) {
-            $hex = strtoupper(bin2hex(random_bytes(6)));
+            $hex = strtoupper(bin2hex(random_bytes(10)));
             $codes[] = implode('-', str_split($hex, 4));
         }
 
