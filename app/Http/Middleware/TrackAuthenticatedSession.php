@@ -14,7 +14,7 @@ use Symfony\\Component\\HttpFoundation\\Response;
 class TrackAuthenticatedSession
 {
     private const DEVICE_COOKIE = 'farast_device_key';
-    private const THREE_YEARS_MINUTES = 1576800;
+    private const THREE_YEARS_MINUTES = 1578240;
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -144,7 +144,7 @@ class TrackAuthenticatedSession
                 ->delete();
             DB::table('farast_security_events')
                 ->where('user_id', $user->id)
-                ->where('created_at', '<', now()->subDays(180))
+                ->where('created_at', '<', now()->subYears(3))
                 ->delete();
         } else {
             DB::table('farast_account_sessions')
