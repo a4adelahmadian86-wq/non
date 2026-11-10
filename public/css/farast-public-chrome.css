@@ -120,3 +120,35 @@
 .trust-principle:hover{transform:translateY(-3px);border-color:#d4e1f1;box-shadow:0 12px 28px rgba(28,55,91,.07)}
 @media(max-width:760px){.farast-footer-trust__heading{align-items:flex-start}.trust-principle{min-height:100%}}
 @media(prefers-reduced-motion:reduce){.trust-principle{transition:none}}
+
+
+/* Compact public footer: keep trust information, remove oversized promotional layers. */
+.site-footer{margin-top:48px}
+.farast-footer-compact{display:grid;grid-template-columns:minmax(220px,1.5fr) repeat(3,minmax(120px,1fr));gap:28px;padding:28px 0 22px}
+.farast-footer-compact .footer-about p{max-width:290px;margin:10px 0;color:#aebfd4;font-size:10px;line-height:1.9}
+.farast-footer-compact .footer-column{display:flex;flex-direction:column;align-items:flex-start;gap:9px}
+.farast-footer-compact .footer-column h3{margin:0 0 4px;color:#f2f6fc;font-size:11px}
+.farast-footer-compact .footer-column a{color:#aebfd4;font-size:10px;line-height:1.6;text-decoration:none}
+.farast-footer-compact .footer-column a:hover{color:#fff}
+.farast-footer-compact .footer-social{margin-top:10px}
+.farast-footer-bottom{grid-template-columns:minmax(220px,.8fr) minmax(0,1.5fr);gap:22px;padding-top:16px;padding-bottom:16px}
+.farast-footer-trust{gap:9px;padding:12px 14px;border-radius:13px}
+.farast-footer-trust__icon{width:32px;height:32px;border-radius:10px;font-size:13px}
+.farast-footer-trust__heading strong{font-size:10px}
+.farast-footer-trust__heading small{font-size:8px}
+.farast-footer-trust__link{min-height:32px;font-size:8px}
+.farast-footer-bottom__meta{gap:10px;font-size:9px}
+.farast-footer-bottom__meta>div{gap:11px;font-size:9px}
+@media(max-width:760px){
+ .farast-footer-compact{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;padding:22px 0 18px}
+ .farast-footer-compact .footer-about{grid-column:1/-1}
+ .farast-footer-compact .footer-about p{max-width:440px}
+ .farast-footer-bottom{grid-template-columns:1fr;gap:14px}
+ .farast-footer-trust{max-width:none;width:100%}
+ .farast-footer-bottom__meta{align-items:flex-start;flex-direction:row}
+}
+@media(max-width:480px){
+ .site-footer{margin-top:32px}
+ .farast-footer-compact{gap:18px 14px}
+ .farast-footer-bottom__meta{flex-direction:column}
+}
