@@ -169,7 +169,13 @@ class MessengerController extends Controller
             $mime = (string) ($inspection['mime'] ?? $file->getMimeType());
             $originalName = Str::limit(basename($file->getClientOriginalName()), 180, '');
             $stream = Storage::disk('private')->readStream($path);
-            abort_unless(is_resource($stream), 503, 'خواندن فایل اسکن‌شده ممکن نشد.');
+            if (! is_resource($stream)) {
+                Storage::disk('private')->delete($path);
+                foreach ($attachments as $storedAttachment) {
+                    Storage::disk($storedAttachment['disk'] ?? 'private')->delete($storedAttachment['path']);
+                }
+                throw ValidationException::withMessages(['attachments' => ['خواندن فایل اسکن‌شده ممکن نشد.']]);
+            }
             try {
                 $stored = Storage::disk('managed')->put($path, $stream, [
                     'farast_classification' => 'non_critical',
@@ -184,6 +190,9 @@ class MessengerController extends Controller
             }
             if (! $stored) {
                 Storage::disk('private')->delete($path);
+                foreach ($attachments as $storedAttachment) {
+                    Storage::disk($storedAttachment['disk'] ?? 'private')->delete($storedAttachment['path']);
+                }
                 throw ValidationException::withMessages(['attachments' => ['ذخیره پیوست در فضای مرکزی ممکن نشد.']]);
             }
             Storage::disk('private')->delete($path);
@@ -296,9 +305,9 @@ class MessengerController extends Controller
         $this->authorizeParticipant($request, $conversation);
         abort_unless((int) $message->conversation_id === (int) $conversation->id, 404);
         $attachment = $message->attachments[$index] ?? null;
-        abort_unless(is_array($attachment) && ($attachment['disk'] ?? null) === 'private' && filled($attachment['path'] ?? null), 404);
+        abort_unless(is_array($attachment) && in_array(($attachment['disk'] ?? null), ['private', 'managed'], true) && filled($attachment['path'] ?? null), 404);
 
-        $disk = Storage::disk('private');
+        $disk = Storage::disk($attachment['disk']);
         abort_unless($disk->exists($attachment['path']), 404);
 
         return $disk->download($attachment['path'], $attachment['name'] ?? 'attachment', [
