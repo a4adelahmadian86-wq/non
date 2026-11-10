@@ -66,12 +66,13 @@ class AdminStorageController extends Controller
             return back()->withErrors(['connection_json' => 'درایور اعلام‌شده پشتیبانی نمی‌شود.'])->withInput($request->except('connection_json'));
         }
 
-        $name = trim((string) ($connection['name'] ?? $connection['provider'] ?? 'فضای ذخیره‌سازی جدید'));
-        if ($name === '') {
-            return back()->withErrors(['connection_json' => 'نام سرویس در اطلاعات اتصال مشخص نشده است.'])->withInput($request->except('connection_json'));
-        }
-
         $credentials = (array) ($connection['credentials'] ?? []);
+        $endpoint = (string) ($connection['endpoint'] ?? ($credentials['endpoint'] ?? ''));
+        $bucket = (string) ($connection['bucket'] ?? ($credentials['bucket'] ?? ''));
+        $host = (string) parse_url($endpoint, PHP_URL_HOST);
+        $provider = trim((string) ($connection['provider'] ?? $host));
+        $name = trim((string) ($connection['name'] ?? (($bucket !== '' ? $bucket.' · ' : '').($provider ?: 'فضای ذخیره‌سازی جدید'))));
+        if ($name === '') $name = 'فضای ذخیره‌سازی جدید';
         foreach (['key', 'secret', 'bucket', 'region', 'endpoint', 'use_path_style_endpoint'] as $key) {
             if (array_key_exists($key, $connection) && ! array_key_exists($key, $credentials)) {
                 $credentials[$key] = $connection[$key];
@@ -81,11 +82,11 @@ class AdminStorageController extends Controller
         $volume = StorageVolume::create([
             'drive_key' => $data['drive_key'],
             'name' => mb_substr($name, 0, 120),
-            'provider' => isset($connection['provider']) ? mb_substr((string) $connection['provider'], 0, 120) : null,
+            'provider' => $provider !== '' ? mb_substr($provider, 0, 120) : null,
             'driver' => $driver,
-            'region' => isset($connection['region']) ? mb_substr((string) $connection['region'], 0, 80) : null,
-            'endpoint' => $connection['endpoint'] ?? ($credentials['endpoint'] ?? null),
-            'bucket' => $connection['bucket'] ?? ($credentials['bucket'] ?? null),
+            'region' => isset($connection['region']) ? mb_substr((string) $connection['region'], 0, 80) : (isset($credentials['region']) ? mb_substr((string) $credentials['region'], 0, 80) : null),
+            'endpoint' => $endpoint ?: null,
+            'bucket' => $bucket ?: null,
             'credentials' => $credentials,
             'capacity_bytes' => isset($connection['capacity_bytes']) ? max(1, (int) $connection['capacity_bytes']) : null,
             'file_limit' => isset($connection['file_limit']) ? max(1, (int) $connection['file_limit']) : null,
