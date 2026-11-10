@@ -52,7 +52,7 @@ class ProcessProductDocument implements ShouldQueue
             $sourceTemporaryPath = tempnam(sys_get_temp_dir(), 'farast-product-source');
             try {
                 $storage->downloadTo($sourceDisk, $file->path, $sourceTemporaryPath);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 @unlink($sourceTemporaryPath);
                 $document->update(['processing_status' => 'failed', 'failure_code' => 'source_file_unavailable']);
                 throw $exception;
