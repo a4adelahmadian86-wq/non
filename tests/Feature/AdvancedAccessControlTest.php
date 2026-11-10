@@ -239,6 +239,36 @@ class AdvancedAccessControlTest extends TestCase
         ));
     }
 
+    public function test_resource_middleware_does_not_fall_back_from_null_owner_to_user_id(): void
+    {
+        $employee = $this->user('09140000130');
+        $resource = new class extends \Illuminate\Database\Eloquent\Model {
+            protected $table = 'documents';
+            public $timestamps = false;
+        };
+        $resource->setRawAttributes([
+            'id' => 9001,
+            'owner_id' => null,
+            'user_id' => $employee->id,
+            'organization_id' => null,
+            'team_id' => null,
+            'status' => 'active',
+        ]);
+
+        $route = new \Illuminate\Routing\Route('GET', '/resource-check', fn () => null);
+        $route->setParameter('resource', $resource);
+        $request = \Illuminate\Http\Request::create('/resource-check');
+        $request->setRouteResolver(fn () => $route);
+        $request->setUserResolver(fn () => $employee);
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(\App\Http\Middleware\EnsureResourcePermission::class)->handle(
+            $request,
+            fn () => response('unexpectedly allowed'),
+            'documents.view'
+        );
+    }
+
     public function test_regular_team_membership_does_not_create_team_management_scope(): void
     {
         $organization = Organization::create(['name' => 'Member Scope Org', 'slug' => 'member-scope-org', 'status' => 'active']);
