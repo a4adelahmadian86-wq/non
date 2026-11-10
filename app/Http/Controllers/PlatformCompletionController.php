@@ -145,7 +145,7 @@ class PlatformCompletionController extends Controller {
   ];
   DB::transaction(function()use($r,$x,$payload){
    if(!empty($x['id'])){
-    $owned=DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->exists();
+    $owned=DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->lockForUpdate()->first();
     abort_unless($owned,404);
     DB::table('farast_workflows')->where('id',$x['id'])->where('user_id',$r->user()->id)->update($payload);
     return;
@@ -180,7 +180,7 @@ class PlatformCompletionController extends Controller {
    'این گردش‌کار به اطلاعات یک رویداد واقعی نیاز دارد و از اجرای دستی قابل تأمین نیست.'
   );
 
-  $run=$engine->run((int)$id,$context);
+  $run=$engine->run((int)$id,$context,null,true);
   return response()->json(['run_id'=>$run,'status'=>'completed']);
  }
  public function security(Request $r){
