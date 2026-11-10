@@ -222,6 +222,9 @@ class StorageMigrationService
             ]);
             Storage::disk('farast_remote')->delete($oldArchivePath);
             return true;
+        } catch (Throwable $exception) {
+            report($exception);
+            return false;
         } finally {
             fclose($archiveStream);
             fclose($archiveTemp);
