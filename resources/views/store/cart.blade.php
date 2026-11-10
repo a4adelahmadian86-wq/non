@@ -81,7 +81,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261109cart3">
+<link rel="stylesheet" href="/css/store.css?v=20261110livecart1">
 @endpush
 @push('scripts')
 <script>
