@@ -177,6 +177,19 @@ class StorageBackupService
             if ((int) $destination->size($objectKey) !== $size) {
                 throw new \RuntimeException('Backup destination size verification failed.');
             }
+            $remoteStream = $destination->readStream($objectKey);
+            if (! is_resource($remoteStream)) {
+                throw new \RuntimeException('Backup destination cannot be read back for verification.');
+            }
+            $remoteHash = hash_init('sha256');
+            try {
+                hash_update_stream($remoteHash, $remoteStream);
+            } finally {
+                fclose($remoteStream);
+            }
+            if (! hash_equals($checksum, hash_final($remoteHash))) {
+                throw new \RuntimeException('Backup destination checksum verification failed.');
+            }
 
             $run->update([
                 'status' => 'completed',
