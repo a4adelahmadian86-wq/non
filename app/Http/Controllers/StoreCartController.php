@@ -134,8 +134,13 @@ class StoreCartController extends Controller
                         throw new \RuntimeException('برنامه آموزشی این دوره هنوز برای تحویل آماده نیست.');
                     }
                 } else {
-                    $file = $product->files->where('purpose', 'product_download')->firstWhere('is_primary', true)
-                        ?: $product->files->where('purpose', 'product_download')->firstWhere('is_active', true);
+                    $file = $product->files()
+                        ->where('purpose', 'product_download')
+                        ->where('is_active', true)
+                        ->whereIn('scan_status', ['clean', 'legacy'])
+                        ->orderByDesc('is_primary')
+                        ->orderByDesc('id')
+                        ->first();
                     if (! $file || ! $file->is_active || ! in_array($file->scan_status, ['clean', 'legacy'], true)) {
                         throw new \RuntimeException('فایل اصلی محصول پس از اسکن امنیتی برای تحویل آماده نیست.');
                     }
