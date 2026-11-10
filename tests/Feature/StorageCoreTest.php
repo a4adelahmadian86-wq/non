@@ -7,13 +7,20 @@ use App\Models\StorageVolume;
 use App\Services\Storage\StorageManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class StorageCoreTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected function tearDown(): void\n    {\n        foreach (StorageVolume::query()->pluck('id') as $id) File::deleteDirectory(storage_path('app/storage-volumes/'.$id));\n        parent::tearDown();\n    }\n\n    public function test_critical_uploads_only_use_iran_primary_volume(): void
+    protected function tearDown(): void
+    {
+        foreach (StorageVolume::query()->pluck('id') as $id) File::deleteDirectory(storage_path('app/storage-volumes/'.$id));
+        parent::tearDown();
+    }
+
+    public function test_critical_uploads_only_use_iran_primary_volume(): void
     {
         $foreign = StorageVolume::create([
             'drive_key' => 'foreign_primary', 'name' => 'Foreign', 'driver' => 'local',
