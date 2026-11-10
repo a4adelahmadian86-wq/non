@@ -25,10 +25,10 @@ class UserFileController extends Controller
         $request->validate(['file' => 'required|file|max:'.($limit * 1024).'|mimes:jpg,jpeg,png,webp,pdf,zip,doc,docx']);
         $file = $request->file('file');
         $bytes = $file->getSize() ?: 0;
+        $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $file->getRealPath());
+        $quote = $pricing->estimateByPages($pages);
         $stored = $storage->storeUploadedFile($file, StorageManager::NON_CRITICAL, 'editor', UserFile::class, null, null, 'private');
         $path = $stored['path'];
-        $pages = $this->estimatePages($file->getMimeType(), $file->getClientOriginalName(), $storage->get($stored['disk'], $path));
-        $quote = $pricing->estimateByPages($pages);
         $now = now();
         $record = UserFile::create([
             'user_id' => auth()->id(), 'original_name' => $file->getClientOriginalName(), 'path' => $path,
@@ -47,16 +47,28 @@ class UserFileController extends Controller
         abort_unless($file->user_id === $request->user()->id, 403);
         abort_unless($storage->exists($file->disk ?: 'private', $file->path), 404, 'فایل در فضای نگهداری موجود نیست.');
 
-        $bytes = $storage->get($file->disk ?: 'private', $file->path);
-        $sourcePath = 'typing/'.$request->user()->id.'/'.Str::uuid().'-'.basename($file->path);
-        Storage::disk('private')->put($sourcePath, $bytes);
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-editor-select');
+        try {
+            $storage->downloadTo($file->disk ?: 'private', $file->path, $temporary);
+            $sourceHash = hash_file('sha256', $temporary);
+            $sourcePath = 'typing/'.$request->user()->id.'/'.Str::uuid().'-'.basename($file->path);
+            $stream = fopen($temporary, 'rb');
+            if (! is_resource($stream)) throw new \\RuntimeException('editor_source_stream_unavailable');
+            try {
+                if (! Storage::disk('private')->writeStream($sourcePath, $stream)) throw new \\RuntimeException('editor_selection_copy_failed');
+            } finally {
+                fclose($stream);
+            }
+        } finally {
+            @unlink($temporary);
+        }
 
         $pending = [
             'path' => $sourcePath,
             'mime' => $file->mime,
             'name' => $file->original_name,
             'user_file_id' => $file->id,
-            'source_hash' => hash('sha256', $bytes),
+            'source_hash' => $sourceHash,
         ];
         $request->session()->put('pending_upload', $pending);
         $request->session()->forget(['typing_preflight_quote', 'typing_preflight_accepted', 'typing_preflight_deposit_order']);
@@ -98,26 +110,39 @@ class UserFileController extends Controller
         return round($bytes / 1073741824, 2).' گیگابایت';
     }
 
-    private function estimatePages(?string $mime, string $name, string $bytes): int
+    private function estimatePages(?string $mime, string $name, string $path): int
     {
         if ($mime === 'application/pdf' || Str::endsWith(strtolower($name), '.pdf')) {
-            $count = preg_match_all('/\/Type\s*\/Page\b/u', $bytes, $m) ?: 0;
-            return max(1, $count);
+            $stream = @fopen($path, 'rb');
+            if (! is_resource($stream)) return 1;
+            $pages = 0;
+            $carry = '';
+            try {
+                while (! feof($stream)) {
+                    $chunk = fread($stream, 1024 * 1024);
+                    if (! is_string($chunk) || $chunk === '') break;
+                    $data = $carry.$chunk;
+                    $all = preg_match_all('/\\/Type\\s*\\/Page\\b/u', $data) ?: 0;
+                    $previous = preg_match_all('/\\/Type\\s*\\/Page\\b/u', $carry) ?: 0;
+                    $pages += max(0, $all - $previous);
+                    $carry = substr($data, -64);
+                }
+            } finally {
+                fclose($stream);
+            }
+            return max(1, $pages);
         }
         if (in_array($mime, ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'], true) && class_exists('ZipArchive')) {
-            $tmp = tempnam(sys_get_temp_dir(), 'farast-doc');
-            file_put_contents($tmp, $bytes);
-            $zip = new \ZipArchive();
+            $zip = new \\ZipArchive();
             $pages = 1;
-            if ($zip->open($tmp) === true) {
+            if ($zip->open($path) === true) {
                 $xml = $zip->getFromName('word/document.xml') ?: '';
-                $words = preg_match_all('/[\p{L}\p{N}]+/u', strip_tags($xml), $m) ?: 0;
+                $words = preg_match_all('/[\\p{L}\\p{N}]+/u', strip_tags($xml), $m) ?: 0;
                 $pages = max(1, (int) ceil($words / 500));
                 $zip->close();
             }
-            @unlink($tmp);
             return $pages;
         }
         return 1;
     }
-}
+}}
