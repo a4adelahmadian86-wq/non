@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class AccountSecurityController extends Controller
 {
-    public function index(Request $request, \\App\\Services\\LocalTotpService $totp)
+    public function index(Request $request, \App\Services\LocalTotpService $totp)
     {
         $user = $request->user();
         $currentKey = hash('sha256', $request->session()->getId());
