@@ -476,6 +476,7 @@ class AdminController extends Controller
 
         $old = $user->role;
         $user->update(['role' => $d['role']]);
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         if (Schema::hasTable('audit_logs')) {
             $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
