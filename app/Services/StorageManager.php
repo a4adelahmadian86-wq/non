@@ -474,11 +474,21 @@ class StorageManager
             return \Illuminate\Support\Facades\Storage::disk('private')->exists($path);
         }
         try {
-            return $this->connections->disk($record->volume)->exists($record->file_key);
+            if ($this->connections->disk($record->volume)->exists($record->file_key)) {
+                return true;
+            }
         } catch (Throwable $exception) {
             report($exception);
-            return false;
         }
+
+        if ($record->replicaVolume && $record->replica_file_key) {
+            try {
+                return $this->connections->disk($record->replicaVolume)->exists($record->replica_file_key);
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        }
+        return false;
     }
 
     public function read(string $path): string
@@ -487,7 +497,15 @@ class StorageManager
         if (! $record) {
             return (string) \Illuminate\Support\Facades\Storage::disk('private')->get($path);
         }
-        return (string) $this->connections->disk($record->volume)->get($record->file_key);
+        try {
+            return (string) $this->connections->disk($record->volume)->get($record->file_key);
+        } catch (Throwable $primaryException) {
+            if ($record->replicaVolume && $record->replica_file_key) {
+                report($primaryException);
+                return (string) $this->connections->disk($record->replicaVolume)->get($record->replica_file_key);
+            }
+            throw $primaryException;
+        }
     }
 
     public function readStream(string $path)
@@ -496,7 +514,15 @@ class StorageManager
         if (! $record) {
             return \Illuminate\Support\Facades\Storage::disk('private')->readStream($path);
         }
-        return $this->connections->disk($record->volume)->readStream($record->file_key);
+        try {
+            return $this->connections->disk($record->volume)->readStream($record->file_key);
+        } catch (Throwable $primaryException) {
+            if ($record->replicaVolume && $record->replica_file_key) {
+                report($primaryException);
+                return $this->connections->disk($record->replicaVolume)->readStream($record->replica_file_key);
+            }
+            throw $primaryException;
+        }
     }
 
     public function delete(string $path): void
@@ -506,10 +532,42 @@ class StorageManager
             \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
             return;
         }
-        $this->connections->disk($record->volume)->delete($record->file_key);
-        DB::transaction(function () use ($record) {
-            $record->update(['status' => 'deleted']);
-            StorageVolume::whereKey($record->storage_volume_id)->decrement('used_bytes', $record->size_bytes);
+        $primaryDeleted = false;
+        $replicaDeleted = false;
+        $failures = [];
+
+        try {
+            $this->connections->disk($record->volume)->delete($record->file_key);
+            $primaryDeleted = true;
+        } catch (Throwable $exception) {
+            $failures[] = $exception;
+        }
+
+        if ($record->replicaVolume && $record->replica_file_key) {
+            try {
+                $this->connections->disk($record->replicaVolume)->delete($record->replica_file_key);
+                $replicaDeleted = true;
+            } catch (Throwable $exception) {
+                $failures[] = $exception;
+            }
+        }
+
+        if (! $primaryDeleted && ! $replicaDeleted) {
+            throw $failures[0] ?? new RuntimeException('Managed object could not be deleted from any replica.');
+        }
+
+        DB::transaction(function () use ($record, $primaryDeleted, $replicaDeleted) {
+            $metadata = (array) ($record->metadata ?? []);
+            if (! $primaryDeleted || ($record->replicated_to_volume_id && ! $replicaDeleted)) {
+                $metadata['orphan_cleanup_pending'] = true;
+            }
+            $record->update(['status' => 'deleted', 'metadata' => $metadata]);
+            if ($primaryDeleted) {
+                StorageVolume::whereKey($record->storage_volume_id)->decrement('used_bytes', $record->size_bytes);
+            }
+            if ($replicaDeleted && $record->replicated_to_volume_id) {
+                StorageVolume::whereKey($record->replicated_to_volume_id)->decrement('used_bytes', $record->size_bytes);
+            }
         });
     }
 
