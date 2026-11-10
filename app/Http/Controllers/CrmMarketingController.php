@@ -5,9 +5,15 @@ namespace App\Http\Controllers;
 use App\Services\AdminConsoleService;
 use App\Services\AuditLogService;
 use App\Services\CrmAudienceService;
+use App\Models\Order;
+use App\Models\StoreCoupon;
+use App\Models\StoreCouponAssignment;
+use App\Models\StoreProduct;
 use App\Services\NotificationService;
+use App\Services\StoreCouponMarginPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CrmMarketingController extends Controller
 {
@@ -116,7 +122,20 @@ class CrmMarketingController extends Controller
                 ->paginate(25, [
                     'crm_marketing_campaigns.*',
                     'crm_customer_segments.name as segment_name',
-                ]),
+                ])
+                ->through(function ($campaign) {
+                    $campaign->offer_count = DB::table('store_coupon_assignments')->where('campaign_id', $campaign->id)->count();
+                    $campaign->redeemed_offer_count = DB::table('store_coupon_assignments')->where('campaign_id', $campaign->id)->where('status', 'redeemed')->count();
+                    $campaign->redeemed_discount_rials = (int) DB::table('store_coupon_assignments as assignments')
+                        ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
+                        ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
+                        ->where('assignments.campaign_id', $campaign->id)
+                        ->where('assignments.status', 'redeemed')
+                        ->where('orders.status', 'paid')
+                        ->whereNotNull('orders.paid_at')
+                        ->sum('store_coupons.value');
+                    return $campaign;
+                }),
         ]);
     }
 
@@ -129,7 +148,19 @@ class CrmMarketingController extends Controller
             'segment_id' => 'required|integer|exists:crm_customer_segments,id',
             'title' => 'required|string|max:180',
             'body' => 'required|string|min:2|max:5000',
+            'incentive_product_id' => 'nullable|integer|exists:store_products,id',
+            'incentive_discount_percent' => 'nullable|integer|min:1|max:50',
+            'incentive_valid_hours' => 'nullable|integer|min:1|max:168',
+            'budget_cap_rials' => 'nullable|integer|min:1|max:999999999999999',
         ]);
+        $incentiveProduct = null;
+        if (! empty($data['incentive_product_id'])) {
+            $incentiveProduct = StoreProduct::query()->published()->findOrFail($data['incentive_product_id']);
+            abort_if($incentiveProduct->cost_price_rials === null, 422, 'برای محصول هدف باید بهای تمام‌شده ثبت شده باشد.');
+            abort_unless(! empty($data['incentive_discount_percent']) && ! empty($data['budget_cap_rials']), 422, 'برای مشوق کمپین، درصد تخفیف و سقف بودجه الزامی است.');
+        } else {
+            abort_if(! empty($data['incentive_discount_percent']) || ! empty($data['budget_cap_rials']), 422, 'تنظیمات مشوق بدون انتخاب محصول هدف مجاز نیست.');
+        }
 
         $segment = DB::table('crm_customer_segments')->where('id', $data['segment_id'])->first();
         abort_unless($segment && ($ownerIds === null || in_array((int) $segment->created_by, $ownerIds, true)), 404);
@@ -141,6 +172,10 @@ class CrmMarketingController extends Controller
             'channel' => 'in_app',
             'status' => 'draft',
             'segment_id' => $segment->id,
+            'incentive_product_id' => $incentiveProduct?->id,
+            'incentive_discount_percent' => $data['incentive_discount_percent'] ?? null,
+            'incentive_valid_hours' => $data['incentive_valid_hours'] ?? 48,
+            'budget_cap_rials' => $data['budget_cap_rials'] ?? 0,
             'title' => trim($data['title']),
             'body' => trim($data['body']),
             'created_by' => $request->user()->id,
@@ -173,12 +208,37 @@ class CrmMarketingController extends Controller
             $count = (clone $audience)->count();
             abort_if($count > 2000, 422, 'برای ارسال بیش از ۲۰۰۰ مخاطب، کمپین را به چند بخش کوچک‌تر تقسیم کنید.');
 
+            $incentiveProduct = null;
+            $budgetCommitted = 0;
+            if (! empty($record->incentive_product_id)) {
+                $incentiveProduct = StoreProduct::query()->published()
+                    ->whereKey($record->incentive_product_id)->lockForUpdate()->first();
+                abort_unless($incentiveProduct && $incentiveProduct->cost_price_rials !== null, 409, 'محصول هدف کمپین دیگر شرایط ارائه تخفیف امن را ندارد.');
+                abort_unless((int) $record->budget_cap_rials > 0 && (int) $record->incentive_discount_percent > 0, 409, 'بودجه یا درصد مشوق کمپین معتبر نیست.');
+
+                $spent = DB::table('store_coupon_assignments as assignments')
+                    ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
+                    ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
+                    ->where('assignments.campaign_id', $campaign)
+                    ->where('assignments.status', 'redeemed')
+                    ->where('orders.status', 'paid')
+                    ->whereNotNull('orders.paid_at')
+                    ->sum('store_coupons.value');
+                $reserved = DB::table('store_coupon_assignments as assignments')
+                    ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
+                    ->where('assignments.campaign_id', $campaign)
+                    ->where('assignments.status', 'offered')
+                    ->where('assignments.expires_at', '>', now())
+                    ->sum('store_coupons.value');
+                $budgetCommitted = (int) $spent + (int) $reserved;
+            }
+
             DB::table('crm_marketing_campaigns')->where('id', $campaign)->update([
                 'status' => 'sending', 'recipient_count' => $count, 'updated_at' => now(),
             ]);
 
             $sent = 0;
-            $audience->chunkById(200, function ($users) use ($record, $campaign, &$sent, $notifications) {
+            $audience->chunkById(200, function ($users) use ($record, $campaign, &$sent, &$budgetCommitted, $incentiveProduct, $notifications) {
                 foreach ($users as $user) {
                     $recipientId = DB::table('crm_campaign_recipients')->insertOrIgnore([
                         'campaign_id' => $campaign,
@@ -191,19 +251,93 @@ class CrmMarketingController extends Controller
                         continue;
                     }
 
+                    $coupon = null;
+                    $assignmentId = null;
+                    if ($incentiveProduct) {
+                        $alreadyPurchased = Order::query()->where('user_id', $user->id)->where('status', 'paid')
+                            ->whereHas('storeItems', fn ($items) => $items->where('product_id', $incentiveProduct->id))->exists();
+                        $overlappingOffer = StoreCouponAssignment::query()
+                            ->where('user_id', $user->id)
+                            ->where('product_id', $incentiveProduct->id)
+                            ->where('status', 'offered')
+                            ->where('expires_at', '>', now())
+                            ->exists();
+                        $recentOffer = StoreCouponAssignment::query()
+                            ->where('user_id', $user->id)
+                            ->where('product_id', $incentiveProduct->id)
+                            ->where('offered_at', '>=', now()->subDays(7))
+                            ->exists();
+                        $discount = min(
+                            (int) floor((int) $incentiveProduct->price_rials * (int) $record->incentive_discount_percent / 100),
+                            app(StoreCouponMarginPolicy::class)->maximumDiscount($incentiveProduct, (int) $incentiveProduct->price_rials, 1)
+                        );
+
+                        if (! $alreadyPurchased && ! $overlappingOffer && ! $recentOffer && $discount > 0
+                            && $budgetCommitted + $discount <= (int) $record->budget_cap_rials) {
+                            do {
+                                $code = 'FARAST'.Str::upper(Str::random(12));
+                            } while (StoreCoupon::query()->where('code', $code)->exists());
+
+                            $expiresAt = now()->addHours(max(1, min(168, (int) $record->incentive_valid_hours)));
+                            $coupon = StoreCoupon::create([
+                                'code' => $code,
+                                'type' => 'fixed',
+                                'value' => $discount,
+                                'max_uses' => 1,
+                                'used_count' => 0,
+                                'is_active' => true,
+                                'starts_at' => now(),
+                                'ends_at' => $expiresAt,
+                                'description' => 'مشوق کمپین '.$record->name,
+                            ]);
+                            $assignmentId = DB::table('store_coupon_assignments')->insertGetId([
+                                'coupon_id' => $coupon->id,
+                                'campaign_id' => $campaign,
+                                'user_id' => $user->id,
+                                'product_id' => $incentiveProduct->id,
+                                'status' => 'offered',
+                                'score' => 0,
+                                'reason_codes' => json_encode(['campaign_'.$campaign], JSON_UNESCAPED_UNICODE),
+                                'offered_at' => now(),
+                                'expires_at' => $expiresAt,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                            $budgetCommitted += $discount;
+                        }
+                    }
+
+                    $message = $record->body;
+                    $notificationData = [
+                        'campaign_id' => $campaign,
+                        'url' => route('platform.notifications', ['filter' => 'marketing']),
+                    ];
+                    if ($coupon && $assignmentId) {
+                        $message .= "\n\nکد تخفیف اختصاصی شما: ".$coupon->code."\nمبلغ تخفیف: ".number_format($coupon->value)." ریال\nمهلت استفاده: ".$coupon->ends_at->format('Y-m-d H:i');
+                        $notificationData['coupon_code'] = $coupon->code;
+                        $notificationData['coupon_assignment_id'] = $assignmentId;
+                        $notificationData['product_id'] = $incentiveProduct->id;
+                        $notificationData['expires_at'] = $coupon->ends_at->toIso8601String();
+                        $notificationData['url'] = route('store.product', $incentiveProduct->slug);
+                    }
+
                     $notification = $notifications->push(
                         (int) $user->id,
                         'announcement_campaign',
                         $record->title,
-                        $record->body,
-                        [
-                            'campaign_id' => $campaign,
-                            'url' => route('platform.notifications', ['filter' => 'marketing']),
-                        ],
+                        $message,
+                        $notificationData,
                         true,
                     );
                     if (! $notification) {
-                        throw new \RuntimeException('ثبت اعلان کمپین بازاریابی انجام نشد.');
+                        throw new \\RuntimeException('ثبت اعلان کمپین بازاریابی انجام نشد.');
+                    }
+
+                    if ($assignmentId) {
+                        DB::table('store_coupon_assignments')->where('id', $assignmentId)->update([
+                            'notification_id' => $notification->id,
+                            'updated_at' => now(),
+                        ]);
                     }
 
                     DB::table('crm_campaign_recipients')->where('campaign_id', $campaign)
