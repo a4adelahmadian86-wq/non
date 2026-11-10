@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\SiteSetting;
 use App\Models\StoreCategory;
 use App\Models\StoreCoupon;
 use App\Models\StoreCouponAssignment;
@@ -105,6 +106,43 @@ class AdminStoreCouponDashboardTest extends TestCase
             ->assertSee('استفاده موفق')
             ->assertSee('1,200', false)
             ->assertSee('8,800', false);
+    }
+
+    public function test_global_admin_can_save_live_smart_discount_rules(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->put(route('admin.store-coupons.settings'), [
+            'score_threshold' => 6,
+            'signal_window_days' => 21,
+            'cooldown_days' => 10,
+            'offer_valid_hours' => 36,
+            'max_discount_percent' => 8,
+            'abandonment_hours' => 3,
+            'retention_days' => 90,
+        ])->assertRedirect(route('admin.store-coupons.index'));
+
+        $this->assertSame(6, (int) SiteSetting::read('smart_discount_score_threshold', 5));
+        $this->assertSame(21, (int) SiteSetting::read('smart_discount_signal_window_days', 14));
+        $this->assertSame(8, (int) SiteSetting::read('smart_discount_max_discount_percent', 10));
+        $this->assertSame(90, (int) SiteSetting::read('marketing_signal_retention_days', 30));
+    }
+
+    public function test_signal_retention_cannot_be_shorter_than_the_analysis_window(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->from(route('admin.store-coupons.index'))
+            ->put(route('admin.store-coupons.settings'), [
+                'score_threshold' => 5,
+                'signal_window_days' => 30,
+                'cooldown_days' => 7,
+                'offer_valid_hours' => 48,
+                'max_discount_percent' => 10,
+                'abandonment_hours' => 2,
+                'retention_days' => 14,
+            ])->assertRedirect(route('admin.store-coupons.index'))
+            ->assertSessionHasErrors('retention_days');
     }
 
     public function test_admin_can_create_normalized_public_coupon_and_toggle_it(): void
