@@ -16,6 +16,22 @@ class EnsureResourcePermission
     {
     }
 
+    /**
+     * Resolve ownership using the first ownership column defined by the model.
+     * An explicitly null primary owner is meaningful and must fail closed; it
+     * must never fall through to a different actor/creator column.
+     */
+    private function ownerIdFromAttributes(array $attributes): mixed
+    {
+        foreach (['owner_id', 'user_id', 'created_by'] as $field) {
+            if (array_key_exists($field, $attributes)) {
+                return $attributes[$field];
+            }
+        }
+
+        return null;
+    }
+
     public function handle(Request $request, Closure $next, string $permission, string $parameter = 'resource')
     {
         $resource = $request->route($parameter);
@@ -25,7 +41,7 @@ class EnsureResourcePermission
         $context = [
             'resource_id' => $resource->getKey(),
             'resource_type' => $resource::class,
-            'owner_id' => $attributes['owner_id'] ?? $attributes['user_id'] ?? $attributes['created_by'] ?? null,
+            'owner_id' => $this->ownerIdFromAttributes($attributes),
             'organization_id' => $attributes['organization_id'] ?? null,
             'team_id' => $attributes['team_id'] ?? null,
             'status' => $attributes['status'] ?? null,
