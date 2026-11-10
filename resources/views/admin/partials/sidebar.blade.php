@@ -10,6 +10,9 @@
     <div class="farast-admin-nav-label">کنسول مدیریت · دامنه: {{ $adminScope }}</div>
     <nav>
         <a href="{{ route('admin.index') }}" @if(request()->routeIs('admin.index')) aria-current="page" @endif><i class="fa-solid fa-grid-2"></i><span>نمای کلی عملیات</span></a>
+        @if($adminConsole->sectionAllowed(auth()->user(), 'storage'))
+            <a href="{{ route('admin.storage.index') }}" @if(request()->routeIs('admin.storage.*')) aria-current="page" @endif><i class="fa-solid fa-hard-drive"></i><span>فضای ذخیره‌سازی و بکاپ</span></a>
+        @endif
         @if($adminConsole->sectionAllowed(auth()->user(), 'users'))
             <a href="{{ route('admin.users') }}" @if(request()->routeIs('admin.users')) aria-current="page" @endif><i class="fa-solid fa-users"></i><span>کاربران</span></a>
             <a href="{{ route('admin.crm.projects.index') }}" @if(request()->routeIs('admin.crm.projects.*')) aria-current="page" @endif><i class="fa-solid fa-diagram-project"></i><span>پروژه‌ها و پرونده مشتریان</span></a>
