@@ -8,6 +8,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\AdminConsoleService;
 use App\Services\AuthorizationService;
+use App\Http\Controllers\AdminAccessCenterController;
 use App\Http\Middleware\EnsureResourcePermission;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
@@ -482,7 +483,15 @@ class AdvancedAccessControlTest extends TestCase
         $admin = $this->user('09140000135', User::ROLE_ADMIN);
         $admin->forceFill(['is_blocked' => true])->save();
 
-        $this->actingAs($admin)->get('/admin/access-center')->assertForbidden();
+        $request = Request::create('/admin/access-center', 'GET');
+        $request->setUserResolver(fn () => $admin);
+
+        try {
+            app(AdminAccessCenterController::class)->index($request);
+            $this->fail('A blocked platform administrator must not manage access.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
     }
 
     public function test_sensitive_permissions_cannot_be_granted_as_direct_user_overrides(): void
