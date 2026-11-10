@@ -28,7 +28,11 @@ class AdminDashboardShellIntegrityTest extends TestCase
 
         $response->assertOk()
             ->assertSee('id="platform-control"', false)
-            ->assertSee('class="farast-admin-main"', false);
+            ->assertSee('class="farast-admin-main"', false)
+            ->assertSee('تیکت‌های نیازمند پیگیری')
+            ->assertSee(route('admin.support.management'))
+            ->assertSee('درآمد ماه جاری')
+            ->assertSee(route('admin.finance'));
 
         $html = $response->getContent();
         $mainStart = strpos($html, '<main class="farast-admin-main">');
