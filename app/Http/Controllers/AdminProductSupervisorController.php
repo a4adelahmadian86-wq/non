@@ -116,34 +116,48 @@ class AdminProductSupervisorController extends Controller
         );
     }
 
-    public function reviewImage(StoreProduct $product, StoreProductImage $image, ProductSupervisorClient $supervisor)
+    public function reviewImage(StoreProduct $product, StoreProductImage $image, ProductSupervisorClient $supervisor, StorageManager $storage)
     {
         abort_unless((int) $image->product_id === (int) $product->id && $image->is_active, 404);
-        abort_unless(Str::startsWith((string) $image->path, 'storage/store/product-images/'.$product->id.'/'), 404);
+        $path = (string) $image->path;
 
-        return $this->reviewStoredAsset(
-            $product,
-            $supervisor,
-            'public',
-            Str::after($image->path, 'storage/'),
-            basename($image->path),
-            'image:'.$image->id
-        );
+        if (preg_match('#^storage/managed/([0-9]+)$#', $path, $matches)) {
+            $managed = StorageManagedFile::query()
+                ->whereKey((int) $matches[1])
+                ->where('product_id', $product->id)
+                ->where('source_type', StoreProductImage::class)
+                ->where('source_id', $image->id)
+                ->where('visibility', 'public')
+                ->firstOrFail();
+            abort_if((int) $managed->size_bytes > 25 * 1024 * 1024, 413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
+            $disk = (string) data_get($managed->metadata, 'disk', $managed->storage_volume_id ? 'storage_volume:'.$managed->storage_volume_id : 'private');
+            return $this->reviewStoredAsset($product, $supervisor, $disk, $managed->file_key, $managed->original_name, 'image:'.$image->id, $managed->checksum, $storage);
+        }
+
+        abort_unless(Str::startsWith($path, 'storage/store/product-images/'.$product->id.'/'), 404);
+        return $this->reviewStoredAsset($product, $supervisor, 'public', Str::after($path, 'storage/'), basename($path), 'image:'.$image->id, null, $storage);
     }
 
-    public function reviewCover(StoreProduct $product, ProductSupervisorClient $supervisor)
+    public function reviewCover(StoreProduct $product, ProductSupervisorClient $supervisor, StorageManager $storage)
     {
         $path = (string) $product->cover_path;
-        abort_unless($path !== '' && Str::startsWith($path, 'storage/store/covers/'.$product->id.'/'), 404);
+        abort_unless($path !== '', 404);
 
-        return $this->reviewStoredAsset(
-            $product,
-            $supervisor,
-            'public',
-            Str::after($path, 'storage/'),
-            basename($path),
-            'cover'
-        );
+        if (preg_match('#^storage/managed/([0-9]+)$#', $path, $matches)) {
+            $managed = StorageManagedFile::query()
+                ->whereKey((int) $matches[1])
+                ->where('product_id', $product->id)
+                ->where('source_type', StoreProduct::class)
+                ->where('source_id', $product->id)
+                ->where('visibility', 'public')
+                ->firstOrFail();
+            abort_if((int) $managed->size_bytes > 25 * 1024 * 1024, 413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
+            $disk = (string) data_get($managed->metadata, 'disk', $managed->storage_volume_id ? 'storage_volume:'.$managed->storage_volume_id : 'private');
+            return $this->reviewStoredAsset($product, $supervisor, $disk, $managed->file_key, $managed->original_name, 'cover', $managed->checksum, $storage);
+        }
+
+        abort_unless(Str::startsWith($path, 'storage/store/covers/'.$product->id.'/'), 404);
+        return $this->reviewStoredAsset($product, $supervisor, 'public', Str::after($path, 'storage/'), basename($path), 'cover', null, $storage);
     }
 
     private function reviewStoredAsset(
@@ -153,17 +167,28 @@ class AdminProductSupervisorController extends Controller
         string $path,
         string $filename,
         string $assetKey,
-        ?string $expectedSha256 = null
+        ?string $expectedSha256,
+        StorageManager $storageManager
     ) {
         $settings = (array) data_get($product->metadata, 'ai_supervisor', []);
         abort_unless((bool) data_get($settings, 'enabled', false), 409, 'ناظر هوشمند برای این محصول فعال نیست.');
         abort_unless($supervisor->configured(), 503, 'سرویس مستقل ناظر هنوز متصل نشده است.');
 
-        $storage = Storage::disk($disk);
-        abort_unless($storage->exists($path), 404, 'فایل موردنظر در فضای ذخیره‌سازی پیدا نشد.');
-        abort_if($storage->size($path) > 25 * 1024 * 1024, 413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
-        $stream = $storage->readStream($path);
+        $temporaryPath = null;
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-supervisor-asset');
+            if (! is_string($temporaryPath)) throw new \\RuntimeException('temporary_asset_path_unavailable');
+            $storageManager->downloadTo($disk, $path, $temporaryPath);
+            abort_if((int) filesize($temporaryPath) > 25 * 1024 * 1024, 413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
+            $stream = fopen($temporaryPath, 'rb');
+        } else {
+            $localDisk = Storage::disk($disk);
+            abort_unless($localDisk->exists($path), 404, 'فایل موردنظر در فضای ذخیره‌سازی پیدا نشد.');
+            abort_if($localDisk->size($path) > 25 * 1024 * 1024, 413, 'برای بررسی هوشمند، حجم هر فایل حداکثر ۲۵ مگابایت است.');
+            $stream = $localDisk->readStream($path);
+        }
         if (! is_resource($stream)) {
+            if ($temporaryPath) @unlink($temporaryPath);
             return back()->withErrors(['ai_supervisor' => 'خواندن امن فایل برای بررسی ممکن نشد.']);
         }
 
