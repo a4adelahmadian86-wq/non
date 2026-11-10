@@ -57,6 +57,34 @@ class CommunicationCenterController extends Controller
                 ->get();
         }
 
+        $unreadConversationsCount = 0;
+        if ($canUseMessenger) {
+            $unreadQuery = DB::table('conversation_messages')
+                ->join('conversation_participants', 'conversation_participants.conversation_id', '=', 'conversation_messages.conversation_id')
+                ->join('conversations', 'conversations.id', '=', 'conversation_messages.conversation_id')
+                ->where('conversation_participants.user_id', $user->id)
+                ->whereNull('conversation_participants.archived_at')
+                ->whereNull('conversation_messages.deleted_at')
+                ->whereColumn('conversation_messages.user_id', '!=', 'conversation_participants.user_id')
+                ->whereRaw('conversation_messages.id > COALESCE(conversation_participants.last_read_message_id, 0)');
+
+            if (! $isAdmin) {
+                $unreadQuery->whereNotExists(function ($subquery) use ($user) {
+                    $subquery->selectRaw('1')
+                        ->from('conversation_participants as other_participants')
+                        ->join('users as other_users', 'other_users.id', '=', 'other_participants.user_id')
+                        ->whereColumn('other_participants.conversation_id', 'conversations.id')
+                        ->where('other_users.role', '!=', User::ROLE_ADMIN)
+                        ->where(function ($scope) use ($user) {
+                            $scope->whereNull('other_users.organization_id')
+                                ->orWhere('other_users.organization_id', '!=', $user->organization_id);
+                        });
+                });
+            }
+
+            $unreadConversationsCount = (int) $unreadQuery->count();
+        }
+
         $recentNotifications = $notifications->latest((int) $user->id, 10);
         $unreadNotifications = $notifications->unreadCount((int) $user->id);
 
@@ -92,9 +120,9 @@ class CommunicationCenterController extends Controller
             ->values();
 
         $stats = [
-            'tickets_needing_reply' => $isAdmin ? Ticket::query()->needsReply()->count() : $tickets->whereIn('status', ['answered', 'user_replied'])->count(),
+            'tickets_needing_reply' => $isAdmin ? Ticket::query()->needsReply()->count() : $tickets->where('status', 'answered')->count(),
             'tickets_open' => $isAdmin ? Ticket::query()->openQueue()->count() : $tickets->where('status', '!=', 'closed')->count(),
-            'conversations_unread' => (int) $conversations->sum('unread_messages_count'),
+            'conversations_unread' => $unreadConversationsCount,
             'notifications_unread' => $unreadNotifications,
         ];
 
