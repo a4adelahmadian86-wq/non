@@ -127,4 +127,42 @@ class AccountSecuritySessionsTest extends TestCase
         ]);
     }
 
+    public function test_blocked_device_sessions_are_revoked_and_owner_can_unblock_device(): void
+    {
+        $user = $this->makeUser();
+        $this->actingAs($user)->get(route('platform.security'))->assertOk();
+
+        $deviceHash = hash('sha256', 'persistent-device-cookie');
+        $sessionId = DB::table('farast_account_sessions')->insertGetId([
+            'user_id' => $user->id,
+            'session_key' => hash('sha256', 'blocked-device-session'),
+            'device_key_hash' => $deviceHash,
+            'session_id_encrypted' => Crypt::encryptString('blocked-device-session'),
+            'device_label' => 'Windows · Firefox',
+            'ip_address' => '203.0.113.55',
+            'user_agent' => 'Firefox test device',
+            'last_activity' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->post(route('platform.security.devices.block', $sessionId), [
+            'current_password' => 'StrongPassword123',
+        ])->assertRedirect();
+
+        $blockedDeviceId = DB::table('farast_blocked_devices')
+            ->where('user_id', $user->id)
+            ->where('device_key_hash', $deviceHash)
+            ->value('id');
+
+        $this->assertNotNull($blockedDeviceId);
+        $this->assertNotNull(DB::table('farast_account_sessions')->where('id', $sessionId)->value('revoked_at'));
+
+        $this->post(route('platform.security.devices.unblock', $blockedDeviceId), [
+            'current_password' => 'StrongPassword123',
+        ])->assertRedirect();
+
+        $this->assertNotNull(DB::table('farast_blocked_devices')->where('id', $blockedDeviceId)->value('unblocked_at'));
+    }
+
 }
