@@ -666,11 +666,7 @@ class AdminStoreController extends Controller
 
                 return [$record, $productRequiresRepublish];
             });
-            StorageManagedFile::whereKey($managed['managed_file_id'])->update([
-                'source_type' => StoreProductFile::class,
-                'source_id' => $fileRecord->id,
-                'product_id' => $product->id,
-            ]);
+            $storage->bindReference((int) $managed['managed_file_id'], StoreProductFile::class, (int) $fileRecord->id, (int) $product->id);
             $disk->delete($finalPath);
         } catch (Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
