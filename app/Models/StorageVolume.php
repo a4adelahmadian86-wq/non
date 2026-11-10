@@ -9,7 +9,7 @@ class StorageVolume extends Model
 {
     protected $fillable = [
         'drive_key', 'name', 'provider', 'driver', 'region', 'endpoint', 'bucket',
-        'credentials', 'capacity_bytes', 'used_bytes', 'file_limit', 'max_file_bytes',
+        'credentials', 'capacity_bytes', 'used_bytes', 'object_count', 'file_limit', 'max_file_bytes',
         'priority', 'is_active', 'status', 'last_checked_at', 'last_success_at',
         'capabilities', 'metadata',
     ];
@@ -22,6 +22,7 @@ class StorageVolume extends Model
             'metadata' => 'array',
             'capacity_bytes' => 'integer',
             'used_bytes' => 'integer',
+            'object_count' => 'integer',
             'file_limit' => 'integer',
             'max_file_bytes' => 'integer',
             'priority' => 'integer',
