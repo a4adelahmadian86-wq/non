@@ -1,0 +1,96 @@
+name: Access Control Validation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'app/Services/AuthorizationService.php'
+      - 'app/Services/WorkflowEngine.php'
+      - 'app/Services/WorkflowConditionEvaluator.php'
+      - 'app/Services/AdminConsoleService.php'
+      - 'app/Http/Controllers/AdminAccessCenterController.php'
+      - 'app/Http/Controllers/PlatformCompletionController.php'
+      - 'app/Http/Middleware/EnsureResourcePermission.php'
+      - 'database/migrations/2026_11_10_15*.php'
+      - 'routes/access_control_routes.php'
+      - 'routes/web.php'
+      - 'routes/web_core_part2.php'
+      - 'resources/views/admin/access*.blade.php'
+      - 'resources/views/platform/workflows.blade.php'
+      - 'tests/Feature/AdvancedAccessControlTest.php'
+      - 'tests/Feature/WorkflowConditionsAndCooldownTest.php'
+      - '.github/workflows/access-control-validation.yml'
+  push:
+    branches: [feat/advanced-rbac-automation-main-sync-20261110]
+    paths:
+      - 'app/Services/AuthorizationService.php'
+      - 'app/Services/WorkflowEngine.php'
+      - 'app/Services/WorkflowConditionEvaluator.php'
+      - 'app/Services/AdminConsoleService.php'
+      - 'app/Http/Controllers/AdminAccessCenterController.php'
+      - 'app/Http/Controllers/PlatformCompletionController.php'
+      - 'app/Http/Middleware/EnsureResourcePermission.php'
+      - 'database/migrations/2026_11_10_15*.php'
+      - 'routes/access_control_routes.php'
+      - 'routes/web.php'
+      - 'routes/web_core_part2.php'
+      - 'resources/views/admin/access*.blade.php'
+      - 'resources/views/platform/workflows.blade.php'
+      - 'tests/Feature/AdvancedAccessControlTest.php'
+      - 'tests/Feature/WorkflowConditionsAndCooldownTest.php'
+      - '.github/workflows/access-control-validation.yml'
+
+jobs:
+  access-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
+          coverage: none
+      - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+      - run: php artisan key:generate
+      - run: touch database/database.sqlite
+      - name: Lint RBAC and workflow PHP
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            app/Services/AuthorizationService.php
+            app/Services/WorkflowEngine.php
+            app/Services/WorkflowConditionEvaluator.php
+            app/Services/AdminConsoleService.php
+            app/Http/Controllers/AdminAccessCenterController.php
+            app/Http/Controllers/AdminController.php
+            app/Http/Controllers/EditorSaveController.php
+            app/Http/Controllers/PlatformCompletionController.php
+            app/Http/Controllers/SupportController.php
+            app/Http/Middleware/EnsureResourcePermission.php
+            bootstrap/app.php
+            routes/access_control_routes.php
+            routes/web.php
+            routes/web_core_part2.php
+            database/migrations/2026_11_10_150000_create_advanced_access_control_tables.php
+            database/migrations/2026_11_10_151000_add_workflow_conditions_and_cooldowns.php
+            database/migrations/2026_11_10_152000_seed_advanced_access_permissions.php
+            database/migrations/2026_11_10_153000_create_workflow_audit_logs.php
+            tests/Feature/AdvancedAccessControlTest.php
+            tests/Feature/WorkflowConditionsAndCooldownTest.php
+          )
+          for file in "${files[@]}"; do php -l "$file"; done
+      - run: php artisan migrate --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: php artisan view:cache
+      - name: Run focused authorization and automation tests
+        run: php artisan test tests/Feature/AdvancedAccessControlTest.php tests/Feature/WorkflowConditionsAndCooldownTest.php
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
