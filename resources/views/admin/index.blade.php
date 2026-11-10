@@ -348,7 +348,7 @@
                     <div class="metric-top"><span>صف پردازش</span><i class="fa-solid fa-list-check"></i></div>
                     <strong>{{ $queueStatusLabel }}</strong>
                     @if(($queueHealth['driver'] ?? '') === 'database' && is_numeric($queueHealth['queued'] ?? null))
-                        <small>{{ number_format($queueHealth['ready'] ?? 0) }} آماده · {{ number_format($queueHealth['reserved'] ?? 0) }} در حال اجرا · {{ $queueHealth['failed'] === null ? 'خطاها نامشخص' : number_format($queueHealth['failed']).' ناموفق' }}</small>
+                        <small>{{ number_format($queueHealth['queued'] ?? 0) }} کل · {{ number_format($queueHealth['ready'] ?? 0) }} آماده · {{ number_format($queueHealth['reserved'] ?? 0) }} رزرو شده · {{ $queueHealth['failed'] === null ? 'خطاها نامشخص' : number_format($queueHealth['failed']).' ناموفق' }}</small>
                         @if(($queueHealth['oldest_ready_seconds'] ?? 0) > 0)<small>قدیمی‌ترین کار آماده: {{ number_format($queueHealth['oldest_ready_seconds']) }} ثانیه</small>@endif
                     @elseif(($queueHealth['driver'] ?? '') === 'sync')
                         <small>درایور هم‌زمان؛ کارها در همان درخواست اجرا می‌شوند.</small>
