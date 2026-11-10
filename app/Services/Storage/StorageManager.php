@@ -66,7 +66,6 @@ class StorageManager
         $absolute = $disk->path($path);
         $upload = new UploadedFile($absolute, $originalName, $mime ?: null, UPLOAD_ERR_OK, true);
         $stored = $this->storeUploadedFile($upload, self::NON_CRITICAL, $sourceModule, $sourceType, $sourceId, $productId, 'private');
-        $disk->delete($path);
         return $stored;
     }
 
