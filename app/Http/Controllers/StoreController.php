@@ -106,8 +106,28 @@ class StoreController extends Controller
             ->where('slug', $slug)
             ->firstOrFail();
 
+        $smartOffer = null;
         if ($request->user()) {
             app(MarketingSignalService::class)->record($request->user(), 'product_viewed', (int) $product->id);
+
+            if ($request->user()->marketing_consent) {
+                $smartOffer = StoreCouponAssignment::query()
+                    ->with('coupon')
+                    ->where('user_id', $request->user()->id)
+                    ->where('product_id', $product->id)
+                    ->where('status', 'offered')
+                    ->where('expires_at', '>', now())
+                    ->whereHas('coupon', fn ($query) => $query
+                        ->where('is_active', true)
+                        ->where(fn ($active) => $active->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                        ->where(fn ($active) => $active->whereNull('ends_at')->orWhere('ends_at', '>', now())))
+                    ->latest('offered_at')
+                    ->first();
+
+                if ($smartOffer) {
+                    app(MarketingSignalService::class)->record($request->user(), 'offer_viewed', (int) $product->id);
+                }
+            }
         }
 
         $ids = collect($request->session()->get('store_recent_ids', []))
