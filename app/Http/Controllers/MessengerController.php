@@ -139,7 +139,7 @@ class MessengerController extends Controller
         });
 
         foreach ($conversation->participants()->where('users.id', '!=', $request->user()->id)->get() as $recipient) {
-            app(\\App\\Services\\NotificationService::class)->push(
+            app(\App\Services\NotificationService::class)->push(
                 (int) $recipient->id,
                 'message_received',
                 'پیام جدید در فراست',
