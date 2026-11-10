@@ -15,7 +15,7 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_internal_archive_inspection_exposes_member_pages_and_author_metadata(): void
     {
-        if (! class_exists(ZipArchive::class) || ! class_exists(FPDF::class)) {
+        if (! class_exists(\\ZipArchive::class) || ! class_exists(\\FPDF::class)) {
             $this->markTestSkipped('ZIP and FPDF extensions are required for this archive metadata fixture.');
         }
 
@@ -23,15 +23,15 @@ class UploadSecurityServiceTest extends TestCase
         $pdfPath = tempnam(sys_get_temp_dir(), 'farast-pdf-');
         $archivePath = tempnam(sys_get_temp_dir(), 'farast-zip-');
         try {
-            $pdf = new FPDF();
+            $pdf = new \\FPDF();
             $pdf->SetAuthor('FARAST Metadata Test');
             $pdf->AddPage();
             $pdf->SetFont('Arial', '', 12);
             $pdf->Cell(40, 10, 'Metadata test');
             $pdf->Output('F', $pdfPath);
 
-            $zip = new ZipArchive();
-            $this->assertTrue($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+            $zip = new \\ZipArchive();
+            $this->assertTrue($zip->open($archivePath, \\ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
             $zip->addFile($pdfPath, 'documents/manual.pdf');
             $zip->close();
 
@@ -52,15 +52,15 @@ class UploadSecurityServiceTest extends TestCase
 
     public function test_internal_archive_inspection_rejects_path_traversal_without_extraction(): void
     {
-        if (! class_exists(ZipArchive::class)) {
+        if (! class_exists(\\ZipArchive::class)) {
             $this->markTestSkipped('ZIP extension is required for this archive fixture.');
         }
 
         Storage::fake('private');
         $archivePath = tempnam(sys_get_temp_dir(), 'farast-zip-');
         try {
-            $zip = new ZipArchive();
-            $this->assertTrue($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+            $zip = new \\ZipArchive();
+            $this->assertTrue($zip->open($archivePath, \\ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
             $zip->addFromString('../outside.txt', 'must never be extracted');
             $zip->close();
             Storage::disk('private')->put('security-tests/traversal.zip', file_get_contents($archivePath));
@@ -68,7 +68,7 @@ class UploadSecurityServiceTest extends TestCase
             try {
                 app(UploadSecurityService::class)->inspect('security-tests/traversal.zip', null, 1024 * 1024);
                 $this->fail('Archive path traversal must be rejected.');
-            } catch (RuntimeException $exception) {
+            } catch (\\RuntimeException $exception) {
                 $this->assertSame('upload_archive_path_or_link_rejected', $exception->getMessage());
             }
         } finally {
