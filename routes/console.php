@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
 
@@ -56,4 +58,31 @@ Artisan::command('store:carts:process-abandoned {--limit=200}', function (StoreC
 
 Schedule::command('store:carts:process-abandoned --limit=200')
     ->everyThirtyMinutes()
+    ->withoutOverlapping();
+
+Artisan::command('store:marketing:prune-signals {--days=90} {--limit=5000}', function () {
+    if (! Schema::hasTable('farast_workflow_events')) {
+        $this->info('Marketing signal storage is not installed; nothing to prune.');
+        return 0;
+    }
+
+    $days = max(30, min(365, (int) $this->option('days')));
+    $limit = max(100, min(20000, (int) $this->option('limit')));
+    $ids = DB::table('farast_workflow_events')
+        ->where('event_type', 'like', 'marketing.%')
+        ->where('created_at', '<', now()->subDays($days))
+        ->orderBy('id')
+        ->limit($limit)
+        ->pluck('id');
+
+    if ($ids->isNotEmpty()) {
+        DB::table('farast_workflow_events')->whereIn('id', $ids)->delete();
+    }
+
+    $this->info('Pruned '.$ids->count().' expired marketing signal(s).');
+    return 0;
+})->purpose('Delete first-party marketing signals after the retention period');
+
+Schedule::command('store:marketing:prune-signals --days=90 --limit=5000')
+    ->dailyAt('03:45')
     ->withoutOverlapping();
