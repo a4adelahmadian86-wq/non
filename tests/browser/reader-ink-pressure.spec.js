@@ -18,8 +18,15 @@ test('pressure-aware ink records real stylus pressure and falls back safely for 
   const pressures=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[0].points.map(p=>p.p));
   expect(pressures).toContain(.18);
   expect(pressures).toContain(.82);
+  const sendMouse=(type,x,y)=>layer.dispatchEvent(type,{bubbles:true,cancelable:true,pointerId:10,pointerType:'mouse',pressure:.5,clientX:rect.x+x,clientY:rect.y+y});
+  await sendMouse('pointerdown',180,160);
+  await sendMouse('pointermove',220,185);
+  await sendMouse('pointerup',250,200);
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
+  const fallback=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[1].points.map(p=>p.p));
+  expect(fallback.every(p=>p===.5)).toBeTruthy();
   await page.locator('[data-pressure-action="undo"]').click();
-  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(0);
-  await page.locator('[data-pressure-action="redo"]').click();
   await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
+  await page.locator('[data-pressure-action="redo"]').click();
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
 });
