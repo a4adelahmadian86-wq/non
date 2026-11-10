@@ -72,3 +72,18 @@ test('homepage file intake sends a deposit quote to checkout after explicit acce
   expect(created).toBe(1);
   expect(accepted).toBe(1);
 });
+
+
+test('service showcase entry points open the matching guided workflow instead of bypassing it', async ({ page }) => {
+  await page.goto('/');
+  const fileCard = page.locator('.home-service-card').filter({ hasText: 'تبدیل فایل به متن' });
+  await fileCard.getByRole('link', { name: 'شروع با فایل' }).click();
+  await expect(page.getByRole('heading', { name: 'نوع محتوای فایل چیست؟' })).toBeVisible();
+
+  await page.locator('#discoveryBack').click();
+  const voiceCard = page.locator('.home-service-card').filter({ hasText: 'تایپ با گفتار' });
+  await voiceCard.getByRole('link', { name: 'انتخاب سرویس' }).click();
+  await expect(page.getByRole('heading', { name: 'کدام کار را می‌خواهید انجام دهید؟' })).toBeVisible();
+  await page.locator('[data-service="voice"]').click();
+  await expect(page.getByRole('heading', { name: 'زبان گفتار چیست؟' })).toBeVisible();
+});
