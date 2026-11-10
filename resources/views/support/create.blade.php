@@ -136,6 +136,20 @@
                     @error('related_product_id')<small class="tk-error">{{ $message }}</small>@enderror
                 </div>
 
+                @if($relatedOrders->isNotEmpty())
+                    <div class="tk-field-block">
+                        <p class="tk-label">سفارش مرتبط <span class="tk-hint">(اختیاری)</span></p>
+                        <select name="related_order_id" id="relatedOrderId" class="tk-select">
+                            <option value="">بدون سفارش مرتبط</option>
+                            @foreach($relatedOrders as $order)
+                                <option value="{{ $order['id'] }}" @selected((string) old('related_order_id') === (string) $order['id'])>{{ $order['label'] }}</option>
+                            @endforeach
+                        </select>
+                        <p class="tk-hint">فقط سفارش‌های ثبت‌شده با حساب خودتان نمایش داده می‌شوند.</p>
+                        @error('related_order_id')<small class="tk-error">{{ $message }}</small>@enderror
+                    </div>
+                @endif
+
                 <div class="tk-field-block">
                     <p class="tk-label">عنوان تیکت</p>
                     <input type="text" name="subject" required maxlength="160" value="{{ old('subject') }}" placeholder="عنوان تیکت را وارد کنید" class="tk-input">
