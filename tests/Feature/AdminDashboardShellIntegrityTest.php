@@ -63,6 +63,55 @@ class AdminDashboardShellIntegrityTest extends TestCase
         $this->assertSame(1, substr_count($html, 'id="platform-control"'));
     }
 
+    public function test_dashboard_crm_card_reports_overdue_and_due_today_followups_in_scope(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $customer = User::factory()->create();
+
+        DB::table('crm_follow_up_tasks')->insert([
+            [
+                'customer_id' => $customer->id,
+                'created_by' => $admin->id,
+                'assigned_to' => $admin->id,
+                'title' => 'پیگیری معوق',
+                'status' => 'open',
+                'priority' => 'high',
+                'due_at' => now()->subDay(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'customer_id' => $customer->id,
+                'created_by' => $admin->id,
+                'assigned_to' => $admin->id,
+                'title' => 'پیگیری امروز',
+                'status' => 'open',
+                'priority' => 'normal',
+                'due_at' => now()->addHour(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'customer_id' => $customer->id,
+                'created_by' => $admin->id,
+                'assigned_to' => $admin->id,
+                'title' => 'پیگیری تکمیل‌شده',
+                'status' => 'completed',
+                'priority' => 'normal',
+                'due_at' => now()->subDay(),
+                'completed_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.index'))
+            ->assertOk()
+            ->assertSee('پیگیری‌های معوق CRM')
+            ->assertSee('1 موعد امروز · 2 باز')
+            ->assertSee(route('admin.crm.followups.index'));
+    }
+
     public function test_dashboard_support_card_breaks_down_customer_replies_and_open_tickets(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
