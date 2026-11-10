@@ -215,6 +215,19 @@
         context.restore();
       }
     }
+    // Keep a clearly detectable, low-opacity identity mark in the lower half of the
+    // rendered bitmap as well; this remains part of the page pixels, not removable HTML.
+    context.save();
+    context.setTransform(1,0,0,1,0,0);
+    context.globalAlpha=.30;
+    context.fillStyle='#64748b';
+    context.font='700 '+Math.max(18,Math.min(28,Math.round(width/48)))+'px Tahoma, Arial, sans-serif';
+    context.textAlign='center';
+    context.textBaseline='middle';
+    context.translate(width/2,height*.70);
+    context.rotate(-Math.PI/7);
+    context.fillText(label,0,0);
+    context.restore();
     context.restore();
   };
 
