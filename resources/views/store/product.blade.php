@@ -116,6 +116,7 @@
         @else
           <span id="store-product-sample" aria-hidden="true"></span>
         @endif
+        <span id="store-product-preview" aria-hidden="true"></span>
 
         @if(filled($product->description) || filled($product->short_description))
           <article class="store-panel" id="store-product-description">
