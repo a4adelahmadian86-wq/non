@@ -348,9 +348,11 @@ class StorageManager
         if ($record->replicated_to_volume_id && $record->replicaVolume?->status === 'healthy' && $record->replica_file_key) {
             try {
                 $replicaDisk = $this->connections->disk($record->replicaVolume);
-                if ($replicaDisk->exists($record->replica_file_key)
-                    && (int) $replicaDisk->size($record->replica_file_key) === $record->size_bytes) {
-                    return true;
+                if ($replicaDisk->exists($record->replica_file_key)) {
+                    if ((int) $replicaDisk->size($record->replica_file_key) === $record->size_bytes) {
+                        return true;
+                    }
+                    $replicaDisk->delete($record->replica_file_key);
                 }
                 $record->replicaVolume->decrement('used_bytes', $record->size_bytes);
                 $record->update(['replicated_to_volume_id' => null, 'replica_file_key' => null]);
