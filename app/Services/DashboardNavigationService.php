@@ -183,6 +183,10 @@ class DashboardNavigationService
             default => null,
         };
 
+        if ($permission === 'messenger.use') {
+            return app(MessengerAccessService::class)->canUse($user);
+        }
+
         if ($capability === null) return $permission === 'documents.view';
         return $this->capabilities->allowed($user, $capability);
     }

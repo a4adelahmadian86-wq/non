@@ -149,7 +149,7 @@ class NotificationService
             $q->whereNull('archived_at');
             if ($filter === 'unread') {
                 $q->whereNull('read_at');
-            } elseif (in_array($filter, ['support', 'finance', 'announcement', 'community', 'security', 'marketing', 'system'], true)) {
+            } elseif (in_array($filter, ['support', 'finance', 'announcement', 'community', 'communications', 'security', 'marketing', 'system'], true)) {
                 $this->applyCategoryFilter($q, $filter);
             }
         }
