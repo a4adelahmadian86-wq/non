@@ -33,6 +33,18 @@ Artisan::command('farast:storage-backup:password {run_id}', function (\App\Servi
     $this->line($restore->password((int) $this->argument('run_id')));
 })->purpose('Reveal the decryption password for a completed backup from the CLI');
 
+Artisan::command('farast:storage-migrate-legacy {--limit=100}', function (\App\Services\StorageMigrationService $migration) {
+    $result = $migration->migrateLegacy((int) $this->option('limit'));
+    foreach ($result as $kind => $count) {
+        $this->line($kind.': '.$count);
+    }
+    return 0;
+})->purpose('Move legacy local uploads into the central multi-host storage system');
+
+Schedule::command('farast:storage-migrate-legacy --limit=100')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping();
+
 Artisan::command('farast:storage-health {--limit=100}', function (\App\Services\StorageHealthService $health) {
     $result = $health->check((int) $this->option('limit'));
     $this->info('Checked '.$result['checked'].' storage host(s); '.$result['healthy'].' healthy, '.$result['failed'].' failed.');
