@@ -122,6 +122,103 @@ class SmartDiscountMarketingServiceTest extends TestCase
     }
 
 
+    public function test_engine_does_not_issue_or_notify_when_monthly_coupon_budget_is_already_spent(): void
+    {
+        SiteSetting::write('store_coupon_monthly_budget_rials', 5000);
+        $user = $this->user();
+        $product = $this->product();
+
+        Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100000,
+            'discount_rials' => 5000,
+            'tax_rials' => 0,
+            'total_rials' => 95000,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'pricing_snapshot' => [
+                'kind' => 'store',
+                'coupon_code' => 'PREVIOUSLY-REDEEMED',
+                'coupon_redeemed_at' => now()->toIso8601String(),
+            ],
+        ]);
+
+        $this->createQualifiedSignals($user, $product);
+
+        $this->assertDatabaseCount('store_coupon_assignments', 0);
+        $this->assertDatabaseMissing('farast_notifications', [
+            'user_id' => $user->id,
+            'type' => 'marketing_discount_offer',
+        ]);
+    }
+
+    public function test_active_smart_offers_reserve_monthly_budget_before_another_offer_is_issued(): void
+    {
+        SiteSetting::write('store_coupon_monthly_budget_rials', 15000);
+        $product = $this->product();
+        $firstUser = $this->user();
+        $this->createQualifiedSignals($firstUser, $product);
+
+        $this->assertDatabaseCount('store_coupon_assignments', 1);
+
+        $secondUser = $this->user();
+        $this->createQualifiedSignals($secondUser, $product);
+
+        $this->assertDatabaseCount('store_coupon_assignments', 1);
+        $this->assertDatabaseHas('store_coupon_assignments', [
+            'user_id' => $firstUser->id,
+            'product_id' => $product->id,
+            'status' => 'offered',
+        ]);
+        $this->assertDatabaseMissing('store_coupon_assignments', [
+            'user_id' => $secondUser->id,
+            'product_id' => $product->id,
+        ]);
+        $this->assertSame(1, DB::table('farast_notifications')->where('type', 'marketing_discount_offer')->count());
+    }
+
+    public function test_learning_ignores_still_valid_offers_until_their_outcome_is_known(): void
+    {
+        $user = $this->user();
+        $product = $this->product();
+        $historyUser = $this->user(false);
+
+        for ($i = 0; $i < 30; $i++) {
+            $redeemed = $i < 4;
+            $expired = $i >= 4 && $i < 10;
+            $coupon = StoreCoupon::create([
+                'code' => 'MATURITY'.str_pad((string) $i, 4, '0', STR_PAD_LEFT),
+                'type' => 'fixed',
+                'value' => 10000,
+                'max_uses' => 1,
+                'used_count' => $redeemed ? 1 : 0,
+                'is_active' => true,
+            ]);
+            StoreCouponAssignment::create([
+                'coupon_id' => $coupon->id,
+                'user_id' => $historyUser->id,
+                'product_id' => $product->id,
+                'status' => $redeemed ? 'redeemed' : 'offered',
+                'score' => 6,
+                'reason_codes' => ['wishlist_interest'],
+                'offered_at' => now()->subDays(5),
+                'expires_at' => $expired ? now()->subHour() : now()->addDay(),
+                'redeemed_at' => $redeemed ? now()->subDays(4) : null,
+            ]);
+        }
+
+        $this->createQualifiedSignals($user, $product);
+
+        $assignment = StoreCouponAssignment::query()
+            ->where('user_id', $user->id)
+            ->with('coupon')
+            ->firstOrFail();
+
+        // Four conversions out of ten completed outcomes = 40%.
+        // Twenty additional active offers must not dilute that measurement.
+        $this->assertSame(7500, $assignment->coupon->value);
+    }
+
     public function test_engine_reduces_incentive_after_strong_product_conversion_history(): void
     {
         $user = $this->user();
