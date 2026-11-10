@@ -3,20 +3,41 @@
 namespace Tests\Feature;
 
 use App\Models\Conversation;
+use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class InternalMessengerTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function makeOrganization(): Organization
+    {
+        return Organization::create([
+            'name' => 'سازمان آزمایشی',
+            'slug' => 'org-'.Str::lower(Str::random(12)),
+            'status' => 'active',
+        ]);
+    }
+
+    private function makeEmployee(Organization $organization): User
+    {
+        return User::factory()->create([
+            'organization_id' => $organization->id,
+            'role' => User::ROLE_EMPLOYEE,
+            'is_blocked' => false,
+        ]);
+    }
+
     public function test_user_can_create_a_private_conversation_and_send_a_message(): void
     {
-        $sender = User::factory()->create();
-        $recipient = User::factory()->create();
+        $organization = $this->makeOrganization();
+        $sender = $this->makeEmployee($organization);
+        $recipient = $this->makeEmployee($organization);
 
-        $response = $this->actingAs($sender)->post(route('messenger.store'), [
+        $this->actingAs($sender)->post(route('messenger.store'), [
             'type' => 'direct',
             'participant_ids' => [$recipient->id],
         ])->assertRedirect();
@@ -43,9 +64,10 @@ class InternalMessengerTest extends TestCase
 
     public function test_non_participant_cannot_view_poll_or_send_messages(): void
     {
-        $owner = User::factory()->create();
-        $member = User::factory()->create();
-        $outsider = User::factory()->create();
+        $organization = $this->makeOrganization();
+        $owner = $this->makeEmployee($organization);
+        $member = $this->makeEmployee($organization);
+        $outsider = $this->makeEmployee($organization);
         $conversation = Conversation::create(['type' => 'direct', 'created_by' => $owner->id, 'direct_key' => hash('sha256', collect([$owner->id, $member->id])->sort()->implode(':'))]);
         $conversation->participants()->attach([$owner->id => ['role' => 'owner'], $member->id => ['role' => 'member']]);
 
@@ -57,9 +79,10 @@ class InternalMessengerTest extends TestCase
 
     public function test_group_owner_can_add_members_rename_and_transfer_ownership_when_leaving(): void
     {
-        $owner = User::factory()->create();
-        $member = User::factory()->create();
-        $newMember = User::factory()->create();
+        $organization = $this->makeOrganization();
+        $owner = $this->makeEmployee($organization);
+        $member = $this->makeEmployee($organization);
+        $newMember = $this->makeEmployee($organization);
 
         $this->actingAs($owner)->post(route('messenger.store'), [
             'type' => 'group',
@@ -91,9 +114,10 @@ class InternalMessengerTest extends TestCase
 
     public function test_typing_presence_is_visible_only_to_conversation_members(): void
     {
-        $sender = User::factory()->create();
-        $recipient = User::factory()->create();
-        $outsider = User::factory()->create();
+        $organization = $this->makeOrganization();
+        $sender = $this->makeEmployee($organization);
+        $recipient = $this->makeEmployee($organization);
+        $outsider = $this->makeEmployee($organization);
         $conversation = Conversation::create([
             'type' => 'direct',
             'created_by' => $sender->id,
@@ -111,8 +135,9 @@ class InternalMessengerTest extends TestCase
 
     public function test_archived_direct_conversation_returns_to_inbox_when_a_new_message_arrives(): void
     {
-        $first = User::factory()->create();
-        $second = User::factory()->create();
+        $organization = $this->makeOrganization();
+        $first = $this->makeEmployee($organization);
+        $second = $this->makeEmployee($organization);
         $conversation = Conversation::create([
             'type' => 'direct',
             'created_by' => $first->id,
@@ -132,13 +157,35 @@ class InternalMessengerTest extends TestCase
 
     public function test_repeated_direct_conversation_creation_reuses_the_existing_thread(): void
     {
-        $first = User::factory()->create();
-        $second = User::factory()->create();
+        $organization = $this->makeOrganization();
+        $first = $this->makeEmployee($organization);
+        $second = $this->makeEmployee($organization);
         $payload = ['type' => 'direct', 'participant_ids' => [$second->id]];
 
         $this->actingAs($first)->post(route('messenger.store'), $payload)->assertRedirect();
         $this->actingAs($second)->post(route('messenger.store'), ['type' => 'direct', 'participant_ids' => [$first->id]])->assertRedirect();
 
         $this->assertSame(1, Conversation::query()->where('type', 'direct')->count());
+    }
+
+    public function test_employees_cannot_start_conversations_across_organizations(): void
+    {
+        $sender = $this->makeEmployee($this->makeOrganization());
+        $otherOrganizationUser = $this->makeEmployee($this->makeOrganization());
+
+        $this->actingAs($sender)->post(route('messenger.store'), [
+            'type' => 'direct',
+            'participant_ids' => [$otherOrganizationUser->id],
+        ])->assertSessionHasErrors('participant_ids');
+        $this->assertDatabaseCount('conversations', 0);
+    }
+
+    public function test_customer_and_unassigned_accounts_cannot_open_internal_messenger(): void
+    {
+        $customer = User::factory()->create(['role' => 'user', 'organization_id' => null]);
+        $unassignedEmployee = User::factory()->create(['role' => User::ROLE_EMPLOYEE, 'organization_id' => null]);
+
+        $this->actingAs($customer)->get(route('messenger.index'))->assertForbidden();
+        $this->actingAs($unassignedEmployee)->get(route('messenger.index'))->assertForbidden();
     }
 }
