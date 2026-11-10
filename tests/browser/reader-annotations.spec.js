@@ -5,6 +5,7 @@ test('annotation workspace persists text highlights and supports undo',async({pa
   await page.addStyleTag({content:'.farast-pdf-document{position:relative;width:600px;height:800px;background:#fff}.farast-pdf-text-layer{position:absolute;inset:0}.farast-annotation-layer{position:absolute;inset:0;z-index:8}.farast-annotation-interactive .farast-annotation-layer{pointer-events:auto;touch-action:none}'});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
   await expect(page.locator('.farast-annotation-toolbar')).toBeVisible();
+  await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
   await page.locator('.farast-pdf-text-layer span').evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
   await page.locator('[data-tool="highlight"]').click();
   await expect(page.locator('.farast-annotation-mark.is-highlight')).toHaveCount(1);
