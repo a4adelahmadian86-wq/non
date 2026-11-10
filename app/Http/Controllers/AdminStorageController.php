@@ -119,10 +119,12 @@ class AdminStorageController extends Controller
             'endpoint' => $endpoint ?: null,
             'bucket' => $bucket ?: null,
             'credentials' => $credentials,
-            'capacity_bytes' => isset($connection['capacity_bytes']) ? max(1, (int) $connection['capacity_bytes']) : null,
-            'file_limit' => isset($connection['file_limit']) ? max(1, (int) $connection['file_limit']) : null,
-            'max_file_bytes' => isset($connection['max_file_bytes']) ? max(1, (int) $connection['max_file_bytes']) : null,
-            'priority' => max(1, min(10000, (int) ($connection['priority'] ?? 100))),
+            // Generic S3 APIs report live object usage, but do not expose a bucket plan quota.
+            // Keep unknown provider limits null rather than accepting guessed/manual figures.
+            'capacity_bytes' => null,
+            'file_limit' => null,
+            'max_file_bytes' => null,
+            'priority' => ((int) StorageVolume::query()->where('drive_key', $data['drive_key'])->max('priority')) + 100,
             'status' => 'unverified',
             'metadata' => ['provider_metadata' => (array) ($connection['metadata'] ?? [])],
         ]);
