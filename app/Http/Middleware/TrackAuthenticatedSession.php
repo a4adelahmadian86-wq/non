@@ -75,6 +75,27 @@ class TrackAuthenticatedSession
             return redirect()->route('login')->with('warning', 'این نشست از بخش امنیت حساب خارج شده است. دوباره وارد شوید.');
         }
 
+        if (! $tracked) {
+            // A valid remember-cookie may restore authentication after the
+            // three-year session cookie has expired. Only a fresh explicit
+            // login may establish a new session after this inactivity limit.
+            $lastAccountActivity = DB::table('farast_account_sessions')
+                ->where('user_id', $user->id)
+                ->max('last_activity');
+            $explicitLoginAt = (int) $request->session()->pull('farast.explicit_login', 0);
+
+            if ($lastAccountActivity
+                && \Illuminate\Support\Carbon::parse($lastAccountActivity)->lt(now()->subYears(3))
+                && $explicitLoginAt < now()->subMinutes(5)->timestamp) {
+                $this->recordEvent($user->id, 'session_expired_three_years', $request->ip(), (string) $request->userAgent(), ['source' => 'remember_cookie']);
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()->route('login')->with('warning', 'بیش از سه سال از آخرین مراجعه حساب گذشته است؛ برای ادامه، دوباره با اطلاعات ورود وارد شوید.');
+            }
+        }
+
         if ($tracked && \Illuminate\Support\Carbon::parse($tracked->last_activity)->lt(now()->subYears(3))) {
             DB::table('farast_account_sessions')->where('id', $tracked->id)->update([
                 'revoked_at' => now(),
