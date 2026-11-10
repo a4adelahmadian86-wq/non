@@ -183,6 +183,10 @@ class StorageManager
                 return $volume;
             }
 
+            if (! config('storage.fallback.enabled', true)) {
+                throw new RuntimeException('No healthy storage volume is available for this storage class.');
+            }
+
             $fallback = StorageVolume::query()
                 ->where('drive_key', $drive)
                 ->where('driver', 'local')
