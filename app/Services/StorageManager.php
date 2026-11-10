@@ -92,6 +92,7 @@ class StorageManager
 
             $oldVolumeId = $existing?->storage_volume_id;
             $oldKey = $existing?->file_key;
+            $oldSize = (int) ($existing?->size_bytes ?? 0);
             DB::transaction(function () use ($existing, $volume, $logicalPath, $objectKey, $size, $checksum, $classification, $config, $oldVolumeId) {
                 if ($existing) {
                     $existing->update([
