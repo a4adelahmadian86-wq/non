@@ -18,4 +18,10 @@ test('pressure-aware ink stores stylus pressure, uses fixed mouse fallback and s
   expect(fallback.every(p=>p===.5)).toBeTruthy();
   await page.locator('[data-pressure-action="undo"]').click();await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
   await page.locator('[data-pressure-action="redo"]').click();await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
+  const backup=await page.evaluate(()=>window.FarastReaderPressureInk.exportData());
+  expect(backup).toHaveLength(2);
+  await page.evaluate(()=>window.FarastReaderPressureInk.importData([]));
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(0);
+  await page.evaluate(data=>window.FarastReaderPressureInk.importData(data),backup);
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(2);
 });
