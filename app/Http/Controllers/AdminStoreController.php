@@ -796,7 +796,7 @@ class AdminStoreController extends Controller
         abort(409, 'بارگذاری مستقیم غیرفعال است؛ ابتدا گزارش بررسی اولیه را مشاهده و سپس فایل را تأیید کنید.');
     }
 
-    public function deleteFile(StoreProduct $product, StoreProductFile $file)
+    public function deleteFile(StoreProduct $product, StoreProductFile $file, StorageManager $storage)
     {
         abort_unless($file->product_id === $product->id && $file->purpose === 'product_download', 404);
 
@@ -835,7 +835,7 @@ class AdminStoreController extends Controller
             return [$disk, $path];
         });
 
-        Storage::disk($disk)->delete($path);
+        $storage->delete($disk, $path);
 
         return back()->with('status', 'فایل حذف شد.');
     }
