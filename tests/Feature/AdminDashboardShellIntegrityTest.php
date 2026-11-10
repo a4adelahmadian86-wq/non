@@ -35,6 +35,7 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('روند فعالیت در ۳۰ روز اخیر')
             ->assertSee('dashboard-trend-chart', false)
             ->assertSee('dashboard-trend-sr-only', false)
+            ->assertSee('صف پردازش')
             ->assertDontSee('hero-orbit')
             ->assertSee('تیکت‌های نیازمند پیگیری')
             ->assertSee(route('admin.support.management'))
