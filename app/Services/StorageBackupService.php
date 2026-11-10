@@ -86,11 +86,11 @@ class StorageBackupService
                     if (! $record->volume) {
                         continue;
                     }
-                    $disk = $this->connections->disk($record->volume);
-                    if (! $disk->exists($record->file_key)) {
+                    $disk = Storage::disk('managed');
+                    if (! $record->logical_path || ! $disk->exists($record->logical_path)) {
                         throw new \RuntimeException('Managed source object is missing: '.$record->id);
                     }
-                    $stream = $disk->readStream($record->file_key);
+                    $stream = $disk->readStream($record->logical_path);
                     if (! is_resource($stream)) {
                         throw new \RuntimeException('Unable to read managed source object: '.$record->id);
                     }
