@@ -22,6 +22,7 @@
 
   const state = {
     queue: [],
+    rejected: [],
     current: null,
     ingestionId: null,
     primaryForCurrent: false,
@@ -180,10 +181,13 @@
   };
 
   const updateQueue = () => {
-    const pending = state.queue.map((file) =>
-      '<div><span>' + escapeHtml(file.name) + '</span><small>' + formatBytes(file.size) + ' · در صف بررسی</small></div>'
+    const pending = state.queue.map((file, index) =>
+      '<div><span>' + escapeHtml(file.name) + '</span><small>' + formatBytes(file.size) + ' · در صف بررسی</small><button type="button" data-remove-queued="' + index + '" aria-label="حذف ' + escapeHtml(file.name) + ' از صف">حذف از صف</button></div>'
     ).join('');
-    queueView.innerHTML = pending;
+    const rejected = state.rejected.map((item) =>
+      '<div class="product-ingestion-queue-error"><span>' + escapeHtml(item.name) + '</span><small>' + escapeHtml(item.reason) + '</small></div>'
+    ).join('');
+    queueView.innerHTML = pending + rejected;
   };
 
   const preflight = async (file) => {
@@ -406,13 +410,57 @@
     }
   };
 
+  const allowedExtensions = new Set([
+    'pdf','zip','tar','tar.gz','tar.bz2','jpg','jpeg','png','webp','gif',
+    'docx','xlsx','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov',
+  ]);
+  const fileExtension = (name) => {
+    const lower = String(name || '').toLowerCase();
+    if (lower.endsWith('.tar.gz')) return 'tar.gz';
+    if (lower.endsWith('.tar.bz2')) return 'tar.bz2';
+    return lower.includes('.') ? lower.split('.').pop() : '';
+  };
+  const fileIdentity = (file) => [file.name.toLowerCase(), file.size, file.lastModified].join(':');
+
   const enqueue = (files) => {
-    const valid = Array.from(files || []).filter((file) => file && file.size > 0);
-    if (!valid.length) return;
-    state.queue.push(...valid);
+    state.rejected = [];
+    const candidates = Array.from(files || []);
+    candidates.forEach((file) => {
+      if (!file || file.size < 1) {
+        state.rejected.push({name: file?.name || 'فایل ناشناس', reason: 'فایل خالی است.'});
+        return;
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        state.rejected.push({name: file.name, reason: 'حجم فایل بیشتر از ۵۰ مگابایت است.'});
+        return;
+      }
+      if (!allowedExtensions.has(fileExtension(file.name))) {
+        state.rejected.push({name: file.name, reason: 'فرمت فایل در فهرست فرمت‌های مجاز نیست.'});
+        return;
+      }
+      const identity = fileIdentity(file);
+      if ((state.current && fileIdentity(state.current) === identity) || state.queue.some((queued) => fileIdentity(queued) === identity)) {
+        state.rejected.push({name: file.name, reason: 'این فایل قبلاً در همین صف انتخاب شده است.'});
+        return;
+      }
+      if (state.queue.length >= 20) {
+        state.rejected.push({name: file.name, reason: 'حداکثر ۲۰ فایل را می‌توان در یک نوبت در صف قرار داد.'});
+        return;
+      }
+      state.queue.push(file);
+    });
     updateQueue();
     processNext();
   };
+
+  queueView.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-remove-queued]');
+    if (!button) return;
+    const index = Number(button.dataset.removeQueued);
+    if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
+    state.queue.splice(index, 1);
+    updateQueue();
+  });
 
   pick.addEventListener('click', () => input.click());
   pick.addEventListener('keydown', (event) => {
