@@ -84,6 +84,7 @@ class StorageManager
         $volume = $this->reserveVolume($drive, $size);
         $objectKey = 'objects/'.now()->format('Y/m').'/'.Str::uuid().'-'.basename($logicalPath);
         $disk = $this->connections->disk($volume);
+        $committed = false;
 
         try {
             $disk->writeStream($objectKey, $stream, [
@@ -153,6 +154,7 @@ class StorageManager
                 $volume->decrement('reserved_bytes', $size);
                 $volume->decrement('reserved_files');
             });
+            $committed = true;
 
             if ($oldVolumeId && $oldKey) {
                 try {
@@ -183,6 +185,12 @@ class StorageManager
                 }
             }
         } catch (Throwable $exception) {
+            if ($committed) {
+                // The logical record and new object are already committed. A queue or
+                // cleanup failure must not turn a successful upload into a broken record.
+                report($exception);
+                return;
+            }
             $volume->decrement('reserved_bytes', $size);
             $volume->decrement('reserved_files');
             try {
