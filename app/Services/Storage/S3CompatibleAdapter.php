@@ -11,12 +11,67 @@ class S3CompatibleAdapter
 {
     public function putFile(StorageVolume $volume, string $key, string $localPath): void
     {
+        $size = (int) filesize($localPath);
+        if ($size > 5 * 1024 * 1024 * 1024) {
+            $this->multipartUpload($volume, $key, $localPath, $size);
+            return;
+        }
+
         $stream = fopen($localPath, 'rb');
         if (! is_resource($stream)) throw new RuntimeException('فایل مبدأ برای آپلود قابل خواندن نیست.');
         try {
             $this->request($volume, 'PUT', $key, [], $stream, 'UNSIGNED-PAYLOAD', [
-                'Content-Length' => (string) filesize($localPath),
+                'Content-Length' => (string) $size,
+                'Content-Type' => mime_content_type($localPath) ?: 'application/octet-stream',
             ]);
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    private function multipartUpload(StorageVolume $volume, string $key, string $localPath, int $size): void
+    {
+        $init = $this->request($volume, 'POST', $key, ['uploads' => '']);
+        $xml = simplexml_load_string((string) $init->getBody(), \SimpleXMLElement::class, LIBXML_NONET);
+        $uploadId = $xml ? (string) ($xml->UploadId ?? '') : '';
+        if ($uploadId === '') throw new RuntimeException('شناسه آپلود چندبخشی از سرویس‌دهنده دریافت نشد.');
+
+        $stream = fopen($localPath, 'rb');
+        if (! is_resource($stream)) throw new RuntimeException('فایل مبدأ برای آپلود چندبخشی قابل خواندن نیست.');
+        $parts = [];
+        $partSize = 64 * 1024 * 1024;
+        try {
+            $partNumber = 1;
+            while (! feof($stream)) {
+                $part = fread($stream, $partSize);
+                if (! is_string($part) || $part === '') break;
+                $partStream = fopen('php://temp', 'w+b');
+                fwrite($partStream, $part);
+                rewind($partStream);
+                $response = $this->request($volume, 'PUT', $key, [
+                    'partNumber' => (string) $partNumber,
+                    'uploadId' => $uploadId,
+                ], $partStream, 'UNSIGNED-PAYLOAD', ['Content-Length' => (string) strlen($part)]);
+                fclose($partStream);
+                $etag = trim((string) $response->getHeaderLine('ETag'), '"');
+                if ($etag === '') throw new RuntimeException('ETag بخش آپلودشده دریافت نشد.');
+                $parts[] = ['number' => $partNumber, 'etag' => $etag];
+                $partNumber++;
+                if ($partNumber > 10000) throw new RuntimeException('تعداد بخش‌های آپلود از سقف S3 بیشتر شد.');
+            }
+            if ($parts === []) throw new RuntimeException('فایل بکاپ خالی است.');
+            $completion = '<CompleteMultipartUpload>'.implode('', array_map(
+                fn ($part) => '<Part><PartNumber>'.$part['number'].'</PartNumber><ETag>'.htmlspecialchars('"'.$part['etag'].'"', ENT_XML1).'</ETag></Part>',
+                $parts
+            )).'</CompleteMultipartUpload>';
+            $this->request($volume, 'POST', $key, ['uploadId' => $uploadId], $completion, hash('sha256', $completion), ['Content-Type' => 'application/xml']);
+        } catch (\Throwable $exception) {
+            try {
+                $this->request($volume, 'DELETE', $key, ['uploadId' => $uploadId]);
+            } catch (\Throwable $abortException) {
+                report($abortException);
+            }
+            throw $exception;
         } finally {
             fclose($stream);
         }
@@ -177,7 +232,7 @@ class S3CompatibleAdapter
 
         try {
             $client = new Client(['connect_timeout' => 8, 'timeout' => 120, 'http_errors' => false, 'verify' => true]);
-            $response = $client->request($method, $url, array_merge($options, ['headers' => array_merge($headers, $extraHeaders), 'body' => $body]));
+            $response = $client->request($method, $url, array_merge($options, ['headers' => $headers, 'body' => $body]));
         } catch (GuzzleException $exception) {
             throw new RuntimeException('ارتباط با فضای ذخیره‌سازی برقرار نشد: '.$exception->getMessage(), 0, $exception);
         }
