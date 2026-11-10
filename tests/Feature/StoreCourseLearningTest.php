@@ -213,7 +213,7 @@ class StoreCourseLearningTest extends TestCase
         $this->actingAs($user)
             ->get(route('store.course.learn', $product))
             ->assertOk()
-            ->assertSee('۱۰۰٪');
+            ->assertSee('100٪');
     }
 
     public function test_drip_released_lesson_cannot_be_opened_before_its_release_day(): void
