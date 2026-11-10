@@ -1,7 +1,7 @@
 <?php
 
-use App\\Services\\AuthorizationService;
-use Illuminate\\Database\\Migrations\\Migration;
+use App\Services\AuthorizationService;
+use Illuminate\Database\Migrations\Migration;
 
 return new class extends Migration
 {
