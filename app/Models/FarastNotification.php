@@ -57,6 +57,7 @@ class FarastNotification extends Model
         $type = (string) $this->type;
 
         if (str_starts_with($type, 'discussion_')) return 'community';
+        if (str_starts_with($type, 'message_')) return 'communications';
         if (str_starts_with($type, 'ticket_')) return 'support';
         if (str_starts_with($type, 'order_') || str_starts_with($type, 'wallet_') || str_starts_with($type, 'billing_')) return 'finance';
         if (str_starts_with($type, 'security_')) return 'security';
@@ -75,6 +76,7 @@ class FarastNotification extends Model
             'announcement' => 'fa-bullhorn',
             'marketing' => 'fa-bullhorn',
             'community' => 'fa-comments',
+            'communications' => 'fa-comments',
             default => 'fa-bell',
         };
     }
@@ -88,6 +90,7 @@ class FarastNotification extends Model
             'announcement' => 'اطلاعیه رسمی',
             'marketing' => 'پیام بازاریابی',
             'community' => 'گفت‌وگوها',
+            'communications' => 'پیام‌رسان',
             default => 'سیستم',
         };
     }
