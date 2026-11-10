@@ -88,7 +88,7 @@ class AdminController extends Controller
             $followUpRow = (clone $followUpQuery)
                 ->selectRaw("SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open_count")
                 ->selectRaw("SUM(CASE WHEN status = 'open' AND due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END) as overdue_count", [now()])
-                ->selectRaw("SUM(CASE WHEN status = 'open' AND due_at >= ? AND due_at <= ? THEN 1 ELSE 0 END) as due_today_count", [today()->startOfDay(), today()->endOfDay()])
+                ->selectRaw("SUM(CASE WHEN status = 'open' AND due_at >= ? AND due_at <= ? THEN 1 ELSE 0 END) as due_today_count", [now(), today()->endOfDay()])
                 ->first();
             $followUpStats = [
                 'open' => (int) ($followUpRow->open_count ?? 0),
