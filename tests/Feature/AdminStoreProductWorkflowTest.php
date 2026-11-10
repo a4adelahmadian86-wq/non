@@ -116,7 +116,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         ]);
 
         $checksum = hash('sha256', 'fake-pdf-content');
-        $security = \\Mockery::mock(UploadSecurityService::class);
+        $security = \Mockery::mock(UploadSecurityService::class);
         $security->shouldReceive('inspect')->once()->andReturn([
             'safe' => true,
             'mime' => 'application/pdf',
@@ -129,7 +129,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         ]);
         app()->instance(UploadSecurityService::class, $security);
 
-        $scanner = \\Mockery::mock(OptionalAntivirusScanner::class);
+        $scanner = \Mockery::mock(OptionalAntivirusScanner::class);
         $scanner->shouldReceive('scan')->once()->withArgs(fn ($path) => is_string($path) && $path !== '')
             ->andReturn([
                 'status' => 'clean',
