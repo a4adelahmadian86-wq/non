@@ -133,6 +133,7 @@
         confirmButton.disabled = false;
         setStatus('بررسی اولیه پایان یافت. تا تأیید شما، منبع در قرنطینه باقی می‌ماند.');
         setProgress(100, true);
+        busy = false;
       } catch (error) {
         setStatus(error.message || 'بررسی اولیه منبع ناموفق بود.', true);
         setProgress(0, false);
