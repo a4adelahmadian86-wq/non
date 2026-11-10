@@ -325,7 +325,7 @@ class AdvancedAccessControlTest extends TestCase
         $member = $this->user('09140000342', User::ROLE_EMPLOYEE, $organizationA->id);
         $outside = $this->user('09140000343', User::ROLE_EMPLOYEE, $organizationB->id);
 
-        $workflowColumns = \Illuminate\\Support\\Facades\\Schema::getColumnListing('farast_workflows');
+        $workflowColumns = \Illuminate\Support\Facades\Schema::getColumnListing('farast_workflows');
         $workflowPayload = array_intersect_key([
             'user_id' => $manager->id,
             'name' => 'Scoped CRM follow-up',
@@ -338,7 +338,7 @@ class AdvancedAccessControlTest extends TestCase
             'updated_at' => now(),
         ], array_flip($workflowColumns));
         $workflowId = DB::table('farast_workflows')->insertGetId($workflowPayload);
-        $engine = app(\App\\Services\\WorkflowEngine::class);
+        $engine = app(\App\Services\WorkflowEngine::class);
 
         $successfulRun = $engine->run($workflowId, [
             'user_id' => $member->id,
