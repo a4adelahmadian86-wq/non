@@ -33,7 +33,7 @@ Artisan::command('farast:storage-backup:password {run_id}', function (\App\Servi
     $this->line($restore->password((int) $this->argument('run_id')));
 })->purpose('Reveal the decryption password for a completed backup from the CLI');
 
-Artisan::command('farast:storage-health {--limit=100}', function (\\App\\Services\\StorageHealthService $health) {
+Artisan::command('farast:storage-health {--limit=100}', function (\App\Services\StorageHealthService $health) {
     $result = $health->check((int) $this->option('limit'));
     $this->info('Checked '.$result['checked'].' storage host(s); '.$result['healthy'].' healthy, '.$result['failed'].' failed.');
     return $result['failed'] > 0 ? 1 : 0;
@@ -44,7 +44,7 @@ Schedule::command('farast:storage-health --limit=100')
     ->withoutOverlapping();
 
 Artisan::command('farast:storage-replicate-pending {--limit=100}', function () {
-    $volumes = \\App\\Models\\StorageVolume::query()
+    $volumes = \App\Models\StorageVolume::query()
         ->where('drive_key', 'iran_primary')
         ->where('is_active', true)
         ->where('status', 'healthy')
@@ -55,17 +55,20 @@ Artisan::command('farast:storage-replicate-pending {--limit=100}', function () {
         return 0;
     }
 
-    $ids = \\App\\Models\\StorageManagedFile::query()
+    $ids = \App\Models\StorageManagedFile::query()
         ->where('drive_key', 'iran_primary')
         ->where('classification', 'critical')
         ->where('status', 'active')
-        ->whereNull('replicated_to_volume_id')
+        ->where(function ($query) {
+            $query->whereNull('replicated_to_volume_id')
+                ->orWhereHas('replicaVolume', fn ($replica) => $replica->where('status', '!=', 'healthy'));
+        })
         ->orderBy('id')
         ->limit(max(1, min(500, (int) $this->option('limit'))))
         ->pluck('id');
 
     foreach ($ids as $id) {
-        \\App\\Jobs\\ReplicateStorageFile::dispatch((int) $id);
+        \App\Jobs\ReplicateStorageFile::dispatch((int) $id);
     }
     $this->info('Queued '.$ids->count().' critical storage replica job(s).');
     return 0;
