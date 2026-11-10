@@ -111,25 +111,36 @@ class StorageTransferService
                 if (stream_copy_to_stream($stream, $out) === false) throw new RuntimeException('انتقال جریان فایل موقت ناموفق بود.');
                 fclose($out);
                 fclose($stream);
+                if (! hash_equals((string) $file->checksum, (string) hash_file('sha256', $temp))) {
+                    throw new RuntimeException('Checksum فایل مبدأ با رکورد ذخیره‌سازی مطابقت ندارد.');
+                }
                 if ($target->driver === 's3') {
                     $this->s3->putFile($target, $file->file_key, $temp);
                     $uploaded = true;
-                    $remoteHash = hash_file('sha256', $temp);
-                    if (! hash_equals((string) $file->checksum, $remoteHash)) throw new RuntimeException('بررسی checksum فایل انتقال‌یافته ناموفق بود.');
+                    $verificationPath = tempnam(sys_get_temp_dir(), 'farast-transfer-verify');
+                    try {
+                        $this->s3->downloadTo($target, $file->file_key, $verificationPath);
+                        $destinationHash = hash_file('sha256', $verificationPath);
+                    } finally {
+                        @unlink($verificationPath);
+                    }
                 } elseif ($target->driver === 'local') {
                     $root = storage_path('app/storage-volumes/'.$target->id);
                     $destination = $root.'/'.$file->file_key;
-                    if (! is_dir(dirname($destination))) mkdir(dirname($destination), 0775, true);
+                    if (! is_dir(dirname($destination)) && ! mkdir(dirname($destination), 0775, true) && ! is_dir(dirname($destination))) {
+                        throw new RuntimeException('ساخت پوشه مقصد ناموفق بود.');
+                    }
                     if (! copy($temp, $destination)) {
                         @unlink($destination);
                         throw new RuntimeException('کپی فایل روی مقصد ناموفق بود.');
                     }
                     $uploaded = true;
+                    $destinationHash = hash_file('sha256', $destination);
                 } else {
                     return;
                 }
-                if (! hash_equals((string) $file->checksum, (string) hash_file('sha256', $temp))) {
-                    throw new RuntimeException('بررسی checksum فایل مبدأ ناموفق بود.');
+                if (! is_string($destinationHash) || ! hash_equals((string) $file->checksum, $destinationHash)) {
+                    throw new RuntimeException('Checksum فایل مقصد پس از انتقال با نسخه مبدأ مطابقت ندارد.');
                 }
                 $newDisk = 'storage_volume:'.$target->id;
                 DB::transaction(function () use ($file, $target, $newDisk) {
