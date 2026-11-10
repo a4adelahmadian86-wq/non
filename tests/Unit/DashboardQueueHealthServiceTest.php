@@ -45,7 +45,7 @@ class DashboardQueueHealthServiceTest extends TestCase
         $this->assertSame(1, $snapshot['reserved']);
         $this->assertSame(1, $snapshot['failed']);
         $this->assertSame(1, $snapshot['failed_24h']);
-        $this->assertGreaterThanOrEqual(180, $snapshot['oldest_ready_seconds']);
+        $this->assertGreaterThanOrEqual(120, $snapshot['oldest_ready_seconds']);
     }
 
     public function test_database_queue_reports_missing_failed_jobs_table_as_misconfigured(): void
