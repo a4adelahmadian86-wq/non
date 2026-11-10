@@ -11,9 +11,15 @@ class S3CompatibleAdapter
 {
     public function putFile(StorageVolume $volume, string $key, string $localPath): void
     {
-        $this->request($volume, 'PUT', $key, [], fopen($localPath, 'rb'), 'UNSIGNED-PAYLOAD', [
-            'Content-Length' => (string) filesize($localPath),
-        ]);
+        $stream = fopen($localPath, 'rb');
+        if (! is_resource($stream)) throw new RuntimeException('فایل مبدأ برای آپلود قابل خواندن نیست.');
+        try {
+            $this->request($volume, 'PUT', $key, [], $stream, 'UNSIGNED-PAYLOAD', [
+                'Content-Length' => (string) filesize($localPath),
+            ]);
+        } finally {
+            fclose($stream);
+        }
     }
 
     public function putContents(StorageVolume $volume, string $key, string $contents): void
