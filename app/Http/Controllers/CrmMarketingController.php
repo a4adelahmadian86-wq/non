@@ -330,7 +330,7 @@ class CrmMarketingController extends Controller
                         true,
                     );
                     if (! $notification) {
-                        throw new \\RuntimeException('ثبت اعلان کمپین بازاریابی انجام نشد.');
+                        throw new \RuntimeException('ثبت اعلان کمپین بازاریابی انجام نشد.');
                     }
 
                     if ($assignmentId) {
