@@ -62,6 +62,11 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.ai_gateway.url' => 'https://voice.example.test',
             'services.ai_gateway.token' => 'shared-render-token',
         ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true, 'tts_ready' => true, 'chat_ready' => true,
+            ], 200),
+        ]);
         $user = User::factory()->create();
         $status = $this->actingAs($user)->getJson('/editor/voice/status');
         $status->assertOk()
@@ -74,7 +79,11 @@ class GlobalAssistantVoiceTest extends TestCase
         [$encoded, $signature] = explode('.', (string) $tokenResponse->json('token'), 2);
         $this->assertSame(hash_hmac('sha256', $encoded, 'shared-render-token'), $signature);
         $this->assertStringNotContainsString('shared-render-token', $tokenResponse->getContent());
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer shared-render-token')
+        );
     }
 
     public function test_render_live_voice_status_rejects_divergent_laravel_client_credentials(): void
@@ -114,6 +123,11 @@ class GlobalAssistantVoiceTest extends TestCase
             'services.ai_gateway.token' => 'render-shared-voice-token',
         ]);
 
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response([
+                'asr_ready' => true, 'tts_ready' => true, 'chat_ready' => true,
+            ], 200),
+        ]);
         $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
 
         $response->assertOk()
@@ -124,6 +138,41 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('provider', 'render')
             ->assertJsonPath('endpointing', 'server-vad');
         $this->assertStringNotContainsString('render-shared-voice-token', $response->getContent());
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer render-shared-voice-token')
+        );
+    }
+
+    public function test_render_live_voice_status_fails_closed_when_render_rejects_the_shared_token(): void
+    {
+        config([
+            'services.voice.local_only' => false,
+            'services.voice_stream.url' => 'wss://voice.example.test',
+            'services.voice_stream.token_secret' => 'stale-local-token',
+            'services.voice_asr.url' => 'https://voice.example.test/v1/transcribe',
+            'services.voice_asr.token' => 'stale-local-token',
+            'services.voice_tts.url' => 'https://voice.example.test/v1/synthesize',
+            'services.voice_tts.token' => 'stale-local-token',
+            'services.ai_gateway.url' => 'https://voice.example.test',
+            'services.ai_gateway.token' => 'stale-local-token',
+        ]);
+        Http::fake([
+            'https://voice.example.test/v1/status' => Http::response(['detail' => 'Unauthorized'], 401),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->getJson('/editor/voice/status');
+
+        $response->assertOk()
+            ->assertJsonPath('mode', 'none')
+            ->assertJsonPath('gateway', false)
+            ->assertJsonPath('reason', 'render_voice_auth_failed')
+            ->assertJsonPath('message', 'سرویس Render توکن اتصال Laravel را نپذیرفت (HTTP 401). مقدار فعلی FARAST_VOICE_TOKEN باید با توکن همین سرویس Voice-typing یکسان باشد؛ میکروفون فعال نشده است.');
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request) =>
+            $request->url() === 'https://voice.example.test/v1/status'
+            && $request->hasHeader('Authorization', 'Bearer stale-local-token')
+        );
     }
 
     public function test_render_chat_stream_does_not_require_site_settings_or_optional_history_tables(): void
