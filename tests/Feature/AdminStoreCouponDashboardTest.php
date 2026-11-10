@@ -74,15 +74,49 @@ class AdminStoreCouponDashboardTest extends TestCase
             'used_count' => 1,
             'is_active' => true,
         ]);
+        $otherProduct = StoreProduct::create([
+            'category_id' => $product->category_id,
+            'title' => 'محصول دوم سبد',
+            'slug' => 'coupon-dashboard-other-product',
+            'sku' => 'COUPON-DASHBOARD-002',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
         $order = Order::create([
             'user_id' => $customer->id,
-            'subtotal_rials' => 100000,
+            'subtotal_rials' => 300000,
             'discount_rials' => 12000,
             'tax_rials' => 0,
-            'total_rials' => 88000,
+            'total_rials' => 288000,
             'status' => 'paid',
             'paid_at' => now(),
             'pricing_snapshot' => ['kind' => 'store'],
+        ]);
+        StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'title_snapshot' => $product->title,
+            'sku_snapshot' => $product->sku,
+            'quantity' => 1,
+            'unit_price_rials' => 100000,
+            'discount_rials' => 12000,
+            'tax_rials' => 0,
+            'total_rials' => 88000,
+            'product_snapshot' => [],
+        ]);
+        StoreOrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $otherProduct->id,
+            'title_snapshot' => $otherProduct->title,
+            'sku_snapshot' => $otherProduct->sku,
+            'quantity' => 2,
+            'unit_price_rials' => 100000,
+            'discount_rials' => 0,
+            'tax_rials' => 0,
+            'total_rials' => 200000,
+            'product_snapshot' => [],
         ]);
         StoreCouponAssignment::create([
             'coupon_id' => $coupon->id,
