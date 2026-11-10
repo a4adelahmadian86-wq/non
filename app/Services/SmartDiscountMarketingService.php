@@ -211,6 +211,15 @@ class SmartDiscountMarketingService
      * a smaller incentive; weak conversion may use the configured ceiling, but
      * the margin policy remains the hard financial limit in every case.
      */
+    /**
+     * Campaigns use the same product-level learning ceiling as automated offers.
+     * The configured campaign percentage is a maximum, never a guaranteed spend.
+     */
+    public function effectiveCampaignDiscountPercent(int $productId, int $configuredMaximum): float
+    {
+        return $this->effectiveDiscountPercent($productId, $configuredMaximum);
+    }
+
     private function effectiveDiscountPercent(int $productId, int $configuredMaximum): float
     {
         $history = StoreCouponAssignment::query()
