@@ -128,6 +128,12 @@
                         @if($canEditWorkflows)
                             <a class="wf-btn alt" href="{{ route('platform.workflows', ['edit' => $w->id]) }}">ویرایش</a>
                         @endif
+                        @if($canDeleteWorkflows && (int)($w->runs_count ?? 0) === 0 && (int)($w->event_mappings_count ?? 0) === 0)
+                            <form method="post" action="{{ route('platform.workflows.destroy', $w->id) }}" onsubmit="return confirm('این گردش‌کار هیچ سابقه اجرایی ندارد. حذف شود؟')">
+                                @csrf @method('delete')
+                                <button class="wf-btn remove" type="submit">حذف</button>
+                            </form>
+                        @endif
                         @if($canRunWorkflows && empty($w->conditions))
                             <form method="post" action="{{ route('platform.workflows.run', $w->id) }}">@csrf<button class="wf-btn alt" type="submit">اجرای دستی</button></form>
                         @elseif($canRunWorkflows)
@@ -158,6 +164,27 @@
                             <td class="wf-error">{{ $run->error ?: '—' }}</td>
                         </tr>
                     @empty<tr><td colspan="5" class="wf-muted">هنوز اجرایی ثبت نشده است.</td></tr>@endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+    @endif
+
+    @if($canViewWorkflowAudit)
+    <section class="wf-card">
+        <h2>تاریخچه تغییرات گردش‌کار</h2>
+        <div style="overflow:auto">
+            <table class="wf-table">
+                <thead><tr><th>عملیات</th><th>گردش‌کار</th><th>زمان</th><th>توضیحات</th></tr></thead>
+                <tbody>
+                    @forelse($workflowAudit as $entry)
+                        <tr>
+                            <td>{{ ['workflow.created'=>'ایجاد','workflow.updated'=>'ویرایش','workflow.deleted'=>'حذف'][$entry->action] ?? $entry->action }}</td>
+                            <td>#{{ $entry->workflow_id ?? '—' }}</td>
+                            <td>{{ $entry->created_at }}</td>
+                            <td>{{ data_get(json_decode($entry->after_state ?: $entry->before_state, true), 'name', '—') }}</td>
+                        </tr>
+                    @empty<tr><td colspan="4" class="wf-muted">تغییری ثبت نشده است.</td></tr>@endforelse
                 </tbody>
             </table>
         </div>
