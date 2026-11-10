@@ -108,7 +108,9 @@
               @if($product->course->duration_minutes)<span><i class="fa-regular fa-clock"></i> {{ $product->course->duration_minutes }} دقیقه آموزش</span>@endif
             </div>
             @forelse($product->course->sections as $section)
-              @php($visibleLessons = $section->lessons->where('is_published',true))
+              @php
+                $visibleLessons = $section->lessons->where('is_published', true);
+              @endphp
               @if($visibleLessons->isNotEmpty())
                 <div class="course-public-section"><strong>{{ $loop->iteration }}. {{ $section->title }}</strong><span>{{ $visibleLessons->count() }} جلسه</span></div>
                 @foreach($visibleLessons as $lesson)
