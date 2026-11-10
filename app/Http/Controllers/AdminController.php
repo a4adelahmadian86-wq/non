@@ -16,6 +16,7 @@ use App\Models\WalletTransaction;
 use App\Models\VoiceProviderAccount;
 use App\Services\AdminConsoleService;
 use App\Services\DashboardQueueHealthService;
+use App\Services\DashboardMessagingSummaryService;
 use App\Services\AuditLogService;
 use App\Services\CapabilityService;
 use App\Services\EmailService;
@@ -76,6 +77,7 @@ class AdminController extends Controller
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
         $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
         $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
+        $messengerSummary = app(DashboardMessagingSummaryService::class)->snapshot($actor);
         $canViewAudit = $console->sectionAllowed($actor, 'audit');
 
         $settings = [];
@@ -316,6 +318,7 @@ class AdminController extends Controller
             'scope' => $scope,
             'scopeSummary' => $console->scopeSummary($actor),
             'allowedSections' => $allowedSections,
+            'messengerSummary' => $messengerSummary,
             'stats' => [
                 'users' => $totalScopedUsers,
                 'active_users' => $visibleIds === null
