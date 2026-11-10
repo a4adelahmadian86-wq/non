@@ -143,7 +143,9 @@ class AdminStoreCouponDashboardTest extends TestCase
             ->assertSee('8,800', false)
             ->assertSee('3,800', false)
             ->assertSee('سود ناخالص قابل محاسبه')
-            ->assertSee('اقلام فاقد بهای تاریخی');
+            ->assertSee('اقلام فاقد بهای تاریخی')
+            ->assertSee('مصرف بودجه تخفیف در ماه جاری')
+            ->assertSee('سقف بودجه تخفیف ماهانه (ریال)');
     }
 
     public function test_dashboard_does_not_estimate_profit_for_legacy_items_without_cost_snapshot(): void
