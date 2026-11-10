@@ -759,4 +759,14 @@ class StoreReaderAccessTest extends TestCase
         $this->assertDatabaseMissing('content_discussions', ['id' => $pending->id]);
     }
 
+
+    public function test_product_detail_renders_file_metadata_without_blade_compilation_errors(): void
+    {
+        [$product] = $this->makePreviewFixture();
+
+        $this->get(route('store.product', $product->slug))
+            ->assertOk()
+            ->assertSee($product->title);
+    }
+
 }
