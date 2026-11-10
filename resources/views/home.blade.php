@@ -88,8 +88,6 @@
         </figure>
     </section>
 
-    <section class="home-pathways"n>
-
     <section class="home-pathways" aria-label="دو مسیر اصلی استفاده از فراست">
         <article class="home-pathway home-pathway--products">
             <div class="pathway-symbol" aria-hidden="true"><i class="fa-solid fa-bag-shopping"></i></div>
