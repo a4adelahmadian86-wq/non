@@ -70,6 +70,7 @@ return [
         [
             'key' => 'collaboration', 'label' => 'تیم و همکاری', 'icon' => 'fa-people-group',
             'items' => [
+                ['key' => 'collaboration.messenger', 'label' => 'پیام‌رسان داخلی', 'icon' => 'fa-comments', 'route' => 'messenger.index'],
                 ['key' => 'collaboration.teams', 'label' => 'تیم‌ها و سازمان‌ها', 'icon' => 'fa-user-group', 'route' => 'admin.organizations', 'exclude_admin' => true, 'permission' => 'organization.manage', 'scope' => 'organization'],
                 ['key' => 'collaboration.members', 'label' => 'اعضای سازمان', 'icon' => 'fa-users', 'route' => 'admin.users', 'exclude_admin' => true, 'permission' => 'users.view', 'scope' => 'organization'],
                 ['key' => 'collaboration.roles', 'label' => 'نقش‌ها', 'icon' => 'fa-user-shield', 'planned' => true, 'admin_only' => true, 'permission' => 'access.manage', 'scope' => 'global'],

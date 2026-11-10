@@ -4,7 +4,7 @@
 @php
     $filter = $filter ?? 'all';
     $search = $search ?? '';
-    $counts = $counts ?? ['all'=>0,'unread'=>0,'archived'=>0,'support'=>0,'finance'=>0,'announcement'=>0,'community'=>0,'security'=>0,'marketing'=>0,'system'=>0];
+    $counts = $counts ?? ['all'=>0,'unread'=>0,'archived'=>0,'support'=>0,'finance'=>0,'announcement'=>0,'community'=>0,'security'=>0,'marketing'=>0,'communications'=>0,'system'=>0];
     $filters = [
         'all' => ['همه اعلان‌ها', 'all'],
         'unread' => ['خوانده‌نشده', 'unread'],
@@ -14,6 +14,7 @@
         'community' => ['گفت‌وگوها', 'community'],
         'security' => ['امنیت حساب', 'security'],
         'marketing' => ['پیام‌های بازاریابی', 'marketing'],
+        'communications' => ['پیام‌رسان داخلی', 'communications'],
         'system' => ['سیستم و گردش‌کار', 'system'],
         'archived' => ['بایگانی شخصی', 'archived'],
     ];

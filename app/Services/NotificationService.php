@@ -175,6 +175,7 @@ class NotificationService
                     ->orWhere('type', 'like', 'billing_%');
             }),
             'community' => $query->where('type', 'like', 'discussion_%'),
+            'communications' => $query->where('type', 'like', 'message_%'),
             'security' => $query->where('type', 'like', 'security_%'),
             'announcement' => $query->where('type', 'like', 'announcement_%')->where('type', '!=', 'announcement_campaign'),
             'marketing' => $query->where(function (Builder $w) {
@@ -183,6 +184,7 @@ class NotificationService
             }),
             'system' => $query
                 ->where('type', 'not like', 'discussion_%')
+                ->where('type', 'not like', 'message_%')
                 ->where('type', 'not like', 'ticket_%')
                 ->where('type', 'not like', 'order_%')
                 ->where('type', 'not like', 'wallet_%')
@@ -234,7 +236,7 @@ class NotificationService
     public function countsByCategory(int $userId): array
     {
         if (! Schema::hasTable('farast_notifications')) {
-            return array_fill_keys(['all', 'unread', 'archived', 'support', 'finance', 'announcement', 'community', 'security', 'marketing', 'system'], 0);
+            return array_fill_keys(['all', 'unread', 'archived', 'support', 'finance', 'announcement', 'community', 'communications', 'security', 'marketing', 'system'], 0);
         }
 
         $base = FarastNotification::query()->where('user_id', $userId);
@@ -254,6 +256,7 @@ class NotificationService
             'finance' => $count('finance'),
             'announcement' => $count('announcement'),
             'community' => $count('community'),
+            'communications' => $count('communications'),
             'security' => $count('security'),
             'marketing' => $count('marketing'),
             'system' => $count('system'),
