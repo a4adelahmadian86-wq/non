@@ -35,6 +35,7 @@ class UploadSecurityServiceTest extends TestCase
             $this->assertSame(2, $result['dimensions']['width']);
             $this->assertSame(2, $result['dimensions']['height']);
             $this->assertTrue($result['sandbox_required']);
+            $this->assertSame('بررسی ایستای داخلی فراست', $result['scan_label']);
             $this->assertStringContainsString('تضمین', $result['security_notice']);
         } finally {
             if ($previousEnv === false) {
