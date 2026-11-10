@@ -1072,9 +1072,28 @@ class AdminStoreController extends Controller
             $filename = Str::random(32).'.'.$extension;
             $storagePath = 'store/covers/'.$product->id.'/'.$filename;
             $publicPath = 'storage/'.$storagePath;
+            $coverStream = Storage::disk('private')->readStream($temporaryPath);
+            abort_unless(is_resource($coverStream), 503, 'خواندن کاور اسکن‌شده ممکن نشد.');
+            try {
+                $managedStored = Storage::disk('managed')->put($storagePath, $coverStream, [
+                    'farast_classification' => 'critical',
+                    'farast_source_type' => 'product_cover',
+                    'farast_source_id' => $product->id,
+                    'farast_product_id' => $product->id,
+                    'farast_owner_user_id' => auth()->id(),
+                    'farast_original_name' => $upload->getClientOriginalName(),
+                    'mimetype' => $inspection['mime'],
+                ]);
+            } finally {
+                fclose($coverStream);
+            }
+            if (! $managedStored) {
+                throw new \RuntimeException('cover_managed_storage_failed');
+            }
             $stored = Storage::disk('public')->putFileAs('store/covers/'.$product->id, $upload, $filename);
             if (! $stored) {
-                throw new \RuntimeException('cover_public_storage_failed');
+                Storage::disk('managed')->delete($storagePath);
+                throw new \RuntimeException('cover_public_cache_failed');
             }
 
             $oldPath = DB::transaction(function () use ($product, $publicPath, $inspection) {
@@ -1097,11 +1116,13 @@ class AdminStoreController extends Controller
             });
             if ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
                 Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
+                Storage::disk('managed')->delete(Str::after($oldPath, 'storage/'));
             }
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($temporaryPath);
             if ($storagePath) {
                 Storage::disk('public')->delete($storagePath);
+                Storage::disk('managed')->delete($storagePath);
             }
             if ($exception instanceof ValidationException) {
                 throw $exception;
