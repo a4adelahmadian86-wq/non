@@ -203,6 +203,41 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertDatabaseCount('crm_follow_up_tasks', 0);
     }
 
+    public function test_workflow_builder_rejects_unrecognized_nested_payload_keys(): void
+    {
+        $owner = $this->owner('09140000210');
+        $base = [
+            'name' => 'Strict payload workflow',
+            'trigger_type' => 'document.saved',
+            'enabled' => '1',
+            'steps' => [[
+                'action' => 'notify',
+                'title' => 'Valid title',
+                'message' => 'Valid message',
+                'unexpected' => 'must not be persisted',
+            ]],
+        ];
+
+        $this->actingAs($owner)->post('/workspace/workflows', $base)
+            ->assertSessionHasErrors('steps.0');
+
+        $base['steps'] = [['action' => 'notify', 'title' => 'Valid title']];
+        $base['conditions'] = [[
+            'field' => 'status',
+            'operator' => 'equals',
+            'value' => 'open',
+            'sql' => 'must not be accepted',
+        ]];
+
+        $this->post('/workspace/workflows', $base)
+            ->assertSessionHasErrors('conditions.0');
+
+        $this->assertDatabaseMissing('farast_workflows', [
+            'user_id' => $owner->id,
+            'name' => 'Strict payload workflow',
+        ]);
+    }
+
     public function test_workflow_create_and_edit_are_recorded_in_the_audit_ledger(): void
     {
         $owner = $this->owner('09140000205');
