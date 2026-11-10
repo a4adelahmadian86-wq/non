@@ -163,6 +163,16 @@ class CrmMarketingController extends Controller
                         ->where('orders.status', 'paid')
                         ->whereNotNull('orders.paid_at')
                         ->sum('store_coupons.value');
+                    $campaign->reserved_discount_rials = (int) DB::table('store_coupon_assignments as assignments')
+                        ->join('store_coupons', 'store_coupons.id', '=', 'assignments.coupon_id')
+                        ->where('assignments.campaign_id', $campaign->id)
+                        ->where('assignments.status', 'offered')
+                        ->where('assignments.expires_at', '>', now())
+                        ->where('store_coupons.is_active', true)
+                        ->sum('store_coupons.value');
+                    $campaign->budget_remaining_rials = (int) ($campaign->budget_cap_rials ?? 0) > 0
+                        ? max(0, (int) $campaign->budget_cap_rials - (int) $campaign->redeemed_discount_rials - (int) $campaign->reserved_discount_rials)
+                        : null;
                     $campaign->attributed_revenue_rials = (int) DB::table('store_coupon_assignments as assignments')
                         ->join('orders', 'orders.id', '=', 'assignments.redeemed_order_id')
                         ->join('store_order_items', function ($join) {
