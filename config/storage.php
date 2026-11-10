@@ -17,6 +17,10 @@ return [
         'stale_after_minutes' => 10,
         'probe_timeout_seconds' => 8,
     ],
+    'replication' => [
+        'critical_copies' => 2,
+        'non_critical_copies' => 1,
+    ],
     'fallback' => [
         'enabled' => true,
     ],
