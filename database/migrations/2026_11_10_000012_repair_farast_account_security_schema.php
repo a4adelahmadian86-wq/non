@@ -1,15 +1,13 @@
 <?php
 
-use Illuminate\\Database\\Migrations\\Migration;
-use Illuminate\\Database\\Schema\\Blueprint;
-use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void
     {
-        // Repair partially migrated local databases without dropping or changing
-        // existing security records. The original migrations remain authoritative
-        // for fresh installations; this migration only fills missing structures.
+        // Repair partially migrated databases without dropping existing security data.
         if (! Schema::hasTable('farast_account_sessions')) {
             Schema::create('farast_account_sessions', function (Blueprint $table) {
                 $table->id();
@@ -63,7 +61,6 @@ return new class extends Migration {
 
     public function down(): void
     {
-        // Intentionally non-destructive: this migration repairs structures that
-        // may already contain production or local account-security data.
+        // Deliberately non-destructive: repaired security tables may contain account history.
     }
 };
