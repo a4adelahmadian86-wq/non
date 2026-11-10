@@ -11,10 +11,9 @@
         <div class="fm-list">
             <div class="fm-list-head"><strong>گفت‌وگوها</strong><span>{{ $conversations->total() }} مورد</span></div>
             @forelse($conversations as $conversation)
-                
                 <a class="fm-conversation" href="{{ route('messenger.show', $conversation) }}">
                     <span class="fm-avatar">{{ mb_substr($conversation->title ?: ($conversation->participants->firstWhere('id', '!=', auth()->id())?->name ?? 'گفتگو'), 0, 1) }}</span>
-                    <span class="fm-conversation-copy"><strong>{{ $conversation->title ?: ($conversation->participants->firstWhere('id', '!=', auth()->id())?->name ?? 'گفت‌وگوی خصوصی') }}</strong><small>{{ $last?->body ? \Illuminate\Support\Str::limit($last->body, 75) : 'هنوز پیامی ارسال نشده است' }}</small></span>
+                    <span class="fm-conversation-copy"><strong>{{ $conversation->title ?: ($conversation->participants->firstWhere('id', '!=', auth()->id())?->name ?? 'گفت‌وگوی خصوصی') }}</strong><small>{{ $conversation->last_message_preview ?: 'هنوز پیامی ارسال نشده است' }}</small></span>
                     @if(($conversation->unread_messages_count ?? 0) > 0)<b class="fm-unread">{{ $conversation->unread_messages_count }}</b>@endif
                 </a>
             @empty
