@@ -51,6 +51,10 @@ class RequireTwoFactorChallenge
             ], 423);
         }
 
+        if ($request->isMethod('GET')) {
+            $request->session()->put('url.intended', $request->fullUrl());
+        }
+
         return redirect()->route('two-factor.challenge');
     }
 }
