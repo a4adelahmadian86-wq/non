@@ -18,7 +18,7 @@ class MessengerController extends Controller
         $userId = (int) $request->user()->id;
         $conversations = Conversation::query()
             ->visibleTo($userId)
-            ->with(['participants:id,name', 'messages' => fn ($q) => $q->latest('id')->limit(1)])
+            ->with('participants:id,name')
             ->withCount(['messages as unread_messages_count' => function ($q) use ($userId) {
                 $q->where('user_id', '!=', $userId)
                     ->whereRaw('conversation_messages.id > COALESCE((SELECT last_read_message_id FROM conversation_participants WHERE conversation_participants.conversation_id = conversation_messages.conversation_id AND conversation_participants.user_id = ? LIMIT 1), 0)', [$userId]);
