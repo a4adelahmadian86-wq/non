@@ -10,7 +10,7 @@
         <div class="storage-detail-head"><div><h1>{{ $volume->name }}</h1><p class="muted">{{ $volume->provider ?: $volume->driver }} · {{ $volume->region ?: 'منطقه نامشخص' }}</p></div><span>{{ $volume->status }}</span></div>
         <p>شناسه: #{{ $volume->id }} · درایو: {{ $volume->drive_key }} · آخرین بررسی: {{ optional($volume->last_checked_at)->format('Y-m-d H:i') ?: 'انجام نشده' }} · آخرین موفقیت: {{ optional($volume->last_success_at)->format('Y-m-d H:i') ?: 'ثبت نشده' }}</p>
         <p>ظرفیت: {{ $volume->capacity_bytes ? \Illuminate\Support\Number::fileSize($volume->capacity_bytes) : 'نامشخص' }} · مصرف ثبت‌شده: {{ \Illuminate\Support\Number::fileSize($volume->used_bytes) }} · فضای آزاد: {{ $volume->free_bytes !== null ? \Illuminate\Support\Number::fileSize($volume->free_bytes) : 'نامشخص' }}</p>
-        <p>فایل‌های اصلی: {{ number_format($volume->files()->where('status', 'active')->count()) }} · نسخه‌های آینه‌ای: {{ number_format($volume->replicas()->where('status', 'active')->count()) }} · سقف تعداد فایل: {{ $volume->file_limit ? number_format($volume->file_limit) : 'اعلام نشده' }} · حداکثر حجم فایل: {{ $volume->max_file_bytes ? \Illuminate\Support\Number::fileSize($volume->max_file_bytes) : 'اعلام نشده' }} · اولویت: {{ $volume->priority }}</p>
+        <p>فایل‌های اصلی: {{ number_format($volume->files()->where('status', 'active')->count()) }} · نسخه‌های آینه‌ای: {{ number_format($volume->replicas()->where('status', 'active')->count()) }} · بکاپ‌ها: {{ number_format($volume->backups()->where('status', 'completed')->count()) }} · سقف تعداد فایل: {{ $volume->file_limit ? number_format($volume->file_limit) : 'اعلام نشده' }} · حداکثر حجم فایل: {{ $volume->max_file_bytes ? \Illuminate\Support\Number::fileSize($volume->max_file_bytes) : 'اعلام نشده' }} · اولویت: {{ $volume->priority }}</p>
         @if(data_get($volume->metadata, 'local_fallback'))<p style="color:#9a5b00">این فضا ذخیره‌سازی محلی جایگزین است؛ برای تضمین محل نگهداری، هاست اختصاصی این درایو را متصل کنید.</p>@endif
         <div style="display:flex;gap:8px;flex-wrap:wrap">
             <form method="post" action="{{ route('admin.storage.verify',$volume) }}">@csrf<button class="btn">آزمون اتصال</button></form>
@@ -24,6 +24,22 @@
         @forelse($files as $file)<tr><td>{{ $file->original_name }}</td><td>{{ \Illuminate\Support\Number::fileSize($file->size_bytes) }}</td><td>{{ $file->classification }}</td><td>{{ $file->source_module ?: '—' }} / {{ $file->source_type ?: '—' }}</td><td>{{ $file->product_id ? 'محصول #'.$file->product_id : ($file->source_id ? 'مرجع #'.$file->source_id : '—') }}</td><td>{{ $file->replicaVolume?->name ?: (data_get($file->metadata, 'replication_status') === 'waiting_for_replica' ? 'در انتظار هاست دوم' : (data_get($file->metadata, 'replication_status') === 'failed' ? 'ناموفق' : '—')) }}</td><td>{{ $file->status }}</td><td>{{ $file->created_at->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="8">هنوز فایلی از طریق هسته مدیریت ذخیره‌سازی در این فضا ثبت نشده است.</td></tr>@endforelse
         </tbody></table></div>
         {{ $files->links() }}
+    </div>
+
+    <div class="storage-detail-card">
+        <h2>نسخه‌های آینه‌ای نگهداری‌شده روی این هاست</h2>
+        <div style="overflow:auto"><table><thead><tr><th>فایل</th><th>فضای اصلی</th><th>مسیر منطقی</th><th>حجم</th><th>Checksum</th></tr></thead><tbody>
+        @forelse($replicaFiles as $file)<tr><td>{{ $file->original_name }}</td><td>{{ $file->volume?->name ?: 'نامشخص' }}</td><td>{{ $file->logical_path ?: $file->file_key }}</td><td>{{ \Illuminate\Support\Number::fileSize($file->size_bytes) }}</td><td><code>{{ $file->checksum }}</code></td></tr>@empty<tr><td colspan="5">نسخه آینه‌ای ثبت نشده است.</td></tr>@endforelse
+        </tbody></table></div>
+        {{ $replicaFiles->links() }}
+    </div>
+
+    <div class="storage-detail-card">
+        <h2>نسخه‌های پشتیبان روی این هاست</h2>
+        <div style="overflow:auto"><table><thead><tr><th>شناسه بکاپ</th><th>نوع</th><th>مسیر فایل</th><th>حجم</th><th>Checksum</th><th>تاریخ تکمیل</th></tr></thead><tbody>
+        @forelse($backups as $backup)<tr><td>#{{ $backup->id }}</td><td>{{ $backup->backup_type }}</td><td>{{ $backup->object_key }}</td><td>{{ \Illuminate\Support\Number::fileSize($backup->size_bytes) }}</td><td><code>{{ $backup->checksum }}</code></td><td>{{ optional($backup->completed_at)->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="6">نسخه پشتیبانی روی این فضا ثبت نشده است.</td></tr>@endforelse
+        </tbody></table></div>
+        {{ $backups->links() }}
     </div>
 </div>
 @endsection
