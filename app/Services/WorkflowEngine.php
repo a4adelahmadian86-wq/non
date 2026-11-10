@@ -253,6 +253,13 @@ class WorkflowEngine
                     ->get();
 
                 $eventContext = array_merge($context, ['event_type' => $lockedEvent->event_type]);
+                $authorization = app(AuthorizationService::class);
+                $workflowOwners = User::query()
+                    ->whereIn('id', $workflows->pluck('user_id')->unique()->values())
+                    ->get()
+                    ->keyBy('id');
+                $subjectContext = $subject ? $this->userResourceContext($subject) : [];
+
                 foreach ($workflows as $workflow) {
                     // Lock the workflow row so concurrent events cannot both pass
                     // its cooldown window and enqueue duplicate executions.
@@ -265,8 +272,14 @@ class WorkflowEngine
                         continue;
                     }
 
-                    $workflowOwner = User::query()->find((int) $current->user_id);
-                    if (! $workflowOwner || ! $this->workflowCanProcessEvent($workflowOwner, $subject, (string) $lockedEvent->event_type)) {
+                    $workflowOwner = $workflowOwners->get((int) $current->user_id);
+                    if (! $workflowOwner || ! $this->workflowCanProcessEvent(
+                        $authorization,
+                        $workflowOwner,
+                        $subject,
+                        (string) $lockedEvent->event_type,
+                        $subjectContext
+                    )) {
                         continue;
                     }
 
@@ -383,9 +396,13 @@ class WorkflowEngine
         return $completedNow;
     }
 
-    private function workflowCanProcessEvent(User $owner, User $subject, string $eventType): bool
-    {
-        $authorization = app(AuthorizationService::class);
+    private function workflowCanProcessEvent(
+        AuthorizationService $authorization,
+        User $owner,
+        User $subject,
+        string $eventType,
+        array $subjectContext
+    ): bool {
         $canRun = $authorization->allows($owner, 'workflows.run')
             || $authorization->allows($owner, 'workflows.manage')
             || $authorization->allows($owner, 'automation.run')
@@ -402,31 +419,34 @@ class WorkflowEngine
         }
 
         $permission = self::EVENT_SCOPE_PERMISSIONS[$eventType] ?? null;
-        if (! $permission) {
-            return false;
-        }
 
+        return $permission !== null
+            && $authorization->allowsFor($owner, $permission, $subjectContext);
+    }
+
+    private function userResourceContext(User $user): array
+    {
         $teamIds = [];
-        if ($subject->organization_id) {
-            $teamIds = $subject->teams()
-                ->where('teams.organization_id', $subject->organization_id)
+        if ($user->organization_id) {
+            $teamIds = $user->teams()
+                ->where('teams.organization_id', $user->organization_id)
                 ->pluck('teams.id')
                 ->map(fn ($id) => (int) $id)
                 ->all();
             $supervisedTeamIds = Team::query()
-                ->where('supervisor_id', $subject->id)
-                ->where('organization_id', $subject->organization_id)
+                ->where('supervisor_id', $user->id)
+                ->where('organization_id', $user->organization_id)
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
                 ->all();
             $teamIds = array_values(array_unique(array_merge($teamIds, $supervisedTeamIds)));
         }
 
-        return $authorization->allowsFor($owner, $permission, [
-            'owner_id' => (int) $subject->id,
-            'organization_id' => $subject->organization_id,
+        return [
+            'owner_id' => (int) $user->id,
+            'organization_id' => $user->organization_id,
             'team_ids' => $teamIds,
-        ]);
+        ];
     }
 
     private function step(array $step, array $context, int $ownerId, int $runId, int $stepIndex): void
@@ -467,27 +487,7 @@ class WorkflowEngine
                 throw new \RuntimeException('Workflow follow-up owner or customer no longer exists.');
             }
 
-            $customerTeamIds = [];
-            if ($customer->organization_id) {
-                $customerTeamIds = $customer->teams()
-                    ->where('teams.organization_id', $customer->organization_id)
-                    ->pluck('teams.id')
-                    ->map(fn ($id) => (int) $id)
-                    ->all();
-                $supervisedTeamIds = Team::query()
-                    ->where('supervisor_id', $customer->id)
-                    ->where('organization_id', $customer->organization_id)
-                    ->pluck('id')
-                    ->map(fn ($id) => (int) $id)
-                    ->all();
-                $customerTeamIds = array_values(array_unique(array_merge($customerTeamIds, $supervisedTeamIds)));
-            }
-
-            $customerContext = [
-                'owner_id' => (int) $customer->id,
-                'organization_id' => $customer->organization_id,
-                'team_ids' => $customerTeamIds,
-            ];
+            $customerContext = $this->userResourceContext($customer);
             if (! app(AuthorizationService::class)->allowsFor($owner, 'users.view', $customerContext)) {
                 throw new \RuntimeException('Workflow owner cannot create a follow-up outside the authorized customer scope.');
             }
