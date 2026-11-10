@@ -161,7 +161,7 @@
             <div class="store-smart-offer__heading"><i class="fa-solid fa-sparkles" aria-hidden="true"></i><strong>پیشنهاد اختصاصی برای شما</strong><span>ویژه همین محصول</span></div>
             <p>با توجه به علاقه‌مندی شما به این محصول، این پیشنهاد اختصاصی برای مدت محدود فعال شده است.</p>
             <div class="store-smart-offer__value"><strong>{{ number_format((int) $smartOffer->coupon->value / 10) }} تومان</strong><span>تخفیف اختصاصی</span></div>
-            <div class="store-smart-offer__code"><code>{{ $smartOffer->coupon->code }}</code><button type="button" data-copy-smart-coupon="{{ $smartOffer->coupon->code }}"><i class="fa-regular fa-copy" aria-hidden="true"></i> کپی کد</button></div>
+            <div class="store-smart-offer__code"><code>{{ $smartOffer->coupon->code }}</code><button type="button" data-copy-smart-coupon="{{ $smartOffer->coupon->code }}" data-track-smart-offer="{{ route('store.smart-offer.interaction', $smartOffer) }}"><i class="fa-regular fa-copy" aria-hidden="true"></i> کپی کد</button></div>
             <small>مهلت استفاده تا {{ $smartOffer->expires_at?->format('Y/m/d H:i') }} · فقط برای حساب شما و همین محصول</small>
           </section>
         @endif
@@ -313,6 +313,10 @@
       button.disabled=true;
     }catch(error){
       window.prompt('کد اختصاصی را کپی کنید:',code);
+    }
+    const trackUrl=button.dataset.trackSmartOffer;
+    if(trackUrl){
+      fetch(trackUrl,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json'}}).catch(()=>{});
     }
   }));
   document.querySelector('[data-share-product]')?.addEventListener('click',async event=>{
