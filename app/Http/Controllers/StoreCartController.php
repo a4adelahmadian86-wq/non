@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\SiteSetting;
-use App\Models\StoreCoupon;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
@@ -169,10 +168,6 @@ class StoreCartController extends Controller
                 $orderItems[] = [$orderItem, $product, $file];
             }
 
-            if ($payload['coupon_code']) {
-                StoreCoupon::where('code', $payload['coupon_code'])->increment('used_count');
-            }
-
             $current->delete();
             $request->session()->forget('store_coupon_code');
 
@@ -185,6 +180,8 @@ class StoreCartController extends Controller
                     'transaction_id' => 'STORE-FREE-'.$order->id.'-'.now()->timestamp,
                     'paid_at' => now(),
                 ]);
+                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
+
                 foreach ($orderItems as [$orderItem, $product, $file]) {
                     $libraryItem = StoreLibraryItem::firstOrCreate(
                         ['user_id' => $request->user()->id, 'product_id' => $product->id, 'order_id' => $order->id],
