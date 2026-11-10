@@ -111,6 +111,40 @@ class DashboardNavigationArchitectureTest extends TestCase
         ], $actualKeys);
     }
 
+    public function test_each_live_module_is_placed_in_its_matching_workspace_domain(): void
+    {
+        $groups = collect(config('dashboard.navigation'))->keyBy('key');
+
+        $keysFor = static fn (string $groupKey): array => array_column($groups[$groupKey]['items'], 'key');
+
+        $this->assertContains('workspace.overview', $keysFor('workspace'));
+        $this->assertNotContains('workspace.billing', $keysFor('workspace'));
+        $this->assertContains('workspace.billing', $keysFor('finance'));
+
+        $this->assertContains('documents.mine', $keysFor('documents'));
+        $this->assertContains('editor.start', $keysFor('documents'));
+
+        $this->assertContains('ai.models', $keysFor('automation'));
+        $this->assertContains('automation.workflows', $keysFor('automation'));
+
+        $this->assertContains('collaboration.teams', $keysFor('collaboration'));
+        $this->assertContains('access.users', $keysFor('collaboration'));
+        $this->assertContains('organization.profile', $keysFor('collaboration'));
+
+        $this->assertContains('support.manage', $keysFor('support_desk'));
+        $this->assertContains('notifications.inbox', $keysFor('support_desk'));
+
+        $this->assertContains('reports.overview', $keysFor('reports'));
+        $this->assertContains('security.audit', $keysFor('reports'));
+
+        $this->assertContains('reports.finance', $keysFor('finance'));
+        $this->assertContains('organization.plans', $keysFor('finance'));
+        $this->assertContains('settings.finance', $keysFor('finance'));
+
+        $this->assertContains('settings.integrations', $keysFor('settings'));
+        $this->assertContains('settings.cms', $keysFor('settings'));
+    }
+
     public function test_navigation_service_hides_planned_and_admin_only_items_for_regular_users(): void
     {
         $employee = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
