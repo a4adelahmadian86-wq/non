@@ -51,6 +51,10 @@ Route::middleware(['auth','permission:store.manage'])->prefix('admin')->name('ad
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
     Route::post('/store/bulk-archive', [AdminStoreController::class, 'bulkArchive'])->middleware('throttle:10,10')->name('store.bulk-archive');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
+    Route::post('/store/intake/preflight', [AdminStoreController::class, 'preflightNewProductFile'])->name('store.intake.preflight');
+    Route::post('/store/intake/{product}/{ingestionId}/confirm', [AdminStoreController::class, 'confirmNewProductFile'])->name('store.intake.confirm');
+    Route::delete('/store/intake/{product}/{ingestionId}', [AdminStoreController::class, 'cancelNewProductIntake'])->name('store.intake.cancel');
+
     Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
     Route::put('/store/{product}',[AdminStoreController::class,'update'])->name('store.update');
