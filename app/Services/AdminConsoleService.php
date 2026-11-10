@@ -37,6 +37,44 @@ class AdminConsoleService
     }
 
     /**
+     * Request-derived scope and section state belong only to the authenticated
+     * subject. Never reuse one user's request context while evaluating another.
+     */
+    private function requestContextBelongsTo(?User $user): bool
+    {
+        $requestUser = request()->user();
+
+        return $user !== null && $requestUser !== null
+            && (int) $requestUser->id === (int) $user->id;
+    }
+
+    private function effectiveScope(?User $user): string
+    {
+        if (! $user) {
+            return self::SCOPE_OWN;
+        }
+
+        $scope = $this->requestContextBelongsTo($user)
+            ? request()->attributes->get('farast.scope')
+            : null;
+
+        return in_array($scope, [self::SCOPE_GLOBAL, self::SCOPE_ORGANIZATION, self::SCOPE_TEAM, self::SCOPE_OWN], true)
+            ? $scope
+            : self::scopeOf($user);
+    }
+
+    private function requestSectionPermission(?User $user): ?string
+    {
+        if (! $this->requestContextBelongsTo($user)) {
+            return null;
+        }
+
+        $permission = request()->attributes->get('farast.section_permission');
+
+        return is_string($permission) && $permission !== '' ? $permission : null;
+    }
+
+    /**
      * آیا بخش X برای کاربر مجاز است؟ (مجوز RBAC + حداقل دامنه لازم)
      */
     public function sectionAllowed(?User $user, string $section): bool
@@ -45,7 +83,7 @@ class AdminConsoleService
             return false;
         }
 
-        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        $scope = $this->effectiveScope($user);
         $def = config("farast_admin.sections.$section");
         if (! is_array($def)) {
             return $user->isAdmin() && $scope === self::SCOPE_GLOBAL;
@@ -63,7 +101,9 @@ class AdminConsoleService
         if ($allowed) {
             // Downstream list/query helpers use this exact section permission
             // to apply custom role scopes and direct deny overrides per record.
-            request()->attributes->set('farast.section_permission', (string) $def['permission']);
+            if ($this->requestContextBelongsTo($user)) {
+                request()->attributes->set('farast.section_permission', (string) $def['permission']);
+            }
         }
 
         return $allowed;
@@ -95,13 +135,13 @@ class AdminConsoleService
             return [];
         }
 
-        $scope = request()->attributes->get('farast.scope');
-        $ids = ResolveAdminScope::visibleUserIds($user, is_string($scope) ? $scope : null);
+        $scope = $this->effectiveScope($user);
+        $ids = ResolveAdminScope::visibleUserIds($user, $scope);
         if ($ids === null) {
             return null;
         }
 
-        $permission ??= request()->attributes->get('farast.section_permission');
+        $permission ??= $this->requestSectionPermission($user);
         if (! is_string($permission) || $permission === '') {
             $permission = 'users.view';
         }
@@ -146,7 +186,7 @@ class AdminConsoleService
             return [];
         }
 
-        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        $scope = $this->effectiveScope($user);
         if ($scope === self::SCOPE_GLOBAL) {
             return null;
         }
@@ -170,7 +210,7 @@ class AdminConsoleService
             return [];
         }
 
-        $permission ??= request()->attributes->get('farast.section_permission');
+        $permission ??= $this->requestSectionPermission($user);
         if (! is_string($permission) || $permission === '') {
             $permission = 'team.view';
         }
@@ -202,7 +242,7 @@ class AdminConsoleService
             return [];
         }
 
-        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        $scope = $this->effectiveScope($user);
         if ($scope === self::SCOPE_GLOBAL) {
             return null;
         }
@@ -215,7 +255,7 @@ class AdminConsoleService
             return [];
         }
 
-        $permission ??= request()->attributes->get('farast.section_permission');
+        $permission ??= $this->requestSectionPermission($user);
         if (! is_string($permission) || $permission === '') {
             $permission = 'organization.manage';
         }
@@ -281,7 +321,7 @@ class AdminConsoleService
      */
     public function scopeSummary(?User $user, bool $includeUserCount = true): array
     {
-        $scope = $user ? (request()->attributes->get('farast.scope') ?? self::scopeOf($user)) : self::SCOPE_OWN;
+        $scope = $this->effectiveScope($user);
         $visibleIds = $includeUserCount ? $this->visibleUserIds($user, 'users.view') : [];
 
         return [
