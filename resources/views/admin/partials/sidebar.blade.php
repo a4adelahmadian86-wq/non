@@ -58,6 +58,7 @@
             </details>
         @endif
 
+        @if($adminConsole->sectionAllowed(auth()->user(), 'integrations') || $adminConsole->sectionAllowed(auth()->user(), 'settings') || $adminConsole->sectionAllowed(auth()->user(), 'pricing') || $adminConsole->sectionAllowed(auth()->user(), 'voice') || $adminConsole->sectionAllowed(auth()->user(), 'ai_providers'))
         <details class="farast-admin-nav-group" @if($configurationActive) open @endif>
             <summary><span><i class="fa-solid fa-sliders"></i><b>پیکربندی پلتفرم</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
             <div class="farast-admin-nav-group__items">
@@ -78,7 +79,9 @@
                 @endif
             </div>
         </details>
+        @endif
 
+        @if($adminConsole->sectionAllowed(auth()->user(), 'analytics') || $adminConsole->sectionAllowed(auth()->user(), 'audit') || $adminConsole->sectionAllowed(auth()->user(), 'access') || $adminConsole->sectionAllowed(auth()->user(), 'organizations'))
         <details class="farast-admin-nav-group" @if($governanceActive) open @endif>
             <summary><span><i class="fa-solid fa-shield-halved"></i><b>حاکمیت و تحلیل</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
             <div class="farast-admin-nav-group__items">
@@ -96,7 +99,9 @@
                 @endif
             </div>
         </details>
+        @endif
 
+        @if($adminConsole->sectionAllowed(auth()->user(), 'announcements') || $adminConsole->sectionAllowed(auth()->user(), 'support_admin') || $adminConsole->sectionAllowed(auth()->user(), 'cms') || $adminConsole->sectionAllowed(auth()->user(), 'emails') || $adminConsole->sectionAllowed(auth()->user(), 'social'))
         <details class="farast-admin-nav-group" @if($communicationActive) open @endif>
             <summary><span><i class="fa-solid fa-comments"></i><b>ارتباطات و محتوا</b></span><i class="fa-solid fa-chevron-down group-chevron"></i></summary>
             <div class="farast-admin-nav-group__items">
@@ -117,6 +122,7 @@
                 @endif
             </div>
         </details>
+        @endif
     </nav>
 
     <div class="farast-admin-nav-bottom">
