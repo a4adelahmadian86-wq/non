@@ -387,7 +387,7 @@ class UploadSecurityService
                 if ($totalExpanded > self::MAX_ARCHIVE_EXPANDED_BYTES || $entrySize > 100 * 1024 * 1024) {
                     throw new RuntimeException('upload_archive_expansion_limit');
                 }
-                if ($entryExtension !== '' && in_array($entryExtension, ['zip','rar','7z','tar','gz','bz2','xz'], true)) {
+                if ($securityScan && $entryExtension !== '' && in_array($entryExtension, ['zip','rar','7z','tar','gz','bz2','xz'], true)) {
                     $risk = 'warning';
                     $findings[] = 'آرشیو تو در تو شناسایی شد؛ محتوای داخلی آن باز یا اجرا نمی‌شود.';
                 }
@@ -507,7 +507,7 @@ class UploadSecurityService
                 fclose($handle);
                 throw new RuntimeException('upload_archive_executable_rejected');
             }
-            if (in_array($extension, ['zip','rar','7z','gz','tgz','tar'], true)) {
+            if ($securityScan && in_array($extension, ['zip','rar','7z','gz','tgz','tar'], true)) {
                 $risk = 'warning';
                 $findings[] = 'آرشیو تو در تو شناسایی شد؛ محتوای داخلی آن باز یا اجرا نمی‌شود.';
             }

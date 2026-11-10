@@ -194,6 +194,25 @@ class UploadSecurityServiceTest extends TestCase
         app(UploadSecurityService::class)->inspect('quarantine/traversal-structural.zip', 'application/zip', null, null, false);
     }
 
+
+    public function test_security_scan_can_be_skipped_for_a_valid_pdf_without_skipping_structural_validation(): void
+    {
+        $pdf = new \\FPDF();
+        $pdf->SetFont('Arial', '', 12);
+        $pdf->AddPage();
+        $pdf->Cell(0, 10, 'Valid document');
+        $bytes = $pdf->Output('S')."\\n% /OpenAction /JavaScript";
+        Storage::disk('private')->put('quarantine/active-structural.pdf', $bytes);
+
+        $result = app(UploadSecurityService::class)->inspect('quarantine/active-structural.pdf', 'application/pdf', null, null, false);
+
+        $this->assertTrue($result['safe']);
+        $this->assertFalse($result['security_scan_requested']);
+        $this->assertSame('farast_structural_v1', $result['scan']);
+        $this->assertGreaterThan(0, $result['page_count']);
+        $this->assertStringContainsString('فقط اعتبارسنجی ساختار', $result['security_notice']);
+    }
+
     public function test_empty_files_are_rejected(): void
     {
         Storage::disk('private')->put('quarantine/empty.txt', '');
