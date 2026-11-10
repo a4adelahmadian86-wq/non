@@ -186,7 +186,9 @@ class SupportTicketService
                     (int) $ticket->id
                 );
             } catch (\Throwable $exception) {
-                \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
+        if (isset($path) && $path !== '') {
+            \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
+        }
                 throw $exception;
             }
             $payload['attachments'] = [[
