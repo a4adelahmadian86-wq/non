@@ -93,8 +93,11 @@ class ReviewProductFileAsset implements ShouldQueue
             $hashContext = hash_init('sha256');
             hash_update_stream($hashContext, $stream);
             $sha256 = hash_final($hashContext);
-            if (! filled($file->sha256) || ! hash_equals(strtolower((string) $file->sha256), strtolower($sha256))) {
+            if (filled($file->sha256) && ! hash_equals(strtolower((string) $file->sha256), strtolower($sha256))) {
                 throw new \RuntimeException('product_asset_checksum_mismatch');
+            }
+            if (! filled($file->sha256)) {
+                $file->forceFill(['sha256' => $sha256])->save();
             }
             rewind($stream);
 
