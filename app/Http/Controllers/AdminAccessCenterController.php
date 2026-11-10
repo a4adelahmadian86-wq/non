@@ -17,11 +17,19 @@ class AdminAccessCenterController extends Controller
     private const SCOPES = ['global', 'organization', 'team', 'own'];
     private const SCOPE_RANK = ['global' => 0, 'organization' => 1, 'team' => 2, 'own' => 3];
     private const SENSITIVE_DIRECT_GRANTS = [
+        // Account, document, financial, administrative and audit access must be
+        // granted through a reviewed role, never as an isolated user override.
         'access.manage', 'access.roles.manage', 'access.assign', 'access.override', 'access.audit',
-        'settings.manage', 'billing.manage', 'finance.manage', 'integrations.manage', 'voice.manage',
-        'system.audit', 'automation.manage', 'automation.run', 'store.manage',
-        'users.delete', 'users.suspend', 'organization.manage', 'team.manage',
-        'workflows.manage', 'workflows.delete', 'workflows.run',
+        'settings.manage', 'billing.view', 'billing.manage', 'finance.view', 'finance.manage',
+        'integrations.manage', 'voice.use', 'voice.manage', 'ai.use', 'ai.view', 'ai.manage', 'ocr.use',
+        'system.audit', 'audit.view', 'reports.view', 'reports.users', 'reports.team',
+        'reports.documents', 'reports.workflows', 'reports.ai', 'reports.resources',
+        'users.view', 'users.create', 'users.edit', 'users.delete', 'users.suspend',
+        'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
+        'documents.export', 'documents.share', 'projects.create',
+        'support.manage', 'store.manage', 'organization.manage', 'team.view', 'team.manage',
+        'workflows.manage', 'workflows.create', 'workflows.edit', 'workflows.delete', 'workflows.run', 'workflows.audit',
+        'automation.manage', 'automation.run', 'automation.audit',
     ];
 
     private function ensurePlatformAdmin(Request $request): void
