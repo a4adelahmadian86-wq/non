@@ -39,6 +39,21 @@ class StorageConnectionService
         return new LaravelFilesystemAdapter(new Filesystem($adapter, ['visibility' => 'private']), $adapter, ['throw' => true]);
     }
 
+    public function detectProvider(?string $endpoint): string
+    {
+        $host = strtolower((string) parse_url((string) $endpoint, PHP_URL_HOST));
+        return match (true) {
+            str_contains($host, 'amazonaws.com') => 'Amazon S3',
+            str_contains($host, 'r2.cloudflarestorage.com') => 'Cloudflare R2',
+            str_contains($host, 'digitaloceanspaces.com') => 'DigitalOcean Spaces',
+            str_contains($host, 'backblazeb2.com') => 'Backblaze B2',
+            str_contains($host, 'storage.googleapis.com') => 'Google Cloud Storage (S3 compatible)',
+            str_contains($host, 'wasabisys.com') => 'Wasabi',
+            $host !== '' => 'S3 Compatible',
+            default => 'S3 Compatible',
+        };
+    }
+
     public function verify(StorageVolume $volume): array
     {
         $disk = $this->disk($volume);
@@ -55,6 +70,7 @@ class StorageConnectionService
         }
 
         $volume->forceFill([
+            'provider' => $volume->provider ?: $this->detectProvider($volume->endpoint),
             'status' => 'healthy',
             'last_checked_at' => now(),
             'last_success_at' => now(),
