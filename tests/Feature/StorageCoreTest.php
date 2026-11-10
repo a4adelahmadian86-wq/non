@@ -184,4 +184,31 @@ class StorageCoreTest extends TestCase
         $this->assertSame('keep-in-iran', app(StorageManager::class)->get($stored['disk'], $stored['path']));
     }
 
+    public function test_public_managed_assets_are_served_without_exposing_private_files(): void
+    {
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pV8AAAAASUVORK5CYII=');
+        $stored = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('public.png', $png),
+            StorageManager::CRITICAL,
+            'test-public-asset',
+            null,
+            null,
+            null,
+            'public'
+        );
+
+        $this->get('/storage/managed/'.$stored['managed_file_id'])
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertContent($png);
+
+        $private = app(StorageManager::class)->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('private.png', $png),
+            StorageManager::CRITICAL,
+            'test-private-asset'
+        );
+
+        $this->get('/storage/managed/'.$private['managed_file_id'])->assertNotFound();
+    }
+
 }
