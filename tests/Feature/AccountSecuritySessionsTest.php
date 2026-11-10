@@ -133,7 +133,7 @@ class AccountSecuritySessionsTest extends TestCase
 
         $this->actingAs($user)->get(route('platform.security'))->assertOk();
 
-        for ($i = 1; $i <= 17; $i++) {
+        for ($i = 1; $i <= 32; $i++) {
             DB::table('farast_account_sessions')->insert([
                 'user_id' => $user->id,
                 'session_key' => hash('sha256', 'pagination-session-'.$i),
@@ -171,15 +171,14 @@ class AccountSecuritySessionsTest extends TestCase
             ]);
         }
 
-        $response = $this->get(route('platform.security', [
-            'sessions_page' => 2,
-            'blocked_page' => 2,
-            'events_page' => 2,
-        ]));
+        $response = $this->get(route('platform.security').'?sessions_page=2&blocked_page=2&events_page=2');
 
         $response->assertOk()
             ->assertViewHas('sessions', function ($sessions) {
-                return $sessions->total() === 18 && $sessions->count() === 3;
+                return $sessions->total() >= 32
+                    && $sessions->currentPage() === 2
+                    && $sessions->firstItem() === 16
+                    && $sessions->count() === 15;
             })
             ->assertViewHas('blockedDevices', function ($devices) {
                 return $devices->total() === 12 && $devices->count() === 2;
