@@ -111,6 +111,14 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    // Central storage and backup management.
+    Route::get('/storage', [\\App\\Http\\Controllers\\AdminStorageController::class, 'index'])->middleware('admin.section:storage')->name('storage.index');
+    Route::post('/storage/volumes', [\\App\\Http\\Controllers\\AdminStorageController::class, 'store'])->middleware(['admin.section:storage', 'throttle:5,10'])->name('storage.store');
+    Route::get('/storage/volumes/{volume}', [\\App\\Http\\Controllers\\AdminStorageController::class, 'show'])->middleware('admin.section:storage')->name('storage.volume');
+    Route::post('/storage/volumes/{volume}/verify', [\\App\\Http\\Controllers\\AdminStorageController::class, 'verify'])->middleware(['admin.section:storage', 'throttle:5,10'])->name('storage.verify');
+    Route::post('/storage/volumes/{volume}/toggle', [\\App\\Http\\Controllers\\AdminStorageController::class, 'toggle'])->middleware('admin.section:storage')->name('storage.toggle');
+    Route::delete('/storage/volumes/{volume}', [\\App\\Http\\Controllers\\AdminStorageController::class, 'destroy'])->middleware('admin.section:storage')->name('storage.destroy');
+
     Route::get('/discussion-reports', [ContentDiscussionController::class, 'adminReports'])->middleware('admin.section:store')->name('discussion-reports.index');
     Route::patch('/discussion-reports/{report}', [ContentDiscussionController::class, 'moderateReport'])->middleware(['admin.section:store', 'throttle:30,10'])->name('discussion-reports.moderate');
     Route::get('/discussions', [ContentDiscussionController::class, 'adminIndex'])->middleware('admin.section:store')->name('discussions.index');
