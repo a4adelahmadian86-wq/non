@@ -420,7 +420,7 @@
 .hero-quick-stats>div{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid rgba(255,255,255,.13);border-radius:13px;background:rgba(255,255,255,.07);backdrop-filter:blur(8px)}
 .hero-quick-stats span{font-size:10px;color:#a9c0e3}
 .hero-quick-stats strong{font-size:18px;color:#fff;font-weight:900;font-variant-numeric:tabular-nums}
-@media(max-width:760px){.hero-quick-stats{width:100%;max-width:none;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}.hero-quick-stats>div{padding:10px;gap:8px}.hero-quick-stats span{font-size:9px}}
+@media(max-width:760px){.hero-copy h1{font-size:20px}.hero-quick-stats{width:100%;max-width:none;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}.hero-quick-stats>div{padding:10px;gap:8px}.hero-quick-stats span{font-size:9px}}
 
 .admin-action-metrics{margin-top:-5px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .admin-action-metric{display:block;min-width:0;text-decoration:none;color:inherit;transition:transform .18s ease,box-shadow .18s ease}
