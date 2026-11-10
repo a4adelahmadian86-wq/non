@@ -93,6 +93,10 @@ class DashboardMessagingSummaryServiceTest extends TestCase
             'role' => User::ROLE_EMPLOYEE,
             'organization_id' => $organizationB,
         ]);
+        $unsupportedSameOrg = User::factory()->create([
+            'role' => User::ROLE_CUSTOMER,
+            'organization_id' => $organizationA,
+        ]);
 
         $createConversation = function (User $other, string $slug) use ($actor): int {
             $conversationId = DB::table('conversations')->insertGetId([
@@ -136,6 +140,7 @@ class DashboardMessagingSummaryServiceTest extends TestCase
 
         $createConversation($colleague, 'same-organization');
         $createConversation($foreignMember, 'foreign-organization');
+        $createConversation($unsupportedSameOrg, 'unsupported-role-same-organization');
 
         $snapshot = app(DashboardMessagingSummaryService::class)->snapshot($actor);
 
