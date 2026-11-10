@@ -58,6 +58,35 @@ class AdminStoreProductWorkflowTest extends TestCase
         ], $overrides);
     }
 
+
+    public function test_product_editor_hides_internal_identifiers_and_generates_them_automatically(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.create'))
+            ->assertOk()
+            ->assertDontSee('شناسه محصول (SKU)')
+            ->assertDontSee('نشانی اختصاصی (Slug)')
+            ->assertDontSee('نوع مجوز استفاده')
+            ->assertSee('admin-store-product-wizard.js');
+        $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
+
+        $response = $this->actingAs($admin)->post(route('admin.store.store'), [
+            'category_id' => $category->id,
+            'title' => 'محصول با شناسه خودکار',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $product = StoreProduct::query()->where('title', 'محصول با شناسه خودکار')->firstOrFail();
+        $response->assertRedirect(route('admin.store.edit', $product));
+        $this->assertNotEmpty($product->sku);
+        $this->assertStringStartsWith('PRD-', $product->sku);
+        $this->assertNotEmpty($product->slug);
+    }
+
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
     {
         $admin = $this->admin();

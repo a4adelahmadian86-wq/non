@@ -12,6 +12,7 @@ use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
 use App\Services\ProductSupervisorSnapshotBuilder;
+use App\Services\ProductRelatedProductsService;
 use App\Services\UploadSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -152,7 +153,7 @@ class AdminStoreController extends Controller
     {
         $categories = StoreCategory::where('is_active', true)->orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
-        $relatedProducts = StoreProduct::query()->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
+        $relatedProducts = collect();
 
         return view('admin.store.form', [
             'product' => new StoreProduct(['status' => 'draft', 'price_rials' => 0, 'preview_pages' => 3, 'type' => 'digital_file']),
@@ -165,20 +166,20 @@ class AdminStoreController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $data['sku'] = filled($data['sku'] ?? null) ? $data['sku'] : $this->uniqueSku();
         $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'] ?? null);
         // A new catalog item must not become public before its protected payload/curriculum exists.
         $data['status'] = 'draft';
         $data['published_at'] = null;
         $tagIds = $data['tag_ids'] ?? [];
-        $relatedIds = $data['related_product_ids'] ?? [];
         unset($data['tag_ids'], $data['related_product_ids'], $data['seo_focus_keyword'], $data['seo_secondary_keywords'], $data['ai_content_source_fingerprints'], $data['ai_content_signature'], $data['ai_content_request_id'], $data['ai_content_model'], $data['ai_content_field_evidence']);
-        $product = DB::transaction(function () use ($data, $tagIds, $relatedIds) {
+        $product = DB::transaction(function () use ($data, $tagIds) {
             $product = StoreProduct::create($data);
             if ($product->type === 'course') {
                 StoreCourse::firstOrCreate(['product_id' => $product->id]);
             }
             $product->tags()->sync($tagIds);
-            $product->related()->sync($relatedIds);
+            $product->related()->sync(app(ProductRelatedProductsService::class)->recommend($product)->pluck('id')->all());
             $this->audit('store.product.created', $product, ['type' => $product->type, 'sku' => $product->sku]);
 
             return $product;
@@ -196,7 +197,7 @@ class AdminStoreController extends Controller
         $product->load(['files.document', 'previews', 'images', 'category', 'course.sections.lessons', 'tags', 'related']);
         $categories = StoreCategory::orderBy('sort_order')->get();
         $tags = StoreTag::query()->orderBy('name')->get();
-        $relatedProducts = StoreProduct::query()->where('id', '!=', $product->id)->where('status', '!=', 'archived')->orderBy('title')->get(['id', 'title', 'sku', 'type']);
+        $relatedProducts = app(ProductRelatedProductsService::class)->recommend($product);
         $aiContentReadiness = $contentGenerator->readiness($product);
 
         $hasSafePrimaryFile = $product->files->contains(fn ($file) => $file->purpose === 'product_download'
@@ -255,7 +256,6 @@ class AdminStoreController extends Controller
         }
         $data = $this->validated($request, $product);
         $tagIds = $data['tag_ids'] ?? [];
-        $relatedIds = $data['related_product_ids'] ?? [];
         $aiTagNames = $request->validate([
             'ai_content_tag_names' => 'nullable|array|max:10',
             'ai_content_tag_names.*' => 'required|string|max:80',
@@ -276,7 +276,7 @@ class AdminStoreController extends Controller
             $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'], $product->id);
         }
 
-        DB::transaction(function () use ($product, $data, $tagIds, $relatedIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
+        DB::transaction(function () use ($product, $data, $tagIds, $aiTagNames, $snapshotBuilder, $publicationReadiness, $contentGenerator, $provenance, $submittedFingerprints, $submittedSignature, $submittedFieldEvidence) {
             $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             if ($provenance !== null && $lockedProduct->type === 'course') {
                 $course = $lockedProduct->course()->lockForUpdate()->first();
@@ -425,6 +425,7 @@ class AdminStoreController extends Controller
             }
             $lockedProduct->update($data);
             $lockedProduct->tags()->sync($tagIds);
+            $lockedProduct->related()->sync(app(ProductRelatedProductsService::class)->recommend($lockedProduct)->pluck('id')->all());
             if ($provenance !== null) {
                 $lockedProduct->refresh();
                 $freshFingerprints = $contentGenerator->currentSourceFingerprints($lockedProduct);
@@ -432,7 +433,7 @@ class AdminStoreController extends Controller
                 $freshMetadata['ai_content']['source_fingerprints'] = $freshFingerprints;
                 $lockedProduct->update(['metadata' => $freshMetadata]);
             }
-            $lockedProduct->related()->sync($relatedIds);
+            
             $this->audit('store.product.updated', $lockedProduct, [
                 'type' => $lockedProduct->type,
                 'status' => $lockedProduct->status,
@@ -1244,7 +1245,7 @@ class AdminStoreController extends Controller
             'category_id' => 'required|exists:store_categories,id',
             'title' => 'required|string|max:220',
             'slug' => 'nullable|string|max:240',
-            'sku' => 'required|string|max:80|unique:store_products,sku,'.($product?->id ?? 'NULL'),
+            'sku' => 'nullable|string|max:80|unique:store_products,sku,'.($product?->id ?? 'NULL'),
             'type' => 'required|in:digital_file,course',
             'short_description' => 'nullable|string|max:2000',
             'description' => 'nullable|string|max:20000',
@@ -1268,8 +1269,6 @@ class AdminStoreController extends Controller
             'ai_content_field_evidence' => 'nullable|string|max:12000',
             'tag_ids' => 'sometimes|array|max:30',
             'tag_ids.*' => 'integer|distinct|exists:store_tags,id',
-            'related_product_ids' => 'sometimes|array|max:12',
-            'related_product_ids.*' => 'integer|distinct|exists:store_products,id',
             'ai_supervisor.enabled' => 'nullable|boolean',
             'ai_supervisor.mode' => 'nullable|in:suggest,review_gate',
             'ai_supervisor.checks.content' => 'nullable|boolean',
@@ -1318,12 +1317,20 @@ class AdminStoreController extends Controller
             ]);
         }
         $data['tag_ids'] = $request->input('tag_ids', []);
-        $data['related_product_ids'] = array_values(array_filter($request->input('related_product_ids', []), fn ($id) => ! $product || (int) $id !== (int) $product->id));
         $data['featured'] = $request->boolean('featured');
         $data['sort_order'] = $data['sort_order'] ?? 0;
         $data['preview_pages'] = $data['preview_pages'] ?? 3;
 
         return $data;
+    }
+
+    private function uniqueSku(): string
+    {
+        do {
+            $sku = 'PRD-'.Str::upper(Str::random(12));
+        } while (StoreProduct::query()->where('sku', $sku)->exists());
+
+        return $sku;
     }
 
     private function uniqueSlug(string $title, ?string $slug = null, ?int $ignoreId = null): string
