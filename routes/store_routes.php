@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminCourseController;
 use App\Http\Controllers\AdminProductSupervisorController;
 use App\Http\Controllers\AdminStoreController;
+use App\Http\Controllers\AdminStoreTaxonomyController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\StoreCourseLearningController;
@@ -80,6 +81,10 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::delete('/store/{product}/course/lessons/{lesson}/resources/{file}',[AdminCourseController::class,'deleteResource'])->name('store.course.resources.delete');
     Route::post('/store/{product}/course/lessons/{lesson}/resources/{file}/review',[AdminProductSupervisorController::class,'reviewCourseResource'])->middleware('throttle:5,10')->name('store.course.resources.review');
 
-    Route::post('/store/categories',[AdminStoreController::class,'storeCategory'])->name('store.categories.store');
-    Route::post('/store/tags',[AdminStoreController::class,'storeTag'])->name('store.tags.store');
+    Route::get('/store/taxonomy', [AdminStoreTaxonomyController::class, 'index'])->name('store.taxonomy.index');
+    Route::post('/store/categories', [AdminStoreTaxonomyController::class, 'storeCategory'])->name('store.categories.store');
+    Route::put('/store/categories/{category}', [AdminStoreTaxonomyController::class, 'updateCategory'])->name('store.taxonomy.categories.update');
+    Route::post('/store/tags', [AdminStoreTaxonomyController::class, 'storeTag'])->name('store.tags.store');
+    Route::put('/store/tags/{tag}', [AdminStoreTaxonomyController::class, 'updateTag'])->name('store.taxonomy.tags.update');
+    Route::delete('/store/tags/{tag}', [AdminStoreTaxonomyController::class, 'destroyTag'])->name('store.taxonomy.tags.destroy');
 });
