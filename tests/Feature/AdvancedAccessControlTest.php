@@ -315,9 +315,10 @@ class AdvancedAccessControlTest extends TestCase
             'status' => 'active',
         ]);
 
-        $route = new \Illuminate\Routing\Route('GET', '/resource-check', fn () => null);
-        $route->setParameter('resource', $resource);
         $request = \Illuminate\Http\Request::create('/resource-check');
+        $route = new \Illuminate\Routing\Route('GET', '/resource-check', fn () => null);
+        $route->bind($request);
+        $route->setParameter('resource', $resource);
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
@@ -337,12 +338,14 @@ class AdvancedAccessControlTest extends TestCase
         $authorization = app(AuthorizationService::class);
 
         $this->actingAs($manager);
-        request()->attributes->set('farast.scope', 'organization');
+        $request = request();
+        $request->setUserResolver(fn () => $manager);
+        $request->attributes->set('farast.scope', 'organization');
         $context = ['owner_id' => $otherUser->id, 'organization_id' => $organization->id];
 
         $this->assertTrue($authorization->allowsFor($manager, 'documents.view', $context));
 
-        request()->attributes->set('farast.scope', 'own');
+        $request->attributes->set('farast.scope', 'own');
         $this->assertFalse($authorization->allowsFor($manager, 'documents.view', $context));
     }
 
@@ -506,7 +509,7 @@ class AdvancedAccessControlTest extends TestCase
     public function test_console_user_lists_apply_custom_team_scope_to_each_record(): void
     {
         $organization = Organization::create(['name' => 'Console Scope Org', 'slug' => 'console-scope-org', 'status' => 'active']);
-        $manager = $this->user('09140000121', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $manager = $this->user('09140000121', User::ROLE_TEAM_SUPERVISOR, $organization->id);
         $otherSupervisor = $this->user('09140000122', User::ROLE_TEAM_SUPERVISOR, $organization->id);
         $teamA = Team::create([
             'organization_id' => $organization->id,
@@ -534,7 +537,7 @@ class AdvancedAccessControlTest extends TestCase
         $this->assign($manager, $roleId, 'team', $teamA->id);
 
         $this->actingAs($manager);
-        request()->attributes->set('farast.scope', 'organization');
+        request()->attributes->set('farast.scope', 'team');
         request()->attributes->set('farast.section_permission', 'users.view');
 
         $visibleIds = app(AdminConsoleService::class)->visibleUserIds($manager);
