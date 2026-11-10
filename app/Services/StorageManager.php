@@ -67,7 +67,7 @@ class StorageManager
             $mime = $config->get('mimetype');
             if (! is_string($mime) || $mime === '') {
                 $sample = fread($temporary, 8192) ?: '';
-                $mime = (new \\finfo(FILEINFO_MIME_TYPE))->buffer($sample) ?: 'application/octet-stream';
+                $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($sample) ?: 'application/octet-stream';
                 rewind($temporary);
             }
             $this->persist($path, $temporary, $size, $checksum, $config, $mime);
@@ -551,7 +551,7 @@ class StorageManager
 
     private function normalize(string $path): string
     {
-        $path = str_replace('\\', '/', trim($path));
+        $path = str_replace('\', '/', trim($path));
         $path = ltrim($path, '/');
         if ($path === '' || in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true) || str_contains($path, "\0")) {
             throw new RuntimeException('Invalid managed storage path.');
@@ -564,8 +564,11 @@ class StorageManager
         return StorageManagedFile::query()->with('volume')->where('logical_path', $this->normalize($path))->where('status', 'active')->first();
     }
 
-    public function exists(string $path): bool
+    public function exists(string $path, ?string $legacyPath = null): bool
     {
+        if ($legacyPath !== null) {
+            return $path === 'managed' ? $this->exists($legacyPath) : \Illuminate\Support\Facades\Storage::disk($path)->exists($legacyPath);
+        }
         $record = $this->record($path);
         if (! $record) {
             return \Illuminate\Support\Facades\Storage::disk('private')->exists($path);
@@ -588,6 +591,14 @@ class StorageManager
         return false;
     }
 
+    public function get(string $path, ?string $legacyPath = null): string
+    {
+        if ($legacyPath !== null) {
+            return $path === 'managed' ? $this->read($legacyPath) : (string) \Illuminate\Support\Facades\Storage::disk($path)->get($legacyPath);
+        }
+        return $this->read($path);
+    }
+
     public function read(string $path): string
     {
         $record = $this->record($path);
@@ -605,8 +616,11 @@ class StorageManager
         }
     }
 
-    public function readStream(string $path)
+    public function readStream(string $path, ?string $legacyPath = null)
     {
+        if ($legacyPath !== null) {
+            return $path === 'managed' ? $this->readStream($legacyPath) : \Illuminate\Support\Facades\Storage::disk($path)->readStream($legacyPath);
+        }
         $record = $this->record($path);
         if (! $record) {
             return \Illuminate\Support\Facades\Storage::disk('private')->readStream($path);
@@ -622,8 +636,16 @@ class StorageManager
         }
     }
 
-    public function delete(string $path): void
+    public function delete(string $path, ?string $legacyPath = null): void
     {
+        if ($legacyPath !== null) {
+            if ($path === 'managed') {
+                $this->delete($legacyPath);
+            } else {
+                \Illuminate\Support\Facades\Storage::disk($path)->delete($legacyPath);
+            }
+            return;
+        }
         $record = $this->record($path);
         if (! $record) {
             \Illuminate\Support\Facades\Storage::disk('private')->delete($path);
