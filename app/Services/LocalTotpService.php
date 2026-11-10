@@ -36,22 +36,31 @@ class LocalTotpService
 
     public function verify(string $secret, string $code, ?int $timestamp = null, int $window = 1): bool
     {
-        $code = preg_replace('/\s+/', '', $code);
-        if (! preg_match('/^\d{6}$/', $code)) {
-            return false;
+        return $this->matchingCounter($secret, $code, $timestamp, $window) !== null;
+    }
+
+    public function matchingCounter(string $secret, string $code, ?int $timestamp = null, int $window = 1): ?int
+    {
+        $code = preg_replace('/\\s+/', '', $code);
+        if (! preg_match('/^\\d{6}$/', $code)) {
+            return null;
         }
 
         $timestamp ??= time();
         $counter = intdiv($timestamp, 30);
 
         for ($offset = -max(0, $window); $offset <= max(0, $window); $offset++) {
-            $expected = $this->codeAtCounter($secret, $counter + $offset);
+            $candidate = $counter + $offset;
+            if ($candidate < 0) {
+                continue;
+            }
+            $expected = $this->codeAtCounter($secret, $candidate);
             if (hash_equals($expected, $code)) {
-                return true;
+                return $candidate;
             }
         }
 
-        return false;
+        return null;
     }
 
     public function codeAtCounter(string $secret, int $counter): string
