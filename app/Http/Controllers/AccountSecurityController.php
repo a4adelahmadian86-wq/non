@@ -104,24 +104,30 @@ class AccountSecurityController extends Controller
         }
 
         $now = now();
-        DB::table('farast_blocked_devices')->updateOrInsert(
-            ['user_id' => $request->user()->id, 'device_key_hash' => $record->device_key_hash],
-            [
-                'device_label' => $record->device_label,
-                'ip_address' => $record->ip_address,
-                'user_agent' => $record->user_agent,
-                'blocked_at' => $now,
-                'unblocked_at' => null,
-                'updated_at' => $now,
-                'created_at' => $now,
-            ]
-        );
+        DB::transaction(function () use ($request, $record, $now) {
+            DB::table('farast_blocked_devices')->updateOrInsert(
+                ['user_id' => $request->user()->id, 'device_key_hash' => $record->device_key_hash],
+                [
+                    'device_label' => $record->device_label,
+                    'ip_address' => $record->ip_address,
+                    'user_agent' => $record->user_agent,
+                    'blocked_at' => $now,
+                    'unblocked_at' => null,
+                    'updated_at' => $now,
+                    'created_at' => $now,
+                ]
+            );
 
-        DB::table('farast_account_sessions')
-            ->where('user_id', $request->user()->id)
-            ->where('device_key_hash', $record->device_key_hash)
-            ->whereNull('revoked_at')
-            ->update(['revoked_at' => $now, 'updated_at' => $now]);
+            $deviceSessions = DB::table('farast_account_sessions')
+                ->where('user_id', $request->user()->id)
+                ->where('device_key_hash', $record->device_key_hash)
+                ->whereNull('revoked_at')
+                ->get();
+
+            foreach ($deviceSessions as $deviceSession) {
+                $this->revokeRecord($deviceSession);
+            }
+        });
 
         $this->recordEvent($request, 'device_blocked', ['device' => $record->device_label]);
         $this->notify($request->user(), 'security_device_blocked', 'دستگاه از ورود به حساب منع شد', 'دستگاه انتخاب‌شده از نشست‌های فعال خارج شد و تا زمانی که آن را از فهرست دستگاه‌های مسدودشده آزاد نکنید، ورود آن با شناسه همین مرورگر پذیرفته نمی‌شود.', ['url' => route('platform.security')]);
