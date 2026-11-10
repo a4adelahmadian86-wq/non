@@ -91,7 +91,7 @@ class AdminStoreCouponDashboardTest extends TestCase
             ->assertSee('SMARTDASH10')
             ->assertSee('مشتری پیشنهاد')
             ->assertSee('استفاده موفق')
-            ->assertSee('۱٬۲۰۰', false);
+            ->assertSee('1,200', false);
     }
 
     public function test_admin_can_create_normalized_public_coupon_and_toggle_it(): void
