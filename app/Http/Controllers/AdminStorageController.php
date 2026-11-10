@@ -97,7 +97,7 @@ class AdminStorageController extends Controller
         ]);
 
         try {
-            $connections->verify($volume);
+            $connections->verify($volume, true);
             return redirect()->route('admin.storage.index')->with('status', 'اتصال با موفقیت بررسی و ثبت شد.');
         } catch (Throwable $e) {
             $volume->update(['status' => 'error', 'last_checked_at' => now(), 'metadata' => ['last_error' => mb_substr($e->getMessage(), 0, 500)]]);
