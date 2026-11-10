@@ -3,45 +3,29 @@
 <section class="store-page" dir="rtl">
   <div class="store-container">
 
-    <div class="store-hero store-hero--market">
-      <div>
-        <div class="store-hero-kicker">کتابخانه و فایل دیجیتال فراست</div>
-        <h1>بخوان، ببین، بعد بخر</h1>
-        <p>نمونه را ببینید، با آگاهی انتخاب کنید و پس از خرید، فایل‌تان را در کتابخانه شخصی فراست در دسترس داشته باشید.</p>
-        <form method="get" action="{{ route('store') }}" class="store-search">
-          <input name="q" value="{{ $q }}" placeholder="جستجوی عنوان، موضوع یا فایل…" aria-label="جستجوی فروشگاه">
+    <div class="store-hero store-hero--market store-hero--focused">
+      <div class="store-hero-content">
+        <div class="store-hero-kicker">فروشگاه فراست</div>
+        <h1>فایل‌ها و دوره‌های دیجیتال</h1>
+        <p>محصول موردنظرتان را جستجو کنید، جزئیات و پیش‌نمایش آن را ببینید و سپس تصمیم بگیرید.</p>
+        <form method="get" action="{{ route('store') }}" class="store-search" role="search">
+          <input name="q" value="{{ $q }}" placeholder="نام محصول یا موضوع موردنظر…" aria-label="جستجوی محصولات فروشگاه">
           @if($category)<input type="hidden" name="category" value="{{ $category }}">@endif
           @if($sort !== 'newest')<input type="hidden" name="sort" value="{{ $sort }}">@endif
           @if($price !== 'all')<input type="hidden" name="price" value="{{ $price }}">@endif
           @if($type !== 'all')<input type="hidden" name="type" value="{{ $type }}">@endif
-          <button type="submit"><i class="fa-solid fa-magnifying-glass"></i> جستجو</button>
+          <button type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> جستجو</button>
         </form>
         <div class="store-hero-links">
-          <a href="{{ route('cart') }}"><i class="fa-solid fa-bag-shopping"></i> سبد خرید</a>
+          <a href="{{ route('cart') }}"><i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> سبد خرید</a>
           @auth
-            <a href="{{ route('wishlist') }}"><i class="fa-regular fa-heart"></i> علاقه‌مندی</a>
-            <a href="{{ route('library') }}"><i class="fa-solid fa-book"></i> کتابخانه من</a>
+            <a href="{{ route('library') }}"><i class="fa-solid fa-book" aria-hidden="true"></i> کتابخانه من</a>
+            <a href="{{ route('wishlist') }}"><i class="fa-regular fa-heart" aria-hidden="true"></i> علاقه‌مندی‌ها</a>
           @else
-            <a href="{{ route('login') }}"><i class="fa-solid fa-right-to-bracket"></i> ورود برای خرید</a>
+            <a href="{{ route('login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> ورود</a>
           @endauth
         </div>
       </div>
-      <div class="store-hero-visual">
-        <img src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1000&q=85" alt="قفسه کتاب‌ها و منابع دیجیتال" fetchpriority="high">
-        <div class="store-hero-visual-caption"><i class="fa-solid fa-sparkles"></i><span><strong>کتابخانه‌ای برای کشف</strong><small>دانلود و مطالعه در فضای شخصی شما</small></span></div>
-        <div class="store-hero-stats">
-          <div><strong>{{ $catalogCount }}</strong><span>محصول</span></div>
-          <div><strong>{{ $categories->count() }}</strong><span>دسته</span></div>
-          <div><strong>{{ $freeCount }}</strong><span>رایگان</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="store-feature-row" aria-label="مزیت‌های فروشگاه فراست">
-      <div class="store-feature"><i class="fa-solid fa-eye"></i><strong>پیش‌نمایش پیش از خرید</strong><span>نمونه واقعی فایل را بررسی کنید.</span></div>
-      <div class="store-feature"><i class="fa-solid fa-cloud-arrow-down"></i><strong>دریافت آسان</strong><span>محصولات خریداری‌شده در کتابخانه شما.</span></div>
-      <div class="store-feature"><i class="fa-solid fa-heart"></i><strong>فهرست شخصی</strong><span>موارد دلخواه را برای بعد نگه دارید.</span></div>
-      <div class="store-feature"><i class="fa-solid fa-shield-halved"></i><strong>خرید شفاف</strong><span>قیمت، مجوز و توضیحات روشن.</span></div>
     </div>
 
     @if(session('status'))
@@ -100,55 +84,9 @@
       </div>
     </form>
 
-    @if(!$isBrowsing)
-      @if($featured->count())
-        <section class="store-shelf">
-          <div class="store-shelf-head"><h2>ویژه و پیشنهادی</h2><span>منتخب فراست</span></div>
-          <div class="store-shelf-track">
-            @foreach($featured as $product)
-              @include('store.partials.card', ['product' => $product])
-            @endforeach
-          </div>
-        </section>
-      @endif
-
-      @if($free->count())
-        <section class="store-shelf">
-          <div class="store-shelf-head"><h2>رایگان‌ها</h2><span>بدون پرداخت</span></div>
-          <div class="store-shelf-track">
-            @foreach($free as $product)
-              @include('store.partials.card', ['product' => $product])
-            @endforeach
-          </div>
-        </section>
-      @endif
-
-      @if($latest->count())
-        <section class="store-shelf">
-          <div class="store-shelf-head"><h2>تازه‌ها</h2><span>آخرین انتشار</span></div>
-          <div class="store-shelf-track">
-            @foreach($latest as $product)
-              @include('store.partials.card', ['product' => $product])
-            @endforeach
-          </div>
-        </section>
-      @endif
-
-      @if($recent->count())
-        <section class="store-shelf">
-          <div class="store-shelf-head"><h2>اخیراً دیده‌اید</h2><span>ادامه مرور</span></div>
-          <div class="store-shelf-track">
-            @foreach($recent as $product)
-              @include('store.partials.card', ['product' => $product])
-            @endforeach
-          </div>
-        </section>
-      @endif
-    @endif
-
-    <section class="store-shelf store-shelf--grid">
+    <section class="store-shelf store-shelf--grid store-catalog">
       <div class="store-shelf-head">
-        <h2>{{ $q ? 'نتایج جستجو' : ($category ? 'دسته انتخاب‌شده' : 'همه محصولات') }}</h2>
+        <h2>{{ $q ? 'نتایج جستجو' : ($category ? 'محصولات این دسته' : 'محصولات فروشگاه') }}</h2>
         <span>{{ $products->total() }} مورد</span>
       </div>
       <div class="store-product-grid">
