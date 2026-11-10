@@ -10,7 +10,7 @@ class StorageManagedFile extends Model
     protected $fillable = [
         'storage_volume_id', 'logical_path', 'drive_key', 'file_key', 'original_name', 'mime',
         'size_bytes', 'checksum', 'classification', 'source_module', 'source_type',
-        'source_id', 'product_id', 'owner_user_id', 'visibility', 'status', 'replicated_to_volume_id', 'metadata',
+        'source_id', 'product_id', 'owner_user_id', 'visibility', 'status', 'replicated_to_volume_id', 'replica_file_key', 'metadata',
     ];
 
     protected function casts(): array
