@@ -85,7 +85,7 @@ class StoreCartService
     {
         $code = mb_strtoupper(trim($code));
         if ($code === '' || mb_strlen($code) > 40) {
-            throw new \\RuntimeException('کد تخفیف را به‌درستی وارد کنید.');
+            throw new \RuntimeException('کد تخفیف را به‌درستی وارد کنید.');
         }
         $coupon = StoreCoupon::query()
             ->whereRaw('UPPER(code) = ?', [$code])
@@ -103,6 +103,11 @@ class StoreCartService
         }
         if ($coupon->max_uses !== null && $coupon->used_count >= $coupon->max_uses) {
             throw new \RuntimeException('ظرفیت استفاده از این کد تمام شده است.');
+        }
+        if (! in_array($coupon->type, ['percent', 'fixed'], true)
+            || (int) $coupon->value <= 0
+            || ($coupon->type === 'percent' && (int) $coupon->value > 100)) {
+            throw new \RuntimeException('تنظیمات این کد تخفیف معتبر نیست.');
         }
 
         $cart = $this->current($request);
