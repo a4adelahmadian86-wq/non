@@ -11,6 +11,13 @@ class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
 
+    private const EVENT_SCOPE_PERMISSIONS = [
+        'document.saved' => 'documents.view',
+        'ticket.created' => 'support.manage',
+        'order.paid' => 'billing.view',
+        'order.deposit_paid' => 'billing.view',
+    ];
+
     public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false): int
     {
         $runId = DB::table('farast_workflow_runs')->insertGetId([
@@ -237,8 +244,8 @@ class WorkflowEngine
             // Freeze the matching set once. An event with no matching workflow must
             // not unexpectedly start running a workflow created hours later.
             if (! $hasMappings && empty($lockedEvent->matched_at)) {
+                $subject = User::query()->find((int) $lockedEvent->user_id);
                 $workflows = DB::table('farast_workflows')
-                    ->where('user_id', (int) $lockedEvent->user_id)
                     ->where('trigger_type', $lockedEvent->event_type)
                     ->where('enabled', true)
                     ->orderBy('id')
@@ -253,7 +260,12 @@ class WorkflowEngine
                         ->lockForUpdate()
                         ->first();
 
-                    if (! $current || ! $current->enabled) {
+                    if (! $current || ! $current->enabled || ! $subject) {
+                        continue;
+                    }
+
+                    $workflowOwner = User::query()->find((int) $current->user_id);
+                    if (! $workflowOwner || ! $this->workflowCanProcessEvent($workflowOwner, $subject, (string) $lockedEvent->event_type)) {
                         continue;
                     }
 
@@ -368,6 +380,52 @@ class WorkflowEngine
         ]);
 
         return $completedNow;
+    }
+
+    private function workflowCanProcessEvent(User $owner, User $subject, string $eventType): bool
+    {
+        $authorization = app(AuthorizationService::class);
+        $canRun = $authorization->allows($owner, 'workflows.run')
+            || $authorization->allows($owner, 'workflows.manage')
+            || $authorization->allows($owner, 'automation.run')
+            || $authorization->allows($owner, 'automation.manage');
+
+        if (! $canRun) {
+            return false;
+        }
+
+        // A user's own workflow can process their own event. Cross-user events
+        // require the explicit domain permission and the full record scope.
+        if ((int) $owner->id === (int) $subject->id) {
+            return true;
+        }
+
+        $permission = self::EVENT_SCOPE_PERMISSIONS[$eventType] ?? null;
+        if (! $permission) {
+            return false;
+        }
+
+        $teamIds = [];
+        if ($subject->organization_id) {
+            $teamIds = $subject->teams()
+                ->where('teams.organization_id', $subject->organization_id)
+                ->pluck('teams.id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $supervisedTeamIds = Team::query()
+                ->where('supervisor_id', $subject->id)
+                ->where('organization_id', $subject->organization_id)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $teamIds = array_values(array_unique(array_merge($teamIds, $supervisedTeamIds)));
+        }
+
+        return $authorization->allowsFor($owner, $permission, [
+            'owner_id' => (int) $subject->id,
+            'organization_id' => $subject->organization_id,
+            'team_ids' => $teamIds,
+        ]);
     }
 
     private function step(array $step, array $context, int $ownerId, int $runId, int $stepIndex): void
