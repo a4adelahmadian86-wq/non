@@ -140,7 +140,7 @@ class StorageManager
                         'replica_file_key' => null,
                         'visibility' => 'private',
                         'status' => 'active',
-                        'metadata' => ['fallback' => (bool) data_get($volume->metadata, 'local_fallback', false)],
+                        'metadata' => ['fallback' => (bool) data_get($volume->metadata, 'local_fallback', false), 'replication_status' => $replicationRequired ? 'queued' : 'not_required'],
                     ]);
                 }
                 $volume->increment('used_bytes', $size);
@@ -254,6 +254,169 @@ class StorageManager
             $fallback->increment('reserved_files');
 
             return $fallback;
+        });
+    }
+
+    private function replicationRequired(string $classification): bool
+    {
+        $requiredCopies = $classification === 'critical'
+            ? (int) config('storage.replication.critical_copies', 2)
+            : (int) config('storage.replication.non_critical_copies', 1);
+
+        return $requiredCopies > 1;
+    }
+
+    public function replicate(int $fileId): bool
+    {
+        $record = StorageManagedFile::query()->with(['volume', 'replicaVolume'])->findOrFail($fileId);
+        if ($record->status !== 'active' || ! $record->volume) {
+            return false;
+        }
+
+        if ($record->replicated_to_volume_id && $record->replicaVolume?->status === 'healthy' && $record->replica_file_key) {
+            return true;
+        }
+
+        $target = $this->reserveReplicaVolume($record);
+        if (! $target) {
+            $metadata = (array) ($record->metadata ?? []);
+            $metadata['replication_status'] = 'waiting_for_replica';
+            $record->update(['metadata' => $metadata]);
+            return false;
+        }
+
+        $replicaKey = 'replicas/'.$record->id.'/'.Str::uuid().'-'.basename($record->file_key);
+        $reserved = true;
+        try {
+            $sourceDisk = $this->connections->disk($record->volume);
+            $sourceStream = $sourceDisk->readStream($record->file_key);
+            if (! is_resource($sourceStream)) {
+                throw new RuntimeException('Primary storage object cannot be opened for replication.');
+            }
+
+            $temporary = tmpfile();
+            if (! is_resource($temporary)) {
+                fclose($sourceStream);
+                throw new RuntimeException('Unable to allocate replication stream.');
+            }
+            $hash = hash_init('sha256');
+            $size = 0;
+            try {
+                while (! feof($sourceStream)) {
+                    $chunk = fread($sourceStream, 1024 * 1024);
+                    if ($chunk === false) {
+                        throw new RuntimeException('Unable to read primary object during replication.');
+                    }
+                    if ($chunk === '') continue;
+                    $size += strlen($chunk);
+                    hash_update($hash, $chunk);
+                    fwrite($temporary, $chunk);
+                }
+            } finally {
+                fclose($sourceStream);
+            }
+
+            $checksum = hash_final($hash);
+            if ($size !== $record->size_bytes || ! hash_equals((string) $record->checksum, $checksum)) {
+                fclose($temporary);
+                throw new RuntimeException('Primary object checksum mismatch during replication.');
+            }
+            rewind($temporary);
+
+            $targetDisk = $this->connections->disk($target);
+            $targetDisk->writeStream($replicaKey, $temporary, ['visibility' => 'private', 'mimetype' => $record->mime]);
+            fclose($temporary);
+
+            if ((int) $targetDisk->size($replicaKey) !== $size) {
+                throw new RuntimeException('Replica object size verification failed.');
+            }
+            $replicaStream = $targetDisk->readStream($replicaKey);
+            if (! is_resource($replicaStream)) {
+                throw new RuntimeException('Replica object cannot be read back for verification.');
+            }
+            $replicaHash = hash_init('sha256');
+            try {
+                hash_update_stream($replicaHash, $replicaStream);
+            } finally {
+                fclose($replicaStream);
+            }
+            if (! hash_equals($checksum, hash_final($replicaHash))) {
+                throw new RuntimeException('Replica object checksum verification failed.');
+            }
+
+            DB::transaction(function () use ($record, $target, $replicaKey, $size) {
+                $locked = StorageManagedFile::query()->whereKey($record->id)->lockForUpdate()->firstOrFail();
+                if ($locked->status !== 'active' || $locked->storage_volume_id !== $record->storage_volume_id
+                    || ! hash_equals((string) $locked->checksum, (string) $record->checksum)) {
+                    throw new RuntimeException('Managed file changed while its replica was being written.');
+                }
+                $locked->update([
+                    'replicated_to_volume_id' => $target->id,
+                    'replica_file_key' => $replicaKey,
+                    'metadata' => array_merge((array) ($locked->metadata ?? []), [
+                        'replication_status' => 'ready',
+                        'replication_verified_at' => now()->toIso8601String(),
+                    ]),
+                ]);
+                $target->increment('used_bytes', $size);
+                $target->decrement('reserved_bytes', $size);
+                $target->decrement('reserved_files');
+            });
+            $reserved = false;
+
+            return true;
+        } catch (Throwable $exception) {
+            if ($reserved) {
+                $target->decrement('reserved_bytes', $record->size_bytes);
+                $target->decrement('reserved_files');
+            }
+            try {
+                $this->connections->disk($target)->delete($replicaKey);
+            } catch (Throwable) {
+                // Keep the original replication failure.
+            }
+            $fresh = $record->fresh();
+            if ($fresh) {
+                $metadata = (array) ($fresh->metadata ?? []);
+                $metadata['replication_status'] = 'failed';
+                $metadata['replication_error'] = mb_substr($exception->getMessage(), 0, 500);
+                $fresh->update(['metadata' => $metadata]);
+            }
+            throw $exception;
+        }
+    }
+
+    private function reserveReplicaVolume(StorageManagedFile $record): ?StorageVolume
+    {
+        $primary = $record->volume;
+        if (! $primary) return null;
+
+        return DB::transaction(function () use ($record, $primary) {
+            $query = StorageVolume::query()
+                ->where('drive_key', $record->drive_key)
+                ->where('id', '!=', $primary->id)
+                ->where('is_active', true)
+                ->where('status', 'healthy')
+                ->withCount(['files' => fn ($query) => $query->where('status', 'active')])
+                ->orderBy('priority')
+                ->orderBy('used_bytes');
+
+            if ($primary->provider) {
+                $query->where(function ($builder) use ($primary) {
+                    $builder->whereNull('provider')->orWhere('provider', '!=', $primary->provider);
+                });
+            }
+
+            foreach ($query->lockForUpdate()->get() as $volume) {
+                if ($volume->max_file_bytes !== null && $record->size_bytes > $volume->max_file_bytes) continue;
+                if ($volume->capacity_bytes !== null && ($volume->used_bytes + $volume->reserved_bytes + $record->size_bytes) > $volume->capacity_bytes) continue;
+                if ($volume->file_limit !== null && ($volume->files_count + $volume->reserved_files + 1) > $volume->file_limit) continue;
+                $volume->increment('reserved_bytes', $record->size_bytes);
+                $volume->increment('reserved_files');
+                return $volume;
+            }
+
+            return null;
         });
     }
 
