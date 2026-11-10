@@ -11,6 +11,7 @@ use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
 use App\Models\User;
+use App\Models\Wallet;
 use App\Services\EmailService;
 use App\Services\ZarinpalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -179,6 +180,56 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             'zarinpal_authority' => 'AUTH-SNAPSHOT',
         ])->get('/checkout/zarinpal/callback?Authority=AUTH-SNAPSHOT&Status=OK')
             ->assertRedirect(route('library'));
+    }
+
+
+    public function test_wallet_payment_uses_the_exact_checkout_price_and_file_snapshot(): void
+    {
+        Storage::fake('private');
+        $user = $this->makeUser('09123456788');
+        [$product, $purchasedFile] = $this->makeProduct('wallet-price-snapshot');
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+
+        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+        $order = Order::query()->latest('id')->firstOrFail();
+        $originalTotal = (int) $order->total_rials;
+        $item = StoreOrderItem::query()->where('order_id', $order->id)->firstOrFail();
+
+        // Catalog changes after checkout must not silently change the confirmed order price.
+        $product->update(['price_rials' => 250000]);
+        Wallet::create(['user_id' => $user->id, 'balance_rials' => $originalTotal]);
+
+        $email = Mockery::mock(EmailService::class);
+        $email->shouldReceive('sendOrderPaid')->once()->andReturnNull();
+        app()->instance(EmailService::class, $email);
+
+        $this->post(route('checkout.wallet', $order), ['accept_terms' => '1'])
+            ->assertRedirect(route('store'));
+
+        $this->assertDatabaseHas('wallets', [
+            'user_id' => $user->id,
+            'balance_rials' => 0,
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'gateway' => 'wallet',
+            'amount_rials' => $originalTotal,
+            'status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'reference_type' => 'store_order',
+            'reference_id' => $order->id,
+            'amount_rials' => $originalTotal,
+        ]);
+
+        $paidOrder = $order->fresh();
+        $this->assertSame($originalTotal, (int) $paidOrder->total_rials);
+        $this->assertSame((int) $item->unit_price_rials, (int) $item->fresh()->unit_price_rials);
+        $libraryItem = StoreLibraryItem::query()->where('order_id', $order->id)->firstOrFail();
+        $this->assertSame($purchasedFile->id, (int) $libraryItem->product_file_id);
     }
 
     public function test_zarinpal_callback_rejects_an_authority_not_bound_to_the_order(): void
