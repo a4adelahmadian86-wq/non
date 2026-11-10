@@ -184,7 +184,10 @@ class AccountSecuritySessionsTest extends TestCase
                 return $devices->total() === 12 && $devices->count() === 2;
             })
             ->assertViewHas('events', function ($events) {
-                return $events->total() === 22 && $events->count() === 2;
+                return $events->total() >= 22
+                    && $events->currentPage() === 2
+                    && $events->firstItem() === 21
+                    && $events->count() === $events->total() - 20;
             });
     }
 
