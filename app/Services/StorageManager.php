@@ -108,8 +108,8 @@ class StorageManager
                         'visibility' => 'private',
                         'metadata' => ['fallback' => (bool) data_get($volume->metadata, 'local_fallback', false)],
                     ]);
-                    if ($oldVolumeId && $oldVolumeId !== $volume->id) {
-                        StorageVolume::whereKey($oldVolumeId)->decrement('used_bytes', (int) $existing->getOriginal('size_bytes'));
+                    if ($oldVolumeId) {
+                        StorageVolume::whereKey($oldVolumeId)->decrement('used_bytes', $oldSize);
                     }
                 } else {
                     StorageManagedFile::create([
