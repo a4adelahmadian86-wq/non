@@ -114,6 +114,10 @@ class AdminStoreCouponController extends Controller
 
         $canManageGlobalCoupons = $visibleIds === null;
         $monthlyBudgetCap = max(0, (int) SiteSetting::read('store_coupon_monthly_budget_rials', 0));
+        $offerViews = DB::table('farast_workflow_events')
+            ->where('event_type', 'marketing.offer_viewed')
+            ->when($visibleIds !== null, fn ($query) => $query->whereIn('user_id', $visibleIds))
+            ->count();
         $monthlyBudgetSpent = Order::query()
             ->where('status', 'paid')
             ->whereNotNull('paid_at')
@@ -135,7 +139,7 @@ class AdminStoreCouponController extends Controller
             'canManageGlobalCoupons' => $canManageGlobalCoupons,
             'filters' => ['status' => $status, 'q' => $request->query('q')],
             'stats' => [
-                'total' => $totalOffers,
+                'total' => $totalOffers,\n                'offer_views' => (int) $offerViews,\n                'view_to_redemption_rate' => $offerViews > 0 ? round($redeemed * 100 / $offerViews, 1) : 0,
                 'redeemed' => $redeemed,
                 'offered' => $offered,
                 'expired' => $expired,
