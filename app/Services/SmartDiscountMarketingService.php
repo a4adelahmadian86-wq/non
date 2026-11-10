@@ -138,6 +138,13 @@ class SmartDiscountMarketingService
                 return null;
             }
 
+            // Reserve budget before creating and notifying an offer. The same
+            // locked policy is checked again at payment, so outstanding offers
+            // cannot collectively promise more than the monthly cap.
+            if (! app(StoreCouponBudgetPolicy::class)->allows($currentDiscount)) {
+                return null;
+            }
+
             $expiresAt = now()->addHours($offerValidHours);
             $code = $this->uniqueCode();
 
@@ -197,7 +204,15 @@ class SmartDiscountMarketingService
         $history = StoreCouponAssignment::query()
             ->where('product_id', $productId)
             ->where('offered_at', '>=', now()->subDays(90))
-            ->whereIn('status', ['offered', 'redeemed']);
+            ->where(function ($query) {
+                // Only completed outcomes belong in the learning denominator.
+                // Counting still-valid offers as failures biases conversion downward.
+                $query->where('status', 'redeemed')
+                    ->orWhere(function ($expired) {
+                        $expired->where('status', 'offered')
+                            ->where('expires_at', '<=', now());
+                    });
+            });
 
         $total = (clone $history)->count();
         if ($total < 10) {
