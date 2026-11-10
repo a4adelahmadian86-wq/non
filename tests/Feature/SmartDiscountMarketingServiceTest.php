@@ -220,6 +220,25 @@ class SmartDiscountMarketingServiceTest extends TestCase
         $this->assertSame(7500, $assignment->coupon->value);
     }
 
+    public function test_engine_does_not_issue_a_second_offer_while_the_first_offer_is_still_valid(): void
+    {
+        SiteSetting::write('smart_discount_cooldown_days', 1);
+        SiteSetting::write('smart_discount_offer_valid_hours', 48);
+
+        $user = $this->user();
+        $product = $this->product();
+        $this->createQualifiedSignals($user, $product);
+
+        $first = StoreCouponAssignment::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame('offered', $first->status);
+
+        $this->travel(25)->hours();
+        $this->createQualifiedSignals($user, $product);
+
+        $this->assertDatabaseCount('store_coupon_assignments', 1);
+        $this->assertSame('offered', $first->fresh()->status);
+    }
+
     public function test_engine_reduces_incentive_after_strong_product_conversion_history(): void
     {
         $user = $this->user();
