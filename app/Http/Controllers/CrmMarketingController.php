@@ -195,10 +195,17 @@ class CrmMarketingController extends Controller
                     }
                     $campaign->offer_view_count = count($viewed);
                     $campaign->offer_click_count = count($clicked);
+                    $campaign->viewed_redeemed_offer_count = ! empty($viewed)
+                        ? DB::table('store_coupon_assignments')
+                            ->where('campaign_id', $campaign->id)
+                            ->where('status', 'redeemed')
+                            ->whereIn('id', array_keys($viewed))
+                            ->count()
+                        : 0;
                     $campaign->view_to_click_rate = $campaign->offer_view_count > 0
                         ? round($campaign->offer_click_count * 100 / $campaign->offer_view_count, 1) : 0;
                     $campaign->view_to_redemption_rate = $campaign->offer_view_count > 0
-                        ? round($campaign->redeemed_offer_count * 100 / $campaign->offer_view_count, 1) : 0;
+                        ? round($campaign->viewed_redeemed_offer_count * 100 / $campaign->offer_view_count, 1) : 0;
                     return $campaign;
                 }),
         ]);
