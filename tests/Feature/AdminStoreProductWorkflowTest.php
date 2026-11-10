@@ -116,27 +116,28 @@ class AdminStoreProductWorkflowTest extends TestCase
         ]);
 
         $checksum = hash('sha256', 'fake-pdf-content');
-        $this->mock(UploadSecurityService::class, function ($mock) use ($checksum) {
-            $mock->shouldReceive('inspect')->once()->andReturn([
-                'safe' => true,
-                'mime' => 'application/pdf',
-                'size' => 16,
-                'checksum' => $checksum,
-                'risk_level' => 'low',
-                'detected_type' => 'pdf',
-                'findings' => [],
-                'warnings' => [],
+        $security = \\Mockery::mock(UploadSecurityService::class);
+        $security->shouldReceive('inspect')->once()->andReturn([
+            'safe' => true,
+            'mime' => 'application/pdf',
+            'size' => 16,
+            'checksum' => $checksum,
+            'risk_level' => 'low',
+            'detected_type' => 'pdf',
+            'findings' => [],
+            'warnings' => [],
+        ]);
+        app()->instance(UploadSecurityService::class, $security);
+
+        $scanner = \\Mockery::mock(OptionalAntivirusScanner::class);
+        $scanner->shouldReceive('scan')->once()->withArgs(fn ($path) => is_string($path) && $path !== '')
+            ->andReturn([
+                'status' => 'clean',
+                'engine' => 'clamav',
+                'version' => 'ClamAV 1.4.0',
+                'scanned_at' => now()->toISOString(),
             ]);
-        });
-        $this->mock(OptionalAntivirusScanner::class, function ($mock) {
-            $mock->shouldReceive('scan')->once()->withArgs(fn ($path) => is_string($path) && $path !== '')
-                ->andReturn([
-                    'status' => 'clean',
-                    'engine' => 'clamav',
-                    'version' => 'ClamAV 1.4.0',
-                    'scanned_at' => now()->toISOString(),
-                ]);
-        });
+        app()->instance(OptionalAntivirusScanner::class, $scanner);
 
         $this->actingAs($admin)
             ->post(route('admin.store.files.preflight', $product), [
