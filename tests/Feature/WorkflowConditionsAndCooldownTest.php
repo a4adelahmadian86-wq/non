@@ -92,6 +92,28 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_manual_run_cannot_forge_business_context_to_bypass_workflow_conditions(): void
+    {
+        $owner = $this->owner('09140000204');
+        $workflow = $this->workflow($owner, [
+            'conditions' => json_encode([
+                ['field' => 'amount_rials', 'operator' => 'greater_than', 'value' => '100000'],
+                ['field' => 'status', 'operator' => 'equals', 'value' => 'paid'],
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $this->actingAs($owner)->postJson('/workspace/workflows/'.$workflow.'/run', [
+            'context' => [
+                'amount_rials' => 9000000,
+                'status' => 'paid',
+                'customer_id' => $owner->id,
+            ],
+        ])->assertStatus(409);
+
+        $this->assertDatabaseCount('farast_workflow_runs', 0);
+        $this->assertDatabaseCount('crm_follow_up_tasks', 0);
+    }
+
     public function test_event_matching_is_frozen_even_when_a_new_workflow_is_created_later(): void
     {
         $owner = $this->owner('09140000203');
