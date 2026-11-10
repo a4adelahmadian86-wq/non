@@ -14,7 +14,6 @@ return new class extends Migration {
 
         Schema::table('storage_managed_files', function (Blueprint $table) {
             $table->string('logical_path', 1024)->nullable()->unique()->after('storage_volume_id');
-            $table->string('original_name')->nullable()->change();
         });
     }
 
