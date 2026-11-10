@@ -1,17 +1,21 @@
 <?php
 
-namespace App\Http\Middleware;
+namespace App\\Http\\Middleware;
 
-use App\Services\NotificationService;
+use App\\Services\\NotificationService;
 use Closure;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\\Http\\Request;
+use Illuminate\\Support\\Facades\\Auth;
+use Illuminate\\Support\\Facades\\Crypt;
+use Illuminate\\Support\\Facades\\DB;
+use Illuminate\\Support\\Str;
+use Symfony\\Component\\HttpFoundation\\Response;
 
 class TrackAuthenticatedSession
 {
+    private const DEVICE_COOKIE = 'farast_device_key';
+    private const THREE_YEARS_MINUTES = 1576800;
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
@@ -22,6 +26,30 @@ class TrackAuthenticatedSession
         $sessionId = $request->session()->getId();
         if ($sessionId === '') {
             return $next($request);
+        }
+
+        $deviceKey = (string) $request->cookie(self::DEVICE_COOKIE, '');
+        $newDeviceKey = $deviceKey === '';
+        if ($newDeviceKey) {
+            $deviceKey = Str::random(64);
+        }
+        $deviceHash = hash('sha256', $deviceKey);
+
+        // A device blocked by its owner cannot continue an existing session or
+        // establish a fresh one while its first-party device cookie is present.
+        $blocked = DB::table('farast_blocked_devices')
+            ->where('user_id', $user->id)
+            ->where('device_key_hash', $deviceHash)
+            ->whereNull('unblocked_at')
+            ->exists();
+
+        if ($blocked) {
+            $this->recordEvent($user->id, 'blocked_device_login_prevented', $request->ip(), (string) $request->userAgent(), []);
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->with('warning', 'این دستگاه قبلاً توسط صاحب حساب از ورودهای بعدی منع شده است.');
         }
 
         $sessionKey = hash('sha256', $sessionId);
@@ -35,22 +63,46 @@ class TrackAuthenticatedSession
             return redirect()->route('login')->with('warning', 'این نشست از بخش امنیت حساب خارج شده است. دوباره وارد شوید.');
         }
 
+        if ($tracked && \Illuminate\\Support\\Carbon::parse($tracked->last_activity)->lt(now()->subYears(3))) {
+            DB::table('farast_account_sessions')->where('id', $tracked->id)->update([
+                'revoked_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $this->recordEvent($user->id, 'session_expired_three_years', $request->ip(), (string) $request->userAgent(), []);
+            try {
+                app(NotificationService::class)->pushToUser(
+                    $user,
+                    'security_session_expired',
+                    'نشست قدیمی حساب پایان یافت',
+                    'به دلیل بیش از سه سال عدم مراجعه، این نشست بسته شد. برای ادامه دوباره وارد شوید.',
+                    ['url' => route('login')],
+                );
+            } catch (\\Throwable) {
+            }
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->with('warning', 'به دلیل بیش از سه سال عدم مراجعه، لازم است دوباره وارد شوید.');
+        }
+
+        $agent = substr((string) $request->userAgent(), 0, 4000);
+        $ip = $request->ip();
+        $label = $this->deviceLabel($agent);
+
         if (! $tracked) {
-            $cutoff = now()->subMinutes((int) config('session.lifetime', 120));
             $previous = DB::table('farast_account_sessions')
                 ->where('user_id', $user->id)
                 ->whereNull('revoked_at')
-                ->where('last_activity', '>=', $cutoff)
+                ->where('last_activity', '>=', now()->subYears(3))
                 ->orderByDesc('last_activity')
                 ->first();
-
-            $agent = substr((string) $request->userAgent(), 0, 4000);
-            $ip = $request->ip();
-            $label = $this->deviceLabel($agent);
 
             DB::table('farast_account_sessions')->insert([
                 'user_id' => $user->id,
                 'session_key' => $sessionKey,
+                'device_key_hash' => $deviceHash,
                 'session_id_encrypted' => Crypt::encryptString($sessionId),
                 'device_label' => $label,
                 'ip_address' => $ip,
@@ -72,23 +124,23 @@ class TrackAuthenticatedSession
                     'previous_ip' => $previous->ip_address,
                     'previous_device' => $previous->device_label,
                 ]);
-
                 try {
                     app(NotificationService::class)->pushToUser(
                         $user,
                         'security_new_environment',
                         'ورود از محیط جدید',
-                        'یک نشست جدید با دستگاه یا نشانی شبکه متفاوت برای حساب شما ثبت شد. اگر این ورود متعلق به شما نیست، نشست‌های ناشناس را از مرکز امنیت خارج کنید.',
+                        'یک نشست جدید با دستگاه یا نشانی شبکه متفاوت برای حساب شما ثبت شد. اگر این ورود متعلق به شما نیست، آن را از مرکز نشست‌ها ببندید.',
                         ['url' => route('platform.security')],
                     );
-                } catch (\Throwable) {
-                    // Keep the security event even when notifications are unavailable.
+                } catch (\\Throwable) {
                 }
             }
-            // Retention cleanup runs once per newly observed session, not on every page request.
+
+            // Keep the audit trail and device controls for the same three-year
+            // inactivity window; security events have a separate six-month retention.
             DB::table('farast_account_sessions')
                 ->where('user_id', $user->id)
-                ->where('last_activity', '<', now()->subDays(30))
+                ->where('last_activity', '<', now()->subYears(3))
                 ->delete();
             DB::table('farast_security_events')
                 ->where('user_id', $user->id)
@@ -98,21 +150,37 @@ class TrackAuthenticatedSession
             DB::table('farast_account_sessions')
                 ->where('id', $tracked->id)
                 ->update([
+                    'device_key_hash' => $tracked->device_key_hash ?: $deviceHash,
                     'last_activity' => now(),
-                    'ip_address' => $request->ip(),
+                    'ip_address' => $ip,
                     'updated_at' => now(),
                 ]);
         }
 
-        return $next($request);
+        $response = $next($request);
+        if ($newDeviceKey) {
+            $response->headers->setCookie(cookie(
+                self::DEVICE_COOKIE,
+                $deviceKey,
+                self::THREE_YEARS_MINUTES,
+                '/',
+                null,
+                $request->isSecure(),
+                true,
+                false,
+                'lax'
+            ));
+        }
+
+        return $response;
     }
 
     private function deviceLabel(string $agent): string
     {
-        $browser = preg_match('/Edg\//i', $agent) ? 'Edge'
-            : (preg_match('/Firefox\//i', $agent) ? 'Firefox'
-            : (preg_match('/Chrome\//i', $agent) ? 'Chrome'
-            : (preg_match('/Safari\//i', $agent) ? 'Safari' : 'مرورگر دیگر')));
+        $browser = preg_match('/Edg\\//i', $agent) ? 'Edge'
+            : (preg_match('/Firefox\\//i', $agent) ? 'Firefox'
+            : (preg_match('/Chrome\\//i', $agent) ? 'Chrome'
+            : (preg_match('/Safari\\//i', $agent) ? 'Safari' : 'مرورگر دیگر')));
         $platform = preg_match('/Windows/i', $agent) ? 'Windows'
             : (preg_match('/Android/i', $agent) ? 'Android'
             : (preg_match('/iPhone|iPad|iOS/i', $agent) ? 'iOS'
