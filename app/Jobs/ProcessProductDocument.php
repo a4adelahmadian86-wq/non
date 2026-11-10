@@ -91,13 +91,13 @@ class ProcessProductDocument implements ShouldQueue
                 }
                 if (! $readerPdfArtifact || ! $readerPdfPath || ! $pdfDisk->exists($readerPdfPath)) {
                     $readerPdfPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/reader-v1.pdf';
-                    if (! Storage::disk('private')->put($readerPdfPath, $pdfBytes)) {
+                    if (! Storage::disk('managed')->put($readerPdfPath, $pdfBytes, ['farast_classification' => 'critical', 'farast_source_type' => 'product_reader_pdf', 'farast_source_id' => $document->id, 'farast_product_id' => $product->id, 'mimetype' => 'application/pdf'])) {
                         throw new \RuntimeException('product_docx_conversion_storage_failed');
                     }
                     $document->artifacts()->updateOrCreate(
                         ['artifact_type' => 'reader_pdf', 'version' => 1],
                         [
-                            'disk' => 'private',
+                            'disk' => 'managed',
                             'path' => $readerPdfPath,
                             'mime' => 'application/pdf',
                             'size_bytes' => strlen($pdfBytes),
@@ -271,11 +271,11 @@ class ProcessProductDocument implements ShouldQueue
                             'sha256' => $existingSample->sha256,
                             'generated_once' => true,
                         ];
-                    } elseif (Storage::disk('private')->put($samplePath, $sampleBytes)) {
+                    } elseif (Storage::disk('managed')->put($samplePath, $sampleBytes, ['farast_classification' => 'critical', 'farast_source_type' => 'product_sample_pdf', 'farast_source_id' => $locked->id, 'farast_product_id' => $locked->product_id, 'mimetype' => 'application/pdf'])) {
                         $artifact = $locked->artifacts()->updateOrCreate(
                             ['artifact_type' => 'sample_pdf', 'version' => 1],
                             [
-                                'disk' => 'private',
+                                'disk' => 'managed',
                                 'path' => $samplePath,
                                 'mime' => 'application/pdf',
                                 'size_bytes' => strlen($sampleBytes),
@@ -300,7 +300,7 @@ class ProcessProductDocument implements ShouldQueue
                         StoreProductPreview::query()->updateOrCreate(
                             ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
                             [
-                                'disk' => 'private',
+                                'disk' => 'managed',
                                 'mime' => 'application/pdf',
                                 'page_number' => 1,
                                 'kind' => 'pdf',
