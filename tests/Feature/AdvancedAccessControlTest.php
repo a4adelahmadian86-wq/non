@@ -317,6 +317,59 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertDatabaseHas('tickets', ['id' => $outsideTicket->id, 'status' => 'open']);
     }
 
+    public function test_workflow_follow_up_respects_the_workflow_owners_customer_scope(): void
+    {
+        $organizationA = Organization::create(['name' => 'Workflow Owner Org', 'slug' => 'workflow-owner-org', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Workflow Foreign Org', 'slug' => 'workflow-foreign-org', 'status' => 'active']);
+        $manager = $this->user('09140000341', User::ROLE_ORGANIZATION_MANAGER, $organizationA->id);
+        $member = $this->user('09140000342', User::ROLE_EMPLOYEE, $organizationA->id);
+        $outside = $this->user('09140000343', User::ROLE_EMPLOYEE, $organizationB->id);
+
+        $workflowColumns = \\Illuminate\\Support\\Facades\\Schema::getColumnListing('farast_workflows');
+        $workflowPayload = array_intersect_key([
+            'user_id' => $manager->id,
+            'name' => 'Scoped CRM follow-up',
+            'trigger_type' => 'ticket.created',
+            'steps' => json_encode([['action' => 'create_follow_up', 'title' => 'پیگیری مشتری']], JSON_UNESCAPED_UNICODE),
+            'enabled' => true,
+            'conditions' => null,
+            'cooldown_seconds' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], array_flip($workflowColumns));
+        $workflowId = DB::table('farast_workflows')->insertGetId($workflowPayload);
+        $engine = app(\\App\\Services\\WorkflowEngine::class);
+
+        $successfulRun = $engine->run($workflowId, [
+            'user_id' => $member->id,
+            'customer_id' => $member->id,
+        ], null, true);
+
+        $this->assertDatabaseHas('farast_workflow_runs', ['id' => $successfulRun, 'status' => 'completed']);
+        $this->assertDatabaseHas('crm_follow_up_tasks', [
+            'customer_id' => $member->id,
+            'assigned_to' => $manager->id,
+            'created_by' => $manager->id,
+            'title' => 'پیگیری مشتری',
+        ]);
+
+        try {
+            $engine->run($workflowId, [
+                'user_id' => $outside->id,
+                'customer_id' => $outside->id,
+            ], null, true);
+            $this->fail('A workflow must not create CRM follow-ups outside its owner's organization scope.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('outside the authorized customer scope', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('crm_follow_up_tasks', ['customer_id' => $outside->id]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflowId,
+            'status' => 'failed',
+        ]);
+    }
+
     public function test_blocked_users_never_receive_dynamic_permissions_and_admin_remains_break_glass(): void
     {
         $employee = $this->user('09140000105');
