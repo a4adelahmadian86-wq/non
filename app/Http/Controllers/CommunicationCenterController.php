@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Schema;
 use App\Services\CapabilityService;
 use App\Services\MessengerAccessService;
 use App\Services\NotificationService;
+use App\Services\CommunicationSearchService;
 use Illuminate\Http\Request;
 
 class CommunicationCenterController extends Controller
@@ -20,11 +21,17 @@ class CommunicationCenterController extends Controller
         NotificationService $notifications,
         CapabilityService $capabilities,
         MessengerAccessService $messengerAccess,
+        CommunicationSearchService $communicationSearch,
     ) {
         $user = $request->user();
         $isAdmin = $user->isAdmin();
         $canSupport = $isAdmin || $capabilities->allowed($user, 'can_support');
         $canUseMessenger = $messengerAccess->canUse($user);
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
+        $searchTerm = trim((string) ($validated['q'] ?? ''));
+        $searchResults = $searchTerm !== ''
+            ? $communicationSearch->search($user, $searchTerm, $canSupport, $canUseMessenger)
+            : collect();
 
         $ticketQuery = Ticket::query()->with(['user:id,name,email', 'assignee:id,name']);
         if (! $isAdmin) {
@@ -150,6 +157,8 @@ class CommunicationCenterController extends Controller
             'isAdmin',
             'canSupport',
             'canUseMessenger',
+            'searchTerm',
+            'searchResults',
         ));
     }
 }

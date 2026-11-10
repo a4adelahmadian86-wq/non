@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Conversation;
+use App\Models\ConversationMessage;
 use App\Models\FarastNotification;
 use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -64,6 +67,135 @@ class CommunicationCenterTest extends TestCase
 
         $this->assertTrue($items->contains(fn ($item) => $item['href'] === route('platform.communications')));
         $this->assertFalse($items->contains(fn ($item) => $item['href'] === route('messenger.index')));
+    }
+
+    public function test_admin_search_finds_existing_ticket_messages_without_creating_a_parallel_store(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+        $ticket = Ticket::create([
+            'user_id' => $admin->id,
+            'subject' => 'درخواست پشتیبانی',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $admin->id,
+            'body' => 'شناسه پیگیری یکتای blue-orchid-927',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.communications.index', ['q' => 'blue-orchid-927']))
+            ->assertOk()
+            ->assertSee('شناسه پیگیری یکتای blue-orchid-927')
+            ->assertSee('پیام در '.$ticket->displayCode());
+    }
+
+    public function test_admin_search_finds_messages_inside_existing_internal_conversations(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+        $peer = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+        $participants = collect([$admin->id, $peer->id])->sort()->values();
+        $conversation = Conversation::create([
+            'type' => 'direct',
+            'created_by' => $admin->id,
+            'direct_key' => hash('sha256', $participants->implode(':')),
+        ]);
+        $conversation->participants()->attach([
+            $admin->id => ['role' => 'owner'],
+            $peer->id => ['role' => 'member'],
+        ]);
+        ConversationMessage::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $peer->id,
+            'body' => 'متن محرمانه تیمی silver-maple-482',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.communications.index', ['q' => 'silver-maple-482']))
+            ->assertOk()
+            ->assertSee('متن محرمانه تیمی silver-maple-482')
+            ->assertSee('پیام در گفت‌وگوی خصوصی');
+    }
+
+    public function test_single_character_search_is_rejected_without_scanning_domain_records(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.communications.index', ['q' => 'x']))
+            ->assertOk()
+            ->assertSee('برای جست‌وجو حداقل دو نویسه وارد کنید.');
+    }
+
+    public function test_customer_search_does_not_expose_another_users_notifications_or_internal_ticket_notes(): void
+    {
+        $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+        $other = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+        FarastNotification::create([
+            'user_id' => $other->id,
+            'type' => 'ticket_reply',
+            'title' => 'private-orchid-notice',
+            'body' => 'اطلاعیه خصوصی',
+        ]);
+
+        $ownTicket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'تیکت خود کاربر',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ownTicket->id,
+            'user_id' => $other->id,
+            'body' => 'private-orchid-note',
+            'is_internal' => true,
+            'is_staff' => true,
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $ownTicket->id,
+            'user_id' => $other->id,
+            'body' => 'public-orchid-reply',
+            'is_internal' => false,
+            'is_staff' => true,
+        ]);
+
+        $otherTicket = Ticket::create([
+            'user_id' => $other->id,
+            'subject' => 'تیکت کاربر دیگر',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        TicketMessage::create([
+            'ticket_id' => $otherTicket->id,
+            'user_id' => $other->id,
+            'body' => 'other-customer-orchid-note',
+            'is_internal' => false,
+            'is_staff' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('platform.communications', ['q' => 'private-orchid-notice']))
+            ->assertOk()
+            ->assertDontSee('<strong>private-orchid-notice</strong>', false);
+
+        $this->get(route('platform.communications', ['q' => 'private-orchid-note']))
+            ->assertOk()
+            ->assertDontSee('<strong>پیام در '.$ownTicket->displayCode(), false)
+            ->assertDontSee('<strong>private-orchid-note</strong>', false);
+
+        $this->get(route('platform.communications', ['q' => 'other-customer-orchid-note']))
+            ->assertOk()
+            ->assertDontSee('<strong>other-customer-orchid-note</strong>', false);
+
+        $this->get(route('platform.communications', ['q' => 'public-orchid-reply']))
+            ->assertOk()
+            ->assertSee('public-orchid-reply');
     }
 
     public function test_non_admin_cannot_open_staff_communication_center(): void
