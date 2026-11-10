@@ -11,7 +11,7 @@
         <div class="fm-list">
             <div class="fm-list-head"><strong>گفت‌وگوها</strong><span>{{ $conversations->total() }} مورد</span></div>
             @forelse($conversations as $conversation)
-                @php $last = $conversation->messages->first(); @endphp
+                
                 <a class="fm-conversation" href="{{ route('messenger.show', $conversation) }}">
                     <span class="fm-avatar">{{ mb_substr($conversation->title ?: ($conversation->participants->firstWhere('id', '!=', auth()->id())?->name ?? 'گفتگو'), 0, 1) }}</span>
                     <span class="fm-conversation-copy"><strong>{{ $conversation->title ?: ($conversation->participants->firstWhere('id', '!=', auth()->id())?->name ?? 'گفت‌وگوی خصوصی') }}</strong><small>{{ $last?->body ? \Illuminate\Support\Str::limit($last->body, 75) : 'هنوز پیامی ارسال نشده است' }}</small></span>
