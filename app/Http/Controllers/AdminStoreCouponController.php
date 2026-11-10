@@ -83,9 +83,17 @@ class AdminStoreCouponController extends Controller
         ]);
     }
 
+    private function assertGlobalCouponManagement(Request $request): void
+    {
+        $scope = $request->attributes->get('farast.scope') ?? AdminConsoleService::scopeOf($request->user());
+        abort_unless($scope === AdminConsoleService::SCOPE_GLOBAL, 403, 'مدیریت کدهای عمومی فقط در دامنه سراسری مجاز است.');
+    }
+
     public function store(Request $request, AdminConsoleService $console)
     {
         $this->visibleUserIds($request, $console);
+        $this->assertGlobalCouponManagement($request);
+        $request->merge(['code' => mb_strtoupper(trim((string) $request->input('code')))]);
         $data = $request->validate([
             'code' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9_-]+$/', Rule::unique('store_coupons', 'code')],
             'type' => ['required', Rule::in(['percent', 'fixed'])],
@@ -111,6 +119,7 @@ class AdminStoreCouponController extends Controller
     public function toggle(Request $request, int $coupon, AdminConsoleService $console)
     {
         $this->visibleUserIds($request, $console);
+        $this->assertGlobalCouponManagement($request);
         $record = StoreCoupon::query()->whereKey($coupon)->firstOrFail();
         abort_if(StoreCouponAssignment::query()->where('coupon_id', $record->id)->exists(), 409, 'کدهای اختصاصی موتور هوشمند از این بخش قابل تغییر نیستند.');
 
