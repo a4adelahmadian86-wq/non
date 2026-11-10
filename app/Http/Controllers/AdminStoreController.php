@@ -470,7 +470,7 @@ class AdminStoreController extends Controller
             'security_scan' => 'nullable|boolean',
         ]);
         $antivirusRequested = $request->boolean('security_scan');
-        $canRequestAntivirus = app(\\App\\Services\\AuthorizationService::class)
+        $canRequestAntivirus = app(\App\Services\AuthorizationService::class)
             ->allows(auth()->user(), 'store.security_scan');
         abort_if($antivirusRequested && ! $canRequestAntivirus, 403, 'مجوز درخواست اسکن آنتی‌ویروس برای این حساب فعال نیست.');
 
@@ -511,10 +511,10 @@ class AdminStoreController extends Controller
             if ($antivirusRequested) {
                 $stream = Storage::disk('private')->readStream($path);
                 if (! is_resource($stream)) {
-                    throw new \\RuntimeException('antivirus_source_unavailable');
+                    throw new \RuntimeException('antivirus_source_unavailable');
                 }
                 try {
-                    $antivirusResult = app(\\App\\Services\\OptionalAntivirusScanner::class)->scanStream($stream);
+                    $antivirusResult = app(\App\Services\OptionalAntivirusScanner::class)->scanStream($stream);
                 } finally {
                     fclose($stream);
                 }
@@ -545,7 +545,7 @@ class AdminStoreController extends Controller
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
-            $code = $exception instanceof \\RuntimeException ? $exception->getMessage() : 'inspection_failed';
+            $code = $exception instanceof \RuntimeException ? $exception->getMessage() : 'inspection_failed';
             $message = match ($code) {
                 'antivirus_scanner_unavailable' => 'اسکن آنتی‌ویروس انتخاب شده است، اما موتور ClamAV روی سرور متصل یا آماده نیست؛ فایل ذخیره نشد.',
                 'antivirus_malware_detected' => 'موتور آنتی‌ویروس تهدیدی در فایل شناسایی کرد؛ فایل ذخیره نشد.',
