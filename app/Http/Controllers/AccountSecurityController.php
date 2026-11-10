@@ -195,7 +195,6 @@ class AccountSecurityController extends Controller
             'user_agent' => substr((string) $request->userAgent(), 0, 4000),
             'meta' => json_encode($meta, JSON_UNESCAPED_UNICODE),
             'created_at' => now(),
-            'updated_at' => now(),
         ]);
     }
 }
