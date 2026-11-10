@@ -1083,14 +1083,18 @@ class AdminStoreController extends Controller
                 return $oldPath;
             });
 
-            if (preg_match('#^storage/managed/([0-9]+)$#', $oldPath, $matches)) {
-                $oldManaged = StorageManagedFile::find((int) $matches[1]);
-                if ($oldManaged) {
-                    $oldDisk = (string) data_get($oldManaged->metadata, 'disk', $oldManaged->storage_volume_id ? 'storage_volume:'.$oldManaged->storage_volume_id : 'private');
-                    $storage->delete($oldDisk, $oldManaged->file_key);
+            try {
+                if (preg_match('#^storage/managed/([0-9]+)$#', $oldPath, $matches)) {
+                    $oldManaged = StorageManagedFile::find((int) $matches[1]);
+                    if ($oldManaged) {
+                        $oldDisk = (string) data_get($oldManaged->metadata, 'disk', $oldManaged->storage_volume_id ? 'storage_volume:'.$oldManaged->storage_volume_id : 'private');
+                        $storage->delete($oldDisk, $oldManaged->file_key);
+                    }
+                } elseif ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
+                    Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
                 }
-            } elseif ($oldPath !== '' && Str::startsWith($oldPath, 'storage/store/covers/'.$product->id.'/')) {
-                Storage::disk('public')->delete(Str::after($oldPath, 'storage/'));
+            } catch (Throwable $cleanupException) {
+                report($cleanupException);
             }
         } catch (Throwable $exception) {
             if ($managed) {
@@ -1165,7 +1169,7 @@ class AdminStoreController extends Controller
         return back()->with('status', 'تصویر گالری در فضای ذخیره‌سازی مرکزی ایران ثبت شد.');
     }
 
-    public function deleteImage(StoreProduct $product, StoreProductImage $image)
+    public function deleteImage(StoreProduct $product, StoreProductImage $image, StorageManager $storage)
     {
         abort_unless($image->product_id === $product->id, 404);
 
@@ -1175,13 +1179,18 @@ class AdminStoreController extends Controller
             $path = (string) $lockedImage->path;
             $this->audit('store.product.image_deleted', $lockedProduct, ['image_id' => $lockedImage->id]);
             $lockedImage->delete();
-
             return $path;
         });
 
-        $ownedPrefix = 'storage/store/product-images/'.$product->id.'/';
-        if (Str::startsWith($path, $ownedPrefix)) {
-            Storage::disk('public')->delete(Str::after($path, 'storage/'));
+        if (preg_match('#^storage/managed/([0-9]+)$#', $path, $matches)) {
+            $managed = StorageManagedFile::find((int) $matches[1]);
+            if ($managed) {
+                $disk = (string) data_get($managed->metadata, 'disk', $managed->storage_volume_id ? 'storage_volume:'.$managed->storage_volume_id : 'private');
+                $storage->delete($disk, $managed->file_key);
+            }
+        } else {
+            $ownedPrefix = 'storage/store/product-images/'.$product->id.'/';
+            if (Str::startsWith($path, $ownedPrefix)) Storage::disk('public')->delete(Str::after($path, 'storage/'));
         }
 
         return back()->with('status', 'تصویر گالری حذف شد.');
