@@ -28,6 +28,11 @@ class HomeIntentTest extends TestCase
         $response = $this->get('/');
 
         $response->assertOk()
+            ->assertSee('از فایل خام تا سند آماده')
+            ->assertSee('برای کاری که همین امروز باید انجام دهید')
+            ->assertSee('مقاله و پژوهش')
+            ->assertSee('PDF و تصویر اسکن‌شده')
+            ->assertSee('data-home-intent="file"', false)
             ->assertSee('امروز چه کاری را پیش می‌برید؟')
             ->assertSee('فایل دارم')
             ->assertSee('از صفر شروع می‌کنم')
