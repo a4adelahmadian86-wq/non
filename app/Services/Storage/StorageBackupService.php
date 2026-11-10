@@ -23,12 +23,29 @@ class StorageBackupService
         if (! mkdir($work, 0700, true) && ! is_dir($work)) throw new RuntimeException('ساخت فضای موقت بکاپ ناموفق بود.');
         $archivePath = $work.'/farast-weekly.zip';
         $results = [];
+        $snapshotLock = StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'snapshot_lock',
+            'status' => 'running',
+            'started_at' => now(),
+            'metadata' => ['lock_only' => true],
+        ]);
 
         try {
             $this->createArchive($archivePath, $work, $backupKey);
-            $targets = StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')->orderBy('priority')->get();
+            $snapshotLock->update(['status' => 'completed', 'completed_at' => now()]);
+            $archiveSize = (int) filesize($archivePath);
+            $targets = StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')
+                ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$archiveSize]))
+                ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $archiveSize))
+                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('(SELECT COUNT(*) FROM storage_managed_files WHERE storage_managed_files.storage_volume_id = storage_volumes.id AND storage_managed_files.status != ?) < storage_volumes.file_limit', ['deleted']))
+                ->orderBy('priority')->get();
             if ((bool) config('storage_management.backup.enable_iran_replica', false)) {
-                $targets = $targets->concat(StorageVolume::query()->where('drive_key', 'iran_backup')->where('is_active', true)->where('status', 'healthy')->orderBy('priority')->get());
+                $targets = $targets->concat(StorageVolume::query()->where('drive_key', 'iran_backup')->where('is_active', true)->where('status', 'healthy')
+                    ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [$archiveSize]))
+                    ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', $archiveSize))
+                    ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('(SELECT COUNT(*) FROM storage_managed_files WHERE storage_managed_files.storage_volume_id = storage_volumes.id AND storage_managed_files.status != ?) < storage_volumes.file_limit', ['deleted']))
+                    ->orderBy('priority')->get());
             }
             if ($targets->isEmpty()) {
                 StorageBackupRun::create([
@@ -71,6 +88,9 @@ class StorageBackupService
                 }
             }
             return $results;
+        } catch (\\Throwable $exception) {
+            $snapshotLock->update(['status' => 'failed', 'completed_at' => now(), 'error_message' => mb_substr($exception->getMessage(), 0, 1000)]);
+            throw $exception;
         } finally {
             $this->removeDirectory($work);
         }
