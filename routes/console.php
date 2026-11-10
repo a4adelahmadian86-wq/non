@@ -8,6 +8,11 @@ use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
 
+// Probe active storage providers and refresh provider-reported usage/counts.
+Schedule::command('storage:check-volumes --limit=100')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);
+
 // Retry staged uploads after remote storage becomes reachable; local staging is never pruned.
 Schedule::command('storage:transfer-pending --limit=100')
     ->everyMinute()
