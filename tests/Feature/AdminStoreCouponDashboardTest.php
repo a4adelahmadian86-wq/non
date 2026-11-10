@@ -219,12 +219,14 @@ class AdminStoreCouponDashboardTest extends TestCase
             'max_discount_percent' => 8,
             'abandonment_hours' => 3,
             'retention_days' => 90,
+            'monthly_budget_rials' => 2500000,
         ])->assertRedirect(route('admin.store-coupons.index'));
 
         $this->assertSame(6, (int) SiteSetting::read('smart_discount_score_threshold', 5));
         $this->assertSame(21, (int) SiteSetting::read('smart_discount_signal_window_days', 14));
         $this->assertSame(8, (int) SiteSetting::read('smart_discount_max_discount_percent', 10));
         $this->assertSame(90, (int) SiteSetting::read('marketing_signal_retention_days', 30));
+        $this->assertSame(2500000, (int) SiteSetting::read('store_coupon_monthly_budget_rials', 0));
     }
 
     public function test_signal_retention_cannot_be_shorter_than_the_analysis_window(): void
