@@ -42,17 +42,24 @@ class StoreCouponBudgetPolicy
             ->whereNotNull('pricing_snapshot->coupon_code')
             ->sum('discount_rials');
 
-        $reserved = DB::table('store_coupon_assignments as assignments')
+        $reserved = $this->reservedAmount($excludeAssignmentId, $now);
+
+        return (int) $spent + $reserved + max(0, $candidateDiscountRials) <= $cap;
+    }
+
+    public function reservedAmount(?int $excludeAssignmentId = null, ?\\Illuminate\\Support\\Carbon $at = null): int
+    {
+        $at = $at ?: now();
+
+        return (int) DB::table('store_coupon_assignments as assignments')
             ->join('store_coupons as coupons', 'coupons.id', '=', 'assignments.coupon_id')
             ->where('assignments.status', 'offered')
-            ->where('assignments.expires_at', '>', $now)
+            ->where('assignments.expires_at', '>', $at)
             ->where('coupons.is_active', true)
-            ->where(function ($query) use ($now) {
-                $query->whereNull('coupons.ends_at')->orWhere('coupons.ends_at', '>', $now);
+            ->where(function ($query) use ($at) {
+                $query->whereNull('coupons.ends_at')->orWhere('coupons.ends_at', '>', $at);
             })
             ->when($excludeAssignmentId !== null, fn ($query) => $query->where('assignments.id', '!=', $excludeAssignmentId))
             ->sum('coupons.value');
-
-        return (int) $spent + (int) $reserved + max(0, $candidateDiscountRials) <= $cap;
     }
 }
