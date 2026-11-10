@@ -163,6 +163,9 @@ class MessengerController extends Controller
                 foreach ($attachments as $stored) {
                     $storage->delete($stored['disk'] ?? 'private', $stored['path']);
                 }
+                foreach ($sourcePathsToDelete as $sourcePath) {
+                    Storage::disk('private')->delete($sourcePath);
+                }
                 throw ValidationException::withMessages([
                     'attachments' => ['فایل پیوست توسط بررسی امنیتی داخلی پذیرفته نشد: '.$exception->getMessage()],
                 ]);
