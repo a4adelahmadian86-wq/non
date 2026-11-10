@@ -38,6 +38,8 @@ class AdminDashboardShellIntegrityTest extends TestCase
             ->assertSee('صف پردازش')
             ->assertSee('پیام‌های خوانده‌نشده')
             ->assertSee(route('messenger.index'))
+            ->assertSee('کاتالوگ محصولات')
+            ->assertSee(route('admin.store.index'))
             ->assertDontSee('hero-orbit')
             ->assertSee('تیکت‌های نیازمند پیگیری')
             ->assertSee(route('admin.support.management'))
@@ -58,6 +60,37 @@ class AdminDashboardShellIntegrityTest extends TestCase
         $this->assertSame(1, substr_count($html, 'class="farast-admin-main"'));
         $this->assertSame(1, substr_count($html, 'class="farast-admin-nav"'));
         $this->assertSame(1, substr_count($html, 'id="platform-control"'));
+    }
+
+    public function test_dashboard_product_summary_uses_real_catalog_counts(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $categoryId = DB::table('store_categories')->insertGetId([
+            'name' => 'Dashboard Category',
+            'slug' => 'dashboard-category',
+            'is_active' => true,
+            'sort_order' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('store_products')->insert([
+            'category_id' => $categoryId,
+            'title' => 'Dashboard Product',
+            'slug' => 'dashboard-product',
+            'sku' => 'DASHBOARD-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'published',
+            'published_at' => now()->subMinute(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.index'))
+            ->assertOk()
+            ->assertSee('کاتالوگ محصولات')
+            ->assertSee('1 منتشرشده');
     }
 
     public function test_dashboard_activity_feed_displays_real_audit_events_and_links_to_the_audit_ledger(): void
