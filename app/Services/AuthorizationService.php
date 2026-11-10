@@ -407,12 +407,14 @@ class AuthorizationService
                 return false;
             }
 
-            $actual = data_get($context, $field);
+            $present = array_key_exists($field, $context)
+                || data_get($context, $field, '__farast_missing__') !== '__farast_missing__';
+            $actual = $present ? data_get($context, $field) : null;
             $expected = $condition['value'] ?? null;
             $matched = match ($operator) {
-                'exists' => array_key_exists($field, $context) || data_get($context, $field, '__farast_missing__') !== '__farast_missing__',
-                'equals' => $this->sameScalarValue($actual, $expected),
-                'not_equals' => ! $this->sameScalarValue($actual, $expected),
+                'exists' => $present && $actual !== null && $actual !== '',
+                'equals' => $present && $this->sameScalarValue($actual, $expected),
+                'not_equals' => $present && ! $this->sameScalarValue($actual, $expected),
                 'in' => is_array($expected) && in_array($actual, $expected, true),
                 'not_in' => is_array($expected) && ! in_array($actual, $expected, true),
                 'contains' => is_array($actual) ? in_array($expected, $actual, true) : (is_string($actual) && is_string($expected) && str_contains($actual, $expected)),
