@@ -59,6 +59,20 @@ class NotificationCenterTest extends TestCase
             ->assertOk()->assertSee('گردش‌کار اجرا شد')->assertSee('nf-cat-system')->assertDontSee('nf-cat-security');
     }
 
+    public function test_communications_filter_returns_only_internal_messenger_notifications(): void
+    {
+        $user = $this->user('09150000120');
+        $service = app(NotificationService::class);
+        $service->push($user->id, 'message_received', 'پیام داخلی', 'پیام جدید در گفت‌وگو');
+        $service->push($user->id, 'ticket_reply', 'پاسخ تیکت', 'پاسخ پشتیبانی');
+        $service->push($user->id, 'order_paid', 'پرداخت موفق', 'سفارش ثبت شد');
+
+        $items = $service->paginateForUser($user->id, 'communications', 20);
+
+        $this->assertSame(['پیام داخلی'], $items->getCollection()->pluck('title')->all());
+        $this->assertSame(1, $service->countsByCategory($user->id)['communications']);
+    }
+
     public function test_user_can_archive_and_restore_only_their_own_notification(): void
     {
         $owner = $this->user('09150000103');

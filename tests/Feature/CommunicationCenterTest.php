@@ -1,0 +1,47 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\FarastNotification;
+use App\Models\Ticket;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class CommunicationCenterTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_admin_communication_center_aggregates_existing_ticket_and_notification_records(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_blocked' => false]);
+        Ticket::create([
+            'user_id' => $admin->id,
+            'subject' => 'پیگیری سفارش آزمایشی',
+            'status' => 'open',
+            'priority' => 'high',
+            'department' => 'support',
+        ]);
+        FarastNotification::create([
+            'user_id' => $admin->id,
+            'type' => 'ticket_created_staff',
+            'title' => 'تیکت تازه',
+            'body' => 'یک درخواست پشتیبانی ثبت شد.',
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.communications.index'))
+            ->assertOk()
+            ->assertSee('مرکز ارتباطات فراست')
+            ->assertSee('پیگیری سفارش آزمایشی')
+            ->assertSee('تیکت تازه')
+            ->assertSee('میز تیکت‌ها')
+            ->assertSee('پیام‌رسان داخلی');
+    }
+
+    public function test_non_admin_cannot_open_staff_communication_center(): void
+    {
+        $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+
+        $this->actingAs($customer)->get(route('admin.communications.index'))->assertForbidden();
+    }
+}
