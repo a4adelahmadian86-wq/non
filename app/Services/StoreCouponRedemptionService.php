@@ -57,8 +57,8 @@ class StoreCouponRedemptionService
         if ($assignment) {
             $product = StoreProduct::query()->find($assignment->product_id);
             $orderItem = $order->storeItems()->where('product_id', $assignment->product_id)->first();
-            $safeDiscountCap = $product && $product->cost_price_rials !== null && $orderItem
-                ? max(0, ((int) $orderItem->unit_price_rials - (int) $product->cost_price_rials - max(0, (int) $product->marketing_min_margin_rials)) * (int) $orderItem->quantity)
+            $safeDiscountCap = $product && $orderItem
+                ? app(StoreCouponMarginPolicy::class)->maximumDiscount($product, (int) $orderItem->unit_price_rials, (int) $orderItem->quantity)
                 : 0;
             if ((int) $coupon->value > $safeDiscountCap) {
                 throw new RuntimeException('حاشیه سود محصول پیش از پرداخت تغییر کرده و این کد دیگر قابل استفاده نیست.');
