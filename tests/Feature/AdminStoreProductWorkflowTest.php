@@ -70,7 +70,9 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertDontSee('شناسه محصول (SKU)')
             ->assertDontSee('نشانی اختصاصی (Slug)')
             ->assertDontSee('نوع مجوز استفاده')
-            ->assertSee('admin-store-product-wizard.js');
+            ->assertSee('admin-store-product-wizard.js')
+            ->assertSee('product-upload-step')
+            ->assertSee('ورود به انتخاب فایل');
         $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
 
         $response = $this->actingAs($admin)->post(route('admin.store.store'), [
@@ -81,10 +83,21 @@ class AdminStoreProductWorkflowTest extends TestCase
             'status' => 'draft',
         ]);
         $product = StoreProduct::query()->where('title', 'محصول با شناسه خودکار')->firstOrFail();
-        $response->assertRedirect(route('admin.store.edit', $product));
+        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
         $this->assertNotEmpty($product->sku);
         $this->assertStringStartsWith('PRD-', $product->sku);
         $this->assertNotEmpty($product->slug);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.edit', $product))
+            ->assertOk()
+            ->assertSee('data-product-ingestion', false)
+            ->assertSee('data-ingestion-input', false)
+            ->assertSee('data-ingestion-confirm', false)
+            ->assertSee('data-ingestion-folder', false)
+            ->assertSee('data-ingestion-selected', false)
+            ->assertSee('بررسی امن فایل')
+            ->assertSee('بررسی ساختار و امنیت');
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
@@ -271,7 +284,7 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
 
-        $response->assertRedirect(route('admin.store.edit', $product));
+        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
         $this->assertSame('draft', $product->status);
         $this->assertNull($product->published_at);
         $this->assertNull($product->cover_path);
@@ -322,7 +335,7 @@ class AdminStoreProductWorkflowTest extends TestCase
         );
 
         $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
-        $response->assertRedirect(route('admin.store.edit', $product));
+        $response->assertRedirect(route('admin.store.edit', $product).'#product-files');
         $this->assertDatabaseHas('store_product_tag', [
             'product_id' => $product->id,
             'tag_id' => $tag->id,
@@ -926,6 +939,70 @@ class AdminStoreProductWorkflowTest extends TestCase
         Queue::assertPushed(ProcessProductDocument::class);
     }
 
+
+    public function test_incomplete_static_archive_review_is_saved_as_warning_not_clean(): void
+    {
+        Storage::fake('private');
+        Queue::fake();
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'آرشیو دارای بررسی محدود',
+            'slug' => 'archive-limited-review',
+            'sku' => 'ARCHIVE-WARNING-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $bytes = 'archive-with-limited-static-review';
+        $checksum = hash('sha256', $bytes);
+        $stagingPath = 'store/quarantine/'.$product->id.'/archive.zip';
+        Storage::disk('private')->put($stagingPath, $bytes);
+        $ingestion = StoreProductIngestion::create([
+            'id' => (string) Str::uuid(),
+            'product_id' => $product->id,
+            'user_id' => $admin->id,
+            'status' => 'inspected',
+            'staging_disk' => 'private',
+            'staging_path' => $stagingPath,
+            'original_name' => 'archive.zip',
+            'mime' => 'application/zip',
+            'size_bytes' => strlen($bytes),
+            'sha256' => $checksum,
+            'inspection_json' => ['safe' => true, 'risk_level' => 'warning'],
+            'is_primary' => true,
+            'expires_at' => now()->addMinutes(30),
+        ]);
+
+        $this->mock(UploadSecurityService::class, function ($mock) use ($stagingPath, $bytes, $checksum) {
+            $mock->shouldReceive('inspect')->once()->with($stagingPath, 'application/zip', 50 * 1024 * 1024)->andReturn([
+                'safe' => true,
+                'mime' => 'application/zip',
+                'size' => strlen($bytes),
+                'checksum' => $checksum,
+                'scan' => 'farast_static_v1',
+                'detected_type' => 'archive',
+                'risk_level' => 'warning',
+                'findings' => ['برخی اعضای آرشیو به‌دلیل محدودیت اندازه کامل بررسی نشدند.'],
+                'warnings' => [],
+            ]);
+        });
+
+        $this->actingAs($admin)
+            ->post(route('admin.store.files.confirm', [$product, $ingestion->id]))
+            ->assertOk();
+
+        $file = StoreProductFile::query()
+            ->where('product_id', $product->id)
+            ->where('purpose', 'product_download')
+            ->firstOrFail();
+        $this->assertSame('warning', $file->scan_status);
+        $this->assertNotSame('clean', $file->scan_status);
+        $this->assertTrue($file->is_primary);
+        $this->assertSame('draft', $product->fresh()->status);
+    }
 
     public function test_ai_suggested_tags_are_created_only_during_product_save_and_seo_keywords_are_persisted(): void
     {
