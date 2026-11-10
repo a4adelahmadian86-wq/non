@@ -33,6 +33,16 @@ Artisan::command('farast:storage-backup:password {run_id}', function (\App\Servi
     $this->line($restore->password((int) $this->argument('run_id')));
 })->purpose('Reveal the decryption password for a completed backup from the CLI');
 
+Artisan::command('farast:storage-health {--limit=100}', function (\\App\\Services\\StorageHealthService $health) {
+    $result = $health->check((int) $this->option('limit'));
+    $this->info('Checked '.$result['checked'].' storage host(s); '.$result['healthy'].' healthy, '.$result['failed'].' failed.');
+    return $result['failed'] > 0 ? 1 : 0;
+})->purpose('Probe connected storage hosts and update their health status');
+
+Schedule::command('farast:storage-health --limit=100')
+    ->everyTenMinutes()
+    ->withoutOverlapping();
+
 Artisan::command('farast:storage-replicate-pending {--limit=100}', function () {
     $volumes = \\App\\Models\\StorageVolume::query()
         ->where('drive_key', 'iran_primary')
