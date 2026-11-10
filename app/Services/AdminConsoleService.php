@@ -281,15 +281,16 @@ class AdminConsoleService
      */
     public function scopeSummary(?User $user, bool $includeUserCount = true): array
     {
-        $scope = request()->attributes->get('farast.scope') ?? self::scopeOf($user);
+        $scope = $user ? (request()->attributes->get('farast.scope') ?? self::scopeOf($user)) : self::SCOPE_OWN;
+        $visibleIds = $includeUserCount ? $this->visibleUserIds($user, 'users.view') : [];
 
         return [
             'scope' => $scope,
             'label' => ResolveAdminScope::scopeLabel($scope),
             'role' => $user?->role,
-            'visible_users' => ! $includeUserCount ? null : ($this->visibleUserIds($user) === null
+            'visible_users' => ! $includeUserCount ? null : ($visibleIds === null
                 ? (Schema::hasTable('users') ? User::count() : null)
-                : count($this->visibleUserIds($user) ?? [])),
+                : count($visibleIds)),
         ];
     }
 }
