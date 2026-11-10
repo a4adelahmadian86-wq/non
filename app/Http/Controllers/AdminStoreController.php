@@ -823,7 +823,7 @@ class AdminStoreController extends Controller
                     ->where('id', '!=', $lockedFile->id)
                     ->where('is_active', true)
                     ->where('is_primary', true)
-                    ->where('scan_status', 'clean')
+                    ->whereIn('scan_status', ['clean', 'structural'])
                     ->exists();
                 if (! $hasReplacement) {
                     throw ValidationException::withMessages([

@@ -97,7 +97,43 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('data-ingestion-folder', false)
             ->assertSee('data-ingestion-selected', false)
             ->assertSee('بررسی امن فایل')
-            ->assertSee('بررسی ساختار و امنیت');
+            ->assertSee('بررسی ساختار و امنیت')
+            ->assertSee('data-ingestion-security-scan', false)
+            ->assertDontSee('data-ingestion-security-scan checked', false);
+    }
+
+
+    public function test_store_management_permission_allows_non_admin_staff_to_use_product_console(): void
+    {
+        $category = $this->category();
+        $staff = User::create([
+            'name' => 'Product Manager',
+            'mobile' => '09123456780',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $permission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        RolePermission::query()->firstOrCreate([
+            'role' => User::ROLE_EMPLOYEE,
+            'permission_id' => $permission->id,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول مدیر فروشگاه',
+            'slug' => 'staff-managed-product',
+            'sku' => 'STAFF-MANAGED-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($staff)
+            ->get(route('admin.store.edit', $product))
+            ->assertOk()
+            ->assertSee('ویرایش محصول')
+            ->assertDontSee('data-ingestion-security-scan', false);
+
+        $this->assertFalse(app(\\App\\Services\\AuthorizationService::class)->allows($staff, 'store.security_scan_bypass'));
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
