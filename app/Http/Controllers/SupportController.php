@@ -70,12 +70,38 @@ class SupportController extends Controller
             $catalogProducts = StoreProduct::query()->published()->orderBy('title')->limit(80)->get(['id', 'title', 'slug']);
         }
 
+        $relatedOrders = collect();
+        if (Schema::hasTable('orders')) {
+            $relatedOrders = Order::query()
+                ->where('user_id', auth()->id())
+                ->with(['storeItems', 'document:id,title'])
+                ->latest()
+                ->limit(20)
+                ->get()
+                ->map(function (Order $order) {
+                    $items = $order->storeItems->pluck('title_snapshot')->filter()->implode('، ');
+                    $summary = $items ?: ($order->document?->title ?: 'سفارش');
+                    $status = match ($order->status) {
+                        'paid' => 'پرداخت‌شده',
+                        'pending' => 'در انتظار پرداخت',
+                        'failed' => 'ناموفق',
+                        'cancelled' => 'لغوشده',
+                        default => (string) $order->status,
+                    };
+
+                    return [
+                        'id' => $order->id,
+                        'label' => '#'.$order->id.' — '.\\Illuminate\\Support\\Str::limit($summary, 52).' — '.$status.' — '.number_format((int) $order->total_rials).' ریال',
+                    ];
+                });
+        }
+
         $services = [
             'typing' => 'تایپ آنلاین', 'convert' => 'تبدیل فایل', 'edit' => 'ویرایش هوشمند',
             'ocr' => 'OCR / استخراج متن', 'voice' => 'ورود صوتی', 'other' => 'سایر خدمات',
         ];
 
-        return view('support.create', compact('purchasedProducts', 'catalogProducts', 'services'));
+        return view('support.create', compact('purchasedProducts', 'catalogProducts', 'relatedOrders', 'services'));
     }
 
     public function show(Ticket $ticket, CapabilityService $capabilities)
@@ -83,7 +109,7 @@ class SupportController extends Controller
         abort_unless($capabilities->allowed(auth()->user(), 'can_support'), 403);
         $this->authorize('view', $ticket);
 
-        $ticket->load(['publicMessages.user', 'relatedProduct', 'assignee']);
+        $ticket->load(['publicMessages.user', 'relatedProduct', 'relatedOrder.storeItems', 'assignee']);
         $this->tickets->markCustomerSeen($ticket);
         $ticket->setRelation('messages', $ticket->publicMessages);
 
@@ -147,6 +173,7 @@ class SupportController extends Controller
             'topic_area' => 'required|string|in:services,store',
             'related_service' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'services'), 'nullable', 'string', 'max:80'],
             'related_product_id' => [Rule::requiredIf(fn () => $request->input('topic_area') === 'store'), 'nullable', 'integer', Rule::exists('store_products', 'id')],
+            'related_order_id' => ['nullable', 'integer', Rule::exists('orders', 'id')->where(fn ($query) => $query->where('user_id', auth()->id()))],
             'attachment' => 'nullable|file|max:5120|mimes:txt,jpg,jpeg,pdf,png',
         ], [
             'department.required' => 'دپارتمان را انتخاب کنید.',
@@ -178,6 +205,7 @@ class SupportController extends Controller
             'topic_area' => $data['topic_area'],
             'related_service' => $data['topic_area'] === 'services' ? ($data['related_service'] ?? null) : null,
             'related_product_id' => $data['topic_area'] === 'store' ? ($data['related_product_id'] ?? null) : null,
+            'related_order_id' => $data['related_order_id'] ?? null,
             'source' => 'dashboard',
         ], $request->file('attachment'));
 
@@ -265,7 +293,7 @@ class SupportController extends Controller
 
         $query = Ticket::with([
             'messages' => fn ($q) => $q->orderBy('created_at'),
-            'user', 'relatedProduct', 'assignee',
+            'user', 'relatedProduct', 'relatedOrder.storeItems', 'assignee',
         ]);
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -342,7 +370,7 @@ class SupportController extends Controller
 
         $active = null;
         if ($request->filled('ticket')) {
-            $active = Ticket::with(['messages' => fn ($q) => $q->orderBy('created_at'), 'user', 'relatedProduct', 'assignee'])
+            $active = Ticket::with(['messages' => fn ($q) => $q->orderBy('created_at'), 'user', 'relatedProduct', 'relatedOrder.storeItems', 'assignee'])
                 ->find($request->integer('ticket'));
         }
         if (! $active) {
