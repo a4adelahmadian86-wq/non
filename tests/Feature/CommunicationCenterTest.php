@@ -265,6 +265,11 @@ class CommunicationCenterTest extends TestCase
             ->assertOk()
             ->assertSee(route('support.show', $ownTicket), false)
             ->assertDontSee(route('admin.support.management', ['ticket' => $ownTicket->id]), false);
+
+        $this->get(route('support.show', $ownTicket))->assertOk();
+        $this->get(route('support.show', $otherTicket))->assertForbidden();
+        $this->post(route('support.message', $otherTicket), ['body' => 'تلاش برای پاسخ خارج از دامنه'])->assertForbidden();
+        $this->post(route('support.close', $otherTicket))->assertForbidden();
     }
 
     public function test_open_ticket_stat_counts_all_customer_tickets_not_only_the_recent_preview(): void
