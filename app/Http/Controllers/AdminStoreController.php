@@ -534,10 +534,19 @@ class AdminStoreController extends Controller
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
+            $code = $exception instanceof \\RuntimeException ? $exception->getMessage() : 'inspection_failed';
+            $message = match ($code) {
+                'antivirus_scanner_unavailable' => 'اسکن آنتی‌ویروس انتخاب شده است، اما موتور ClamAV روی سرور متصل یا آماده نیست؛ فایل ذخیره نشد.',
+                'antivirus_malware_detected' => 'موتور آنتی‌ویروس تهدیدی در فایل شناسایی کرد؛ فایل ذخیره نشد.',
+                'antivirus_scan_failed' => 'اسکن آنتی‌ویروس به‌طور کامل انجام نشد؛ فایل ذخیره نشد.',
+                default => 'بررسی اولیه فایل کامل نشد؛ فایل ذخیره نشده است.',
+            };
+            $status = $code === 'antivirus_scanner_unavailable' ? 503 : 422;
+
             return response()->json([
-                'message' => 'بررسی اولیه فایل کامل نشد؛ فایل ذخیره نشده است.',
-                'code' => class_basename($exception) === 'RuntimeException' ? $exception->getMessage() : 'inspection_failed',
-            ], 422);
+                'message' => $message,
+                'code' => $code,
+            ], $status);
         }
 
         return response()->json([
@@ -570,6 +579,12 @@ class AdminStoreController extends Controller
             ->where('status', 'inspected')
             ->where('expires_at', '>', now())
             ->firstOrFail();
+
+        abort_unless(
+            ! $ingestion->antivirus_requested || $ingestion->antivirus_status === 'clean',
+            409,
+            'اسکن آنتی‌ویروس انتخاب‌شده تکمیل یا تأیید نشده است؛ فایل قابل ذخیره‌سازی نیست.'
+        );
 
         $disk = Storage::disk($ingestion->staging_disk ?: 'private');
         abort_unless($disk->exists($ingestion->staging_path), 410, 'مهلت نگهداری فایل موقت تمام شده است؛ فایل را دوباره انتخاب کنید.');
@@ -638,7 +653,7 @@ class AdminStoreController extends Controller
                     'is_primary' => $lockedIngestion->is_primary,
                     'is_active' => true,
                     'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'clean',
-                    'scan_engine' => 'farast_static_v1',
+                    'scan_engine' => 'farast_static_v1'.($ingestion->antivirus_status === 'clean' ? '+clamav' : ''),
                     'scanned_at' => now(),
                 ]);
 
