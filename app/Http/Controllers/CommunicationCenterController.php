@@ -121,8 +121,20 @@ class CommunicationCenterController extends Controller
             ->take(24)
             ->values();
 
+        $customerUnreadTickets = 0;
+        if (! $isAdmin && $canSupport) {
+            $unreadTicketsQuery = Ticket::query()->where('user_id', $user->id)->where('status', 'answered');
+            if (Schema::hasColumn('tickets', 'customer_last_seen_at') && Schema::hasColumn('tickets', 'last_reply_at')) {
+                $unreadTicketsQuery->where(function ($query) {
+                    $query->whereNull('customer_last_seen_at')
+                        ->orWhereColumn('last_reply_at', '>', 'customer_last_seen_at');
+                });
+            }
+            $customerUnreadTickets = $unreadTicketsQuery->count();
+        }
+
         $stats = [
-            'tickets_needing_reply' => $isAdmin ? Ticket::query()->needsReply()->count() : $tickets->where('status', 'answered')->count(),
+            'tickets_needing_reply' => $isAdmin ? Ticket::query()->needsReply()->count() : $customerUnreadTickets,
             'tickets_open' => $isAdmin ? Ticket::query()->openQueue()->count() : $tickets->where('status', '!=', 'closed')->count(),
             'conversations_unread' => $unreadConversationsCount,
             'notifications_unread' => $unreadNotifications,
