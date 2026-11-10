@@ -450,8 +450,18 @@ class AdminAccessCenterController extends Controller
 
         if ($role->scope_type === 'team') {
             $teamId = (int) $role->scope_id;
-            $belongs = $target->teams()->where('teams.id', $teamId)->exists()
-                || Team::query()->whereKey($teamId)->where('supervisor_id', $target->id)->exists();
+            $team = Team::query()->whereKey($teamId)->first();
+            abort_unless(
+                $team && $target->organization_id !== null
+                && (int) $team->organization_id === (int) $target->organization_id,
+                422,
+                'تیم محدوده نقش خارج از سازمان کاربر است.'
+            );
+            $belongs = $target->teams()
+                ->where('teams.id', $teamId)
+                ->where('teams.organization_id', $target->organization_id)
+                ->exists()
+                || ((int) $team->supervisor_id === (int) $target->id);
             abort_unless($belongs, 422, 'کاربر عضو تیم محدوده نقش نیست.');
 
             if ($assignmentScope === 'team') {
@@ -487,8 +497,18 @@ class AdminAccessCenterController extends Controller
         if ($scope === 'organization') {
             abort_unless($user->organization_id && (int) $user->organization_id === $scopeId, 422, 'کاربر عضو سازمان انتخاب‌شده نیست.');
         } elseif ($scope === 'team') {
-            $belongs = $user->teams()->where('teams.id', $scopeId)->exists()
-                || Team::query()->where('id', $scopeId)->where('supervisor_id', $user->id)->exists();
+            $team = Team::query()->whereKey($scopeId)->first();
+            abort_unless(
+                $team && $user->organization_id !== null
+                && (int) $team->organization_id === (int) $user->organization_id,
+                422,
+                'تیم انتخاب‌شده خارج از سازمان کاربر است.'
+            );
+            $belongs = $user->teams()
+                ->where('teams.id', $scopeId)
+                ->where('teams.organization_id', $user->organization_id)
+                ->exists()
+                || ((int) $team->supervisor_id === (int) $user->id);
             abort_unless($belongs, 422, 'کاربر عضو یا سرپرست تیم انتخاب‌شده نیست.');
         }
     }
