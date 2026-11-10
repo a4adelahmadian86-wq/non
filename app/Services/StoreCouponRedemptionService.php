@@ -17,7 +17,8 @@ class StoreCouponRedemptionService
         $snapshot = $order->pricing_snapshot ?? [];
         $code = trim((string) ($snapshot['coupon_code'] ?? ''));
 
-        // Older pending orders already consumed usage at checkout; only redeem new flagged orders.\n        if ($code === '' || empty($snapshot['coupon_redemption_pending']) || ! empty($snapshot['coupon_redeemed_at'])) {
+        // Older pending orders already consumed usage at checkout; only redeem new flagged orders.
+        if ($code === '' || empty($snapshot['coupon_redemption_pending']) || ! empty($snapshot['coupon_redeemed_at'])) {
             return;
         }
 
@@ -33,7 +34,8 @@ class StoreCouponRedemptionService
 
         $coupon->increment('used_count');
 
-        $snapshot['coupon_redemption_pending'] = false;\n        $snapshot['coupon_redeemed_at'] = now()->toIso8601String();
+        $snapshot['coupon_redemption_pending'] = false;
+        $snapshot['coupon_redeemed_at'] = now()->toIso8601String();
         $order->update(['pricing_snapshot' => $snapshot]);
     }
 }
