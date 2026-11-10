@@ -93,13 +93,13 @@
                                         <span class="dashboard-trend-bar documents" style="height: {{ $documentValue > 0 ? max(2, round(($documentValue / $trendMaximum) * 100)) : 0 }}%" title="اسناد: {{ number_format($documentValue) }}"></span>
                                         <span class="dashboard-trend-bar ai" style="height: {{ $aiValue > 0 ? max(2, round(($aiValue / $trendMaximum) * 100)) : 0 }}%" title="تعامل AI: {{ number_format($aiValue) }}"></span>
                                     </div>
-                                    <small class="dashboard-trend-date">{{ \\Illuminate\\Support\\Carbon::parse($day)->format('m/d') }}</small>
+                                    <small class="dashboard-trend-date">{{ \Illuminate\Support\Carbon::parse($day)->format('m/d') }}</small>
                                 </div>
                             @endforeach
                         </div>
                     </div>
                 @endif
-                <div class="dashboard-trend-axis"><span>{{ \\Illuminate\\Support\\Carbon::parse($trendLabels[0])->format('Y/m/d') }}</span><span>{{ \\Illuminate\\Support\\Carbon::parse($trendLabels[count($trendLabels) - 1])->format('Y/m/d') }}</span></div>
+                <div class="dashboard-trend-axis"><span>{{ \Illuminate\Support\Carbon::parse($trendLabels[0])->format('Y/m/d') }}</span><span>{{ \Illuminate\Support\Carbon::parse($trendLabels[count($trendLabels) - 1])->format('Y/m/d') }}</span></div>
                 <table class="dashboard-trend-sr-only">
                     <caption>داده‌های روزانهٔ نمودار فعالیت</caption>
                     <thead><tr><th>تاریخ</th><th>کاربران</th><th>اسناد</th><th>تعامل AI</th></tr></thead>
