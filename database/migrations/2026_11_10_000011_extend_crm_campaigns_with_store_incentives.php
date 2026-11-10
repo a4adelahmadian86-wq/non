@@ -45,7 +45,10 @@ return new class extends Migration
 
         if (Schema::hasTable('crm_marketing_campaigns')) {
             Schema::table('crm_marketing_campaigns', function (Blueprint $table) {
-                foreach (['incentive_product_id', 'incentive_discount_percent', 'incentive_valid_hours', 'budget_cap_rials'] as $column) {
+                if (Schema::hasColumn('crm_marketing_campaigns', 'incentive_product_id')) {
+                    $table->dropConstrainedForeignId('incentive_product_id');
+                }
+                foreach (['incentive_discount_percent', 'incentive_valid_hours', 'budget_cap_rials'] as $column) {
                     if (Schema::hasColumn('crm_marketing_campaigns', $column)) {
                         $table->dropColumn($column);
                     }
