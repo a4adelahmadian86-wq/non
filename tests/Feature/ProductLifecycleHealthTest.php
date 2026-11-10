@@ -88,4 +88,68 @@ class ProductLifecycleHealthTest extends TestCase
             ->assertViewHas('lifecycleHealth')
             ->assertSee('یکپارچگی چرخه عمر محصول');
     }
+
+    public function test_reader_only_health_accepts_only_a_hash_matched_ready_primary_document_with_pages(): void
+    {
+        $category = StoreCategory::create([
+            'name' => 'خوانشگر',
+            'slug' => 'reader-health-category',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول خوانشگر آماده',
+            'slug' => 'reader-health-ready',
+            'sku' => 'READER-HEALTH-READY',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'published',
+            'published_at' => now()->subMinute(),
+            'download_policy' => 'reader_only',
+        ]);
+        $hash = hash('sha256', 'reader-source');
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'private',
+            'path' => 'store/reader-health/source.pdf',
+            'original_name' => 'source.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => 13,
+            'sha256' => $hash,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+        $document = StoreProductDocument::create([
+            'product_id' => $product->id,
+            'product_file_id' => $file->id,
+            'source_sha256' => $hash,
+            'processing_status' => 'completed',
+            'detected_type' => 'pdf',
+            'page_count' => 1,
+            'structure_json' => ['reader' => ['ready' => true]],
+        ]);
+        $document->pages()->create([
+            'page_number' => 1,
+            'page_kind' => 'pdf_page',
+            'locator_key' => 'page:1',
+            'locator_json' => ['page' => 1],
+            'content_text' => 'متن صفحه',
+            'content_html' => '<p>متن صفحه</p>',
+            'content_sha256' => hash('sha256', 'متن صفحه'),
+            'has_extracted_text' => true,
+        ]);
+
+        $snapshot = app(ProductLifecycleHealthService::class)->snapshot();
+        $this->assertSame(0, $snapshot['reader_only_without_ready_document']);
+
+        $file->update(['is_active' => false]);
+        $snapshot = app(ProductLifecycleHealthService::class)->snapshot();
+        $this->assertSame(1, $snapshot['reader_only_without_ready_document']);
+    }
+
 }
