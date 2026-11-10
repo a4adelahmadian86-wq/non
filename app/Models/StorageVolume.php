@@ -9,9 +9,9 @@ class StorageVolume extends Model
 {
     protected $fillable = [
         'drive_key', 'name', 'provider', 'driver', 'region', 'endpoint', 'bucket',
-        'credentials', 'capacity_bytes', 'used_bytes', 'file_limit', 'max_file_bytes',
-        'priority', 'is_active', 'status', 'last_checked_at', 'last_success_at',
-        'capabilities', 'metadata',
+        'credentials', 'capacity_bytes', 'used_bytes', 'reserved_bytes', 'reserved_files',
+        'file_limit', 'max_file_bytes', 'priority', 'is_active', 'status',
+        'last_checked_at', 'last_success_at', 'capabilities', 'metadata',
     ];
 
     protected function casts(): array
@@ -22,6 +22,8 @@ class StorageVolume extends Model
             'metadata' => 'array',
             'capacity_bytes' => 'integer',
             'used_bytes' => 'integer',
+            'reserved_bytes' => 'integer',
+            'reserved_files' => 'integer',
             'file_limit' => 'integer',
             'max_file_bytes' => 'integer',
             'priority' => 'integer',
@@ -38,6 +40,8 @@ class StorageVolume extends Model
 
     public function getFreeBytesAttribute(): ?int
     {
-        return $this->capacity_bytes === null ? null : max(0, $this->capacity_bytes - $this->used_bytes);
+        return $this->capacity_bytes === null
+            ? null
+            : max(0, $this->capacity_bytes - $this->used_bytes - $this->reserved_bytes);
     }
 }
