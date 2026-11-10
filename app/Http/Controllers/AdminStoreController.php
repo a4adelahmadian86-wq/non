@@ -464,7 +464,15 @@ class AdminStoreController extends Controller
     public function preflightFile(Request $request, StoreProduct $product, UploadSecurityService $security)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، فایل‌ها را در بخش منابع هر جلسه بارگذاری کنید.');
-        $request->validate(['file' => 'required|file|max:51200', 'is_primary' => 'nullable|boolean']);
+        $request->validate([
+            'file' => 'required|file|max:51200',
+            'is_primary' => 'nullable|boolean',
+            'security_scan' => 'nullable|boolean',
+        ]);
+        $antivirusRequested = $request->boolean('security_scan');
+        $canRequestAntivirus = app(\App\Services\AuthorizationService::class)
+            ->allows(auth()->user(), 'store.security_scan');
+        abort_if($antivirusRequested && ! $canRequestAntivirus, 403, 'مجوز درخواست اسکن آنتی‌ویروس برای این حساب فعال نیست.');
 
         $upload = $request->file('file');
         $originalNameLower = strtolower(str_replace('\\', '/', $upload->getClientOriginalName()));
@@ -499,6 +507,19 @@ class AdminStoreController extends Controller
         try {
             $inspection = $security->inspect($path, $upload->getMimeType(), 50 * 1024 * 1024);
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ایستای داخلی عبور نکرده است.');
+            $antivirusResult = null;
+            if ($antivirusRequested) {
+                $stream = Storage::disk('private')->readStream($path);
+                if (! is_resource($stream)) {
+                    throw new \RuntimeException('antivirus_source_unavailable');
+                }
+                try {
+                    $antivirusResult = app(\App\Services\OptionalAntivirusScanner::class)->scanStream($stream);
+                } finally {
+                    fclose($stream);
+                }
+                $inspection['antivirus'] = $antivirusResult;
+            }
             $ingestion = StoreProductIngestion::create([
                 'id' => (string) Str::uuid(),
                 'product_id' => $product->id,
@@ -512,6 +533,11 @@ class AdminStoreController extends Controller
                 'sha256' => $inspection['checksum'],
                 'inspection_json' => $inspection,
                 'is_primary' => $request->boolean('is_primary', true),
+                'antivirus_requested' => $antivirusRequested,
+                'antivirus_status' => $antivirusResult['status'] ?? null,
+                'antivirus_engine' => $antivirusResult['engine'] ?? null,
+                'antivirus_version' => $antivirusResult['version'] ?? null,
+                'antivirus_scanned_at' => isset($antivirusResult['scanned_at']) ? now() : null,
                 'expires_at' => now()->addMinutes(30),
             ]);
         } catch (Throwable $exception) {
@@ -519,10 +545,16 @@ class AdminStoreController extends Controller
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
-            return response()->json([
-                'message' => 'بررسی اولیه فایل کامل نشد؛ فایل ذخیره نشده است.',
-                'code' => class_basename($exception) === 'RuntimeException' ? $exception->getMessage() : 'inspection_failed',
-            ], 422);
+            $code = $exception instanceof \RuntimeException ? $exception->getMessage() : 'inspection_failed';
+            $message = match ($code) {
+                'antivirus_scanner_unavailable' => 'اسکن آنتی‌ویروس انتخاب شده است، اما موتور ClamAV روی سرور متصل یا آماده نیست؛ فایل ذخیره نشد.',
+                'antivirus_malware_detected' => 'موتور آنتی‌ویروس تهدیدی در فایل شناسایی کرد؛ فایل ذخیره نشد.',
+                'antivirus_scan_failed' => 'اسکن آنتی‌ویروس کامل نشد؛ فایل ذخیره نشد.',
+                default => 'بررسی اولیه فایل کامل نشد؛ فایل ذخیره نشده است.',
+            };
+            $status = $code === 'antivirus_scanner_unavailable' ? 503 : 422;
+
+            return response()->json(['message' => $message, 'code' => $code], $status);
         }
 
         return response()->json([
@@ -536,6 +568,9 @@ class AdminStoreController extends Controller
                 'sha256' => $ingestion->sha256,
             ],
             'inspection' => $inspection,
+            'antivirus' => $antivirusRequested
+                ? ['requested' => true, 'status' => $antivirusResult['status'] ?? 'unknown', 'engine' => $antivirusResult['engine'] ?? null, 'version' => $antivirusResult['version'] ?? null]
+                : ['requested' => false, 'status' => 'not_requested'],
         ], 201);
     }
 
@@ -555,6 +590,11 @@ class AdminStoreController extends Controller
 
         $inspection = $security->inspect($ingestion->staging_path, $ingestion->mime, 50 * 1024 * 1024);
         abort_unless(hash_equals((string) $ingestion->sha256, (string) $inspection['checksum']), 409, 'فایل پس از بررسی اولیه تغییر کرده است؛ دوباره آن را بارگذاری کنید.');
+        abort_unless(
+            ! $ingestion->antivirus_requested || $ingestion->antivirus_status === 'clean',
+            409,
+            'اسکن آنتی‌ویروس انتخاب‌شده کامل یا تأیید نشده است؛ فایل قابل ذخیره‌سازی نیست.'
+        );
 
         $originalNameLower = strtolower($ingestion->original_name);
         $finalExtension = str_ends_with($originalNameLower, '.tar.gz')
@@ -629,7 +669,7 @@ class AdminStoreController extends Controller
                     'is_primary' => $lockedIngestion->is_primary,
                     'is_active' => true,
                     'scan_status' => ($inspection['risk_level'] ?? 'low') === 'warning' ? 'warning' : 'clean',
-                    'scan_engine' => 'farast_static_v1',
+                    'scan_engine' => $lockedIngestion->antivirus_requested ? 'farast_static_v1+clamav' : 'farast_static_v1',
                     'scanned_at' => now(),
                 ]);
 
@@ -666,7 +706,11 @@ class AdminStoreController extends Controller
 
                 return [$record, $productRequiresRepublish];
             });
-            $storage->bindReference((int) $managed['managed_file_id'], StoreProductFile::class, (int) $fileRecord->id, (int) $product->id);
+            StorageManagedFile::whereKey($managed['managed_file_id'])->update([
+                'source_type' => StoreProductFile::class,
+                'source_id' => $fileRecord->id,
+                'product_id' => $product->id,
+            ]);
             $disk->delete($finalPath);
         } catch (Throwable $exception) {
             $storage->delete($managed['disk'], $managed['path']);
