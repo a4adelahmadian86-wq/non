@@ -60,6 +60,34 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => 'document:invalid-user:1']);
     }
 
+    public function test_authenticated_ticket_creation_dispatches_a_workflow_event(): void
+    {
+        $owner = $this->owner('09140000211');
+        $workflow = $this->workflow($owner, ['trigger_type' => 'ticket.created']);
+
+        $this->actingAs($owner)->post('/support/tickets', [
+            'subject' => 'Workflow integration test',
+            'body' => 'Test ticket event dispatch',
+            'department' => 'support',
+            'priority' => 'normal',
+            'topic_area' => 'services',
+            'related_service' => 'typing',
+        ])->assertRedirect();
+
+        $ticket = DB::table('tickets')->where('user_id', $owner->id)->where('subject', 'Workflow integration test')->first();
+        $this->assertNotNull($ticket);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:'.$ticket->id.':created',
+            'event_type' => 'ticket.created',
+            'user_id' => $owner->id,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflow,
+            'status' => 'completed',
+        ]);
+    }
+
     public function test_document_revision_metadata_is_accepted_as_a_trusted_event_field(): void
     {
         $owner = $this->owner('09140000210');
