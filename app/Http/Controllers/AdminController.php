@@ -75,6 +75,7 @@ class AdminController extends Controller
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
         $canManageAnnouncements = $console->sectionAllowed($actor, 'announcements');
         $canViewAnalytics = $console->sectionAllowed($actor, 'analytics');
+        $canViewAudit = $console->sectionAllowed($actor, 'audit');
 
         $settings = [];
         if ($globalScope) {
@@ -370,11 +371,28 @@ class AdminController extends Controller
             ],
             'ticketStats' => $ticketStats,
             'topConsumers' => $canViewAnalytics ? $topConsumers : collect(),
-            'recentAudit' => (Schema::hasTable('audit_logs') && $scope === AdminConsoleService::SCOPE_GLOBAL)
-                ? DB::table('audit_logs')->leftJoin('users', 'users.id', '=', 'audit_logs.user_id')
-                    ->latest('audit_logs.id')->limit(7)
-                    ->get(['audit_logs.action', 'audit_logs.created_at', 'users.name as actor_name'])
-                : collect(),
+            'recentAudit' => (function () use ($canViewAudit, $visibleIds) {
+                if (! $canViewAudit || ! Schema::hasTable('audit_logs')) {
+                    return collect();
+                }
+
+                // Scoped operators may only see audit entries attributed to users
+                // inside their visible user set. Never fall back to a global feed.
+                if ($visibleIds !== null && ! Schema::hasColumn('audit_logs', 'user_id')) {
+                    return collect();
+                }
+
+                $query = DB::table('audit_logs')
+                    ->leftJoin('users', 'users.id', '=', 'audit_logs.user_id');
+
+                if ($visibleIds !== null) {
+                    $query->whereIn('audit_logs.user_id', $visibleIds);
+                }
+
+                return $query->latest('audit_logs.id')
+                    ->limit(8)
+                    ->get(['audit_logs.action', 'audit_logs.created_at', 'users.name as actor_name']);
+            })(),
             'settings' => $globalScope ? $settings : [
                 'weekly_free_pages' => '',
                 'max_file_mb' => '',
