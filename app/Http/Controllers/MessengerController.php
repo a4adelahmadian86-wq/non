@@ -159,40 +159,71 @@ class MessengerController extends Controller
             } catch (\Throwable $exception) {
                 Storage::disk('private')->delete($path);
                 foreach ($attachments as $stored) {
-                    Storage::disk('private')->delete($stored['path']);
+                    Storage::disk($stored['disk'] ?? 'private')->delete($stored['path']);
                 }
                 throw ValidationException::withMessages([
                     'attachments' => ['فایل پیوست توسط بررسی امنیتی داخلی پذیرفته نشد: '.$exception->getMessage()],
                 ]);
             }
 
+            $mime = (string) ($inspection['mime'] ?? $file->getMimeType());
+            $originalName = Str::limit(basename($file->getClientOriginalName()), 180, '');
+            $stream = Storage::disk('private')->readStream($path);
+            abort_unless(is_resource($stream), 503, 'خواندن فایل اسکن‌شده ممکن نشد.');
+            try {
+                $stored = Storage::disk('managed')->put($path, $stream, [
+                    'farast_classification' => 'non_critical',
+                    'farast_source_type' => 'messenger_attachment',
+                    'farast_source_id' => $conversation->id,
+                    'farast_owner_user_id' => $request->user()->id,
+                    'farast_original_name' => $originalName,
+                    'mimetype' => $mime,
+                ]);
+            } finally {
+                fclose($stream);
+            }
+            if (! $stored) {
+                Storage::disk('private')->delete($path);
+                throw ValidationException::withMessages(['attachments' => ['ذخیره پیوست در فضای مرکزی ممکن نشد.']]);
+            }
+            Storage::disk('private')->delete($path);
+            $managedFile = \App\Models\StorageManagedFile::query()->where('logical_path', $path)->first();
+
             $attachments[] = [
                 'path' => $path,
-                'disk' => 'private',
-                'name' => Str::limit(basename($file->getClientOriginalName()), 180, ''),
+                'disk' => 'managed',
+                'storage_managed_file_id' => $managedFile?->id,
+                'name' => $originalName,
                 'size' => (int) $file->getSize(),
-                'mime' => (string) ($inspection['mime'] ?? $file->getMimeType()),
+                'mime' => $mime,
                 'sha256' => (string) ($inspection['checksum'] ?? ''),
                 'scan' => (string) ($inspection['scan'] ?? 'farast_static_v1'),
                 'risk_level' => (string) ($inspection['risk_level'] ?? 'unknown'),
             ];
         }
 
-        $message = DB::transaction(function () use ($conversation, $request, $body, $replyTo, $attachments) {
-            $message = $conversation->messages()->create([
-                'user_id' => $request->user()->id,
-                'reply_to_id' => $replyTo?->id,
-                'body' => $body,
-                'attachments' => $attachments ?: null,
-            ]);
+        try {
+            $message = DB::transaction(function () use ($conversation, $request, $body, $replyTo, $attachments) {
+                $message = $conversation->messages()->create([
+                    'user_id' => $request->user()->id,
+                    'reply_to_id' => $replyTo?->id,
+                    'body' => $body,
+                    'attachments' => $attachments ?: null,
+                ]);
 
-            $conversation->forceFill([
-                'last_message_at' => $message->created_at,
-                'last_message_preview' => Str::limit($body !== '' ? $body : 'فایل پیوست', 220),
-            ])->save();
+                $conversation->forceFill([
+                    'last_message_at' => $message->created_at,
+                    'last_message_preview' => Str::limit($body !== '' ? $body : 'فایل پیوست', 220),
+                ])->save();
 
-            return $message;
-        });
+                return $message;
+            });
+        } catch (\Throwable $exception) {
+            foreach ($attachments as $stored) {
+                Storage::disk($stored['disk'] ?? 'private')->delete($stored['path']);
+            }
+            throw $exception;
+        }
 
         DB::table('conversation_participants')->where('conversation_id', $conversation->id)->update(['archived_at' => null, 'updated_at' => now()]);
 
