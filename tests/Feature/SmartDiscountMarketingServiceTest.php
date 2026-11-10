@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\SiteSetting;
 use App\Models\StoreCategory;
 use App\Models\StoreCouponAssignment;
+use App\Models\StoreCoupon;
 use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
 use App\Models\User;
@@ -118,6 +119,45 @@ class SmartDiscountMarketingServiceTest extends TestCase
             $product->price_rials - $product->cost_price_rials - $product->marketing_min_margin_rials,
             $assignment->coupon->value
         );
+    }
+
+
+    public function test_engine_reduces_incentive_after_strong_product_conversion_history(): void
+    {
+        $user = $this->user();
+        $product = $this->product(60000, 10000);
+
+        for ($i = 0; $i < 10; $i++) {
+            $historyUser = $this->user(false);
+            $coupon = StoreCoupon::create([
+                'code' => 'HISTORY'.str_pad((string) $i, 4, '0', STR_PAD_LEFT),
+                'type' => 'fixed',
+                'value' => 10000,
+                'max_uses' => 1,
+                'used_count' => $i < 4 ? 1 : 0,
+                'is_active' => true,
+            ]);
+            StoreCouponAssignment::create([
+                'coupon_id' => $coupon->id,
+                'user_id' => $historyUser->id,
+                'product_id' => $product->id,
+                'status' => $i < 4 ? 'redeemed' : 'offered',
+                'score' => 6,
+                'reason_codes' => ['wishlist_interest'],
+                'offered_at' => now()->subDays(5),
+                'expires_at' => now()->addDay(),
+                'redeemed_at' => $i < 4 ? now()->subDays(4) : null,
+            ]);
+        }
+
+        $this->createQualifiedSignals($user, $product);
+
+        $assignment = StoreCouponAssignment::query()
+            ->where('user_id', $user->id)
+            ->with('coupon')
+            ->firstOrFail();
+
+        $this->assertSame(7500, $assignment->coupon->value);
     }
 
     public function test_engine_keeps_a_five_percent_default_margin_when_product_floor_is_not_configured(): void
