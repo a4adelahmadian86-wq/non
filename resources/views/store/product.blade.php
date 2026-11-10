@@ -166,7 +166,7 @@
           @endif
         </div>
 
-        <button type="button" class="add-to-cart" data-product-id="{{ $product->id }}">
+        <button type="button" class="add-to-cart" data-product-id="{{ $product->id }}" aria-live="polite">
           <i class="fa-solid fa-bag-shopping"></i>
           {{ (int)$product->price_rials===0 ? 'افزودن (رایگان)' : 'افزودن به سبد' }}
         </button>
@@ -226,7 +226,7 @@
 </section>
 @endsection
 @push('styles')
-<link rel="stylesheet" href="/css/store.css?v=20261109product4">
+<link rel="stylesheet" href="/css/store.css?v=20261110product5">
 <link rel="stylesheet" href="/css/content-discussions.css?v=20261109community4">
 <style>
 
@@ -270,14 +270,26 @@
     }catch(error){if(error?.name!=='AbortError')window.prompt('پیوند محصول را کپی کنید:',shareData.url);}
   });
   document.querySelectorAll('.add-to-cart').forEach(b=>b.addEventListener('click',async()=>{
+    if(b.dataset.adding==='1'||b.dataset.added==='1')return;
+    b.dataset.adding='1';
     b.disabled=true;
+    const originalLabel=b.innerHTML;
     try{
       const r=await fetch('/cart/products/'+b.dataset.productId,{method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({quantity:1})});
-      const j=await r.json(); if(!r.ok) throw new Error(j.message||'افزودن ناموفق');
-      b.innerHTML='<i class="fa-solid fa-check"></i> به سبد اضافه شد';
+      const j=await r.json();
+      if(!r.ok||j.ok===false) throw new Error(j.message||'افزودن محصول به سبد خرید انجام نشد.');
+      b.dataset.added='1';
+      b.innerHTML='<i class="fa-solid fa-check" aria-hidden="true"></i> در سبد خرید قرار گرفت';
+      b.setAttribute('aria-label','این محصول به سبد خرید اضافه شده است؛ برای تغییر تعداد، سبد خرید را مشاهده کنید.');
       if(window.FarastCart?.refresh) window.FarastCart.refresh();
       const c=document.getElementById('farastCartCount'); if(c&&j.count!=null) c.textContent=j.count;
-    }catch(e){alert(e.message)} finally{b.disabled=false}
+    }catch(e){
+      b.disabled=false;
+      b.innerHTML=originalLabel;
+      alert(e.message||'خطا در افزودن محصول');
+    }finally{
+      delete b.dataset.adding;
+    }
   }));
   document.querySelectorAll('.wishlist-btn').forEach(b=>b.addEventListener('click',async()=>{
     b.disabled=true;
