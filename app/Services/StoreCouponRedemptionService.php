@@ -14,7 +14,7 @@ class StoreCouponRedemptionService
 {
     /**
      * Redeem only inside the transaction that marks an order paid.
-     * The caller must hold a row lock on the order; this method locks the coupon too.
+     * The caller holds the order lock; this method serializes consent, assignment, campaign, coupon, and budget checks.
      */
     public function redeemForPaidOrder(Order $order): void
     {
