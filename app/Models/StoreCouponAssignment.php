@@ -20,11 +20,6 @@ class StoreCouponAssignment extends Model
         'redeemed_at' => 'datetime',
     ];
 
-    public function campaign(): BelongsTo
-    {
-        return $this->belongsTo(\\Illuminate\\Database\\Eloquent\\Model::class, 'campaign_id');
-    }
-
     public function coupon(): BelongsTo
     {
         return $this->belongsTo(StoreCoupon::class, 'coupon_id');
