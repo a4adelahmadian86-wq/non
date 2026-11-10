@@ -20,4 +20,14 @@ class StoreCoupon extends Model
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $coupon): void {
+            $coupon->code = mb_strtoupper(trim((string) $coupon->code));
+            $coupon->description = filled($coupon->description)
+                ? trim((string) $coupon->description)
+                : null;
+        });
+    }
 }
