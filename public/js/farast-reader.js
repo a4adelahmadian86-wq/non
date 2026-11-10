@@ -85,12 +85,14 @@
       const response=await fetch(remoteStateUrl,{credentials:'same-origin',headers:{'Accept':'application/json'}});
       if(!response.ok)return;
       const remote=await response.json();
-      if(remote.updated_at){
+      const hasLocalState=Boolean(readerState.progress||readerState.bookmarks.length);
+      if(remote.updated_at&&!hasLocalState){
         const saved=remote.progress;
         readerState.progress=saved&&Number.isInteger(saved.section)&&Number.isInteger(saved.page)&&saved.section>=0&&saved.section<articles.length&&saved.page>0?saved:null;
         readerState.bookmarks=(Array.isArray(remote.bookmarks)?remote.bookmarks:[])
           .filter(item=>item&&Number.isInteger(item.section)&&Number.isInteger(item.page)&&item.section>=0&&item.section<articles.length&&item.page>0).slice(0,100);
-      }else if(readerState.progress||readerState.bookmarks.length){
+      }else if(hasLocalState){
+        // Device-local IndexedDB state is canonical; remote state is only a fallback for a new device.
         queueRemoteSync();
       }
       persistReaderState();
