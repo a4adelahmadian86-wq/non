@@ -537,7 +537,7 @@ class AdminStoreController extends Controller
         ], 201);
     }
 
-    public function confirmFileUpload(Request $request, StoreProduct $product, string $ingestionId, UploadSecurityService $security)
+    public function confirmFileUpload(Request $request, StoreProduct $product, string $ingestionId, UploadSecurityService $security, StorageManager $storage)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، منابع را از مدیریت جلسات بارگذاری کنید.');
         $ingestion = StoreProductIngestion::query()
@@ -606,8 +606,8 @@ class AdminStoreController extends Controller
                     'product_id' => $lockedProduct->id,
                     'purpose' => 'product_download',
                     'version' => $lockedProduct->version,
-                    'disk' => 'private',
-                    'path' => $finalPath,
+                    'disk' => $managed['disk'],
+                    'path' => $managed['path'],
                     'original_name' => $lockedIngestion->original_name,
                     'mime' => $inspection['mime'],
                     'size_bytes' => $inspection['size'],
@@ -633,7 +633,7 @@ class AdminStoreController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                $lockedIngestion->update(['status' => 'uploaded', 'confirmed_at' => now(), 'staging_path' => $finalPath]);
+                $lockedIngestion->update(['status' => 'uploaded', 'confirmed_at' => now(), 'staging_path' => 'uploaded:'.$managed['managed_file_id']]);
                 $this->audit('store.product.file_uploaded', $lockedProduct, [
                     'file_id' => $record->id,
                     'mime' => $record->mime,
@@ -652,7 +652,14 @@ class AdminStoreController extends Controller
 
                 return [$record, $productRequiresRepublish];
             });
+            StorageManagedFile::whereKey($managed['managed_file_id'])->update([
+                'source_type' => StoreProductFile::class,
+                'source_id' => $fileRecord->id,
+                'product_id' => $product->id,
+            ]);
+            $disk->delete($finalPath);
         } catch (Throwable $exception) {
+            $storage->delete($managed['disk'], $managed['path']);
             $disk->delete($finalPath);
             throw $exception;
         }
