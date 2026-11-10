@@ -253,6 +253,34 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertTrue(app(AuthorizationService::class)->allows($admin, 'automation.manage'));
     }
 
+    public function test_assigned_role_scope_cannot_be_retargeted_without_revoking_assignments(): void
+    {
+        $admin = $this->user('09140000116', User::ROLE_ADMIN);
+        $employee = $this->user('09140000117');
+        $roleId = $this->role('scope-retarget-guard', 'global');
+        $this->assign($employee, $roleId, 'global');
+
+        $organization = Organization::create([
+            'name' => 'Retarget Guard Org',
+            'slug' => 'retarget-guard-org',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->put('/admin/access-center/roles/'.$roleId, [
+            'name' => 'Scope Retarget Guard',
+            'description' => 'Must not widen existing assignments',
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+            'is_active' => true,
+        ])->assertStatus(409);
+
+        $this->assertDatabaseHas('farast_roles', [
+            'id' => $roleId,
+            'scope_type' => 'global',
+            'scope_id' => null,
+        ]);
+    }
+
     public function test_admin_can_create_assign_and_revoke_scoped_custom_access(): void
     {
         $organization = Organization::create(['name' => 'Managed Access Org', 'slug' => 'managed-access-org', 'status' => 'active']);
