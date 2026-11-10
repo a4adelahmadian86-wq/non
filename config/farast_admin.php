@@ -23,6 +23,7 @@ return [
     // این جدول هم در فیلتر ناوبری و هم در کنترل دسترسی سطح‌عمقی استفاده می‌شود.
     'sections' => [
         'overview'      => ['permission' => 'dashboard.view',     'min_scope' => 'own'],
+        'storage'       => ['permission' => 'integrations.manage', 'min_scope' => 'global'],
         'users'         => ['permission' => 'users.view',         'min_scope' => 'team'],
         'marketing'     => ['permission' => 'users.view',         'min_scope' => 'team'],
         'documents'     => ['permission' => 'documents.view',     'min_scope' => 'own'],
