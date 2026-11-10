@@ -494,8 +494,18 @@
     }).join('');
     const errors = state.rejected.map(item => '<div class="product-ingestion-queue-error"><strong>' +
       escapeHtml(item.name) + '</strong><small>' + escapeHtml(item.reason) + '</small></div>').join('');
+    const current = state.current;
+    const currentDetails = current
+      ? '<div class="product-ingestion-archive-detail"><dl>' +
+        '<div><dt>مسیر و نام</dt><dd>' + escapeHtml(current.webkitRelativePath || current.relativePath || current.name) + '</dd></div>' +
+        '<div><dt>نوع اعلام‌شده مرورگر</dt><dd>' + escapeHtml(current.type || fileExtension(current.name).toUpperCase() || 'نامشخص') + '</dd></div>' +
+        '<div><dt>حجم</dt><dd>' + formatBytes(current.size) + '</dd></div>' +
+        '<div><dt>آخرین تغییر</dt><dd>' + (current.lastModified ? escapeHtml(new Date(current.lastModified).toLocaleDateString('fa-IR')) : 'ثبت نشده') + '</dd></div>' +
+        '<div><dt>تعداد صفحات و پدیدآورنده</dt><dd>پس از بررسی امن فایل، در گزارش فنی نمایش داده می‌شود.</dd></div>' +
+        '</dl></div>'
+      : '';
     selectedView.innerHTML = files.length
-      ? '<strong>فهرست انتخاب‌شده · ' + files.length + ' فایل</strong>' + rows + errors
+      ? '<strong>فهرست انتخاب‌شده · ' + files.length + ' فایل</strong>' + rows + currentDetails + errors
       : errors;
   };
 
