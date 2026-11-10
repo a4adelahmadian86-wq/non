@@ -168,7 +168,6 @@ class AccountSecuritySessionsTest extends TestCase
                 'user_agent' => 'Audit browser '.$i,
                 'meta' => json_encode(['sequence' => $i]),
                 'created_at' => now()->subMinutes($i),
-                'updated_at' => now()->subMinutes($i),
             ]);
         }
 
