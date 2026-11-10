@@ -347,7 +347,13 @@ class SmartDiscountMarketingServiceTest extends TestCase
             'event_type' => 'marketing.offer_viewed',
         ]);
 
-        $this->postJson(route('store.smart-offer.interaction', $assignment))
+        $otherUser = $this->user();
+        $this->actingAs($otherUser)
+            ->postJson(route('store.smart-offer.interaction', $assignment))
+            ->assertNotFound();
+
+        $this->actingAs($user)
+            ->postJson(route('store.smart-offer.interaction', $assignment))
             ->assertOk()
             ->assertJsonPath('ok', true);
         $this->assertDatabaseHas('farast_workflow_events', [
