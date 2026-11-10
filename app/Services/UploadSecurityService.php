@@ -542,9 +542,11 @@ class UploadSecurityService
                         throw $exception;
                     }
                 } else {
-                    $contentScan = 'skipped_size_limit';
-                    $risk = 'warning';
-                    $findings[] = 'محتوای عضو بزرگ آرشیو به‌دلیل سقف بررسی ایستا به‌طور کامل خوانده نشد: '.$normalized;
+                    $contentScan = $securityScan ? 'skipped_size_limit' : 'not_requested';
+                    if ($securityScan) {
+                        $risk = 'warning';
+                        $findings[] = 'محتوای عضو بزرگ آرشیو به‌دلیل سقف بررسی ایستا به‌طور کامل خوانده نشد: '.$normalized;
+                    }
                 }
             }
             fseek($handle, $centralPosition);
