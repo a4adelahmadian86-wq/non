@@ -369,13 +369,24 @@ class AuthorizationService
     private function teamIdsForUser(User $user): array
     {
         if (! array_key_exists($user->id, $this->teamIdsByUser)) {
-            $memberIds = $user->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
-            $supervisedIds = \App\Models\Team::query()
-                ->where('supervisor_id', $user->id)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
-            $this->teamIdsByUser[$user->id] = array_values(array_unique(array_merge($memberIds, $supervisedIds)));
+            // Team membership is subordinate to the user's organization. A stale
+            // or malformed cross-organization pivot must never expand scope.
+            if (! $user->organization_id) {
+                $this->teamIdsByUser[$user->id] = [];
+            } else {
+                $memberIds = $user->teams()
+                    ->where('teams.organization_id', $user->organization_id)
+                    ->pluck('teams.id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $supervisedIds = \App\Models\Team::query()
+                    ->where('supervisor_id', $user->id)
+                    ->where('organization_id', $user->organization_id)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $this->teamIdsByUser[$user->id] = array_values(array_unique(array_merge($memberIds, $supervisedIds)));
+            }
         }
 
         return $this->teamIdsByUser[$user->id];
