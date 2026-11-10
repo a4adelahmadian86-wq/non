@@ -117,6 +117,11 @@ class AdminStoreCouponController extends Controller
             'abandonment_hours' => ['required', 'integer', 'min:1', 'max:72'],
             'retention_days' => ['required', 'integer', 'min:7', 'max:180'],
         ]);
+        if ((int) $data['retention_days'] < (int) $data['signal_window_days']) {
+            return back()->withErrors([
+                'retention_days' => 'مدت نگهداری سیگنال‌ها نمی‌تواند از پنجره تحلیل کوتاه‌تر باشد.',
+            ])->withInput();
+        }
         DB::transaction(function () use ($data): void {
             foreach ($data as $key => $value) {
                 SiteSetting::write(match ($key) {
