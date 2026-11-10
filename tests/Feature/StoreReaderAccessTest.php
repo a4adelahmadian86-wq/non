@@ -813,7 +813,7 @@ class StoreReaderAccessTest extends TestCase
 
         try {
             token_get_all($compiled, TOKEN_PARSE);
-        } catch (\\ParseError $exception) {
+        } catch (\ParseError $exception) {
             $lines = explode("\n", $compiled);
             $line = $exception->getLine();
             $context = implode("\n", array_slice($lines, max(0, $line - 12), 24));
