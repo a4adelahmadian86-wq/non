@@ -39,9 +39,9 @@ Use a separate API credential with only the required bucket permissions. The end
 ## Operational commands
 
 - `php artisan storage:transfer-pending --limit=100`
-- `php artisan storage:backup-weekly`
+- `php artisan storage:backup-weekly`\n- `php artisan storage:check-volumes`\n- `php artisan storage:cleanup-deferred-deletes`\n- `php artisan storage:verify-backup <run-id>`\n- `php artisan queue:work --queue=backups,default --timeout=14400` (required for the manual backup button)
 
-The scheduler must be running. Backups are encrypted with ZIP AES-256 and are retained; automatic pruning is intentionally disabled.
+The Laravel scheduler and queue worker must be running. Weekly backups are encrypted with ZIP AES-256, downloaded again after upload for SHA-256 verification, and retained; automatic pruning is intentionally disabled. A manual backup request is queued and appears in the backup history. The verification command checks the remote checksum, encrypted manifest, and database stream.
 
 ## Safety notes
 
