@@ -51,6 +51,25 @@ class StorageManager
         ]);
     }
 
+    public function adoptExistingPrivate(
+        string $path,
+        string $originalName,
+        string $mime,
+        int $size,
+        string $sourceModule,
+        string $sourceType,
+        ?int $sourceId = null,
+        ?int $productId = null
+    ): array {
+        $disk = Storage::disk('private');
+        if (! $disk->exists($path)) throw new RuntimeException('فایل موقت برای انتقال وجود ندارد.');
+        $absolute = $disk->path($path);
+        $upload = new UploadedFile($absolute, $originalName, $mime ?: null, UPLOAD_ERR_OK, true);
+        $stored = $this->storeUploadedFile($upload, self::NON_CRITICAL, $sourceModule, $sourceType, $sourceId, $productId, 'private');
+        $disk->delete($path);
+        return $stored;
+    }
+
     public function exists(string $disk, string $path): bool
     {
         if (str_starts_with($disk, 'storage_volume:')) {
