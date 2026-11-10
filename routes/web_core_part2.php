@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountSecurityController;
+use App\Http\Controllers\AccountTwoFactorController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ContentDiscussionController;
 use App\Http\Controllers\AdminPlatformController;
@@ -72,6 +73,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.run');
     Route::delete('/workspace/workflows/{id}', [PlatformCompletionController::class, 'deleteWorkflow'])->whereNumber('id')->middleware('throttle:10,1')->name('platform.workflows.destroy');
     Route::get('/workspace/security', [AccountSecurityController::class, 'index'])->name('platform.security');
+    Route::post('/workspace/security/two-factor/setup', [AccountTwoFactorController::class, 'startEnrollment'])->middleware('throttle:5,10')->name('platform.security.two-factor.setup');
+    Route::post('/workspace/security/two-factor/enable', [AccountTwoFactorController::class, 'enable'])->middleware('throttle:5,10')->name('platform.security.two-factor.enable');
+    Route::post('/workspace/security/two-factor/recovery-codes', [AccountTwoFactorController::class, 'regenerateRecoveryCodes'])->middleware('throttle:5,10')->name('platform.security.two-factor.recovery-codes');
+    Route::post('/workspace/security/two-factor/disable', [AccountTwoFactorController::class, 'disable'])->middleware('throttle:5,10')->name('platform.security.two-factor.disable');
     Route::post('/workspace/security/sessions/{session}/revoke', [AccountSecurityController::class, 'revoke'])->whereNumber('session')->middleware('throttle:10,10')->name('platform.security.sessions.revoke');
     Route::post('/workspace/security/sessions/{session}/block-device', [AccountSecurityController::class, 'blockDevice'])->whereNumber('session')->middleware('throttle:5,10')->name('platform.security.devices.block');
     Route::post('/workspace/security/devices/{device}/unblock', [AccountSecurityController::class, 'unblockDevice'])->whereNumber('device')->middleware('throttle:5,10')->name('platform.security.devices.unblock');
