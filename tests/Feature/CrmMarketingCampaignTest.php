@@ -9,6 +9,7 @@ use App\Models\StoreCouponAssignment;
 use App\Models\StoreProduct;
 use App\Models\User;
 use App\Services\AuthorizationService;
+use App\Services\CrmAudienceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -283,9 +284,13 @@ class CrmMarketingCampaignTest extends TestCase
         ])->assertCreated()->assertJsonPath('audience_count', 1);
 
         $segment = DB::table('crm_customer_segments')->where('created_by', $admin->id)->first();
-        $this->assertSame($interested->id, (int) $this->app->make(\\App\\Services\\CrmAudienceService::class)
-            ->query(json_decode($segment->filters, true))->value('id'));
-        $this->assertNotSame($noSignal->id, (int) $interested->id);
+        $matchedIds = app(CrmAudienceService::class)
+            ->query(json_decode($segment->filters, true))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $this->assertSame([$interested->id], $matchedIds);
+        $this->assertNotContains($noSignal->id, $matchedIds);
     }
 
 
