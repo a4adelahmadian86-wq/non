@@ -24,24 +24,27 @@ class AccountSecurityController extends Controller
             ->whereNull('revoked_at')
             ->where('last_activity', '>=', $cutoff)
             ->orderByDesc('last_activity')
-            ->get()
-            ->map(function ($session) use ($currentKey) {
-                $session->is_current = hash_equals($currentKey, $session->session_key);
-                $session->browser_label = $this->browserLabel((string) $session->user_agent);
-                return $session;
-            });
+            ->paginate(15, ['*'], 'sessions_page')
+            ->withQueryString();
+        $sessions->getCollection()->transform(function ($session) use ($currentKey) {
+            $session->is_current = hash_equals($currentKey, $session->session_key);
+            $session->browser_label = $this->browserLabel((string) $session->user_agent);
+            return $session;
+        });
 
         $blockedDevices = DB::table('farast_blocked_devices')
             ->where('user_id', $user->id)
             ->whereNull('unblocked_at')
             ->orderByDesc('blocked_at')
-            ->get();
+            ->paginate(10, ['*'], 'blocked_page')
+            ->withQueryString();
 
         $events = DB::table('farast_security_events')
             ->where('user_id', $user->id)
             ->latest('created_at')
-            ->limit(80)
-            ->get();
+            ->latest('id')
+            ->paginate(20, ['*'], 'events_page')
+            ->withQueryString();
 
         $pendingSecret = (string) $request->session()->get('farast.two_factor.pending_secret', '');
         $pendingAt = (int) $request->session()->get('farast.two_factor.pending_at', 0);
