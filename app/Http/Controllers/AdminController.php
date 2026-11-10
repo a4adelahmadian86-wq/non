@@ -168,7 +168,7 @@ class AdminController extends Controller
 
         // Canonical workspace documents are authoritative. Legacy editor rows are
         // counted only when they have no canonical document link, preventing double counts.
-        $documentCount = function ($since = null) use ($visibleIds): int {
+        $documentCount = function ($since = null) use ($documentVisibleIds): int {
             $count = 0;
 
             if (Schema::hasTable('farast_documents')) {
@@ -179,8 +179,8 @@ class AdminController extends Controller
                 if ($since !== null) {
                     $query->where('created_at', '>=', $since);
                 }
-                if ($visibleIds !== null) {
-                    $query->whereIn('user_id', $visibleIds);
+                if ($documentVisibleIds !== null) {
+                    $query->whereIn('user_id', $documentVisibleIds);
                 }
                 $count += (int) $query->count();
             }
@@ -193,8 +193,8 @@ class AdminController extends Controller
                 if ($since !== null) {
                     $query->where('created_at', '>=', $since);
                 }
-                if ($visibleIds !== null) {
-                    $query->whereIn('user_id', $visibleIds);
+                if ($documentVisibleIds !== null) {
+                    $query->whereIn('user_id', $documentVisibleIds);
                 }
                 $count += (int) $query->count();
             }
@@ -202,7 +202,7 @@ class AdminController extends Controller
             return $count;
         };
 
-        $documentSeries = function () use ($chartDays, $visibleIds): array {
+        $documentSeries = function () use ($chartDays, $documentVisibleIds): array {
             $map = [];
             $sources = [];
 
@@ -213,8 +213,8 @@ class AdminController extends Controller
                 if (Schema::hasColumn('farast_documents', 'trashed_at')) {
                     $query->whereNull('trashed_at');
                 }
-                if ($visibleIds !== null) {
-                    $query->whereIn('user_id', $visibleIds);
+                if ($documentVisibleIds !== null) {
+                    $query->whereIn('user_id', $documentVisibleIds);
                 }
                 $sources[] = $query;
             }
@@ -224,8 +224,8 @@ class AdminController extends Controller
                 if (Schema::hasColumn('typing_documents', 'farast_document_id')) {
                     $query->whereNull('farast_document_id');
                 }
-                if ($visibleIds !== null) {
-                    $query->whereIn('user_id', $visibleIds);
+                if ($documentVisibleIds !== null) {
+                    $query->whereIn('user_id', $documentVisibleIds);
                 }
                 $sources[] = $query;
             }
@@ -349,7 +349,10 @@ class AdminController extends Controller
                 // Project workspace is the canonical bridge between customer requests, documents, billing and human tasks.
                 'projects' => $scopedCount('farast_projects'),
                 'active_projects' => $scopedCount('farast_projects', ['status' => 'active']),
-                'ai' => $canViewAi ? $scopedCount('ai_interactions') : 0,
+                'ai' => $canViewAi && Schema::hasTable('ai_interactions')
+                    && ($aiVisibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
+                    ? ($aiVisibleIds === null ? DB::table('ai_interactions')->count() : DB::table('ai_interactions')->whereIn('user_id', $aiVisibleIds)->count())
+                    : 0,
                 'ai_today' => $canViewAi && Schema::hasTable('ai_interactions')
                     && ($aiVisibleIds === null || Schema::hasColumn('ai_interactions', 'user_id'))
                     ? (($aiVisibleIds === null ? DB::table('ai_interactions') : DB::table('ai_interactions')->whereIn('user_id', $aiVisibleIds))->whereDate('created_at', today())->count())
