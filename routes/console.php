@@ -8,6 +8,23 @@ use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
 
+
+use App\\Services\\StorageBackupService;
+
+Artisan::command('farast:storage-backup', function (StorageBackupService $backups) {
+    $run = $backups->runWeekly();
+    if ($run->status !== 'completed') {
+        $this->error($run->error_message ?: 'Backup failed.');
+        return 1;
+    }
+    $this->info('Backup #'.$run->id.' completed and verified.');
+    return 0;
+})->purpose('Create and verify an encrypted off-site backup of database and files');
+
+Schedule::command('farast:storage-backup')
+    ->weeklyOn(0, '02:30')
+    ->withoutOverlapping();
+
 Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
 Schedule::command('farast:prune-product-ingestions --limit=200')->hourly()->withoutOverlapping();
