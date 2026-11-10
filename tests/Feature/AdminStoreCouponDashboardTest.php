@@ -12,6 +12,7 @@ use App\Models\StoreOrderItem;
 use App\Models\User;
 use App\Services\AuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminStoreCouponDashboardTest extends TestCase
@@ -119,7 +120,7 @@ class AdminStoreCouponDashboardTest extends TestCase
             'total_rials' => 200000,
             'product_snapshot' => [],
         ]);
-        StoreCouponAssignment::create([
+        $assignment = StoreCouponAssignment::create([
             'coupon_id' => $coupon->id,
             'user_id' => $customer->id,
             'product_id' => $product->id,
@@ -131,6 +132,18 @@ class AdminStoreCouponDashboardTest extends TestCase
             'redeemed_at' => now(),
             'redeemed_order_id' => $order->id,
         ]);
+        foreach (['offer_viewed', 'offer_clicked'] as $event) {
+            DB::table('farast_workflow_events')->insert([
+                'event_type' => 'marketing.'.$event,
+                'idempotency_key' => 'marketing:'.$event.':'.$customer->id.':'.$product->id.':assignment-'.$assignment->id,
+                'user_id' => $customer->id,
+                'context' => json_encode(['product_id' => $product->id, 'assignment_id' => $assignment->id]),
+                'matched_workflows' => 0,
+                'processed_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         $this->actingAs($admin)
             ->get(route('admin.store-coupons.index'))
