@@ -193,6 +193,56 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertTrue(app(AuthorizationService::class)->allows($admin, 'automation.manage'));
     }
 
+    public function test_admin_can_create_assign_and_revoke_scoped_custom_access(): void
+    {
+        $organization = Organization::create(['name' => 'Managed Access Org', 'slug' => 'managed-access-org', 'status' => 'active']);
+        $admin = $this->user('09140000110', User::ROLE_ADMIN);
+        $manager = $this->user('09140000111', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+
+        $this->actingAs($admin)->post('/admin/access-center/roles', [
+            'name' => 'بازرس سازمان',
+            'description' => 'مشاهده ممیزی در محدوده سازمان',
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+        ])->assertRedirect();
+
+        $role = DB::table('farast_roles')->where('name', 'بازرس سازمان')->first();
+        $this->assertNotNull($role);
+
+        $this->post('/admin/access-center/roles/'.$role->id.'/permissions', [
+            'scope_type' => 'organization',
+            'permissions' => ['access.audit'],
+        ])->assertRedirect();
+
+        $this->post('/admin/access-center/users/'.$manager->id.'/roles', [
+            'role_id' => $role->id,
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('farast_user_roles', [
+            'user_id' => $manager->id,
+            'role_id' => $role->id,
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+        ]);
+        $authorization = app(AuthorizationService::class);
+        $this->assertTrue($authorization->allowsFor($manager, 'access.audit', ['organization_id' => $organization->id]));
+
+        $this->post('/admin/access-center/users/'.$manager->id.'/overrides', [
+            'permission' => 'access.audit',
+            'effect' => 'deny',
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+            'reason' => 'Temporary separation of duties',
+        ])->assertRedirect();
+
+        $this->assertFalse(app(AuthorizationService::class)->allowsFor($manager, 'access.audit', ['organization_id' => $organization->id]));
+        $this->assertDatabaseHas('farast_access_audit_logs', ['action' => 'role.created', 'actor_id' => $admin->id]);
+        $this->assertDatabaseHas('farast_access_audit_logs', ['action' => 'user.role.assigned', 'subject_user_id' => $manager->id]);
+        $this->assertDatabaseHas('farast_access_audit_logs', ['action' => 'user.permission.override.created', 'subject_user_id' => $manager->id]);
+    }
+
     public function test_advanced_access_center_is_only_available_to_the_platform_admin(): void
     {
         $admin = $this->user('09140000107', User::ROLE_ADMIN);
