@@ -97,7 +97,10 @@
     if (invalid) {
       event.preventDefault(); const index = panels.indexOf(invalid.closest('[data-wizard-panel]'));
       if (index >= 0) show(index); invalid.reportValidity(); invalid.focus({ preventScroll: false });
+      return;
     }
+    const save = document.getElementById('productSaveButton');
+    if (save) { save.disabled = true; save.setAttribute('aria-busy', 'true'); save.textContent = 'در حال ذخیره اطلاعات…'; }
   });
   show(0);
 })();

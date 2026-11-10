@@ -71,6 +71,7 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertDontSee('نشانی اختصاصی (Slug)')
             ->assertDontSee('نوع مجوز استفاده')
             ->assertSee('admin-store-product-wizard.js');
+        $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
 
         $response = $this->actingAs($admin)->post(route('admin.store.store'), [
             'category_id' => $category->id,

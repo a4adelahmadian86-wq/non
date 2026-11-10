@@ -675,7 +675,8 @@
       event.preventDefault();
       return;
     }
-    if (!form.dataset.wizardReady && !form.reportValidity()) return;
+    if (form.dataset.wizardReady === '1') return;
+    if (!form.reportValidity()) return;
     if (button) {
       button.dataset.submitting = '1';
       button.disabled = true;
