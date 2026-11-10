@@ -340,17 +340,34 @@ class AdvancedAccessControlTest extends TestCase
         $workflowId = DB::table('farast_workflows')->insertGetId($workflowPayload);
         $engine = app(\App\Services\WorkflowEngine::class);
 
-        $successfulRun = $engine->run($workflowId, [
+        $matched = $engine->dispatch('ticket.created', [
             'user_id' => $member->id,
             'customer_id' => $member->id,
-        ], null, true);
+        ], 'ticket:scope-member:created');
 
-        $this->assertDatabaseHas('farast_workflow_runs', ['id' => $successfulRun, 'status' => 'completed']);
+        $this->assertSame(1, $matched, 'An organization manager workflow should process an authorized member event.');
         $this->assertDatabaseHas('crm_follow_up_tasks', [
             'customer_id' => $member->id,
             'assigned_to' => $manager->id,
             'created_by' => $manager->id,
             'title' => 'پیگیری مشتری',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:scope-member:created',
+            'status' => 'completed',
+            'matched_workflows' => 1,
+        ]);
+
+        $outsideMatched = $engine->dispatch('ticket.created', [
+            'user_id' => $outside->id,
+            'customer_id' => $outside->id,
+        ], 'ticket:scope-outside:created');
+
+        $this->assertSame(0, $outsideMatched, 'A workflow must not be selected for a customer outside its owner\'s organization.');
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => 'ticket:scope-outside:created',
+            'status' => 'completed',
+            'matched_workflows' => 0,
         ]);
 
         try {
@@ -358,12 +375,16 @@ class AdvancedAccessControlTest extends TestCase
                 'user_id' => $outside->id,
                 'customer_id' => $outside->id,
             ], null, true);
-            $this->fail('A workflow must not create CRM follow-ups outside its owner's organization scope.');
-        } catch (\RuntimeException $exception) {
+            $this->fail('A workflow must not create CRM follow-ups outside its owner\'s organization scope.');
+        } catch (\\RuntimeException $exception) {
             $this->assertStringContainsString('outside the authorized customer scope', $exception->getMessage());
         }
 
         $this->assertDatabaseMissing('crm_follow_up_tasks', ['customer_id' => $outside->id]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflowId,
+            'status' => 'completed',
+        ]);
         $this->assertDatabaseHas('farast_workflow_runs', [
             'workflow_id' => $workflowId,
             'status' => 'failed',
