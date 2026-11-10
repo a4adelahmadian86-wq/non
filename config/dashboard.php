@@ -70,7 +70,7 @@ return [
         [
             'key' => 'collaboration', 'label' => 'تیم و همکاری', 'icon' => 'fa-people-group',
             'items' => [
-                ['key' => 'collaboration.messenger', 'label' => 'پیام‌رسان داخلی', 'icon' => 'fa-comments', 'route' => 'messenger.index'],
+                ['key' => 'collaboration.messenger', 'label' => 'پیام‌رسان داخلی', 'icon' => 'fa-comments', 'route' => 'messenger.index', 'permission' => 'messenger.use'],
                 ['key' => 'collaboration.teams', 'label' => 'تیم‌ها و سازمان‌ها', 'icon' => 'fa-user-group', 'route' => 'admin.organizations', 'exclude_admin' => true, 'permission' => 'organization.manage', 'scope' => 'organization'],
                 ['key' => 'collaboration.members', 'label' => 'اعضای سازمان', 'icon' => 'fa-users', 'route' => 'admin.users', 'exclude_admin' => true, 'permission' => 'users.view', 'scope' => 'organization'],
                 ['key' => 'collaboration.roles', 'label' => 'نقش‌ها', 'icon' => 'fa-user-shield', 'planned' => true, 'admin_only' => true, 'permission' => 'access.manage', 'scope' => 'global'],
@@ -89,10 +89,10 @@ return [
         [
             'key' => 'notifications', 'label' => 'اعلان‌ها و پیام‌ها', 'icon' => 'fa-bell',
             'items' => [
+                ['key' => 'notifications.center', 'label' => 'مرکز ارتباطات', 'icon' => 'fa-tower-broadcast', 'route' => 'platform.communications'],
                 ['key' => 'notifications.inbox', 'label' => 'صندوق اعلان‌ها', 'icon' => 'fa-bell', 'route' => 'platform.notifications'],
                 ['key' => 'notifications.alerts', 'label' => 'اعلانات سرویس', 'icon' => 'fa-bullhorn', 'route' => 'announcements'],
                 ['key' => 'notifications.manage', 'label' => 'مدیریت اعلان‌ها', 'icon' => 'fa-sliders', 'route' => 'admin.announcements.index', 'admin_only' => true],
-                ['key' => 'notifications.support', 'label' => 'گفتگوهای پشتیبانی', 'icon' => 'fa-headset', 'planned' => true],
             ],
         ],
         [
