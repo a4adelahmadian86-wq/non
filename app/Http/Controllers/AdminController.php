@@ -139,17 +139,18 @@ class AdminController extends Controller
         for ($i = 29; $i >= 0; $i--) {
             $chartDays[] = now()->subDays($i)->toDateString();
         }
-        $seriesOf = function (string $table, string $dateCol = 'created_at') use ($chartDays, $visibleIds) {
+        $seriesOf = function (string $table, string $dateCol = 'created_at', ?array $scopeIds = null, bool $overrideScope = false) use ($chartDays, $visibleIds) {
             if (! Schema::hasTable($table)) {
                 return array_fill(0, count($chartDays), 0);
             }
+            $ids = $overrideScope ? $scopeIds : $visibleIds;
             $since = $chartDays[0];
             $q = DB::table($table)->where($dateCol, '>=', $since);
-            if ($visibleIds !== null) {
+            if ($ids !== null) {
                 if ($table === 'users') {
-                    $q->whereIn('id', $visibleIds);
+                    $q->whereIn('id', $ids);
                 } elseif (Schema::hasColumn($table, 'user_id')) {
-                    $q->whereIn('user_id', $visibleIds);
+                    $q->whereIn('user_id', $ids);
                 } else {
                     // جدول بدون ستون user_id در دامنه‌های محدود شمارش نمی‌شود تا داده نشت نکند.
                     return array_fill(0, count($chartDays), 0);
@@ -370,10 +371,10 @@ class AdminController extends Controller
                         ? \App\Models\Team::count()
                         : DB::table('teams')->whereIn('id', $visibleTeamIds)->count())
                     : 0,
-                'audit_events' => Schema::hasTable('audit_logs')
-                    ? ($visibleIds === null
+                'audit_events' => $canViewAudit && Schema::hasTable('audit_logs')
+                    ? ($auditVisibleIds === null
                         ? DB::table('audit_logs')->count()
-                        : DB::table('audit_logs')->whereIn('user_id', $visibleIds)->count())
+                        : DB::table('audit_logs')->whereIn('user_id', $auditVisibleIds)->count())
                     : 0,
                 'revenue_month' => $canViewFinance && Schema::hasTable('payments')
                     ? (int) $paidPaymentsQuery()->where('payments.created_at', '>=', $monthAgo)->sum('payments.amount_rials')
@@ -386,9 +387,9 @@ class AdminController extends Controller
             ],
             'charts' => [
                 'labels' => $chartDays,
-                'users' => Schema::hasTable('users') ? $seriesOf('users') : array_fill(0, 30, 0),
-                'documents' => $documentSeries(),
-                'ai' => Schema::hasTable('ai_interactions') ? $seriesOf('ai_interactions') : array_fill(0, 30, 0),
+                'users' => $canViewUsers ? $seriesOf('users', 'created_at', $userVisibleIds, true) : array_fill(0, 30, 0),
+                'documents' => $canViewDocuments ? $documentSeries() : array_fill(0, 30, 0),
+                'ai' => $canViewAi ? $seriesOf('ai_interactions', 'created_at', $aiVisibleIds, true) : array_fill(0, 30, 0),
             ],
             'ticketStats' => $ticketStats,
             'topConsumers' => $canViewAnalytics ? $topConsumers : collect(),
