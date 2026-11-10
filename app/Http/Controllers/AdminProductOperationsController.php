@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StoreProductDocument;
 use App\Services\ProductDocumentRetryService;
+use App\Services\ProductInfrastructureHealthService;
 use App\Services\ProductLifecycleHealthService;
 use App\Services\ProductSupervisorClient;
 use Illuminate\Support\Facades\DB;
@@ -12,8 +13,11 @@ use Illuminate\Http\Request;
 
 class AdminProductOperationsController extends Controller
 {
-    public function index(ProductSupervisorClient $supervisor, ProductLifecycleHealthService $lifecycleHealth)
-    {
+    public function index(
+        ProductSupervisorClient $supervisor,
+        ProductLifecycleHealthService $lifecycleHealth,
+        ProductInfrastructureHealthService $infrastructureHealth
+    ) {
         $statuses = ['pending', 'processing', 'completed', 'extracted', 'partial', 'failed', 'stale', 'awaiting_provider'];
         $documentStats = array_fill_keys($statuses, 0);
 
@@ -39,16 +43,14 @@ class AdminProductOperationsController extends Controller
         ];
 
         $privateRoot = (string) config('filesystems.disks.private.root');
-        $audioConfigured = filled(config('services.document_audio.url'))
-            && filled(config('services.document_audio.token'));
 
         return view('admin.store.operations', [
             'documentStats' => $documentStats,
             'documents' => $documents,
             'queueStats' => $queueStats,
             'lifecycleHealth' => $lifecycleHealth->snapshot(),
+            'serviceHealth' => $infrastructureHealth->snapshot(),
             'supervisorConfigured' => $supervisor->configured(),
-            'audioConfigured' => $audioConfigured,
             'queueDriver' => config('queue.default'),
             'scheduledWorker' => (bool) config('queue.scheduled_worker', true),
             'privateStorageWritable' => $privateRoot !== '' && is_dir($privateRoot) && is_writable($privateRoot),
