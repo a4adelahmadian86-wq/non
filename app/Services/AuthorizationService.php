@@ -76,12 +76,14 @@ class AuthorizationService
                 ->orderByDesc('id')
                 ->get();
 
-            foreach ($overrides as $override) {
-                if (! $this->scopeMatches($user, $override->scope_type, $override->scope_id, $context)
-                    || ! $this->conditionsMatch($override->conditions, $context)) {
-                    continue;
-                }
+            $matching = $overrides->filter(fn ($override) =>
+                $this->scopeMatches($user, $override->scope_type, $override->scope_id, $context)
+                && $this->conditionsMatch($override->conditions, $context)
+            );
+            $override = $matching->first(fn ($item) => $item->effect === 'deny')
+                ?? $matching->first(fn ($item) => $item->effect === 'allow');
 
+            if ($override) {
                 return [
                     'allowed' => $override->effect === 'allow',
                     'reason' => 'direct_'.$override->effect.'_override',
