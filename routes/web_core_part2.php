@@ -114,6 +114,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Central storage and backup management.
     Route::get('/storage', [\App\Http\Controllers\AdminStorageController::class, 'index'])->middleware('admin.section:storage')->name('storage.index');
     Route::get('/storage/backups', [\App\Http\Controllers\AdminStorageController::class, 'backups'])->middleware('admin.section:storage')->name('storage.backups');
+    Route::post('/storage/backups/run', [\App\Http\Controllers\AdminStorageController::class, 'runBackup'])->middleware(['admin.section:storage', 'throttle:2,10'])->name('storage.backups.run');
     Route::post('/storage/volumes', [\App\Http\Controllers\AdminStorageController::class, 'store'])->middleware(['admin.section:storage', 'throttle:5,10'])->name('storage.store');
     Route::get('/storage/volumes/{volume}', [\App\Http\Controllers\AdminStorageController::class, 'show'])->middleware('admin.section:storage')->name('storage.volume');
     Route::post('/storage/volumes/{volume}/verify', [\App\Http\Controllers\AdminStorageController::class, 'verify'])->middleware(['admin.section:storage', 'throttle:5,10'])->name('storage.verify');
