@@ -115,39 +115,30 @@ class AdminStoreProductWorkflowTest extends TestCase
             'status' => 'draft',
         ]);
 
-        $checksum = hash('sha256', 'fake-pdf-content');
-        $security = \Mockery::mock(UploadSecurityService::class);
-        $security->shouldReceive('inspect')->once()->andReturn([
-            'safe' => true,
-            'mime' => 'application/pdf',
-            'size' => 16,
-            'checksum' => $checksum,
-            'risk_level' => 'low',
-            'detected_type' => 'pdf',
-            'findings' => [],
-            'warnings' => [],
-        ]);
-        app()->instance(UploadSecurityService::class, $security);
+        $binary = tempnam(sys_get_temp_dir(), 'farast-clamav-');
+        file_put_contents($binary, <<<'SH'
+#!/bin/sh
+if [ "$1" = "--version" ]; then echo 'ClamAV 1.4.0'; exit 0; fi
+exit 0
+SH
+        );
+        chmod($binary, 0700);
+        config(['services.clamav.binary' => $binary]);
 
-        $scanner = \Mockery::mock(OptionalAntivirusScanner::class);
-        $scanner->shouldReceive('scan')->once()->withArgs(fn ($path) => is_string($path) && $path !== '')
-            ->andReturn([
-                'status' => 'clean',
-                'engine' => 'clamav',
-                'version' => 'ClamAV 1.4.0',
-                'scanned_at' => now()->toISOString(),
-            ]);
-        app()->instance(OptionalAntivirusScanner::class, $scanner);
-
-        $this->actingAs($admin)
-            ->post(route('admin.store.files.preflight', $product), [
-                'file' => UploadedFile::fake()->createWithContent('source.pdf', '%PDF-1.4 fake'),
-                'security_scan' => '1',
-            ])
-            ->assertCreated()
-            ->assertJsonPath('antivirus.requested', true)
-            ->assertJsonPath('antivirus.status', 'clean')
-            ->assertJsonPath('antivirus.engine', 'clamav');
+        try {
+            $this->actingAs($admin)
+                ->post(route('admin.store.files.preflight', $product), [
+                    'file' => UploadedFile::fake()->createWithContent('source.txt', 'Plain text product content for security scan.'),
+                    'security_scan' => '1',
+                ])
+                ->assertCreated()
+                ->assertJsonPath('antivirus.requested', true)
+                ->assertJsonPath('antivirus.status', 'clean')
+                ->assertJsonPath('antivirus.engine', 'clamav')
+                ->assertJsonPath('antivirus.version', 'ClamAV 1.4.0');
+        } finally {
+            @unlink($binary);
+        }
 
         $this->assertDatabaseHas('store_product_ingestions', [
             'product_id' => $product->id,
