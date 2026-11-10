@@ -1,13 +1,12 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\Conversation;
-use App\\Models\\FarastNotification;
-use App\\Models\\Ticket;
-use App\\Services\\NotificationService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Collection;
+use App\Models\Conversation;
+use App\Models\FarastNotification;
+use App\Models\Ticket;
+use App\Services\NotificationService;
+use Illuminate\Http\Request;
 
 class CommunicationCenterController extends Controller
 {
