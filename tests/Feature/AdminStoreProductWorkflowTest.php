@@ -97,7 +97,155 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->assertSee('data-ingestion-folder', false)
             ->assertSee('data-ingestion-selected', false)
             ->assertSee('بررسی امن فایل')
-            ->assertSee('بررسی ساختار و امنیت');
+            ->assertSee('بررسی ساختار و امنیت')
+            ->assertSee('data-ingestion-security-scan', false)
+            ->assertDontSee('data-ingestion-security-scan checked', false);
+    }
+
+
+    public function test_store_management_permission_allows_non_admin_staff_to_use_product_console(): void
+    {
+        $category = $this->category();
+        $staff = User::create([
+            'name' => 'Product Manager',
+            'mobile' => '09123456780',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $permission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        RolePermission::query()->firstOrCreate([
+            'role' => User::ROLE_EMPLOYEE,
+            'permission_id' => $permission->id,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول مدیر فروشگاه',
+            'slug' => 'staff-managed-product',
+            'sku' => 'STAFF-MANAGED-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($staff)
+            ->get(route('admin.store.edit', $product))
+            ->assertOk()
+            ->assertSee('ویرایش محصول')
+            ->assertDontSee('data-ingestion-security-scan', false);
+
+        $this->assertFalse(app(\\App\\Services\\AuthorizationService::class)->allows($staff, 'store.security_scan_bypass'));
+    }
+
+
+    public function test_staff_without_security_scan_bypass_cannot_disable_the_scan_in_a_request(): void
+    {
+        Storage::fake('private');
+        $category = $this->category();
+        $staff = User::create([
+            'name' => 'Product Operator',
+            'mobile' => '09123456781',
+            'password' => 'secret',
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+        $storePermission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        RolePermission::query()->firstOrCreate(['role' => User::ROLE_EMPLOYEE, 'permission_id' => $storePermission->id]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول اپراتور',
+            'slug' => 'operator-product',
+            'sku' => 'OPERATOR-PRODUCT-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $actualScanFlag = null;
+        $this->mock(UploadSecurityService::class, function ($mock) use (&$actualScanFlag) {
+            $mock->shouldReceive('inspect')->once()->andReturnUsing(function ($path, $mime, $limit, $allowedMimes, $securityScan) use (&$actualScanFlag) {
+                $actualScanFlag = $securityScan;
+                $absolute = Storage::disk('private')->path($path);
+
+                return [
+                    'safe' => true,
+                    'mime' => 'text/plain',
+                    'size' => Storage::disk('private')->size($path),
+                    'checksum' => hash_file('sha256', $absolute),
+                    'scan' => 'farast_static_v1',
+                    'security_scan_requested' => $securityScan,
+                    'risk_level' => 'low',
+                    'detected_type' => 'text',
+                    'archive_entries' => [],
+                    'archive_entry_count' => 0,
+                    'findings' => [],
+                    'warnings' => [],
+                ];
+            });
+        });
+
+        $this->actingAs($staff)
+            ->postJson(route('admin.store.files.preflight', $product), [
+                'file' => UploadedFile::fake()->create('notes.txt', 2, 'text/plain'),
+                'is_primary' => 1,
+                'security_scan' => 0,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('inspection.security_scan_requested', true);
+
+        $this->assertTrue($actualScanFlag);
+    }
+
+    public function test_staff_with_explicit_security_scan_bypass_permission_can_use_default_off_mode(): void
+    {
+        Storage::fake('private');
+        $category = $this->category();
+        $staff = User::create([
+            'name' => 'Trusted Product Operator',
+            'mobile' => '09123456782',
+            'password' => 'secret',
+            'role' => User::ROLE_TEAM_SUPERVISOR,
+        ]);
+        $storePermission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        $bypassPermission = Permission::query()->where('key', 'store.security_scan_bypass')->firstOrFail();
+        RolePermission::query()->firstOrCreate(['role' => User::ROLE_TEAM_SUPERVISOR, 'permission_id' => $storePermission->id]);
+        RolePermission::query()->firstOrCreate(['role' => User::ROLE_TEAM_SUPERVISOR, 'permission_id' => $bypassPermission->id]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول اپراتور مجاز',
+            'slug' => 'trusted-operator-product',
+            'sku' => 'TRUSTED-OPERATOR-001',
+            'type' => 'digital_file',
+            'price_rials' => 100000,
+            'status' => 'draft',
+        ]);
+        $actualScanFlag = null;
+        $this->mock(UploadSecurityService::class, function ($mock) use (&$actualScanFlag) {
+            $mock->shouldReceive('inspect')->once()->andReturnUsing(function ($path, $mime, $limit, $allowedMimes, $securityScan) use (&$actualScanFlag) {
+                $actualScanFlag = $securityScan;
+                return [
+                    'safe' => true,
+                    'mime' => 'text/plain',
+                    'size' => Storage::disk('private')->size($path),
+                    'checksum' => hash_file('sha256', Storage::disk('private')->path($path)),
+                    'scan' => 'farast_structural_v1',
+                    'security_scan_requested' => $securityScan,
+                    'risk_level' => 'low',
+                    'detected_type' => 'text',
+                    'archive_entries' => [],
+                    'archive_entry_count' => 0,
+                    'findings' => [],
+                    'warnings' => [],
+                ];
+            });
+        });
+
+        $this->actingAs($staff)
+            ->postJson(route('admin.store.files.preflight', $product), [
+                'file' => UploadedFile::fake()->create('trusted-notes.txt', 2, 'text/plain'),
+                'is_primary' => 1,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('inspection.security_scan_requested', false);
+
+        $this->assertFalse($actualScanFlag);
     }
 
     public function test_product_index_filters_by_category_and_supports_whitelisted_sorting(): void
