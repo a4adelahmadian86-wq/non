@@ -10,6 +10,7 @@ use App\Models\StorageManagedFile;
 use App\Models\StoreProductIngestion;
 use App\Jobs\ProcessProductDocument;
 use App\Jobs\ReviewProductForPublication;
+use App\Jobs\ReviewProductFileAsset;
 use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
@@ -814,6 +815,16 @@ class AdminStoreController extends Controller
             ]);
             Log::warning('Product document processing could not be dispatched', [
                 'document_id' => $documentId,
+                'exception' => class_basename($exception),
+            ]);
+        }
+
+        try {
+            ReviewProductFileAsset::dispatch((int) $product->id, (int) $fileRecord->id);
+        } catch (Throwable $exception) {
+            Log::warning('Product asset supervisor review could not be dispatched', [
+                'product_id' => $product->id,
+                'file_id' => $fileRecord->id,
                 'exception' => class_basename($exception),
             ]);
         }
