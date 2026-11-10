@@ -27,7 +27,7 @@
                 <h2>نشست‌ها و دستگاه‌های متصل</h2>
                 <p>نشست‌ها تا خروج کاربر یا سه سال عدم مراجعه معتبر می‌مانند. فعالیت هر دستگاه در این فهرست به‌روزرسانی می‌شود.</p>
             </div>
-            <span class="security-count">{{ $sessions->count() }} نشست</span>
+            <span class="security-count">{{ $sessions->total() }} نشست فعال</span>
         </div>
 
         @if($sessions->isEmpty())
@@ -73,6 +73,9 @@
                     </article>
                 @endforeach
             </div>
+            @if($sessions->hasPages())
+                <div class="security-pagination">{{ $sessions->links() }}</div>
+            @endif
             <form method="post" action="{{ route('platform.security.sessions.revoke-others') }}" class="security-revoke-others">
                 @csrf
                 <label for="revokeOtherPassword">خروج از تمام نشست‌های دیگر (نشست فعلی باقی می‌ماند)</label>
@@ -108,6 +111,9 @@
                     </article>
                 @endforeach
             </div>
+            @if($blockedDevices->hasPages())
+                <div class="security-pagination">{{ $blockedDevices->links() }}</div>
+            @endif
         @endif
     </section>
 
@@ -241,6 +247,9 @@
                     </div>
                 @endforeach
             </div>
+            @if($events->hasPages())
+                <div class="security-pagination">{{ $events->links() }}</div>
+            @endif
         @endif
     </section>
 
