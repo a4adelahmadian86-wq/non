@@ -269,6 +269,23 @@ class AdvancedAccessControlTest extends TestCase
         );
     }
 
+    public function test_authorization_cache_isolated_by_effective_request_scope(): void
+    {
+        $organization = Organization::create(['name' => 'Cache Scope Org', 'slug' => 'cache-scope-org', 'status' => 'active']);
+        $manager = $this->user('09140000135', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+        $otherUser = $this->user('09140000136', User::ROLE_EMPLOYEE, $organization->id);
+        $authorization = app(AuthorizationService::class);
+
+        $this->actingAs($manager);
+        request()->attributes->set('farast.scope', 'organization');
+        $context = ['owner_id' => $otherUser->id, 'organization_id' => $organization->id];
+
+        $this->assertTrue($authorization->allowsFor($manager, 'documents.view', $context));
+
+        request()->attributes->set('farast.scope', 'own');
+        $this->assertFalse($authorization->allowsFor($manager, 'documents.view', $context));
+    }
+
     public function test_permission_explanation_labels_navigation_and_resource_context_separately(): void
     {
         $employee = $this->user('09140000134');
