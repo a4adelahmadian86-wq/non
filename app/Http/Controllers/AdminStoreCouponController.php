@@ -92,7 +92,6 @@ class AdminStoreCouponController extends Controller
                 'attributed_orders' => $attributedOrderCount,
                 'products_missing_cost' => StoreProduct::query()->published()->whereNull('cost_price_rials')->count(),
             ],
-,
             'settings' => [
                 'score_threshold' => (int) SiteSetting::read('smart_discount_score_threshold', 5),
                 'signal_window_days' => (int) SiteSetting::read('smart_discount_signal_window_days', 14),
@@ -101,7 +100,8 @@ class AdminStoreCouponController extends Controller
                 'max_discount_percent' => (int) SiteSetting::read('smart_discount_max_discount_percent', 10),
                 'abandonment_hours' => (int) SiteSetting::read('smart_discount_abandonment_hours', 2),
                 'retention_days' => (int) SiteSetting::read('marketing_signal_retention_days', 30),
-            ],        ]);
+            ],
+        ]);
     }
 
     public function saveSettings(Request $request, AdminConsoleService $console)
