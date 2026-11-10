@@ -464,6 +464,10 @@ class AdvancedAccessControlTest extends TestCase
             'team_id' => $foreignTeam->id,
             'owner_id' => null,
         ]));
+        $this->assertNotContains(
+            $foreignTeam->id,
+            app(AdminConsoleService::class)->visibleTeamIds($supervisor, 'team.view') ?? []
+        );
     }
 
     public function test_role_assignment_rejects_a_team_outside_the_target_users_organization(): void
