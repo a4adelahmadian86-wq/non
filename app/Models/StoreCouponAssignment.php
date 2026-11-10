@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class StoreCouponAssignment extends Model
 {
     protected $fillable = [
-        'coupon_id', 'user_id', 'product_id', 'status', 'score', 'reason_codes',
+        'coupon_id', 'campaign_id', 'user_id', 'product_id', 'status', 'score', 'reason_codes',
         'offered_at', 'expires_at', 'redeemed_at', 'redeemed_order_id', 'notification_id',
     ];
 
@@ -19,6 +19,11 @@ class StoreCouponAssignment extends Model
         'expires_at' => 'datetime',
         'redeemed_at' => 'datetime',
     ];
+
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(\\Illuminate\\Database\\Eloquent\\Model::class, 'campaign_id');
+    }
 
     public function coupon(): BelongsTo
     {
