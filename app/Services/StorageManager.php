@@ -271,6 +271,63 @@ class StorageManager
         });
     }
 
+    public function rebalanceFallbackFiles(int $limit = 100): int
+    {
+        $limit = max(1, min(500, $limit));
+        $moved = 0;
+        $records = StorageManagedFile::query()
+            ->with('volume')
+            ->where('status', 'active')
+            ->whereNotNull('logical_path')
+            ->whereHas('volume', fn ($query) => $query->whereJsonContains('metadata->local_fallback', true))
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+
+        foreach ($records as $record) {
+            if (! $record->volume || ! $this->hasDedicatedVolume($record->drive_key)) {
+                continue;
+            }
+            $oldVolumeId = $record->storage_volume_id;
+            $stream = $this->readStream($record->logical_path);
+            if (! is_resource($stream)) {
+                continue;
+            }
+            $config = new Config([
+                'farast_classification' => $record->classification,
+                'farast_source_type' => $record->source_type,
+                'farast_source_id' => $record->source_id,
+                'farast_product_id' => $record->product_id,
+                'farast_owner_user_id' => $record->owner_user_id,
+                'farast_original_name' => $record->original_name,
+                'mimetype' => $record->mime,
+            ]);
+            try {
+                $this->writeStream($record->logical_path, $stream, $config);
+                $record->refresh();
+                if ($record->storage_volume_id !== $oldVolumeId) {
+                    $moved++;
+                }
+            } catch (Throwable $exception) {
+                report($exception);
+            } finally {
+                fclose($stream);
+            }
+        }
+
+        return $moved;
+    }
+
+    private function hasDedicatedVolume(string $drive): bool
+    {
+        return StorageVolume::query()
+            ->where('drive_key', $drive)
+            ->where('driver', '!=', 'local')
+            ->where('is_active', true)
+            ->where('status', 'healthy')
+            ->exists();
+    }
+
     private function replicationRequired(string $classification): bool
     {
         $requiredCopies = $classification === 'critical'
