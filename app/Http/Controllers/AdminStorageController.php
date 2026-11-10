@@ -6,6 +6,7 @@ use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
 use App\Services\StorageConnectionService;
+use App\Services\StorageBackupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,16 @@ class AdminStorageController extends Controller
     {
         $backups = StorageBackupRun::with('volume')->latest()->paginate(30);
         return view('admin.storage.backups', compact('backups'));
+    }
+
+    public function runBackup(StorageBackupService $backups)
+    {
+        $run = $backups->runWeekly();
+        if ($run->status === 'completed') {
+            return redirect()->route('admin.storage.backups')->with('status', 'نسخه پشتیبان با موفقیت ایجاد و صحت‌سنجی شد.');
+        }
+
+        return redirect()->route('admin.storage.backups')->with('warning', $run->error_message ?: 'تهیه نسخه پشتیبان ناموفق بود.');
     }
 
     public function store(Request $request, StorageConnectionService $connections)
