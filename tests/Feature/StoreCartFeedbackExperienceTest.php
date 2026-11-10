@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\StoreCategory;
 use App\Models\StoreProduct;
+use App\Models\StoreCoupon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
