@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
+use App\Models\SiteSetting;
 
 Schedule::command('farast:purge-files')->daily();
 Schedule::command('farast:prune-user-files')->dailyAt('03:20')->withoutOverlapping();
@@ -66,7 +67,8 @@ Artisan::command('store:marketing:prune-signals {--days=90} {--limit=5000}', fun
         return 0;
     }
 
-    $days = max(30, min(365, (int) $this->option('days')));
+    $configuredDays = (int) ($this->option('days') ?: SiteSetting::read('marketing_signal_retention_days', 90));
+    $days = max(7, min(365, $configuredDays));
     $limit = max(100, min(20000, (int) $this->option('limit')));
     $ids = DB::table('farast_workflow_events')
         ->where('event_type', 'like', 'marketing.%')
@@ -83,6 +85,6 @@ Artisan::command('store:marketing:prune-signals {--days=90} {--limit=5000}', fun
     return 0;
 })->purpose('Delete first-party marketing signals after the retention period');
 
-Schedule::command('store:marketing:prune-signals --days=90 --limit=5000')
+Schedule::command('store:marketing:prune-signals --limit=5000')
     ->dailyAt('03:45')
     ->withoutOverlapping();
