@@ -149,7 +149,16 @@ class AdminStorageController extends Controller
 
     public function destroy(StorageVolume $volume)
     {
-        abort_if($volume->files()->exists(), 409, 'ابتدا فایل‌های این فضا را منتقل کنید؛ فضای دارای فایل حذف نمی‌شود.');
+        $hasManagedFiles = $volume->files()->exists();
+        $hasProviderObjects = (int) $volume->object_count > 0;
+        $hasBackups = StorageBackupRun::query()->where('storage_volume_id', $volume->id)->exists();
+
+        abort_if(
+            $hasManagedFiles || $hasProviderObjects || $hasBackups,
+            409,
+            'این هاست هنوز فایل یا نسخه پشتیبان دارد. ابتدا اطلاعات را به مقصد دیگری منتقل و خالی بودن کامل هاست را تأیید کنید.'
+        );
+
         $volume->delete();
         return redirect()->route('admin.storage.index')->with('status', 'اتصال حذف شد.');
     }
