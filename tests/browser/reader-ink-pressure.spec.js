@@ -1,0 +1,25 @@
+const { test, expect } = require('@playwright/test');
+test('pressure-aware ink records real stylus pressure and falls back safely for mouse input',async({page})=>{
+  await page.goto('/');
+  await page.setContent('<section class="farast-reader" data-reader-root data-product-id="pressure-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Pressure ink test</span></div></div></article></section>');
+  await page.addStyleTag({path:require('path').join(__dirname,'../../public/css/farast-reader-annotations.css')});
+  await page.addStyleTag({path:require('path').join(__dirname,'../../public/css/farast-reader-ink-pressure.css')});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-ink-pressure.js')});
+  await page.locator('[data-tool="pen"]').click();
+  const layer=page.locator('.farast-pressure-ink-layer').first();
+  await expect(layer).toBeAttached();
+  const rect=await page.locator('.farast-pdf-document').boundingBox();
+  const send=(type,x,y,pressure)=>layer.dispatchEvent(type,new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:9,pointerType:'pen',pressure,clientX:rect.x+x,clientY:rect.y+y}));
+  await send('pointerdown',80,80,.18);
+  await send('pointermove',120,105,.82);
+  await send('pointerup',150,120,.45);
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
+  const pressures=await page.evaluate(()=>JSON.parse(localStorage.getItem('farast-reader:pressure-ink:v1:pressure-test'))[0].points.map(p=>p.p));
+  expect(pressures).toContain(.18);
+  expect(pressures).toContain(.82);
+  await page.locator('[data-pressure-action="undo"]').click();
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(0);
+  await page.locator('[data-pressure-action="redo"]').click();
+  await expect.poll(()=>page.evaluate(()=>window.FarastReaderPressureInk?.strokeCount||0)).toBe(1);
+});
