@@ -87,6 +87,12 @@ class TrackAuthenticatedSession
             if ($lastAccountActivity
                 && \Illuminate\Support\Carbon::parse($lastAccountActivity)->lt(now()->subYears(3))
                 && $explicitLoginAt < now()->subMinutes(5)->timestamp) {
+                $expiredCutoff = now()->subYears(3);
+                DB::table('farast_account_sessions')
+                    ->where('user_id', $user->id)
+                    ->whereNull('revoked_at')
+                    ->where('last_activity', '<', $expiredCutoff)
+                    ->update(['revoked_at' => now(), 'updated_at' => now()]);
                 $this->recordEvent($user->id, 'session_expired_three_years', $request->ip(), (string) $request->userAgent(), ['source' => 'remember_cookie']);
                 Auth::logout();
                 $request->session()->invalidate();
