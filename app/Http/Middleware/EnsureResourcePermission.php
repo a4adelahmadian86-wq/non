@@ -39,6 +39,20 @@ class EnsureResourcePermission
             $context['team_ids'] = array_values(array_unique(array_merge($memberTeamIds, $supervisedTeamIds)));
         } elseif ($resource instanceof Organization) {
             $context['organization_id'] = $resource->id;
+            $actor = $request->user();
+            if ($actor) {
+                $actorTeamIds = $actor->teams()->pluck('teams.id')->map(fn ($id) => (int) $id)->all();
+                $actorTeamIds = array_merge(
+                    $actorTeamIds,
+                    Team::query()->where('supervisor_id', $actor->id)->pluck('id')->map(fn ($id) => (int) $id)->all()
+                );
+                $context['team_ids'] = Team::query()
+                    ->where('organization_id', $resource->id)
+                    ->whereIn('id', array_values(array_unique($actorTeamIds)))
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+            }
         } elseif ($resource instanceof Team) {
             $context['team_id'] = $resource->id;
             $context['organization_id'] = $resource->organization_id;
