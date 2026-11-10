@@ -100,7 +100,7 @@ class StorageMigrationService
     private function migrateUserFiles(int $limit): int
     {
         $count = 0;
-        UserFile::query()->where('disk', 'private')->whereIn('status', ['local', 'remote'])->orderBy('id')->limit($limit)->get()
+        UserFile::query()->where('disk', 'private')->where('status', 'local')->orderBy('id')->limit($limit)->get()
             ->each(function (UserFile $file) use (&$count): void {
                 $sourceDisk = $file->disk ?: 'private';
                 $sourcePath = $file->path;
