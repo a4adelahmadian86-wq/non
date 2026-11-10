@@ -198,6 +198,24 @@ class CommunicationCenterTest extends TestCase
             ->assertSee('public-orchid-reply');
     }
 
+    public function test_customer_ticket_cards_link_to_the_customer_ticket_page(): void
+    {
+        $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'subject' => 'پیگیری سفارش مشتری',
+            'status' => 'open',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+
+        $this->actingAs($customer)
+            ->get(route('platform.communications'))
+            ->assertOk()
+            ->assertSee('href="'.route('support.show', $ticket).'"', false)
+            ->assertDontSee('href="'.route('admin.support.management', ['ticket' => $ticket->id]).'"', false);
+    }
+
     public function test_non_admin_cannot_open_staff_communication_center(): void
     {
         $customer = User::factory()->create(['role' => 'user', 'is_blocked' => false]);
