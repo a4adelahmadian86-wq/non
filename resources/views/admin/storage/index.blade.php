@@ -41,12 +41,12 @@
 
     <section class="storage-add">
         <h2>افزودن فضای ذخیره‌سازی</h2>
-        <p class="storage-muted">برای اتصال S3-compatible، اطلاعات دسترسی را به‌صورت JSON وارد کنید. کلیدها در پایگاه داده رمزنگاری می‌شوند و در صفحه نمایش داده نخواهند شد.</p>
+        <p class="storage-muted">اتصال فعلی برای سرویس‌های S3-compatible است. Endpoint، Bucket، Region و کلیدهای دسترسی را وارد کنید؛ نام ارائه‌دهنده از Endpoint تشخیص داده می‌شود. ظرفیت و محدودیت‌هایی که API عمومی اعلام نمی‌کند، «نامشخص» باقی می‌مانند. کلیدها رمزنگاری می‌شوند.</p>
         <form method="post" action="{{ route('admin.storage.store') }}" class="storage-form">
             @csrf
             <label>درایو مقصد<select name="drive_key" required>@foreach($drives as $drive)<option value="{{ $drive['key'] }}">{{ $drive['title'] }}</option>@endforeach</select></label>
-            <label class="wide">اطلاعات اتصال API / سرویس‌دهنده<textarea name="connection_json" rows="8" required spellcheck="false" placeholder='{"driver":"s3","name":"فضای ابری اصلی","provider":"نام شرکت","region":"eu-central-1","endpoint":"https://s3.example.com","bucket":"my-bucket","capacity_bytes":1099511627776,"credentials":{"key":"ACCESS_KEY","secret":"SECRET_KEY","use_path_style_endpoint":true}}'></textarea></label>
-            <div class="wide storage-muted">فقط درایو و اطلاعات اتصال را وارد کنید. نام، ارائه‌دهنده، منطقه، Bucket، ظرفیت و محدودیت‌ها از اطلاعات سرویس دریافت می‌شوند؛ هر مشخصه‌ای که سرویس اعلام نکند نامشخص می‌ماند. کلیدهای محرمانه رمزنگاری‌شده ذخیره می‌شوند.</div>
+            <label class="wide">اطلاعات اتصال API / سرویس‌دهنده<textarea name="connection_json" rows="8" required spellcheck="false" placeholder='{"driver":"s3","endpoint":"https://s3.example.com","bucket":"my-bucket","region":"eu-central-1","credentials":{"key":"ACCESS_KEY","secret":"SECRET_KEY","use_path_style_endpoint":true}}'></textarea></label>
+            <div class="wide storage-muted">درایو مقصد را انتخاب و اطلاعات اتصال S3 را وارد کنید. ارائه‌دهنده از Endpoint تشخیص داده می‌شود؛ ظرفیت و سهمیه‌های غیرقابل‌استخراج به‌صورت نامشخص نمایش داده خواهند شد. کلیدهای محرمانه رمزنگاری‌شده ذخیره می‌شوند.</div>
             <div class="wide"><button class="storage-btn" type="submit"><i class="fa-solid fa-plug"></i> بررسی اتصال و افزودن هاست</button></div>
         </form>
     </section>
