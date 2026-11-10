@@ -93,71 +93,6 @@ class VoiceController extends Controller
             }
 
             if (! $missing) {
-                // Local configuration alone does not prove that Render accepts the
-                // shared bearer credential. Verify it before the browser requests
-                // microphone permission or attempts a WebSocket handshake.
-                try {
-                    $remoteStatus = Http::acceptJson()
-                        ->withToken($chatToken)
-                        ->connectTimeout(3)
-                        ->timeout(6)
-                        ->get($chatUrl.'/v1/status');
-                } catch (\Throwable) {
-                    return response()->json([
-                        'ok' => true,
-                        'mode' => 'none',
-                        'chunked' => false,
-                        'gateway' => false,
-                        'websocket_url' => '',
-                        'reason' => 'render_voice_gateway_unreachable',
-                        'message' => 'ارتباط امن با سرویس Render برای بررسی اعتبار اتصال برقرار نشد؛ میکروفون فعال نشده است. اتصال شبکه و وضعیت سرویس را بررسی کن.',
-                        'self_hosted' => false,
-                    ], 200, ['Cache-Control' => 'no-store']);
-                }
-
-                if ($remoteStatus->status() === 401) {
-                    return response()->json([
-                        'ok' => true,
-                        'mode' => 'none',
-                        'chunked' => false,
-                        'gateway' => false,
-                        'websocket_url' => '',
-                        'reason' => 'render_voice_auth_failed',
-                        'message' => 'سرویس Render توکن اتصال Laravel را نپذیرفت (HTTP 401). مقدار فعلی FARAST_VOICE_TOKEN باید با توکن همین سرویس Voice-typing یکسان باشد؛ میکروفون فعال نشده است.',
-                        'self_hosted' => false,
-                    ], 200, ['Cache-Control' => 'no-store']);
-                }
-
-                if (! $remoteStatus->successful()) {
-                    return response()->json([
-                        'ok' => true,
-                        'mode' => 'none',
-                        'chunked' => false,
-                        'gateway' => false,
-                        'websocket_url' => '',
-                        'reason' => 'render_voice_gateway_unavailable',
-                        'message' => 'سرویس Render برای احراز هویت و آماده‌بودن گفتار پاسخ موفق نداد (HTTP '.$remoteStatus->status().')؛ میکروفون فعال نشده است.',
-                        'self_hosted' => false,
-                    ], 200, ['Cache-Control' => 'no-store']);
-                }
-
-                $remoteReadiness = $remoteStatus->json();
-                if (! is_array($remoteReadiness)
-                    || ! ($remoteReadiness['asr_ready'] ?? false)
-                    || ! ($remoteReadiness['tts_ready'] ?? false)
-                    || ! ($remoteReadiness['chat_ready'] ?? false)) {
-                    return response()->json([
-                        'ok' => true,
-                        'mode' => 'none',
-                        'chunked' => false,
-                        'gateway' => false,
-                        'websocket_url' => '',
-                        'reason' => 'render_voice_gateway_not_ready',
-                        'message' => 'توکن پذیرفته شد، اما یکی از قابلیت‌های گفتار یا چت در سرویس Render آماده نیست؛ میکروفون فعال نشده است.',
-                        'self_hosted' => false,
-                    ], 200, ['Cache-Control' => 'no-store']);
-                }
-
                 return response()->json([
                     'ok' => true,
                     'mode' => 'gateway',
@@ -328,10 +263,53 @@ class VoiceController extends Controller
             }
         }
 
-        // Do not make a second outbound Render request here. The browser has already
-        // checked the public /health endpoint before asking for this short-lived token.
-        // The signed WebSocket session is itself the credential proof: the gateway
-        // verifies its HMAC against FARAST_VOICE_TOKEN before accepting any audio.
+        // The browser wakes the Render Free service through /health first. Once it
+        // is awake, verify the same bearer token that will sign the WebSocket session.
+        // This prevents issuing a token that Render will reject after the microphone
+        // connection attempt has already begun.
+        if (! $localVoiceOnly && $aiGatewayUrl !== '' && $secret !== '') {
+            try {
+                $remoteStatus = Http::acceptJson()
+                    ->withToken(trim((string) config('services.ai_gateway.token', '')))
+                    ->connectTimeout(3)
+                    ->timeout(6)
+                    ->get($aiGatewayUrl.'/v1/status');
+            } catch (\Throwable) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'render_voice_gateway_unreachable',
+                    'message' => 'پس از بیدارشدن سرویس، بررسی اعتبار اتصال Render انجام نشد؛ اتصال شبکه را بررسی کن و دوباره تلاش کن. میکروفون هنوز فعال نشده است.',
+                ], 503, ['Cache-Control' => 'no-store']);
+            }
+
+            if ($remoteStatus->status() === 401) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'render_voice_auth_failed',
+                    'message' => 'سرویس Render توکن اتصال Laravel را نپذیرفت (HTTP 401). مقدار فعلی FARAST_VOICE_TOKEN باید با توکن همین سرویس Voice-typing یکسان باشد. میکروفون هنوز فعال نشده است.',
+                ], 503, ['Cache-Control' => 'no-store']);
+            }
+
+            if (! $remoteStatus->successful()) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'render_voice_gateway_unavailable',
+                    'message' => 'سرویس Render برای بررسی اعتبار اتصال پاسخ موفق نداد (HTTP '.$remoteStatus->status().'). میکروفون هنوز فعال نشده است.',
+                ], 503, ['Cache-Control' => 'no-store']);
+            }
+
+            $remoteReadiness = $remoteStatus->json();
+            if (! is_array($remoteReadiness)
+                || ! ($remoteReadiness['asr_ready'] ?? false)
+                || ! ($remoteReadiness['tts_ready'] ?? false)
+                || ! ($remoteReadiness['chat_ready'] ?? false)) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'render_voice_gateway_not_ready',
+                    'message' => 'توکن پذیرفته شد، اما یکی از قابلیت‌های گفتار یا چت در سرویس Render آماده نیست. میکروفون هنوز فعال نشده است.',
+                ], 503, ['Cache-Control' => 'no-store']);
+            }
+        }
 
         $payload = [
             'uid' => (int) $request->user()->id,
