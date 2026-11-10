@@ -444,6 +444,55 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_team_permission_does_not_cross_the_users_organization_through_a_malformed_membership(): void
+    {
+        $organizationA = Organization::create(['name' => 'Actor Organization', 'slug' => 'actor-organization', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Foreign Organization', 'slug' => 'foreign-organization', 'status' => 'active']);
+        $supervisor = $this->user('09140000321', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $foreignTeam = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Foreign Supervised Team',
+            'slug' => 'foreign-supervised-team',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $roleId = $this->role('foreign-org-team-grant', 'team', $foreignTeam->id);
+        $this->grant($roleId, 'access.audit', 'team');
+        $this->assign($supervisor, $roleId, 'team', $foreignTeam->id);
+
+        $this->assertFalse(app(AuthorizationService::class)->allowsFor($supervisor, 'access.audit', [
+            'organization_id' => $organizationB->id,
+            'team_id' => $foreignTeam->id,
+            'owner_id' => null,
+        ]));
+    }
+
+    public function test_role_assignment_rejects_a_team_outside_the_target_users_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Target Organization', 'slug' => 'target-organization', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Other Target Organization', 'slug' => 'other-target-organization', 'status' => 'active']);
+        $admin = $this->user('09140000322', User::ROLE_ADMIN);
+        $supervisor = $this->user('09140000323', User::ROLE_TEAM_SUPERVISOR, $organizationA->id);
+        $foreignTeam = Team::create([
+            'organization_id' => $organizationB->id,
+            'name' => 'Out of Organization Team',
+            'slug' => 'out-of-organization-team',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $roleId = $this->role('out-of-org-assignment-role', 'team', $foreignTeam->id);
+
+        $this->actingAs($admin)->post('/admin/access-center/users/'.$supervisor->id.'/roles', [
+            'role_id' => $roleId,
+            'scope_type' => 'team',
+            'scope_id' => $foreignTeam->id,
+            'reason' => 'Cross-organization assignment regression test',
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseMissing('farast_user_roles', [
+            'user_id' => $supervisor->id,
+            'role_id' => $roleId,
+        ]);
+    }
+
     public function test_team_scoped_role_cannot_be_assigned_to_a_different_team(): void
     {
         $organization = Organization::create(['name' => 'Team Scope Org', 'slug' => 'team-scope-org', 'status' => 'active']);
