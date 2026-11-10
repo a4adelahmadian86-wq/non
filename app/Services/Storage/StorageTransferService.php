@@ -75,7 +75,10 @@ class StorageTransferService
             if (! $target) return;
             $sourceDisk = (string) data_get($file->metadata, 'staging_disk', 'private');
             $source = Storage::disk($sourceDisk);
-            if (! $source->exists($file->file_key)) return;
+            if (! $source->exists($file->file_key)) {
+                $file->update(['status' => 'transfer_error', 'metadata' => array_merge((array) $file->metadata, ['transfer_error' => 'staging_file_missing'])]);
+                return;
+            }
             $temp = tempnam(sys_get_temp_dir(), 'farast-transfer');
             $uploaded = false;
             try {
