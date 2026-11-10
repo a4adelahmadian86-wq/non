@@ -51,7 +51,7 @@ class StorageBackupRestoreService
             $password = Crypt::decryptString($ciphertext);
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $name = (string) $zip->getNameIndex($i);
-                if ($name === '' || str_starts_with($name, '/') || str_contains($name, '\\') || in_array('..', explode('/', $name), true) || str_contains($name, "\0")) {
+                if ($name === '' || str_starts_with($name, '/') || str_contains($name, '\') || in_array('..', explode('/', $name), true) || str_contains($name, "\0")) {
                     $zip->close();
                     throw new RuntimeException('Backup contains an unsafe archive entry.');
                 }
@@ -79,11 +79,16 @@ class StorageBackupRestoreService
                 }
 
                 $target = Storage::disk('managed');
-                if ($target->exists($logicalPath) && ! $overwrite) {
-                    $existingHash = hash('sha256', (string) $target->get($logicalPath));
-                    if (hash_equals((string) $item['sha256'], $existingHash)) {
-                        $restored['skipped']++;
-                        continue;
+                $existingRecord = StorageManagedFile::query()->where('logical_path', $logicalPath)->where('status', 'active')->first();
+                if ($existingRecord && ! $overwrite) {
+                    try {
+                        $existingHash = hash('sha256', (string) $target->get($logicalPath));
+                        if (hash_equals((string) $item['sha256'], $existingHash)) {
+                            $restored['skipped']++;
+                            continue;
+                        }
+                    } catch (\Throwable $exception) {
+                        report($exception);
                     }
                     $restored['skipped']++;
                     continue;
