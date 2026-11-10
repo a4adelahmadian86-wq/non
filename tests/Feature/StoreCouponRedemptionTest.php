@@ -45,7 +45,8 @@ class StoreCouponRedemptionTest extends TestCase
         $service->redeemForPaidOrder($order->fresh());
 
         $this->assertSame(1, $coupon->fresh()->used_count);
-        $this->assertNotEmpty($order->fresh()->pricing_snapshot['coupon_redeemed_at'] ?? null);\n        $this->assertFalse($order->fresh()->pricing_snapshot['coupon_redemption_pending']);
+        $this->assertNotEmpty($order->fresh()->pricing_snapshot['coupon_redeemed_at'] ?? null);
+        $this->assertFalse($order->fresh()->pricing_snapshot['coupon_redemption_pending']);
     }
 
     public function test_coupon_capacity_is_checked_at_redemption_not_order_creation(): void
@@ -105,4 +106,34 @@ class StoreCouponRedemptionTest extends TestCase
 
         $this->assertArrayNotHasKey('coupon_redeemed_at', $order->fresh()->pricing_snapshot ?? []);
     }
+    public function test_legacy_pending_orders_are_not_counted_twice(): void
+    {
+        $user = User::create([
+            'name' => 'Legacy Coupon QA',
+            'mobile' => '09123456782',
+            'password' => 'secret',
+        ]);
+        $coupon = StoreCoupon::create([
+            'code' => 'LEGACY10',
+            'type' => 'percent',
+            'value' => 10,
+            'max_uses' => 5,
+            'used_count' => 1,
+            'is_active' => true,
+        ]);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'subtotal_rials' => 100000,
+            'discount_rials' => 10000,
+            'tax_rials' => 0,
+            'total_rials' => 90000,
+            'status' => 'pending',
+            'pricing_snapshot' => ['kind' => 'store', 'coupon_code' => $coupon->code],
+        ]);
+
+        app(StoreCouponRedemptionService::class)->redeemForPaidOrder($order);
+
+        $this->assertSame(1, $coupon->fresh()->used_count);
+    }
+
 }
