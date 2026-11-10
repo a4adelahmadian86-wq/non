@@ -12,6 +12,9 @@ class AuthorizationService
 {
     private array $permissionIds = [];
     private array $decisionCache = [];
+    private array $legacyPermissionIds = [];
+    private array $overrideRowsByUser = [];
+    private array $dynamicGrantsByUser = [];
 
     public const PERMISSIONS = [
         'dashboard.view', 'users.view', 'users.create', 'users.edit', 'users.delete', 'users.suspend',
@@ -63,36 +66,24 @@ class AuthorizationService
             return ['allowed' => false, 'reason' => 'unknown_permission', 'source' => null, 'permission' => $permission];
         }
 
-        if (Schema::hasTable('farast_user_permission_overrides')) {
-            $overrides = DB::table('farast_user_permission_overrides')
-                ->where('user_id', $user->id)
-                ->where('permission_id', $permissionId)
-                ->where(function ($query) {
-                    $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
-                })
-                ->where(function ($query) {
-                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
-                })
-                ->orderByDesc('id')
-                ->get();
-
-            $matching = $overrides->filter(fn ($override) =>
-                $this->scopeMatches($user, $override->scope_type, $override->scope_id, $context)
+        $matching = array_values(array_filter(
+            $this->overridesFor($user),
+            fn ($override) => (int) $override->permission_id === $permissionId
+                && $this->scopeMatches($user, $override->scope_type, $override->scope_id, $context)
                 && $this->conditionsMatch($override->conditions, $context)
-            );
-            $override = $matching->first(fn ($item) => $item->effect === 'deny')
-                ?? $matching->first(fn ($item) => $item->effect === 'allow');
+        ));
+        $override = collect($matching)->first(fn ($item) => $item->effect === 'deny')
+            ?? collect($matching)->first(fn ($item) => $item->effect === 'allow');
 
-            if ($override) {
-                return [
-                    'allowed' => $override->effect === 'allow',
-                    'reason' => 'direct_'.$override->effect.'_override',
-                    'source' => 'user_override',
-                    'permission' => $permission,
-                    'override_id' => (int) $override->id,
-                    'scope' => $override->scope_type,
-                ];
-            }
+        if ($override) {
+            return [
+                'allowed' => $override->effect === 'allow',
+                'reason' => 'direct_'.$override->effect.'_override',
+                'source' => 'user_override',
+                'permission' => $permission,
+                'override_id' => (int) $override->id,
+                'scope' => $override->scope_type,
+            ];
         }
 
         if ($this->hasLegacyGrant($user, $permissionId)) {
@@ -117,6 +108,9 @@ class AuthorizationService
         // local cache after writes also protects long-running workers and tests.
         $this->decisionCache = [];
         $this->permissionIds = [];
+        $this->legacyPermissionIds = [];
+        $this->overrideRowsByUser = [];
+        $this->dynamicGrantsByUser = [];
     }
 
     private function decide(?User $user, string $permission, array $context): bool
@@ -142,31 +136,19 @@ class AuthorizationService
             return $this->decisionCache[$cacheKey] = false;
         }
 
-        if (Schema::hasTable('farast_user_permission_overrides')) {
-            $overrides = DB::table('farast_user_permission_overrides')
-                ->where('user_id', $user->id)
-                ->where('permission_id', $permissionId)
-                ->where(function ($query) {
-                    $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
-                })
-                ->where(function ($query) {
-                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
-                })
-                ->orderByDesc('id')
-                ->get();
-
-            $matching = $overrides->filter(fn ($override) =>
-                $this->scopeMatches($user, $override->scope_type, $override->scope_id, $context)
+        $matching = array_values(array_filter(
+            $this->overridesFor($user),
+            fn ($override) => (int) $override->permission_id === $permissionId
+                && $this->scopeMatches($user, $override->scope_type, $override->scope_id, $context)
                 && $this->conditionsMatch($override->conditions, $context)
-            );
+        ));
 
-            // Explicit deny always wins over every inherited or direct grant.
-            if ($matching->contains(fn ($override) => $override->effect === 'deny')) {
-                return $this->decisionCache[$cacheKey] = false;
-            }
-            if ($matching->contains(fn ($override) => $override->effect === 'allow')) {
-                return $this->decisionCache[$cacheKey] = true;
-            }
+        // Explicit deny always wins over every inherited or direct grant.
+        if (collect($matching)->contains(fn ($override) => $override->effect === 'deny')) {
+            return $this->decisionCache[$cacheKey] = false;
+        }
+        if (collect($matching)->contains(fn ($override) => $override->effect === 'allow')) {
+            return $this->decisionCache[$cacheKey] = true;
         }
 
         if ($this->hasLegacyGrant($user, $permissionId)) {
@@ -189,43 +171,76 @@ class AuthorizationService
 
     private function hasLegacyGrant(User $user, int $permissionId): bool
     {
-        return Schema::hasTable('role_permissions')
-            && RolePermission::query()->where('role', $user->role)->where('permission_id', $permissionId)->exists();
+        if (! array_key_exists($user->role, $this->legacyPermissionIds)) {
+            $ids = Schema::hasTable('role_permissions')
+                ? RolePermission::query()->where('role', $user->role)->pluck('permission_id')->map(fn ($id) => (int) $id)->all()
+                : [];
+            $this->legacyPermissionIds[$user->role] = array_fill_keys($ids, true);
+        }
+
+        return isset($this->legacyPermissionIds[$user->role][$permissionId]);
+    }
+
+    /** Load active direct overrides once per user/request, not once per permission. */
+    private function overridesFor(User $user): array
+    {
+        if (! array_key_exists($user->id, $this->overrideRowsByUser)) {
+            $this->overrideRowsByUser[$user->id] = Schema::hasTable('farast_user_permission_overrides')
+                ? DB::table('farast_user_permission_overrides')
+                    ->where('user_id', $user->id)
+                    ->where(function ($query) {
+                        $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                    })
+                    ->where(function ($query) {
+                        $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->orderByDesc('id')
+                    ->get()
+                    ->all()
+                : [];
+        }
+
+        return $this->overrideRowsByUser[$user->id];
     }
 
     private function dynamicGrant(User $user, int $permissionId, array $context): ?object
     {
-        if (! Schema::hasTable('farast_user_roles')
-            || ! Schema::hasTable('farast_roles')
-            || ! Schema::hasTable('farast_role_permissions')) {
-            return null;
+        if (! array_key_exists($user->id, $this->dynamicGrantsByUser)) {
+            $this->dynamicGrantsByUser[$user->id] = Schema::hasTable('farast_user_roles')
+                && Schema::hasTable('farast_roles')
+                && Schema::hasTable('farast_role_permissions')
+                ? DB::table('farast_user_roles as ur')
+                    ->join('farast_roles as r', 'r.id', '=', 'ur.role_id')
+                    ->join('farast_role_permissions as rp', 'rp.role_id', '=', 'r.id')
+                    ->where('ur.user_id', $user->id)
+                    ->where('r.is_active', true)
+                    ->where(function ($query) {
+                        $query->whereNull('ur.starts_at')->orWhere('ur.starts_at', '<=', now());
+                    })
+                    ->where(function ($query) {
+                        $query->whereNull('ur.expires_at')->orWhere('ur.expires_at', '>', now());
+                    })
+                    ->select([
+                        'rp.permission_id',
+                        'r.id as role_id',
+                        'r.scope_type as role_scope_type',
+                        'r.scope_id as role_scope_id',
+                        'ur.scope_type as assignment_scope_type',
+                        'ur.scope_id as assignment_scope_id',
+                        'rp.scope_type as permission_scope_type',
+                        'rp.conditions as permission_conditions',
+                    ])
+                    ->orderBy('ur.id')
+                    ->get()
+                    ->all()
+                : [];
         }
 
-        $assignments = DB::table('farast_user_roles as ur')
-            ->join('farast_roles as r', 'r.id', '=', 'ur.role_id')
-            ->join('farast_role_permissions as rp', 'rp.role_id', '=', 'r.id')
-            ->where('ur.user_id', $user->id)
-            ->where('rp.permission_id', $permissionId)
-            ->where('r.is_active', true)
-            ->where(function ($query) {
-                $query->whereNull('ur.starts_at')->orWhere('ur.starts_at', '<=', now());
-            })
-            ->where(function ($query) {
-                $query->whereNull('ur.expires_at')->orWhere('ur.expires_at', '>', now());
-            })
-            ->select([
-                'r.id as role_id',
-                'r.scope_type as role_scope_type',
-                'r.scope_id as role_scope_id',
-                'ur.scope_type as assignment_scope_type',
-                'ur.scope_id as assignment_scope_id',
-                'rp.scope_type as permission_scope_type',
-                'rp.conditions as permission_conditions',
-            ])
-            ->orderBy('ur.id')
-            ->get();
+        foreach ($this->dynamicGrantsByUser[$user->id] as $assignment) {
+            if ((int) $assignment->permission_id !== $permissionId) {
+                continue;
+            }
 
-        foreach ($assignments as $assignment) {
             if (! $this->scopeMatches($user, $assignment->role_scope_type, $assignment->role_scope_id, $context)
                 || ! $this->scopeMatches($user, $assignment->assignment_scope_type, $assignment->assignment_scope_id, $context)
                 || ! $this->scopeMatches($user, $assignment->permission_scope_type, null, $context)
