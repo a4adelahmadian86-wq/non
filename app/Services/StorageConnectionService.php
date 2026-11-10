@@ -22,7 +22,7 @@ class StorageConnectionService
             if ($shouldRefreshInventory) {
                 try {
                     $inventory = $this->s3->inventory($volume);
-                } catch (\\Throwable $exception) {
+                } catch (\Throwable $exception) {
                     $inventoryError = mb_substr($exception->getMessage(), 0, 400);
                 }
             }
@@ -67,7 +67,7 @@ class StorageConnectionService
         $count = 0;
         $bytes = 0;
         if (! is_dir($root)) return ['object_count' => 0, 'used_bytes' => 0];
-        $iterator = new \\RecursiveIteratorIterator(new \\RecursiveDirectoryIterator($root, \\FilesystemIterator::SKIP_DOTS));
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
             if ($file->isFile() && ! str_starts_with($file->getFilename(), '.farast-health-')) {
                 $count++;
