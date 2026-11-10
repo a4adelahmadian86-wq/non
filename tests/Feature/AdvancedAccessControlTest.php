@@ -326,6 +326,51 @@ class AdvancedAccessControlTest extends TestCase
         ]);
     }
 
+    public function test_team_scoped_role_cannot_be_assigned_to_a_different_team(): void
+    {
+        $organization = Organization::create(['name' => 'Team Scope Org', 'slug' => 'team-scope-org', 'status' => 'active']);
+        $admin = $this->user('09140000118', User::ROLE_ADMIN);
+        $supervisor = $this->user('09140000119', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $teamA = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Role Team A',
+            'slug' => 'role-team-a',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $teamB = Team::create([
+            'organization_id' => $organization->id,
+            'name' => 'Role Team B',
+            'slug' => 'role-team-b',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $roleId = $this->role('team-parent-bound-role', 'team', $teamA->id);
+
+        $this->actingAs($admin)->post('/admin/access-center/users/'.$supervisor->id.'/roles', [
+            'role_id' => $roleId,
+            'scope_type' => 'team',
+            'scope_id' => $teamB->id,
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseMissing('farast_user_roles', [
+            'user_id' => $supervisor->id,
+            'role_id' => $roleId,
+        ]);
+    }
+
+    public function test_role_change_and_audit_log_are_atomic(): void
+    {
+        $admin = $this->user('09140000120', User::ROLE_ADMIN);
+        DB::unprepared("CREATE TRIGGER fail_access_audit BEFORE INSERT ON farast_access_audit_logs BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END");
+
+        $this->actingAs($admin)->post('/admin/access-center/roles', [
+            'name' => 'نقش بدون ممیزی',
+            'description' => 'نباید بدون ثبت ممیزی ذخیره شود',
+            'scope_type' => 'global',
+        ])->assertServerError();
+
+        $this->assertDatabaseMissing('farast_roles', ['name' => 'نقش بدون ممیزی']);
+    }
+
     public function test_advanced_access_center_is_only_available_to_the_platform_admin(): void
     {
         $admin = $this->user('09140000107', User::ROLE_ADMIN);
