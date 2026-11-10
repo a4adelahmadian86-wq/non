@@ -301,6 +301,30 @@ class AdvancedAccessControlTest extends TestCase
         $this->assertDatabaseHas('farast_access_audit_logs', ['action' => 'user.permission.override.created', 'subject_user_id' => $manager->id]);
     }
 
+    public function test_organization_role_cannot_be_assigned_outside_its_parent_organization(): void
+    {
+        $organizationA = Organization::create(['name' => 'Role Parent A', 'slug' => 'role-parent-a', 'status' => 'active']);
+        $organizationB = Organization::create(['name' => 'Role Parent B', 'slug' => 'role-parent-b', 'status' => 'active']);
+        $admin = $this->user('09140000116', User::ROLE_ADMIN);
+        $target = $this->user('09140000117', User::ROLE_ORGANIZATION_MANAGER, $organizationB->id);
+        $roleId = $this->role('organization-parent-bound-role', 'organization', $organizationA->id);
+
+        $this->actingAs($admin)->post('/admin/access-center/users/'.$target->id.'/roles', [
+            'role_id' => $roleId,
+            'scope_type' => 'organization',
+            'scope_id' => $organizationB->id,
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseMissing('farast_user_roles', [
+            'user_id' => $target->id,
+            'role_id' => $roleId,
+        ]);
+        $this->assertDatabaseMissing('farast_access_audit_logs', [
+            'action' => 'user.role.assigned',
+            'subject_user_id' => $target->id,
+        ]);
+    }
+
     public function test_advanced_access_center_is_only_available_to_the_platform_admin(): void
     {
         $admin = $this->user('09140000107', User::ROLE_ADMIN);
