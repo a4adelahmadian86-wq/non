@@ -122,4 +122,49 @@ class OptionalTwoFactorAuthenticationTest extends TestCase
             ->count());
         $this->assertTrue(session('auth.two_factor_passed'));
     }
+    public function test_owner_can_regenerate_recovery_codes_and_disable_two_factor(): void
+    {
+        $secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+        $user = $this->makeUser($secret);
+        $totp = app(LocalTotpService::class);
+        $oldCodes = $totp->generateRecoveryCodes(10);
+        $now = now();
+
+        DB::table('farast_two_factor_recovery_codes')->insert(array_map(
+            fn (string $code) => [
+                'user_id' => $user->id,
+                'code_hash' => hash('sha256', $totp->normalizeRecoveryCode($code)),
+                'used_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            $oldCodes,
+        ));
+
+        $this->actingAs($user)
+            ->withSession(['auth.two_factor_passed' => true])
+            ->post(route('platform.security.two-factor.recovery-codes'), [
+                'current_password' => 'StrongPassword123',
+                'code' => $oldCodes[0],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('two_factor_recovery_codes');
+
+        $newCodes = session('two_factor_recovery_codes');
+        $this->assertCount(10, $newCodes);
+        $this->assertSame(10, DB::table('farast_two_factor_recovery_codes')
+            ->where('user_id', $user->id)
+            ->whereNull('used_at')
+            ->count());
+
+        $this->post(route('platform.security.two-factor.disable'), [
+            'current_password' => 'StrongPassword123',
+            'code' => $newCodes[0],
+        ])->assertRedirect();
+
+        $this->assertNull($user->fresh()->two_factor_enabled_at);
+        $this->assertNull($user->fresh()->two_factor_secret);
+        $this->assertSame(0, DB::table('farast_two_factor_recovery_codes')->where('user_id', $user->id)->count());
+    }
+
 }
