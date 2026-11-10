@@ -87,13 +87,19 @@ class CrmController extends Controller
                 'items' => $order->storeItems->pluck('title_snapshot')->values(),
             ]);
 
-        $tickets = Ticket::query()->where('user_id', $user->id)->latest()->limit(30)->get()
+        $tickets = Ticket::query()->with(['relatedOrder' => fn ($query) => $query->where('user_id', $user->id)])->where('user_id', $user->id)->latest()->limit(30)->get()
             ->map(fn (Ticket $ticket) => [
                 'type' => 'ticket',
                 'id' => $ticket->id,
                 'title' => $ticket->subject,
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
+                'related_order_id' => $ticket->relatedOrder?->id,
+                'related_order' => $ticket->relatedOrder ? [
+                    'id' => $ticket->relatedOrder->id,
+                    'status' => $ticket->relatedOrder->status,
+                    'amount_rials' => $ticket->relatedOrder->total_rials,
+                ] : null,
                 'created_at' => $ticket->created_at,
             ]);
 
