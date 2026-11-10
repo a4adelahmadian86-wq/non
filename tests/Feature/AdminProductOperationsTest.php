@@ -123,6 +123,23 @@ class AdminProductOperationsTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_retry_rejects_files_above_the_current_supervisor_limit(): void
+    {
+        Queue::fake();
+        config(['services.product_supervisor.url' => 'https://supervisor.example.test', 'services.product_supervisor.token' => 'test-token']);
+        $document = $this->document('awaiting_provider');
+        $document->file->update(['size_bytes' => 26 * 1024 * 1024]);
+
+        $this->actingAs($this->admin())
+            ->from(route('admin.store.operations'))
+            ->post(route('admin.store.operations.documents.retry', $document))
+            ->assertRedirect(route('admin.store.operations'))
+            ->assertSessionHasErrors('document');
+
+        $this->assertSame('awaiting_provider', $document->fresh()->processing_status);
+        Queue::assertNothingPushed();
+    }
+
     public function test_operations_center_requires_admin_authentication(): void
     {
         $this->get(route('admin.store.operations'))->assertRedirect(route('login'));

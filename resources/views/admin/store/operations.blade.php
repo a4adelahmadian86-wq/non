@@ -55,13 +55,13 @@
             @if($document->product)
               <a href="{{ route('admin.store.edit', $document->product) }}">مشاهده محصول</a>
             @endif
-            @if($supervisorConfigured)
+            @if($supervisorConfigured && (int) ($document->file?->size_bytes ?? 0) <= 26214400)
               <form method="post" action="{{ route('admin.store.operations.documents.retry', $document) }}" onsubmit="return confirm('سلامت و یکسانی نسخه فایل دوباره بررسی و سند وارد صف شود؟')">
                 @csrf
                 <button type="submit" class="store-outline-btn">بررسی و تلاش مجدد</button>
               </form>
             @else
-              <span class="ops-note">تا اتصال ناظر محصول برقرار نشود، تلاش مجدد غیرفعال است.</span>
+              <span class="ops-note">{{ ! $supervisorConfigured ? 'تا اتصال ناظر محصول برقرار نشود، تلاش مجدد غیرفعال است.' : 'فایل بزرگ‌تر از ۲۵ مگابایت است؛ مسیر پردازش دسته‌ای هنوز فعال نشده است.' }}</span>
             @endif
           </div>
         </article>

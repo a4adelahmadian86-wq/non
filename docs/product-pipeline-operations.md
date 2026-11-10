@@ -18,7 +18,7 @@ Only documents in `failed`, `stale`, or `awaiting_provider` can be manually retr
 
 - The source file belongs to the same product and document.
 - The file is active, clean according to the first-party static upload inspection, and has an allowed product/lesson purpose.
-- The source exists on the private disk.
+- The source exists on the private disk and is no larger than the current 25 MiB supervisor request ceiling. Larger files remain visible for diagnosis but cannot be retried until bounded batch processing is implemented.
 - The file bytes, file record SHA-256, and document source SHA-256 all match.
 
 The document and file rows are locked and rechecked before the status is changed. The audit event is recorded in the same transaction, and dispatch happens only after commit. Pending and processing jobs are not manually duplicated. Automatic recovery remains limited to expired processing leases and is handled by `farast:recover-product-documents`.

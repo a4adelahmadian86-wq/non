@@ -12,6 +12,7 @@ use Illuminate\Validation\ValidationException;
 class ProductDocumentRetryService
 {
     private const RETRYABLE_STATUSES = ['failed', 'stale', 'awaiting_provider'];
+    private const MAX_SUPERVISOR_FILE_BYTES = 25 * 1024 * 1024;
 
     public function __construct(
         private readonly AuditEventService $audit,
@@ -96,6 +97,7 @@ class ProductDocumentRetryService
         }
 
         if (! $file
+            || (int) $file->size_bytes > self::MAX_SUPERVISOR_FILE_BYTES
             || (int) $file->product_id !== (int) $document->product_id
             || ! in_array($file->purpose, ['product_download', 'lesson_resource'], true)
             || ! $file->is_active
@@ -103,7 +105,7 @@ class ProductDocumentRetryService
             || ($file->disk ?: 'private') !== 'private'
             || ! filled($file->sha256)
             || ! hash_equals((string) $document->source_sha256, (string) $file->sha256)) {
-            $this->reject('فایل فعال، سالم و هم‌نسخه برای این سند تأیید نشد.');
+            $this->reject('فایل باید فعال، سالم، هم‌نسخه و حداکثر ۲۵ مگابایت باشد؛ فایل‌های بزرگ‌تر تا آماده‌شدن پردازش دسته‌ای قابل تلاش مجدد نیستند.');
         }
     }
 
