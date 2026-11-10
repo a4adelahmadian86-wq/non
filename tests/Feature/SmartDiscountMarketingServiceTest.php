@@ -262,7 +262,7 @@ class SmartDiscountMarketingServiceTest extends TestCase
                 'score' => 6,
                 'reason_codes' => ['wishlist_interest'],
                 'offered_at' => now()->subDays(5),
-                'expires_at' => now()->addDay(),
+                'expires_at' => $i < 4 ? now()->addDay() : now()->subHour(),
                 'redeemed_at' => $i < 4 ? now()->subDays(4) : null,
             ]);
         }
