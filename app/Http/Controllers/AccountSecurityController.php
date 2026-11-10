@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +52,7 @@ class AccountSecurityController extends Controller
         abort_if(hash_equals(hash('sha256', $request->session()->getId()), $record->session_key), 422, 'برای خروج از نشست فعلی از دکمه خروج استفاده کنید.');
 
         $this->revokeRecord($record);
+        $this->rotateRememberToken($request->user());
         $this->recordEvent($request, 'session_revoked', ['device' => $record->device_label]);
 
         return back()->with('status', 'نشست انتخاب‌شده برای خروج امن علامت‌گذاری شد.');
@@ -70,6 +72,10 @@ class AccountSecurityController extends Controller
             $this->revokeRecord($record);
         }
 
+        if ($others->isNotEmpty()) {
+            $this->rotateRememberToken($request->user());
+        }
+
         $this->recordEvent($request, 'other_sessions_revoked', ['count' => $others->count()]);
 
         return back()->with('status', $others->count().' نشست دیگر برای خروج امن علامت‌گذاری شد. نشست فعلی باز می‌ماند.');
@@ -78,6 +84,14 @@ class AccountSecurityController extends Controller
     private function confirmPassword(Request $request): void
     {
         $request->validate(['current_password' => ['required', 'current_password']]);
+    }
+
+    private function rotateRememberToken(User $user): void
+    {
+        // Laravel stores one remember token per account. Rotating it prevents a
+        // revoked browser from silently signing back in with an old recaller cookie.
+        $user->setRememberToken(\\Illuminate\\Support\\Str::random(60));
+        $user->save();
     }
 
     private function revokeRecord(object $record): void
