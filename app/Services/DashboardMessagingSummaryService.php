@@ -24,22 +24,22 @@ class DashboardMessagingSummaryService
             return ['available' => false, 'status' => 'forbidden', 'unread_messages' => null];
         }
 
-        foreach ([
-            'conversation_participants' => ['user_id', 'conversation_id', 'archived_at', 'last_read_message_id'],
-            'conversation_messages' => ['conversation_id', 'user_id', 'deleted_at'],
-            'conversations' => ['id'],
-        ] as $table => $columns) {
-            if (! Schema::hasTable($table)) {
-                return ['available' => true, 'status' => 'unavailable', 'unread_messages' => null];
-            }
-            foreach ($columns as $column) {
-                if (! Schema::hasColumn($table, $column)) {
+        try {
+            foreach ([
+                'conversation_participants' => ['user_id', 'conversation_id', 'archived_at', 'last_read_message_id'],
+                'conversation_messages' => ['conversation_id', 'user_id', 'deleted_at'],
+                'conversations' => ['id'],
+            ] as $table => $columns) {
+                if (! Schema::hasTable($table)) {
                     return ['available' => true, 'status' => 'unavailable', 'unread_messages' => null];
                 }
+                foreach ($columns as $column) {
+                    if (! Schema::hasColumn($table, $column)) {
+                        return ['available' => true, 'status' => 'unavailable', 'unread_messages' => null];
+                    }
+                }
             }
-        }
 
-        try {
             $query = DB::table('conversation_participants as current_participant')
                 ->join('conversations', 'conversations.id', '=', 'current_participant.conversation_id')
                 ->join('conversation_messages', 'conversation_messages.conversation_id', '=', 'conversations.id')
