@@ -60,3 +60,31 @@ test('separate reader features can migrate into the same durable device store',a
  },Object.keys(records));
  for(const [key,value] of Object.entries(records))expect(restored[key]).toBe(value);
 });
+
+
+test('storage persistence denial is reported to the reader UI',async({page})=>{
+ await page.addInitScript(()=>{
+  Object.defineProperty(navigator,'storage',{configurable:true,value:{persisted:async()=>false,persist:async()=>false,estimate:async()=>({usage:1,quota:100})}});
+  window.__persistenceStatuses=[];
+  window.addEventListener('farast:storage-persistence-status',event=>window.__persistenceStatuses.push(event.detail));
+ });
+ await page.goto('/');
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ const result=await page.evaluate(()=>window.FarastReaderDurableStore.requestPersistence());
+ expect(result).toEqual({supported:true,persisted:false,granted:false});
+ await expect.poll(()=>page.evaluate(()=>window.__persistenceStatuses.length)).toBe(1);
+});
+
+test('IndexedDB write failures emit a visible storage warning event',async({page})=>{
+ await page.addInitScript(()=>{
+  Object.defineProperty(indexedDB,'open',{configurable:true,value:()=>{throw new Error('blocked by test');}});
+  window.__storageWriteErrors=[];
+  window.addEventListener('farast:storage-write-error',event=>window.__storageWriteErrors.push(event.detail));
+ });
+ await page.goto('/');
+ await page.addScriptTag({path:path.join(__dirname,'../../public/js/farast-reader-storage.js')});
+ const failed=await page.evaluate(async()=>{try{await window.FarastReaderDurableStore.set('farast-reader:blocked-write','value');return false;}catch(_){return true;}});
+ expect(failed).toBe(true);
+ await expect.poll(()=>page.evaluate(()=>window.__storageWriteErrors.length)).toBe(1);
+ expect(await page.evaluate(()=>window.__storageWriteErrors[0].key)).toBe('farast-reader:blocked-write');
+});

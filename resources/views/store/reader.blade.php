@@ -156,8 +156,8 @@
 @endpush
 
 @push('scripts')
-<script src="/js/farast-reader-storage.js?v=20261110durable5"></script>
-<script src="/js/farast-reader.js?v=20261110durable2"></script>
+<script src="/js/farast-reader-storage.js?v=20261110durable6"></script>
+<script src="/js/farast-reader.js?v=20261110durable3"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261110durable2" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
