@@ -67,7 +67,7 @@ class AdminStoreTaxonomyController extends Controller
             return response()->json(['id' => $category->id, 'name' => $category->name], 201);
         }
 
-        return redirect()->route('admin.store.taxonomy.index')->with('status', 'دسته‌بندی ایجاد شد.');
+        return back()->with('status', 'دسته‌بندی ایجاد شد.');
     }
 
     public function updateCategory(Request $request, StoreCategory $category)
@@ -124,7 +124,7 @@ class AdminStoreTaxonomyController extends Controller
             return response()->json(['id' => $tag->id, 'name' => $tag->name], 201);
         }
 
-        return redirect()->route('admin.store.taxonomy.index')->with('status', 'برچسب ایجاد شد.');
+        return back()->with('status', 'برچسب ایجاد شد.');
     }
 
     public function updateTag(Request $request, StoreTag $tag)
