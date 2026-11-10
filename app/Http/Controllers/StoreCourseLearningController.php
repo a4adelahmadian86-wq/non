@@ -119,6 +119,8 @@ class StoreCourseLearningController extends Controller
             $publishedLessonIds = StoreCourseLesson::query()
                 ->where('is_published', true)
                 ->whereHas('section', fn ($query) => $query->where('course_id', $enrollment->course_id))
+                ->get()
+                ->filter(fn (StoreCourseLesson $availableLesson) => $this->lessonAvailable($enrollment, $availableLesson))
                 ->pluck('id');
             $total = $publishedLessonIds->count();
             $done = $enrollment->progress()
