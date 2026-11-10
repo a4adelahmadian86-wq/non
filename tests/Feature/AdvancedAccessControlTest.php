@@ -459,9 +459,31 @@ class AdvancedAccessControlTest extends TestCase
         $this->grant($roleId, 'access.audit', 'team');
         $this->assign($supervisor, $roleId, 'team', $foreignTeam->id);
 
-        $this->assertFalse(app(AuthorizationService::class)->allowsFor($supervisor, 'access.audit', [
+        $authorization = app(AuthorizationService::class);
+        $this->assertFalse($authorization->allowsFor($supervisor, 'access.audit', [
             'organization_id' => $organizationB->id,
             'team_id' => $foreignTeam->id,
+            'owner_id' => null,
+        ]));
+
+        $localTeam = Team::create([
+            'organization_id' => $organizationA->id,
+            'name' => 'Local Team With Mismatched Record Org',
+            'slug' => 'local-team-mismatched-record-org',
+            'supervisor_id' => $supervisor->id,
+        ]);
+        $localRole = $this->role('local-team-scope-grant', 'team', $localTeam->id);
+        $this->grant($localRole, 'access.audit', 'team');
+        $this->assign($supervisor, $localRole, 'team', $localTeam->id);
+
+        $this->assertTrue($authorization->allowsFor($supervisor, 'access.audit', [
+            'organization_id' => $organizationA->id,
+            'team_id' => $localTeam->id,
+            'owner_id' => null,
+        ]));
+        $this->assertFalse($authorization->allowsFor($supervisor, 'access.audit', [
+            'organization_id' => $organizationB->id,
+            'team_id' => $localTeam->id,
             'owner_id' => null,
         ]));
         $this->assertNotContains(
