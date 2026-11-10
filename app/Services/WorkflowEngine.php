@@ -87,18 +87,54 @@ class WorkflowEngine
         if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
             throw new \InvalidArgumentException('Unsupported workflow event.');
         }
-        if (empty($context['user_id']) || ! is_numeric($context['user_id']) || ! Schema::hasTable('farast_workflow_events')) {
+
+        $idempotencyKey = trim($idempotencyKey);
+        if ($idempotencyKey === '' || mb_strlen($idempotencyKey) > 190) {
+            throw new \InvalidArgumentException('Workflow event idempotency key must contain 1 to 190 characters.');
+        }
+
+        $userId = filter_var($context['user_id'] ?? null, FILTER_VALIDATE_INT);
+        if (! $userId || $userId < 1 || ! Schema::hasTable('farast_workflow_events')) {
             return 0;
         }
 
-        $userId = (int) $context['user_id'];
+        $allowedContextFields = WorkflowConditionEvaluator::FIELDS;
+        $unknownContextFields = array_diff(array_keys($context), $allowedContextFields);
+        if ($unknownContextFields !== []) {
+            throw new \InvalidArgumentException('Workflow event context contains unsupported fields.');
+        }
+        foreach ($context as $field => $value) {
+            if ($field === 'user_id') {
+                continue;
+            }
+            if ($value !== null && ! is_scalar($value) && ! is_array($value)) {
+                throw new \InvalidArgumentException('Workflow event context values must be scalar or flat arrays.');
+            }
+            if (is_array($value) && (count($value) > 20 || count(array_filter($value, fn ($item) => $item === null || is_scalar($item))) !== count($value))) {
+                throw new \InvalidArgumentException('Workflow event context arrays must contain at most 20 scalar values.');
+            }
+            if (is_scalar($value) && mb_strlen((string) $value) > 5000) {
+                throw new \InvalidArgumentException('Workflow event context values cannot exceed 5000 characters.');
+            }
+        }
+
+        $context['user_id'] = (int) $userId;
+        unset($context['event_type']); // The event type is authoritative from the dispatcher argument.
+        try {
+            $encodedContext = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new \InvalidArgumentException('Workflow event context cannot be encoded.', 0, $exception);
+        }
+        if (strlen($encodedContext) > 32768) {
+            throw new \InvalidArgumentException('Workflow event context cannot exceed 32 KB.');
+        }
 
         try {
             $eventId = DB::table('farast_workflow_events')->insertGetId([
                 'event_type' => $eventType,
                 'idempotency_key' => $idempotencyKey,
-                'user_id' => $userId,
-                'context' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'user_id' => (int) $userId,
+                'context' => $encodedContext,
                 'status' => 'pending',
                 'attempts' => 0,
                 'matched_workflows' => 0,
