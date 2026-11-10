@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EditorSession;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -75,6 +76,7 @@ class AccountSecurityController extends Controller
         }
 
         if ($others->isNotEmpty()) {
+            EditorSession::where('user_id', $request->user()->id)->delete();
             $this->rotateRememberToken($request->user());
         }
 
@@ -111,6 +113,7 @@ class AccountSecurityController extends Controller
             ->where('user_id', $user->id)
             ->where('id', '!=', $currentSessionId)
             ->delete();
+        EditorSession::where('user_id', $user->id)->delete();
 
         $this->recordEvent($request, 'password_changed', ['method' => 'authenticated_account_security']);
 
@@ -146,6 +149,7 @@ class AccountSecurityController extends Controller
         }
 
         $this->rotateRememberToken($request->user());
+        EditorSession::where('user_id', $request->user()->id)->delete();
         $this->recordEvent($request, 'all_sessions_revoked', ['count' => $all->count()]);
 
         Auth::logout();
@@ -191,7 +195,6 @@ class AccountSecurityController extends Controller
             'user_agent' => substr((string) $request->userAgent(), 0, 4000),
             'meta' => json_encode($meta, JSON_UNESCAPED_UNICODE),
             'created_at' => now(),
-            'updated_at' => now(),
         ]);
     }
 }

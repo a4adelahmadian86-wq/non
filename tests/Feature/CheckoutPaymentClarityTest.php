@@ -103,7 +103,7 @@ class CheckoutPaymentClarityTest extends TestCase
     }
     public function test_paid_typing_deposit_returns_to_the_original_project_and_restores_upload_acceptance(): void
     {
-        \\Illuminate\\Support\\Facades\\Storage::fake('private');
+        \Illuminate\Support\Facades\Storage::fake('private');
 
         $user = User::create([
             'name' => 'Deposit QA',
@@ -111,7 +111,7 @@ class CheckoutPaymentClarityTest extends TestCase
             'password' => 'secret',
         ]);
 
-        $project = \\App\\Models\\FarastProject::create([
+        $project = \App\Models\FarastProject::create([
             'user_id' => $user->id,
             'name' => 'پروژه آزمون فایل',
             'project_type' => 'typing',
@@ -127,7 +127,7 @@ class CheckoutPaymentClarityTest extends TestCase
 
         $path = 'typing/'.$user->id.'/homepage-source.pdf';
         $bytes = '%PDF-1.4 deposit project continuity test';
-        \\Illuminate\\Support\\Facades\\Storage::disk('private')->put($path, $bytes);
+        \Illuminate\Support\Facades\Storage::disk('private')->put($path, $bytes);
 
         $order = Order::create([
             'user_id' => $user->id,
@@ -165,7 +165,7 @@ class CheckoutPaymentClarityTest extends TestCase
 
     public function test_preflight_acceptance_binds_the_quote_to_the_authenticated_project(): void
     {
-        \\Illuminate\\Support\\Facades\\Storage::fake('private');
+        \Illuminate\Support\Facades\Storage::fake('private');
 
         $user = User::create([
             'name' => 'Preflight QA',
@@ -173,7 +173,7 @@ class CheckoutPaymentClarityTest extends TestCase
             'password' => 'secret',
         ]);
 
-        $project = \\App\\Models\\FarastProject::create([
+        $project = \App\Models\FarastProject::create([
             'user_id' => $user->id,
             'name' => 'پروژه فایل هشت صفحه‌ای',
             'project_type' => 'typing',
@@ -189,16 +189,16 @@ class CheckoutPaymentClarityTest extends TestCase
 
         $path = 'typing/'.$user->id.'/preflight-source.pdf';
         $bytes = '%PDF-1.4 '.str_repeat('/Type /Page ', 8);
-        \\Illuminate\\Support\\Facades\\Storage::disk('private')->put($path, $bytes);
+        \Illuminate\Support\Facades\Storage::disk('private')->put($path, $bytes);
         $hash = hash('sha256', $bytes);
 
-        $this->mock(\\App\\Services\\PricingService::class, function ($mock) {
+        $this->mock(\App\Services\PricingService::class, function ($mock) {
             $mock->shouldReceive('estimateByPages')->once()->with(8)->andReturn([
                 'price_rials' => 160000,
                 'free_page_value_rials' => 10000,
             ]);
         });
-        $this->mock(\\App\\Services\\FreeQuotaService::class, function ($mock) {
+        $this->mock(\App\Services\FreeQuotaService::class, function ($mock) {
             $mock->shouldReceive('availablePages')->once()->andReturn(0);
         });
 

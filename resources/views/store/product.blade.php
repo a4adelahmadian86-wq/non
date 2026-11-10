@@ -60,17 +60,22 @@
     </nav>
     <div class="store-detail-grid">
       <section>
-        @php($galleryImages = $product->images->where('is_active', true)->values())
-        @if($galleryImages->isNotEmpty())
-          @php($mainGalleryImage = $galleryImages->first())
+        @php
+          $galleryImages = $product->images->where('is_active', true)->values();
+          $mainGalleryImage = $galleryImages->firstWhere('path', $product->cover_path) ?: $galleryImages->first();
+          $mainImagePath = $product->cover_path ?: $mainGalleryImage?->path;
+          $mainImageAlt = $mainGalleryImage?->alt ?: $product->title;
+          $additionalGalleryImages = $galleryImages->reject(fn ($image) => $image->path === $mainImagePath)->values();
+        @endphp
+        @if($mainImagePath)
           <div class="store-product-media" aria-label="تصاویر اختصاصی محصول">
-            <button type="button" class="store-detail-cover store-gallery-open" data-gallery-src="{{ asset($mainGalleryImage->path) }}" data-gallery-alt="{{ $mainGalleryImage->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر اصلی محصول">
-              <img src="{{ asset($mainGalleryImage->path) }}" alt="{{ $mainGalleryImage->alt ?: $product->title }}" fetchpriority="high">
+            <button type="button" class="store-detail-cover store-gallery-open" data-gallery-src="{{ asset($mainImagePath) }}" data-gallery-alt="{{ $mainImageAlt }}" aria-label="بزرگ‌نمایی تصویر اصلی محصول">
+              <img src="{{ asset($mainImagePath) }}" alt="{{ $mainImageAlt }}" fetchpriority="high">
               <span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی تصویر</span>
             </button>
-            @if($galleryImages->count() > 1)
+            @if($additionalGalleryImages->isNotEmpty())
               <div class="store-product-gallery" aria-label="سایر تصاویر اختصاصی محصول">
-                @foreach($galleryImages->skip(1) as $image)
+                @foreach($additionalGalleryImages as $image)
                   <button type="button" class="store-gallery-open" data-gallery-src="{{ asset($image->path) }}" data-gallery-alt="{{ $image->alt ?: $product->title }}" aria-label="بزرگ‌نمایی تصویر {{ $loop->iteration + 1 }}"><img src="{{ asset($image->path) }}" alt="{{ $image->alt ?: $product->title }}" loading="lazy"><span><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i> بزرگ‌نمایی</span></button>
                 @endforeach
               </div>
@@ -121,7 +126,9 @@
       <aside class="store-buy-card" id="store-buy-card">
         <small>{{ $product->type === 'course' ? 'دوره آموزشی' : ($product->category?->name ?? 'فایل دیجیتال') }}</small>
         <h1>{{ $product->title }}</h1>
-        <p class="lead">{{ $product->short_description }}</p>
+        @if(filled($product->short_description) && filled($product->description) && trim(strip_tags((string) $product->short_description)) !== trim(strip_tags((string) $product->description)))
+          <p class="lead">{{ $product->short_description }}</p>
+        @endif
         <div class="store-product-rating" aria-label="امتیاز کاربران">
           @if($ratingCount > 0 && $averageRating !== null)
             <span class="store-product-rating__score"><i class="fa-solid fa-star" aria-hidden="true"></i> {{ number_format((float) $averageRating, 1) }}</span>

@@ -89,8 +89,8 @@ class StoreController extends Controller
     {
         $product = StoreProduct::with([
             'category',
-            'images',
-            'previews',
+            'images' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
+            'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
             'tags',
             'related',
             'files' => fn ($query) => $query
@@ -120,14 +120,14 @@ class StoreController extends Controller
         $request->session()->put('store_recent_ids', $ids);
 
         $related = $product->related()
-            ->with(['category', 'images'])
+            ->with(['category', 'images' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order')])
             ->published()
             ->orderByDesc('featured')
             ->limit(8)
             ->get();
 
         if ($related->isEmpty()) {
-            $related = StoreProduct::with(['category', 'images'])
+            $related = StoreProduct::with(['category', 'images' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order')])
                 ->published()
                 ->where('id', '!=', $product->id)
                 ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
@@ -136,7 +136,7 @@ class StoreController extends Controller
                 ->get();
         }
 
-        $alsoViewed = StoreProduct::with(['category', 'images'])
+        $alsoViewed = StoreProduct::with(['category', 'images' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order')])
             ->published()
             ->where('id', '!=', $product->id)
             ->whereIn('id', collect($ids)->reject(fn ($id) => (int) $id === (int) $product->id)->take(8))
