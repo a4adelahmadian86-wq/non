@@ -186,8 +186,15 @@
                   ? number_format($fileSizeBytes / 1048576, 2).' مگابایت'
                   : ($fileSizeBytes >= 1024 ? number_format($fileSizeBytes / 1024, 1).' کیلوبایت' : number_format($fileSizeBytes).' بایت');
             @endphp
-            @if($fileExtension !== '')<span><i class="fa-solid fa-file-lines"></i> فرمت فایل: {{ $fileExtension }}</span>@endif
-            @if($fileSizeBytes > 0)<span><i class="fa-solid fa-hard-drive"></i> حجم فایل: {{ $fileSizeLabel }}</span>@endif
+            @php
+              $deliveryDetails = array_filter([
+                  $fileExtension !== '' ? 'فرمت فایل: '.$fileExtension : null,
+                  $fileSizeBytes > 0 ? 'حجم فایل: '.$fileSizeLabel : null,
+              ]);
+            @endphp
+            @if($deliveryDetails)
+              <span><i class="fa-solid fa-file-lines"></i> {{ implode(' · ', $deliveryDetails) }}</span>
+            @endif
           @endif
           <span><i class="fa-solid fa-shield-halved"></i> {{ $product->type === 'course' ? 'دسترسی به دوره در کتابخانه آموزشی' : (($product->download_policy ?? 'signed') === 'reader_only' ? 'مطالعه در خوانشگر پس از پرداخت' : 'دریافت در کتابخانه پس از پرداخت') }}</span>
           <span><i class="fa-solid fa-file-contract"></i> مجوز {{ $product->license_type ?: 'شخصی' }}</span>
