@@ -50,7 +50,7 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
         <a href="{{ route('dashboard') }}"><i class="fa-solid fa-table-cells-large"></i><span>فضای من</span></a>
         <a href="{{ route('platform.communications') }}" @if(request()->routeIs('platform.communications')) aria-current="page" @endif><i class="fa-solid fa-tower-broadcast"></i><span>مرکز ارتباطات</span></a>
         <a href="{{ route('support') }}"><i class="fa-solid fa-headset"></i><span>پشتیبانی</span></a>
-        @if(app(\\App\\Services\\MessengerAccessService::class)->canUse(auth()->user()))
+        @if(app(\App\Services\MessengerAccessService::class)->canUse(auth()->user()))
             <a href="{{ route('messenger.index') }}"><i class="fa-solid fa-comments"></i><span>پیام‌رسان</span></a>
         @endif
         @if(auth()->user()->isAdmin())<a href="/admin"><i class="fa-solid fa-user-shield"></i><span>مدیریت</span></a>@endif
