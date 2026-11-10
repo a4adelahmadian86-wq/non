@@ -33,6 +33,16 @@ Artisan::command('farast:storage-backup:password {run_id}', function (\App\Servi
     $this->line($restore->password((int) $this->argument('run_id')));
 })->purpose('Reveal the decryption password for a completed backup from the CLI');
 
+Artisan::command('farast:storage-rebalance {--limit=100}', function (\App\Services\StorageManager $storage) {
+    $moved = $storage->rebalanceFallbackFiles((int) $this->option('limit'));
+    $this->info('Moved '.$moved.' fallback object(s) to dedicated storage hosts.');
+    return 0;
+})->purpose('Move fallback objects to their preferred storage hosts after recovery');
+
+Schedule::command('farast:storage-rebalance --limit=100')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();
+
 Artisan::command('farast:storage-migrate-legacy {--limit=100}', function (\App\Services\StorageMigrationService $migration) {
     $result = $migration->migrateLegacy((int) $this->option('limit'));
     foreach ($result as $kind => $count) {
