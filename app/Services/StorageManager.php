@@ -103,7 +103,7 @@ class StorageManager
             $oldReplicaId = $existing?->replicated_to_volume_id;
             $oldReplicaKey = $existing?->replica_file_key;
             $replicationRequired = $this->replicationRequired($classification);
-            DB::transaction(function () use ($existing, $volume, $logicalPath, $objectKey, $size, $checksum, $classification, $config, $oldVolumeId, $oldSize, $replicationRequired) {
+            DB::transaction(function () use ($existing, $volume, $logicalPath, $objectKey, $size, $checksum, $classification, $config, $oldVolumeId, $oldSize, $replicationRequired, $mime) {
                 if ($existing) {
                     $existing->update([
                         'storage_volume_id' => $volume->id,
@@ -449,7 +449,7 @@ class StorageManager
             });
             $reserved = false;
 
-            if ($oldReplicaId && $oldReplicaKey && $oldReplicaId !== $target->id) {
+            if ($oldReplicaId && $oldReplicaKey && $oldReplicaKey !== $replicaKey) {
                 try {
                     $oldReplica = StorageVolume::find($oldReplicaId);
                     if ($oldReplica) {
@@ -494,7 +494,7 @@ class StorageManager
                 ->where('id', '!=', $primary->id)
                 ->where('is_active', true)
                 ->where('status', 'healthy')
-                ->withCount(['files' => fn ($query) => $query->where('status', 'active')])
+                ->withCount(['files' => fn ($query) => $query->where('status', 'active'), 'replicas' => fn ($query) => $query->where('status', 'active'), 'backups' => fn ($query) => $query->where('status', 'completed')])
                 ->orderBy('priority')
                 ->orderBy('used_bytes');
 
@@ -551,7 +551,7 @@ class StorageManager
 
     private function normalize(string $path): string
     {
-        $path = str_replace('\', '/', trim($path));
+        $path = str_replace('\\\\', '/', trim($path));
         $path = ltrim($path, '/');
         if ($path === '' || in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true) || str_contains($path, "\0")) {
             throw new RuntimeException('Invalid managed storage path.');
