@@ -69,43 +69,47 @@ class AdminStoreCouponController extends Controller
             ->where('store_coupon_assignments.status', 'redeemed')
             ->where('orders.status', 'paid')
             ->whereNotNull('orders.paid_at');
-        $attributedItems = (clone $attributedOrders)
+        $attributedOrderCount = (clone $attributedOrders)->distinct()->count('orders.id');
+        $attributedRevenue = 0;
+        $redeemedDiscountCost = 0;
+        $knownGrossProfit = 0;
+        $itemsMissingHistoricalCost = 0;
+
+        // Process in bounded batches so a large coupon history cannot exhaust
+        // memory while the dashboard is calculating historical profit.
+        (clone $attributedOrders)
             ->select([
-                'orders.id as order_id',
+                'store_order_items.id as order_item_id',
                 'orders.discount_rials as order_discount_rials',
                 'store_order_items.total_rials',
                 'store_order_items.discount_rials',
                 'store_order_items.quantity',
                 'store_order_items.product_snapshot',
             ])
-            ->get();
-        $attributedOrderCount = $attributedItems->pluck('order_id')->unique()->count();
-        $attributedRevenue = 0;
-        $redeemedDiscountCost = 0;
-        $knownGrossProfit = 0;
-        $itemsMissingHistoricalCost = 0;
+            ->orderBy('store_order_items.id')
+            ->chunkById(500, function ($items) use (&$attributedRevenue, &$redeemedDiscountCost, &$knownGrossProfit, &$itemsMissingHistoricalCost): void {
+                foreach ($items as $item) {
+                    $snapshot = is_array($item->product_snapshot)
+                        ? $item->product_snapshot
+                        : (json_decode((string) $item->product_snapshot, true) ?: []);
+                    $hasFinancialSnapshot = ! empty($snapshot['cost_snapshot_captured_at']);
+                    $itemDiscount = $hasFinancialSnapshot
+                        ? (int) $item->discount_rials
+                        : (int) $item->order_discount_rials;
+                    $itemRevenue = max(0, (int) $item->total_rials - ($hasFinancialSnapshot ? 0 : $itemDiscount));
 
-        foreach ($attributedItems as $item) {
-            $snapshot = is_array($item->product_snapshot)
-                ? $item->product_snapshot
-                : (json_decode((string) $item->product_snapshot, true) ?: []);
-            $hasFinancialSnapshot = ! empty($snapshot['cost_snapshot_captured_at']);
-            $itemDiscount = $hasFinancialSnapshot
-                ? (int) $item->discount_rials
-                : (int) $item->order_discount_rials;
-            $itemRevenue = max(0, (int) $item->total_rials - ($hasFinancialSnapshot ? 0 : $itemDiscount));
+                    $attributedRevenue += $itemRevenue;
+                    $redeemedDiscountCost += $itemDiscount;
 
-            $attributedRevenue += $itemRevenue;
-            $redeemedDiscountCost += $itemDiscount;
+                    $cost = $snapshot['cost_price_rials'] ?? null;
+                    if (! array_key_exists('cost_price_rials', $snapshot) || $cost === null || ! is_numeric($cost) || (int) $cost < 0) {
+                        $itemsMissingHistoricalCost++;
+                        continue;
+                    }
 
-            $cost = $snapshot['cost_price_rials'] ?? null;
-            if (! array_key_exists('cost_price_rials', $snapshot) || $cost === null || ! is_numeric($cost) || (int) $cost < 0) {
-                $itemsMissingHistoricalCost++;
-                continue;
-            }
-
-            $knownGrossProfit += $itemRevenue - ((int) $cost * (int) $item->quantity);
-        }
+                    $knownGrossProfit += $itemRevenue - ((int) $cost * (int) $item->quantity);
+                }
+            }, 'store_order_items.id', 'order_item_id');
 
         $canManageGlobalCoupons = $visibleIds === null;
         $genericCoupons = $canManageGlobalCoupons
