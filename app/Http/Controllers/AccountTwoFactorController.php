@@ -1,15 +1,15 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Models\\User;
-use App\\Services\\LocalTotpService;
-use App\\Services\\NotificationService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Crypt;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\RateLimiter;
-use Illuminate\\Validation\\ValidationException;
+use App\Models\User;
+use App\Services\LocalTotpService;
+use App\Services\NotificationService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class AccountTwoFactorController extends Controller
