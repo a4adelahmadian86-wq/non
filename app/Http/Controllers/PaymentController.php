@@ -282,6 +282,8 @@ class PaymentController extends Controller
                     ]);
                 }
 
+                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
+
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
