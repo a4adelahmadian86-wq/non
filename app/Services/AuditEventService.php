@@ -128,7 +128,28 @@ class AuditEventService
             throw new \UnexpectedValueException('Audit payload must serialize to an object.');
         }
 
+        // MySQL normalizes key order inside native JSON columns. Canonicalize
+        // metadata before hashing so SQLite/MySQL/PostgreSQL verify identical bytes.
+        $normalized['payload_meta'] = $this->canonicalizeValue($normalized['payload_meta'] ?? []);
+
         return $normalized;
+    }
+
+    private function canonicalizeValue(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        foreach ($value as $key => $nested) {
+            $value[$key] = $this->canonicalizeValue($nested);
+        }
+
+        if (! array_is_list($value)) {
+            ksort($value, SORT_STRING);
+        }
+
+        return $value;
     }
 
     private function sanitize(array $data, int $depth = 0): array
