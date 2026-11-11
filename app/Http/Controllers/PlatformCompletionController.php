@@ -367,13 +367,17 @@ class PlatformCompletionController extends Controller {
    422,
    'عضویت تیم فقط برای کاربر همان سازمان مجاز است.'
   );
-  DB::table('team_user')->updateOrInsert(
-   ['team_id'=>$teamRecord->id,'user_id'=>$member->id],
-   ['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]
-  );
-  if($x['team_role']!=='supervisor' && (int)$teamRecord->supervisor_id===(int)$member->id){
-   $teamRecord->update(['supervisor_id'=>null]);
-  }
+  DB::transaction(function()use($teamRecord,$member,$x):void{
+   DB::table('team_user')->updateOrInsert(
+    ['team_id'=>$teamRecord->id,'user_id'=>$member->id],
+    ['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]
+   );
+   if($x['team_role']==='supervisor' && ! $teamRecord->supervisor_id){
+    $teamRecord->update(['supervisor_id'=>$member->id]);
+   } elseif($x['team_role']!=='supervisor' && (int)$teamRecord->supervisor_id===(int)$member->id){
+    $teamRecord->update(['supervisor_id'=>null]);
+   }
+  });
   app(AuthorizationService::class)->forgetUser((int)$member->id);
   return back()->with('status','عضو تیم به‌روزرسانی شد.');
  }
