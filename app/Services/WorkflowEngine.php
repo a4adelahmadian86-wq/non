@@ -233,7 +233,7 @@ class WorkflowEngine
             if ($sync) {
                 try {
                     $this->processQueuedEvent((int) $event->id);
-                } catch (\\Throwable $exception) {
+                } catch (\Throwable $exception) {
                     report($exception);
                 }
             } else {
@@ -538,7 +538,7 @@ class WorkflowEngine
             DB::afterCommit(function () use ($eventId): void {
                 try {
                     $this->processQueuedEvent($eventId);
-                } catch (\\Throwable $exception) {
+                } catch (\Throwable $exception) {
                     report($exception);
                 }
             });
