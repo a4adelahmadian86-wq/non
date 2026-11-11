@@ -509,14 +509,14 @@ class AdminStoreController extends Controller
         ]);
 
         $upload = $request->file('file');
-        $originalNameLower = strtolower(str_replace('\\\\', '/', $upload->getClientOriginalName()));
+        $originalNameLower = strtolower(str_replace('\\', '/', $upload->getClientOriginalName()));
         $extension = str_ends_with($originalNameLower, '.tar.gz')
             ? 'tar.gz'
             : (str_ends_with($originalNameLower, '.tar.bz2') ? 'tar.bz2' : strtolower($upload->getClientOriginalExtension()));
         $allowedExtensions = ['pdf','zip','tar','tar.gz','tar.bz2','jpg','jpeg','png','webp','gif','docx','xlsx','pptx','txt','csv','md','mp3','wav','ogg','flac','m4a','mp4','webm','mov'];
         abort_unless(in_array($extension, $allowedExtensions, true), 422, 'این پسوند در فهرست فرمت‌های مجاز فراست نیست.');
 
-        $safeName = mb_substr(basename(str_replace('\\\\', '/', $upload->getClientOriginalName())), 0, 255);
+        $safeName = mb_substr(basename(str_replace('\\', '/', $upload->getClientOriginalName())), 0, 255);
         $path = $upload->storeAs(
             'store/quarantine/product-ingestions/'.$session->id,
             (string) Str::uuid().'.'.$extension,
@@ -600,7 +600,7 @@ class AdminStoreController extends Controller
             : (str_ends_with(strtolower($ingestion->original_name), '.tar.bz2') ? 'tar.bz2' : strtolower(pathinfo($ingestion->original_name, PATHINFO_EXTENSION)));
         $finalPath = 'store/intake/'.$session->id.'/'.Str::uuid().'.'.$extension;
         if (! $disk->move($ingestion->staging_path, $finalPath)) {
-            throw new \\RuntimeException('product_file_storage_move_failed');
+            throw new \RuntimeException('product_file_storage_move_failed');
         }
 
         try {
