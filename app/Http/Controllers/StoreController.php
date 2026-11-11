@@ -472,7 +472,7 @@ class StoreController extends Controller
         return response()->stream(function () use ($storage, $audioDisk, $preview, $start, $length): void {
             $output = fopen('php://output', 'wb');
             if (! is_resource($output)) {
-                throw new \\RuntimeException('جریان خروجی صوت در دسترس نیست.');
+                throw new \RuntimeException('جریان خروجی صوت در دسترس نیست.');
             }
             try {
                 $storage->streamRange($audioDisk, $preview->audio_path, $start, $length, $output);
