@@ -48,9 +48,21 @@ Before adding a relationship, it checks for orphan references. If any are found,
 
 ## Historical migration requiring special handling
 
-\`2026_10_03_000004_canonicalize_farast_subscriptions.php\` has a risky data-migration sequence: it drops the legacy subscription table before the canonical copy has been fully verified, and it skips rows when a matching commercial plan cannot be resolved.
+`2026_10_03_000004_canonicalize_farast_subscriptions.php` originally dropped the legacy subscription table before verifying the canonical copy and silently skipped rows whose commercial plan could not be resolved. This was a confirmed data-loss risk.
 
-This historical migration was not rewritten as part of this change because it may already be recorded as applied in existing environments. Editing an applied migration would not repair those databases and could make fresh-install and upgrade behavior diverge. Its effect must be checked against a database snapshot or backup before any recovery decision.
+The migration has now been hardened for fresh installations and environments where it is still pending:
+- It copies into a staging table while leaving the source table intact.
+- It resolves legacy plan references by ID and then by plan code.
+- It aborts with the source table preserved if a plan cannot be resolved.
+- It verifies the copied row count and parent references before replacing the source table.
+- It retains legacy identifiers and unknown legacy columns in metadata rather than silently discarding them.
+- It can resume if a prior attempt left only the verified staging table.
+
+Important: editing an already-applied migration does not rerun it in an existing environment. Existing databases that recorded this migration as applied still require a backup-based reconciliation if historical rows were skipped by the old implementation. The migration ledger alone cannot establish whether any rows were lost.
+
+## Additional consistency fixes
+
+- Store checkout now builds order items from the cart relation reloaded under the transaction's row lock, rather than from the pre-lock in-memory cart snapshot. This closes a race where totals could be calculated from one cart version while order lines came from another.
 
 ## Automated coverage added
 
@@ -59,6 +71,7 @@ This historical migration was not rewritten as part of this change because it ma
 - Wallet ledger records reject Eloquent updates and deletes.
 - The financial migration backfills legacy rows, is repeatable, and rejects duplicate legacy keys without merging them.
 - The commercial ledger migration rejects orphan references and preserves the orphaned row for manual reconciliation.
+- Subscription canonicalization preserves all source rows and unknown legacy fields, and refuses to discard a subscription whose plan cannot be resolved.
 - Representative subscription, invoice-item, and wallet-reservation references are rejected when their parent row does not exist.
 - Deleting a commercial plan referenced by a subscription is rejected.
 
