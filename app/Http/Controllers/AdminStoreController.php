@@ -718,6 +718,12 @@ class AdminStoreController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), $maxBytes);
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ساختاری و امنیتی عبور نکرده است.');
 
+            $isPrimary = $session->product_type === 'digital_file'
+                && $request->boolean('is_primary', ! $session->ingestions()->where('is_primary', true)->exists());
+            if ($isPrimary) {
+                $session->ingestions()->where('is_primary', true)->update(['is_primary' => false]);
+            }
+
             $ingestion = StoreProductIngestion::create([
                 'id' => (string) Str::uuid(),
                 'product_id' => null,
@@ -731,7 +737,7 @@ class AdminStoreController extends Controller
                 'size_bytes' => $inspection['size'],
                 'sha256' => $inspection['checksum'],
                 'inspection_json' => $inspection,
-                'is_primary' => $session->product_type === 'digital_file' && $request->boolean('is_primary', true),
+                'is_primary' => $isPrimary,
                 'expires_at' => now()->addMinutes(30),
                 'supervisor_status' => 'pending',
                 'antivirus_status' => 'not_requested',
