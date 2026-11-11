@@ -27,7 +27,9 @@ class StorageManager
         ?int $productId = null,
         string $visibility = 'private'
     ): array {
-        $classification = $classification === self::CRITICAL ? self::CRITICAL : self::NON_CRITICAL;
+        if (! in_array($classification, [self::CRITICAL, self::NON_CRITICAL], true)) {
+            throw new \\InvalidArgumentException('طبقه‌بندی فایل برای تعیین محل نگهداری معتبر نیست.');
+        }
         $drive = $classification === self::CRITICAL ? 'iran_primary' : 'foreign_primary';
         $key = trim($sourceModule, '/').'/'.now()->format('Y/m').'/'.Str::uuid().'-'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.strtolower($file->getClientOriginalExtension());
         $checksum = hash_file('sha256', $file->getRealPath());
