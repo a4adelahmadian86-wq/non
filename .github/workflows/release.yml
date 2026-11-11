@@ -1,0 +1,80 @@
+name: FARAST Versioned Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (vMAJOR.MINOR.PATCH, e.g. v1.2.3)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark this release as a pre-release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: farast-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate release request
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Version must match vMAJOR.MINOR.PATCH (optional prerelease suffix)."
+            exit 1
+          fi
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Require successful FARAST CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest="$(gh run list --workflow farast-ci.yml --branch main --limit 1 --json headSha,conclusion,status)"
+          sha="$(jq -r '.[0].headSha // empty' <<<"$latest")"
+          conclusion="$(jq -r '.[0].conclusion // empty' <<<"$latest")"
+          status="$(jq -r '.[0].status // empty' <<<"$latest")"
+          if [[ "$sha" != "$EXPECTED_SHA" || "$conclusion" != "success" || "$status" != "completed" ]]; then
+            echo "::error::Latest FARAST CI is not successful for the exact release SHA."
+            echo "Expected: $EXPECTED_SHA; observed: $sha; status: $status; conclusion: $conclusion"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag $VERSION already exists."
+            exit 1
+          fi
+
+      - name: Create immutable tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(release create "$VERSION" --target "$GITHUB_SHA" --title "FARAST $VERSION" --generate-notes)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}"
