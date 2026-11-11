@@ -22,17 +22,19 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          extensions: mbstring, dom, fileinfo
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
           coverage: none
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: chmod -R ug+rwx bootstrap/cache storage/framework
       - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Verify PHP test environment and Composer autoload
+        run: bash scripts/verify-test-environment.sh
       - run: printf '%s\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
       - run: php artisan key:generate
       - run: touch database/database.sqlite

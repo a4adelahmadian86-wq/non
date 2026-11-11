@@ -23,11 +23,15 @@ class CrmMarketingController extends Controller
     public function dashboard(Request $request, AdminConsoleService $console)
     {
         $console->authorizeAction($request->user(), 'marketing');
+        $productColumns = ['id', 'title', 'price_rials'];
+        if ($this->hasGlobalMarketingScope($request)) {
+            $productColumns[] = 'cost_price_rials';
+        }
 
         return view('admin.crm.marketing', [
             'products' => StoreProduct::query()->published()
                 ->orderBy('title')
-                ->get(['id', 'title', 'price_rials', 'cost_price_rials']),
+                ->get($productColumns),
         ]);
     }
 
@@ -50,6 +54,14 @@ class CrmMarketingController extends Controller
         // intentionally exclude admin accounts), but must retain access to records
         // they created themselves.
         return array_values(array_unique(array_merge($visibleIds, [(int) $request->user()->id])));
+    }
+
+    private function hasGlobalMarketingScope(Request $request): bool
+    {
+        $scope = $request->attributes->get('farast.scope')
+            ?? AdminConsoleService::scopeOf($request->user());
+
+        return $scope === AdminConsoleService::SCOPE_GLOBAL;
     }
 
     private function filters(Request $request): array
@@ -287,6 +299,7 @@ class CrmMarketingController extends Controller
         ]);
         $incentiveProduct = null;
         if (! empty($data['incentive_product_id'])) {
+            abort_unless($this->hasGlobalMarketingScope($request), 403, 'مشوق مبتنی بر بهای تمام‌شده فقط در دامنهٔ سراسری قابل مدیریت است.');
             $incentiveProduct = StoreProduct::query()->published()->findOrFail($data['incentive_product_id']);
             abort_if($incentiveProduct->cost_price_rials === null, 422, 'برای محصول هدف باید بهای تمام‌شده ثبت شده باشد.');
             abort_unless(! empty($data['incentive_discount_percent']) && ! empty($data['budget_cap_rials']), 422, 'برای مشوق کمپین، درصد تخفیف و سقف بودجه الزامی است.');
@@ -331,6 +344,9 @@ class CrmMarketingController extends Controller
         $sentCount = DB::transaction(function () use ($campaign, $request, $visibleIds, $ownerIds, $audiences, $notifications) {
             $record = DB::table('crm_marketing_campaigns')->where('id', $campaign)->lockForUpdate()->first();
             abort_unless($record && ($ownerIds === null || in_array((int) $record->created_by, $ownerIds, true)), 404);
+            if (! empty($record->incentive_product_id)) {
+                abort_unless($this->hasGlobalMarketingScope($request), 403, 'ارسال مشوق مبتنی بر بهای تمام‌شده فقط در دامنهٔ سراسری مجاز است.');
+            }
             abort_unless($record->status === 'draft', 409, 'این کمپین قبلاً ارسال یا پردازش شده است.');
 
             $segment = DB::table('crm_customer_segments')->where('id', $record->segment_id)->first();

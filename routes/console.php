@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 use App\Services\WorkflowEngine;
 use App\Services\StoreCartAbandonmentService;
 use App\Models\SiteSetting;
@@ -65,12 +66,87 @@ Schedule::command('announcements:broadcast-due')
 
 // Retry failed workflow steps without replaying steps that already completed.
 Artisan::command('farast:workflows:retry {--limit=50}', function (WorkflowEngine $engine) {
-    $completed = $engine->retryFailedEvents((int) $this->option('limit'));
-    $this->info("Completed {$completed} retried workflow step(s).");
+    $queued = $engine->dispatchPendingEvents((int) $this->option('limit'));
+    $this->info("Queued {$queued} pending or recoverable workflow event(s).");
 })->purpose('Retry failed FARAST workflow event steps');
 
 Schedule::command('farast:workflows:retry --limit=50')
     ->everyMinute()
+    ->withoutOverlapping(10);
+
+// Dedicated database-backed automation worker; sync mode is intentionally excluded.
+Schedule::command('queue:work --queue=automation --stop-when-empty --max-time=900 --timeout=300 --tries=5 --backoff=60')
+    ->everyMinute()
+    ->withoutOverlapping(20)
+    ->when(fn () => (bool) config('queue.scheduled_worker', true) && config('queue.default') !== 'sync');
+
+Artisan::command('farast:workflows:pause {eventId}', function (WorkflowEngine $engine) {
+    $paused = $engine->pauseEvent((int) $this->argument('eventId'));
+    $this->info($paused ? 'Workflow event paused at a safe boundary.' : 'Event not found or already completed.');
+    return $paused ? 0 : 1;
+})->purpose('Pause a workflow event without deleting its history');
+
+Artisan::command('farast:workflows:resume {eventId}', function (WorkflowEngine $engine) {
+    $resumed = $engine->resumeEvent((int) $this->argument('eventId'));
+    $message = config('queue.default') === 'sync'
+        ? 'Event resumed and stored as pending; configure QUEUE_CONNECTION=database and start the automation worker.'
+        : 'Workflow event queued for recovery.';
+    $this->info($resumed ? $message : 'Event is not paused or does not exist.');
+    return $resumed ? 0 : 1;
+})->purpose('Resume a paused workflow event');
+
+Artisan::command('farast:workflows:retry-event {eventId}', function (WorkflowEngine $engine) {
+    $retried = $engine->retryFailedEvent((int) $this->argument('eventId'));
+    $message = config('queue.default') === 'sync'
+        ? 'Event reset to pending; configure QUEUE_CONNECTION=database and start the automation worker.'
+        : 'Terminally failed event queued for a new recovery cycle.';
+    $this->info($retried ? $message : 'Event is not in terminal failed state.');
+    return $retried ? 0 : 1;
+})->purpose('Manually retry a terminally failed workflow event');
+
+Artisan::command('farast:workflows:health', function () {
+    if (! Schema::hasTable('farast_workflow_events')) {
+        $this->warn('Workflow event ledger is not installed.');
+        return 1;
+    }
+    $counts = DB::table('farast_workflow_events')
+        ->selectRaw('status, COUNT(*) as total')
+        ->groupBy('status')->pluck('total', 'status');
+    $oldest = DB::table('farast_workflow_events')->where('status', 'pending')->orderBy('created_at')->first();
+    $delay = $oldest ? max(0, (int) Illuminate\Support\Carbon::parse($oldest->created_at)->diffInSeconds(now())) : 0;
+    $staleProcessing = DB::table('farast_workflow_events')->where('status', 'processing')
+        ->where('updated_at', '<=', now()->subMinutes(30))->count();
+    $queueJobs = Schema::hasTable('jobs') ? DB::table('jobs')->where('queue', 'automation')->count() : 0;
+    $oldestQueuedJob = Schema::hasTable('jobs')
+        ? DB::table('jobs')->where('queue', 'automation')->orderBy('created_at')->first()
+        : null;
+    $queueDelay = $oldestQueuedJob
+        ? max(0, now()->getTimestamp() - (int) $oldestQueuedJob->created_at)
+        : 0;
+    $failedQueueJobs = Schema::hasTable('failed_jobs')
+        ? DB::table('failed_jobs')->where('queue', 'automation')->count()
+        : 0;
+    $failed = (int) ($counts['failed'] ?? 0);
+    $pending = (int) ($counts['pending'] ?? 0);
+    $queueConnection = (string) config('queue.default');
+    $this->line('queue_connection='.$queueConnection.' pending='.$pending.' processing='.(int) ($counts['processing'] ?? 0).' stale_processing='.$staleProcessing.' failed='.$failed.' paused='.(int) ($counts['paused'] ?? 0).' queue_jobs='.$queueJobs.' failed_queue_jobs='.$failedQueueJobs.' oldest_pending_seconds='.$delay.' oldest_queue_seconds='.$queueDelay);
+    if (($queueConnection === 'sync' && $pending > 0) || $failed > 0 || $staleProcessing > 0 || $failedQueueJobs > 0 || $delay >= 300 || $queueDelay >= 300) {
+        Log::warning('FARAST workflow queue health threshold exceeded', [
+            'queue_connection' => $queueConnection,
+            'pending' => $pending,
+            'failed' => $failed,
+            'stale_processing' => $staleProcessing,
+            'queue_jobs' => $queueJobs,
+            'failed_queue_jobs' => $failedQueueJobs,
+            'oldest_pending_seconds' => $delay,
+            'oldest_queue_seconds' => $queueDelay,
+        ]);
+    }
+    return 0;
+})->purpose('Report workflow queue backlog, latency and terminal failures');
+
+Schedule::command('farast:workflows:health')
+    ->everyFiveMinutes()
     ->withoutOverlapping();
 
 // Move legacy support attachments out of the public web root in bounded batches.
