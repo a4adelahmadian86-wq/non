@@ -51,6 +51,22 @@
         <p class="product-pipeline-empty">در حال حاضر سندی در وضعیت نیازمند رسیدگی یا پردازش طولانی ثبت نشده است.</p>
       @endif
     </section>
+    @if($intakeManualReviewQueue->isNotEmpty())
+      <section class="product-pipeline-panel" aria-label="فایل‌های منتظر بررسی دستی">
+        <div class="product-pipeline-heading">
+          <div><strong>فایل‌های منتظر بررسی دستی مدیر</strong><small>بررسی خودکار فایل کامل نشده است؛ پس از بررسی دستی، محصول همچنان وارد صف انتشار می‌شود.</small></div>
+          <span class="product-pipeline-status">{{ $intakeManualReviewQueue->count() }} نشست</span>
+        </div>
+        <div class="product-pipeline-attention">
+          @foreach($intakeManualReviewQueue as $intakeSession)
+            <div class="product-pipeline-attention-row">
+              <span><b>{{ $intakeSession->product_type === 'course' ? 'دوره آموزشی' : 'فایل دیجیتال' }}</b><small>ثبت‌کننده: {{ $intakeSession->user?->name ?? 'کاربر حذف‌شده' }} · {{ $intakeSession->files()->where('supervisor_status', 'manual_review_required')->count() }} فایل نیازمند بررسی</small></span>
+              <a href="{{ route('admin.store.intake.show', $intakeSession) }}">بازبینی فایل‌ها</a>
+            </div>
+          @endforeach
+        </div>
+      </section>
+    @endif
     @if($publicationQueue->isNotEmpty())
       <section class="product-pipeline-panel" aria-label="صف بررسی و انتشار محصولات">
         <div class="product-pipeline-heading">
