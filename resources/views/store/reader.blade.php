@@ -78,6 +78,10 @@
         <strong>فهرست مطالب</strong>
         <div id="reader-outline-list"></div>
       </section>
+      <section class="farast-reader-layers" id="reader-layers" hidden aria-label="لایه‌های اختیاری PDF">
+        <strong>لایه‌های سند</strong>
+        <div id="reader-layers-list"></div>
+      </section>
     </aside>
 
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
@@ -188,6 +192,12 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 .farast-pdf-annotation-layer .linkAnnotation,.farast-pdf-annotation-layer .widgetAnnotation,.farast-pdf-annotation-layer input,.farast-pdf-annotation-layer textarea,.farast-pdf-annotation-layer select,.farast-pdf-annotation-layer button{pointer-events:auto}
 .farast-pdf-annotation-layer input,.farast-pdf-annotation-layer textarea,.farast-pdf-annotation-layer select{max-width:100%;font:inherit}
 .farast-pdf-annotation-layer :focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+
+.farast-reader-layers{margin-top:14px;padding-top:12px;border-top:1px solid var(--reader-line);font-size:.72rem}
+.farast-reader-layers[hidden]{display:none}
+.farast-reader-layers strong{display:block;margin-bottom:8px}
+.farast-reader-layer-option{display:flex;align-items:flex-start;gap:8px;padding:5px 2px;color:var(--reader-muted);line-height:1.6;cursor:pointer}
+.farast-reader-layer-option input{margin-top:3px;accent-color:#3478d0}
 </style>
 @push('scripts')
 <script src="/js/farast-reader-storage.js?v=20261111backup3"></script>
