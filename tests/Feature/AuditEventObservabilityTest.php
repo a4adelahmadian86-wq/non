@@ -33,7 +33,7 @@ class AuditEventObservabilityTest extends TestCase
             1,
             [
                 'api_token' => 'must-not-persist',
-                'nested' => ['password' => 'secret'],
+                'nested' => ['zeta' => 'last', 'password' => 'secret', 'a' => 'first'],
                 'callback' => 'https://example.test/callback?token=must-not-persist&state=ok',
             ],
             'admin'
@@ -43,6 +43,8 @@ class AuditEventObservabilityTest extends TestCase
         $this->assertSame('correlation-ledger-456', $event->payload_meta['correlation_id']);
         $this->assertSame('[REDACTED]', $event->payload_meta['api_token']);
         $this->assertSame('[REDACTED]', $event->payload_meta['nested']['password']);
+        $this->assertSame('first', $event->payload_meta['nested']['a']);
+        $this->assertSame('last', $event->payload_meta['nested']['zeta']);
         $this->assertSame('https://example.test/callback?token=[REDACTED]&state=ok', $event->payload_meta['callback']);
         $this->assertTrue(app(AuditIntegrityService::class)->verify()['ok']);
     }

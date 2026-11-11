@@ -1,0 +1,367 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Throwable;
+
+class FarastObservabilityService
+{
+    public function snapshot(): array
+    {
+        try {
+            $productServices = app(ProductInfrastructureHealthService::class)->snapshot();
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('product_services', $exception);
+            $productServices = [
+                'supervisor' => ['status' => 'unknown', 'configured' => null],
+                'document_audio' => ['status' => 'unknown', 'configured' => null],
+            ];
+        }
+        $productServiceStatuses = array_column($productServices, 'status');
+        $productServiceStatus = array_intersect($productServiceStatuses, ['unavailable', 'misconfigured']) !== []
+            ? 'critical'
+            : (array_intersect($productServiceStatuses, ['degraded', 'not_configured', 'unknown']) !== [] ? 'warning' : 'healthy');
+
+        $components = [
+            'database' => $this->database(),
+            'queue' => $this->queue(),
+            'storage' => $this->storage(),
+            'logging' => $this->logging(),
+            'product_services' => [
+                'status' => $productServiceStatus,
+                'services' => $productServices,
+            ],
+        ];
+
+        $statuses = array_column($components, 'status');
+        $overall = in_array('critical', $statuses, true)
+            ? 'critical'
+            : (in_array('warning', $statuses, true) || in_array('unknown', $statuses, true) ? 'warning' : 'healthy');
+
+        return [
+            'status' => $overall,
+            'checked_at' => now()->toIso8601String(),
+            'environment' => (string) config('app.env'),
+            'observability_enabled' => (bool) config('observability.enabled', true),
+            'components' => $components,
+            'incidents' => ($incidentHistory = $this->recentIncidents())['items'],
+            'incident_history_available' => $incidentHistory['available'],
+            'incident_trend_24h' => $this->incidentTrend(),
+        ];
+    }
+
+
+    /**
+     * Read only the latest bounded incident transitions from the canonical audit ledger.
+     * No separate incident table or competing history store is introduced.
+     */
+    private function recentIncidents(): array
+    {
+        try {
+            if (! Schema::hasTable('farast_audit_events')) {
+                return ['available' => false, 'items' => []];
+            }
+
+            $items = DB::table('farast_audit_events')
+                ->where('event_type', 'like', 'observability.incident.%')
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get(['event_id', 'event_type', 'payload_meta', 'created_at'])
+                ->map(function ($event): array {
+                    $meta = is_array($event->payload_meta)
+                        ? $event->payload_meta
+                        : (json_decode((string) $event->payload_meta, true) ?: []);
+
+                    return [
+                        'event_id' => (string) $event->event_id,
+                        'incident_id' => is_string($meta['incident_id'] ?? null) ? $meta['incident_id'] : null,
+                        'event_type' => (string) $event->event_type,
+                        'severity' => (string) ($meta['severity'] ?? (substr((string) $event->event_type, strrpos((string) $event->event_type, '.') + 1) ?: 'unknown')),
+                        'status' => (string) ($meta['status'] ?? 'unknown'),
+                        'affected_components' => is_array($meta['affected_components'] ?? null)
+                            ? array_slice($meta['affected_components'], 0, 10, true)
+                            : [],
+                        'correlation_id' => is_string($meta['correlation_id'] ?? null) ? $meta['correlation_id'] : null,
+                        'created_at' => $event->created_at,
+                    ];
+                })
+                ->all();
+
+            return ['available' => true, 'items' => $items];
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('incident_history', $exception);
+
+            return ['available' => false, 'items' => []];
+        }
+    }
+
+
+    /**
+     * Aggregate a bounded 24-hour incident trend from the same append-only ledger.
+     */
+    private function incidentTrend(): array
+    {
+        $trend = ['available' => false, 'critical' => 0, 'warning' => 0, 'recovered' => 0, 'sampled' => 0, 'truncated' => false];
+
+        try {
+            if (! Schema::hasTable('farast_audit_events')) {
+                return $trend;
+            }
+
+            $events = DB::table('farast_audit_events')
+                ->where('event_type', 'like', 'observability.incident.%')
+                ->where('created_at', '>=', now()->subDay())
+                ->orderByDesc('id')
+                ->limit(501)
+                ->get(['event_type', 'payload_meta']);
+
+            $trend['available'] = true;
+            $trend['truncated'] = $events->count() > 500;
+            foreach ($events->take(500) as $event) {
+                $meta = is_array($event->payload_meta)
+                    ? $event->payload_meta
+                    : (json_decode((string) $event->payload_meta, true) ?: []);
+                $type = (string) $event->event_type;
+                $severity = (string) ($meta['severity'] ?? (substr($type, strrpos($type, '.') + 1) ?: 'unknown'));
+
+                if ($severity === 'recovered') {
+                    $trend['recovered']++;
+                } elseif (in_array($severity, ['critical', 'warning'], true)) {
+                    $trend[$severity]++;
+                }
+                $trend['sampled']++;
+            }
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('incident_trend', $exception);
+        }
+
+        return $trend;
+    }
+
+    private function database(): array
+    {
+        try {
+            DB::select('SELECT 1');
+
+            return ['status' => 'healthy', 'message' => 'اتصال پایگاه داده برقرار است.'];
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('database', $exception);
+
+            return ['status' => 'critical', 'message' => 'اتصال پایگاه داده ناموفق است.'];
+        }
+    }
+
+    private function queue(): array
+    {
+        $connection = (string) config('queue.default', 'unknown');
+        $queueDatabase = config("queue.connections.{$connection}.connection") ?: config('database.default');
+        $queueTable = (string) config("queue.connections.{$connection}.table", 'jobs');
+        $failedDatabase = config('queue.failed.database') ?: config('database.default');
+        $failedTable = (string) config('queue.failed.table', 'failed_jobs');
+        $result = [
+            'status' => 'healthy',
+            'connection' => $connection,
+            'queue_database' => $queueDatabase,
+            'pending_jobs' => null,
+            'failed_jobs' => null,
+            'oldest_pending_minutes' => null,
+        ];
+
+        try {
+            if ($connection === 'sync') {
+                $result['status'] = 'warning';
+                $result['message'] = 'پردازش صف به‌صورت هم‌زمان انجام می‌شود؛ backlog پایدار قابل اندازه‌گیری نیست.';
+            } elseif (config("queue.connections.{$connection}.driver") !== 'database') {
+                $result['status'] = 'warning';
+                $result['message'] = 'برای این درایور صف، شمارش backlog در این داشبورد پیکربندی نشده است.';
+            } elseif (Schema::connection($queueDatabase)->hasTable($queueTable)) {
+                $jobs = DB::connection($queueDatabase)->table($queueTable);
+                $result['pending_jobs'] = (int) (clone $jobs)->count();
+                $oldest = (clone $jobs)->min('created_at');
+                $result['oldest_pending_minutes'] = $oldest
+                    ? max(0, now()->timestamp - (int) $oldest) / 60
+                    : 0;
+            } else {
+                $result['status'] = 'warning';
+                $result['message'] = 'جدول صف در اتصال پایگاه دادهٔ پیکربندی‌شده وجود ندارد.';
+            }
+
+            if (Schema::connection($failedDatabase)->hasTable($failedTable)) {
+                $result['failed_jobs'] = (int) DB::connection($failedDatabase)->table($failedTable)->count();
+                if ($result['failed_jobs'] > 0) {
+                    $result['status'] = 'warning';
+                }
+            } else {
+                $result['status'] = 'warning';
+                $result['failed_jobs_warning'] = 'جدول failed_jobs وجود ندارد.';
+            }
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('queue', $exception);
+            $result['status'] = 'critical';
+            $result['message'] = 'خواندن وضعیت صف ناموفق است.';
+        }
+
+        return $result;
+    }
+
+    private function storage(): array
+    {
+        $disk = (string) config('filesystems.default', 'local');
+        $privateRoot = (string) config('filesystems.disks.private.root', '');
+        $result = [
+            'status' => 'unknown',
+            'default_disk' => $disk,
+            'private_disk_configured' => $privateRoot !== '',
+            'private_root_writable' => null,
+            'volumes' => null,
+            'pending_transfers' => null,
+        ];
+
+        try {
+            if ($privateRoot !== '') {
+                $result['private_root_writable'] = is_dir($privateRoot) && is_writable($privateRoot);
+                $result['status'] = $result['private_root_writable'] ? 'healthy' : 'critical';
+            }
+
+            if (Schema::hasTable('storage_volumes')) {
+                $query = DB::table('storage_volumes');
+                if (Schema::hasColumn('storage_volumes', 'is_active')) {
+                    $query->where('is_active', true);
+                }
+                $result['volumes'] = [
+                    'total' => (int) (clone $query)->count(),
+                    'healthy' => (int) (clone $query)->where('status', 'healthy')->count(),
+                    'unhealthy_or_unverified' => (int) (clone $query)->whereNotIn('status', ['healthy'])->count(),
+                ];
+                if ($result['volumes']['unhealthy_or_unverified'] > 0 && $result['status'] === 'healthy') {
+                    $result['status'] = 'warning';
+                }
+            } else {
+                $result['status'] = 'warning';
+                $result['inventory_warning'] = 'جدول موجودی Volumeها نصب نشده است.';
+            }
+
+            if (Schema::hasTable('storage_managed_files')) {
+                $result['pending_transfers'] = (int) DB::table('storage_managed_files')
+                    ->whereIn('status', ['pending_transfer', 'transfer_error'])
+                    ->count();
+                if ($result['pending_transfers'] > 0 && $result['status'] === 'healthy') {
+                    $result['status'] = 'warning';
+                }
+            } else {
+                $result['status'] = 'warning';
+                $result['transfer_warning'] = 'جدول مدیریت فایل‌ها نصب نشده است.';
+            }
+
+            if ($result['status'] === 'unknown') {
+                $result['status'] = 'warning';
+            }
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('storage', $exception);
+            $result['status'] = 'critical';
+        }
+
+        return $result;
+    }
+
+
+    private function recordProbeFailure(string $component, Throwable $exception): void
+    {
+        try {
+            // Exception messages can contain connection details or provider paths.
+            // Keep operational logs useful without copying those values.
+            Log::warning('farast.health.probe_failed', [
+                'component' => $component,
+                'exception_class' => get_class($exception),
+            ]);
+        } catch (Throwable $loggingException) {
+            error_log('FARAST health probe logging failed: '.get_class($loggingException));
+        }
+    }
+
+    private function logging(): array
+    {
+        $channel = (string) config('logging.default', 'stack');
+        $days = config('logging.channels.daily.days');
+        $path = config('logging.channels.daily.path');
+        $directory = is_string($path) && $path !== '' ? dirname($path) : null;
+        $writable = $directory !== null && is_dir($directory) && is_writable($directory);
+        $usesDaily = $channel === 'daily'
+            || ($channel === 'stack' && in_array('daily', (array) config('logging.channels.stack.channels', []), true));
+        $errorCount = null;
+        $errorCountComplete = false;
+
+        if ($usesDaily && is_string($path) && $path !== '') {
+            $filename = pathinfo($path, PATHINFO_FILENAME);
+            $extension = pathinfo($path, PATHINFO_EXTENSION);
+            $dailyFile = dirname($path).DIRECTORY_SEPARATOR.$filename.'-'.now()->format('Y-m-d').($extension !== '' ? '.'.$extension : '');
+            $errorCount = $this->countRecentErrors($dailyFile, 1024 * 1024, 15);
+            $errorCountComplete = $errorCount !== null && (! is_file($dailyFile) || (filesize($dailyFile) !== false && filesize($dailyFile) <= 1024 * 1024));
+        }
+
+        return [
+            'status' => $writable && $usesDaily && $errorCount !== null ? 'healthy' : 'warning',
+            'default_channel' => $channel,
+            'daily_retention_days' => is_numeric($days) ? (int) $days : null,
+            'log_directory_writable' => $writable,
+            'daily_error_count_last_15_minutes' => $errorCount,
+            'error_count_complete' => $errorCountComplete,
+            'error_count_window_minutes' => 15,
+        ];
+    }
+
+    /**
+     * Read at most the final megabyte of today's JSON log file. A null result
+     * means the configured daily file could not be read; it is never reported
+     * as zero errors in that case.
+     */
+    private function countRecentErrors(string $file, int $maxBytes, int $windowMinutes): ?int
+    {
+        if (! is_file($file)) {
+            return 0;
+        }
+
+        $handle = @fopen($file, 'rb');
+        if (! is_resource($handle)) {
+            return null;
+        }
+
+        try {
+            $size = filesize($file);
+            if (! is_int($size)) {
+                return null;
+            }
+
+            $offset = max(0, $size - $maxBytes);
+            if ($offset > 0) {
+                fseek($handle, $offset);
+                fgets($handle); // Discard a potentially partial first JSON line.
+            }
+
+            $cutoff = now()->subMinutes($windowMinutes)->toDateTimeImmutable();
+            $count = 0;
+            while (($line = fgets($handle)) !== false) {
+                $record = json_decode($line, true);
+                if (! is_array($record) || (int) ($record['level'] ?? 0) < 400 || ! is_string($record['datetime'] ?? null)) {
+                    continue;
+                }
+
+                try {
+                    $timestamp = new \DateTimeImmutable($record['datetime']);
+                    if ($timestamp >= $cutoff) {
+                        $count++;
+                    }
+                } catch (Throwable) {
+                    continue;
+                }
+            }
+
+            return $count;
+        } finally {
+            fclose($handle);
+        }
+    }
+}
