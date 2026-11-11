@@ -86,6 +86,71 @@ class StorageCoreTest extends TestCase
         ]);
     }
 
+    public function test_capacity_reservations_prevent_uploads_from_overcommitting_a_volume(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Reserved capacity volume', 'driver' => 'local',
+            'capacity_bytes' => 10, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $reservation = $storage->reserveVolumeCapacity($volume, 7, 'test-upload', [
+            'object_key' => 'reservations/first.bin',
+        ]);
+        $this->assertNotNull($reservation);
+        $this->assertNull($storage->reserveVolumeCapacity($volume, 4, 'concurrent-upload', [
+            'object_key' => 'reservations/second.bin',
+        ]));
+
+        $stagedContents = '1234';
+        $staged = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('capacity-blocked.txt', $stagedContents),
+            StorageManager::CRITICAL,
+            'capacity-test'
+        );
+        $this->assertNull($staged['volume_id']);
+        $this->assertSame('pending_transfer', $staged['status']);
+
+        $storage->releaseVolumeCapacityReservation($reservation);
+        $stored = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('capacity-available.txt', $stagedContents),
+            StorageManager::CRITICAL,
+            'capacity-test'
+        );
+
+        $this->assertSame($volume->id, $stored['volume_id']);
+        $volume->refresh();
+        $this->assertSame(strlen($stagedContents), $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+        $this->assertDatabaseCount('storage_volume_reservations', 0);
+    }
+
+    public function test_expired_capacity_reservation_removes_partial_object_before_releasing_capacity(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Expired reservation volume', 'driver' => 'local',
+            'capacity_bytes' => 1024, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $key = 'reservations/abandoned-upload.bin';
+        $reservation = $storage->reserveVolumeCapacity($volume, 16, 'test-upload', ['object_key' => $key]);
+        $this->assertNotNull($reservation);
+
+        $absolute = storage_path('app/storage-volumes/'.$volume->id.'/'.$key);
+        File::ensureDirectoryExists(dirname($absolute));
+        file_put_contents($absolute, 'partial-upload');
+        \\App\\Models\\StorageVolumeReservation::query()
+            ->where('reservation_key', $reservation)
+            ->update(['expires_at' => now()->subMinute()]);
+
+        $this->assertSame(1, $storage->cleanupExpiredVolumeReservations());
+        $this->assertFileDoesNotExist($absolute);
+        $this->assertDatabaseCount('storage_volume_reservations', 0);
+    }
+
     public function test_generated_contents_use_the_central_managed_storage_pipeline(): void
     {
         StorageVolume::create([
