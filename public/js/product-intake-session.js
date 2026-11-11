@@ -20,7 +20,7 @@
   const modalReport = modal.querySelector('[data-intake-file-report]');
   const modalConfirm = modal.querySelector('[data-intake-file-confirm]');
   const modalReject = modal.querySelector('[data-intake-file-reject]');
-  const state = { sessionId: null, type: null, files: [], primaryIndex: 0, processing: false, activeIngestionId: null };
+  const state = { sessionId: null, type: null, files: [], primaryIndex: 0, processing: false, activeIngestionId: null, processed: new Set() };
 
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
@@ -65,7 +65,7 @@
       (state.type === 'digital_file' ? '<label><input type="radio" name="intake-primary" data-primary-index="' + index + '"' +
         (index === state.primaryIndex ? ' checked' : '') + '> فایل اصلی</label>' : '') + '</div>'
     )).join('');
-    processButton.disabled = state.files.length === 0 || state.processing;
+    processButton.disabled = state.files.length === 0 || state.processing || state.processed.size >= state.files.length;
   };
 
   const addFiles = (files) => {
@@ -124,10 +124,12 @@
     if (!accepted) {
       const cancelTarget = url(url(root.dataset.cancelUrlTemplate, '__SESSION__', state.sessionId), '__INGESTION__', preflight.ingestion_id);
       await request(cancelTarget, { method: 'DELETE' });
-      throw new Error('فایل ' + file.name + ' توسط کاربر رد شد.');
+      message.textContent = 'فایل ' + file.name + ' رد شد و به محصول متصل نخواهد شد.';
+      return false;
     }
     const confirmTarget = url(url(root.dataset.confirmUrlTemplate, '__SESSION__', state.sessionId), '__INGESTION__', preflight.ingestion_id);
     await request(confirmTarget, { method: 'POST' });
+    return true;
   };
 
   const renderProgress = (payload) => {
@@ -255,6 +257,7 @@
   });
   clearButton.addEventListener('click', () => {
     state.files = [];
+    state.processed.clear();
     state.primaryIndex = 0;
     filePicker.value = '';
     folderPicker.value = '';
@@ -269,8 +272,11 @@
     reviewPanel.hidden = false;
     try {
       for (let i = 0; i < state.files.length; i++) {
+        if (state.processed.has(i)) continue;
         message.textContent = 'در حال بررسی فایل ' + (i + 1) + ' از ' + state.files.length + ': ' + state.files[i].name;
         await preflightOne(state.files[i], i);
+        state.processed.add(i);
+        renderSelected();
         await pollProgress();
       }
       message.textContent = 'انتقال فایل‌ها تمام شد؛ در انتظار تکمیل بازبینی ناظر هستیم.';
@@ -280,7 +286,7 @@
       await pollProgress();
     } finally {
       state.processing = false;
-      processButton.disabled = state.files.length === 0;
+      renderSelected();
     }
   });
 
