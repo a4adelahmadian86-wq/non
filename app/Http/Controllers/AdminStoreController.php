@@ -203,15 +203,19 @@ class AdminStoreController extends Controller
 
     public function showIntake(StoreProductIntakeSession $session)
     {
-        abort_unless((int) $session->user_id === (int) auth()->id(), 404);
+        $ownsSession = (int) $session->user_id === (int) auth()->id();
+        $canManageIntakeReview = app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.products.publish')
+            && in_array(auth()->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true);
+        abort_unless($ownsSession || $canManageIntakeReview, 404);
         abort_unless($session->isUsable(), 410, 'مهلت این نشست ورود محصول پایان یافته است؛ یک نشست تازه بسازید.');
 
-        if ($session->status === 'details') {
+        if ($ownsSession && $session->status === 'details') {
             return redirect()->route('admin.store.intake.details', $session);
         }
+        abort_if(! $ownsSession && $session->status === 'details', 409, 'این نشست وارد مرحله ثبت مشخصات شده است.');
         $session->load(['files' => fn ($query) => $query->orderBy('id')]);
 
-        return view('admin.store.intake-files', compact('session'));
+        return view('admin.store.intake-files', compact('session', 'canManageIntakeReview'));
     }
 
     public function intakeDetails(Request $request, StoreProductIntakeSession $session)
@@ -589,8 +593,11 @@ class AdminStoreController extends Controller
 
     public function intakeFileStatus(Request $request, StoreProductIntakeSession $session, StoreProductIntakeFile $file)
     {
-        abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
-        abort_unless($file->intake_session_id === $session->id && (int) $file->user_id === (int) $request->user()->id, 404);
+        $ownsSession = (int) $session->user_id === (int) $request->user()->id;
+        $canManageIntakeReview = app(\App\Services\AuthorizationService::class)->allows($request->user(), 'store.products.publish')
+            && in_array($request->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true);
+        abort_unless($ownsSession || $canManageIntakeReview, 404);
+        abort_unless($file->intake_session_id === $session->id && ($ownsSession ? (int) $file->user_id === (int) $request->user()->id : true), 404);
 
         return response()->json([
             'file_id' => $file->id,
@@ -600,6 +607,39 @@ class AdminStoreController extends Controller
             'security_gate' => data_get($file->supervisor_review_json, 'security_gate'),
             'supervisor_reviewed_at' => $file->supervisor_reviewed_at?->toISOString(),
         ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function manualReviewIntakeFile(Request $request, StoreProductIntakeSession $session, StoreProductIntakeFile $file)
+    {
+        abort_unless(in_array($request->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true), 403);
+        abort_unless($file->intake_session_id === $session->id, 404);
+        abort_unless($file->status === 'uploaded' && $file->supervisor_status === 'manual_review_required', 409);
+
+        $data = $request->validate([
+            'manager_notes' => 'required|string|min:20|max:2000',
+        ]);
+
+        $file->update([
+            'supervisor_status' => 'completed',
+            'supervisor_review_json' => array_replace_recursive((array) ($file->supervisor_review_json ?? []), [
+                'security_gate' => 'manual_scan_required',
+                'manual_review' => [
+                    'approved' => true,
+                    'reviewed_by' => $request->user()->id,
+                    'reviewed_at' => now()->toISOString(),
+                    'notes' => $data['manager_notes'],
+                    'automated_publication' => false,
+                ],
+            ]),
+            'supervisor_reviewed_at' => now(),
+        ]);
+
+        $this->audit('store.product.intake_file_manager_reviewed', $file, [
+            'intake_session_id' => $session->id,
+            'reviewed_by' => $request->user()->id,
+        ]);
+
+        return back()->with('status', 'بررسی دستی فایل ثبت شد؛ محصول همچنان برای تأیید نهایی مدیر در صف انتشار باقی می‌ماند.');
     }
 
     public function cancelIntakeFile(Request $request, StoreProductIntakeSession $session, StoreProductIntakeFile $file)
