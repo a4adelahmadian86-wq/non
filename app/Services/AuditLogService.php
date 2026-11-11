@@ -24,11 +24,19 @@ class AuditLogService
         $safeMeta = $this->sanitize($meta);
         $encoded = json_encode($safeMeta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
+        if (! is_string($encoded) || strlen($encoded) > 16000) {
+            $encoded = json_encode([
+                '_truncated' => true,
+                'request_id' => $meta['request_id'] ?? null,
+                'correlation_id' => $meta['correlation_id'] ?? null,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+        }
+
         DB::table('audit_logs')->insert([
             'user_id' => $userId,
             'action' => mb_substr($action, 0, 120),
             'ip' => $ip,
-            'meta' => is_string($encoded) ? mb_substr($encoded, 0, 16000) : '{}',
+            'meta' => $encoded,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
