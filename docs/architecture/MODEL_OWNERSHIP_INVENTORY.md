@@ -4,7 +4,7 @@
 
 > مبنا: شاخه `main`، فایل‌های `app/Models/*.php`. جدول صریح فقط در صورت وجود `$table` ثبت شده؛ در غیر این صورت نام جدول از قرارداد Eloquent در runtime مشتق می‌شود و در این فهرست به‌عنوان حدس قطعی ثبت نشده است. روابطی که با الگوی استاتیک قابل استخراج نبوده‌اند باید با `Model::getRelations()`/تست runtime تکمیل شوند.
 
-- مدل‌های فایل‌محور شناسایی‌شده: **104**
+- مدل‌های فایل‌محور شناسایی‌شده: **105**
 - این فهرست مالکیت فایل مدل، table override، primary key، connection و روابط مستقیم قابل استخراج را ثبت می‌کند.
 
 | Model | Explicit table | Table basis | Primary key | Connection | Relations | Source |
@@ -74,6 +74,7 @@
 | `RolePermission` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `permission:belongsTo(Permission)` | `app/Models/RolePermission.php` |
 
 | `SiteSetting` | `—` | Eloquent convention; runtime not verified | `id` | `default` | — | `app/Models/SiteSetting.php` |
+| `SmsLog` | `—` | Eloquent convention; runtime not verified | `id` | `default` | — | `app/Models/SmsLog.php` |
 | `StorageBackupRun` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `volume:belongsTo(StorageVolume; 'storage_volume_id')` | `app/Models/StorageBackupRun.php` |
 | `StorageManagedFile` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `volume:belongsTo(StorageVolume; 'storage_volume_id')`<br>`replicaVolume:belongsTo(StorageVolume; 'replicated_to_volume_id')` | `app/Models/StorageManagedFile.php` |
 | `StorageVolume` | `—` | Eloquent convention; runtime not verified | `id` | `default` | `files:hasMany(StorageManagedFile; '!=', 'deleted')`<br>`allFiles:hasMany(StorageManagedFile)` | `app/Models/StorageVolume.php` |
