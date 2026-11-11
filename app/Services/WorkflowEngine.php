@@ -158,7 +158,7 @@ class WorkflowEngine
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-            ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation')->afterCommit();
+            $this->queueEvent($eventId);
             return $eventId;
         } catch (\Illuminate\Database\QueryException $exception) {
             $existing = DB::table('farast_workflow_events')->where('idempotency_key', $idempotencyKey)->first();
@@ -173,7 +173,7 @@ class WorkflowEngine
             }
 
             $existingId = (int) $existing->id;
-            ProcessWorkflowEvent::dispatch($existingId)->onQueue('automation')->afterCommit();
+            $this->queueEvent($existingId);
             return $existingId;
         }
     }
@@ -217,7 +217,7 @@ class WorkflowEngine
     /** Queue pending and recoverable outbox events in bounded batches. */
     public function dispatchPendingEvents(int $limit = 50): int
     {
-        if (! Schema::hasTable('farast_workflow_events')) return 0;
+        if (! Schema::hasTable('farast_workflow_events') || config('queue.default') === 'sync') return 0;
         $events = DB::table('farast_workflow_events')
             ->whereIn('status', ['pending', 'failed', 'processing'])
             ->where('attempts', '<', 5)
@@ -229,7 +229,7 @@ class WorkflowEngine
             })
             ->orderBy('id')->limit(max(1, min($limit, 200)))->get(['id']);
         foreach ($events as $event) {
-            ProcessWorkflowEvent::dispatch((int) $event->id)->onQueue('automation');
+            $this->queueEvent((int) $event->id, false);
         }
         return $events->count();
     }
@@ -278,7 +278,7 @@ class WorkflowEngine
             return true;
         });
 
-        if ($retried) ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation')->afterCommit();
+        if ($retried) $this->queueEvent($eventId);
         return $retried;
     }
 
@@ -295,7 +295,7 @@ class WorkflowEngine
             ]);
             return true;
         });
-        if ($resumed) ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation')->afterCommit();
+        if ($resumed) $this->queueEvent($eventId);
         return $resumed;
     }
 
@@ -505,6 +505,19 @@ class WorkflowEngine
         ]);
 
         return $completedNow;
+    }
+
+    private function queueEvent(int $eventId, bool $afterCommit = true): void
+    {
+        // A sync driver is useful for unit tests but must never masquerade as background processing.
+        if (config('queue.default') === 'sync') {
+            return;
+        }
+
+        $pending = ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation');
+        if ($afterCommit) {
+            $pending->afterCommit();
+        }
     }
 
     private function step(array $step, array $context, int $ownerId, int $runId, int $stepIndex): void
