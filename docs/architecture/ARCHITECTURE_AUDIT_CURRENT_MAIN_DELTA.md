@@ -270,7 +270,39 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 **تصمیم لازم:** `FarastPricingPolicyVersion + PricingEngine` باید منبع canonical برای policyهای versioned باشد. `PricingPolicyAdminService` باید write API رسمی و audit‌شده آن باشد. قواعد `PricingRule` و `FarastPricingPolicy` باید برای هر key طبقه‌بندی شوند: یا به‌عنوان migration source فقط خواندنی باقی بمانند، یا برای کلیدهای مشخص به‌صورت صریح owner باشند. Admin UI نباید صرفاً `PricingRule` را به‌روزرسانی کند درحالی‌که runtime نسخه بالاتری را می‌خواند. پیش از حذف legacy، کلیدهای typing و policyهای فعلی باید migrate و quoteهای قبل/بعد regression-tested شوند.
 
-## 9. تعارض معماری قطعی در خوشه توسعه محصول
+
+## 9. قابلیت، سهمیه و مصرف: لایه‌های جدا با مرزهای لازم
+
+در main چند کنترل مجزا وجود دارد که باید در نقشه دسترسی/تجارت به‌عنوان قراردادهای متفاوت ثبت شوند:
+
+| مفهوم | منبع داده | سرویس تصمیم/عملیات | معنی |
+|---|---|---|---|
+| feature flag | `site_settings` + `user_capabilities` / `UserCapability` | `CapabilityService` | فعال بودن قابلیت‌هایی مانند `can_type/can_ai/can_voice` و سقف‌های پیکربندی‌شده |
+| free typing allowance | `free_credits` / `FreeCredit` | `FreeQuotaService` | اعتبار هفتگی صفحات، با `mobile_hash + week_start` و قفل تراکنشی |
+| daily AI abuse/rate cap | `ai_interactions` / `AiInteraction` | `AiQuotaService` | محدودیت تعداد درخواست AI در روز بر اساس `daily_ai_requests` |
+| subscription/PAYG entitlement | `farast_entitlements`, reservations, usage events, charges, wallet reservations | `CommerceAuthorizationService` | رزرو، commit/release، محاسبه هزینه و settlement |
+| legacy project subscription | `farast_subscriptions + farast_plans + farast_usage_counters` و `farast_projects.billing_state` | `ProjectBillingService` | محاسبه allowance و قفل/بازکردن خروجی پروژه؛ مسیر قدیمی که در بخش اشتراک ثبت شد |
+
+این لایه‌ها الزاماً رقیب نیستند: feature flag، free tier، abuse limit و billable entitlement می‌توانند نقش متفاوت داشته باشند. مشکل وقتی رخ می‌دهد که یک عملیات بدون قرارداد مشخص فقط یکی از آن‌ها را بررسی کند یا quota را در چند ledger مستقل کم کند.
+
+### مسیرهای مشاهده‌شده
+
+- `EditorController`, `TypingPreflightController`, `PaymentController` و `UserFileController` مصرف‌کننده‌های `PricingService/FreeQuotaService` هستند.
+- `AiQuotaService` سقف روزانه را از شمارش `AiInteraction` اعمال می‌کند.
+- `EditorAiAssistService` رزرو و commit واقعی AI را از `CommerceAuthorizationService` انجام می‌دهد؛ در عین حال `EntitlementService` را در constructor تزریق می‌کند، اما در متد `assist` از آن استفاده نمی‌کند.
+- `EntitlementService` یک مسیر مستقل `authorize/consume/grant` دارد که می‌تواند `FarastEntitlement.used_quantity` را مستقیم افزایش دهد، بدون ایجاد `FarastUsageReservation/FarastUsageEvent/FarastCharge`. در inventory فعلی، callsite عملیاتی قطعی برای این مسیر به‌جز تزریق بلااستفاده فوق شناسایی نشد.
+- `OutputAuthorizationService` از `CommerceAuthorizationService` استفاده می‌کند و قبل از آن، پرداخت سفارش یا `FarastProject.output_state=unlocked` را هم می‌پذیرد.
+
+### تصمیم لازم
+
+1. `CapabilityService` فقط مالک feature flags و حدود پیکربندی باشد؛ نباید ledger مصرف یا charge را خودش انجام دهد.
+2. `FreeQuotaService` فقط free-tier allowance مشخص را مدیریت کند؛ همه مصرف‌های billable باید به CommerceAuthorizationService برسند.
+3. `AiQuotaService` فقط rate/abuse cap روزانه باشد و با usage billing اشتباه نشود.
+4. `CommerceAuthorizationService` مرجع واحد reserve/commit/release/charge/refund باشد؛ مسیر `EntitlementService::consume` یا باید به آن delegate شود یا بعد از اثبات نبود مصرف‌کننده حذف/محدود شود.
+5. `ProjectBillingService` نباید هم‌زمان subscription و usage legacy را جداگانه از منبع تجاری جدید بخواند؛ باید با migration اشتراک و quota یکپارچه شود.
+6. برای هر endpoint حساس، ماتریس تست مشخص کند کدام لایه‌ها بررسی و کدام ledgerها تغییر می‌کنند؛ تست منفی باید ثابت کند free flag به‌تنهایی امکان دور زدن سقف یا charge را نمی‌دهد.
+
+## 10. تعارض معماری قطعی در خوشه توسعه محصول
 
 بازبینی diff شاخه‌های باز #262، #265، #279، #318 و #333 نشان می‌دهد این‌ها PRهای مستقل و قابل ادغام جداگانه نیستند؛ چند فایل و حتی قرارداد Schema مشترک دارند.
 
@@ -348,7 +380,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 **وضعیت:** هیچ‌یک از PRهای #262/#265/#279/#318/#333 را نمی‌توان صرفاً به‌دلیل سبز بودن مستقل، جداگانه ادغام کرد. لازم است یک PR ادغام‌شده و rebased روی main جاری ساخته شود که schema نهایی را تثبیت و فایل‌های هم‌پوشان را یک‌بار تغییر دهد.
 
 
-## 10. وضعیت CI خط مبنای جدید
+## 11. وضعیت CI خط مبنای جدید
 
 پس از ادغام PR #371، checkهای commit `c3067f69da7d29b874c26438e804e4067a078bab` دوباره بررسی شدند و همگی به پایان رسیدند:
 - `laravel`: success
@@ -361,7 +393,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 بنابراین merge commit ممیزی Routeها سبز است؛ دو check skipped به معنی اجرای موفق آن تست‌ها نیستند. این نتیجه به PRهای دیگر یا commitهای بعدی تعمیم داده نمی‌شود.
 
-## 11. ترتیب ادامه ممیزی/تثبیت
+## 12. ترتیب ادامه ممیزی/تثبیت
 
 1. دریافت نتیجه نهایی CI روی `c3067f69...`؛ در صورت شکست، تشخیص بر اساس job و log.
 2. بررسی و ادغام امن PR #347 پس از rebase و CI؛ این مسیر شکاف authorization سطح Route را می‌بندد.
@@ -370,7 +402,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 5. اجرای runtime inventory روی main پس از ادغام این تغییرها: `route:list`, migration fresh install/upgrade، تست‌های منفی Scope و مالکیت فایل.
 6. تکمیل call graph برای هر سرویس با مصرف‌کننده‌ها و تست‌های واقعی؛ سپس تعیین موارد retain/consolidate/deprecate.
 
-## 12. معیار تکمیل
+## 13. معیار تکمیل
 
 این addendum وضعیت snapshot را ثبت می‌کند، نه پایان کل مرحله دوم را. مرحله دوم تنها وقتی بسته می‌شود که:
 - Routeها و نام‌ها در runtime یکتا باشند؛
