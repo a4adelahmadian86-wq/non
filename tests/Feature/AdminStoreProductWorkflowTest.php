@@ -74,11 +74,13 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.store.create'))
             ->assertOk()
-            ->assertDontSee('شناسه محصول (SKU)')
-            ->assertDontSee('نشانی اختصاصی (Slug)')
-            ->assertDontSee('نوع مجوز استفاده')
-            ->assertSee('admin-store-product-wizard.js')
-            ->assertSee('product-upload-step')
+            ->assertSee('ابتدا نوع محصول را انتخاب کنید')
+            ->assertSee(route('admin.store.create', ['type' => 'digital_file']), false)
+            ->assertSee(route('admin.store.create', ['type' => 'course']), false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.create', ['type' => 'digital_file']))
+            ->assertOk()
             ->assertSee('ابتدا فایل محصول را انتخاب کنید')
             ->assertSee('data-product-ingestion', false)
             ->assertDontSee('name="title"', false);
@@ -763,14 +765,47 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame('reader_only', $snapshot['download_policy']);
     }
 
-    public function test_delivery_policy_is_exposed_and_reader_only_publication_requires_a_ready_reader(): void
+    public function test_product_type_is_selected_before_file_or_course_creation(): void
     {
-        Storage::fake('private');
         $admin = $this->admin();
         $category = $this->category();
 
         $this->actingAs($admin)
             ->get(route('admin.store.create'))
+            ->assertOk()
+            ->assertSee('ابتدا نوع محصول را انتخاب کنید')
+            ->assertSee(route('admin.store.create', ['type' => 'digital_file']), false)
+            ->assertSee(route('admin.store.create', ['type' => 'course']), false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.create', ['type' => 'course']))
+            ->assertOk()
+            ->assertSee('name="type" value="course"', false)
+            ->assertSee('name="title"', false)
+            ->assertDontSee('data-product-ingestion', false)
+            ->assertDontSee('data-product-upload-step', false);
+
+        $response = $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
+            'title' => 'دوره آزمایشی از انتخاب نوع',
+            'sku' => 'COURSE-TYPE-FIRST-001',
+            'type' => 'course',
+        ]));
+
+        $product = StoreProduct::query()->where('sku', 'COURSE-TYPE-FIRST-001')->firstOrFail();
+        $response->assertRedirect(route('admin.store.course.edit', $product));
+        $this->assertSame('course', $product->type);
+        $this->assertTrue($product->course()->exists());
+    }
+
+    public function test_delivery_policy_is_exposed_and_reader_only_publication_requires_a_ready_reader(): void
+    {
+        Queue::fake();
+        Storage::fake('private');
+        $admin = $this->admin();
+        $category = $this->category();
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.create', ['type' => 'digital_file']))
             ->assertOk()
             ->assertSee('ابتدا فایل محصول را انتخاب کنید')
             ->assertDontSee('name="download_policy"', false);
@@ -868,8 +903,10 @@ class AdminStoreProductWorkflowTest extends TestCase
             ->put(route('admin.store.update', $product), $publishPayload)
             ->assertRedirect(route('admin.store.edit', $product));
 
-        $this->assertSame('published', $product->fresh()->status);
+        $this->assertSame('draft', $product->fresh()->status);
         $this->assertSame('reader_only', $product->fresh()->download_policy);
+        $this->assertSame('queued', data_get($product->fresh()->metadata, 'publication_workflow.status'));
+        Queue::assertPushed(ReviewProductForPublication::class, fn ($job) => $job->productId === $product->id);
     }
 
     public function test_replacing_primary_file_unpublishes_reader_only_product_until_reprocessing_finishes(): void
@@ -1235,7 +1272,7 @@ class AdminStoreProductWorkflowTest extends TestCase
                 'ai_supervisor' => ['checks' => ['content' => true, 'pricing' => true, 'seo' => true, 'media' => true, 'policy' => true]],
             ],
         ]);
-        StoreProductFile::create([
+        $file = StoreProductFile::create([
             'product_id' => $product->id,
             'purpose' => 'product_download',
             'version' => '1.0',
