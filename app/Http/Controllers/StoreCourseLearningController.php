@@ -60,7 +60,7 @@ class StoreCourseLearningController extends Controller
         $enrollment = $this->enrollment($request, $product);
         abort_unless($lesson->section()->where('course_id', $enrollment->course_id)->exists() && $lesson->is_published, 404);
         abort_unless($courseProgress->lessonAvailable($enrollment, $lesson), 403, 'این جلسه طبق برنامه انتشار تدریجی هنوز در دسترس نیست.');
-        $lesson->load(['resources' => fn ($query) => $query->where('is_active', true)->where('scan_status', 'clean')]);
+        $lesson->load(['resources' => fn ($query) => $query->where('is_active', true)->whereIn('scan_status', ['clean', 'structural'])]);
         $progress = StoreCourseLessonProgress::firstOrNew([
             'enrollment_id' => $enrollment->id,
             'lesson_id' => $lesson->id,
@@ -122,7 +122,7 @@ class StoreCourseLearningController extends Controller
                 && $file->course_lesson_id === $lesson->id
                 && $file->purpose === 'lesson_resource'
                 && $file->is_active
-                && $file->scan_status === 'clean',
+                && in_array($file->scan_status, ['clean', 'structural'], true),
             404
         );
 
