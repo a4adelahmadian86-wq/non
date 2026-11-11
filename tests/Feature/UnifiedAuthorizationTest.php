@@ -88,6 +88,25 @@ class UnifiedAuthorizationTest extends TestCase
         ));
     }
 
+    public function test_legacy_system_role_editor_uses_the_unified_authorization_service(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $employee = User::factory()->create(['role' => 'employee']);
+        $this->permission('documents.view');
+        $this->permission('dashboard.view');
+        $authorization = app(AuthorizationService::class);
+
+        self::assertTrue($authorization->allows($employee, 'documents.view'));
+        $authorization->updateRolePermissions($admin, 'employee', ['dashboard.view']);
+        self::assertFalse($authorization->allows($employee, 'documents.view'));
+        self::assertTrue($authorization->allows($employee, 'dashboard.view'));
+
+        $this->assertDatabaseHas('access_audit_logs', [
+            'actor_id' => $admin->id,
+            'event' => 'role.permissions.updated',
+        ]);
+    }
+
     public function test_admin_with_a_limited_assignment_cannot_bypass_record_scope(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
