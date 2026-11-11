@@ -258,7 +258,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         try {
             $this->runFinancialMigration();
             $this->fail('A payment authority without a gateway must be reconciled before adding uniqueness constraints.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('payment authority exists without a gateway', $exception->getMessage());
         }
 
@@ -273,7 +273,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         try {
             $this->runFinancialMigration();
             $this->fail('A payment transaction ID without a gateway must be reconciled before adding uniqueness constraints.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('payment transaction ID exists without a gateway', $exception->getMessage());
         }
 
