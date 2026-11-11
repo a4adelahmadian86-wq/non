@@ -313,11 +313,31 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 5. `ProjectBillingService` نباید هم‌زمان subscription و usage legacy را جداگانه از منبع تجاری جدید بخواند؛ باید با migration اشتراک و quota یکپارچه شود.
 6. برای هر endpoint حساس، ماتریس تست مشخص کند کدام لایه‌ها بررسی و کدام ledgerها تغییر می‌کنند؛ تست منفی باید ثابت کند free flag به‌تنهایی امکان دور زدن سقف یا charge را نمی‌دهد.
 
-## 10. تعارض معماری قطعی در خوشه توسعه محصول
+
+## 10. ممیزی و تاریخچه: ledgerهای جدا با تضمین‌های متفاوت
+
+در main دو مسیر اصلی audit وجود دارد:
+
+| هدف | سرویس | جدول | تضمین |
+|---|---|---|---|
+| ثبت عملیات مدیریتی/legacy | `AuditLogService::record` | `audit_logs` | ثبت action، actor، IP و meta؛ hash-chain در این سرویس وجود ندارد |
+| رویداد دامنه‌ای FARAST | `AuditEventService::record` | `farast_audit_events` | `event_id`، payload checksum و previous checksum؛ `AuditIntegrityService` زنجیره را verify می‌کند |
+
+`AuditIntegrityService` فقط `farast_audit_events` را بررسی می‌کند؛ سبز بودن integrity آن به معنی tamper-evident بودن `audit_logs` نیست. این دو ledger می‌توانند برای دو دامنه متفاوت باقی بمانند، اما UI/گزارش نباید آن‌ها را یک تاریخچه واحد با تضمین امنیتی یکسان معرفی کند.
+
+در head ادغام‌نشده PR #347 دو ledger تخصصی دیگر نیز اضافه شده‌اند:
+- `farast_access_audit_logs` برای تغییرهای نقش/مجوز/Scope و عملیات مرکز دسترسی.
+- `farast_workflow_audit_logs` برای تغییر/اجرای workflow و وضعیت‌های اجرایی.
+
+این تفکیک می‌تواند معتبر باشد، مشروط بر آنکه قرارداد retention، actor identity، correlation/event id، دسترسی خواندن و انتقال رخداد به تاریخچه مرکزی روشن باشد. پیش از ادغام PR #347 باید مشخص شود access/workflow logها ledger تخصصی‌اند یا باید event متناظر در `farast_audit_events` نیز ثبت شود؛ در هر حالت نباید ادعای hash-chain برای جدول‌هایی که آن را ندارند مطرح شود.
+
+آزمون `AuditEventObservabilityTest` در main جدید، هویت incident را در تاریخچه observability بررسی می‌کند؛ این آزمون پوشش نمایش/trace است و جایگزین تست integrity زنجیره یا ثبت تمام عملیات حساس نیست.
+
+## 11. تعارض معماری قطعی در خوشه توسعه محصول
 
 بازبینی diff شاخه‌های باز #262، #265، #279، #318 و #333 نشان می‌دهد این‌ها PRهای مستقل و قابل ادغام جداگانه نیستند؛ چند فایل و حتی قرارداد Schema مشترک دارند.
 
-### 10.1 دو تعریف ناسازگار برای Publication Review
+### 11.1 دو تعریف ناسازگار برای Publication Review
 
 | مورد | PR #262 | PR #333 |
 |---|---|---|
@@ -332,7 +352,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 هر دو Migration با `Schema::create('store_product_publication_reviews')` شروع می‌شوند و هر دو همان نام مدل PHP را تعریف می‌کنند، اما schema و state machine آن‌ها متفاوت است. ادغام هر دو به‌صورت مستقل باعث شکست migration دوم و overwrite معنای مدل/فیلدها می‌شود.
 
-### 10.2 دو قرارداد intake و antivirus روی ingestion
+### 11.2 دو قرارداد intake و antivirus روی ingestion
 
 - PR #262 فایل‌محور است و `StoreProductIngestion` را با `product_id` nullable و `relative_path` گسترش می‌دهد.
 - PR #333 یک aggregate جدید `StoreProductIntakeSession` و `StoreProductIntakeFile` ایجاد می‌کند؛ این‌ها staging، نوع محصول، فایل‌های intake و supervisor review را نگه می‌دارند.
@@ -341,7 +361,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 دو Migration antivirus در هر دو، همین پنج ستون را به `store_product_ingestions` اضافه می‌کنند: `antivirus_requested`, `antivirus_status`, `antivirus_engine`, `antivirus_version`, `antivirus_scanned_at`. هر دو مجوز `store.security_scan` را نیز در کاتالوگ ثبت می‌کنند؛ PR #318 علاوه بر آن `store.publish_products` را اضافه می‌کند. اجرای هر دو Migration روی یک دیتابیس به افزودن مجدد ستون‌ها می‌رسد.
 
-### 10.3 هم‌پوشانی اجرایی
+### 11.3 هم‌پوشانی اجرایی
 
 | PR | نقش پیشنهادی در خوشه | فایل‌های مشترک/حساس |
 |---|---|---|
@@ -362,7 +382,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 این jobها به یک supervisor و یک محصول اشاره می‌کنند، اما ورودی، رکورد state و قرارداد خروجی یکسانی ندارند. `ProcessProductDocument` باید همان job پردازش سند باقی بماند؛ AI review فایل و publication نباید آن را با pipeline مستقل دیگری جایگزین کنند.
 
-### 10.4 تصمیم معماری لازم
+### 11.4 تصمیم معماری لازم
 
 **منبع حقیقت فعلی در main:**
 - کاتالوگ و هویت محصول: `StoreProduct`.
@@ -391,7 +411,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 **وضعیت:** هیچ‌یک از PRهای #262/#265/#279/#318/#333 را نمی‌توان صرفاً به‌دلیل سبز بودن مستقل، جداگانه ادغام کرد. لازم است یک PR ادغام‌شده و rebased روی main جاری ساخته شود که schema نهایی را تثبیت و فایل‌های هم‌پوشان را یک‌بار تغییر دهد.
 
 
-## 11. وضعیت CI خط مبنای جدید
+## 12. وضعیت CI خط مبنای جدید
 
 - commit ممیزی Routeها `c3067f69...`: `laravel`, `voice-service-contract-tests`, `document-audio-smoke`, `test`, `agent` موفق؛ `reader-browser-regression` و `voice-model-smoke` skipped.
 - commit عملیات Storage `68c61461...`: `test` و `agent` موفق.
@@ -400,7 +420,7 @@ PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را
 
 commit `18e79a8b...` آزمون `BusinessCommerceLifecycleTest` را اضافه می‌کند که مسیر catalog → cart → order → wallet payment → entitlement → course enrollment → notification و replay idempotency را end-to-end بررسی می‌کند. PR #365 بسته شد اما merged نبود؛ آزمون در main با commit مستقیم ثبت شده است.
 
-## 12. ترتیب ادامه ممیزی/تثبیت
+## 13. ترتیب ادامه ممیزی/تثبیت
 
 1. دریافت نتیجه نهایی CI روی `7d68c678...`؛ در صورت شکست، تشخیص بر اساس job و log.
 2. rebase و حل تعارض PR #347 روی main جدید؛ تست‌های منفی Scope و قرارداد role/permission باید سبز شوند.
@@ -410,7 +430,7 @@ commit `18e79a8b...` آزمون `BusinessCommerceLifecycleTest` را اضافه 
 6. اجرای runtime inventory روی main: `route:list`, migration fresh install/upgrade، تست‌های منفی Scope و مالکیت فایل.
 7. تکمیل call graph برای هر سرویس با مصرف‌کننده‌ها و تست‌های واقعی؛ سپس تعیین موارد retain/consolidate/deprecate.
 
-## 13. معیار تکمیل
+## 14. معیار تکمیل
 
 این addendum وضعیت snapshot را ثبت می‌کند، نه پایان کل مرحله دوم را. مرحله دوم تنها وقتی بسته می‌شود که:
 - Routeها و نام‌ها در runtime یکتا باشند؛
