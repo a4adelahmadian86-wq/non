@@ -48,14 +48,21 @@ const transaction=(mode,work,retry=true)=>open().then(db=>{
   let requestResult;
   let settled=false;
   const fail=error=>{if(settled)return;settled=true;reject(error||new Error('IndexedDB transaction failed'));};
+  const retryStaleTransaction=error=>{
+   if(!retry||!['InvalidStateError','NotFoundError'].includes(error?.name))return false;
+   settled=true;
+   invalidateDatabase(db);
+   transaction(mode,work,false).then(resolve,reject);
+   return true;
+  };
   tx.oncomplete=()=>{
    if(settled)return;
    settled=true;
    try{resolve(requestResult&&typeof requestResult==='object'&&'result'in requestResult?(requestResult.result??null):(requestResult??null));}
    catch(error){reject(error);}
   };
-  tx.onerror=()=>fail(tx.error||new Error('IndexedDB transaction failed'));
-  tx.onabort=()=>fail(tx.error||new Error('IndexedDB transaction aborted'));
+  tx.onerror=()=>{if(!retryStaleTransaction(tx.error))fail(tx.error||new Error('IndexedDB transaction failed'));};
+  tx.onabort=()=>{if(!retryStaleTransaction(tx.error))fail(tx.error||new Error('IndexedDB transaction aborted'));};
   try{requestResult=work(tx.objectStore(STORE),tx);}
   catch(error){try{tx.abort();}catch(_){}fail(error);}
  });
