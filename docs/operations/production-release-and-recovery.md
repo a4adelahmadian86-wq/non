@@ -72,6 +72,8 @@ Commit مبنا: `90ee46c90bf1879f8281095769baf88803cce24a`
 
 Migration در Production نباید از روی عادت یا با اجرای بی‌بررسی `php artisan migrate --force` انجام شود.
 
+پیش از Migration، Scheduler/Cron و Workerهای اختصاصی را از طریق Process Manager میزبان متوقف کنید و اجازه دهید Jobهای در حال اجرا به‌صورت graceful تمام شوند. اگر `QUEUE_SCHEDULED_WORKER=true` است، توقف Scheduler مانع ساخت Workerهای زمان‌بندی‌شده جدید می‌شود. `php artisan queue:restart` به‌تنهایی توقف فوری نیست؛ فقط Worker را پس از پایان Job جاری برای راه‌اندازی مجدد علامت‌گذاری می‌کند.
+
 قبل از اجرا:
 1. از دیتابیس Production بکاپ بگیرید و checksum آن را ثبت کنید.
 2. فهرست Migrationهای pending و ترتیب اجرای آن‌ها را ثبت کنید.
@@ -114,7 +116,7 @@ Scheduler لاراول باید دقیقاً یک اجراکننده فعال ب
 - اگر `QUEUE_SCHEDULED_WORKER=true` است، فرمان‌های Worker زمان‌بندی‌شده در `routes/console.php` فعال می‌شوند؛ این حالت را هم‌زمان با Worker دائمی بدون طراحی ظرفیت و جلوگیری از مصرف دوگانه فعال نکنید.
 - اجرای بکاپ با Cache lock مشترک serialize می‌شود؛ `storage:recover-stale-backup-runs` هر ۱۵ دقیقه درخواست‌های متوقف‌شده، رکوردهای اجرای بکاپ و snapshot lockهای منقضی را آزاد می‌کند.
 - صف‌های `documents`، `documents-audio`، `default` و `backups` در کد فعلی قراردادهای جدا دارند؛ نام صف و connection باید در میزبان واقعی با همین تنظیمات هماهنگ باشد.
-- پس از Deploy، Workerها باید با نسخه جدید کد restart شوند؛ Jobهای در حال اجرا و timeout آن‌ها قبل از این کار بررسی شود.
+- پس از Migration و فعال‌سازی Release جدید، Workerها و Scheduler را از طریق Process Manager دوباره راه‌اندازی کنید؛ فقط یک Scheduler برای هر محیط فعال باشد و سپس `php artisan queue:restart` برای Workerهای باقی‌مانده اجرا شود.
 
 ## 7) پشتیبان‌گیری و بازیابی
 
