@@ -71,14 +71,37 @@ class WorkflowEngine
 
     public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false, ?string $eventWorkflowLeaseToken = null): int
     {
-        $runId = DB::table('farast_workflow_runs')->insertGetId([
-            'workflow_id' => $workflowId,
-            'status' => 'running',
-            'context' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'started_at' => now(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // Register the run and bind it to the current event lease atomically.
+        // A hard worker exit can then be recovered without leaving an untraceable run.
+        $runId = DB::transaction(function () use ($workflowId, $context, $eventWorkflowId, $eventWorkflowLeaseToken): int {
+            $runId = (int) DB::table('farast_workflow_runs')->insertGetId([
+                'workflow_id' => $workflowId,
+                'status' => 'running',
+                'context' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'started_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if ($eventWorkflowId !== null) {
+                if (! $eventWorkflowLeaseToken) {
+                    throw new \RuntimeException('Workflow event lease token is missing.');
+                }
+
+                $linked = DB::table('farast_workflow_event_workflows')
+                    ->where('id', $eventWorkflowId)
+                    ->where('workflow_id', $workflowId)
+                    ->where('status', 'running')
+                    ->where('lease_token', $eventWorkflowLeaseToken)
+                    ->update(['run_id' => $runId, 'updated_at' => now()]);
+
+                if ($linked !== 1) {
+                    throw new \RuntimeException('Workflow event lease was lost before run registration.');
+                }
+            }
+
+            return $runId;
+        });
 
         try {
             DB::transaction(function () use ($workflowId, $context, $runId, $eventWorkflowId, $manual, $eventWorkflowLeaseToken): void {
@@ -328,6 +351,7 @@ class WorkflowEngine
                     'started_at' => null,
                     'finished_at' => null,
                     'lease_token' => null,
+                    'run_id' => null,
                     'updated_at' => now(),
                 ]);
             DB::table('farast_workflow_events')->where('id', $eventId)->update([
@@ -360,6 +384,7 @@ class WorkflowEngine
                     'started_at' => null,
                     'finished_at' => null,
                     'lease_token' => null,
+                    'run_id' => null,
                     'updated_at' => now(),
                 ]);
             DB::table('farast_workflow_events')->where('id', $eventId)->update([
@@ -524,8 +549,23 @@ class WorkflowEngine
                     return false;
                 }
 
+                if ($locked->status === 'running' && $locked->started_at
+                    && \Illuminate\Support\Carbon::parse($locked->started_at)->lte(now()->subMinutes(30))
+                    && ! empty($locked->run_id)) {
+                    DB::table('farast_workflow_runs')
+                        ->where('id', $locked->run_id)
+                        ->where('status', 'running')
+                        ->update([
+                            'status' => 'failed',
+                            'error' => 'Worker lease expired before workflow completion.',
+                            'finished_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                }
+
                 DB::table('farast_workflow_event_workflows')->where('id', $locked->id)->update([
                     'status' => 'running',
+                    'run_id' => null,
                     'attempts' => (int) $locked->attempts + 1,
                     'last_error' => null,
                     'started_at' => now(),
@@ -554,6 +594,7 @@ class WorkflowEngine
                     'last_error' => mb_substr($exception->getMessage(), 0, 4000),
                     'finished_at' => now(),
                     'lease_token' => null,
+                    'run_id' => null,
                     'updated_at' => now(),
                 ]);
                 report($exception);
