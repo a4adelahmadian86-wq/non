@@ -20,6 +20,11 @@
       storageWarning.hidden=false;
     }
   });
+  window.addEventListener('farast:storage-read-error',()=>{
+    storageWriteFailed=true;
+    storageWarning.textContent='خواندن اطلاعات از حافظه پایدار دستگاه ناموفق شد؛ ممکن است وضعیت قبلی مطالعه یا یادداشت‌ها در دسترس نباشد. فضای دستگاه و مجوزهای مرورگر را بررسی کنید.';
+    storageWarning.hidden=false;
+  });
   window.addEventListener('farast:storage-write-error',()=>{
     storageWriteFailed=true;
     storageWarning.textContent='ذخیره‌سازی در IndexedDB ناموفق شد؛ تغییرات جدید ممکن است پایدار نشده باشند. فضای آزاد و مجوزهای مرورگر را بررسی کنید.';
