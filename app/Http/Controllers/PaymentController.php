@@ -10,6 +10,7 @@ use App\Models\SiteSetting;
 use App\Models\StoreLibraryItem;
 use App\Models\TypingDocument;
 use App\Models\Wallet;
+use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\EmailService;
 use App\Services\FreeQuotaService;
@@ -38,7 +39,8 @@ class PaymentController extends Controller
         $total = max(0, $gross - $depositCredit);
         $hash = hash('sha256', (string) $document->content);
 
-        $order = Order::create([
+        $idempotencyKey = 'typing-document-'.$request->user()->id.'-'.$document->id.'-'.$hash;
+        $order = Order::firstOrCreate(['idempotency_key' => $idempotencyKey], [
             'user_id' => auth()->id(),
             'document_id' => $document->id,
             'subtotal_rials' => $subtotal,
@@ -59,6 +61,10 @@ class PaymentController extends Controller
             'free_pages_applied' => $freeApplied,
             'terms_accepted_at' => now(),
         ]);
+
+        if ($order->isPaid()) {
+            return redirect()->route('library')->with('status', 'این سند قبلاً تسویه شده است.');
+        }
 
         return redirect()->route('checkout', $order);
     }
@@ -124,7 +130,9 @@ class PaymentController extends Controller
                     'terms_accepted_at' => now(),
                 ]);
 
-                $wallet = Wallet::firstOrCreate(['user_id' => auth()->id()], ['balance_rials' => 0]);
+                // Serialize wallet creation and balance mutations across different orders of the same user.
+                User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
                 if ($total > $wallet->balance_rials) {
@@ -153,7 +161,7 @@ class PaymentController extends Controller
                     $free->consume(auth()->user(), $freeApplied, $this->freePagesSetting());
                 }
 
-                Payment::create([
+                Payment::firstOrCreate(['idempotency_key' => 'wallet-typing-final-'.$locked->id], [
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
                     'amount_rials' => $total,
@@ -259,7 +267,9 @@ class PaymentController extends Controller
                     throw new \RuntimeException('مبلغ سفارش معتبر نیست.');
                 }
 
-                $wallet = Wallet::firstOrCreate(['user_id' => auth()->id()], ['balance_rials' => 0]);
+                // Serialize wallet creation and balance mutations across different orders of the same user.
+                User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
                 if ($total > $wallet->balance_rials) {
                     throw new \RuntimeException('موجودی کیف پول برای این سفارش کافی نیست.');
@@ -284,7 +294,7 @@ class PaymentController extends Controller
 
                 app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
 
-                Payment::create([
+                Payment::firstOrCreate(['idempotency_key' => 'wallet-store-order-'.$locked->id], [
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
                     'amount_rials' => $total,
@@ -359,7 +369,9 @@ class PaymentController extends Controller
                 abort_unless($path !== '' && Storage::disk('private')->exists($path), 404, 'فایل مربوط به این برآورد پیدا نشد.');
                 abort_unless(hash_equals($hash, hash('sha256', Storage::disk('private')->get($path))), 409, 'فایل پس از برآورد تغییر کرده است.');
 
-                $wallet = Wallet::firstOrCreate(['user_id' => auth()->id()], ['balance_rials' => 0]);
+                // Serialize wallet creation and balance mutations across different orders of the same user.
+                User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
                 $amount = (int) $locked->total_rials;
 
@@ -384,7 +396,7 @@ class PaymentController extends Controller
                     ]);
                 }
 
-                Payment::create([
+                Payment::firstOrCreate(['idempotency_key' => 'wallet-typing-deposit-'.$locked->id], [
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
                     'amount_rials' => $amount,

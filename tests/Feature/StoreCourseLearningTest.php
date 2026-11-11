@@ -105,7 +105,9 @@ class StoreCourseLearningTest extends TestCase
             ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
             ->assertOk();
 
-        $this->post('/cart/checkout', ['accept_terms' => '1'])
+        $this->get('/cart')->assertOk();
+        $checkoutKey = session('store_checkout_idempotency_key');
+        $this->post('/cart/checkout', ['accept_terms' => '1', 'idempotency_key' => $checkoutKey])
             ->assertRedirect(route('library'));
 
         $libraryItem = StoreLibraryItem::query()

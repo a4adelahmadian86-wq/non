@@ -60,6 +60,7 @@
 
           <form method="post" action="{{ route('cart.checkout') }}" class="store-checkout-form">
             @csrf
+            <input type="hidden" name="idempotency_key" value="{{ $checkoutIdempotencyKey }}">
             <label><input type="checkbox" name="accept_terms" value="1" required> قوانین خرید دیجیتال را می‌پذیرم.</label>
             <button type="submit">{{ ($cart['total_rials']??0)===0 ? 'دریافت رایگان' : 'ادامه به پرداخت' }}</button>
           </form>
