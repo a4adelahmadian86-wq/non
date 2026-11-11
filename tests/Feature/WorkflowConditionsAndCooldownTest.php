@@ -753,7 +753,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        (new ProcessWorkflowEvent($activeEventId))->failed(new \\RuntimeException('stale reservation callback'));
+        (new ProcessWorkflowEvent($activeEventId))->failed(new \RuntimeException('stale reservation callback'));
 
         $this->assertDatabaseHas('farast_workflow_events', [
             'id' => $activeEventId,
