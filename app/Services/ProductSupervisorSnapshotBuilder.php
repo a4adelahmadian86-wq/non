@@ -93,6 +93,15 @@ class ProductSupervisorSnapshotBuilder
         ];
     }
 
+    public function buildReviewSnapshot(StoreProduct $product, array $settings): array
+    {
+        $snapshot = $this->build($product, $settings);
+        $snapshot['document_knowledge'] = app(ProductKnowledgeService::class)
+            ->contextForProduct($product, 12000);
+
+        return $snapshot;
+    }
+
     public function fingerprint(array $snapshot): string
     {
         return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
