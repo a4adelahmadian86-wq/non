@@ -44,6 +44,24 @@ class ProductSupervisorClient
             throw new RuntimeException('product_supervisor_invalid_response');
         }
 
+        $suggestedEdits = $payload['suggested_edits'] ?? [];
+        if (! is_array($suggestedEdits)) {
+            throw new RuntimeException('product_supervisor_invalid_response');
+        }
+        $allowedEditLengths = [
+            'title' => 220,
+            'short_description' => 2000,
+            'description' => 8000,
+            'seo_title' => 220,
+            'seo_description' => 320,
+        ];
+        $payload['suggested_edits'] = [];
+        foreach ($allowedEditLengths as $field => $maxLength) {
+            $value = $suggestedEdits[$field] ?? null;
+            if (is_string($value)) {
+                $payload['suggested_edits'][$field] = mb_substr(trim(strip_tags($value)), 0, $maxLength);
+            }
+        }
         $payload['automated_publication'] = false;
 
         return $payload;
