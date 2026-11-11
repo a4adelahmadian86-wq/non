@@ -13,6 +13,7 @@ Route::middleware(['auth', 'admin', 'admin.section:access'])
         Route::delete('/roles/{role}', [AdminAccessCenterController::class, 'destroyRole'])->whereNumber('role')->middleware('throttle:10,10')->name('roles.destroy');
         Route::post('/roles/{role}/permissions', [AdminAccessCenterController::class, 'syncPermissions'])->whereNumber('role')->middleware('throttle:20,10')->name('roles.permissions');
         Route::post('/users/{user}/roles', [AdminAccessCenterController::class, 'assignRole'])->whereNumber('user')->middleware('throttle:20,10')->name('users.roles.store');
+        Route::put('/users/{user}/admin-scope', [AdminAccessCenterController::class, 'setAdminScope'])->whereNumber('user')->middleware('throttle:10,10')->name('users.admin-scope.update');
         Route::delete('/users/{user}/roles/{assignment}', [AdminAccessCenterController::class, 'revokeRole'])->whereNumber('user')->whereNumber('assignment')->middleware('throttle:30,10')->name('users.roles.destroy');
         Route::post('/users/{user}/overrides', [AdminAccessCenterController::class, 'storeOverride'])->whereNumber('user')->middleware('throttle:20,10')->name('users.overrides.store');
         Route::delete('/users/{user}/overrides/{override}', [AdminAccessCenterController::class, 'revokeOverride'])->whereNumber('user')->whereNumber('override')->middleware('throttle:30,10')->name('users.overrides.destroy');
