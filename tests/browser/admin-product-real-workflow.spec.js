@@ -19,11 +19,11 @@ async function signInAsSeededAdmin(page) {
   await expect(page).toHaveURL(/\/admin\/store\/create(?:[?#].*)?$/);
 }
 
-async function signInAsSeededEmployee(page) {
+async function signInAsSeededRole(page, mobile = '09150000001') {
   const password = String(process.env.GITHUB_RUN_ID || 'local') + '-farast-employee';
 
   await page.goto('/login?continue=%2Fdashboard');
-  await page.locator('input[name="mobile"]').fill('09150000001');
+  await page.locator('input[name="mobile"]').fill(mobile);
 
   const phoneResponsePromise = page.waitForResponse(response =>
     response.url().endsWith('/login/phone') && response.request().method() === 'POST'
@@ -242,11 +242,19 @@ test.describe('Real admin product workflow', () => {
     expect(failures).toEqual([]);
   });
 
-  test('employee can use the dashboard but cannot open the role permission console', async ({ page }) => {
-    await signInAsSeededEmployee(page);
-    await expect(page).toHaveURL(/\/dashboard/);
-    const response = await page.goto('/admin/access');
-    expect(response?.status()).toBe(403);
+  test('employee, organization manager, and team supervisor cannot open the role permission console', async ({ page }) => {
+    for (const mobile of ['09150000001', '09150000002', '09150000003']) {
+      await signInAsSeededRole(page, mobile);
+      await expect(page).toHaveURL(/dashboard/);
+      const csrf = await page.locator('meta[name="csrf-token"]').getAttribute('content');
+      const response = await page.goto('/admin/access');
+      expect(response?.status()).toBe(403);
+      await page.evaluate(async token => fetch('/logout', {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' },
+        credentials: 'same-origin',
+      }), csrf);
+    }
   });
 
   test('free storefront checkout grants a library entitlement and a secure file download', async ({ page }) => {
@@ -330,7 +338,7 @@ test.describe('Real admin product workflow', () => {
     const employeeContext = await page.context().browser().newContext();
     const employeePage = await employeeContext.newPage();
     try {
-      await signInAsSeededEmployee(employeePage);
+      await signInAsSeededRole(employeePage);
       const conversationResponse = await employeePage.goto(conversationUrl);
       expect(conversationResponse?.status()).toBe(200);
       await expect(employeePage.locator('#fm-messages')).toContainText(firstMessage);
