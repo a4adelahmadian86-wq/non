@@ -46,6 +46,9 @@ class EnsureResourcePermission
         } elseif ($resource instanceof Organization) {
             $context['organization_id'] = $resource->id;
         } elseif ($resource instanceof Team) {
+            // A supervisor is not the owner of the team record. Team access must
+            // be granted by the team/organization scope, never by own-scope fallback.
+            $context['owner_id'] = null;
             $context['team_id'] = $resource->id;
             $context['organization_id'] = $resource->organization_id;
         }
