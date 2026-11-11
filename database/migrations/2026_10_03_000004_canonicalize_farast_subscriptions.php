@@ -80,6 +80,7 @@ return new class extends Migration
             }
 
             $normalized[] = [
+                'id' => (int) $row->id,
                 'subscription_id' => $subscriptionId,
                 'user_id' => $row->user_id ?? null,
                 'organization_id' => $row->organization_id ?? null,
