@@ -128,7 +128,7 @@
 - فایل اصلی محصول در مسیر تأیید `AdminStoreController::confirmFileUpload` ابتدا در private staging جابه‌جا و سپس با `adoptExistingPrivate` در رجیستری مدیریت‌شده ثبت می‌شود؛ رکورد `StoreProductFile` نیز `disk/path` مستقل دارد و bindReference با نوع/شناسه رکورد انجام می‌شود.
 - منابع دوره در `AdminCourseController::uploadResource` نیز پس از staging به `StorageManager` adopt و reference می‌شوند.
 - کاور محصول از `StorageManager` استفاده می‌کند و مسیر عمومی آن به شکل `storage/managed/{managed_file_id}` تولید می‌شود.
-- در مقابل، `AdminStoreController::uploadPreview` و `uploadPreviewAudio` فایل‌های `StoreProductPreview` را مستقیماً روی private disk می‌نویسند و در مسیر مشاهده‌شده، `StorageManager::adoptExistingPrivate/storeUploadedFile` یا `bindReference` برای آن‌ها اجرا نمی‌شود. `StoreProductPreview` نیز فقط `disk/path/audio_disk/audio_path` دارد. بنابراین preview و audio preview از رجیستری مرکزی مدیریت‌شده خارج‌اند؛ این یک شکاف واقعی در یکپارچگی چرخه فایل است، نه صرفاً تفاوت مدل.
+- در مقابل، `AdminStoreController::uploadPreview` و `uploadPreviewAudio` فایل‌های `StoreProductPreview` را مستقیماً روی private disk می‌نویسند و در مسیر مشاهده‌شده، `StorageManager::adoptExistingPrivate/storeUploadedFile` یا `bindReference` برای آن‌ها اجرا نمی‌شود. `StoreProductPreview` نیز فقط `disk/path/audio_disk/audio_path` دارد. افزون بر آن، `StoreController::readerAudio` برای یافتن، اندازه‌گیری و خواندن `StoreProductDocumentArtifact` از `Storage::disk($artifact->disk)` استفاده می‌کند، نه `StorageManager`؛ اگر artifact روی volume مدیریت‌شده با disk key از نوع `storage_volume:{id}` باشد، این مسیر با API عادی Filesystem سازگار نیست. بنابراین preview/audio preview هم از رجیستری مرکزی خارج‌اند و هم reader audio یک مصرف‌کننده مستقیم Storage دارد که باید با قرارداد volume-aware همسان شود.
 - فایل‌های quarantine و staging که پیش از تأیید نهایی در private disk نگهداری می‌شوند، لزوماً bypass محسوب نمی‌شوند؛ اما باید TTL، پاک‌سازی و انتقال آن‌ها با مالک مشخص ثبت شود.
 
 **تصمیم منبع حقیقت:** برای بایت‌های فایل‌های مدیریت‌شده، رجیستری `StorageManagedFile + StorageManager` باید مرجع مرکزی باشد؛ جدول‌های دامنه فقط metadata کسب‌وکاری و reference را نگه دارند. تا زمان مهاجرت previewها، آن‌ها را «legacy/unmanaged private objects» علامت‌گذاری می‌کنیم و نباید تصور کنیم backup/volume inventory مرکزی الزاماً آن‌ها را پوشش می‌دهد.
@@ -203,7 +203,7 @@
 | Route مرجع | `routes/notifications.php` |
 | تست‌ها | `NotificationCenterTest`, `NotificationRouteOwnershipTest` |
 
-**تداخل Route اثبات‌شده و اصلاح‌شده در شاخه ممیزی:** `web_core_part2.php` دو endpoint یعنی `GET /workspace/notifications` و `POST /workspace/notifications/{id}/read` را با همان URI و route nameهای `platform.notifications` و `platform.notifications.read` ثبت کرده بود. مقصد آن‌ها `PlatformCompletionController` بود، اما متدهای این کنترلر فقط به `NotificationController` delegate می‌کردند؛ بنابراین پیاده‌سازی منطق اعلان موازی نبود، ولی ثبت Route دوگانه و مالکیت مبهم بود. دو تعریف تکراری از `web_core_part2.php` حذف شدند و مالکیت Route به `routes/notifications.php` واگذار شد. تست `NotificationRouteOwnershipTest` اضافه شد تا Action نهایی هر دو route را به `NotificationController` مقید کند. این تست هنوز در CI اجرا و تأیید نشده است.
+**تداخل Route اثبات‌شده و اصلاح‌شده در شاخه ممیزی:** `web_core_part2.php` دو endpoint یعنی `GET /workspace/notifications` و `POST /workspace/notifications/{id}/read` را با همان URI و route nameهای `platform.notifications` و `platform.notifications.read` ثبت کرده بود. مقصد آن‌ها `PlatformCompletionController` بود، اما متدهای این کنترلر فقط به `NotificationController` delegate می‌کردند؛ بنابراین پیاده‌سازی منطق اعلان موازی نبود، ولی ثبت Route دوگانه و مالکیت مبهم بود. دو تعریف تکراری از `web_core_part2.php` حذف شدند و مالکیت Route به `routes/notifications.php` واگذار شد. تست `NotificationRouteOwnershipTest` اضافه شد تا Action نهایی هر دو route را به `NotificationController` مقید کند. این تست در اجرای Phase 3 Commerce Tests با run ID 43017849679 روی commit 9d9a4b498434aa3922d4543fc391cdfc29cfc649 موفق شد؛ همان اجرا به‌علت پنج شکست مستقل در StoreReaderAccessTest در مجموع ناموفق بود.
 
 ### 4.9 اتوماسیون و گردش‌کار
 
@@ -609,3 +609,59 @@ farast_workflow_events
 - اجرای `migrate:status`، خواندن `information_schema`/SQLite schema، و مقایسه خروجی با این ERD لازم است.
 - برای روابط polymorphic یا unsigned id بدون FK، جدول قراردادهای سرویس‌محور باید جایگزین فرض FK شود.
 - Migrationهای هم‌timestamp باید با ترتیب lexical واقعی Laravel و اجرای clean install + upgrade snapshot آزموده شوند.
+
+
+## 15. دفتر هم‌پوشانی شاخه‌ها و وابستگی به کار توسعه‌دهندگان دیگر
+
+این بخش از فهرست زنده Pull Requestهای باز استخراج شده است. هیچ شاخه همکار تغییر داده نشده است. هدف، جلوگیری از ادغام موازی تغییرات یک فایل یا ایجاد دو پیاده‌سازی رقیب است.
+
+| PR | دامنه واقعی تغییر | فایل‌های مشترک/نقطه تماس با main | وضعیت مشاهده‌شده | تصمیم هماهنگی |
+|---:|---|---|---|---|
+| #347 | هسته scoped RBAC، resource permission، Workflow Outbox/Job/lease/fencing | AuthorizationService، AdminConsoleService، ResolveAdminScope، WorkflowEngine، PlatformCompletionController، web_core_part2.php، AppServiceProvider و Migrationها | Draft؛ Phase 3 روی HEAD آن ۵ شکست StoreReader دارد؛ Phase 4 Agent موفق | کاندید اصلی بررسی هسته امنیت/اتوماسیون؛ قبل از ادغام با تمام call-siteها و Migrationها بازبینی شود |
+| #330 | شاخه قدیمی‌تر scoped RBAC و Workflow با مجموعه فایل تقریباً مشابه #347 | تقریباً همان فایل‌های #347؛ از جمله AuthorizationService، WorkflowEngine، PlatformCompletionController و routeها | Draft؛ test در صف؛ با #347 diverged و ۷۴ commit عقب‌تر از آن گزارش شد | دو شاخه نباید هر دو ادغام شوند؛ #347 صراحتاً نسخه port/rebase شده #330 است. #330 شاخه موازی/قدیمی تلقی شود |
+| #335 | یکپارچه‌سازی artifact/preview/audio با StorageManager، reservation، delete lifecycle، restore و migration legacy | StorageManager، StorageTransferService، AdminStoreController، StoreController، مدل‌های storage و reader، Migration رزرو | Draft؛ Product Supervisor Agent موفق؛ Phase 3: ۶۲۰ موفق و یک شکست در StorageBackupRestoreIntegrationTest؛ FARAST CI pending | مالک پیشنهادی اصلاح شکاف Storage محصول؛ نباید اصلاح preview/audio موازی در این ممیزی ساخته شود. شکست restore باید پیش از ادغام رفع شود |
+| #340 | idempotency مالی، retention، ledger FK و Migration preflight | Order، Payment، WalletTransaction، PaymentController، StoreCartController و Migrationهای commerce | Draft؛ تست‌های SQLite/MySQL/Postgres در صف؛ CI کامل نهایی نشده | کاندید رفع روابط بدون FK و idempotency؛ قبل از ادغام preflight داده یتیم روی snapshot الزامی است |
+| #350 | اصلاح تست‌های Reader و workflowهای CI، بدون تغییر رفتار production | StoreReaderAccessTest، farast-ci.yml و phase3-commerce.yml | غیر Draft؛ Agent موفق، تست اصلی در صف | برای بستن پنج شکست شناخته‌شده StoreReader مناسب است؛ فقط پس از سبز شدن روی HEAD خودش ادغام شود |
+| #333 | type-first product intake، AI-gated publication و course flow | AdminStoreController، StoreProduct، AuthorizationService و store_routes.php | غیر Draft؛ در زمان snapshot check-run ثبت نشده | با #318 و #335 روی مسیر intake هم‌پوشانی دارد؛ باید قرارداد نهایی یک مسیر intake را انتخاب و قابلیت‌های لازم را از شاخه‌های دیگر port کند |
+| #318 | file-first secure intake، staging، document ingestion و reader integration | AdminStoreController، StoreController، StoreProduct، StoreProductFile، store_routes.php و web_core_part1.php | Draft؛ FARAST CI شکست خورده، Reader browser و Product Supervisor موفق | مسیر ایجاد محصول با #333 هم‌پوشان است؛ ادغام جداگانه بدون تصمیم واحد، خطر دو جریان intake دارد |
+| #353 | observability و trace/audit integration | web_core_part2.php، AppServiceProvider، AuditLogService و middleware | Draft؛ چند check در صف | تغییر Route در همان فایل با اصلاح اعلان ما هم‌فایل است؛ پس از ادغام، حذف دو Route اعلان و route inventory دوباره کنترل شود |
+| #351 | قراردادهای integration ماژول‌های کسب‌وکار | فقط سند معماری جدید | Draft؛ Laravel check ناموفق، برخی checks دیگر موفق/درحال اجرا | مکمل این ممیزی است، نه منبع حقیقت runtime؛ اختلاف اصطلاحات و مبنا باید پس از ادغام همسان شود |
+| #354 | بهینه‌سازی گزارش پشتیبانی و SLA | SupportReportController و SupportSlaService | Draft؛ testها در صف، regression skipped | بعد از merge، مسیر گزارش و query ownership در بخش پشتیبانی به‌روزرسانی شود |
+| #234 | قرنطینه و تأیید منابع درس | AdminCourseController، store_routes.php و تست‌ها | غیر Draft؛ check نهایی باید هنگام ادغام دوباره خوانده شود | به‌عنوان vertical slice دوره با #333/#335 سازگار شود؛ فایل‌های lesson از مسیر Storage واحد استفاده کنند |
+
+### خوشه هم‌پوشانی ایجاد محصول و فایل
+
+در PRهای باز و قدیمی‌تر، فایل AdminStoreController.php در دست‌کم این شاخه‌ها تغییر می‌کند: #333، #318، #279، #265، #262، #259، #247، #241، #202، #156 و #153. فایل routes/store_routes.php نیز در #333، #318، #279، #262، #234، #233، #202، #167، #156 و #153 تغییر دارد.
+
+این وضعیت نشان‌دهنده چند تلاش مرحله‌ای/موازی در طول توسعه است؛ به‌تنهایی اثبات نمی‌کند همه PRها قابلیت موازی فعال دارند. اما قبل از merge باید:
+1. شاخه‌های منسوخ با شاخه جدیدتر مقایسه شوند؛
+2. تنها یک قرارداد intake و یک route owner باقی بماند؛
+3. اسکن امنیتی، AI review، StorageManager و course upload به‌صورت لایه‌های یک pipeline واحد ترکیب شوند؛
+4. تست‌های قدیمی و جدید روی یک HEAD ادغام‌شده اجرا شوند.
+
+### ترتیب پیشنهادی ادغام برای کاهش تداخل
+
+این ترتیب پیشنهاد عملیاتی مبتنی بر هم‌پوشانی فایل‌هاست، نه ادعای آماده بودن PRها:
+1. ابتدا رفع baseline تست‌های Reader با #350 و گرفتن CI سبز روی HEAD.
+2. سپس انتخاب و ادغام یک شاخه از #330/#347؛ ترجیح بررسی با #347 به‌دلیل port شدن روی main، ولی فقط بعد از حل شکست‌های تست و Migration review.
+3. سپس #340 برای دفترکل مالی، با preflight دیتابیس snapshot و آزمون سه موتور.
+4. سپس #335 برای lifecycle فایل محصول، پس از رفع شکست restore و اجرای تست‌های storage.
+5. انتخاب یک مسیر intake از #333 یا #318 و port کردن قابلیت‌های لازم دیگری به همان pipeline؛ ادغام هر دو به شکل مستقل ممنوع.
+6. پس از این‌ها PRهای observability و support optimization با rebase و CI کامل ادغام شوند.
+7. پس از هر merge، شاخه ممیزی باید به آخرین main rebase شود و route/ERD/source-of-truth دوباره استخراج شود.
+
+## 16. نتیجه ممیزی منبع حقیقت برای مسیرهای محصول و Storage
+
+| عملیات | مسیر فعلی main | وضعیت مرجع | اقدام تعیین‌شده |
+|---|---|---|---|
+| آپلود فایل اصلی محصول | preflight -> ingestion record -> confirm -> StorageManager adopt -> StoreProductFile + bindReference | مسیر تأییدشده؛ endpoint قدیمی uploadFile عمداً 409 می‌دهد | همین pipeline حفظ شود؛ route قدیمی فقط برای سازگاری خطا بدهد تا حذف نسخه‌دار |
+| آپلود preview | AdminStoreController -> private disk -> StoreProductPreview.disk/path | خارج از managed registry | انتقال به StorageManager با حفظ رکورد preview و mirror path؛ مالک تغییر PR #335 |
+| آپلود preview audio | AdminStoreController -> private disk -> StoreProductPreview.audio_disk/audio_path | خارج از managed registry | انتقال و bind جداگانه با source_field؛ مالک تغییر PR #335 |
+| نمایش preview | StoreController -> StorageManager.exists/get/downloadTo | مصرف‌کننده volume-aware | حفظ |
+| پخش preview audio | StoreController -> StorageManager.exists/downloadTo/stream | مصرف‌کننده volume-aware | حفظ |
+| خواندن audio artifact خوانشگر | StoreController.readerAudio -> Storage::disk مستقیم | ناسازگار با volume disk key | تغییر به StorageManager و range/stream؛ مالک تغییر PR #335 |
+| فایل کاربر | UserFileController -> StorageManager + bindReference؛ UserFile نیز disk/path mirror دارد | رجیستری managed مرجع بایت، UserFile مرجع مالکیت/metadata | reconcile مرجع‌ها و جلوگیری از حذف orphan |
+| منابع درس دوره | AdminCourseController -> quarantine -> StorageManager adopt + bindReference | pipeline مدیریت‌شده | با #234 و #335 همگام شود |
+| پیوست تیکت/پیام‌رسان | StorageManager برای ثبت نهایی، private staging برای preflight | managed registry برای فایل نهایی | کنترل orphan و ownership reference در تست‌ها |
+
+**نتیجه:** شکاف preview/audio در main شناسایی شده و مالک تغییر آن در شاخه موجود #335 است؛ در این ممیزی pipeline موازی ایجاد نمی‌شود. مسیر StoreController.readerAudio نیز باید در همان PR به StorageManager منتقل شود تا ذخیره و بازیابی یک قرارداد واحد داشته باشند.
