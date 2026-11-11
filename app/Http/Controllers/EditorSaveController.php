@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\TypingDocument;
 use App\Services\CapabilityService;
 use App\Services\EditorDocumentService;
-use App\Services\WorkflowEngine;
 use Illuminate\Http\Request;
 
 class EditorSaveController extends Controller
@@ -14,7 +13,6 @@ class EditorSaveController extends Controller
         Request $request,
         CapabilityService $capabilities,
         EditorDocumentService $documents,
-        WorkflowEngine $workflows,
     ) {
         abort_unless($capabilities->allowed($request->user(), 'can_type'), 403, 'ویرایش برای این حساب فعال نیست.');
 
@@ -50,16 +48,6 @@ class EditorSaveController extends Controller
                 'revision' => $result['revision'],
                 'document_id' => $result['document_id'],
             ], 409);
-        }
-
-        try {
-            $workflows->dispatch(
-                'document.saved',
-                ['user_id' => $request->user()->id, 'customer_id' => $request->user()->id, 'document_id' => $result['document_id'], 'revision' => $result['revision']],
-                'document:'.$result['document_id'].':revision:'.$result['revision'],
-            );
-        } catch (\Throwable $exception) {
-            report($exception);
         }
 
         return response()->json($result);
