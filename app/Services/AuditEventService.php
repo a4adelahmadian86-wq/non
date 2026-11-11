@@ -67,6 +67,9 @@ class AuditEventService
                 )),
                 'previous_checksum' => $previous,
             ]);
+            // These exact timestamps are part of the v2 checksum payload.
+            // Disable Eloquent's automatic timestamp rewrite during this insert.
+            $event->timestamps = false;
             $event->forceFill([
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
