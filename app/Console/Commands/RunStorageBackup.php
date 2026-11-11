@@ -25,7 +25,6 @@ class RunStorageBackup extends Command
             $existing = StorageBackupRun::query()
                 ->where('source_name', 'scheduler_request')
                 ->whereIn('status', ['queued', 'running'])
-                ->where('created_at', '>=', now()->subHours(12))
                 ->latest('id')
                 ->first();
 
