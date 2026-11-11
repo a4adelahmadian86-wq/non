@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\ReadinessController;
 use Illuminate\Support\Facades\Route;
 
 require __DIR__.'/web_core.php';
