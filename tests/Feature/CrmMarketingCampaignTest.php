@@ -333,7 +333,7 @@ class CrmMarketingCampaignTest extends TestCase
 
     public function test_scoped_marketing_users_do_not_receive_product_cost_or_manage_margin_based_offers(): void
     {
-        $organization = \\App\\Models\\Organization::create([
+        $organization = \App\Models\Organization::create([
             'name' => 'Scoped Marketing Organization',
             'slug' => 'scoped-marketing-organization',
             'status' => 'active',
@@ -383,7 +383,7 @@ class CrmMarketingCampaignTest extends TestCase
 
     public function test_incentive_campaign_cannot_be_sent_after_scope_is_narrowed_from_global(): void
     {
-        $organization = \\App\\Models\\Organization::create([
+        $organization = \App\Models\Organization::create([
             'name' => 'Narrowed Marketing Organization',
             'slug' => 'narrowed-marketing-organization',
             'status' => 'active',
@@ -427,7 +427,7 @@ class CrmMarketingCampaignTest extends TestCase
         $campaignId = DB::table('crm_marketing_campaigns')->where('created_by', $admin->id)->value('id');
 
         config(['farast_admin.scope_override_key' => 'dashboard_scope_override']);
-        \\App\\Models\\SiteSetting::write('dashboard_scope_override', 'organization');
+        \App\Models\SiteSetting::write('dashboard_scope_override', 'organization');
 
         $this->postJson('/admin/crm/marketing/campaigns/'.$campaignId.'/send')->assertForbidden();
         $this->assertSame('draft', DB::table('crm_marketing_campaigns')->where('id', $campaignId)->value('status'));
