@@ -155,6 +155,21 @@ class StorageBackupService
                 throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ پس از انتقال قابل رمزگشایی نیست.');
             }
 
+            $formatVersion = (int) ($manifest['format_version'] ?? 1);
+            $expectedEntries = $manifest['entries'] ?? [];
+            if ($formatVersion >= 2 && (
+                ! is_array($expectedEntries)
+                || (int) ($manifest['entry_count'] ?? -1) !== count($expectedEntries)
+            )) {
+                throw new RuntimeException('فهرست اصالت فایل‌های آرشیو بکاپ معتبر نیست.');
+            }
+
+            $manifestStat = $zip->statName('manifest.json');
+            if (! is_array($manifestStat) || ($manifestStat['encryption_method'] ?? null) !== ZipArchive::EM_AES_256) {
+                throw new RuntimeException('Manifest بکاپ باید با AES-256 رمزنگاری شده باشد.');
+            }
+
+            $seenEntries = [];
             $databaseBytes = null;
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $stat = $zip->statIndex($index);
@@ -162,9 +177,32 @@ class StorageBackupService
                 if ($name === '' || str_ends_with($name, '/')) {
                     continue;
                 }
+                if ($name === 'manifest.json') {
+                    continue;
+                }
+                if (
+                    str_starts_with($name, '/')
+                    || preg_match('/^[A-Za-z]:/', $name)
+                    || str_contains($name, '\\')
+                    || preg_match('#(^|/)\.\.?(/|$)#', $name)
+                    || str_contains($name, "\0")
+                    || isset($seenEntries[$name])
+                ) {
+                    throw new RuntimeException('مسیر تکراری یا ناامن در آرشیو بکاپ شناسایی شد.');
+                }
+                $seenEntries[$name] = true;
 
                 if (($stat['encryption_method'] ?? null) !== ZipArchive::EM_AES_256) {
                     throw new RuntimeException('همه فایل‌های آرشیو بکاپ باید با AES-256 رمزنگاری شده باشند.');
+                }
+
+                $expected = $formatVersion >= 2 ? ($expectedEntries[$name] ?? null) : null;
+                if ($formatVersion >= 2 && (
+                    ! is_array($expected)
+                    || ! is_string($expected['sha256'] ?? null)
+                    || ! preg_match('/^[a-f0-9]{64}$/', $expected['sha256'])
+                )) {
+                    throw new RuntimeException('فهرست اصالت آرشیو، فایل موجود را پوشش نمی‌دهد: '.$name);
                 }
 
                 $stream = $zip->getStream($name);
@@ -173,6 +211,7 @@ class StorageBackupService
                 }
 
                 $bytesRead = 0;
+                $hash = hash_init('sha256');
                 try {
                     while (! feof($stream)) {
                         $chunk = fread($stream, 1024 * 1024);
@@ -186,13 +225,21 @@ class StorageBackupService
                             throw new RuntimeException('جریان یکی از فایل‌های بکاپ پیش از پایان متوقف شد: '.$name);
                         }
                         $bytesRead += strlen($chunk);
+                        hash_update($hash, $chunk);
                     }
                 } finally {
                     fclose($stream);
                 }
 
+                $actualChecksum = hash_final($hash);
                 if ($bytesRead !== (int) ($stat['size'] ?? -1)) {
-                    throw new RuntimeException('اندازه فایل رمزگشایی‌شده با Manifest ZIP مطابقت ندارد: '.$name);
+                    throw new RuntimeException('اندازه فایل رمزگشایی‌شده با ساختار ZIP مطابقت ندارد: '.$name);
+                }
+                if ($formatVersion >= 2 && (
+                    $bytesRead !== (int) ($expected['size_bytes'] ?? -1)
+                    || ! hash_equals($expected['sha256'], $actualChecksum)
+                )) {
+                    throw new RuntimeException('Checksum فایل آرشیو با Manifest امضاشده مطابقت ندارد: '.$name);
                 }
 
                 if ($name === 'database/database.sql') {
@@ -200,8 +247,12 @@ class StorageBackupService
                 }
             }
 
-            if (! is_int($databaseBytes) || $databaseBytes < 1) {
-                throw new RuntimeException('جریان کامل دیتابیس در آرشیو بکاپ موجود یا قابل رمزگشایی نیست.');
+            if (
+                ! is_int($databaseBytes)
+                || $databaseBytes < 1
+                || ($formatVersion >= 2 && count($seenEntries) !== count($expectedEntries))
+            ) {
+                throw new RuntimeException('فهرست کامل فایل‌های بکاپ یا جریان دیتابیس در آرشیو معتبر نیست.');
             }
         } finally {
             $zip->close();
