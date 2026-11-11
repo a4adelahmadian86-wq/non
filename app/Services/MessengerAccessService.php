@@ -92,10 +92,9 @@ class MessengerAccessService
             return false;
         }
 
-        return $this->participantsShareAllowedOrganization(
-            $actor,
-            $conversation->participants()->get()->merge($candidates)
-        );
+        $existing = $conversation->participants()->get()->reject(fn (User $user) => $user->is_blocked);
+
+        return $this->participantsShareAllowedOrganization($actor, $existing->merge($candidates));
     }
 
     public function assertConversationScope(User $actor, Conversation $conversation): void
@@ -105,9 +104,15 @@ class MessengerAccessService
             return;
         }
 
-        $foreignMemberExists = $conversation->participants()
-            ->get()
-            ->contains(fn (User $participant) => ! $this->canShareConversationWith($actor, $participant));
+        // A blocked participant must not lock every other member out of an
+        // otherwise valid conversation. Block status prevents that account
+        // from using the messenger; organization/role boundaries protect peers.
+        $foreignMemberExists = $conversation->participants()->get()->contains(
+            fn (User $participant) => ! $participant->isAdmin()
+                && (! in_array($participant->role, self::STAFF_ROLES, true)
+                    || $participant->organization_id === null
+                    || (int) $participant->organization_id !== (int) $actor->organization_id)
+        );
 
         abort_if($foreignMemberExists, 404);
     }
