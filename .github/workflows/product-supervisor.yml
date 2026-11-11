@@ -13,6 +13,7 @@ on:
       - "resources/views/admin/store/form.blade.php"
       - "resources/views/admin/store/course.blade.php"
       - "render.yaml"
+      - "scripts/verify-test-environment.sh"
       - ".github/workflows/product-supervisor.yml"
   push:
     branches: [main]
@@ -25,6 +26,7 @@ on:
       - "routes/store_routes.php"
       - "resources/views/admin/store/form.blade.php"
       - "render.yaml"
+      - "scripts/verify-test-environment.sh"
       - ".github/workflows/product-supervisor.yml"
 
 permissions:
