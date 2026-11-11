@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
 use Illuminate\Console\Command;
@@ -95,6 +96,34 @@ class RestoreStorageBackup extends Command
             $this->restoreDatabase($databaseDriver, $extracted.'/database/database.sql');
             DB::purge();
             DB::reconnect();
+
+            // The backup run itself was recorded after its database snapshot. Recreate
+            // its audit row and account for the already-present backup object after restore.
+            $restoredRun = StorageBackupRun::query()->find($run->id);
+            if (! $restoredRun) {
+                $restoredRun = new StorageBackupRun();
+                $restoredRun->id = $run->id;
+                $volume = StorageVolume::query()->find($run->storage_volume_id);
+                if (! $volume) {
+                    throw new RuntimeException('مقصد نسخه پشتیبان در پایگاه داده بازیابی‌شده موجود نیست.');
+                }
+                $volume->increment('used_bytes', max(0, (int) $run->size_bytes));
+                $volume->increment('object_count');
+            }
+            $runMetadata = (array) ($run->metadata ?? []);
+            $runMetadata['restored_at'] = now()->toIso8601String();
+            $restoredRun->forceFill([
+                'storage_volume_id' => $run->storage_volume_id,
+                'backup_type' => $run->backup_type,
+                'source_name' => $run->source_name,
+                'status' => 'completed',
+                'object_key' => $run->object_key,
+                'size_bytes' => $run->size_bytes,
+                'checksum' => $run->checksum,
+                'started_at' => $run->started_at,
+                'completed_at' => $run->completed_at,
+                'metadata' => $runMetadata,
+            ])->save();
 
             // The snapshot necessarily captured its own lock row as "running".
             // It is no longer active after a restore and must not defer deletes for hours.
