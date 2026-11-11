@@ -83,7 +83,7 @@
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
       <div class="farast-reader-pages" id="reader-pages">
         @foreach($previews as $i => $preview)
-          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}" @if(($preview->kind ?? '') === 'reader_document') data-reader-page="{{ $preview->page_number }}" data-reader-page-url="{{ $preview->reader_page_url }}" @endif @if(($readerMode ?? 'sample') === 'document' && !empty($readerAudioUrl)) data-audio-url="{{ $readerAudioUrl }}" @elseif(!empty($preview->audio_path)) data-audio-url="{{ route('store.preview.audio',$preview) }}" data-audio-timing="{{ json_encode($preview->audio_timing ?? [], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) }}" @endif>
+          <article class="farast-reader-page-item {{ $i===0 ? 'is-active' : '' }} {{ in_array(($preview->kind ?? ''), ['pdf', 'docx'], true) || str_contains((string) $preview->mime, 'pdf') ? 'is-pdf' : '' }}" data-index="{{ $i }}" data-watermark="{{ $readerWatermark }}" @if(($preview->kind ?? '') === 'reader_document') data-reader-page="{{ $preview->page_number }}" data-reader-page-url="{{ $preview->reader_page_url }}" @endif @if(($readerMode ?? 'sample') === 'document' && !empty($readerAudioUrl)) data-audio-url="{{ $readerAudioUrl }}" @elseif(!empty($preview->audio_path)) data-audio-url="{{ route('store.preview.audio',$preview) }}" data-audio-timing="{{ json_encode($preview->audio_timing ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP) }}" @endif>
             <div class="farast-reader-page-content">
               @if(($preview->kind ?? '') === 'reader_document')
                 <div class="farast-pdf-document farast-reader-document" data-reader-document-page aria-label="محتوای متنی صفحه">
@@ -170,6 +170,12 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 .farast-reader .farast-studio-action[aria-label]::after,.farast-reader .farast-audio-play[aria-label]::after,.farast-reader .farast-audio-collapse[aria-label]::after{content:attr(aria-label);font-size:.62rem;white-space:nowrap}
 .farast-reader .farast-audio-play,.farast-reader .farast-audio-collapse{width:auto;min-width:38px;padding-inline:8px;border-radius:9px}
 .farast-reader .farast-reader-heading span{font-family:Tahoma,Arial,sans-serif}
+
+.farast-reader.is-native-pdf-fallback .farast-reader-progress,.farast-reader.is-native-pdf-fallback .farast-reader-sidebar,.farast-reader.is-native-pdf-fallback .farast-reader-advanced-panel,.farast-reader.is-native-pdf-fallback .farast-audio-dock,.farast-reader.is-native-pdf-fallback #reader-prev,.farast-reader.is-native-pdf-fallback #reader-next,.farast-reader.is-native-pdf-fallback .reader-page-input,.farast-reader.is-native-pdf-fallback #reader-resume,.farast-reader.is-native-pdf-fallback #reader-bookmark-toggle,.farast-reader.is-native-pdf-fallback #reader-bookmarks-open,.farast-reader.is-native-pdf-fallback #reader-zoom-out,.farast-reader.is-native-pdf-fallback #reader-zoom-label,.farast-reader.is-native-pdf-fallback #reader-zoom-in,.farast-reader.is-native-pdf-fallback #reader-fit,.farast-reader.is-native-pdf-fallback #reader-fit-page,.farast-reader.is-native-pdf-fallback #reader-rotate,.farast-reader.is-native-pdf-fallback #reader-scroll-mode,.farast-reader.is-native-pdf-fallback .reader-search-group,.farast-reader.is-native-pdf-fallback #reader-thumbs-toggle{display:none!important}
+.farast-reader.is-native-pdf-fallback .farast-reader-workspace{grid-template-columns:minmax(0,1fr)}
+.farast-reader.is-native-pdf-fallback .farast-reader-canvas{min-height:70vh;padding:0}
+.farast-pdf-native-notice{margin:0;padding:8px 12px;background:#fef3c7;color:#92400e;font-size:.75rem;line-height:1.7}
+.farast-pdf-native-frame{display:block;width:100%;height:calc(100vh - 260px);min-height:65vh;border:0;background:#fff}
 .farast-reader-preferences-panel [data-reader-legacy-annotation],.farast-reader-preferences-panel [data-reader-highlight],.farast-reader-preferences-panel [data-reader-note],.farast-reader-preferences-panel [data-reader-notes],.farast-reader-preferences-panel [data-reader-export],.farast-reader-preferences-panel [data-reader-import],.farast-reader-preferences-panel [data-reader-import-file],.farast-reader-preferences-panel .farast-reader-ink-tools{display:none!important}
 
 
@@ -178,7 +184,7 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 
 @push('scripts')
 <script src="/js/farast-reader-storage.js?v=20261111backup3"></script>
-<script src="/js/farast-reader.js?v=20261111pdfcompat4"></script>
+<script src="/js/farast-reader.js?v=20261111pdfcompat6"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261111prefs1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
