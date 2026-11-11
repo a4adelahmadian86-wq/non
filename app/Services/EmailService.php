@@ -481,6 +481,8 @@ class EmailService
                         'queued_at' => now(),
                         'error' => null,
                         'last_attempt_at' => null,
+                        'sent_at' => null,
+                        'accepted_at' => null,
                     ]);
 
                 if ($claimed === 0) {
