@@ -334,8 +334,10 @@ class StoreReaderAccessTest extends TestCase
         $readyReaderResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readyReaderResponse->assertOk()
             ->assertSee('data-reader-audio-status="ready"', false)
-            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
-            ->assertSee('متن مجاز صفحه اول کتاب');
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
+        preg_match('/data-reader-audio-timing="([^"]*)"/', $readyReaderResponse->getContent(), $timingMatch);
+        $timing = json_decode(html_entity_decode($timingMatch[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+        $this->assertSame('متن مجاز صفحه اول کتاب', data_get($timing, '0.text'));
 
         $headResponse = $this->actingAs($user)
             ->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3');
@@ -776,8 +778,10 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
             ->assertSee('data-reader-audio-timing', false)
             ->assertSee('farast-reader-audio.js')
-            ->assertSee('سلام')
             ->assertDontSee($audioPath);
+        preg_match('/data-reader-audio-timing="([^"]*)"/', $response->getContent(), $timingMatch);
+        $timing = json_decode(html_entity_decode($timingMatch[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+        $this->assertSame('سلام', data_get($timing, '0.text'));
     }
 
 
