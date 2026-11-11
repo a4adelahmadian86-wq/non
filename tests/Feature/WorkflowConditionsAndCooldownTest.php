@@ -729,6 +729,38 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
         $this->assertNotNull(DB::table('farast_workflow_events')->where('id', $failedEventId)->value('failed_at'));
 
+        $workflow = $this->workflow($owner);
+        $activeEventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'active-lease-guard:document:238',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 238, 'revision' => 3]),
+            'status' => 'processing',
+            'attempts' => 4,
+            'matched_workflows' => 1,
+            'failed_workflows' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('farast_workflow_event_workflows')->insert([
+            'event_id' => $activeEventId,
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'attempts' => 1,
+            'started_at' => now(),
+            'lease_token' => 'newer-active-lease',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        (new ProcessWorkflowEvent($activeEventId))->failed(new \\RuntimeException('stale reservation callback'));
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $activeEventId,
+            'status' => 'processing',
+            'attempts' => 4,
+        ]);
+
         $completedEventId = DB::table('farast_workflow_events')->insertGetId([
             'event_type' => 'document.saved',
             'idempotency_key' => 'completed-job-guard:document:238',
