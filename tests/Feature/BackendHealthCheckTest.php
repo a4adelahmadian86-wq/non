@@ -29,7 +29,7 @@ class BackendHealthCheckTest extends TestCase
         Storage::fake('private');
 
         $this->artisan('farast:health-check')
-            ->expectsOutputToContain('backup_configuration: failed')
+            ->expectsOutputToContain('Backend checks: 6 passed, 1 failed.')
             ->assertExitCode(1);
     }
 
