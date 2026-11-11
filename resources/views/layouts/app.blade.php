@@ -132,8 +132,12 @@ if(!$isEditor&&!$isAdmin&&!$isDashboard){if(\Illuminate\Support\Facades\Schema::
 <button type="button" id="farastInstallApp" class="farast-install-app" aria-label="نصب اپلیکیشن فراست" hidden><i class="fa-solid fa-download" aria-hidden="true"></i><span>نصب فراست</span></button>
 <div id="farastPwaHelp" class="farast-pwa-help" role="dialog" aria-modal="false" aria-labelledby="farastPwaHelpTitle" hidden><button type="button" class="farast-pwa-help__close" aria-label="بستن">×</button><strong id="farastPwaHelpTitle">افزودن فراست به صفحه اصلی</strong><p>در نوار پایین مرورگر روی «اشتراک‌گذاری» بزنید و سپس «افزودن به صفحه اصلی» را انتخاب کنید.</p></div>
 @if(!$isReader)@include('components.support-chat-widget')@endif
-<script src="/js/farast-pwa.js?v=20261108pwa1"></script><script src="/js/farast-tab-lock.js"></script><script src="/js/farast.js"></script><script src="/js/farast-sound.js"></script>@if(!$isReader&&!$isAdmin&&!$isDashboard)<script src="/js/farast-app.js"></script><script src="/js/store-cart.js?v=20260929c1"></script>@endif
-<script src="/js/farast-assistant.js?v=20261107voiceSession1"></script>@endif
+@if($isReader)
+<script src="/js/farast-pwa.js?v=20261108pwa1"></script><script src="/js/farast-tab-lock.js"></script>
+@else
+<script src="/js/farast-pwa.js?v=20261108pwa1"></script><script src="/js/farast-tab-lock.js"></script><script src="/js/farast.js"></script><script src="/js/farast-sound.js"></script>@if(!$isAdmin&&!$isDashboard)<script src="/js/farast-app.js"></script><script src="/js/store-cart.js?v=20260929c1"></script>@endif
+<script src="/js/farast-assistant.js?v=20261107voiceSession1"></script>
+@endif
 @if($isEditor)<script src="/js/editor-layout.js?v=20261014a"></script><script src="/js/editor-core.js?v=20261014g"></script><script src="/js/editor-agent.js?v=20261010a"></script><script src="/js/farast-voice.js?v=20261031serveronly5"></script>@endif
 @stack('scripts')<script>
 (() => {
