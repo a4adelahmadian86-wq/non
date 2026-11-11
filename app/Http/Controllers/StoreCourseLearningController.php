@@ -13,6 +13,7 @@ use App\Services\StoreCourseProgressService;
 use App\Services\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class StoreCourseLearningController extends Controller
 {
