@@ -17,6 +17,7 @@ class StorageBackupRecoveryTest extends TestCase
 
     private string $sourceDatabase;
     private string $targetDatabase;
+    private string $bootstrapDatabase;
     private int $volumeId = 910001;
 
     protected function setUp(): void
@@ -25,6 +26,7 @@ class StorageBackupRecoveryTest extends TestCase
 
         $this->sourceDatabase = tempnam(sys_get_temp_dir(), 'farast-backup-source-');
         $this->targetDatabase = tempnam(sys_get_temp_dir(), 'farast-backup-target-');
+        $this->bootstrapDatabase = tempnam(sys_get_temp_dir(), 'farast-backup-bootstrap-');
     }
 
     protected function tearDown(): void
@@ -42,7 +44,7 @@ class StorageBackupRecoveryTest extends TestCase
         @unlink(storage_path('app/private/backup-recovery-fixture.txt'));
         @unlink(storage_path('app/private/backup-recovery-target-only.txt'));
 
-        foreach ([$this->sourceDatabase, $this->targetDatabase] as $path) {
+        foreach ([$this->sourceDatabase, $this->targetDatabase, $this->bootstrapDatabase] as $path) {
             @unlink($path);
             @unlink($path.'-wal');
             @unlink($path.'-shm');
@@ -214,6 +216,41 @@ class StorageBackupRecoveryTest extends TestCase
         $restoredVolume = StorageVolume::query()->findOrFail($this->volumeId);
         $this->assertSame($sizeBytes, (int) $restoredVolume->used_bytes);
         $this->assertSame(1, (int) $restoredVolume->object_count);
+        $this->assertFalse(app()->isDownForMaintenance());
+
+        // Simulate total loss of the operational database: no StorageBackupRun or
+        // StorageVolume rows exist until the archive itself has restored them.
+        $archivePath = storage_path('app/storage-volumes/'.$this->volumeId.'/'.$objectKey);
+        $this->assertFileExists($archivePath);
+        $this->useDatabase($this->bootstrapDatabase);
+        User::create([
+            'name' => 'Bootstrap-only user',
+            'mobile' => '09110000003',
+            'password' => 'bootstrap-password',
+        ]);
+        File::put(storage_path('app/private/backup-recovery-bootstrap-only.txt'), 'must-be-removed');
+
+        app()->forgetInstance(\\App\\Services\\Storage\\StorageManager::class);
+        $bootstrapExitCode = Artisan::call('storage:restore-backup', [
+            '--archive' => $archivePath,
+            '--confirm' => true,
+        ]);
+        $bootstrapOutput = Artisan::output();
+        Artisan::call('up');
+
+        $this->assertSame(0, $bootstrapExitCode, $bootstrapOutput);
+        $this->assertTrue(User::query()->where('mobile', '09110000001')->exists());
+        $this->assertFalse(User::query()->where('mobile', '09110000003')->exists());
+        $this->assertFileDoesNotExist(storage_path('app/private/backup-recovery-bootstrap-only.txt'));
+
+        $bootstrapAudit = StorageBackupRun::query()
+            ->where('source_name', 'bootstrap_restore')
+            ->where('status', 'restored')
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame($checksum, $bootstrapAudit->checksum);
+        $this->assertTrue((bool) data_get($bootstrapAudit->metadata, 'bootstrap'));
+        $this->assertNotEmpty(data_get($bootstrapAudit->metadata, 'restored_at'));
         $this->assertFalse(app()->isDownForMaintenance());
     }
 
