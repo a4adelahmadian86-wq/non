@@ -12,6 +12,7 @@ use Illuminate\Contracts\Queue\Job;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class FarastObservabilityTest extends TestCase
@@ -191,5 +192,19 @@ class FarastObservabilityTest extends TestCase
             \Mockery::on(fn (array $context): bool => ($context['denied_requests'] ?? null) === 25
                 && ($context['threshold'] ?? null) === 25)
         );
+    }
+
+    public function test_exception_responses_keep_request_and_correlation_headers(): void
+    {
+        Route::get('/_test/observability-failure', function () {
+            throw new \\RuntimeException('expected test exception');
+        });
+
+        $this->getJson('/_test/observability-failure', [
+            'X-Request-Id' => 'exception-request-123',
+            'X-Correlation-Id' => 'exception-correlation-456',
+        ])->assertStatus(500)
+            ->assertHeader('X-Request-Id', 'exception-request-123')
+            ->assertHeader('X-Correlation-Id', 'exception-correlation-456');
     }
 }
