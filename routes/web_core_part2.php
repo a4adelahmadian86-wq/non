@@ -66,8 +66,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspace/documents/{id}/versions', [PlatformCompletionController::class, 'versions'])->name('platform.documents.versions');
     Route::post('/workspace/documents/{id}/share', [PlatformCompletionController::class, 'share'])->name('platform.documents.share');
     Route::delete('/workspace/shares/{id}', [PlatformCompletionController::class, 'revokeShare'])->name('platform.documents.shares.destroy');
-    Route::get('/workspace/notifications', [PlatformCompletionController::class, 'notifications'])->name('platform.notifications');
-    Route::post('/workspace/notifications/{id}/read', [PlatformCompletionController::class, 'readNotification'])->name('platform.notifications.read');
     Route::get('/workspace/workflows', [PlatformCompletionController::class, 'workflow'])->name('platform.workflows');
     Route::post('/workspace/workflows', [PlatformCompletionController::class, 'saveWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.save');
     Route::post('/workspace/workflows/{id}/run', [PlatformCompletionController::class, 'runWorkflow'])->middleware('throttle:20,1')->name('platform.workflows.run');
