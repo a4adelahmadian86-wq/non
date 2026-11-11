@@ -358,24 +358,25 @@ class PlatformCompletionController extends Controller {
  public function addTeamMember(Request $r,$team){
   abort_unless($r->user()?->isAdmin(),403);
   $x=$r->validate(['user_id'=>'required|integer|exists:users,id','team_role'=>'required|in:owner,supervisor,manager,employee']);
-  $teamRecord=\App\Models\Team::query()->findOrFail((int)$team);
-  $member=\App\Models\User::query()->findOrFail((int)$x['user_id']);
-  abort_unless(
-   $teamRecord->organization_id !== null
-   && $member->organization_id !== null
-   && (int)$teamRecord->organization_id === (int)$member->organization_id,
-   422,
-   'عضویت تیم فقط برای کاربر همان سازمان مجاز است.'
-  );
-  $beforeMembership=DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$member->id)->first();
-  $beforeState=[
-   'team_id'=>(int)$teamRecord->id,
-   'organization_id'=>(int)$teamRecord->organization_id,
-   'user_id'=>(int)$member->id,
-   'team_role'=>$beforeMembership?->team_role,
-   'supervisor_id'=>$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null,
-  ];
-  DB::transaction(function()use($r,$teamRecord,$member,$x,$beforeState):void{
+  $memberId=(int)$x['user_id'];
+  DB::transaction(function()use($r,$team,$x,$memberId):void{
+   $teamRecord=\\App\\Models\\Team::query()->whereKey((int)$team)->lockForUpdate()->firstOrFail();
+   $member=\\App\\Models\\User::query()->whereKey($memberId)->lockForUpdate()->firstOrFail();
+   abort_unless(
+    $teamRecord->organization_id!==null
+    && $member->organization_id!==null
+    && (int)$teamRecord->organization_id===(int)$member->organization_id,
+    422,
+    'عضویت تیم فقط برای کاربر همان سازمان مجاز است.'
+   );
+   $beforeMembership=DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$member->id)->first();
+   $beforeState=[
+    'team_id'=>(int)$teamRecord->id,
+    'organization_id'=>(int)$teamRecord->organization_id,
+    'user_id'=>(int)$member->id,
+    'team_role'=>$beforeMembership?->team_role,
+    'supervisor_id'=>$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null,
+   ];
    DB::table('team_user')->updateOrInsert(
     ['team_id'=>$teamRecord->id,'user_id'=>$member->id],
     ['team_role'=>$x['team_role'],'created_at'=>now(),'updated_at'=>now()]
@@ -394,25 +395,25 @@ class PlatformCompletionController extends Controller {
     'supervisor_id'=>$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null,
    ]);
   });
-  app(AuthorizationService::class)->forgetUser((int)$member->id);
+  app(AuthorizationService::class)->forgetUser($memberId);
   return back()->with('status','عضو تیم به‌روزرسانی شد.');
  }
  public function removeTeamMember(Request $r,$team,$user){
   abort_unless($r->user()?->isAdmin(),403);
-  $teamRecord=\App\Models\Team::query()->findOrFail((int)$team);
   $memberId=(int)$user;
-  $member=\App\Models\User::query()->findOrFail($memberId);
-  $beforeMembership=DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->first();
-  $beforeSupervisorId=$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null;
-  if(! $beforeMembership && $beforeSupervisorId!==$memberId){return back();}
-  $beforeState=[
-   'team_id'=>(int)$teamRecord->id,
-   'organization_id'=>(int)$teamRecord->organization_id,
-   'user_id'=>$memberId,
-   'team_role'=>$beforeMembership?->team_role,
-   'supervisor_id'=>$beforeSupervisorId,
-  ];
-  DB::transaction(function()use($r,$teamRecord,$member,$memberId,$beforeState):void{
+  DB::transaction(function()use($r,$team,$memberId):void{
+   $teamRecord=\\App\\Models\\Team::query()->whereKey((int)$team)->lockForUpdate()->firstOrFail();
+   $member=\\App\\Models\\User::query()->whereKey($memberId)->lockForUpdate()->firstOrFail();
+   $beforeMembership=DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->first();
+   $beforeSupervisorId=$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null;
+   if(! $beforeMembership && $beforeSupervisorId!==$memberId){return;}
+   $beforeState=[
+    'team_id'=>(int)$teamRecord->id,
+    'organization_id'=>(int)$teamRecord->organization_id,
+    'user_id'=>$memberId,
+    'team_role'=>$beforeMembership?->team_role,
+    'supervisor_id'=>$beforeSupervisorId,
+   ];
    DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->delete();
    if((int)$teamRecord->supervisor_id===$memberId){
     $teamRecord->update(['supervisor_id'=>null]);
