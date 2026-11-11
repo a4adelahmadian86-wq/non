@@ -891,7 +891,7 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 
 این فهرست عملیات source را نشان می‌دهد، نه schema واقعی محیط نصب‌شده؛ raw SQL، morph/polymorphic و وضعیت واقعی FKها نیازمند runtime introspection هستند.
 
-این فایل از Routeهای بارگذاری‌شده توسط `routes/web.php` استخراج شده و `routes/legal.php` orphan را عمداً وارد inventory فعال نمی‌کند. route inventory ایستا است؛ پس از عبور CI از `php artisan route:list` باید با خروجی runtime تطبیق داده شود.
+این فایل از Routeهای بارگذاری‌شده توسط `routes/web.php` استخراج شده و `routes/legal.php` orphan را عمداً وارد inventory فعال نمی‌کند. ۴۹ action controller استخراج‌شده همگی با فایل‌های controller inventory تطبیق دارند؛ دو فایل بدون route action، کلاس پایه `Controller` و trait `PaysWithZarinpal` هستند. route inventory ایستا است؛ پس از عبور CI از `php artisan route:list` باید با خروجی runtime تطبیق داده شود.
 
 ### 18.9 هم‌پوشانی محل تعریف جدول‌ها در Migrationها
 
@@ -925,6 +925,24 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 - در Serviceها: ۲۸ فایل دارای call مستقیم DB با مجموع ۱۱۲ call؛ ۸ فایل دارای call مستقیم Storage با مجموع ۲۱ call.
 
 این اعداد شمار source-level callهای facade هستند؛ queryهای Eloquent، repositoryهای dynamic، `StorageManager` injection، helperهای سفارشی و دسترسی از Job/Command/Listener در این شمارش مستقیم نیستند. وجود call مستقیم نیز به‌تنهایی bypass اثبات نمی‌کند؛ هر مورد باید با مالکیت دامنه و قرارداد امنیتی سنجیده شود. این دو inventory برای اولویت‌بندی call-site audit استفاده می‌شوند، نه برای حذف مکانیکی DB/Storage از Controllerها.
+### 18.12 Hotspotهای مستقیم برای مراحل بعد
+
+با شمارش همه فراخوانی‌های `DB::...` و `Storage::...` (نه فقط `DB::table`) در دو inventory، بیشترین نقاط تماس مستقیم چنین‌اند:
+
+| فایل | DB facade calls | Storage facade calls | نقش/اهمیت معماری |
+|---|---:|---:|---|
+| `PlatformCompletionController` | 52 | 0 | چند دامنه در یک controller؛ workflow، workspace، billing، team و عملیات پلتفرم |
+| `AdminStoreController` | 20 | 21 | مسیر مدیریتی محصول و فایل؛ نقطه حساس اتصال به StorageManager |
+| `AdminController` | 26 | 1 | کاربران، capability override، تنظیمات، قیمت‌گذاری و wallet |
+| `CrmMarketingController` | 21 | 0 | query/mutation مستقیم CRM و کمپین |
+| `AccountSecurityController` | 18 | 0 | عملیات نشست و رخداد امنیتی با Query Builder |
+| `WorkflowEngine` | 28 | 0 | persistence و lifecycle گردش‌کار؛ مالک execution باید در مرحله اتوماسیون تثبیت شود |
+| `FeedbackPipelineService` | 16 | 0 | pipeline و persistence بازخورد؛ باید مالک جدول‌ها و مسیر async آن روشن باشد |
+| `StorageManager` | 3 | 8 | هسته ذخیره‌سازی؛ دسترسی مستقیم به disk در خود adapter/core قابل انتظار است |
+| `StorageTransferService` | 6 | 1 | انتقال بین Volumeها و ثبت وضعیت انتقال |
+| `ProjectBillingService` | 2 | 0 | تعداد call کم اما اثر زیاد؛ reader legacy فعال برای billing سند پروژه‌ای |
+
+این شمارش صرفاً اولویت بررسی را مشخص می‌کند. تعداد بیشتر به‌تنهایی نشانه بد بودن کلاس نیست؛ معیار اصلاح، مالکیت دامنه، تراکنش، authorization و idempotency هر call-site است. به‌ویژه `AdminStoreController` نباید با یک Storage abstraction موازی جایگزین شود؛ callهای مستقیم آن باید به‌صورت تدریجی با `StorageManager` canonical تطبیق داده شوند.
 ### 18.10 محدودیت inventory مدل‌ها
 
 از ۱۰۴ فایل مدل:
