@@ -480,6 +480,7 @@ class PaymentController extends Controller
                 'order_id' => (int) $order->id,
                 'amount_rials' => (int) $order->total_rials,
                 'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+                'status' => (string) $order->status,
             ],
             'order:'.$order->id.':'.$eventType,
         );
@@ -497,6 +498,7 @@ class PaymentController extends Controller
                     'order_id' => (int) $order->id,
                     'amount_rials' => (int) $order->total_rials,
                     'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+                'status' => (string) $order->status,
                 ],
                 'order:'.$order->id.':'.$eventType,
             );
