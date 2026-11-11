@@ -180,7 +180,7 @@ test.describe('Real admin product workflow', () => {
     await expect(page.getByText('پاسخ‌گویی آزمایشی قابل قبول بود.')).toBeVisible();
   });
 
-  test('admin can open the role console and see the role matrix', async ({ page }) => {
+  test('admin can open the role console, change a role permission, and verify persistence', async ({ page }) => {
     await signInAsSeededAdmin(page);
     const response = await page.goto('/admin/access');
     expect(response?.status()).toBe(200);
@@ -188,6 +188,58 @@ test.describe('Real admin product workflow', () => {
     await expect(page.getByText('مدیر سازمان')).toBeVisible();
     await expect(page.getByText('سرپرست تیم')).toBeVisible();
     await expect(page.getByText('کارمند')).toBeVisible();
+
+    const employeeRole = page.locator('.role-access-role').filter({
+      has: page.getByRole('heading', { name: 'کارمند', exact: true }),
+    });
+    const permission = employeeRole.locator('input[name="permissions[]"][value="reports.ai"]');
+    await expect(permission).not.toBeChecked();
+    await permission.check();
+
+    const saveResponsePromise = page.waitForResponse(result =>
+      new URL(result.url()).pathname === '/admin/access/roles/employee' &&
+      result.request().method() === 'POST'
+    );
+    await employeeRole.getByRole('button', { name: 'ذخیره مجوزهای کارمند' }).click();
+    const saveResponse = await saveResponsePromise;
+    expect(saveResponse.status()).toBe(302);
+    await expect(page.getByText('مجوزهای نقش ذخیره شد.')).toBeVisible();
+
+    await page.reload();
+    const persistedRole = page.locator('.role-access-role').filter({
+      has: page.getByRole('heading', { name: 'کارمند', exact: true }),
+    });
+    await expect(persistedRole.locator('input[name="permissions[]"][value="reports.ai"]')).toBeChecked();
+  });
+
+  test('admin sidebar destinations render without client-visible server errors', async ({ page }) => {
+    await signInAsSeededAdmin(page);
+    await page.goto('/admin');
+    const sidebar = page.locator('aside.farast-admin-nav');
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar).toHaveAttribute('aria-label', 'ناوبری مرکز عملیات');
+
+    const destinations = await sidebar.locator('a[href]').evaluateAll(anchors => {
+      const unique = new Set();
+      for (const anchor of anchors) {
+        const url = new URL(anchor.href);
+        if (url.pathname.startsWith('/admin/')) unique.add(url.pathname + url.search);
+      }
+      return [...unique];
+    });
+    expect(destinations.length).toBeGreaterThan(10);
+
+    const unlabeledLinks = await sidebar.locator('a[href]').evaluateAll(anchors =>
+      anchors.filter(anchor => !anchor.innerText.trim() && !anchor.getAttribute('aria-label')).map(anchor => anchor.href)
+    );
+    expect(unlabeledLinks).toEqual([]);
+
+    const failures = [];
+    for (const destination of destinations) {
+      const response = await page.request.get(new URL(destination, page.url()).toString(), { maxRedirects: 0 });
+      if (response.status() >= 400) failures.push({ destination, status: response.status() });
+    }
+    expect(failures).toEqual([]);
   });
 
   test('employee can use the dashboard but cannot open the role permission console', async ({ page }) => {
