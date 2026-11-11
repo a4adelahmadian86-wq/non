@@ -117,6 +117,7 @@ class AuthorizationService
         }
 
         // Compatibility for users not yet migrated to scoped access control.
+
         if ($user->access_control_managed) {
             return false;
         }
