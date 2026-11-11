@@ -12,6 +12,8 @@ on:
 jobs:
   laravel:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -154,6 +156,44 @@ jobs:
       - run: pip install --no-cache-dir -r services/document-audio/requirements.txt
       - run: python services/document-audio/download_model.py
       - run: python services/document-audio/smoke_test.py
+
+  voice-service-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: voice-service/requirements-test.txt
+      - run: pip install --no-cache-dir -r voice-service/requirements-test.txt
+      - run: pytest -q tests
+        working-directory: voice-service
+        env:
+          FARAST_VOICE_TOKEN: ci-test-token
+          FARAST_TTS_AUTO_DOWNLOAD: 'false'
+          FARAST_TTS_MODEL_PATH: /tmp/farast-test-missing/model.pth
+          FARAST_TTS_CONFIG_PATH: /tmp/farast-test-missing/config.json
+
+  voice-service-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: voice-service/requirements-test.txt
+      - run: pip install --no-cache-dir -r voice-service/requirements-test.txt
+      - run: pytest -q tests
+        working-directory: voice-service
+        env:
+          FARAST_VOICE_TOKEN: ci-test-token
+          FARAST_TTS_AUTO_DOWNLOAD: 'false'
+          FARAST_TTS_MODEL_PATH: /tmp/farast-test-missing/model.pth
+          FARAST_TTS_CONFIG_PATH: /tmp/farast-test-missing/config.json
 
   voice-model-smoke:
     if: github.ref == 'refs/heads/feat/self-hosted-sherpa-streaming'
