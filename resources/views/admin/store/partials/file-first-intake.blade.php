@@ -35,7 +35,7 @@
         <div class="product-ingestion-modal-head"><span class="product-ingestion-icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>بررسی داخلی فراست</small><h3 id="ingestion-modal-title">گزارش بررسی فایل</h3><p data-ingestion-filename></p></div><button type="button" data-ingestion-close aria-label="بستن پنجره">×</button></div>
         <div class="product-ingestion-selected" data-ingestion-selected aria-live="polite"></div>
         <div class="product-ingestion-antivirus">
-          @if(app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.security_scan'))
+          @if($canRequestAntivirus)
             <label><input type="checkbox" data-ingestion-antivirus> اسکن تکمیلی آنتی‌ویروس (اختیاری)</label>
             <small>پیش‌فرض خاموش است. با فعال‌سازی، فایل در قرنطینه خصوصی با موتور ClamAV بررسی می‌شود؛ این گزینه جایگزین بررسی ساختاری داخلی نیست.</small>
           @else
