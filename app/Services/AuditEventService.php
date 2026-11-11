@@ -15,8 +15,9 @@ class AuditEventService
         // covered by the ledger integrity chain.
         $trace = app(FarastTraceContext::class)->current();
         $request = app()->bound('request') ? request() : null;
-        $requestId = $trace['request_id'] ?? $request?->attributes->get('farast.request_id');
-        $correlationId = $trace['correlation_id'] ?? $request?->attributes->get('farast.correlation_id');
+        $hasActiveTrace = $trace['request_id'] !== null || $trace['correlation_id'] !== null;
+        $requestId = $hasActiveTrace ? $trace['request_id'] : $request?->attributes->get('farast.request_id');
+        $correlationId = $hasActiveTrace ? $trace['correlation_id'] : $request?->attributes->get('farast.correlation_id');
 
         if (is_string($requestId) && $requestId !== '') {
             $payloadMeta['request_id'] = $requestId;
