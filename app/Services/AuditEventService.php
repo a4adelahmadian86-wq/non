@@ -27,6 +27,7 @@ class AuditEventService
         }
 
         $payloadMeta = $this->sanitize($payloadMeta);
+        $payloadMeta['_ledger_checksum_version'] = 2;
 
         return DB::transaction(function () use ($eventType, $userId, $projectId, $aggregateType, $aggregateId, $payloadMeta, $source) {
             $this->lockLedgerAppend();
@@ -34,7 +35,10 @@ class AuditEventService
             // This is a locking/current read after the stable append lock. It
             // prevents repeatable-read snapshots from observing a stale chain head.
             $previous = FarastAuditEvent::query()->lockForUpdate()->latest('id')->value('payload_checksum');
+            $eventId = (string) Str::uuid();
+            $timestamp = now()->format('Y-m-d H:i:s');
             $payload = [
+                'event_id' => $eventId,
                 'event_type' => $eventType,
                 'user_id' => $userId,
                 'project_id' => $projectId,
@@ -42,12 +46,14 @@ class AuditEventService
                 'aggregate_id' => $aggregateId,
                 'source' => $source,
                 'payload_meta' => $payloadMeta,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
             ];
 
             $payload = $this->normalizePayload($payload);
 
             return FarastAuditEvent::create([
-                'event_id' => (string) Str::uuid(),
+                'event_id' => $payload['event_id'],
                 'user_id' => $payload['user_id'],
                 'project_id' => $payload['project_id'],
                 'event_type' => $payload['event_type'],
@@ -55,6 +61,8 @@ class AuditEventService
                 'aggregate_id' => $payload['aggregate_id'],
                 'source' => $payload['source'],
                 'payload_meta' => $payload['payload_meta'],
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
                 'payload_checksum' => hash('sha256', json_encode(
                     $payload,
                     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
