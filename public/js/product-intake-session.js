@@ -124,10 +124,12 @@
               : 'بررسی ناظر هوشمند تکمیل شد.';
           break;
         }
-        if (['failed', 'awaiting_provider', 'blocked'].includes(data.supervisor_status)) {
-          status.textContent = data.supervisor_status === 'awaiting_provider'
-            ? 'حجم فایل از سقف تحلیل فعلی بیشتر است؛ بررسی کامل هنوز انجام نشده است.'
-            : data.supervisor_status === 'blocked'
+        if (['failed', 'awaiting_provider', 'manual_review_required', 'blocked'].includes(data.supervisor_status)) {
+          status.textContent = data.supervisor_status === 'manual_review_required'
+            ? 'بررسی خودکار کامل نشد؛ مدیر باید فایل را دستی بررسی و تأیید کند.'
+            : data.supervisor_status === 'awaiting_provider'
+              ? 'حجم فایل از سقف تحلیل فعلی بیشتر است؛ بررسی کامل هنوز انجام نشده است.'
+              : data.supervisor_status === 'blocked'
               ? 'فایل توسط ناظر هوشمند مسدود شد.'
               : 'بررسی ناظر هوشمند ناموفق بود؛ فایل تأییدشده محسوب نمی‌شود.';
           break;
