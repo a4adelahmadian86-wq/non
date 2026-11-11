@@ -52,13 +52,14 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/bulk-archive', [AdminStoreController::class, 'bulkArchive'])->middleware('throttle:10,10')->name('store.bulk-archive');
     Route::get('/store/intake/create', [AdminStoreController::class, 'createIntake'])->middleware('permission:store.products.create')->name('store.intake.create');
     Route::post('/store/intake', [AdminStoreController::class, 'storeIntake'])->middleware('permission:store.products.create')->name('store.intake.store');
-    Route::get('/store/intake/{session}', [AdminStoreController::class, 'showIntake'])->middleware('permission:store.products.create')->name('store.intake.show');
+    Route::get('/store/intake/{session}', [AdminStoreController::class, 'showIntake'])->name('store.intake.show');
     Route::get('/store/intake/{session}/details', [AdminStoreController::class, 'intakeDetails'])->middleware('permission:store.products.create')->name('store.intake.details');
     Route::post('/store/intake/finalize', [AdminStoreController::class, 'finalizeIntake'])->middleware('permission:store.products.create')->name('store.intake.finalize');
     Route::post('/store/intake/{session}/files/preflight', [AdminStoreController::class, 'preflightIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.preflight');
     Route::post('/store/intake/{session}/files/{file}/confirm', [AdminStoreController::class, 'confirmIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.confirm');
     Route::delete('/store/intake/{session}/files/{file}', [AdminStoreController::class, 'cancelIntakeFile'])->middleware('permission:store.products.create')->name('store.intake.files.cancel');
-    Route::get('/store/intake/{session}/files/{file}/status', [AdminStoreController::class, 'intakeFileStatus'])->middleware('permission:store.products.create')->name('store.intake.files.status');
+    Route::get('/store/intake/{session}/files/{file}/status', [AdminStoreController::class, 'intakeFileStatus'])->name('store.intake.files.status');
+    Route::post('/store/intake/{session}/files/{file}/manual-review', [AdminStoreController::class, 'manualReviewIntakeFile'])->middleware('permission:store.products.publish')->name('store.intake.files.manual-review');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
     Route::post('/store',[AdminStoreController::class,'store'])->middleware('permission:store.products.create')->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
