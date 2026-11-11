@@ -96,6 +96,7 @@ class EmailService
             mailable: new WelcomeMail(...$data),
             htmlView: 'emails.welcome',
             viewData: $data,
+            idempotencyKey: 'welcome:user:'.$user->id,
         );
     }
 
@@ -121,13 +122,14 @@ class EmailService
                 htmlView: 'emails.order-paid',
                 viewData: $data,
                 meta: ['order_id' => $order->id],
+                idempotencyKey: 'order-paid:'.$order->id.':user:'.$user->id,
             );
         } catch (Throwable $e) {
             Log::warning('farast.email.order_paid_failed', ['error' => $e->getMessage()]);
         }
     }
 
-    public function sendTicketReply(User $user, Ticket $ticket, string $messageBody): void
+    public function sendTicketReply(User $user, Ticket $ticket, string $messageBody, ?string $eventIdentity = null): void
     {
         if (! $user->email || ! $this->isEnabled('ticket_reply')) {
             return;
@@ -161,11 +163,12 @@ class EmailService
             ),
             htmlView: 'emails.ticket-reply',
             viewData: $data,
-            meta: ['ticket_id' => $ticket->id],
+            meta: ['ticket_id' => $ticket->id, 'event_identity' => $eventIdentity],
+            idempotencyKey: $eventIdentity ? 'ticket-reply:'.$ticket->id.':'.$eventIdentity.':user:'.$user->id : null,
         );
     }
 
-    public function sendTicketReplyGuest(Ticket $ticket, string $messageBody): void
+    public function sendTicketReplyGuest(Ticket $ticket, string $messageBody, ?string $eventIdentity = null): void
     {
         $email = $ticket->guest_email;
         if (! $email || ! $this->isEnabled('ticket_reply')) {
@@ -181,6 +184,7 @@ class EmailService
             body: mb_substr($messageBody, 0, 800),
             staffUrl: false,
             name: $ticket->guest_name ?: 'کاربر',
+            idempotencyKey: $eventIdentity ? 'ticket-reply:'.$ticket->id.':'.$eventIdentity.':guest:'.$this->hash($email) : null,
         );
     }
 
@@ -198,6 +202,7 @@ class EmailService
             headline: 'تیکت شما ثبت شد',
             body: 'تیکت شما با موفقیت ثبت شد و کارشناسان ما به‌زودی پاسخ می‌دهند.',
             staffUrl: false,
+            idempotencyKey: 'ticket-created:'.$ticket->id.':user:'.$user->id,
         );
     }
 
@@ -215,10 +220,11 @@ class EmailService
             headline: 'تیکت پشتیبانی جدید',
             body: 'از طرف '.$ticket->displayName()."\n\n".'موضوع: '.$ticket->subject,
             staffUrl: true,
+            idempotencyKey: 'ticket-created-staff:'.$ticket->id.':staff:'.$staff->id,
         );
     }
 
-    public function sendTicketCustomerReply(User $staff, Ticket $ticket, string $body): void
+    public function sendTicketCustomerReply(User $staff, Ticket $ticket, string $body, ?string $eventIdentity = null): void
     {
         if (! $staff->email || ! $this->isEnabled('ticket_customer_reply')) {
             return;
@@ -232,10 +238,11 @@ class EmailService
             headline: 'پاسخ جدید کاربر',
             body: mb_substr($body, 0, 800),
             staffUrl: true,
+            idempotencyKey: $eventIdentity ? 'ticket-customer-reply:'.$ticket->id.':'.$eventIdentity.':staff:'.$staff->id : null,
         );
     }
 
-    public function sendTicketClosed(User $user, Ticket $ticket): void
+    public function sendTicketClosed(User $user, Ticket $ticket, ?string $eventIdentity = null): void
     {
         if (! $user->email || ! $this->isEnabled('ticket_closed')) {
             return;
@@ -249,10 +256,11 @@ class EmailService
             headline: 'تیکت بسته شد',
             body: 'تیکت شما بسته شد. در صورت نیاز می‌توانید تیکت جدیدی ثبت کنید.',
             staffUrl: false,
+            idempotencyKey: $eventIdentity ? 'ticket-closed:'.$ticket->id.':'.$eventIdentity.':user:'.$user->id : null,
         );
     }
 
-    public function sendTicketAssigned(User $agent, Ticket $ticket): void
+    public function sendTicketAssigned(User $agent, Ticket $ticket, ?string $eventIdentity = null): void
     {
         if (! $agent->email || ! $this->isEnabled('ticket_assigned')) {
             return;
@@ -266,6 +274,7 @@ class EmailService
             headline: 'تیکت به شما ارجاع شد',
             body: 'موضوع: '.$ticket->subject,
             staffUrl: true,
+            idempotencyKey: $eventIdentity ? 'ticket-assigned:'.$ticket->id.':'.$eventIdentity.':agent:'.$agent->id : null,
         );
     }
 
@@ -275,6 +284,7 @@ class EmailService
         string $headline,
         string $body,
         string $type = 'ticket_sla_warning',
+        ?string $eventIdentity = null,
     ): void {
         if (! $staff->email || ! in_array($type, ['ticket_sla_warning', 'ticket_sla_breach'], true) || ! $this->isEnabled($type)) {
             return;
@@ -288,6 +298,7 @@ class EmailService
             headline: $headline,
             body: $body,
             staffUrl: true,
+            idempotencyKey: 'ticket-sla:'.$ticket->id.':'.$type.':'.($eventIdentity ?? 'updated:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':staff:'.$staff->id,
         );
     }
 
@@ -328,6 +339,7 @@ class EmailService
                 'link' => $link,
             ],
             meta: ['announcement_id' => $announcement->id],
+            idempotencyKey: 'announcement:'.$announcement->id.':user:'.$user->id,
         );
     }
 
@@ -375,6 +387,7 @@ class EmailService
         string $body,
         bool $staffUrl,
         ?string $name = null,
+        ?string $idempotencyKey = null,
     ): void {
         $url = $this->ticketUrl($ticket, $staffUrl);
         $status = $ticket->statusLabel();
@@ -409,7 +422,8 @@ class EmailService
             ),
             htmlView: 'emails.support-ticket',
             viewData: $data,
-            meta: ['ticket_id' => $ticket->id],
+            meta: ['ticket_id' => $ticket->id, 'idempotency_key' => $idempotencyKey],
+            idempotencyKey: $idempotencyKey,
         );
     }
 
@@ -433,11 +447,12 @@ class EmailService
         string $htmlView,
         array $viewData = [],
         array $meta = [],
+        ?string $idempotencyKey = null,
     ): void {
         $this->mailConfig->apply();
 
         $provider = $this->mailConfig->currentProvider();
-        $log = EmailLog::create([
+        $attributes = [
             'type' => $type,
             'to_email' => mb_strtolower(trim($to)),
             'user_id' => $user?->id,
@@ -445,7 +460,38 @@ class EmailService
             'status' => 'queued',
             'queued_at' => now(),
             'meta' => array_merge($meta, ['provider' => $provider]),
-        ]);
+        ];
+
+        if ($idempotencyKey !== null && trim($idempotencyKey) !== '') {
+            $key = mb_substr(trim($idempotencyKey), 0, 191);
+            $log = EmailLog::firstOrCreate(
+                ['idempotency_key' => $key],
+                $attributes + ['idempotency_key' => $key],
+            );
+
+            // Existing queued/accepted events are already owned by the delivery pipeline.
+            // A terminally failed log may be claimed once for an explicit retry; the
+            // conditional update prevents concurrent duplicate dispatches.
+            if (! $log->wasRecentlyCreated) {
+                $claimed = EmailLog::query()
+                    ->whereKey($log->id)
+                    ->where('status', 'failed')
+                    ->update([
+                        'status' => 'queued',
+                        'queued_at' => now(),
+                        'error' => null,
+                        'last_attempt_at' => null,
+                        'sent_at' => null,
+                        'accepted_at' => null,
+                    ]);
+
+                if ($claimed === 0) {
+                    return;
+                }
+            }
+        } else {
+            $log = EmailLog::create($attributes);
+        }
 
         try {
             $forceSync = in_array($type, ['otp', 'test'], true)

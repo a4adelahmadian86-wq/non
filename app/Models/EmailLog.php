@@ -20,6 +20,7 @@ class EmailLog extends Model
         'queued_at',
         'last_attempt_at',
         'accepted_at',
+        'idempotency_key',
     ];
 
     protected function casts(): array
