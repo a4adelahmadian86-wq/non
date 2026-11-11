@@ -57,6 +57,15 @@ return new class extends Migration
             throw new RuntimeException('Cannot enforce payment authority uniqueness: payments.gateway or payments.authority is missing.');
         }
 
+        $missingGateway = DB::table('payments')
+            ->whereNotNull('authority')
+            ->whereNull('gateway')
+            ->exists();
+
+        if ($missingGateway) {
+            throw new RuntimeException('A payment authority exists without a gateway; assign the correct gateway before enforcing uniqueness.');
+        }
+
         $duplicate = DB::table('payments')
             ->select('gateway', 'authority')
             ->whereNotNull('authority')
@@ -77,6 +86,15 @@ return new class extends Migration
 
         if (! Schema::hasColumn('payments', 'gateway') || ! Schema::hasColumn('payments', 'transaction_id')) {
             throw new RuntimeException('Cannot enforce payment transaction uniqueness: payments.gateway or payments.transaction_id is missing.');
+        }
+
+        $missingGateway = DB::table('payments')
+            ->whereNotNull('transaction_id')
+            ->whereNull('gateway')
+            ->exists();
+
+        if ($missingGateway) {
+            throw new RuntimeException('A payment transaction ID exists without a gateway; assign the correct gateway before enforcing uniqueness.');
         }
 
         $duplicate = DB::table('payments')
