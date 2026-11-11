@@ -59,7 +59,12 @@ class AuditLogService
             if (is_array($value)) {
                 $safe[$name] = $this->sanitize($value, $depth + 1);
             } elseif (is_string($value)) {
-                $safe[$name] = mb_substr($value, 0, 2000);
+                $redacted = preg_replace(
+                    '/([?&](?:access_token|api_key|key|password|secret|signature|token|code)=)[^&#]*/i',
+                    '$1[REDACTED]',
+                    $value
+                );
+                $safe[$name] = mb_substr(is_string($redacted) ? $redacted : '[REDACTED]', 0, 2000);
             } elseif (is_int($value) || is_float($value) || is_bool($value) || $value === null) {
                 $safe[$name] = $value;
             } else {
