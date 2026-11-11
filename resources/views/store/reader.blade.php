@@ -78,6 +78,10 @@
         <strong>فهرست مطالب</strong>
         <div id="reader-outline-list"></div>
       </section>
+      <section class="farast-reader-layers" id="reader-layers" hidden aria-label="لایه‌های اختیاری PDF">
+        <strong>لایه‌های سند</strong>
+        <div id="reader-layers-list"></div>
+      </section>
     </aside>
 
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
@@ -182,9 +186,28 @@ html,body{margin:0;min-height:100%;background:#0b1220;font-family:Tahoma,Arial,s
 </style>
 @endpush
 
+<style>
+.farast-pdf-document,.farast-pdf-cont-page{position:relative}
+.farast-pdf-annotation-layer.annotationLayer{position:absolute;top:0;left:0;z-index:2;overflow:hidden;pointer-events:none;transform-origin:0 0}
+.farast-pdf-annotation-layer section{position:absolute;text-align:initial}
+.farast-pdf-annotation-layer .linkAnnotation{pointer-events:auto}
+.farast-pdf-annotation-layer .linkAnnotation>a{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:pointer}
+.farast-pdf-annotation-layer .linkAnnotation>a:hover{background:rgba(59,130,246,.12);outline:1px solid rgba(59,130,246,.55)}
+.farast-pdf-annotation-layer .widgetAnnotation{pointer-events:auto}
+.farast-pdf-annotation-layer .widgetAnnotation input,.farast-pdf-annotation-layer .widgetAnnotation textarea,.farast-pdf-annotation-layer .widgetAnnotation select{box-sizing:border-box;width:100%;height:100%;max-width:100%;font:inherit;color:#111827;background:rgba(255,255,255,.88);border:1px solid rgba(75,85,99,.55);border-radius:2px}
+.farast-pdf-annotation-layer .widgetAnnotation input[type=checkbox],.farast-pdf-annotation-layer .widgetAnnotation input[type=radio]{width:auto;height:auto;max-width:none}
+.farast-pdf-annotation-layer .widgetAnnotation input:focus,.farast-pdf-annotation-layer .widgetAnnotation textarea:focus,.farast-pdf-annotation-layer .widgetAnnotation select:focus{outline:2px solid #2563eb;outline-offset:1px}
+.farast-pdf-annotation-layer :focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+
+.farast-reader-layers{margin-top:14px;padding-top:12px;border-top:1px solid var(--reader-line);font-size:.72rem}
+.farast-reader-layers[hidden]{display:none}
+.farast-reader-layers strong{display:block;margin-bottom:8px}
+.farast-reader-layer-option{display:flex;align-items:flex-start;gap:8px;padding:5px 2px;color:var(--reader-muted);line-height:1.6;cursor:pointer}
+.farast-reader-layer-option input{margin-top:3px;accent-color:#3478d0}
+</style>
 @push('scripts')
 <script src="/js/farast-reader-storage.js?v=20261111backup3"></script>
-<script src="/js/farast-reader.js?v=20261111pdfcompat6"></script>
+<script src="/js/farast-reader.js?v=20261111annotations1"></script>
 <script src="/js/farast-reader-personal-tools.js?v=20261111prefs1" defer></script>
 <script src="/js/farast-reader-audio.js?v=20261108granular3" defer></script>
 <script src="/js/farast-reader-document.js?v=20261108reader-pages2" defer></script>
