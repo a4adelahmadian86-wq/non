@@ -115,7 +115,7 @@ class AdminStoreController extends Controller
         $attentionCount = (clone $attentionQuery)->count();
         $attentionDocuments = $attentionQuery->orderByDesc('updated_at')->limit(8)->get();
         $supervisorConfigured = app(\\App\\Services\\ProductSupervisorClient::class)->configured();
-        $canManagePublication = app(\\App\\Services\\AuthorizationService::class)
+        $canManagePublication = app(\App\Services\AuthorizationService::class)
             ->allows(auth()->user(), 'store.products.publish');
         $publicationQueue = StoreProductPublicationReview::query()
             ->with(['product:id,title,type,status', 'submitter:id,name'])
@@ -672,7 +672,7 @@ class AdminStoreController extends Controller
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
 
-        $canPublishProduct = app(\\App\\Services\\AuthorizationService::class)->allows(auth()->user(), 'store.products.publish');
+        $canPublishProduct = app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.products.publish');
         return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'canPublishProduct'));
     }
 
@@ -702,7 +702,7 @@ class AdminStoreController extends Controller
         $manualQueueApproval = false;
         $managerApprovalNote = null;
         if (($data['status'] ?? null) === 'published') {
-            abort_unless(app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.products.publish'), 403, 'مجوز انتشار محصول برای حساب شما ثبت نشده است.');
+            abort_unless(app(\App\Services\AuthorizationService::class)->allows($request->user(), 'store.products.publish'), 403, 'مجوز انتشار محصول برای حساب شما ثبت نشده است.');
             if ($publicationReview?->status === StoreProductPublicationReview::STATUS_PENDING_AI) {
                 throw ValidationException::withMessages(['status' => 'تا پایان بررسی ناظر هوشمند امکان انتشار محصول وجود ندارد.']);
             }
