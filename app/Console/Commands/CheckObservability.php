@@ -295,9 +295,8 @@ class CheckObservability extends Command
         // command-level fingerprint gate provides retry deduplication.
         $alertKey = (string) Str::uuid();
 
-        $incidentEvent = null;
         try {
-            $incidentEvent = $auditEvents->record(
+            $auditEvents->record(
                 'observability.incident.'.$severity,
                 null,
                 null,
