@@ -220,7 +220,18 @@ trait PaysWithZarinpal
                 ]);
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
-                app(\App\Services\NotificationService::class)->push(
+                app(\App\Services\WorkflowEngine::class)->enqueue(
+                    'order.paid',
+                    [
+                        'user_id' => (int) $locked->user_id,
+                        'customer_id' => (int) $locked->user_id,
+                        'order_id' => (int) $locked->id,
+                        'amount_rials' => (int) $locked->total_rials,
+                        'order_kind' => (string) ($locked->pricing_snapshot['kind'] ?? 'store'),
+                    ],
+                    'order:'.$locked->id.':paid',
+                );
+                app(\App\\Services\\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
                     'خرید شما با موفقیت ثبت شد',
@@ -248,7 +259,13 @@ trait PaysWithZarinpal
             try {
                 app(\App\Services\WorkflowEngine::class)->dispatch(
                     'order.paid',
-                    ['user_id' => (int) $order->user_id, 'order_id' => (int) $order->id, 'amount_rials' => (int) $order->total_rials],
+                    [
+                        'user_id' => (int) $order->user_id,
+                        'customer_id' => (int) $order->user_id,
+                        'order_id' => (int) $order->id,
+                        'amount_rials' => (int) $order->total_rials,
+                        'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'store'),
+                    ],
                     'order:'.$order->id.':paid',
                 );
             } catch (\Throwable $exception) {
