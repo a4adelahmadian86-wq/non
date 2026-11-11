@@ -360,7 +360,7 @@ class StoreController extends Controller
         return response()->stream(function () use ($storage, $previewDisk, $preview, $start, $length): void {
             $output = fopen('php://output', 'wb');
             if (! is_resource($output)) {
-                throw new \\RuntimeException('جریان خروجی سند در دسترس نیست.');
+                throw new \RuntimeException('جریان خروجی سند در دسترس نیست.');
             }
             try {
                 $storage->streamRange($previewDisk, $preview->path, $start, $length, $output);
