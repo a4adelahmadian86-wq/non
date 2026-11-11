@@ -784,4 +784,57 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_mapping_retry_limit_remains_effective_when_event_attempt_counter_is_exhausted(): void
+    {
+        $owner = $this->owner('09140000239');
+        $workflow = $this->workflow($owner, [
+            'steps' => json_encode([['action' => 'not_allowed']], JSON_UNESCAPED_UNICODE),
+        ]);
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'mapping-retry-limit:document:239',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 239, 'revision' => 1]),
+            'status' => 'failed',
+            'attempts' => 5,
+            'matched_workflows' => 1,
+            'failed_workflows' => 1,
+            'matched_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $mappingId = DB::table('farast_workflow_event_workflows')->insertGetId([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'failed',
+            'attempts' => 1,
+            'last_error' => 'previous attempt failed',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $engine = app(WorkflowEngine::class);
+        $this->assertSame(1, $engine->dispatchPendingEvents());
+        $this->assertDatabaseHas('jobs', ['queue' => 'automation']);
+        $this->assertTrue($engine->hasRetryableWorkflowSteps($eventId));
+
+        try {
+            (new ProcessWorkflowEvent($eventId))->handle($engine);
+            $this->fail('A failed mapping below its own retry limit must be retried.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('retryable failed steps', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'failed',
+            'attempts' => 6,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'id' => $mappingId,
+            'status' => 'failed',
+            'attempts' => 2,
+        ]);
+    }
+
 }
