@@ -1,0 +1,99 @@
+name: FARAST Versioned Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (vMAJOR.MINOR.PATCH, e.g. v1.2.3)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark this release as a pre-release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: farast-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate release request
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Version must be SemVer vMAJOR.MINOR.PATCH with optional prerelease/build metadata."
+            exit 1
+          fi
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Require successful production test workflows for this exact main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_workflows=(farast-ci.yml phase3-commerce.yml phase4-agent.yml)
+          optional_workflows=(assistant-browser-tests.yml voice-assistant-tests.yml product-supervisor.yml)
+
+          require_successful_push_run() {
+            local workflow="$1"
+            local optional="$2"
+            local runs
+            runs="$(gh run list --workflow "$workflow" --branch main --commit "$EXPECTED_SHA" --limit 50 --json headSha,conclusion,status,event,createdAt)"
+            if [[ "$optional" == "true" && "$(jq 'length' <<<"$runs")" -eq 0 ]]; then
+              echo "No path-triggered run for $workflow on this commit; skipping."
+              return 0
+            fi
+            latest="$(jq -c --arg sha "$EXPECTED_SHA" '[.[] | select(.headSha == $sha and .event == "push")] | sort_by(.createdAt) | last // empty' <<<"$runs")"
+            if [[ -z "$latest" ]] || ! jq -e '.status == "completed" and .conclusion == "success"' <<<"$latest" >/dev/null; then
+              echo "::error::The latest main-branch push run for $workflow is not successful for $EXPECTED_SHA."
+              jq -r '.[] | [.headSha, .event, .status, (.conclusion // "pending"), .createdAt] | @tsv' <<<"$runs" || true
+              return 1
+            fi
+          }
+
+          for workflow in "${required_workflows[@]}"; do
+            require_successful_push_run "$workflow" false
+          done
+          for workflow in "${optional_workflows[@]}"; do
+            require_successful_push_run "$workflow" true
+          done
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag $VERSION already exists."
+            exit 1
+          fi
+
+      - name: Create immutable tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(release create "$VERSION" --target "$GITHUB_SHA" --title "FARAST $VERSION" --generate-notes)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}"
