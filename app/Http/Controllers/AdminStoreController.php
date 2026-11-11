@@ -249,8 +249,7 @@ class AdminStoreController extends Controller
 
         $data = $this->validated($request);
         abort_unless(($data['type'] ?? null) === $session->product_type, 422, 'نوع محصول با نوع نشست ورود مطابقت ندارد.');
-        $manualReviewRequired = $files->contains(fn ($file) => data_get($file->inspection_json, 'antivirus.status') !== 'clean'
-            || data_get($file->supervisor_review_json, 'security_gate') === 'manual_scan_required'
+        $manualReviewRequired = $files->contains(fn ($file) => data_get($file->supervisor_review_json, 'security_gate') === 'manual_scan_required'
             || data_get($file->inspection_json, 'risk_level') === 'warning');
         $data['metadata'] = array_replace_recursive((array) ($data['metadata'] ?? []), [
             'intake_security_review' => [
@@ -344,7 +343,7 @@ class AdminStoreController extends Controller
                 'intake_session_id' => $session->id,
                 'file_count' => count($bindings),
                 'product_type' => $product->type,
-                'manual_security_review_required' => $lockedFiles->contains(fn ($file) => data_get($file->inspection_json, 'antivirus.status') !== 'clean' || data_get($file->supervisor_review_json, 'security_gate') === 'manual_scan_required'),
+                'manual_security_review_required' => $lockedFiles->contains(fn ($file) => data_get($file->supervisor_review_json, 'security_gate') === 'manual_scan_required' || data_get($file->inspection_json, 'risk_level') === 'warning'),
             ]);
 
             return [$product, $bindings];
