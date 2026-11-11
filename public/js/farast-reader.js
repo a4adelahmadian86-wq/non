@@ -612,7 +612,7 @@
       if(!pdfDoc){
         const pdfjs=await getPdfjs();
         pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/legacy/build/pdf.worker.mjs';
-        pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,disableAutoFetch:true,disableStream:true,isEvalSupported:false,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'}).promise;
+        pdfDoc=await pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'}).promise;
       }
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
