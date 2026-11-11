@@ -43,6 +43,38 @@ class BackendCoreDefaultsTest extends TestCase
         });
     }
 
+    public function test_backup_job_is_persisted_and_processed_by_the_real_database_worker(): void
+    {
+        $request = StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'worker_integration_test',
+            'status' => 'queued',
+            'started_at' => now(),
+            'metadata' => ['request_only' => true],
+        ]);
+
+        $this->mock(StorageBackupService::class, function ($mock): void {
+            $mock->shouldReceive('runWeekly')
+                ->once()
+                ->andReturn([['volume_id' => 99, 'status' => 'completed']]);
+        });
+
+        RunStorageBackupJob::dispatch($request->id);
+
+        $this->assertDatabaseHas('jobs', ['queue' => 'backups']);
+
+        $this->artisan('queue:work', [
+            'connection' => 'backups',
+            '--queue' => 'backups',
+            '--once' => true,
+            '--tries' => 1,
+            '--timeout' => 10,
+        ])->assertExitCode(0);
+
+        $this->assertSame('completed', $request->fresh()->status);
+        $this->assertDatabaseMissing('jobs', ['queue' => 'backups']);
+    }
+
     public function test_scheduled_workers_are_enabled_by_default_for_cron_only_hosts(): void
     {
         $this->assertTrue((bool) config('queue.scheduled_worker'));
