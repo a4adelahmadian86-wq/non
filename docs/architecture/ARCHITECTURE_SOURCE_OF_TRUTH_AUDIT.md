@@ -665,3 +665,133 @@ farast_workflow_events
 | پیوست تیکت/پیام‌رسان | StorageManager برای ثبت نهایی، private staging برای preflight | managed registry برای فایل نهایی | کنترل orphan و ownership reference در تست‌ها |
 
 **نتیجه:** شکاف preview/audio در main شناسایی شده و مالک تغییر آن در شاخه موجود #335 است؛ در این ممیزی pipeline موازی ایجاد نمی‌شود. مسیر StoreController.readerAudio نیز باید در همان PR به StorageManager منتقل شود تا ذخیره و بازیابی یک قرارداد واحد داشته باشند.
+
+
+## 17. یافته‌های عمیق امنیت، اشتراک، مالی و ممیزی
+
+این بخش یافته‌هایی را ثبت می‌کند که از تطبیق مستقیم Service، Controller، Middleware، Migration و call-site به دست آمده‌اند. اولویت‌ها بر اساس اثر احتمالی بر جداسازی tenant، مجوز نوشتن، اعتبار مالی و قابلیت بازیابی داده تعیین شده‌اند.
+
+### ARCH-09 — قرارداد نقش تیم با Scope resolver هم‌خوان نیست
+
+**شواهد main:**
+- PlatformCompletionController::addTeamMember مقدارهای owner، supervisor و employee را برای team_user.team_role می‌پذیرد.
+- ResolveAdminScope::hasManagedTeams و teamUserIds فقط team_role = manager را به‌عنوان عضویت مدیریتی می‌شناسند؛ AdminConsoleService::visibleTeamIds نیز همین مقدار را می‌خواند.
+- در نتیجه supervisor/owner که از UI فعلی به pivot اضافه می‌شود، در Scope تیمی شناخته نمی‌شود؛ مسیر دوم teams.supervisor_id مستقل از pivot کار می‌کند.
+- queryهای pivot در ResolveAdminScope و AdminConsoleService شرط teams.organization_id = users.organization_id ندارند.
+- Migration جدول team_user فقط FKهای team و user را تضمین می‌کند؛ قید هم‌سازمانی user/team ندارد.
+- endpointهای مدیریت عضویت تیم در PlatformCompletionController فقط isAdmin() را کنترل می‌کنند و تطبیق organization_id کاربر و تیم را enforce نمی‌کنند.
+
+**اثر:** ناسازگاری نقش supervisor/owner با Scope؛ و در صورت وجود عضویت manager بین‌سازمانی، امکان گسترش دامنه تیمی به کاربران سازمان دیگر. این یک ریسک جداسازی tenant است و باید با داده واقعی نیز preflight شود.
+
+**پوشش شاخه #347:** تست‌های AdvancedAccessControlTest شامل مرز cross-organization و رفتار team authority هستند؛ شاخه #347 هم roleهای manager/owner/supervisor را یکپارچه و هم organization boundary را در queryهای Scope اعمال می‌کند. این شاخه هنوز در main نیست.
+
+### ARCH-10 — مجوز مشاهده به‌جای مجوز عملیات نوشتاری استفاده می‌شود
+
+**شواهد main:**
+- AdminConsoleService::authorizeAction(User, section, targetUserId) فقط sectionAllowed و مالکیت/Scope رکورد را می‌سنجد؛ ورودی برای permission اختصاصی عملیات ندارد.
+- بخش users در config/farast_admin.php با users.view تعریف شده است.
+- AdminController::toggleUser و updateUserCapabilities هر دو فقط authorizeAction(..., 'users', targetUserId) را صدا می‌زنند.
+- AuthorizationService مجوزهایی مانند users.edit و users.suspend را می‌شناسد، اما این دو مسیر آن‌ها را مطالبه نمی‌کنند؛ در نتیجه نقش دارای users.view و Scope مناسب می‌تواند عملیات suspend یا تغییر capability override انجام دهد.
+- تغییر capability شامل can_ai، can_type، can_voice، export و quota override است؛ این عملیات صرفاً read نیست.
+
+**اثر:** نقض اصل least privilege و تبدیل مجوز مشاهده کاربران به مجوز تغییر وضعیت/قابلیت آن‌ها. کنترل Scope، جایگزین مجوز عملیاتی نیست.
+
+**پوشش شاخه #347:** AdminConsoleService::authorizeAction پارامتر required permission می‌گیرد؛ کنترلرها برای suspend و capability management مجوزهای اختصاصی مطالبه می‌کنند؛ تست view_permission_cannot_be_used_as_a_record_write_permission این مرز را پوشش می‌دهد. در اجرای Phase 3 شاخه #347، AdvancedAccessControlTest با ۲۷ تست موفق گزارش شده است؛ همان suite به‌علت پنج شکست مستقل StoreReader در مجموع قرمز مانده است.
+
+### ARCH-11 — دو تصمیم‌گیر entitlement با ترتیب انتخاب متفاوت
+
+**شواهد main:**
+- EntitlementService::allows/consume و CommerceAuthorizationService::findEntitlement/reserve/commit هر دو از FarastEntitlement و fallbackهای CapabilityService استفاده می‌کنند.
+- EntitlementService entitlement را با specificity (project/user) انتخاب می‌کند، اما CommerceAuthorizationService ابتدا priority و سپس specificity را مرتب می‌کند؛ برای چند entitlement هم‌پوشان ممکن است دو سرویس دو رکورد متفاوت را انتخاب کنند.
+- EntitlementService::allows مقدار used_quantity را می‌سنجد، اما reservationهای باز را در دسترس باقی‌مانده لحاظ نمی‌کند؛ CommerceAuthorizationService مقدار reserved را نیز کم می‌کند.
+- در EditorController::analyze ابتدا EntitlementService::allows اجرا می‌شود و سپس CommerceAuthorizationService::reserve با allow_payg اجرا می‌شود. بنابراین gate اولیه می‌تواند قبل از مسیر PAYG تصمیم deny بدهد.
+- EntitlementService::consume مسیر افزایش مستقیم used_quantity دارد؛ مسیر جدید Commerce از reservation/commit و event/charge استفاده می‌کند.
+
+**اثر:** اختلاف در انتخاب entitlement، سهمیه باقی‌مانده و امکان PAYG؛ دو منبع تصمیم برای یک capability. باید یک تصمیم‌گیر واحد یا قرارداد روشن feature gate در برابر billing authorization تعریف شود و انتخاب entitlement در هر دو مسیر یکسان باشد.
+
+### ARCH-12 — مسیر اشتراک و سهمیه پروژه هنوز بخشی از schema legacy را می‌خواند
+
+**شواهد main:**
+- Migration 2026_09_29_000006_create_farast_completion_tables.php ابتدا farast_plans و farast_subscriptions را با FK قدیمی plan_id -> farast_plans می‌سازد.
+- Migrationهای 2026_10_03_000001 و 000003 کاتالوگ جدید farast_commercial_plans و ساختار جدید farast_usage_counters را اضافه/نرمال می‌کنند.
+- Migration 2026_10_03_000004_canonicalize_farast_subscriptions.php جدول اشتراک را بازسازی می‌کند؛ schema canonical فعلی plan_id را برای commercial plan به کار می‌گیرد و FK قدیمی را حذف می‌کند.
+- PlatformCompletionController::billing/subscribe/adminPlans/savePlan و ProfessionalCommerceService از farast_commercial_plans استفاده می‌کنند؛ SubscriptionEntitlementService از همین کاتالوگ برای ساخت FarastEntitlement استفاده می‌کند.
+- بااین‌حال ProjectBillingService::includedAllowance همچنان farast_subscriptions را به farast_plans join می‌کند و usage را با ستون‌های legacy user_id/metric/used از farast_usage_counters جمع می‌زند.
+- مدل FarastUsageCounter و ProfessionalCommerceService::recordUsageCounter قرارداد جدید scope_key/capability/unit/quantity را استفاده می‌کنند.
+- PaymentController::createForDocument و payWithWallet برای اسناد دارای project، فعالانه ProjectBillingService::quote را فراخوانی می‌کنند؛ پس این مسیر legacy dead code نیست.
+
+**اثر:** تغییر plan از پنل مدیریت در کاتالوگ commercial ممکن است در project billing منعکس نشود؛ usage جدید با schema canonical ممکن است در جمع legacy دیده نشود؛ quota/price پروژه می‌تواند stale یا نادرست باشد. این مسیر باید به commercial plan و usage source واحد منتقل شود یا legacy بودن آن با یک adapter رسمی و تست‌شده حفظ شود.
+
+### ARCH-13 — Migration استانداردسازی اشتراک در main fail-open و غیرقابل rollback است
+
+**شواهد main:** 2026_10_03_000004_canonicalize_farast_subscriptions.php جدول قدیمی را rename می‌کند، سپس آن را drop می‌کند و بعد جدول canonical را می‌سازد و رکوردها را insert می‌کند. اگر plan قابل حل نباشد، بعضی ردیف‌ها با continue حذف می‌شوند؛ down() نیز عملاً کاری نمی‌کند. نگاشت plan ابتدا بر اساس numeric id است و در صورت نبود، فقط اگر ستون plan_code در خود subscription row وجود داشته باشد از code استفاده می‌کند؛ schema legacy اولیه چنین ستون plan_codeی ندارد.
+
+**اثر:** خطر حذف/جاافتادن رکورد اشتراک در migration و احتمال نگاشت plan به رکورد هم‌شماره اما متفاوت. اجرای این Migration روی snapshot واقعی بدون تطبیق plan IDs ایمن نیست.
+
+**پوشش شاخه #340:** Migration به staging copy، row-count verification و orphan preflight تغییر کرده و در صورت plan حل‌نشده منبع را حفظ می‌کند. بااین‌حال تست آن یک ستون plan_code در schema آزمایشی می‌سازد که در Migration اولیه main وجود ندارد. لازم است تستی با schema واقعی legacy (FK به farast_plans و بدون plan_code) اضافه شود و mapping از طریق join به farast_plans.code انجام شود؛ صرف تطبیق numeric id کافی نیست. #340 همچنین Migration FK را به farast_commercial_plans اضافه می‌کند، اما ProjectBillingService در فایل‌های تغییرکرده آن PR اصلاح نشده و همچنان reader legacy است.
+
+### ARCH-14 — debitهای legacy کیف پول، holdهای Commerce را لحاظ نمی‌کنند
+
+**شواهد main:**
+- CommerceAuthorizationService::canAfford مانده قابل خرج را از wallet.balance_rials - SUM(farast_wallet_reservations.status=reserved) محاسبه می‌کند.
+- reserve یک FarastWalletReservation ایجاد می‌کند و موجودی اصلی Wallet را تا زمان commit کم نمی‌کند.
+- PaymentController::payWithWallet، مسیر wallet برای Store order و مسیر deposit، Wallet را lock می‌کنند اما فقط total > wallet.balance_rials را می‌سنجند؛ مجموع holdهای باز را از موجودی قابل خرج کم نمی‌کنند.
+- CommerceAuthorizationService::commitWalletHold بعداً hold را lock می‌کند و فقط balance فعلی را با مبلغ همان hold می‌سنجد؛ debit قدیمی می‌تواند منابع لازم برای holdهای باز دیگر را مصرف کرده باشد.
+- در PR #340 نسخه PaymentController همچنان شرط balance مستقیم دارد و بررسی FarastWalletReservation در debitهای legacy دیده نمی‌شود.
+
+**اثر:** پرداخت قدیمی می‌تواند اعتبار رزروشده برای مصرف PAYG را خرج کند و commit رزرو بعدی را به insufficient_credit برساند؛ lock کردن Wallet به‌تنهایی مشکل را حل نمی‌کند.
+
+**قاعده مالکیت:** تمام debitهای Wallet باید از یک سرویس مشترک available balance = balance - active holds استفاده کنند؛ هیچ Controller نباید مستقلاً balance را قابل خرج فرض کند.
+
+### ARCH-15 — دو دفتر ممیزی با سطح یکپارچگی متفاوت
+
+| دفتر | جدول | سرویس نویسنده | ویژگی |
+|---|---|---|---|
+| ممیزی عملیاتی | audit_logs | AuditLogService | action، user، IP، metadata؛ بدون checksum chain |
+| ممیزی رویدادی FARAST | farast_audit_events | AuditEventService | event_id یکتا، payload_checksum و previous_checksum؛ قابل verify با AuditIntegrityService |
+
+- AdminPlatformController صفحه audit را از audit_logs می‌خواند؛ این صفحه به‌تنهایی زنجیره farast_audit_events را نمایش نمی‌دهد.
+- AuditIntegrityService فقط زنجیره FarastAuditEvent را verify می‌کند؛ صحت audit_logs را از نظر tamper-evidence بررسی نمی‌کند.
+- پوشش رخدادهای حساس بین این دو دفتر تقسیم شده و شناسه correlation واحد در قرارداد مشاهده‌شده وجود ندارد.
+
+**ریسک concurrency در زنجیره:** AuditEventService::record آخرین checksum را با lockForUpdate()->latest('id') می‌خواند. وقتی جدول خالی است هیچ row موجودی برای قفل وجود ندارد؛ دو writer هم‌زمان می‌توانند هر دو previous_checksum=null بگیرند و زنجیره fork شود. تست فعلی فقط یک رویداد اول را ثبت می‌کند و concurrency اولین writerها را نمی‌آزماید. راهکار پایدار نیازمند chain-head row/singleton lock یا advisory lock و تست چندنویسنده است.
+
+### ARCH-16 — Workflow فعلی synchronous و فاقد fencing token است
+
+**شواهد main:**
+- WorkflowEngine::dispatch رویداد را ثبت می‌کند و همان درخواست، processEvent را اجرا می‌کند؛ Job مستقل برای مصرف event در main وجود ندارد.
+- retry با schedule هر دقیقه در routes/console.php انجام می‌شود.
+- mapping اجرا پس از گذشت بازه stale دوباره claim می‌شود، اما در schema فعلی lease token یا fencing token برای تشخیص مالک اجرای قدیمی وجود ندارد.
+- run اجرای stepها را در transaction انجام می‌دهد؛ ولی در رقابت worker قدیمی و retry جدید، شرط وضعیت running به‌تنهایی اثبات نمی‌کند همان worker مالک lease است.
+- workflow definitions و runs عمدتاً با DB query builder در WorkflowEngine و PlatformCompletionController خوانده/نوشته می‌شوند؛ مدل Eloquent مستقل برای workflow و run در main وجود ندارد.
+
+**اثر:** اجرای طولانی‌تر از stale window می‌تواند با retry هم‌پوشانی پیدا کند و side effectهای غیر idempotent مانند create_follow_up تکرار شوند؛ اجرای event نیز در latency درخواست کاربر دخیل است.
+
+**پوشش شاخه #347:** Job/outbox، lease و fencing در آن شاخه اضافه شده‌اند؛ این بخش باید همراه با تست crash/retry/lease-expiry و نه صرفاً تست happy path بررسی شود.
+
+### ARCH-17 — Controllerهای مرکزی مرز Service را می‌شکنند
+
+اسکن ایستای main روی فایل‌های اصلی این شمارش را نشان داد (شمارش source-level، نه پیچیدگی runtime):
+
+| Controller | تعداد method | DB::table call | DB::transaction call | برداشت |
+|---|---:|---:|---:|---|
+| PlatformCompletionController | 31 | 47 | 5 | چند دامنه: document/workspace، workflow، CMS، billing، security، OCR، team |
+| AdminController | 20 | 23 | 2 | dashboard، users/capability، settings، pricing، wallet و گزارش |
+| AdminPlatformController | 8 | 7 | 1 | analytics، audit و مدیریت platform |
+| AdminStoreController | 24 | 9 | 11 | catalog، upload، preview، content workflow |
+| CrmController | 7 | 7 | 0 | query و mutation مستقیم CRM |
+| MessengerController | 13 | 7 | 2 | access و persistence مکالمه |
+| StoreCartController | 9 | 0 | 1 | عمدتاً delegation به StoreCartService |
+| PaymentController | 11 | 0 | 3 | orchestration مدل/سرویس و تراکنش مالی |
+| SupportController | 19 | 0 | 0 | delegation غالب به SupportTicketService |
+
+PlatformCompletionController پرریسک‌ترین hotspot است: تعریف و اجرای workflow، CRUD سند، share، folder، billing، subscription، team membership و برخی عملیات admin در یک Controller جمع شده‌اند. این مسئله با ساختن Controllerهای موازی حل نمی‌شود؛ هر استخراج آینده باید از همین endpointها و جدول‌های مرجع به Serviceهای مالک منتقل شود و Route/response قرارداد فعلی را حفظ کند.
+
+### ARCH-18 — Pricing/Entitlement چند لایه دارد و باید دامنه هر لایه ثابت شود
+
+- PricingService::quote/projectQuote برای خدمات تایپ و پروژه استفاده می‌شود؛ ProjectBillingService آن را با subscription و counter legacy ترکیب می‌کند.
+- PricingEngine از FarastPricingPolicyVersion نسخه‌دار برای capability usage استفاده می‌کند؛ ProfessionalCommerceService و CommerceAuthorizationService به این مسیر متصل‌اند.
+- PricingService::calculate همچنان مدل/جدول legacy FarastPricingPolicy را می‌خواند؛ در Controllerهای پرداخت و Editor که بررسی شدند مسیر اصلی از quote/projectQuote است، نه calculate.
+- PricingRule برای تعرفه تایپ با FarastPricingPolicyVersion یکی نیست؛ این دو باید به‌عنوان دو دامنه قیمت‌گذاری جدا مستند شوند، نه اینکه نام کلی Pricing باعث یکی فرض کردنشان شود.
+- Migration professional_commercial_engine جدول‌های farast_price_quotes و farast_output_authorizations را می‌سازد؛ در سرویس‌های اصلی بررسی‌شده writer/reader قطعی برای farast_output_authorizations و مدل متناظر پیدا نشد. این دو جدول باید با جست‌وجوی کامل call-site در کل repository تعیین تکلیف شوند؛ فعلاً orphan-schema candidate هستند.
+
