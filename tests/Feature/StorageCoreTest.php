@@ -8,6 +8,7 @@ use App\Models\StorageVolume;
 use App\Models\User;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
+use App\Services\StorageConnectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
@@ -365,6 +366,29 @@ class StorageCoreTest extends TestCase
             'storage_volume_id' => null,
             'status' => 'deleted',
         ]);
+    }
+
+
+    public function test_local_inventory_ignores_and_reclaims_abandoned_write_artifacts(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Local inventory', 'driver' => 'local',
+            'used_bytes' => 0, 'object_count' => 0, 'status' => 'unverified',
+            'is_active' => true, 'priority' => 1,
+        ]);
+        $root = storage_path('app/storage-volumes/'.$volume->id);
+        File::ensureDirectoryExists($root.'/documents');
+        file_put_contents($root.'/documents/real.txt', 'real');
+        $abandoned = $root.'/.farast-upload-abandoned.tmp';
+        file_put_contents($abandoned, 'partial-write');
+        touch($abandoned, now()->subHours(2)->timestamp);
+
+        app(StorageConnectionService::class)->verify($volume, true);
+        $volume->refresh();
+
+        $this->assertSame(4, $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+        $this->assertFileDoesNotExist($abandoned);
     }
 
 }
