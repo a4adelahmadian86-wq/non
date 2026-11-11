@@ -24,8 +24,12 @@ class StorageBackupService
         $this->assertArchiveReadable($archivePath, $backupKey);
     }
 
-    public function runWeekly(): array
+    public function runWeekly(string $backupType = 'weekly'): array
     {
+        if (! in_array($backupType, ['weekly', 'manual'], true)) {
+            throw new RuntimeException('نوع درخواست بکاپ پشتیبانی نمی‌شود.');
+        }
+
         // Prevent concurrent snapshots from racing volume capacity accounting and uploads.
         // The worker hard timeout is four hours; the five-hour lease matches the stale-run recovery threshold.
         $lock = Cache::lock('farast:backup:execution', 18000);
@@ -34,13 +38,13 @@ class StorageBackupService
         }
 
         try {
-            return $this->runWeeklyLocked();
+            return $this->runWeeklyLocked($backupType);
         } finally {
             $lock->release();
         }
     }
 
-    private function runWeeklyLocked(): array
+    private function runWeeklyLocked(string $backupType): array
     {
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
         if ($backupKey === '') throw new RuntimeException('برای بکاپ رمزنگاری‌شده، FARAST_BACKUP_ENCRYPTION_KEY باید تنظیم شود.');
@@ -48,10 +52,10 @@ class StorageBackupService
 
         $work = storage_path('app/backup-work/'.bin2hex(random_bytes(12)));
         if (! mkdir($work, 0700, true) && ! is_dir($work)) throw new RuntimeException('ساخت فضای موقت بکاپ ناموفق بود.');
-        $archivePath = $work.'/farast-weekly.zip';
+        $archivePath = $work.'/farast-'.$backupType.'.zip';
         $results = [];
         $snapshotLock = StorageBackupRun::create([
-            'backup_type' => 'weekly',
+            'backup_type' => $backupType,
             'source_name' => 'snapshot_lock',
             'status' => 'running',
             'started_at' => now(),
@@ -76,7 +80,7 @@ class StorageBackupService
             }
             if ($targets->isEmpty()) {
                 StorageBackupRun::create([
-                    'backup_type' => 'weekly', 'source_name' => 'application',
+                    'backup_type' => $backupType, 'source_name' => 'application',
                     'status' => 'failed', 'error_message' => 'هیچ مقصد سالمی برای بکاپ پیکربندی نشده است.',
                     'completed_at' => now(),
                 ]);
@@ -87,14 +91,14 @@ class StorageBackupService
             foreach ($targets as $target) {
                 $run = StorageBackupRun::create([
                     'storage_volume_id' => $target->id,
-                    'backup_type' => 'weekly',
+                    'backup_type' => $backupType,
                     'source_name' => 'application',
                     'status' => 'running',
                     'started_at' => now(),
                     'size_bytes' => (int) filesize($archivePath),
                     'checksum' => $checksum,
                 ]);
-                $objectKey = 'weekly/'.now()->format('Y/m/d').'/farast-'.now()->format('Ymd-His').'-'.$run->id.'.zip';
+                $objectKey = $backupType.'/'.now()->format('Y/m/d').'/farast-'.now()->format('Ymd-His').'-'.$run->id.'.zip';
                 try {
                     $this->storage->uploadBackup($target, $objectKey, $archivePath);
                     $targetDisk = $this->storage->volumeDisk($target);
