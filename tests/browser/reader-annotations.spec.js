@@ -1,9 +1,14 @@
 const { test, expect } = require('@playwright/test');
+
+async function openAnnotationTools(page) {
+  await page.locator('.farast-reader-annotation-panel > summary').click();
+}
 test('annotation workspace persists text highlights and supports undo',async({page})=>{
   await page.goto('/');
   await page.setContent('<section class="farast-reader" data-reader-root data-product-id="annotation-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>FARAST annotation sample</span></div></div></article></section>');
   await page.addStyleTag({content:'.farast-pdf-document{position:relative;width:600px;height:800px;background:#fff}.farast-pdf-text-layer{position:absolute;inset:0}.farast-annotation-layer{position:absolute;inset:0;z-index:8}.farast-annotation-interactive .farast-annotation-layer{pointer-events:auto;touch-action:none}'});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await openAnnotationTools(page);
   await expect(page.locator('.farast-annotation-toolbar')).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
   await page.locator('.farast-pdf-text-layer span').evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
@@ -41,6 +46,7 @@ test('annotation backup import rejects malformed records and confirms replacemen
   await page.goto('/');
   await page.setContent('<section class="farast-reader" data-reader-root data-product-id="annotation-import-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Import validation</span></div></div></article></section>');
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await openAnnotationTools(page);
   const key='farast-reader:annotations:v1:annotation-import-test';
   await page.evaluate(k=>localStorage.setItem(k,JSON.stringify([{id:'existing',type:'note',page:'0:1',x:.2,y:.2,text:'Keep me'}])),key);
   await page.locator('[data-action="import"]').click();
@@ -60,6 +66,7 @@ test('annotations are restored from IndexedDB after localStorage is cleared',asy
   await page.setContent('<section class="farast-reader" data-reader-root data-product-id="annotation-durable-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Durable annotation sample</span></div></div></article></section>');
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await openAnnotationTools(page);
   await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
   await page.locator('.farast-pdf-text-layer span').evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
   await page.locator('[data-tool="highlight"]').click();
@@ -110,6 +117,7 @@ test('reader exposes local storage durability status to the user',async({page})=
   await page.setContent('<section class="farast-reader" data-reader-root data-product-id="storage-status-test"><nav class="farast-reader-toolbar"></nav><article class="farast-reader-page-item is-active" data-index="0"><div class="farast-pdf-document"><div class="farast-pdf-text-layer"><span>Storage status</span></div></div></article></section>');
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-storage.js')});
   await page.addScriptTag({path:require('path').join(__dirname,'../../public/js/farast-reader-annotations.js')});
+  await openAnnotationTools(page);
   await expect.poll(()=>page.evaluate(()=>document.querySelector('[data-reader-root]')?.dataset.annotationsReady)).toBe('true');
   await page.locator('[data-action="storage"]').click();
   await expect.poll(()=>page.locator('.farast-annotation-status').textContent()).toContain('مگابایت');
