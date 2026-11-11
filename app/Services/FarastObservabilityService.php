@@ -205,11 +205,11 @@ class FarastObservabilityService
             $extension = pathinfo($path, PATHINFO_EXTENSION);
             $dailyFile = dirname($path).DIRECTORY_SEPARATOR.$filename.'-'.now()->format('Y-m-d').($extension !== '' ? '.'.$extension : '');
             $errorCount = $this->countRecentErrors($dailyFile, 1024 * 1024, 15);
-            $errorCountComplete = $errorCount !== null;
+            $errorCountComplete = $errorCount !== null && (! is_file($dailyFile) || (filesize($dailyFile) !== false && filesize($dailyFile) <= 1024 * 1024));
         }
 
         return [
-            'status' => $writable && $usesDaily ? 'healthy' : 'warning',
+            'status' => $writable && $usesDaily && $errorCount !== null ? 'healthy' : 'warning',
             'default_channel' => $channel,
             'daily_retention_days' => is_numeric($days) ? (int) $days : null,
             'log_directory_writable' => $writable,
