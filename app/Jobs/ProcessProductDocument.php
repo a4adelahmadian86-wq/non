@@ -189,8 +189,32 @@ class ProcessProductDocument implements ShouldQueue
         $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 300) : [];
         $totalCharacters = 0;
         $totalWords = 0;
+        $sampleManaged = null;
+        $sampleHash = null;
+        $samplePageNumbers = [];
+        $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
+        if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
+            $sampleBytes = base64_decode($sampleBase64, true);
+            if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
+                $sampleHash = hash('sha256', $sampleBytes);
+                $samplePageNumbers = array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int'));
+                $sampleManaged = $storage->storeContents(
+                    $sampleBytes,
+                    'sample-v1.pdf',
+                    'application/pdf',
+                    StorageManager::CRITICAL,
+                    'store-product-artifact',
+                    StoreProductDocumentArtifact::class,
+                    null,
+                    (int) $product->id,
+                    'private'
+                );
+            }
+        }
 
-        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, &$totalCharacters, &$totalWords) {
+        $sampleManagedBound = false;
+        try {
+        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $sampleManaged, $sampleHash, $samplePageNumbers, $storage, &$sampleManagedBound, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
             $locked->facts()->delete();
@@ -287,83 +311,61 @@ class ProcessProductDocument implements ShouldQueue
                 'publication_authorized' => false,
             ];
 
-            $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
-            if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
-                $sampleBytes = base64_decode($sampleBase64, true);
-                if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
-                    $sampleHash = hash('sha256', $sampleBytes);
-                    $samplePath = 'store/products/'.$locked->product_id.'/artifacts/'.$locked->source_sha256.'/sample-v1.pdf';
-                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
-                    $sampleDisk = $existingSample?->disk ?: 'private';
-                    $samplePathForReader = null;
-                    $sampleDiskForReader = 'private';
-                    if ($existingSample && $storage->exists($sampleDisk, $existingSample->path)) {
-                        $samplePathForReader = $existingSample->path;
-                        $sampleDiskForReader = $sampleDisk;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
-                            'sha256' => $existingSample->sha256,
-                            'generated_once' => true,
-                        ];
-                    } else {
-                        $managedSample = $storage->storeContents(
-                            $sampleBytes,
-                            'sample-v1.pdf',
-                            'application/pdf',
-                            StorageManager::CRITICAL,
-                            'store-product-artifact',
-                            StoreProductDocumentArtifact::class,
-                            null,
-                            (int) $locked->product_id,
-                            'private'
-                        );
-                        try {
-                            $artifact = $locked->artifacts()->updateOrCreate(
-                                ['artifact_type' => 'sample_pdf', 'version' => 1],
-                                [
-                                    'disk' => $managedSample['disk'],
-                                    'path' => $managedSample['path'],
-                                    'mime' => 'application/pdf',
-                                    'size_bytes' => strlen($sampleBytes),
-                                    'sha256' => $sampleHash,
-                                    'metadata_json' => [
-                                        'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                                        'source_sha256' => $locked->source_sha256,
-                                        'generated_once' => true,
-                                    ],
-                                ]
-                            );
-                            $storage->bindReference((int) $managedSample['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $locked->product_id);
-                        } catch (\Throwable $exception) {
-                            $storage->delete($managedSample['disk'], $managedSample['path']);
-                            throw $exception;
-                        }
-                        $samplePathForReader = $artifact->path;
-                        $sampleDiskForReader = $artifact->disk;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                            'sha256' => $artifact->sha256,
-                            'generated_once' => true,
-                        ];
-                    }
+            if ($file->is_primary && ($sampleManaged || $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->exists())) {
+                $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+                $samplePathForReader = null;
+                $sampleDiskForReader = 'private';
+                if ($existingSample && $storage->exists($existingSample->disk ?: 'private', $existingSample->path)) {
+                    $samplePathForReader = $existingSample->path;
+                    $sampleDiskForReader = $existingSample->disk ?: 'private';
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
+                        'sha256' => $existingSample->sha256,
+                        'generated_once' => true,
+                    ];
+                } elseif ($sampleManaged) {
+                    $artifact = $locked->artifacts()->updateOrCreate(
+                        ['artifact_type' => 'sample_pdf', 'version' => 1],
+                        [
+                            'disk' => $sampleManaged['disk'],
+                            'path' => $sampleManaged['path'],
+                            'mime' => 'application/pdf',
+                            'size_bytes' => (int) data_get($sampleManaged, 'size_bytes', 0),
+                            'sha256' => $sampleHash,
+                            'metadata_json' => [
+                                'selected_pages' => $samplePageNumbers,
+                                'source_sha256' => $locked->source_sha256,
+                                'generated_once' => true,
+                            ],
+                        ]
+                    );
+                    $storage->bindReference((int) $sampleManaged['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $locked->product_id);
+                    $sampleManagedBound = true;
+                    $samplePathForReader = $artifact->path;
+                    $sampleDiskForReader = $artifact->disk;
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => $samplePageNumbers,
+                        'sha256' => $artifact->sha256,
+                        'generated_once' => true,
+                    ];
+                }
 
-                    if ($samplePathForReader) {
-                        StoreProductPreview::query()->updateOrCreate(
-                            ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
-                            [
-                                'disk' => $sampleDiskForReader,
-                                'mime' => 'application/pdf',
-                                'page_number' => 1,
-                                'kind' => 'pdf',
-                                'access_level' => 'sample',
-                                'watermarked' => true,
-                                'is_active' => true,
-                                'sort_order' => 0,
-                            ]
-                        );
-                    }
+                if ($samplePathForReader) {
+                    StoreProductPreview::query()->updateOrCreate(
+                        ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
+                        [
+                            'disk' => $sampleDiskForReader,
+                            'mime' => 'application/pdf',
+                            'page_number' => 1,
+                            'kind' => 'pdf',
+                            'access_level' => 'sample',
+                            'watermarked' => true,
+                            'is_active' => true,
+                            'sort_order' => 0,
+                        ]
+                    );
                 }
             }
 
@@ -423,6 +425,13 @@ class ProcessProductDocument implements ShouldQueue
                 'processed_at' => now(),
             ]);
         });
+        } catch (Throwable $exception) {
+            if ($sampleManaged) $storage->delete($sampleManaged['disk'], $sampleManaged['path']);
+            throw $exception;
+        }
+        if ($sampleManaged && ! $sampleManagedBound) {
+            $storage->delete($sampleManaged['disk'], $sampleManaged['path']);
+        }
 
         $processedDocument = $document->fresh();
         if ($processedDocument
