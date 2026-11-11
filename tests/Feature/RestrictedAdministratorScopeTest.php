@@ -207,6 +207,19 @@ class RestrictedAdministratorScopeTest extends TestCase
             'updated_at' => now()->subDays(2),
         ]);
 
+        $roleId = $this->createScopedRole('expired-admin-role-'.$restrictedAdmin->id, 'organization', $organization->id);
+        DB::table('farast_user_roles')->insert([
+            'user_id' => $restrictedAdmin->id,
+            'role_id' => $roleId,
+            'scope_type' => 'organization',
+            'scope_id' => $organization->id,
+            'starts_at' => now()->subDays(2),
+            'expires_at' => null,
+            'assigned_by' => null,
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ]);
+
         $this->actingAs($restrictedAdmin);
         $this->get('/dashboard')->assertOk();
         app(AuthorizationService::class)->forgetUser();
