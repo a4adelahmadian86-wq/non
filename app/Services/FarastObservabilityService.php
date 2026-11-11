@@ -77,7 +77,7 @@ class FarastObservabilityService
                 $result['message'] = 'جدول صف در اتصال پایگاه دادهٔ پیکربندی‌شده وجود ندارد.';
             }
 
-            if (Schema::connection($failedDatabase)->hasTable('failed_jobs')) {
+            if (Schema::connection($failedDatabase)->hasTable($failedTable)) {
                 $result['failed_jobs'] = (int) DB::connection($failedDatabase)->table($failedTable)->count();
                 if ($result['failed_jobs'] > 0) {
                     $result['status'] = 'warning';
