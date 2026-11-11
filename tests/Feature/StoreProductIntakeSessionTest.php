@@ -124,6 +124,14 @@ class StoreProductIntakeSessionTest extends TestCase
             'password' => 'secret',
             'role' => User::ROLE_EMPLOYEE,
         ]);
+        $createPermission = Permission::firstOrCreate(
+            ['key' => 'store.products.create'],
+            ['label' => 'ثبت محصول و دوره', 'group' => 'store']
+        );
+        RolePermission::firstOrCreate([
+            'role' => User::ROLE_EMPLOYEE,
+            'permission_id' => $createPermission->id,
+        ]);
         $session = StoreProductIntakeSession::create([
             'user_id' => $owner->id,
             'product_type' => 'digital_file',
