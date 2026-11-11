@@ -82,10 +82,10 @@ class WorkflowSyncDriverTest extends TestCase
                     ['user_id' => $owner->id, 'document_id' => 7802],
                     'sync-outbox:document:7802:revision:1',
                 );
-                throw new \\RuntimeException('rollback source event');
+                throw new \RuntimeException('rollback source event');
             });
             $this->fail('The source transaction should roll back.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('rollback source event', $exception->getMessage());
         }
 
