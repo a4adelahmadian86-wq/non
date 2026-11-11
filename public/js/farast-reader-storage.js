@@ -103,7 +103,7 @@ const requestPersistence=()=>{
    else if(!navigator.storage?.persist)reason='unsupported';
   }catch(error){reason=error?.name||'request-failed';}
   const result={supported:!!navigator.storage?.persist,persisted,granted,reason,usage:estimate?.usage??null,quota:estimate?.quota??null};
-  if(!persisted&&persistPromise===pending)persistPromise=null;
+  if(!persisted)persistPromise=null;
   window.dispatchEvent(new CustomEvent('farast:storage-persistence-status',{detail:result}));
   if(persisted)window.dispatchEvent(new Event('farast:storage-persistence-ready'));
   return result;
