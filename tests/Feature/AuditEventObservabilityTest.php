@@ -83,4 +83,18 @@ class AuditEventObservabilityTest extends TestCase
         $this->assertSame(1, $snapshot['incident_trend_24h']['critical']);
         $this->assertSame(1, $snapshot['incident_trend_24h']['sampled']);
     }
+
+    public function test_active_job_without_originating_request_id_does_not_inherit_stale_request_attributes(): void
+    {
+        $request = Request::create('/admin/settings', 'POST');
+        $request->attributes->set('farast.request_id', 'stale-request');
+        $request->attributes->set('farast.correlation_id', 'stale-correlation');
+        app()->instance('request', $request);
+        app(FarastTraceContext::class)->set(null, 'background-job-correlation');
+
+        $event = app(AuditEventService::class)->record('background.job.completed');
+
+        $this->assertArrayNotHasKey('request_id', $event->payload_meta);
+        $this->assertSame('background-job-correlation', $event->payload_meta['correlation_id']);
+    }
 }
