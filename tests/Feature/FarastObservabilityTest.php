@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\FarastObservability;
 use Illuminate\Http\Request;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\JobProcessed;
@@ -15,6 +16,7 @@ use Tests\TestCase;
 
 class FarastObservabilityTest extends TestCase
 {
+    use RefreshDatabase;
     public function test_it_preserves_bounded_safe_trace_identifiers(): void
     {
         Log::spy();
