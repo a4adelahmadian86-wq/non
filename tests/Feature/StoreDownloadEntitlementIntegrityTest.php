@@ -5,6 +5,10 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StoreCategory;
+use App\Models\StoreCourse;
+use App\Models\StoreCourseEnrollment;
+use App\Models\StoreCourseLesson;
+use App\Models\StoreCourseSection;
 use App\Models\StoreDownload;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreOrderItem;
@@ -184,6 +188,111 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             ->assertRedirect(route('library'));
     }
 
+
+    public function test_zarinpal_callback_grants_course_enrollment_only_after_verified_payment(): void
+    {
+        $user = $this->makeUser('09123456787');
+        $category = StoreCategory::create([
+            'name' => 'دوره درگاه',
+            'slug' => 'zarinpal-course-category',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'دوره پرداخت درگاه',
+            'slug' => 'zarinpal-course-product',
+            'sku' => 'ZP-COURSE-001',
+            'type' => 'course',
+            'price_rials' => 50000,
+            'status' => 'published',
+            'published_at' => now()->subMinute(),
+        ]);
+        $course = StoreCourse::create([
+            'product_id' => $product->id,
+            'level' => 'beginner',
+            'language' => 'fa',
+            'drip_enabled' => false,
+        ]);
+        $section = StoreCourseSection::create([
+            'course_id' => $course->id,
+            'title' => 'فصل پرداخت درگاه',
+            'sort_order' => 1,
+        ]);
+        StoreCourseLesson::create([
+            'section_id' => $section->id,
+            'title' => 'درس پرداخت درگاه',
+            'slug' => 'zarinpal-course-product-lesson',
+            'lesson_type' => 'article',
+            'content' => 'محتوای دوره',
+            'is_published' => true,
+            'is_preview' => true,
+            'sort_order' => 1,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+
+        $order = Order::query()->where('user_id', $user->id)->latest('id')->firstOrFail();
+        $orderItem = StoreOrderItem::query()->where('order_id', $order->id)->firstOrFail();
+        $this->assertSame($product->id, (int) $orderItem->product_id);
+
+        Payment::create([
+            'order_id' => $order->id,
+            'gateway' => 'zarinpal',
+            'authority' => 'AUTH-COURSE',
+            'transaction_id' => 'AUTH-COURSE',
+            'amount_rials' => $order->total_rials,
+            'status' => 'pending',
+        ]);
+
+        $gateway = Mockery::mock(ZarinpalService::class);
+        $gateway->shouldReceive('verify')
+            ->once()
+            ->with('AUTH-COURSE', (int) $order->total_rials)
+            ->andReturn(['code' => 100, 'ref_id' => 'COURSE-REF-123']);
+        app()->instance(ZarinpalService::class, $gateway);
+
+        $email = Mockery::mock(EmailService::class);
+        $email->shouldReceive('sendOrderPaid')->once()->andReturnNull();
+        app()->instance(EmailService::class, $email);
+
+        $callback = fn () => $this->withSession([
+            'zarinpal_order_id' => $order->id,
+            'zarinpal_authority' => 'AUTH-COURSE',
+        ])->get('/checkout/zarinpal/callback?Authority=AUTH-COURSE&Status=OK');
+
+        $callback()->assertRedirect(route('library'));
+
+        $paidOrder = $order->fresh();
+        $this->assertSame('paid', $paidOrder->status);
+        $this->assertNotNull($paidOrder->paid_at);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'status' => 'paid',
+            'amount_rials' => $order->total_rials,
+        ]);
+
+        $libraryItem = StoreLibraryItem::query()->where('order_id', $order->id)->firstOrFail();
+        $this->assertSame($orderItem->id, (int) $libraryItem->order_item_id);
+        $this->assertDatabaseHas('store_course_enrollments', [
+            'library_item_id' => $libraryItem->id,
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+        ]);
+
+        // A repeated callback must not duplicate payment, entitlement or enrollment.
+        $this->withSession([
+            'zarinpal_order_id' => $order->id,
+            'zarinpal_authority' => 'AUTH-COURSE',
+        ])->get('/checkout/zarinpal/callback?Authority=AUTH-COURSE&Status=OK')
+            ->assertRedirect(route('library'));
+
+        $this->assertSame(1, Payment::query()->where('order_id', $order->id)->where('status', 'paid')->count());
+        $this->assertSame(1, StoreLibraryItem::query()->where('order_id', $order->id)->count());
+        $this->assertSame(1, StoreCourseEnrollment::query()->where('library_item_id', $libraryItem->id)->count());
+    }
 
     public function test_wallet_payment_uses_the_exact_checkout_price_and_file_snapshot(): void
     {
