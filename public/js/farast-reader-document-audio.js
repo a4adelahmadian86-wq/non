@@ -11,9 +11,11 @@
   const pollUrl = root.dataset.readerAudioPollUrl || '';
   const audioStatus = root.dataset.readerAudioStatus || '';
 
-  if (pendingStatus && audioStatus === 'unavailable' && !url) {
+  if (pendingStatus && !url && ['unavailable', 'failed'].includes(audioStatus)) {
     pendingStatus.hidden = false;
-    pendingStatus.textContent = 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
+    pendingStatus.textContent = audioStatus === 'failed'
+      ? 'آماده‌سازی نسخه صوتی با خطا روبه‌رو شد؛ متن سند همچنان در دسترس است.'
+      : 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
   }
 
   if (pendingStatus && pollUrl && ['pending', 'upgrading'].includes(audioStatus)) {
@@ -41,13 +43,28 @@
           cache: 'no-store',
           headers: { Accept: 'audio/wav' }
         });
-        if (response.ok) {
+        if ([200, 206].includes(response.status)) {
           stopped = true;
           pendingStatus.textContent = 'صوت آماده شد؛ در حال بارگذاری زمان‌بندی دقیق…';
           window.location.reload();
           return;
         }
-        if ([401, 403, 410].includes(response.status)) {
+        if (response.status === 409) {
+          stopped = true;
+          pendingStatus.textContent = 'آماده‌سازی نسخه صوتی با خطا روبه‌رو شد؛ متن سند همچنان در دسترس است.';
+          return;
+        }
+        if (response.status === 410) {
+          stopped = true;
+          pendingStatus.textContent = 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
+          return;
+        }
+        if (response.status === 404) {
+          stopped = true;
+          pendingStatus.textContent = 'وضعیت آماده‌سازی صوت قابل تشخیص نیست؛ برای بررسی دوباره صفحه را بارگذاری کنید.';
+          return;
+        }
+        if ([401, 403].includes(response.status)) {
           stopped = true;
           pendingStatus.textContent = 'دسترسی صوت تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.';
           return;

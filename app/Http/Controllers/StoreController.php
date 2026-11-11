@@ -541,8 +541,16 @@ class StoreController extends Controller
                     $audioArtifactReady = (bool) $audioArtifact;
 
                     // Reading a PDF must never trigger a remote speech-provider call.
-                    // Existing audio artifacts remain playable from this application's own storage.
-                    $readerAudioStatus = $audioArtifactReady ? 'ready' : 'unavailable';
+                    // Audio generation is scheduled by the document-processing pipeline, not by this page request.
+                    $audioState = (string) data_get($structure, 'audio.status', '');
+                    $audioPending = in_array($audioState, ['pending', 'queued', 'processing'], true)
+                        || ($audioState === 'upgrading' && ! $audioArtifactReady);
+                    $audioUpgrading = $audioState === 'upgrading' && $audioArtifactReady;
+                    $audioFailed = ! $audioArtifactReady && in_array($audioState, ['failed', 'partial', 'completed', 'ready'], true);
+                    $audioUnavailable = in_array($audioState, ['awaiting_provider', 'unavailable', 'not_applicable'], true);
+                    $readerAudioStatus = $audioArtifactReady
+                        ? ($audioUpgrading ? 'upgrading' : 'ready')
+                        : ($audioPending ? 'pending' : ($audioFailed ? 'failed' : ($audioUnavailable ? 'unavailable' : '')));
 
                     if ($audioArtifactReady) {
                         $readerAudioUrl = route('store.reader.audio', [$product, $document]).'?version='.(int) $audioArtifact->version;
@@ -569,6 +577,13 @@ class StoreController extends Controller
                                 'page' => $page,
                             ];
                         }
+                        if ($audioUpgrading) {
+                            // Keep the current playable artifact while polling for the newer version.
+                            $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
+                        }
+                    } elseif ($audioPending) {
+                        // The browser polls the entitlement-checked endpoint until the new artifact is ready.
+                        $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
                     }
 
                     $previews = $document->pages->map(function ($page) use ($product, $readerAudioTiming) {
@@ -807,6 +822,25 @@ class StoreController extends Controller
         $artifact = $artifactQuery->get()
             ->first(static fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
                 && Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
+        if (! $artifact && request()->isMethod('HEAD')) {
+            $audioState = (string) data_get($document->structure_json, 'audio.status', '');
+            $pollHeaders = [
+                'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+                'X-Content-Type-Options' => 'nosniff',
+            ];
+
+            if (in_array($audioState, ['pending', 'queued', 'processing', 'upgrading'], true)) {
+                return response('', 202, $pollHeaders + ['Retry-After' => '5']);
+            }
+
+            if (in_array($audioState, ['failed', 'partial', 'completed', 'ready'], true)) {
+                return response('', 409, $pollHeaders);
+            }
+
+            if (in_array($audioState, ['awaiting_provider', 'unavailable', 'not_applicable'], true)) {
+                return response('', 410, $pollHeaders);
+            }
+        }
         abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
         $disk = Storage::disk($artifact->disk ?: 'private');
