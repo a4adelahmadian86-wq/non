@@ -656,7 +656,7 @@ class AdminStoreController extends Controller
         $supervisorReviewFresh = false;
         if (is_array($storedSupervisorReview) && filled($storedSupervisorReview['snapshot_hash'] ?? null)) {
             $currentSnapshot = $snapshotBuilder->build($product, $supervisorSettings);
-            $currentSnapshot['document_knowledge'] = app(\\App\\Services\\ProductKnowledgeService::class)->contextForProduct($product, 12000);
+            $currentSnapshot['document_knowledge'] = app(\App\Services\ProductKnowledgeService::class)->contextForProduct($product, 12000);
             $supervisorReviewFresh = hash_equals(
                 (string) $storedSupervisorReview['snapshot_hash'],
                 $snapshotBuilder->fingerprint($currentSnapshot)
@@ -810,7 +810,7 @@ class AdminStoreController extends Controller
                     && data_get($supervisorSettings, 'mode', 'suggest') === 'review_gate') {
                     $lastReview = data_get($lockedProduct->metadata, 'ai_supervisor.last_review');
                     $snapshot = $snapshotBuilder->build($lockedProduct, $supervisorSettings);
-                    $snapshot['document_knowledge'] = app(\\App\\Services\\ProductKnowledgeService::class)->contextForProduct($lockedProduct, 12000);
+                    $snapshot['document_knowledge'] = app(\App\Services\ProductKnowledgeService::class)->contextForProduct($lockedProduct, 12000);
                     $snapshotMatches = is_array($lastReview)
                         && filled($lastReview['snapshot_hash'] ?? null)
                         && hash_equals((string) $lastReview['snapshot_hash'], $snapshotBuilder->fingerprint($snapshot));
