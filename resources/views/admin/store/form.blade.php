@@ -45,6 +45,32 @@
     @endif
     <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : (isset($intakeSession) ? route('admin.store.intake.finalize') : route('admin.store.store')) }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @elseif(isset($intakeSession))<input type="hidden" name="intake_session_id" value="{{ $intakeSession->id }}">@endif
+      @if($isEdit && $product->publicationReview)
+        <section class="store-panel" style="padding:16px;margin-bottom:18px" aria-label="وضعیت صف انتشار">
+          <strong>وضعیت بررسی و انتشار</strong>
+          <p>
+            {{ $product->publicationReview->status === 'pending_ai_review' ? 'در انتظار بررسی نهایی ناظر هوشمند' : ($product->publicationReview->status === 'pending_manager' ? 'در انتظار تصمیم مدیر' : ($product->publicationReview->status === 'published' ? 'تصمیم انتشار ثبت شده' : $product->publicationReview->status)) }}
+            @if($product->publicationReview->ai_verdict)
+              · نتیجه ناظر: {{ match($product->publicationReview->ai_verdict) { 'approved' => 'تأیید', 'needs_changes' => 'نیازمند اصلاح', 'blocked' => 'رد شده', 'unavailable' => 'سرویس در دسترس نیست', default => $product->publicationReview->ai_verdict } }}
+            @endif
+          </p>
+          @if(is_array($product->publicationReview->ai_review_json) && !empty($product->publicationReview->ai_review_json['findings']))
+            <ul>
+              @foreach($product->publicationReview->ai_review_json['findings'] as $finding)
+                <li><strong>{{ $finding['title'] ?? 'یافته ناظر' }}</strong> — {{ $finding['detail'] ?? '' }} <small>پیشنهاد: {{ $finding['recommendation'] ?? 'بررسی مدیر' }}</small></li>
+              @endforeach
+            </ul>
+          @endif
+          @if($product->publicationReview->status === 'pending_manager' && $canManagePublication)
+            <label class="product-field product-field-wide">یادداشت تصمیم مدیر (حداقل ۲۰ نویسه)
+              <textarea name="manager_approval_note" minlength="20" maxlength="2000" required placeholder="نتیجه بررسی دستی، اصلاحات انجام‌شده و دلیل تأیید یا انتشار را ثبت کنید">{{ old('manager_approval_note') }}</textarea>
+            </label>
+            <small>در صورت رد یا درخواست اصلاح توسط AI، انتشار فقط با تصمیم صریح مدیر و ثبت این یادداشت ممکن است.</small>
+          @elseif($product->publicationReview->status === 'pending_manager')
+            <small>این مورد در صف مدیر است. حساب شما مجوز تصمیم نهایی انتشار را ندارد.</small>
+          @endif
+        </section>
+      @endif
       @if($isEdit)
         <input type="hidden" name="ai_content_source_fingerprints" data-ai-content-provenance>
         <input type="hidden" name="ai_content_signature" data-ai-content-signature>
