@@ -71,6 +71,47 @@
     </div>
 
     <section class="control-card mt-4">
+        <div class="flex items-center justify-between gap-3">
+            <h2>تاریخچه هشدارها و بازیابی</h2>
+            <span class="text-sm text-slate-500">آخرین ۲۰ تغییر وضعیت</span>
+        </div>
+        @if(!empty($health['incidents']))
+            <div class="mt-3 overflow-x-auto">
+                <table class="w-full text-sm text-right">
+                    <thead>
+                        <tr>
+                            <th class="py-2">زمان</th>
+                            <th class="py-2">نوع رخداد</th>
+                            <th class="py-2">شدت</th>
+                            <th class="py-2">وضعیت</th>
+                            <th class="py-2">اجزای درگیر</th>
+                            <th class="py-2">Correlation ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($health['incidents'] as $incident)
+                            <tr class="border-t">
+                                <td class="py-2 whitespace-nowrap">{{ $incident['created_at'] }}</td>
+                                <td class="py-2">{{ $incident['event_type'] }}</td>
+                                <td class="py-2">{{ $incident['severity'] }}</td>
+                                <td class="py-2">{{ $incident['status'] }}</td>
+                                <td class="py-2">
+                                    @foreach($incident['affected_components'] as $name => $componentStatus)
+                                        <span>{{ $name }}: {{ $componentStatus }}</span>@if(!$loop->last)، @endif
+                                    @endforeach
+                                </td>
+                                <td class="py-2 font-mono text-xs">{{ $incident['correlation_id'] ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <p class="mt-3 text-sm text-slate-500">هنوز رخداد عملیاتی ثبت‌شده‌ای در دفترکل وجود ندارد.</p>
+        @endif
+    </section>
+
+    <section class="control-card mt-4">
         <h2>محدودیت‌های این نما</h2>
         <ul class="list-disc space-y-1 pr-5">
             <li>این صفحه فقط وضعیت قابل مشاهده از فرایند Laravel و دیتابیس را گزارش می‌کند؛ سلامت واقعی میزبان، CPU، حافظه و شبکه باید از مانیتورینگ زیرساخت دریافت شود.</li>
