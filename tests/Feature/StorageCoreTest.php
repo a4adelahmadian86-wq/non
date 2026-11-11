@@ -194,8 +194,20 @@ class StorageCoreTest extends TestCase
         ]);
 
         $storage = app(StorageManager::class);
+        $backupRun = StorageBackupRun::create([
+            'storage_volume_id' => $volume->id,
+            'backup_type' => 'weekly',
+            'source_name' => 'application',
+            'status' => 'running',
+            'started_at' => now(),
+            'size_bytes' => 16,
+            'checksum' => hash('sha256', 'partial-upload'),
+        ]);
         $key = 'reservations/abandoned-upload.bin';
-        $reservation = $storage->reserveVolumeCapacity($volume, 16, 'test-upload', ['object_key' => $key]);
+        $reservation = $storage->reserveVolumeCapacity($volume, 16, 'backup', [
+            'object_key' => $key,
+            'backup_run_id' => $backupRun->id,
+        ]);
         $this->assertNotNull($reservation);
 
         $absolute = storage_path('app/storage-volumes/'.$volume->id.'/'.$key);
@@ -208,6 +220,11 @@ class StorageCoreTest extends TestCase
         $this->assertSame(1, $storage->cleanupExpiredVolumeReservations());
         $this->assertFileDoesNotExist($absolute);
         $this->assertDatabaseCount('storage_volume_reservations', 0);
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'id' => $backupRun->id,
+            'status' => 'failed',
+            'object_key' => $key,
+        ]);
     }
 
     public function test_generated_contents_use_the_central_managed_storage_pipeline(): void
