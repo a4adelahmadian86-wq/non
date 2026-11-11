@@ -553,6 +553,7 @@ class AdvancedAccessControlTest extends TestCase
         $organization = Organization::create(['name' => 'Team Audit Org', 'slug' => 'team-audit-org', 'status' => 'active']);
         $admin = $this->user('09140000143', User::ROLE_ADMIN);
         $supervisor = $this->user('09140000144', User::ROLE_TEAM_SUPERVISOR, $organization->id);
+        $secondarySupervisor = $this->user('09140000149', User::ROLE_TEAM_SUPERVISOR, $organization->id);
         $team = Team::create([
             'organization_id' => $organization->id,
             'name' => 'Audited Team',
@@ -579,15 +580,25 @@ class AdvancedAccessControlTest extends TestCase
             'action' => 'team.member.added',
         ]);
 
+        $this->post('/admin/teams/'.$team->id.'/members', [
+            'user_id' => $secondarySupervisor->id,
+            'team_role' => 'supervisor',
+        ])->assertRedirect();
+
         $this->delete('/admin/teams/'.$team->id.'/members/'.$supervisor->id)->assertRedirect();
 
         $this->assertDatabaseMissing('team_user', [
             'team_id' => $team->id,
             'user_id' => $supervisor->id,
         ]);
+        $this->assertDatabaseHas('team_user', [
+            'team_id' => $team->id,
+            'user_id' => $secondarySupervisor->id,
+            'team_role' => 'supervisor',
+        ]);
         $this->assertDatabaseHas('teams', [
             'id' => $team->id,
-            'supervisor_id' => null,
+            'supervisor_id' => $secondarySupervisor->id,
         ]);
         $this->assertDatabaseHas('farast_access_audit_logs', [
             'actor_id' => $admin->id,
