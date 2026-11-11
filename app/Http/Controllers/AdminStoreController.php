@@ -16,6 +16,7 @@ use App\Models\StoreProductImage;
 use App\Models\StoreProductPreview;
 use App\Models\StoreTag;
 use App\Services\AuthorizationService;
+use App\Services\AuditEventService;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\ProductRelatedProductsService;
 use App\Services\StoreProductIntakeService;
@@ -1116,7 +1117,7 @@ class AdminStoreController extends Controller
             };
             $lockedSession->update(['status' => $nextStatus]);
 
-            app(\\App\\Services\\AuditEventService::class)->record(
+            app(AuditEventService::class)->record(
                 'store.product.intake_file_manager_reviewed',
                 (int) $request->user()->id,
                 null,
