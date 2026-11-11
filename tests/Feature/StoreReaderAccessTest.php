@@ -461,9 +461,9 @@ class StoreReaderAccessTest extends TestCase
         ]);
         $user = $this->makeReaderUser();
 
-        $this->actingAs($user)
-            ->get(route('store.reader', $product->slug))
-            ->assertOk()
+        $readerResponse = $this->actingAs($user)
+            ->get(route('store.reader', $product->slug));
+        $readerResponse->assertOk()
             ->assertSee('farast-xlsx-frame')
             ->assertSee('09123456789')
             ->assertSee('sandbox', false)
@@ -557,8 +557,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('farast-reader.js')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
-            ->assertHeader('Referrer-Policy', 'no-referrer')
-            ;
+            ->assertHeader('Referrer-Policy', 'no-referrer');
         $readerCsp = (string) $readerResponse->headers->get('Content-Security-Policy');
         $this->assertStringContainsString("default-src 'self'", $readerCsp);
         $this->assertStringContainsString("object-src 'none'", $readerCsp);
