@@ -14,10 +14,16 @@ TARGET_DIR="$ROOT_DIR/public/vendor/pdfjs"
 test -s "$PACKAGE_DIR/legacy/build/pdf.mjs"
 test -s "$PACKAGE_DIR/legacy/build/pdf.worker.mjs"
 
-mkdir -p "$TARGET_DIR/legacy/build" "$TARGET_DIR/web"
+mkdir -p "$TARGET_DIR/legacy/build" "$TARGET_DIR/legacy/web" "$TARGET_DIR/web"
 cp "$PACKAGE_DIR/legacy/build/pdf.mjs" "$TARGET_DIR/legacy/build/pdf.mjs"
 cp "$PACKAGE_DIR/legacy/build/pdf.worker.mjs" "$TARGET_DIR/legacy/build/pdf.worker.mjs"
+cp "$PACKAGE_DIR/legacy/web/pdf_viewer.mjs" "$TARGET_DIR/legacy/web/pdf_viewer.mjs"
+cp "$PACKAGE_DIR/legacy/web/pdf_viewer.css" "$TARGET_DIR/legacy/web/pdf_viewer.css"
 cp "$PACKAGE_DIR/web/pdf_viewer.css" "$TARGET_DIR/web/pdf_viewer.css"
+if [ -d "$PACKAGE_DIR/legacy/web/images" ]; then
+  rm -rf "$TARGET_DIR/legacy/web/images"
+  cp -a "$PACKAGE_DIR/legacy/web/images" "$TARGET_DIR/legacy/web/images"
+fi
 cp "$PACKAGE_DIR/LICENSE" "$TARGET_DIR/LICENSE"
 
 for asset_dir in cmaps standard_fonts wasm; do
