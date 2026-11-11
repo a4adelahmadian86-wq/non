@@ -38,3 +38,5 @@ jobs:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
       - run: php artisan test --filter=GlobalAssistantVoiceTest
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
