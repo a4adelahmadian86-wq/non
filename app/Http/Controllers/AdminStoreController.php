@@ -1020,11 +1020,20 @@ class AdminStoreController extends Controller
 
         try {
             if ($snapshot['managed_file_id']) {
+                if ($snapshot['storage_disk'] === '' || $snapshot['storage_path'] === '') {
+                    throw new \\RuntimeException('intake_cancel_managed_reference_incomplete');
+                }
                 if (StorageManagedFile::query()->whereKey($snapshot['managed_file_id'])->exists()) {
                     $storage->delete($snapshot['storage_disk'], $snapshot['storage_path']);
                 }
             } elseif ($snapshot['staging_path'] !== '' && $snapshot['staging_path'] !== 'cancelled') {
-                Storage::disk($snapshot['staging_disk'])->delete($snapshot['staging_path']);
+                $stagingDisk = Storage::disk($snapshot['staging_disk']);
+                if ($stagingDisk->exists($snapshot['staging_path']) && ! $stagingDisk->delete($snapshot['staging_path'])) {
+                    throw new \\RuntimeException('intake_cancel_staging_delete_failed');
+                }
+                if ($stagingDisk->exists($snapshot['staging_path'])) {
+                    throw new \\RuntimeException('intake_cancel_staging_delete_incomplete');
+                }
             }
         } catch (Throwable $exception) {
             report($exception);
