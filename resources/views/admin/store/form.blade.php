@@ -27,7 +27,46 @@
         <p>این بررسی وضعیت واقعی اطلاعات ذخیره‌شده را نشان می‌دهد. کنترل نهایی انتشار همچنان در سرور انجام می‌شود.</p>
       </section>
     @endif
+    @php($publicationWorkflow = (array) data_get($product->metadata, 'publication_workflow', []))
+    @if($isEdit && filled($publicationWorkflow['status'] ?? null))
+      @php($publicationStatusLabels = [
+        'queued' => 'در صف بررسی ناظر هوشمند',
+        'reviewing' => 'ناظر هوشمند در حال بررسی محصول',
+        'awaiting_supervisor' => 'در انتظار اتصال یا اجرای مجدد ناظر',
+        'awaiting_admin_approval' => 'تأیید هوش مصنوعی انجام شده؛ منتظر تأیید مدیر',
+        'awaiting_manual_approval' => 'اصلاح خودکار انجام شده؛ منتظر تأیید دستی مدیر',
+        'needs_manual_changes' => 'نیازمند اصلاح دستی اطلاعات محصول',
+        'blocked' => 'انتشار به دلیل موانع قطعی متوقف است',
+        'stale' => 'اطلاعات محصول هنگام بررسی تغییر کرده است',
+        'published' => 'بررسی و انتشار تکمیل شده است',
+      ])
+      <section class="store-panel product-publication-workflow" aria-labelledby="publication-workflow-title">
+        <div class="product-readiness-head">
+          <div><span>گردش‌کار واقعی انتشار</span><h2 id="publication-workflow-title">وضعیت ناظر و صف انتشار</h2></div>
+          <strong>{{ $publicationStatusLabels[$publicationWorkflow['status']] ?? 'وضعیت نامشخص' }}</strong>
+        </div>
+        @if(filled($publicationWorkflow['review_summary'] ?? null))
+          <p>{{ $publicationWorkflow['review_summary'] }}</p>
+        @endif
+        @if(!empty($publicationWorkflow['publication_blockers']))
+          <ul>@foreach($publicationWorkflow['publication_blockers'] as $blocker)<li>{{ $blocker }}</li>@endforeach</ul>
+        @endif
+        @if(!empty($publicationWorkflow['correction_applied']))
+          <p>ناظر هوشمند اصلاحاتی را اعمال کرده است. برای جلوگیری از انتشار خودکار، تأیید انسانی الزامی است.</p>
+        @endif
+        @if(in_array($publicationWorkflow['status'], ['awaiting_admin_approval','awaiting_manual_approval'], true)
+          && app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.publish_products'))
+          <form method="post" action="{{ route('admin.store.publication.approve', $product) }}" onsubmit="return confirm('آیا پس از بررسی گزارش ناظر، انتشار این محصول را تأیید می‌کنید؟');">
+            @csrf
+            <button type="submit" class="store-primary-btn">تأیید نهایی و انتشار محصول</button>
+          </form>
+        @endif
+      </section>
+    @endif
 
+    @if(!$isEdit)
+      @include('admin.store.partials.file-first-intake')
+    @else
     <div class="product-workflow {{ $isEdit ? 'has-media' : 'has-upload' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
@@ -350,6 +389,7 @@
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
         <section class="product-ingestion" data-product-ingestion
+          data-product-id="{{ $product->id }}"
           data-preflight-url="{{ route('admin.store.files.preflight',$product) }}"
           data-confirm-url-template="{{ route('admin.store.files.confirm',[$product,'__INGESTION__']) }}"
           data-cancel-url-template="{{ route('admin.store.files.cancel',[$product,'__INGESTION__']) }}"
@@ -371,6 +411,14 @@
             <div class="product-ingestion-dialog">
               <div class="product-ingestion-modal-head"><span class="product-ingestion-icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>بررسی داخلی فراست</small><h3 id="ingestion-modal-title">گزارش بررسی فایل</h3><p data-ingestion-filename></p></div><button type="button" data-ingestion-close aria-label="بستن پنجره">×</button></div>
               <div class="product-ingestion-selected" data-ingestion-selected aria-live="polite"></div>
+              <div class="product-ingestion-antivirus">
+                @if(app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.security_scan'))
+                  <label><input type="checkbox" data-ingestion-antivirus> اسکن تکمیلی آنتی‌ویروس (اختیاری)</label>
+                  <small>پیش‌فرض خاموش است. با فعال‌سازی، فایل در قرنطینه خصوصی با موتور ClamAV بررسی می‌شود؛ این گزینه جایگزین بررسی ساختاری داخلی نیست.</small>
+                @else
+                  <small>بررسی ساختاری داخلی فعال است. اسکن آنتی‌ویروس تکمیلی فقط برای حساب‌های دارای مجوز در دسترس است.</small>
+                @endif
+              </div>
               <div class="product-ingestion-timeline" data-ingestion-timeline>
                 <div data-step="received" class="is-done"><i>✓</i><span>دریافت فایل</span></div>
                 <div data-step="upload"><i>2</i><span>انتقال امن به قرنطینه</span></div>
@@ -386,7 +434,7 @@
                 <small data-ingestion-progress-label>آماده‌سازی فایل...</small>
               </div>
               <div class="product-ingestion-report" data-ingestion-report><p>در حال بررسی فایل در محیط سایت...</p></div>
-              <p class="product-ingestion-security-note">این اسکنر داخلی فایل را اجرا نمی‌کند و سرویس ضدبدافزار ثالثی به کار نمی‌گیرد. نتیجه، بررسی ایستای ساختار و نشانه‌های خطر است و تضمین کشف همه بدافزارهای ناشناخته نیست.</p>
+              <p class="product-ingestion-security-note">بررسی ساختاری داخلی فایل را اجرا نمی‌کند. اسکن آنتی‌ویروس فقط با انتخاب صریح حساب مجاز و در صورت پیکربندی ClamAV انجام می‌شود؛ هیچ‌یک تضمین کشف همه تهدیدهای ناشناخته نیست.</p>
               <div class="product-ingestion-actions"><button type="button" class="store-outline-btn" data-ingestion-cancel>لغو انتخاب</button><button type="button" class="store-primary-btn" data-ingestion-confirm disabled>بررسی امن فایل</button></div>
             </div>
           </div>
@@ -411,6 +459,7 @@
     <div class="store-panel product-category-panel product-tag-panel"><h2>مدیریت سریع برچسب‌ها</h2><p class="product-inline-feedback" data-inline-feedback role="status" aria-live="polite"></p><form method="post" action="{{ route('admin.store.tags.store') }}" data-inline-create="tag">@csrf<input name="name" required maxlength="100" placeholder="نام برچسب جدید"><input name="slug" maxlength="120" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن برچسب</button></form><small class="product-help">پس از ذخیره، برچسب در فهرست برچسب‌های قابل انتخاب محصول قرار می‌گیرد.</small></div>
   </div>
 </section>
+    @endif
 @endsection
 @push('scripts')
 <script src="{{ asset('js/product-ingestion.js') }}" defer></script>
@@ -585,6 +634,7 @@
 .product-wizard-progress{display:grid;gap:4px;padding:12px 15px;border:1px solid #dce7f4;border-radius:12px;background:#f6f9fd;color:#405875}
 .product-wizard-progress strong{font-size:.76rem}.product-wizard-progress span{font-size:.66rem;color:var(--st-muted)}
 @media(max-width:650px){.product-wizard-panel{padding:13px}.product-wizard-actions button{flex:1}.product-workflow{overflow-x:auto}}
+.product-file-first-step{display:grid;gap:1rem}.product-file-first-step>p{line-height:1.95;color:var(--muted,#64748b);margin:0}.product-file-first-points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem 1.25rem;list-style:none;padding:0;margin:0}.product-file-first-points li{position:relative;padding-inline-start:1.4rem;line-height:1.8}.product-file-first-points li:before{content:"✓";position:absolute;inset-inline-start:0;color:var(--success,#15803d);font-weight:800}@media(max-width:720px){.product-file-first-points{grid-template-columns:1fr}}
 </style>
 @endpush
 
