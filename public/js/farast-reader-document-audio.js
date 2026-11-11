@@ -43,13 +43,23 @@
           cache: 'no-store',
           headers: { Accept: 'audio/wav' }
         });
-        if (response.ok) {
+        if ([200, 206].includes(response.status)) {
           stopped = true;
           pendingStatus.textContent = 'صوت آماده شد؛ در حال بارگذاری زمان‌بندی دقیق…';
           window.location.reload();
           return;
         }
-        if ([401, 403, 410].includes(response.status)) {
+        if (response.status === 409) {
+          stopped = true;
+          pendingStatus.textContent = 'آماده‌سازی نسخه صوتی با خطا روبه‌رو شد؛ متن سند همچنان در دسترس است.';
+          return;
+        }
+        if (response.status === 410) {
+          stopped = true;
+          pendingStatus.textContent = 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
+          return;
+        }
+        if ([401, 403].includes(response.status)) {
           stopped = true;
           pendingStatus.textContent = 'دسترسی صوت تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.';
           return;
