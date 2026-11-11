@@ -321,10 +321,20 @@ class StoreController extends Controller
         // storage backend and stream a bounded range instead of materializing it in PHP memory.
         $size = $storage->size($previewDisk, $preview->path);
         abort_unless($size > 0, 404);
+        $version = (string) ($preview->updated_at?->getTimestamp() ?? 0);
+        $etag = '"'.hash('sha256', $preview->id.'|'.$version.'|'.$size).'"';
+        $headers['ETag'] = $etag;
+        if ($preview->updated_at) {
+            $headers['Last-Modified'] = $preview->updated_at->copy()->utc()->format('D, d M Y H:i:s').' GMT';
+        }
         $start = 0;
         $end = $size - 1;
         $status = 200;
         $range = request()->header('Range');
+        $ifRange = request()->header('If-Range');
+        if (is_string($ifRange) && $ifRange !== '' && ! hash_equals($etag, trim($ifRange))) {
+            $range = null;
+        }
 
         if (is_string($range) && preg_match('/^bytes=/i', $range)) {
             if (preg_match('/\\Abytes=(\\d*)-(\\d*)\\z/i', trim($range), $matches)) {
