@@ -253,6 +253,7 @@ class StorageCoreTest extends TestCase
         $this->assertSame((int) $stored['size_bytes'], $volume->used_bytes);
         $this->assertSame(1, $volume->object_count);
         $this->assertNull(data_get($managed->metadata, 'orphaned_source'));
+        $this->assertFalse(app(StorageManager::class)->exists('storage_volume:'.$volume->id, $stagingPath === $managed->file_key ? data_get($managed->metadata, 'restored_original_key', '') : 'restore-test/missing-key'));
         $this->assertTrue(app(StorageManager::class)->exists($managed->metadata['disk'], $managed->file_key));
     }
 
