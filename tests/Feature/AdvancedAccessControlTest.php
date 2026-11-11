@@ -347,6 +347,11 @@ class AdvancedAccessControlTest extends TestCase
             'scope_id' => $foreignTeam->id,
         ])->assertUnprocessable();
 
+        $this->post('/admin/teams/'.$foreignTeam->id.'/members', [
+            'user_id' => $manager->id,
+            'team_role' => 'supervisor',
+        ])->assertUnprocessable();
+
         $this->assertDatabaseMissing('farast_user_roles', [
             'user_id' => $manager->id,
             'role_id' => $roleId,
