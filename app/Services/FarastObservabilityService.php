@@ -48,6 +48,7 @@ class FarastObservabilityService
             'observability_enabled' => (bool) config('observability.enabled', true),
             'components' => $components,
             'incidents' => $this->recentIncidents(),
+            'incident_trend_24h' => $this->incidentTrend(),
         ];
     }
 
@@ -91,6 +92,48 @@ class FarastObservabilityService
 
             return [];
         }
+    }
+
+
+    /**
+     * Aggregate a bounded 24-hour incident trend from the same append-only ledger.
+     */
+    private function incidentTrend(): array
+    {
+        $trend = ['critical' => 0, 'warning' => 0, 'recovered' => 0, 'sampled' => 0, 'truncated' => false];
+
+        try {
+            if (! Schema::hasTable('farast_audit_events')) {
+                return $trend;
+            }
+
+            $events = DB::table('farast_audit_events')
+                ->where('event_type', 'like', 'observability.incident.%')
+                ->where('created_at', '>=', now()->subDay())
+                ->orderByDesc('id')
+                ->limit(501)
+                ->get(['event_type', 'payload_meta']);
+
+            $trend['truncated'] = $events->count() > 500;
+            foreach ($events->take(500) as $event) {
+                $meta = is_array($event->payload_meta)
+                    ? $event->payload_meta
+                    : (json_decode((string) $event->payload_meta, true) ?: []);
+                $type = (string) $event->event_type;
+                $severity = (string) ($meta['severity'] ?? (substr($type, strrpos($type, '.') + 1) ?: 'unknown'));
+
+                if ($severity === 'recovered') {
+                    $trend['recovered']++;
+                } elseif (in_array($severity, ['critical', 'warning'], true)) {
+                    $trend[$severity]++;
+                }
+                $trend['sampled']++;
+            }
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('incident_trend', $exception);
+        }
+
+        return $trend;
     }
 
     private function database(): array
