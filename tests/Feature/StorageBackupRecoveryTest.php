@@ -65,6 +65,16 @@ class StorageBackupRecoveryTest extends TestCase
         File::ensureDirectoryExists(storage_path('app/private'));
         File::put(storage_path('app/private/backup-recovery-fixture.txt'), 'snapshot-private-content');
 
+        // The scheduled job marks this request running before it takes the snapshot.
+        // Restore must close that in-flight request or the next weekly backup is blocked.
+        StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'scheduler_request',
+            'status' => 'running',
+            'started_at' => now(),
+            'metadata' => ['request_only' => true],
+        ]);
+
         StorageVolume::forceCreate([
             'id' => $this->volumeId,
             'drive_key' => 'foreign_backup',
@@ -164,6 +174,19 @@ class StorageBackupRecoveryTest extends TestCase
                 ->where('source_name', 'snapshot_lock')
                 ->where('status', 'running')
                 ->count()
+        );
+        $this->assertSame(
+            0,
+            StorageBackupRun::query()
+                ->where('source_name', 'scheduler_request')
+                ->whereIn('status', ['queued', 'running'])
+                ->count()
+        );
+        $this->assertNotEmpty(
+            data_get(
+                StorageBackupRun::query()->where('source_name', 'scheduler_request')->firstOrFail()->metadata,
+                'restored_at'
+            )
         );
 
         $restoredVolume = StorageVolume::query()->findOrFail($this->volumeId);
