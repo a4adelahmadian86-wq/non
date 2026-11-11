@@ -265,7 +265,7 @@ class AuthorizationService
         }
 
         if ($scope === 'global') {
-            return $actorScope === 'global' && $actor->isAdmin();
+            return $actorScope === 'global';
         }
 
         if ($scope === 'organization') {
@@ -280,9 +280,46 @@ class AuthorizationService
             }
             $teamOrganizationId = \\App\\Models\\Team::query()->whereKey($teamId)->value('organization_id');
 
-            return $teamOrganizationId !== null
-                && ($organizationId === null || $organizationId === (int) $teamOrganizationId)
-                && ($actorScope === 'global' || (int) $actor->organization_id === (int) $teamOrganizationId);
+            if ($teamOrganizationId === null
+                || ($organizationId !== null && $organizationId !== (int) $teamOrganizationId)) {
+                return false;
+            }
+
+            if ($actorScope === 'global') {
+                return true;
+            }
+
+            if ((int) $actor->organization_id !== (int) $teamOrganizationId) {
+                return false;
+            }
+
+            return $actorScope === 'organization'
+                || \\App\\Models\\Team::query()
+                    ->whereKey($teamId)
+                    ->where('supervisor_id', $actor->id)
+                    ->exists()
+                || $actor->teams()->whereKey($teamId)->wherePivot('team_role', 'manager')->exists();
+        }
+
+        if ($actorScope === 'global') {
+            return true;
+        }
+
+        if ($actorScope === 'organization') {
+            return $organizationId !== null
+                && (int) $subject->organization_id === $organizationId
+                && (int) $actor->organization_id === $organizationId;
+        }
+
+        if ($actorScope === 'team') {
+            return $actor->teams()
+                ->wherePivot('team_role', 'manager')
+                ->whereHas('members', fn ($query) => $query->whereKey($subject->id))
+                ->exists()
+                || \\App\\Models\\Team::query()
+                    ->where('supervisor_id', $actor->id)
+                    ->whereHas('members', fn ($query) => $query->whereKey($subject->id))
+                    ->exists();
         }
 
         return (int) $actor->id === (int) $subject->id;
