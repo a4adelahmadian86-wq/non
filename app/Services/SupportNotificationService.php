@@ -83,7 +83,7 @@ class SupportNotificationService
                 staff: true,
                 eventIdentity: $messageId === null ? null : 'message:'.$messageId
             );
-            $this->email->sendTicketCustomerReply($staff, $ticket, $body);
+            $this->email->sendTicketCustomerReply($staff, $ticket, $body, $messageId === null ? null : 'message:'.$messageId);
         }
 
         if ($this->smsEnabled('ticket_customer_reply') && $ticket->priority === 'high') {
@@ -116,7 +116,7 @@ class SupportNotificationService
                 $ticket,
                 eventIdentity: $messageId === null ? null : 'message:'.$messageId
             );
-            $this->email->sendTicketReply($ticket->user, $ticket, $body);
+            $this->email->sendTicketReply($ticket->user, $ticket, $body, $messageId === null ? null : 'message:'.$messageId);
 
             if ($this->smsEnabled('ticket_reply') && $ticket->user?->mobile) {
                 $this->sms->sendEvent(
@@ -127,7 +127,7 @@ class SupportNotificationService
                 );
             }
         } elseif ($ticket->guest_email) {
-            $this->email->sendTicketReplyGuest($ticket, $body);
+            $this->email->sendTicketReplyGuest($ticket, $body, $messageId === null ? null : 'message:'.$messageId);
         }
     }
 
@@ -148,7 +148,7 @@ class SupportNotificationService
                 $ticket,
                 eventIdentity: $eventIdentity ?? 'transition:'.$ticket->updated_at?->format('U.u')
             );
-            $this->email->sendTicketClosed($ticket->user, $ticket);
+            $this->email->sendTicketClosed($ticket->user, $ticket, $eventIdentity ?? 'transition:'.($ticket->updated_at?->format('U.u') ?? 'unknown'));
 
             if ($this->smsEnabled('ticket_closed') && $ticket->user?->mobile) {
                 $this->sms->sendEvent(
@@ -176,7 +176,7 @@ class SupportNotificationService
             staff: true,
             eventIdentity: $eventIdentity ?? 'assignment:'.$ticket->updated_at?->format('U.u')
         );
-        $this->email->sendTicketAssigned($agent, $ticket);
+        $this->email->sendTicketAssigned($agent, $ticket, $eventIdentity ?? 'assignment:'.($ticket->updated_at?->format('U.u') ?? 'unknown'));
 
         if ($this->smsEnabled('ticket_assigned') && $agent->mobile) {
             $this->sms->sendEvent(
