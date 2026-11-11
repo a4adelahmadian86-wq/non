@@ -158,7 +158,7 @@ Route::get('/editor/voice/health',function(){
     $gateway=rtrim(trim((string)config('services.ai_gateway.url','')),'/');
     if($gateway==='')return response()->json(['status'=>'unavailable'],503,['Cache-Control'=>'no-store']);
     try{
-        $upstream=\Illuminate\Support\Facades\Http::acceptJson()->connectTimeout(4)->timeout(12)->get($gateway.'/health');
+        $upstream=\Illuminate\Support\Facades\Http::acceptJson()->connectTimeout(8)->timeout(55)->get($gateway.'/health');
         $data=$upstream->json();
         $ready=$upstream->successful()&&is_array($data)&&($data['status']??null)==='ok'
             &&($data['asr_configured']??false)===true&&($data['tts_configured']??false)===true&&($data['chat_configured']??false)===true;
