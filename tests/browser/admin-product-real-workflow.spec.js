@@ -209,7 +209,18 @@ test.describe('Real admin product workflow', () => {
     const persistedRole = page.locator('.role-access-role').filter({
       has: page.getByRole('heading', { name: 'کارمند', exact: true }),
     });
-    await expect(persistedRole.locator('input[name="permissions[]"][value="reports.ai"]')).toBeChecked();
+    const persistedPermission = persistedRole.locator('input[name="permissions[]"][value="reports.ai"]');
+    await expect(persistedPermission).toBeChecked();
+    await persistedPermission.uncheck();
+
+    const restoreResponsePromise = page.waitForResponse(result =>
+      new URL(result.url()).pathname === '/admin/access/roles/employee' &&
+      result.request().method() === 'POST'
+    );
+    await persistedRole.getByRole('button', { name: 'ذخیره مجوزهای کارمند' }).click();
+    const restoreResponse = await restoreResponsePromise;
+    expect(restoreResponse.status()).toBe(302);
+    await expect(persistedPermission).not.toBeChecked();
   });
 
   test('admin sidebar destinations render without client-visible server errors', async ({ page }) => {
