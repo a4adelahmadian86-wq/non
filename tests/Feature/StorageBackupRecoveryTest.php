@@ -247,7 +247,7 @@ class StorageBackupRecoveryTest extends TestCase
 
         $bootstrapAudit = StorageBackupRun::query()
             ->where('source_name', 'bootstrap_restore')
-            ->where('status', 'restored')
+            ->where('status', 'completed')
             ->latest('id')
             ->firstOrFail();
         $this->assertSame($checksum, $bootstrapAudit->checksum);
