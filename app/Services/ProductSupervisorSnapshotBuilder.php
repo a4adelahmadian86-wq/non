@@ -7,6 +7,10 @@ use App\Models\StoreProduct;
 
 class ProductSupervisorSnapshotBuilder
 {
+    public function __construct(private readonly ProductKnowledgeService $knowledge)
+    {
+    }
+
     public function build(StoreProduct $product, array $settings): array
     {
         $product->loadMissing(['category', 'tags']);
@@ -91,6 +95,15 @@ class ProductSupervisorSnapshotBuilder
             'checks' => $checks,
             'instructions' => mb_substr(trim((string) ($settings['instructions'] ?? '')), 0, 2000),
         ];
+    }
+
+    public function buildReviewSnapshot(StoreProduct $product, array $settings): array
+    {
+        $snapshot = $this->build($product, $settings);
+        $snapshot['document_knowledge'] = $this->knowledge
+            ->contextForProduct($product, 12000);
+
+        return $snapshot;
     }
 
     public function fingerprint(array $snapshot): string
