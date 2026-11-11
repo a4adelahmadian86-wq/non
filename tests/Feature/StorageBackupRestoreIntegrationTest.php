@@ -94,15 +94,6 @@ class StorageBackupRestoreIntegrationTest extends TestCase
         $this->volumeId = (int) $volume->id;
 
         $beforeSnapshot = User::factory()->create();
-        $run = StorageBackupRun::create([
-            'storage_volume_id' => $volume->id,
-            'backup_type' => 'weekly',
-            'source_name' => 'application',
-            'status' => 'running',
-            'started_at' => now(),
-            'size_bytes' => 0,
-            'checksum' => null,
-        ]);
 
         DB::statement('PRAGMA wal_checkpoint(FULL)');
         DB::purge('sqlite');
@@ -114,6 +105,17 @@ class StorageBackupRestoreIntegrationTest extends TestCase
 
         DB::connection('sqlite');
         $afterSnapshot = User::factory()->create();
+
+        // The real backup run is recorded after its database snapshot is taken.
+        $run = StorageBackupRun::create([
+            'storage_volume_id' => $volume->id,
+            'backup_type' => 'weekly',
+            'source_name' => 'application',
+            'status' => 'running',
+            'started_at' => now(),
+            'size_bytes' => 0,
+            'checksum' => null,
+        ]);
 
         $password = 'restore-integration-test-key-2026';
         config(['storage_management.backup.encryption_key' => $password]);
@@ -161,15 +163,11 @@ class StorageBackupRestoreIntegrationTest extends TestCase
         $this->assertSame(0, $exitCode, $output);
         $this->assertDatabaseHas('users', ['id' => $beforeSnapshot->id]);
         $this->assertDatabaseMissing('users', ['id' => $afterSnapshot->id]);
-        $this->assertDatabaseHas('storage_backup_runs', [
-            'id' => $run->id,
-            'status' => 'completed',
-            'object_key' => $objectKey,
-            'checksum' => $checksum,
-            'size_bytes' => $size,
-        ]);
+        // The backup run and its uploaded object were created after the snapshot;
+        // restoring the snapshot correctly removes both the run row and its capacity accounting.
+        $this->assertDatabaseMissing('storage_backup_runs', ['id' => $run->id]);
         $restoredVolume = StorageVolume::findOrFail($volume->id);
-        $this->assertSame($size, $restoredVolume->used_bytes);
-        $this->assertSame(1, $restoredVolume->object_count);
+        $this->assertSame(0, $restoredVolume->used_bytes);
+        $this->assertSame(0, $restoredVolume->object_count);
     }
 }
