@@ -59,6 +59,11 @@
           pendingStatus.textContent = 'سرویس تولید صوت برای این محیط تنظیم نشده است؛ متن سند همچنان در دسترس است.';
           return;
         }
+        if (response.status === 404) {
+          stopped = true;
+          pendingStatus.textContent = 'وضعیت آماده‌سازی صوت قابل تشخیص نیست؛ برای بررسی دوباره صفحه را بارگذاری کنید.';
+          return;
+        }
         if ([401, 403].includes(response.status)) {
           stopped = true;
           pendingStatus.textContent = 'دسترسی صوت تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.';
