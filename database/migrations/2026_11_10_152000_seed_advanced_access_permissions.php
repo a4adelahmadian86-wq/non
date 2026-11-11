@@ -14,6 +14,7 @@ return new class extends Migration
 
         $now = now();
         $permissions = [
+            ['key' => 'users.capabilities.manage', 'label' => 'مدیریت قابلیت‌های کاربران', 'group' => 'users'],
             ['key' => 'access.roles.manage', 'label' => 'ایجاد و مدیریت نقش‌ها', 'group' => 'access'],
             ['key' => 'access.assign', 'label' => 'انتساب نقش به کاربران', 'group' => 'access'],
             ['key' => 'access.override', 'label' => 'مدیریت دسترسی مستقیم کاربران', 'group' => 'access'],
