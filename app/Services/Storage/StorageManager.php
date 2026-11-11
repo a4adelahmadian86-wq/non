@@ -227,6 +227,68 @@ class StorageManager
         }
     }
 
+    public function size(string $disk, string $path): int
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+            if ($volume->driver === 'local') {
+                $size = @filesize($this->localVolumePath($volume, $path));
+                if (! is_int($size) || $size < 0) throw new RuntimeException('اندازه فایل در فضای محلی دریافت نشد.');
+                return $size;
+            }
+            return $this->s3->size($volume, $path);
+        }
+        return (int) Storage::disk($disk ?: 'private')->size($path);
+    }
+
+    public function streamRange(string $disk, string $path, int $start, int $length, $output): void
+    {
+        if ($start < 0 || $length < 1 || ! is_resource($output)) {
+            throw new RuntimeException('محدوده دریافت فایل نامعتبر است.');
+        }
+
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+            if ($volume->driver !== 'local') {
+                $this->s3->streamRange($volume, $path, $start, $length, $output);
+                return;
+            }
+            $source = @fopen($this->localVolumePath($volume, $path), 'rb');
+        } else {
+            $source = Storage::disk($disk ?: 'private')->readStream($path);
+        }
+
+        if (! is_resource($source)) throw new RuntimeException('جریان فایل برای دریافت بخشی از سند در دسترس نیست.');
+        try {
+            $skip = $start;
+            while ($skip > 0 && ! feof($source)) {
+                $chunk = fread($source, min(65536, $skip));
+                if (! is_string($chunk) || $chunk === '') break;
+                $skip -= strlen($chunk);
+            }
+            if ($skip !== 0) throw new RuntimeException('پرش به محدوده درخواستی فایل ناموفق بود.');
+
+            $remaining = $length;
+            while ($remaining > 0 && ! feof($source)) {
+                $chunk = fread($source, min(65536, $remaining));
+                if (! is_string($chunk) || $chunk === '') break;
+                $written = 0;
+                $chunkLength = strlen($chunk);
+                while ($written < $chunkLength) {
+                    $count = fwrite($output, substr($chunk, $written));
+                    if ($count === false || $count === 0) throw new RuntimeException('ارسال بخشی از سند ناموفق بود.');
+                    $written += $count;
+                }
+                $remaining -= $chunkLength;
+            }
+            if ($remaining !== 0) throw new RuntimeException('دریافت بخشی از سند ناقص بود.');
+        } finally {
+            fclose($source);
+        }
+    }
+
     public function uploadBackup(StorageVolume $volume, string $key, string $localPath): void
     {
         $this->writeToVolume($volume, StoragePath::normalizeObjectKey($key), $localPath);
