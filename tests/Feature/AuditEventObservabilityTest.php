@@ -76,6 +76,8 @@ class AuditEventObservabilityTest extends TestCase
 
         $snapshot = app(FarastObservabilityService::class)->snapshot();
 
+        $this->assertTrue($snapshot['incident_history_available']);
+        $this->assertTrue($snapshot['incident_trend_24h']['available']);
         $this->assertCount(1, $snapshot['incidents']);
         $this->assertSame('observability.incident.critical', $snapshot['incidents'][0]['event_type']);
         $this->assertSame('critical', $snapshot['incidents'][0]['severity']);
