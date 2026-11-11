@@ -66,9 +66,14 @@ class AuthorizationService
         }
 
         if ($user->isAdmin()) {
-            // Preserve break-glass navigation, but still honor an explicitly
-            // narrowed request scope for record-level resource checks.
-            $allowed = $context === [] || $this->scopeMatches($user, $this->baseScope($user), null, $context);
+            $scope = $this->baseScope($user);
+            $allowed = $scope === 'global'
+                || ($context !== [] && $this->scopeMatches(
+                    $user,
+                    $scope,
+                    \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user),
+                    $context
+                ));
 
             return [
                 'allowed' => $allowed,
@@ -145,7 +150,15 @@ class AuthorizationService
         // navigation and unscoped operations. Explicit record checks still honor
         // a narrower scope imposed by the trusted admin-scope middleware.
         if ($user->isAdmin()) {
-            return $context === [] || $this->scopeMatches($user, $this->baseScope($user), null, $context);
+            $scope = $this->baseScope($user);
+
+            return $scope === 'global'
+                || ($context !== [] && $this->scopeMatches(
+                    $user,
+                    $scope,
+                    \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user),
+                    $context
+                ));
         }
 
         $contextKey = $context ? hash('sha256', json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') : 'navigation';
@@ -216,6 +229,10 @@ class AuthorizationService
             : null;
         if (! in_array($scope, ['global', 'organization', 'team', 'own'], true)) {
             $scope = \App\Http\Middleware\ResolveAdminScope::scopeFor($user);
+        }
+
+        if ($scope === 'team' && $user->isAdmin()) {
+            return \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user) ? 'team' : 'own';
         }
 
         // A supervisor with no managed team is effectively personal-scope.
@@ -342,13 +359,16 @@ class AuthorizationService
             if ($hasResourceContext && (! array_key_exists('organization_id', $context) || $context['organization_id'] === null || $context['organization_id'] === '')) {
                 return false;
             }
+            $actorOrganizationId = $user->isAdmin()
+                ? \App\Http\Middleware\ResolveAdminScope::organizationIdForScope($user)
+                : $user->organization_id;
             $organizationId = $hasResourceContext
                 ? $context['organization_id']
-                : ($scopeId ?? $user->organization_id);
+                : ($scopeId ?? $actorOrganizationId);
 
             return $organizationId !== null
-                && $user->organization_id !== null
-                && (int) $organizationId === (int) $user->organization_id
+                && $actorOrganizationId !== null
+                && (int) $organizationId === (int) $actorOrganizationId
                 && ($scopeId === null || (int) $scopeId === (int) $organizationId);
         }
 
@@ -356,10 +376,13 @@ class AuthorizationService
             // When a resource declares its organization, it must agree with the
             // actor's organization. A shared/corrupt team pivot cannot expose a
             // foreign-organization user or record.
+            $actorOrganizationId = $user->isAdmin()
+                ? \App\Http\Middleware\ResolveAdminScope::organizationIdForScope($user)
+                : $user->organization_id;
             if ($hasResourceContext && array_key_exists('organization_id', $context)
                 && ($context['organization_id'] === null
-                    || $user->organization_id === null
-                    || (int) $context['organization_id'] !== (int) $user->organization_id)) {
+                    || $actorOrganizationId === null
+                    || (int) $context['organization_id'] !== (int) $actorOrganizationId)) {
                 return false;
             }
 
@@ -397,6 +420,24 @@ class AuthorizationService
     private function teamIdsForUser(User $user): array
     {
         if (! array_key_exists($user->id, $this->teamIdsByUser)) {
+            if ($user->isAdmin()) {
+                $scope = \App\Http\Middleware\ResolveAdminScope::scopeFor($user);
+                $scopeId = \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user);
+                if ($scope === 'team' && $scopeId) {
+                    $this->teamIdsByUser[$user->id] = \App\Models\Team::query()->whereKey($scopeId)->exists() ? [$scopeId] : [];
+                } elseif ($scope === 'organization' && $scopeId) {
+                    $this->teamIdsByUser[$user->id] = \App\Models\Team::query()
+                        ->where('organization_id', $scopeId)
+                        ->pluck('id')
+                        ->map(fn ($id) => (int) $id)
+                        ->all();
+                } else {
+                    $this->teamIdsByUser[$user->id] = [];
+                }
+
+                return $this->teamIdsByUser[$user->id];
+            }
+
             // Ordinary membership is not management authority. Only manager
             // memberships and explicitly supervised teams enter the actor scope.
             // Team authority is valid only inside the user's own organization.
