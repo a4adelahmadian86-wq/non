@@ -332,6 +332,27 @@ class StoreReaderAccessTest extends TestCase
 
         $this->actingAs($user)->get(route('store.preview', $full))->assertNotFound();
         $this->actingAs($user)->post(route('library.download.issue', $libraryItem))->assertForbidden();
+
+        $document->artifacts()->delete();
+        Storage::disk('private')->delete($audioPath);
+        $structure = (array) $document->fresh()->structure_json;
+        $structure['audio'] = ['status' => 'failed'];
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="failed"', false);
+
+        $structure['audio'] = ['status' => 'awaiting_provider'];
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="unavailable"', false);
+
+        unset($structure['audio']);
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status=""', false);
     }
 
     public function test_docx_sanitizer_drops_embedded_images_over_the_per_image_budget(): void
