@@ -806,8 +806,8 @@ class StoreController extends Controller
         try {
             $storage->downloadTo($artifactDisk, $artifact->path, $temporary);
             $stream = fopen($temporary, 'rb');
-            if (! is_resource($stream)) throw new \\RuntimeException('جریان فایل صوتی برای پخش باز نشد.');
-        } catch (\\Throwable $exception) {
+            if (! is_resource($stream)) throw new \RuntimeException('جریان فایل صوتی برای پخش باز نشد.');
+        } catch (\Throwable $exception) {
             @unlink($temporary);
             throw $exception;
         }
