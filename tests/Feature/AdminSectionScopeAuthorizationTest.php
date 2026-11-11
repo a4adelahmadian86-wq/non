@@ -277,4 +277,29 @@ class AdminSectionScopeAuthorizationTest extends TestCase
         $this->post('/admin/users/'.$insideUser->id.'/role', ['role' => User::ROLE_ADMIN])->assertForbidden();
         $this->assertDatabaseHas('users', ['id' => $insideUser->id, 'role' => User::ROLE_EMPLOYEE]);
     }
+
+    public function test_store_admin_routes_require_global_store_section_even_when_multi_role_console_is_enabled(): void
+    {
+        $organization = Organization::create([
+            'name' => 'Store Scope Org',
+            'slug' => 'store-scope-org',
+            'status' => 'active',
+        ]);
+        $manager = $this->makeUser('09123456785', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
+
+        $storePermission = Permission::query()->where('key', 'store.manage')->firstOrFail();
+        RolePermission::firstOrCreate([
+            'role' => User::ROLE_ORGANIZATION_MANAGER,
+            'permission_id' => $storePermission->id,
+        ]);
+
+        // Even an explicit role grant cannot widen a section configured as global-only.
+        $this->actingAs($manager)->get('/admin/store')->assertForbidden();
+        $this->post('/admin/store', ['name' => 'Must Not Be Created'])->assertForbidden();
+
+        $employee = $this->makeUser('09123456786', User::ROLE_EMPLOYEE);
+        $this->actingAs($employee)->get('/admin/store')->assertForbidden();
+        $this->post('/admin/store', ['name' => 'Must Not Be Created Either'])->assertForbidden();
+    }
+
 }
