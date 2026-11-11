@@ -7,6 +7,8 @@ use App\Models\Payment;
 use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
+use App\Models\StoreCourseLesson;
+use App\Models\StoreCourseSection;
 use App\Models\StoreLibraryItem;
 use App\Models\StoreOrderItem;
 use App\Models\StoreProduct;
@@ -89,6 +91,77 @@ class StoreCourseEnrollmentIntegrityTest extends TestCase
         }
 
         return compact('user', 'product', 'course', 'order', 'orderItem', 'libraryItem');
+    }
+
+    public function test_zero_total_checkout_marks_order_paid_before_granting_course_access(): void
+    {
+        $user = User::factory()->create();
+        $category = StoreCategory::create([
+            'name' => 'دوره رایگان',
+            'slug' => 'free-course-enrollment-integrity',
+            'is_active' => true,
+        ]);
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'دوره رایگان یکپارچه',
+            'slug' => 'free-course-enrollment-integrity-product',
+            'sku' => 'FREE-COURSE-ENROLL',
+            'type' => 'course',
+            'price_rials' => 0,
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+        $course = StoreCourse::create([
+            'product_id' => $product->id,
+            'level' => 'beginner',
+            'language' => 'fa',
+            'drip_enabled' => false,
+        ]);
+        $section = StoreCourseSection::create([
+            'course_id' => $course->id,
+            'title' => 'فصل رایگان',
+            'sort_order' => 1,
+        ]);
+        StoreCourseLesson::create([
+            'section_id' => $section->id,
+            'title' => 'درس رایگان',
+            'slug' => 'free-course-enrollment-integrity-lesson',
+            'lesson_type' => 'article',
+            'content' => 'محتوای رایگان',
+            'is_published' => true,
+            'is_preview' => false,
+            'sort_order' => 1,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
+            ->assertOk();
+
+        $this->post('/cart/checkout', ['accept_terms' => '1'])
+            ->assertRedirect(route('library'));
+
+        $order = Order::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'paid')
+            ->where('pricing_snapshot->kind', 'store')
+            ->latest('id')
+            ->firstOrFail();
+
+        $payment = Payment::query()->where('order_id', $order->id)->firstOrFail();
+        $this->assertSame('free', $payment->gateway);
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame(0, (int) $payment->amount_rials);
+
+        $libraryItem = StoreLibraryItem::query()
+            ->where('order_id', $order->id)
+            ->firstOrFail();
+        $enrollment = StoreCourseEnrollment::query()
+            ->where('library_item_id', $libraryItem->id)
+            ->firstOrFail();
+
+        $this->assertSame($user->id, (int) $enrollment->user_id);
+        $this->assertSame($product->id, (int) $enrollment->product_id);
+        $this->assertNotNull($order->paid_at);
     }
 
     public function test_pending_order_cannot_grant_course_enrollment(): void
