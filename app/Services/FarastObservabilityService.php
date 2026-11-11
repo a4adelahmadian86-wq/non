@@ -11,11 +11,21 @@ class FarastObservabilityService
 {
     public function snapshot(): array
     {
+        $productServices = app(ProductInfrastructureHealthService::class)->snapshot();
+        $productServiceStatuses = array_column($productServices, 'status');
+        $productServiceStatus = array_intersect($productServiceStatuses, ['unavailable', 'misconfigured']) !== []
+            ? 'critical'
+            : (array_intersect($productServiceStatuses, ['degraded', 'not_configured']) !== [] ? 'warning' : 'healthy');
+
         $components = [
             'database' => $this->database(),
             'queue' => $this->queue(),
             'storage' => $this->storage(),
             'logging' => $this->logging(),
+            'product_services' => [
+                'status' => $productServiceStatus,
+                'services' => $productServices,
+            ],
         ];
 
         $statuses = array_column($components, 'status');
