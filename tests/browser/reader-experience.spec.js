@@ -179,8 +179,9 @@ async function mountPdfReader(page, pageCount = 1, pdfBytes = null) {
   await page.evaluate(() => {
     window.__pdfAnnotationErrors = [];
     window.__pdfLayerDiagnostics = [];
-    window.addEventListener('farast:reader-annotation-layer-error', event => window.__pdfAnnotationErrors.push(event.detail?.message || 'unknown annotation error'));
-    window.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
+    const readerRoot = document.querySelector('[data-reader-root]');
+    readerRoot?.addEventListener('farast:reader-annotation-layer-error', event => window.__pdfAnnotationErrors.push(event.detail?.message || 'unknown annotation error'));
+    readerRoot?.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
   });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
