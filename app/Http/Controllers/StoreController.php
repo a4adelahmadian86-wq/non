@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\GenerateProductDocumentAudio;
 use App\Models\ContentDiscussion;
 use App\Models\StoreCategory;
 use App\Models\StoreCourseLesson;
