@@ -150,9 +150,41 @@ class RestoreStorageBackup extends Command
 
         if ($driver === 'sqlite') {
             $database = (string) ($config['database'] ?? '');
-            if ($database === '' || $database === ':memory:' || ! copy($dumpPath, $database)) {
-                throw new RuntimeException('بازگردانی فایل پایگاه داده SQLite ناموفق بود.');
+            if ($database === '' || $database === ':memory:') {
+                throw new RuntimeException('مسیر پایگاه داده SQLite برای بازیابی معتبر نیست.');
             }
+
+            File::ensureDirectoryExists(dirname($database));
+            $temporary = $database.'.restore-'.bin2hex(random_bytes(8));
+            $previous = $database.'.pre-restore-'.bin2hex(random_bytes(8));
+            if (! copy($dumpPath, $temporary)) {
+                throw new RuntimeException('ساخت فایل موقت پایگاه داده SQLite ناموفق بود.');
+            }
+
+            // Remove stale WAL sidecars before replacing the database snapshot.
+            @unlink($database.'-wal');
+            @unlink($database.'-shm');
+
+            $hadPrevious = is_file($database);
+            if ($hadPrevious && ! @rename($database, $previous)) {
+                @unlink($temporary);
+                throw new RuntimeException('جابجایی امن پایگاه داده فعلی SQLite ناموفق بود.');
+            }
+
+            if (! @rename($temporary, $database)) {
+                if ($hadPrevious) {
+                    @rename($previous, $database);
+                }
+                @unlink($temporary);
+                throw new RuntimeException('جایگزینی اتمیک پایگاه داده SQLite ناموفق بود.');
+            }
+
+            if ($hadPrevious) {
+                @unlink($previous);
+            }
+            @unlink($database.'-wal');
+            @unlink($database.'-shm');
+
             return;
         }
 
