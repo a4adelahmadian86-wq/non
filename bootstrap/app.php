@@ -7,7 +7,14 @@ use Illuminate\Foundation\Http\Middleware\TrimStrings;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath:dirname(__DIR__))
-    ->withRouting(web:__DIR__.'/../routes/web.php',commands:__DIR__.'/../routes/console.php',health:'/up')
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+        then: function (): void {
+            Route::get('/ready', ReadinessController::class)->name('health.ready');
+        }
+    )
     ->withMiddleware(function(Middleware $middleware):void{
         TrimStrings::skipWhen(fn(Request $request):bool=>$request->is('editor/save')&&$request->has('document_model'));
         $middleware->alias(['single.editor'=>App\Http\Middleware\EnsureSingleEditor::class,'admin'=>App\Http\Middleware\AdminOnly::class,'admin.scope'=>App\Http\Middleware\ResolveAdminScope::class,'admin.section'=>App\Http\Middleware\EnsureAdminSection::class,'capability'=>App\Http\Middleware\EnsureCapability::class,'permission'=>App\Http\Middleware\EnsurePermission::class]);
