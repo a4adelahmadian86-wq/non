@@ -82,6 +82,10 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'user_id' => $owner->id,
             'status' => 'completed',
         ]);
+        $ticketEvent = DB::table('farast_workflow_events')
+            ->where('idempotency_key', 'ticket:'.$ticket->id.':created')
+            ->first();
+        $this->assertNotEmpty(data_get(json_decode($ticketEvent->context, true), 'ticket_code'));
         $this->assertDatabaseHas('farast_workflow_runs', [
             'workflow_id' => $workflow,
             'status' => 'completed',
