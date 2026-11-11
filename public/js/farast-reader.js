@@ -612,7 +612,7 @@
       if(!pdfDoc){
         const pdfjs=await getPdfjs();
         pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/legacy/build/pdf.worker.mjs';
-        const loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,enableXfa:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
+        const loadingTask=pdfjs.getDocument({url:nextUrl,withCredentials:true,rangeChunkSize:65536,isEvalSupported:false,useSystemFonts:true,cMapUrl:'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',wasmUrl:'/vendor/pdfjs/wasm/'});
         loadingTask.onPassword=(updatePassword,reason)=>requestPdfPassword(updatePassword,reason,loadingTask);
         pdfDoc=await loadingTask.promise;
       }
