@@ -111,7 +111,7 @@ class CrmCustomerWorkspaceTest extends TestCase
             'type' => 'course', 'price_rials' => 300000, 'status' => 'published',
             'published_at' => now(),
         ]);
-        $course = StoreCourse::create(['product_id' => $courseProduct->id, 'level' => 'beginner', 'language' => 'fa']);
+        $course = StoreCourse::create(['product_id' => $courseProduct->id, 'level' => 'beginner', 'language' => 'fa', 'drip_enabled' => true]);
         $section = StoreCourseSection::create(['course_id' => $course->id, 'title' => 'فصل CRM', 'sort_order' => 1]);
         $completedLesson = StoreCourseLesson::create([
             'section_id' => $section->id, 'title' => 'درس تکمیل‌شده', 'slug' => 'crm-course-completed',
@@ -119,7 +119,7 @@ class CrmCustomerWorkspaceTest extends TestCase
         ]);
         StoreCourseLesson::create([
             'section_id' => $section->id, 'title' => 'درس در حال انجام', 'slug' => 'crm-course-pending',
-            'lesson_type' => 'article', 'content' => 'متن درس دوم', 'is_published' => true, 'sort_order' => 2,
+            'lesson_type' => 'article', 'content' => 'متن درس دوم', 'is_published' => true, 'drip_after_days' => 3, 'sort_order' => 2,
         ]);
         $courseOrder = Order::create([
             'user_id' => $customer->id, 'subtotal_rials' => 300000, 'discount_rials' => 0,
@@ -165,8 +165,8 @@ class CrmCustomerWorkspaceTest extends TestCase
                 'id' => $enrollment->id,
                 'status' => 'active',
                 'completed_lessons_count' => 1,
-                'published_lessons_count' => 2,
-                'progress_percent' => 50,
+                'published_lessons_count' => 1,
+                'progress_percent' => 100,
             ]);
 
         $this->postJson('/admin/crm/customers/'.$customer->id.'/notes', [
