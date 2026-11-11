@@ -1944,9 +1944,15 @@ test('captures a selected reader passage and jumps back to its anchored discussi
 
 
 test('renders PDF hyperlinks and editable standard AcroForm fields', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__pdfAnnotationErrors = [];
+    window.addEventListener('farast:reader-annotation-layer-error', event => window.__pdfAnnotationErrors.push(event.detail?.message || 'unknown annotation error'));
+  });
   await mountPdfReader(page, 1, makePdfAnnotationFixture());
   const root = page.locator('[data-reader-root]');
   await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  const annotationErrors = await page.evaluate(() => window.__pdfAnnotationErrors);
+  expect(annotationErrors).toEqual([]);
   const layer = root.locator('.farast-pdf-annotation-layer');
   await expect(layer).toBeVisible();
   const layerPanel = root.locator('#reader-layers');
