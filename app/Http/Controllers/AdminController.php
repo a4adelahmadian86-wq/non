@@ -1036,7 +1036,7 @@ class AdminController extends Controller
             ]);
         });
 
-        app(\\App\\Services\\AuthorizationService::class)->forgetUser((int) $user->id);
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         return back()->with('status', 'دسترسی‌های کاربر ذخیره شد.');
     }
