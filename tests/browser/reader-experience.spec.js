@@ -132,22 +132,26 @@ async function mountReader(page, includeExcel = false, readerStateUrl = '') {
 }
 
 
-function makePdfFixture(pageCount = 1, withAnnotations = false) {
+function makePdfFixture(pageCount = 1, withAnnotations = false, withLayers = false) {
   const annotationId = 3 + pageCount * 3;
+  const optionalLayerId = 3 + pageCount * 3 + (withAnnotations ? 2 + (pageCount > 1 ? 1 : 0) : 0);
   const widgetId = annotationId + 1;
   const internalLinkId = annotationId + 2;
+  const catalog = withAnnotations
+    ? '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [' + widgetId + ' 0 R] /NeedAppearances true /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 12 Tf 0 g) >> >>'
+    : '<< /Type /Catalog /Pages 2 0 R >>';
   const objects = [
-    withAnnotations
-      ? '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [' + widgetId + ' 0 R] /NeedAppearances true /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 12 Tf 0 g) >> >>'
-      : '<< /Type /Catalog /Pages 2 0 R >>',
+    withLayers ? catalog.replace(/ >>$/, ' /OCProperties << /OCGs [' + optionalLayerId + ' 0 R] /D << /BaseState /ON /Order [' + optionalLayerId + ' 0 R] /ON [' + optionalLayerId + ' 0 R] >> >> >>') : catalog,
     '<< /Type /Pages /Kids [' + Array.from({ length: pageCount }, (_, index) => (3 + index * 3) + ' 0 R').join(' ') + '] /Count ' + pageCount + ' >>',
   ];
   for (let page = 1; page <= pageCount; page++) {
     const pageId = 3 + (page - 1) * 3;
     const fontId = pageId + 1;
     const streamId = pageId + 2;
-    const stream = 'BT /F1 24 Tf 72 720 Td (FARAST PDF PAGE ' + page + ') Tj ET';
-    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ' + fontId + ' 0 R >> >> /Contents ' + streamId + ' 0 R ' + (page === 1 && withAnnotations ? '/Annots [' + annotationId + ' 0 R ' + widgetId + ' 0 R' + (pageCount > 1 ? ' ' + internalLinkId + ' 0 R' : '') + ']' : '') + ' >>');
+    const optionalText = withLayers && page === 1 ? '/OC /OC1 BDC BT /F1 18 Tf 72 600 Td (OPTIONAL LAYER TEXT) Tj ET EMC ' : '';
+    const stream = optionalText + 'BT /F1 24 Tf 72 720 Td (FARAST PDF PAGE ' + page + ') Tj ET';
+    const properties = withLayers && page === 1 ? ' /Properties << /OC1 ' + optionalLayerId + ' 0 R >>' : '';
+    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ' + fontId + ' 0 R >>' + properties + ' >> /Contents ' + streamId + ' 0 R ' + (page === 1 && withAnnotations ? '/Annots [' + annotationId + ' 0 R ' + widgetId + ' 0 R' + (pageCount > 1 ? ' ' + internalLinkId + ' 0 R' : '') + ']' : '') + ' >>');
     objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
     objects.push('<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream');
   }
@@ -158,6 +162,7 @@ function makePdfFixture(pageCount = 1, withAnnotations = false) {
       objects.push('<< /Type /Annot /Subtype /Link /Rect [72 590 240 625] /Border [0 0 0] /Dest [6 0 R /Fit] /F 4 /P 3 0 R >>');
     }
   }
+  if (withLayers) objects.push('<< /Type /OCG /Name (Optional test layer) /Intent /View >>');
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -173,7 +178,7 @@ function makePdfFixture(pageCount = 1, withAnnotations = false) {
   return Buffer.from(pdf, 'binary');
 }
 
-async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
+async function mountPdfReader(page, pageCount = 1, withAnnotations = false, withLayers = false) {
   page.on('console', message => console.log('[PDF QA console]', message.type(), message.text()));
   page.on('pageerror', error => console.log('[PDF QA pageerror]', error.message));
   page.on('requestfailed', request => console.log('[PDF QA requestfailed]', request.url(), request.failure()?.errorText));
@@ -185,7 +190,7 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
   await page.route('**/reader-fixture.pdf', route => route.fulfill({
     status: 200,
     contentType: 'application/pdf',
-    body: makePdfFixture(pageCount, withAnnotations),
+    body: makePdfFixture(pageCount, withAnnotations, withLayers),
   }));
   await page.goto('/reader-fixture.html');
   await page.setContent(
@@ -205,7 +210,8 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
         '<button id="reader-theme" type="button">پوسته</button><button id="reader-fs" type="button">تمام‌صفحه</button></nav>' +
       '<div class="farast-reader-progress" role="progressbar" aria-valuenow="0"><span id="reader-progress"></span></div>' +
       '<div id="reader-stage"><aside id="reader-sidebar"><div class="farast-reader-thumbs"></div>' +
-        '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section></aside>' +
+        '<section class="farast-reader-outline" id="reader-outline" hidden><strong>فهرست مطالب</strong><div id="reader-outline-list"></div></section>' +
+        '<section class="farast-reader-layers" id="reader-layers" hidden><strong>لایه‌های سند</strong><div id="reader-layers-list"></div></section></aside>' +
         '<main class="farast-reader-canvas"><article class="farast-reader-page-item is-active is-pdf" data-index="0">' +
           '<div class="farast-reader-page-content"><div class="farast-pdf-document" data-pdf-url="/reader-fixture.pdf">' +
             '<canvas class="farast-pdf-canvas"></canvas><div class="farast-pdf-text-layer"></div><div class="farast-pdf-annotation-layer annotationLayer"></div>' +
@@ -214,6 +220,10 @@ async function mountPdfReader(page, pageCount = 1, withAnnotations = false) {
   );
   await page.addStyleTag({ url: new URL('/vendor/pdfjs/legacy/web/pdf_viewer.css', page.url()).href });
   await page.addStyleTag({ content: '.farast-pdf-document{position:relative}.farast-pdf-annotation-layer.annotationLayer{position:absolute;inset:0;z-index:4}#reader-stage{height:600px;max-height:600px;overflow-y:scroll!important;overflow-x:hidden;display:block}.farast-reader-canvas{height:auto;overflow:visible}.farast-pdf-document{position:relative;width:800px;min-height:600px;background:#fff}.farast-pdf-document.is-continuous .farast-pdf-continuous-pages{display:grid;grid-template-columns:1fr;gap:20px}.farast-pdf-cont-page{display:block;position:relative;min-height:792px;margin:0 auto 20px}.farast-pdf-canvas{display:block;max-width:100%;height:auto}.farast-pdf-loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff}' });
+  await page.evaluate(() => {
+    window.__pdfLayerDiagnostics = [];
+    document.querySelector('[data-reader-root]')?.addEventListener('farast:reader-pdf-layers-ready', event => window.__pdfLayerDiagnostics.push(event.detail));
+  });
   await page.addScriptTag({ url: new URL('/js/farast-reader.js', page.url()).href });
 }
 
@@ -2002,3 +2012,22 @@ test('captures a selected reader passage and jumps back to its anchored discussi
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('عبارت مهم دوم');
 });
 
+test('exposes and toggles PDF optional-content layers', async ({ page }) => {
+  await mountPdfReader(page, 1, true, true);
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  await expect.poll(() => page.evaluate(() => window.__pdfLayerDiagnostics.length)).toBe(1);
+  const diagnostics = await page.evaluate(() => window.__pdfLayerDiagnostics[0]);
+  console.log('[PDF OCG diagnostics]', JSON.stringify(diagnostics));
+  expect(diagnostics.error).toBeUndefined();
+  expect(diagnostics.supported).toBe(true);
+  expect(diagnostics.count).toBe(1);
+  expect(diagnostics.groups[0].name).toBe('Optional test layer');
+  const panel = root.locator('#reader-layers');
+  await expect(panel).toBeVisible();
+  const layer = panel.locator('input[data-ocg-id]');
+  await expect(layer).toHaveCount(1);
+  await expect(layer).toBeChecked();
+  await layer.uncheck();
+  await expect(layer).not.toBeChecked();
+});
