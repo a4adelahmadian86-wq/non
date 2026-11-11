@@ -257,7 +257,7 @@ class StorageTransferService
                     if ($source->exists($file->file_key) && ! $source->delete($file->file_key)) {
                         throw new RuntimeException('پاک‌سازی نسخه موقت پس از انتقال ناموفق بود.');
                     }
-                } catch (\\Throwable $cleanupException) {
+                } catch (\Throwable $cleanupException) {
                     report($cleanupException);
                     $file->update(['metadata' => array_merge((array) $file->fresh()->metadata, [
                         'staging_cleanup_pending' => true,
@@ -266,7 +266,7 @@ class StorageTransferService
                 }
 
                 $moved++;
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 if ($uploaded) {
                     try {
                         if ($target->driver === 's3') {
@@ -277,7 +277,7 @@ class StorageTransferService
                                 throw new RuntimeException('پاک‌سازی فایل ناقص مقصد ناموفق بود.');
                             }
                         }
-                    } catch (\\Throwable $cleanupException) {
+                    } catch (\Throwable $cleanupException) {
                         report($cleanupException);
                     }
                 }
