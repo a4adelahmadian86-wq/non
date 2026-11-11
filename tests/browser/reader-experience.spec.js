@@ -109,7 +109,33 @@ function makePdfFixture(pageCount = 1) {
   return Buffer.from(pdf, 'binary');
 }
 
-async function mountPdfReader(page, pageCount = 1) {
+
+function makePdfAnnotationFixture() {
+  const stream = '/OC /OC1 BDC BT /F1 18 Tf 72 600 Td (OPTIONAL LAYER TEXT) Tj ET EMC BT /F1 24 Tf 72 720 Td (PDF annotation and AcroForm fixture) Tj ET';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] /NeedAppearances true /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 12 Tf 0 g) >> >> /OCProperties << /OCGs [8 0 R] /D << /Order [8 0 R] /ON [8 0 R] >> >> >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> /Properties << /OC1 8 0 R >> >> /Contents 5 0 R /Annots [6 0 R 7 0 R] >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Length ' + Buffer.byteLength(stream, 'binary') + ' >>\nstream\n' + stream + '\nendstream',
+    '<< /Type /Annot /Subtype /Link /Rect [72 700 260 740] /Border [0 0 0] /A << /S /URI /URI (https://example.com/) >> >>',
+    '<< /Type /Annot /Subtype /Widget /FT /Tx /T (readerField) /TU (Reader test field) /V (Initial value) /Rect [72 650 300 682] /F 4 /DA (/Helv 12 Tf 0 g) /P 3 0 R >>',
+    '<< /Type /OCG /Name (Optional test layer) >>'
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf, 'binary'));
+    pdf += (index + 1) + ' 0 obj\n' + object + '\nendobj\n';
+  });
+  const xrefOffset = Buffer.byteLength(pdf, 'binary');
+  pdf += 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
+  offsets.slice(1).forEach(offset => { pdf += String(offset).padStart(10, '0') + ' 00000 n \n'; });
+  pdf += 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
+  return Buffer.from(pdf, 'binary');
+}
+
+async function mountPdfReader(page, pageCount = 1, pdfBytes = null) {
   page.on('console', message => console.log('[PDF QA console]', message.type(), message.text()));
   page.on('pageerror', error => console.log('[PDF QA pageerror]', error.message));
   page.on('requestfailed', request => console.log('[PDF QA requestfailed]', request.url(), request.failure()?.errorText));
@@ -121,7 +147,7 @@ async function mountPdfReader(page, pageCount = 1) {
   await page.route('**/reader-fixture.pdf', route => route.fulfill({
     status: 200,
     contentType: 'application/pdf',
-    body: makePdfFixture(pageCount),
+    body: pdfBytes || makePdfFixture(pageCount),
   }));
   await page.goto('/reader-fixture.html');
   await page.setContent(
@@ -1916,3 +1942,31 @@ test('captures a selected reader passage and jumps back to its anchored discussi
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('عبارت مهم دوم');
 });
 
+
+test('renders PDF hyperlinks and editable standard AcroForm fields', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__pdfAnnotationErrors = [];
+    window.addEventListener('farast:reader-annotation-layer-error', event => window.__pdfAnnotationErrors.push(event.detail?.message || 'unknown annotation error'));
+  });
+  await mountPdfReader(page, 1, makePdfAnnotationFixture());
+  const root = page.locator('[data-reader-root]');
+  await expect(root.locator('.farast-pdf-loading')).toBeHidden({ timeout: 45000 });
+  const annotationErrors = await page.evaluate(() => window.__pdfAnnotationErrors);
+  expect(annotationErrors).toEqual([]);
+  const layer = root.locator('.farast-pdf-annotation-layer');
+  await expect(layer).toBeVisible();
+  const layerPanel = root.locator('#reader-layers');
+  await expect(layerPanel).toBeVisible();
+  const optionalLayer = layerPanel.locator('input[data-ocg-id]');
+  await expect(optionalLayer).toHaveCount(1);
+  await expect(optionalLayer).toBeChecked();
+  await optionalLayer.uncheck();
+  await expect(optionalLayer).not.toBeChecked();
+  const link = layer.locator('a[href="https://example.com/"]');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  const field = layer.locator('input');
+  await expect(field).toHaveValue('Initial value');
+  await field.fill('Edited locally');
+  await expect(field).toHaveValue('Edited locally');
+});
