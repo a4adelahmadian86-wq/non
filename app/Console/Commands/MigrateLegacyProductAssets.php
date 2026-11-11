@@ -34,7 +34,7 @@ class MigrateLegacyProductAssets extends Command
             $this->attemptMigration(fn () => $this->migrateArtifact($artifact, $storage, $transfer), 'سند تولیدشده محصول', $artifact->id, $remaining, $migrated, $failed);
         }
 
-        foreach (StoreProductFile::query()->where(fn ($q) => $q->whereNull('disk')->orWhere('disk', 'private'))->orderBy('id')->cursor() as $file) {
+        foreach (StoreProductFile::query()->where(fn ($q) => $q->whereNull('disk')->orWhereIn('disk', ['private', 'public']))->orderBy('id')->cursor() as $file) {
             if ($remaining < 1) break;
             if ($this->hasManagedReference(StoreProductFile::class, (int) $file->id)) continue;
             $this->attemptMigration(fn () => $this->migrateProductFile($file, $storage, $transfer), 'فایل محصول', $file->id, $remaining, $migrated, $failed);
@@ -46,7 +46,7 @@ class MigrateLegacyProductAssets extends Command
                 if ($remaining < 1) break;
                 $disk = $field === 'audio_path' ? ($preview->audio_disk ?: 'private') : ($preview->disk ?: 'private');
                 $path = $field === 'audio_path' ? $preview->audio_path : $preview->path;
-                if (! $path || $disk !== 'private' || $this->hasManagedReference(StoreProductPreview::class, (int) $preview->id, $field)) continue;
+                if (! $path || ! in_array($disk, ['private', 'public'], true) || $this->hasManagedReference(StoreProductPreview::class, (int) $preview->id, $field)) continue;
                 $this->attemptMigration(fn () => $this->migratePreviewAsset($preview, $field, $storage, $transfer), 'پیش‌نمایش محصول', $preview->id, $remaining, $migrated, $failed);
             }
         }
