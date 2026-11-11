@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\FarastObservability;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Contracts\Queue\Job;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
@@ -85,5 +88,34 @@ class FarastObservabilityTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertNull($response->headers->get('X-Request-Id'));
+    }
+
+    public function test_terminal_queue_failure_is_logged_with_original_trace_ids(): void
+    {
+        Log::spy();
+
+        $job = \\Mockery::mock(Job::class);
+        $job->shouldReceive('payload')->andReturn([
+            'farast_trace' => [
+                'request_id' => 'request-queue-123',
+                'correlation_id' => 'correlation-queue-456',
+            ],
+        ]);
+        $job->shouldReceive('resolveName')->andReturn('App\\Jobs\\ExampleJob');
+        $job->shouldReceive('getJobId')->andReturn('job-789');
+        $job->shouldReceive('getQueue')->andReturn('critical');
+
+        Event::dispatch(new JobFailed('database', $job, new \\RuntimeException('expected test failure')));
+
+        Log::shouldHaveReceived('error')->once()->with(
+            'farast.queue.job.failed',
+            \\Mockery::on(function (array $context): bool {
+                return ($context['request_id'] ?? null) === 'request-queue-123'
+                    && ($context['correlation_id'] ?? null) === 'correlation-queue-456'
+                    && ($context['job_id'] ?? null) === 'job-789'
+                    && ($context['queue'] ?? null) === 'critical'
+                    && ($context['exception_class'] ?? null) === \\RuntimeException::class;
+            })
+        );
     }
 }
