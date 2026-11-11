@@ -10,6 +10,65 @@ class WorkflowEngine
 {
     private const SUPPORTED_ACTIONS = ['notify', 'create_follow_up'];
 
+    /**
+     * Trusted internal event contracts. Required identifiers and business values
+     * are validated before the immutable payload enters the transactional outbox.
+     */
+    private const EVENT_CONTRACTS = [
+        'document.saved' => [
+            'positive_integers' => ['document_id', 'revision'],
+        ],
+        'ticket.created' => [
+            'positive_integers' => ['ticket_id'],
+            'non_empty_strings' => ['ticket_code'],
+        ],
+        'order.paid' => [
+            'positive_integers' => ['order_id'],
+            'non_negative_integers' => ['amount_rials'],
+            'non_empty_strings' => ['order_kind'],
+            'status' => 'paid',
+        ],
+        'order.deposit_paid' => [
+            'positive_integers' => ['order_id'],
+            'non_negative_integers' => ['amount_rials'],
+            'non_empty_strings' => ['order_kind'],
+            'status' => 'deposit_paid',
+        ],
+    ];
+
+    private function validateEventContract(string $eventType, array $context): void
+    {
+        $contract = self::EVENT_CONTRACTS[$eventType] ?? null;
+        if ($contract === null) {
+            throw new \InvalidArgumentException('Unsupported workflow event.');
+        }
+
+        foreach ($contract['positive_integers'] ?? [] as $field) {
+            $value = filter_var($context[$field] ?? null, FILTER_VALIDATE_INT);
+            if ($value === false || $value < 1) {
+                throw new \InvalidArgumentException('Workflow event requires a positive integer '.$field.'.');
+            }
+        }
+
+        foreach ($contract['non_negative_integers'] ?? [] as $field) {
+            $value = filter_var($context[$field] ?? null, FILTER_VALIDATE_INT);
+            if ($value === false || $value < 0) {
+                throw new \InvalidArgumentException('Workflow event requires a non-negative integer '.$field.'.');
+            }
+        }
+
+        foreach ($contract['non_empty_strings'] ?? [] as $field) {
+            $value = trim((string) ($context[$field] ?? ''));
+            if ($value === '' || mb_strlen($value) > 190) {
+                throw new \InvalidArgumentException('Workflow event requires a valid '.$field.'.');
+            }
+        }
+
+        if (isset($contract['status']) && ($context['status'] ?? null) !== $contract['status']) {
+            throw new \InvalidArgumentException('Workflow event status does not match its contract.');
+        }
+    }
+
     public function run(int $workflowId, array $context = [], ?int $eventWorkflowId = null, bool $manual = false, ?string $eventWorkflowLeaseToken = null): int
     {
         $runId = DB::table('farast_workflow_runs')->insertGetId([
@@ -98,9 +157,7 @@ class WorkflowEngine
      */
     public function enqueue(string $eventType, array $context, string $idempotencyKey): int
     {
-        if (! in_array($eventType, ['document.saved', 'ticket.created', 'order.paid', 'order.deposit_paid'], true)) {
-            throw new \InvalidArgumentException('Unsupported workflow event.');
-        }
+        $this->validateEventContract($eventType, $context);
 
         $idempotencyKey = trim($idempotencyKey);
         if ($idempotencyKey === '' || mb_strlen($idempotencyKey) > 190) {
