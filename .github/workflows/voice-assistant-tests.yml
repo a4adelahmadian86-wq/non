@@ -1,0 +1,40 @@
+name: Voice assistant Laravel regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'routes/web_core_part1.php'
+      - 'app/Http/Controllers/VoiceController.php'
+      - 'tests/Feature/GlobalAssistantVoiceTest.php'
+      - '.github/workflows/voice-assistant-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'routes/web_core_part1.php'
+      - 'app/Http/Controllers/VoiceController.php'
+      - 'tests/Feature/GlobalAssistantVoiceTest.php'
+      - '.github/workflows/voice-assistant-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  voice-assistant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, gd, zip, curl, xml
+          coverage: none
+      - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: printf '%s\\n' 'APP_NAME=FARAST' 'APP_ENV=testing' 'APP_KEY=' 'APP_DEBUG=true' 'APP_URL=http://localhost' 'DB_CONNECTION=sqlite' 'DB_DATABASE=database/database.sqlite' 'CACHE_STORE=array' 'SESSION_DRIVER=file' 'QUEUE_CONNECTION=sync' > .env
+      - run: php artisan key:generate
+      - run: touch database/database.sqlite
+      - run: php artisan migrate --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - run: php artisan test --filter=GlobalAssistantVoiceTest
