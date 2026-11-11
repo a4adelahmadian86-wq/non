@@ -19,7 +19,7 @@ class ProcessWorkflowEvent implements ShouldQueue, ShouldBeUnique
 
     public int $tries = 5;
     public int $timeout = 300;
-    public int $uniqueFor = 1800;
+    public int $uniqueFor = 3600;
     public array $backoff = [60, 300, 900, 1800];
 
     public function __construct(public readonly int $eventId)
@@ -35,6 +35,11 @@ class ProcessWorkflowEvent implements ShouldQueue, ShouldBeUnique
     public function handle(WorkflowEngine $engine): void
     {
         $engine->processQueuedEvent($this->eventId);
+
+        $event = DB::table('farast_workflow_events')->where('id', $this->eventId)->first();
+        if ($event && $event->status === 'failed' && (int) $event->attempts < 5) {
+            throw new \\RuntimeException('Workflow event has retryable failed steps.');
+        }
     }
 
     public function failed(Throwable $exception): void
