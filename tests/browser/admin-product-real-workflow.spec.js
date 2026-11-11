@@ -272,7 +272,8 @@ test.describe('Real admin product workflow', () => {
     expect(firstSend.status()).toBe(201);
     await expect(page.locator('#fm-messages')).toContainText(firstMessage);
 
-    const employeePage = await page.context().newPage();
+    const employeeContext = await page.context().browser().newContext();
+    const employeePage = await employeeContext.newPage();
     try {
       await signInAsSeededEmployee(employeePage);
       const conversationResponse = await employeePage.goto(conversationUrl);
@@ -293,7 +294,7 @@ test.describe('Real admin product workflow', () => {
       // The admin page remains open; its authenticated polling loop must receive the employee's message.
       await expect(page.locator('#fm-messages')).toContainText(reply, { timeout: 12_000 });
     } finally {
-      await employeePage.close();
+      await employeeContext.close();
     }
   });
 
