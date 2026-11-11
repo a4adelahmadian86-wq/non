@@ -2,7 +2,7 @@
 
 > آخرین تطبیق فایل‌های منبع: `main` در commit `1b9108fcedfb3f330a2ba19caba91a33cb00a966`. تغییرهای بین snapshot قبلی و این commit در فایل‌های مربوط به Reader/Browser و مستندات یکپارچگی کسب‌وکار بوده و فایل‌های منبع این inventory را تغییر نداده‌اند.
 
-> مبنا: ۱۱۴ فایل `database/migrations/*.php` در `main`؛ ترتیب مطابق نام فایل‌ها. این استخراج ایستا است و فقط عملیات قابل تشخیص `Schema::create/table/rename` و FK/indexهای صریح را نشان می‌دهد. عملیات شرطی، raw SQL، morph/polymorphic و وضعیت واقعی دیتابیس باید جداگانه runtime-verify شوند.
+> مبنا: ۱۱۶ فایل `database/migrations/*.php` در `main`؛ ترتیب مطابق نام فایل‌ها. این استخراج ایستا است و فقط عملیات قابل تشخیص `Schema::create/table/rename` و FK/indexهای صریح را نشان می‌دهد. عملیات شرطی، raw SQL، morph/polymorphic و وضعیت واقعی دیتابیس باید جداگانه runtime-verify شوند.
 
 | Migration | Creates | Alters | Renames | Explicit FK columns | Unique declarations | Index declarations | Guard/notes |
 |---|---|---|---|---|---|---|
@@ -127,3 +127,6 @@
 | `2026_11_10_000011_add_storage_file_key_hash.php` | — | `storage_managed_files`, `storage_managed_files`, `storage_managed_files` | — | — | `'file_key_hash'` | — | — |
 | `2026_11_10_000011_extend_crm_campaigns_with_store_incentives.php` | — | `crm_marketing_campaigns`, `store_coupon_assignments`, `store_coupon_assignments`, `crm_marketing_campaigns` | — | `incentive_product_id → store_products`<br>`campaign_id → crm_marketing_campaigns` | — | `['campaign_id', 'status', 'expires_at']` | — |
 | `2026_11_10_000012_repair_farast_account_security_schema.php` | `farast_account_sessions`, `farast_security_events`, `farast_blocked_devices` | `farast_account_sessions` | — | `user_id → Laravel convention`<br>`user_id → Laravel convention`<br>`user_id → Laravel convention` | `farast_account_sessions.session_key`<br>`farast_blocked_devices(user_id, device_key_hash)` | `farast_account_sessions.device_key_hash`<br>`farast_account_sessions.last_activity`<br>`farast_account_sessions.revoked_at`<br>`farast_account_sessions(user_id, revoked_at, last_activity)`<br>`farast_account_sessions.device_key_hash`<br>`farast_security_events(user_id, created_at)`<br>`farast_blocked_devices(user_id, unblocked_at)` | guarded: farast_account_sessions, farast_security_events, farast_blocked_devices |
+
+| `2026_11_11_000020_add_email_log_idempotency_key.php` | — | `email_logs` | — | — | `email_logs.idempotency_key` | — | Nullable unique idempotency key for email delivery ledger |
+| `2026_11_11_000021_create_sms_logs_table.php` | `sms_logs` | — | — | — | `sms_logs.idempotency_key` | `sms_logs(event, status)`<br>`sms_logs.mobile_hash` | SMS delivery ledger with attempts/status/accepted_at/meta |
