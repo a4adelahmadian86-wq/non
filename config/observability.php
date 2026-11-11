@@ -22,5 +22,8 @@ return [
         'failed_authentication_window_minutes' => 10,
         'failed_authentication_warning_threshold' => 5,
         'failed_authentication_critical_threshold' => 10,
+        'authorization_denied_window_minutes' => 10,
+        'authorization_denied_warning_threshold' => 10,
+        'authorization_denied_critical_threshold' => 25,
     ],
 ];
