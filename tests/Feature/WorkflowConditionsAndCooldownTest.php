@@ -619,4 +619,29 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_duplicate_idempotency_key_cannot_mutate_the_original_outbox_payload(): void
+    {
+        $owner = $this->owner('09140000236');
+        $engine = app(WorkflowEngine::class);
+        $key = 'immutable-outbox:document:236:revision:1';
+
+        $firstId = $engine->enqueue('document.saved', [
+            'user_id' => $owner->id,
+            'document_id' => 236,
+            'revision' => 1,
+        ], $key);
+
+        $secondId = $engine->enqueue('document.saved', [
+            'user_id' => $owner->id,
+            'document_id' => 999,
+            'revision' => 9,
+        ], $key);
+
+        $this->assertSame($firstId, $secondId);
+        $stored = DB::table('farast_workflow_events')->where('id', $firstId)->first();
+        $context = json_decode($stored->context, true);
+        $this->assertSame(236, (int) $context['document_id']);
+        $this->assertSame(1, (int) $context['revision']);
+    }
+
 }
