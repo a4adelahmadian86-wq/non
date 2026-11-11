@@ -10,6 +10,7 @@ use App\Models\SiteSetting;
 use App\Models\StoreLibraryItem;
 use App\Models\TypingDocument;
 use App\Models\Wallet;
+use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\EmailService;
 use App\Services\FreeQuotaService;
@@ -130,7 +131,7 @@ class PaymentController extends Controller
                 ]);
 
                 // Serialize wallet creation and balance mutations across different orders of the same user.
-                \\App\\Models\\User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
                 $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
@@ -267,7 +268,7 @@ class PaymentController extends Controller
                 }
 
                 // Serialize wallet creation and balance mutations across different orders of the same user.
-                \\App\\Models\\User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
                 $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
                 if ($total > $wallet->balance_rials) {
@@ -369,7 +370,7 @@ class PaymentController extends Controller
                 abort_unless(hash_equals($hash, hash('sha256', Storage::disk('private')->get($path))), 409, 'فایل پس از برآورد تغییر کرده است.');
 
                 // Serialize wallet creation and balance mutations across different orders of the same user.
-                \\App\\Models\\User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
+                User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
                 $wallet = Wallet::firstOrCreate(['user_id' => $locked->user_id], ['balance_rials' => 0]);
                 $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
                 $amount = (int) $locked->total_rials;
