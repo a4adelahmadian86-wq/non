@@ -29,7 +29,7 @@ class FarastObservabilityTest extends TestCase
         $this->assertSame('trace.parent:456', $response->headers->get('X-Correlation-Id'));
         $this->assertSame('req-123', $request->attributes->get('farast.request_id'));
         $this->assertSame('trace.parent:456', $request->attributes->get('farast.correlation_id'));
-        $this->assertSame(['request_id' => null, 'correlation_id' => null], app(\\App\\Services\\FarastTraceContext::class)->current());
+        $this->assertSame(['request_id' => null, 'correlation_id' => null], app(\App\Services\FarastTraceContext::class)->current());
 
         Log::shouldHaveReceived('withContext')->once()->with([
             'request_id' => 'req-123',
@@ -94,27 +94,27 @@ class FarastObservabilityTest extends TestCase
     {
         Log::spy();
 
-        $job = \\Mockery::mock(Job::class);
+        $job = \Mockery::mock(Job::class);
         $job->shouldReceive('payload')->andReturn([
             'farast_trace' => [
                 'request_id' => 'request-queue-123',
                 'correlation_id' => 'correlation-queue-456',
             ],
         ]);
-        $job->shouldReceive('resolveName')->andReturn('App\\Jobs\\ExampleJob');
+        $job->shouldReceive('resolveName')->andReturn('App\Jobs\ExampleJob');
         $job->shouldReceive('getJobId')->andReturn('job-789');
         $job->shouldReceive('getQueue')->andReturn('critical');
 
-        Event::dispatch(new JobFailed('database', $job, new \\RuntimeException('expected test failure')));
+        Event::dispatch(new JobFailed('database', $job, new \RuntimeException('expected test failure')));
 
         Log::shouldHaveReceived('error')->once()->with(
             'farast.queue.job.failed',
-            \\Mockery::on(function (array $context): bool {
+            \Mockery::on(function (array $context): bool {
                 return ($context['request_id'] ?? null) === 'request-queue-123'
                     && ($context['correlation_id'] ?? null) === 'correlation-queue-456'
                     && ($context['job_id'] ?? null) === 'job-789'
                     && ($context['queue'] ?? null) === 'critical'
-                    && ($context['exception_class'] ?? null) === \\RuntimeException::class;
+                    && ($context['exception_class'] ?? null) === \RuntimeException::class;
             })
         );
     }
