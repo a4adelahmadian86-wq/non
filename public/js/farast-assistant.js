@@ -177,7 +177,8 @@
     mic.setAttribute('aria-label',state==='connecting'?'در حال اتصال میکروفون':state==='ready'?'خاموش‌کردن میکروفون':state==='idle'?'شروع گفت‌وگو':'روشن‌کردن میکروفون');
     var label=mic.querySelector('span');if(label)label.textContent=state==='connecting'?'در حال اتصال':state==='ready'?'میکروفون روشن':state==='idle'?'صحبت کن':'میکروفون خاموش';
   }
-  setMicButtonState('idle');  function setGatewayMicrophoneMuted(muted){
+  setMicButtonState('idle');
+  function setGatewayMicrophoneMuted(muted){
     gatewayMicrophoneMuted=!!muted;
     gatewayBargeInFrames=0;
     gatewayBargeInBuffer=[];
@@ -356,7 +357,8 @@
         if(queueState.queue.length){await say(queueState.queue.shift(),queueState);continue;}
         if(queueState.done)return;
         await new Promise(function(resolve){queueState.notify=resolve;});
-      }    }
+      }
+    }
     var playback=drainSpeechQueue();
     var answer='',pendingSpeech='',speechBatch=[],firstSpeechBatchSent=false,turnSucceeded=false;
     function flushSpeechBatch(force){
@@ -535,7 +537,8 @@
         panel.classList.remove('is-listening');var stoppedMic=root.querySelector('.farast-assistant-mic');stoppedMic.classList.remove('is-recording');var stoppedMicLabel=stoppedMic.querySelector('span');if(stoppedMicLabel)stoppedMicLabel.textContent='صحبت کن';stoppedMic.setAttribute('aria-label','شروع صحبت');
         if(!chunks.length){status.textContent='صدایی ضبط نشد؛ دوباره تلاش کن.';voiceTitle.textContent='ضبط خالی بود';return;}
         var blob=new Blob(chunks,{type:blobType});
-        if(!blob.size){status.textContent='فایل ضبط‌شده خالی است؛ دوباره تلاش کن.';return;}        voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='صدا به سرویس تشخیص گفتار Render ارسال می‌شود.';status.textContent='در حال تبدیل صدا به متن…';
+        if(!blob.size){status.textContent='فایل ضبط‌شده خالی است؛ دوباره تلاش کن.';return;}
+        voiceTitle.textContent='در حال تشخیص گفتار';voiceCaption.textContent='صدا به سرویس تشخیص گفتار Render ارسال می‌شود.';status.textContent='در حال تبدیل صدا به متن…';
         try{
           var formData=new FormData();
           var extension=blobType.indexOf('mp4')!==-1?'mp4':'webm';
@@ -714,7 +717,8 @@
       voiceCaption.textContent='در حال اتصال امن به سرویس گفتار؛ هیچ فایل یا مدلی روی دستگاه دانلود نمی‌شود. ضبط پس از آماده‌شدن سرویس آغاز می‌شود.';
       status.textContent='درخواست اتصال امن ارسال شد؛ هنوز ضبط شروع نشده و دانلودی روی دستگاه انجام نمی‌شود.';
       await new Promise(function(resolve,reject){
-        var settled=false;var timer=window.setTimeout(function(){finish(new Error('سرویس آماده است اما اتصال WebSocket در ۲۰ ثانیه برقرار نشد؛ شبکه یا پشتیبانی WebSocket را بررسی کن.'));},20000);        function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);socket.removeEventListener('close',closed);if(error)reject(error);else resolve();}
+        var settled=false;var timer=window.setTimeout(function(){finish(new Error('سرویس آماده است اما اتصال WebSocket در ۲۰ ثانیه برقرار نشد؛ شبکه یا پشتیبانی WebSocket را بررسی کن.'));},20000);
+        function finish(error){if(settled)return;settled=true;window.clearTimeout(timer);socket.removeEventListener('open',opened);socket.removeEventListener('error',failed);socket.removeEventListener('close',closed);if(error)reject(error);else resolve();}
         function opened(){finish();}
         function failed(){finish(new Error('ارتباط WebSocket با سرویس آماده‌شده برقرار نشد؛ ممکن است شبکه اتصال WebSocket را مسدود کرده باشد.'));}
         function closed(event){finish(new Error('درگاه صوتی پیش از تکمیل اتصال بسته شد (کد '+event.code+').'));}
