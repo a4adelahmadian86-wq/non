@@ -6,6 +6,7 @@
       <div><span class="eyebrow">مدیریت فروشگاه</span><h1>مرکز مدیریت محصولات</h1><p>محصولات دانلودی و دوره‌های آموزشی را از یک پنل مدیریت کنید.</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a class="store-outline-btn" href="{{ route('admin.index') }}">بازگشت ادمین</a>
+        <a class="store-outline-btn" href="{{ route('admin.store.taxonomy.index') }}">دسته‌بندی و برچسب‌ها</a>
         <a class="store-primary-btn" href="{{ route('admin.store.create') }}"><i class="fa-solid fa-plus"></i> محصول جدید</a>
       </div>
     </div>
