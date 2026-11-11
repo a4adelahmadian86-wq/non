@@ -75,47 +75,53 @@
             <h2>تاریخچه هشدارها و بازیابی</h2>
             <span class="text-sm text-slate-500">آخرین ۲۰ تغییر وضعیت</span>
         </div>
-        @if(!empty($health['incident_trend_24h']))
+        @if(!empty($health['incident_trend_24h']['available']))
             <div class="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4 text-sm">
                 <div class="rounded border p-2">بحرانی: {{ $health['incident_trend_24h']['critical'] }}</div>
                 <div class="rounded border p-2">هشدار: {{ $health['incident_trend_24h']['warning'] }}</div>
                 <div class="rounded border p-2">بازیابی: {{ $health['incident_trend_24h']['recovered'] }}</div>
                 <div class="rounded border p-2">نمونه بررسی‌شده: {{ $health['incident_trend_24h']['sampled'] }}@if($health['incident_trend_24h']['truncated'])+ @endif</div>
             </div>
-        @endif
-        @if(!empty($health['incidents']))
-            <div class="mt-3 overflow-x-auto">
-                <table class="w-full text-sm text-right">
-                    <thead>
-                        <tr>
-                            <th class="py-2">زمان</th>
-                            <th class="py-2">نوع رخداد</th>
-                            <th class="py-2">شدت</th>
-                            <th class="py-2">وضعیت</th>
-                            <th class="py-2">اجزای درگیر</th>
-                            <th class="py-2">Correlation ID</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($health['incidents'] as $incident)
-                            <tr class="border-t">
-                                <td class="py-2 whitespace-nowrap">{{ $incident['created_at'] }}</td>
-                                <td class="py-2">{{ $incident['event_type'] }}</td>
-                                <td class="py-2">{{ $incident['severity'] }}</td>
-                                <td class="py-2">{{ $incident['status'] }}</td>
-                                <td class="py-2">
-                                    @foreach($incident['affected_components'] as $name => $componentStatus)
-                                        <span>{{ $name }}: {{ $componentStatus }}</span>@if(!$loop->last)، @endif
-                                    @endforeach
-                                </td>
-                                <td class="py-2 font-mono text-xs">{{ $incident['correlation_id'] ?? '—' }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
         @else
-            <p class="mt-3 text-sm text-slate-500">هنوز رخداد عملیاتی ثبت‌شده‌ای در دفترکل وجود ندارد.</p>
+            <p class="mt-3 text-sm text-amber-700">روند ۲۴ ساعته رخدادها در دسترس نیست.</p>
+        @endif
+        @if(!empty($health['incident_history_available']))
+            @if(!empty($health['incidents']))
+                <div class="mt-3 overflow-x-auto">
+                    <table class="w-full text-sm text-right">
+                        <thead>
+                            <tr>
+                                <th class="py-2">زمان</th>
+                                <th class="py-2">نوع رخداد</th>
+                                <th class="py-2">شدت</th>
+                                <th class="py-2">وضعیت</th>
+                                <th class="py-2">اجزای درگیر</th>
+                                <th class="py-2">Correlation ID</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($health['incidents'] as $incident)
+                                <tr class="border-t">
+                                    <td class="py-2 whitespace-nowrap">{{ $incident['created_at'] }}</td>
+                                    <td class="py-2">{{ $incident['event_type'] }}</td>
+                                    <td class="py-2">{{ $incident['severity'] }}</td>
+                                    <td class="py-2">{{ $incident['status'] }}</td>
+                                    <td class="py-2">
+                                        @foreach($incident['affected_components'] as $name => $componentStatus)
+                                            <span>{{ $name }}: {{ $componentStatus }}</span>@if(!$loop->last)، @endif
+                                        @endforeach
+                                    </td>
+                                    <td class="py-2 font-mono text-xs">{{ $incident['correlation_id'] ?? '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <p class="mt-3 text-sm text-slate-500">هنوز رخداد عملیاتی ثبت‌شده‌ای در دفترکل وجود ندارد.</p>
+            @endif
+        @else
+            <p class="mt-3 text-sm text-amber-700">تاریخچه رخدادها از دفترکل ممیزی قابل خواندن نیست.</p>
         @endif
     </section>
 
@@ -123,7 +129,7 @@
         <h2>محدودیت‌های این نما</h2>
         <ul class="list-disc space-y-1 pr-5">
             <li>این صفحه فقط وضعیت قابل مشاهده از فرایند Laravel و دیتابیس را گزارش می‌کند؛ سلامت واقعی میزبان، CPU، حافظه و شبکه باید از مانیتورینگ زیرساخت دریافت شود.</li>
-            <li>شمارش خطاها از روی فایل لاگ انجام نمی‌شود؛ برای نرخ خطا و هشدار عملیاتی به مقصد مرکزی Metrics/Alerting نیاز است.</li>
+            <li>تعداد خطاهای ۱۵ دقیقه اخیر از بخش محدود انتهایی فایل JSON روزانه محاسبه می‌شود؛ نرخ خطا، latency و شاخص‌های میزبان به مقصد مرکزی Metrics/Alerting نیاز دارند.</li>
             <li>مقادیر صف و Storage شاخص‌های لحظه بررسی هستند و جایگزین آزمون بازیابی یا بررسی Provider نیستند.</li>
         </ul>
     </section>
