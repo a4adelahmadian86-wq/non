@@ -286,6 +286,10 @@ class StoreReaderAccessTest extends TestCase
         \Illuminate\Support\Facades\Queue::assertNothingPushed();
         \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Jobs\GenerateProductDocumentAudio::class);
 
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(202)
+            ->assertHeader('Retry-After', '5');
+
         $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
         $pageResponse->assertOk()
             ->assertJsonPath('page_number', 1)
@@ -341,18 +345,24 @@ class StoreReaderAccessTest extends TestCase
         $this->actingAs($user)->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('data-reader-audio-status="failed"', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(409);
 
         $structure['audio'] = ['status' => 'awaiting_provider'];
         $document->update(['structure_json' => $structure]);
         $this->actingAs($user)->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('data-reader-audio-status="unavailable"', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(410);
 
         unset($structure['audio']);
         $document->update(['structure_json' => $structure]);
         $this->actingAs($user)->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('data-reader-audio-status=""', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertNotFound();
 
         $structure['audio'] = ['status' => 'pending'];
         $document->update(['structure_json' => $structure]);
