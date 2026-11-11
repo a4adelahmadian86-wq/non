@@ -103,6 +103,46 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertSame(4, (int) data_get(json_decode($event->context, true), 'revision'));
     }
 
+    public function test_domain_outbox_event_rolls_back_with_source_and_scheduler_processes_committed_event(): void
+    {
+        $owner = $this->owner('09140000220');
+        $workflow = $this->workflow($owner);
+        $engine = app(WorkflowEngine::class);
+        $rolledBackKey = 'document:outbox-rollback:revision:1';
+        $committedKey = 'document:outbox-commit:revision:1';
+        $context = ['user_id' => $owner->id, 'customer_id' => $owner->id, 'document_id' => 220, 'revision' => 1];
+
+        try {
+            DB::transaction(function () use ($engine, $context, $rolledBackKey): void {
+                $this->assertGreaterThan(0, $engine->enqueue('document.saved', $context, $rolledBackKey));
+                throw new \\RuntimeException('Simulated source transaction rollback');
+            });
+            $this->fail('The simulated source transaction must roll back.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame('Simulated source transaction rollback', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('farast_workflow_events', ['idempotency_key' => $rolledBackKey]);
+
+        DB::transaction(function () use ($engine, $context, $committedKey): void {
+            $this->assertGreaterThan(0, $engine->enqueue('document.saved', $context, $committedKey));
+        });
+
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => $committedKey,
+            'status' => 'pending',
+        ]);
+        $this->assertSame(1, $engine->retryFailedEvents());
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'idempotency_key' => $committedKey,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'workflow_id' => $workflow,
+            'status' => 'completed',
+        ]);
+    }
+
     public function test_event_only_runs_workflow_when_all_conditions_match(): void
     {
         $owner = $this->owner('09140000201');
