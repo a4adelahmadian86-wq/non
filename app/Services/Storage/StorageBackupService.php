@@ -27,8 +27,8 @@ class StorageBackupService
     public function runWeekly(): array
     {
         // Prevent concurrent snapshots from racing volume capacity accounting and uploads.
-        // The worker hard timeout is four hours; the six-hour lease leaves recovery headroom.
-        $lock = Cache::lock('farast:backup:execution', 21600);
+        // The worker hard timeout is four hours; the five-hour lease matches the stale-run recovery threshold.
+        $lock = Cache::lock('farast:backup:execution', 18000);
         if (! $lock->get()) {
             throw new \RuntimeException('A backup operation is already running.');
         }
