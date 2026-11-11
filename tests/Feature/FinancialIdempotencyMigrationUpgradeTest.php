@@ -108,7 +108,7 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
         $this->assertDatabaseHas('payments', ['id' => 30, 'order_id' => 20]);
     }
 
-    public function test_commerce_reference_migration_aborts_and_preserves_orphaned_rows(): void
+    public function test_commerce_reference_migration_preflights_all_relations_before_adding_constraints(): void
     {
         Schema::create('farast_commercial_plans', function (Blueprint $table): void {
             $table->id();
@@ -117,25 +117,39 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('plan_id');
         });
+        Schema::create('farast_commercial_products', function (Blueprint $table): void {
+            $table->id();
+        });
+        Schema::create('farast_commercial_plan_products', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('plan_id');
+            $table->unsignedBigInteger('product_id');
+        });
 
-        DB::table('farast_subscriptions')->insert([
+        DB::table('farast_commercial_plans')->insert(['id' => 1]);
+        DB::table('farast_commercial_products')->insert(['id' => 1]);
+        DB::table('farast_subscriptions')->insert(['id' => 1, 'plan_id' => 1]);
+        DB::table('farast_commercial_plan_products')->insert([
             'id' => 1,
-            'plan_id' => 999999,
+            'plan_id' => 1,
+            'product_id' => 999999,
         ]);
 
         $migration = require base_path('database/migrations/2026_11_11_000002_enforce_farast_commerce_ledger_references.php');
 
         try {
             $migration->up();
-            $this->fail('The migration must stop when legacy orphan references exist.');
+            $this->fail('The migration must stop when any legacy orphan reference exists.');
         } catch (\RuntimeException $exception) {
-            $this->assertStringContainsString('farast_subscriptions.plan_id has 1 orphan reference(s)', $exception->getMessage());
+            $this->assertStringContainsString('farast_commercial_plan_products.product_id has 1 orphan reference(s)', $exception->getMessage());
         }
 
-        $this->assertDatabaseHas('farast_subscriptions', [
-            'id' => 1,
-            'plan_id' => 999999,
-        ]);
+        $this->assertDatabaseHas('farast_subscriptions', ['id' => 1, 'plan_id' => 1]);
+        $this->assertDatabaseHas('farast_commercial_plan_products', ['id' => 1, 'product_id' => 999999]);
+        $this->assertFalse(DB::table('sqlite_master')
+            ->where('type', 'trigger')
+            ->where('name', 'farast_subscriptions_plan_id_fk_insert')
+            ->exists());
     }
 
     public function test_upgrade_stops_before_mutation_when_gateway_authorities_are_duplicated(): void
