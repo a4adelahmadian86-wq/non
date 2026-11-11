@@ -543,7 +543,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
                 'ticket_code' => ['not-a-string'],
             ], 'ticket:234:invalid-code');
             $this->fail('Ticket codes must be strings, not arrays.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('ticket_code', $exception->getMessage());
         }
 
