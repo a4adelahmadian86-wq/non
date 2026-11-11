@@ -220,6 +220,26 @@ PR #335 و #357 هر دو `StoreController::readerAudio` را تغییر می‌
 
 
 
+
+### اشتراک و سهمیه: دو مسیر plan/usage هنوز هم‌زمان فعال‌اند
+
+در main فعلی، دو مسیر قابل تشخیص‌اند:
+
+| مسیر | plan catalog | subscription | quota/usage |
+|---|---|---|---|
+| Legacy project billing | `farast_plans` | `farast_subscriptions` | ستون‌های legacy در `farast_usage_counters` یعنی `user_id/metric/used` |
+| Professional commerce | `farast_commercial_plans` | همان جدول `farast_subscriptions` | `FarastEntitlement` و `FarastUsageCounter(scope_key/capability/quantity)` |
+
+`ProfessionalCommerceService::subscribe` از `FarastCommercialPlan` شناسه `plan_id` را در `farast_subscriptions` می‌نویسد و entitlementهای جدید می‌سازد. اما `ProjectBillingService::includedAllowance` هنوز همان `plan_id` را به `farast_plans.id` وصل می‌کند و usage را از ستون‌های legacy می‌خواند. پس یک ستون `plan_id` در دو مسیر با دو catalog ID space متفاوت تفسیر می‌شود و counterهای جدید نیز لزوماً در محاسبه سهمیه پروژه دیده نمی‌شوند.
+
+PR #340 Migration `2026_10_03_000004_canonicalize_farast_subscriptions.php` را برای انتقال subscriptionها به catalog جدید اضافه می‌کند، اما در head بررسی‌شده:
+- جدول قدیمی را قبل از اثبات کامل mapping حذف می‌کند؛
+- اگر عدد `plan_id` تصادفاً در catalog جدید موجود باشد، بدون تطبیق `code` پذیرفته می‌شود؛
+- اگر mapping پیدا نشود، رکورد با `continue` حذف می‌شود؛
+- `ProjectBillingService` همچنان join قدیمی `farast_plans` و ستون‌های usage قدیمی را نگه می‌دارد.
+
+این خطر به PR #340 گزارش شده است. **تا زمانی که mapping plan ID و مصرف quota در هر دو مسیر canonical نشده، Migration ادغام اشتراک نباید اجرا شود.** آزمون upgrade باید IDهای متفاوت/متصادم، plan code، رکورد بدون mapping، تعداد subscriptionها، entitlementها و مقدار usage را تطبیق دهد.
+
 ## 8. قیمت‌گذاری: سه منبع داده با precedence متفاوت
 
 بازبینی کد main نشان می‌دهد «قیمت» در یک محل واحد نگهداری نمی‌شود. این‌ها دامنه‌های قابل تفکیک‌اند، اما قرارداد precedence فعلی باید به‌عنوان ریسک ثبت شود.
