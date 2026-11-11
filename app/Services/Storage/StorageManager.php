@@ -471,10 +471,25 @@ class StorageManager
                 }
 
                 DB::transaction(function () use ($reservation): void {
-                    StorageVolumeReservation::query()
+                    $lockedReservation = StorageVolumeReservation::query()
                         ->whereKey($reservation->id)
                         ->lockForUpdate()
-                        ->delete();
+                        ->first();
+                    if (! $lockedReservation) {
+                        return;
+                    }
+
+                    $managedFileId = (int) data_get($lockedReservation->metadata, 'managed_file_id', 0);
+                    $lockedReservation->delete();
+
+                    if ($managedFileId > 0) {
+                        $managed = StorageManagedFile::query()->lockForUpdate()->find($managedFileId);
+                        if ($managed) {
+                            $metadata = (array) $managed->metadata;
+                            unset($metadata['capacity_reservation_key']);
+                            $managed->update(['metadata' => $metadata]);
+                        }
+                    }
                 });
                 $cleaned++;
             } catch (\Throwable $exception) {
