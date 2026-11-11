@@ -371,17 +371,23 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
         $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
             ->assertStatus(202);
+
+        (new \\App\\Jobs\\ProcessProductDocument($document->id))->failed(new \\RuntimeException('audio-upgrade-failure'));
+        $failedUpgrade = $document->fresh();
+        $this->assertSame('failed', data_get($failedUpgrade->structure_json, 'audio.status'));
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="ready"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=2', false)
+            ->assertDontSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(409);
+
         $document->artifacts()->delete();
         Storage::disk('private')->delete($olderAudioPath);
-
-        $structure = (array) $document->fresh()->structure_json;
-        $structure['audio'] = ['status' => 'failed'];
-        $document->update(['structure_json' => $structure]);
         $this->actingAs($user)->get(route('store.reader', $product->slug))
             ->assertOk()
             ->assertSee('data-reader-audio-status="failed"', false);
-        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
-            ->assertStatus(409);
 
         $structure['audio'] = ['status' => 'awaiting_provider'];
         $document->update(['structure_json' => $structure]);
