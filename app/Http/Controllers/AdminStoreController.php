@@ -737,7 +737,7 @@ class AdminStoreController extends Controller
     public function preflightIntakeFile(Request $request, StoreProductIntakeSession $session, StoreProductIntakeService $intake, UploadSecurityService $security)
     {
         $intake->assertOwnedAndActive($session, $request->user());
-        abort_unless(in_array($session->status, ['selecting_files', 'review_pending', 'review_attention'], true), 409);
+        abort_unless(in_array($session->status, ['selecting_files', 'review_pending', 'review_attention', 'files_reviewed'], true), 409);
 
         $maxKilobytes = $session->product_type === 'course' ? 262144 : 51200;
         $maxBytes = $maxKilobytes * 1024;
@@ -768,26 +768,49 @@ class AdminStoreController extends Controller
             $inspection = $security->inspect($path, $upload->getMimeType(), $maxBytes);
             abort_unless($inspection['safe'] ?? false, 422, 'فایل از بررسی ساختاری و امنیتی عبور نکرده است.');
 
-            $ingestion = StoreProductIngestion::create([
-                'id' => (string) Str::uuid(),
-                'product_id' => null,
-                'intake_session_id' => $session->id,
-                'user_id' => $request->user()->id,
-                'status' => 'inspected',
-                'staging_disk' => 'private',
-                'staging_path' => $path,
-                'original_name' => $safeName,
-                'mime' => $inspection['mime'],
-                'size_bytes' => $inspection['size'],
-                'sha256' => $inspection['checksum'],
-                'inspection_json' => $inspection,
-                'is_primary' => $session->product_type === 'digital_file' && $request->boolean('is_primary', true),
-                'expires_at' => now()->addMinutes(30),
-                'supervisor_status' => 'pending',
-                'antivirus_status' => 'not_requested',
-            ]);
+            $isPrimary = $session->product_type === 'digital_file' && $request->boolean('is_primary', true);
+            $ingestion = DB::transaction(function () use ($request, $session, $inspection, $path, $safeName, $isPrimary) {
+                $lockedSession = StoreProductIntakeSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+                abort_unless(
+                    (int) $lockedSession->user_id === (int) $request->user()->id
+                        && $lockedSession->expires_at?->isFuture()
+                        && in_array($lockedSession->status, ['selecting_files', 'review_pending', 'review_attention', 'files_reviewed'], true)
+                        && $lockedSession->product_id === null,
+                    409,
+                    'این فرایند دیگر امکان افزودن فایل ندارد.'
+                );
 
-            $session->update(['status' => 'selecting_files']);
+                if ($isPrimary) {
+                    StoreProductIngestion::query()
+                        ->where('intake_session_id', $lockedSession->id)
+                        ->whereNull('product_id')
+                        ->whereIn('status', ['inspected', 'uploaded'])
+                        ->update(['is_primary' => false]);
+                }
+
+                $ingestion = StoreProductIngestion::create([
+                    'id' => (string) Str::uuid(),
+                    'product_id' => null,
+                    'intake_session_id' => $lockedSession->id,
+                    'user_id' => $request->user()->id,
+                    'status' => 'inspected',
+                    'staging_disk' => 'private',
+                    'staging_path' => $path,
+                    'original_name' => $safeName,
+                    'mime' => $inspection['mime'],
+                    'size_bytes' => $inspection['size'],
+                    'sha256' => $inspection['checksum'],
+                    'inspection_json' => $inspection,
+                    'is_primary' => $isPrimary,
+                    'expires_at' => now()->addMinutes(30),
+                    'supervisor_status' => 'pending',
+                    'antivirus_status' => 'not_requested',
+                ]);
+
+                $lockedSession->update(['status' => 'selecting_files']);
+
+                return $ingestion;
+            }, 3);
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($path);
             if ($exception instanceof ValidationException) {
