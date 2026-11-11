@@ -33,12 +33,18 @@
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
       @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه</b><small>کاور و تصاویر</small></a>
-      @else<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
+      @elseif(isset($intakeSession))<a href="#intake-files-summary"><span>۴</span><b>فایل‌ها</b><small>{{ $intakeSession->files->count() }} فایل بررسی‌شده</small></a>@else<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
       <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۵' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
       <a href="#product-ai-supervisor"><span>۶</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
-    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
-      @csrf @if($isEdit) @method('PUT') @endif
+    @if(isset($intakeSession))
+      <section class="store-panel" id="intake-files-summary" style="padding:16px">
+        <strong>فایل‌های بررسی‌شده و متصل به این نشست</strong>
+        <ul>@foreach($intakeSession->files as $intakeFile)<li>{{ $intakeFile->relative_path ?: $intakeFile->original_name }} · {{ number_format($intakeFile->size_bytes) }} بایت · ناظر: {{ $intakeFile->supervisor_status }}</li>@endforeach</ul>
+      </section>
+    @endif
+    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : (isset($intakeSession) ? route('admin.store.intake.finalize') : route('admin.store.store')) }}" class="store-panel product-editor-form" id="productEditorForm">
+      @csrf @if($isEdit) @method('PUT') @elseif(isset($intakeSession))<input type="hidden" name="intake_session_id" value="{{ $intakeSession->id }}">@endif
       @if($isEdit)
         <input type="hidden" name="ai_content_source_fingerprints" data-ai-content-provenance>
         <input type="hidden" name="ai_content_signature" data-ai-content-signature>
@@ -50,7 +56,7 @@
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
-        <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
+        <label class="product-field">نوع محصول *@if($isEdit || isset($intakeSession))<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit || isset($intakeSession))><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
         <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
         <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
@@ -267,9 +273,9 @@
         </div>
       </section>
 
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
+      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : (isset($intakeSession) ? 'ثبت پیش‌نویس و ورود به صف بررسی انتشار' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل') }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : (isset($intakeSession) ? 'محصول پس از اتصال فایل‌های بررسی‌شده به‌صورت پیش‌نویس ذخیره می‌شود و انتشار خودکار انجام نمی‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.') }}</span></div>
     </form>
-    @if(!$isEdit && $product->type !== 'course')
+    @if(!$isEdit && !isset($intakeSession) && $product->type !== 'course')
       <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">
         <div class="product-editor-heading"><div><span>گام چهارم · فایل اصلی</span><h2 id="product-upload-step-title">انتخاب و بارگذاری فایل محصول</h2></div><span class="product-editor-step">مرحله بعد از ذخیره</span></div>
         <p>برای اینکه فایل به همین محصول متصل شود و در فضای خصوصی قرنطینه، بررسی و پردازش شود، ابتدا پیش‌نویس محصول را ذخیره کنید. بلافاصله پس از ذخیره، به همین بخش در صفحه محصول منتقل می‌شوید و می‌توانید یک یا چند فایل را انتخاب کنید.</p>
