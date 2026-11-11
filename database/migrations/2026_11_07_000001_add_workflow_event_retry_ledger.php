@@ -49,16 +49,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('farast_workflow_event_workflows');
-
-        if (Schema::hasTable('farast_workflow_events')) {
-            Schema::table('farast_workflow_events', function (Blueprint $table): void {
-                foreach (['status', 'attempts', 'failed_workflows', 'error_summary'] as $column) {
-                    if (Schema::hasColumn('farast_workflow_events', $column)) {
-                        $table->dropColumn($column);
-                    }
-                }
-            });
-        }
+        // Event and workflow execution history is an operational ledger; never drop it during rollback.
+        // Schema retirement requires an explicit, separately reviewed data migration.
     }
 };

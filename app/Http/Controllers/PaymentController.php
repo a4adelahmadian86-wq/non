@@ -164,6 +164,7 @@ class PaymentController extends Controller
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 $document->update(['status' => 'paid', 'price_rials' => $gross]);
+                $this->enqueuePaidOrderWorkflow($locked);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
@@ -182,7 +183,6 @@ class PaymentController extends Controller
             if ($paidOrder) {
                 try { $emailService->sendOrderPaid(auth()->user(), $paidOrder); } catch (\Throwable) {}
             }
-            if ($paidOrder) $this->dispatchPaidOrderWorkflow($paidOrder);
 
             return redirect()->route('editor')->with('status', 'پرداخت با موفقیت ثبت شد؛ اکنون خروجی قابل دریافت است.');
         } catch (\RuntimeException $e) {
@@ -308,6 +308,7 @@ class PaymentController extends Controller
                 }
 
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                $this->enqueuePaidOrderWorkflow($locked);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
@@ -322,7 +323,6 @@ class PaymentController extends Controller
             if ($paidOrder) {
                 try { $emailService->sendOrderPaid(auth()->user(), $paidOrder); } catch (\Throwable) {}
             }
-            if ($paidOrder) $this->dispatchPaidOrderWorkflow($paidOrder);
 
             return redirect()->route('store')->with('status', 'خرید با موفقیت ثبت شد؛ فایل یا دوره در کتابخانه شما فعال شد.');
         } catch (\RuntimeException $e) {
@@ -394,6 +394,7 @@ class PaymentController extends Controller
                 ]);
 
                 $locked->update(['status' => 'deposit_paid', 'paid_at' => now()]);
+                $this->enqueuePaidOrderWorkflow($locked);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_deposit_paid',
@@ -418,7 +419,6 @@ class PaymentController extends Controller
             $project = $projectId > 0
                 ? FarastProject::query()->whereKey($projectId)->where('user_id', auth()->id())->first()
                 : null;
-            $this->dispatchPaidOrderWorkflow($paidDeposit);
 
             return redirect()->route('editor', $project ? ['project' => $project->id] : [])
                 ->with('status', 'پیش‌پرداخت ثبت شد؛ فایل آماده ورود به ویرایشگر است.');
@@ -466,24 +466,21 @@ class PaymentController extends Controller
             : 0;
     }
 
-    private function dispatchPaidOrderWorkflow(Order $order): void
+    private function enqueuePaidOrderWorkflow(Order $order): void
     {
-        try {
-            $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
-            app(\App\Services\WorkflowEngine::class)->dispatch(
-                $eventType,
-                [
-                    'user_id' => (int) $order->user_id,
-                    'customer_id' => (int) $order->user_id,
-                    'order_id' => (int) $order->id,
-                    'amount_rials' => (int) $order->total_rials,
-                    'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
-                ],
-                'order:'.$order->id.':'.$eventType,
-            );
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        $eventType = $order->status === 'deposit_paid' ? 'order.deposit_paid' : 'order.paid';
+        app(\App\Services\WorkflowEngine::class)->enqueue(
+            $eventType,
+            [
+                'user_id' => (int) $order->user_id,
+                'customer_id' => (int) $order->user_id,
+                'order_id' => (int) $order->id,
+                'amount_rials' => (int) $order->total_rials,
+                'order_kind' => (string) ($order->pricing_snapshot['kind'] ?? 'unknown'),
+                'status' => (string) $order->status,
+            ],
+            'order:'.$order->id.':'.$eventType,
+        );
     }
 
 
