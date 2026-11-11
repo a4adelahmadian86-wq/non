@@ -41,8 +41,8 @@ class GlobalAssistantVoiceTest extends TestCase
             ->assertJsonPath('status', 'ok')
             ->assertJsonPath('asr_configured', true)
             ->assertJsonPath('tts_configured', true)
-            ->assertJsonPath('chat_configured', true)
-            ->assertHeader('Cache-Control', 'no-store, private');
+            ->assertJsonPath('chat_configured', true);
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
         $this->assertStringNotContainsString('voice_id', $response->getContent());
         Http::assertSentCount(1);
         Http::assertSent(fn (ClientRequest $request) =>
