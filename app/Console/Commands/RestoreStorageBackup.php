@@ -74,7 +74,7 @@ class RestoreStorageBackup extends Command
             }
             $manifest = json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR);
             $databaseDriver = (string) ($manifest['database_driver'] ?? '');
-            if (! $zip->locateName('database/database.sql')) {
+            if ($zip->locateName('database/database.sql') === false) {
                 $zip->close();
                 throw new RuntimeException('فایل پایگاه داده در آرشیو موجود نیست.');
             }
