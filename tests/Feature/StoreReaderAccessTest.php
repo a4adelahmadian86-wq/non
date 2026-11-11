@@ -163,7 +163,7 @@ class StoreReaderAccessTest extends TestCase
 
         $previewResponse = $this->withServerVariables(['REMOTE_ADDR' => $guestIp])->get(route('store.preview', $preview));
         $previewResponse->assertOk();
-        $this->assertSame('%PDF-1.4 sample', $previewResponse->getContent());
+        $this->assertSame('%PDF-1.4 sample', $previewResponse->streamedContent());
     }
 
     public function test_reader_only_purchase_unlocks_page_text_but_never_the_original_file_or_download(): void
@@ -276,12 +276,13 @@ class StoreReaderAccessTest extends TestCase
         $readerResponse = $this->actingAs($user)->get(route('store.reader', $product->slug));
         $readerResponse->assertOk()
             ->assertSee('data-reader-mode="document"', false)
-            ->assertSee('data-reader-audio-status="pending"', false)
-            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
+            ->assertSee('data-reader-audio-status="unavailable"', false)
+            ->assertDontSee(route('store.reader.audio', [$product, $document]).'?version=3', false)
             ->assertSee(route('store.reader.page', [$product, 1]), false)
             ->assertDontSee(route('store.preview', $full), false)
             ->assertDontSee($originalBytes, false);
 
+        \Illuminate\Support\Facades\Queue::assertNothingPushed();
 
         $pageResponse = $this->actingAs($user)->getJson(route('store.reader.page', [$product, 1]));
         $pageResponse->assertOk()
@@ -390,7 +391,7 @@ class StoreReaderAccessTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'inline');
 
-        $pdf = $response->getContent();
+        $pdf = $response->streamedContent();
         $this->assertStringStartsWith('%PDF-', $pdf);
         $this->assertGreaterThan(1000, strlen($pdf));
         $this->assertStringContainsString('/Subtype /Image', $pdf);
@@ -547,9 +548,8 @@ class StoreReaderAccessTest extends TestCase
         [$product, $preview] = $this->makePreviewFixture();
         $user = $this->makeReaderUser();
 
-        $this->actingAs($user)
-            ->get(route('store.reader', $product->slug))
-            ->assertOk()
+        $response = $this->actingAs($user)->get(route('store.reader', $product->slug));
+        $response->assertOk()
             ->assertSee('09123456789')
             ->assertSee('farast-reader-watermark')
             ->assertSee('is-pdf')
@@ -557,8 +557,18 @@ class StoreReaderAccessTest extends TestCase
             ->assertSee('farast-reader.js')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
-            ->assertHeader('Referrer-Policy', 'no-referrer')
-            ->assertHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:");
+            ->assertHeader('Referrer-Policy', 'no-referrer');
+        $contentSecurityPolicy = (string) $response->headers->get('Content-Security-Policy');
+        foreach ([
+            "default-src 'self'",
+            "object-src 'none'",
+            "frame-ancestors 'self'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "worker-src 'self' blob:",
+        ] as $directive) {
+            $this->assertStringContainsString($directive, $contentSecurityPolicy);
+        }
 
         $response = $this->actingAs($user)->get(route('store.preview', $preview));
 
