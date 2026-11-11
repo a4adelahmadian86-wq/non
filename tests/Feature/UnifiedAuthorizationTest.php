@@ -239,6 +239,38 @@ class UnifiedAuthorizationTest extends TestCase
         self::assertFalse(app(AuthorizationService::class)->allows($user, 'workflows.manage'));
     }
 
+    public function test_direct_team_access_manager_grant_is_limited_to_its_team(): void
+    {
+        $organization = Organization::create(['name' => 'Direct delegation', 'slug' => 'direct-delegation', 'status' => 'active']);
+        $teamA = Team::create(['organization_id' => $organization->id, 'name' => 'Direct A', 'slug' => 'direct-a']);
+        $teamB = Team::create(['organization_id' => $organization->id, 'name' => 'Direct B', 'slug' => 'direct-b']);
+        $root = User::factory()->create(['role' => 'admin']);
+        $manager = User::factory()->create(['role' => 'employee', 'organization_id' => $organization->id]);
+        $memberA = User::factory()->create(['role' => 'employee', 'organization_id' => $organization->id]);
+        $memberB = User::factory()->create(['role' => 'employee', 'organization_id' => $organization->id]);
+        $manager->teams()->attach($teamA->id, ['team_role' => 'manager']);
+        $memberA->teams()->attach($teamA->id, ['team_role' => 'employee']);
+        $memberB->teams()->attach($teamB->id, ['team_role' => 'employee']);
+        $this->permission('access.manage');
+
+        $authorization = app(AuthorizationService::class);
+        $authorization->grantDirectPermission(
+            $root,
+            $manager,
+            'access.manage',
+            'allow',
+            'team',
+            $organization->id,
+            $teamA->id,
+        );
+
+        $assignment = $authorization->assignRole($manager, $memberA, 'employee', 'own');
+        self::assertSame($memberA->id, (int) $assignment->user_id);
+
+        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $authorization->assignRole($manager, $memberB, 'employee', 'own');
+    }
+
     public function test_team_scoped_access_manager_cannot_delegate_into_another_team(): void
     {
         $organization = Organization::create(['name' => 'Delegation', 'slug' => 'delegation', 'status' => 'active']);
