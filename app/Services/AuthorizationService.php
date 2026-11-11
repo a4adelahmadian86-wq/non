@@ -59,7 +59,16 @@ class AuthorizationService
         }
 
         if ($user->isAdmin()) {
-            return ['allowed' => true, 'reason' => 'system_administrator', 'source' => 'system', 'permission' => $permission];
+            // Preserve break-glass navigation, but still honor an explicitly
+            // narrowed request scope for record-level resource checks.
+            $allowed = $context === [] || $this->scopeMatches($user, $this->baseScope($user), null, $context);
+
+            return [
+                'allowed' => $allowed,
+                'reason' => $allowed ? 'system_administrator' : 'outside_admin_scope',
+                'source' => 'system',
+                'permission' => $permission,
+            ];
         }
 
         $permissionId = $this->permissionId($permission);
@@ -125,10 +134,11 @@ class AuthorizationService
             return false;
         }
 
-        // The platform owner remains the immutable break-glass administrator.
-        // Data boundaries still apply through AdminConsoleService / resource queries.
+        // The platform owner remains the immutable break-glass administrator for
+        // navigation and unscoped operations. Explicit record checks still honor
+        // a narrower scope imposed by the trusted admin-scope middleware.
         if ($user->isAdmin()) {
-            return true;
+            return $context === [] || $this->scopeMatches($user, $this->baseScope($user), null, $context);
         }
 
         $contextKey = $context ? hash('sha256', json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') : 'navigation';
