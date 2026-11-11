@@ -61,7 +61,7 @@ Checksum version 2 canonicalizes associative metadata keys recursively before ha
 
 Rows without a version marker retain the legacy version 1 byte-level verification path. Their checksums are never silently rewritten or "repaired" during verification. If a historical v1 row fails verification on a database that normalized JSON key order, it remains an integrity finding and requires a separately approved, evidence-preserving reconciliation; the v2 canonicalization is not retroactive.
 
-The Feedback Evidence schema reconciliation is additive and idempotent. `tests/Feature/FarastFeedbackEvidenceSchemaTest.php` checks its required columns and composite indexes, and the MySQL 8.4 CI job runs this contract test alongside the audit-ledger integrity tests.
+The Feedback Evidence schema reconciliation is additive and idempotent. `tests/Feature/FarastFeedbackEvidenceSchemaTest.php` checks its required columns and composite indexes, and the MySQL 8.4 CI job runs this contract test alongside the audit-ledger integrity tests. The composite `feedback_id,status` index deliberately keeps `feedback_id` as its leftmost key, so feedback-only lookups can use the same index without introducing a competing single-column index.
 
 Operational daily logs retain the existing 14-day Monolog rotation policy. The audit ledger is not automatically pruned: no destructive retention period is assumed without an approved business/legal schedule. This phase does not claim physical secure erasure on SSDs, snapshots or backups. Any future deletion process must include the database, replicas, backups and encryption-key lifecycle and must be tested before activation.
 
