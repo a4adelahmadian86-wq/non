@@ -4,6 +4,8 @@
 
 This phase extends existing first-party assets; it does not introduce a parallel audit, notification, queue or storage subsystem.
 
+> Main baseline synchronized during this phase: `3ab245fd72053675ca6fb9fed6b85e9befae6143` (2026-11-11). The branch retains this commit as a merge ancestor; validation below is against that baseline.
+
 - Global HTTP middleware: `App\\Http\\Middleware\\FarastObservability`, prepended before other global middleware so early failures receive trace IDs.
 - Request and correlation headers: `X-Request-Id` and `X-Correlation-Id`.
 - Runtime configuration: `config/observability.php`; environment access is kept inside config for Config Cache compatibility.
