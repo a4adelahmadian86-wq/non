@@ -123,13 +123,13 @@ class UnifiedAuthorizationTest extends TestCase
         ]);
         RolePermission::firstOrCreate(['role' => 'limited_admin', 'permission_id' => $permission->id]);
         RolePermission::firstOrCreate(['role' => 'limited_admin', 'permission_id' => $accessPermission->id]);
-        $assignmentId = DB::table('role_assignments')->insertGetId([
-            'user_id' => $admin->id,
-            'role_id' => $roleId,
-            'scope' => 'own',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $assignment = app(AuthorizationService::class)->assignRole(
+            $admin,
+            $admin,
+            'limited_admin',
+            'own',
+        );
+        $assignmentId = (int) $assignment->id;
 
         self::assertFalse(app(AuthorizationService::class)->allowsRecord(
             $admin,
