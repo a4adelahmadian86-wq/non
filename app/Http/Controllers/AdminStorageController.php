@@ -186,13 +186,16 @@ class AdminStorageController extends Controller
     public function destroy(StorageVolume $volume)
     {
         $hasManagedFiles = $volume->files()->whereNotIn('status', ['deleted'])->exists();
+        $hasOrphanedObjects = StorageManagedFile::query()
+            ->where('metadata->orphaned_source->volume_id', $volume->id)
+            ->exists();
         $hasProviderObjects = (int) $volume->object_count > 0;
         $inventoryIsFresh = $volume->status === 'healthy'
             && $volume->last_checked_at
             && $volume->last_checked_at->gte(now()->subMinutes(30));
 
         abort_if(
-            $hasManagedFiles || $hasProviderObjects || ! $inventoryIsFresh,
+            $hasManagedFiles || $hasOrphanedObjects || $hasProviderObjects || ! $inventoryIsFresh,
             409,
             'برای حذف امن، ابتدا اتصال را بررسی کنید و مطمئن شوید موجودی سرویس‌دهنده در ۳۰ دقیقه اخیر صفر بوده و هیچ فایل یا نسخه پشتیبانی باقی نمانده است.'
         );
