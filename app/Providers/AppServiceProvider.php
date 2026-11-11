@@ -98,6 +98,27 @@ class AppServiceProvider extends ServiceProvider
             }
         });
 
+        // JobExceptionOccurred is emitted for each failed attempt. JobFailed is
+        // emitted only when the worker gives up; log that terminal state from the
+        // immutable payload because the per-attempt listener clears worker context.
+        Event::listen(JobFailed::class, function (JobFailed $event): void {
+            try {
+                $trace = (array) ($event->job->payload()['farast_trace'] ?? []);
+                Log::error('farast.queue.job.failed', array_filter([
+                    'request_id' => is_string($trace['request_id'] ?? null) ? $trace['request_id'] : null,
+                    'correlation_id' => is_string($trace['correlation_id'] ?? null) ? $trace['correlation_id'] : null,
+                    'job_name' => $event->job->resolveName(),
+                    'job_id' => $event->job->getJobId(),
+                    'queue' => $event->job->getQueue(),
+                    'exception_class' => get_class($event->exception),
+                ], static fn ($value) => $value !== null));
+            } catch (Throwable $exception) {
+                error_log('FARAST terminal queue failure logging failed: '.get_class($exception));
+            } finally {
+                $this->clearQueueTrace();
+            }
+        });
+
         Event::listen(AuthenticationFailed::class, function (AuthenticationFailed $event): void {
             // Never log the submitted credentials or the attempted email/phone.
             try {
