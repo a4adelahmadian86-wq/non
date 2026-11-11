@@ -422,6 +422,14 @@ class StoreReaderAccessTest extends TestCase
         $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
             ->assertStatus(410);
 
+        $structure['audio'] = ['status' => 'not_applicable'];
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="unavailable"', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(410);
+
         unset($structure['audio']);
         $document->update(['structure_json' => $structure]);
         $this->actingAs($user)->get(route('store.reader', $product->slug))
