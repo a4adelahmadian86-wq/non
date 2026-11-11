@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 @section('admin-content')
 @php($isEdit = $product->exists)
+@php($selectedProductType = $selectedProductType ?? ($isEdit ? $product->type : null))
 <section class="store-page" dir="rtl">
   <div class="store-container product-editor">
     <div class="store-section-head">
@@ -27,13 +28,57 @@
         <p>این بررسی وضعیت واقعی اطلاعات ذخیره‌شده را نشان می‌دهد. کنترل نهایی انتشار همچنان در سرور انجام می‌شود.</p>
       </section>
     @endif
+    @php($publicationWorkflow = (array) data_get($product->metadata, 'publication_workflow', []))
+    @if($isEdit && filled($publicationWorkflow['status'] ?? null))
+      @php($publicationStatusLabels = [
+        'queued' => 'در صف بررسی ناظر هوشمند',
+        'reviewing' => 'ناظر هوشمند در حال بررسی محصول',
+        'awaiting_supervisor' => 'در انتظار اتصال یا اجرای مجدد ناظر',
+        'awaiting_admin_approval' => 'تأیید هوش مصنوعی انجام شده؛ منتظر تأیید مدیر',
+        'awaiting_manual_approval' => 'اصلاح خودکار انجام شده؛ منتظر تأیید دستی مدیر',
+        'needs_manual_changes' => 'نیازمند اصلاح دستی اطلاعات محصول',
+        'blocked' => 'انتشار به دلیل موانع قطعی متوقف است',
+        'stale' => 'اطلاعات محصول هنگام بررسی تغییر کرده است',
+        'published' => 'بررسی و انتشار تکمیل شده است',
+      ])
+      <section class="store-panel product-publication-workflow" aria-labelledby="publication-workflow-title">
+        <div class="product-readiness-head">
+          <div><span>گردش‌کار واقعی انتشار</span><h2 id="publication-workflow-title">وضعیت ناظر و صف انتشار</h2></div>
+          <strong>{{ $publicationStatusLabels[$publicationWorkflow['status']] ?? 'وضعیت نامشخص' }}</strong>
+        </div>
+        @if(filled($publicationWorkflow['review_summary'] ?? null))
+          <p>{{ $publicationWorkflow['review_summary'] }}</p>
+        @endif
+        @if(!empty($publicationWorkflow['publication_blockers']))
+          <ul>@foreach($publicationWorkflow['publication_blockers'] as $blocker)<li>{{ $blocker }}</li>@endforeach</ul>
+        @endif
+        @if(!empty($publicationWorkflow['correction_applied']))
+          <p>ناظر هوشمند اصلاحاتی را اعمال کرده است. برای جلوگیری از انتشار خودکار، تأیید انسانی الزامی است.</p>
+        @endif
+        @if(in_array($publicationWorkflow['status'], ['awaiting_admin_approval','awaiting_manual_approval'], true)
+          && app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.publish_products'))
+          <form method="post" action="{{ route('admin.store.publication.approve', $product) }}" onsubmit="return confirm('آیا پس از بررسی گزارش ناظر، انتشار این محصول را تأیید می‌کنید؟');">
+            @csrf
+            <button type="submit" class="store-primary-btn">تأیید نهایی و انتشار محصول</button>
+          </form>
+        @endif
+      </section>
+    @endif
 
+    @if(!$isEdit && !$selectedProductType)
+      @include('admin.store.partials.product-type-selection')
+    @elseif(!$isEdit && $selectedProductType === 'digital_file')
+      @include('admin.store.partials.file-first-intake')
+    @else
+    @if(!$isEdit)
+      <div class="product-type-change-row"><a href="{{ route('admin.store.create') }}">بازگشت به انتخاب نوع محصول</a></div>
+    @endif
     <div class="product-workflow {{ $isEdit ? 'has-media' : 'has-upload' }}" aria-label="مراحل آماده‌سازی محصول">
       <a href="#product-identity"><span>۱</span><b>مشخصات</b><small>هویت و دسته‌بندی</small></a>
       <a href="#product-pricing"><span>۲</span><b>قیمت‌گذاری</b><small>قیمت و انتشار</small></a>
       <a href="#product-content"><span>۳</span><b>محتوا</b><small>معرفی و توضیحات</small></a>
       @if($isEdit)<a href="#product-media"><span>۴</span><b>رسانه</b><small>کاور و تصاویر</small></a>
-      @else<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
+      @elseif($product->type !== 'course')<a href="#product-upload-step" data-product-upload-nav><span>۴</span><b>فایل اصلی</b><small>آپلود امن محصول</small></a>@endif
       <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۵' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
       <a href="#product-ai-supervisor"><span>۶</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
@@ -50,7 +95,7 @@
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
-        <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
+        <label class="product-field">نوع محصول *@if($isEdit || $selectedProductType)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit || $selectedProductType)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ ($isEdit || $selectedProductType) ? 'نوع محصول پس از انتخاب و ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
         <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
         <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
@@ -267,7 +312,7 @@
         </div>
       </section>
 
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
+      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : ($product->type === 'course' ? 'ذخیره پیش‌نویس و ورود به طراحی دوره' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل') }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : ($product->type === 'course' ? 'پس از ذخیره پیش‌نویس، فصل‌ها و جلسات دوره را طراحی کنید.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.') }}</span></div>
     </form>
     @if(!$isEdit && $product->type !== 'course')
       <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">
@@ -350,6 +395,7 @@
           <form method="post" action="{{ route('admin.store.files.delete',[$product,$file]) }}" onsubmit="return confirm('فایل حذف شود؟')">@csrf @method('DELETE')<button type="submit" class="product-danger">حذف</button></form></div>
         @empty <div class="course-empty">هنوز فایلی بارگذاری نشده است.</div>@endforelse</div>
         <section class="product-ingestion" data-product-ingestion
+          data-product-id="{{ $product->id }}"
           data-preflight-url="{{ route('admin.store.files.preflight',$product) }}"
           data-confirm-url-template="{{ route('admin.store.files.confirm',[$product,'__INGESTION__']) }}"
           data-cancel-url-template="{{ route('admin.store.files.cancel',[$product,'__INGESTION__']) }}"
@@ -371,6 +417,14 @@
             <div class="product-ingestion-dialog">
               <div class="product-ingestion-modal-head"><span class="product-ingestion-icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>بررسی داخلی فراست</small><h3 id="ingestion-modal-title">گزارش بررسی فایل</h3><p data-ingestion-filename></p></div><button type="button" data-ingestion-close aria-label="بستن پنجره">×</button></div>
               <div class="product-ingestion-selected" data-ingestion-selected aria-live="polite"></div>
+              <div class="product-ingestion-antivirus">
+                @if(app(\App\Services\AuthorizationService::class)->allows(auth()->user(), 'store.security_scan'))
+                  <label><input type="checkbox" data-ingestion-antivirus> اسکن تکمیلی آنتی‌ویروس (اختیاری)</label>
+                  <small>پیش‌فرض خاموش است. با فعال‌سازی، فایل در قرنطینه خصوصی با موتور ClamAV بررسی می‌شود؛ این گزینه جایگزین بررسی ساختاری داخلی نیست.</small>
+                @else
+                  <small>بررسی ساختاری داخلی فعال است. اسکن آنتی‌ویروس تکمیلی فقط برای حساب‌های دارای مجوز در دسترس است.</small>
+                @endif
+              </div>
               <div class="product-ingestion-timeline" data-ingestion-timeline>
                 <div data-step="received" class="is-done"><i>✓</i><span>دریافت فایل</span></div>
                 <div data-step="upload"><i>2</i><span>انتقال امن به قرنطینه</span></div>
@@ -386,7 +440,7 @@
                 <small data-ingestion-progress-label>آماده‌سازی فایل...</small>
               </div>
               <div class="product-ingestion-report" data-ingestion-report><p>در حال بررسی فایل در محیط سایت...</p></div>
-              <p class="product-ingestion-security-note">این اسکنر داخلی فایل را اجرا نمی‌کند و سرویس ضدبدافزار ثالثی به کار نمی‌گیرد. نتیجه، بررسی ایستای ساختار و نشانه‌های خطر است و تضمین کشف همه بدافزارهای ناشناخته نیست.</p>
+              <p class="product-ingestion-security-note">بررسی ساختاری داخلی فایل را اجرا نمی‌کند. اسکن آنتی‌ویروس فقط با انتخاب صریح حساب مجاز و در صورت پیکربندی ClamAV انجام می‌شود؛ هیچ‌یک تضمین کشف همه تهدیدهای ناشناخته نیست.</p>
               <div class="product-ingestion-actions"><button type="button" class="store-outline-btn" data-ingestion-cancel>لغو انتخاب</button><button type="button" class="store-primary-btn" data-ingestion-confirm disabled>بررسی امن فایل</button></div>
             </div>
           </div>
@@ -411,6 +465,7 @@
     <div class="store-panel product-category-panel product-tag-panel"><h2>مدیریت سریع برچسب‌ها</h2><p class="product-inline-feedback" data-inline-feedback role="status" aria-live="polite"></p><form method="post" action="{{ route('admin.store.tags.store') }}" data-inline-create="tag">@csrf<input name="name" required maxlength="100" placeholder="نام برچسب جدید"><input name="slug" maxlength="120" placeholder="نشانی (اختیاری)"><button type="submit" class="store-outline-btn">افزودن برچسب</button></form><small class="product-help">پس از ذخیره، برچسب در فهرست برچسب‌های قابل انتخاب محصول قرار می‌گیرد.</small></div>
   </div>
 </section>
+    @endif
 @endsection
 @push('scripts')
 <script src="{{ asset('js/product-ingestion.js') }}" defer></script>
@@ -585,6 +640,7 @@
 .product-wizard-progress{display:grid;gap:4px;padding:12px 15px;border:1px solid #dce7f4;border-radius:12px;background:#f6f9fd;color:#405875}
 .product-wizard-progress strong{font-size:.76rem}.product-wizard-progress span{font-size:.66rem;color:var(--st-muted)}
 @media(max-width:650px){.product-wizard-panel{padding:13px}.product-wizard-actions button{flex:1}.product-workflow{overflow-x:auto}}
+.product-type-choice{padding:clamp(18px,3vw,28px);display:grid;gap:20px}.product-type-choice-head>span{font-size:.7rem;font-weight:900;color:var(--st-blue)}.product-type-choice-head h2{font-size:1.08rem;margin:6px 0}.product-type-choice-head p{max-width:760px;margin:0;color:var(--st-muted);font-size:.76rem;line-height:1.95}.product-type-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-type-choice-card{display:grid;gap:9px;align-content:start;padding:20px;border:1px solid var(--st-line);border-radius:15px;background:#fff;color:var(--st-ink);text-decoration:none;transition:border-color .18s,background .18s,transform .18s}.product-type-choice-card:hover{border-color:var(--st-blue);background:#f7faff;transform:translateY(-2px)}.product-type-choice-number{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#edf5ff;color:var(--st-blue);font-size:.76rem;font-weight:900}.product-type-choice-card strong{font-size:.92rem}.product-type-choice-card p{margin:0;color:var(--st-muted);font-size:.72rem;line-height:1.9}.product-type-choice-action{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px;color:var(--st-blue);font-size:.72rem;font-weight:900}.product-type-change-row{display:flex;justify-content:flex-start}.product-type-change-row a{font-size:.7rem;color:var(--st-blue);text-decoration:none;font-weight:800}.product-file-first-step{display:grid;gap:1rem}.product-file-first-step>p{line-height:1.95;color:var(--muted,#64748b);margin:0}.product-file-first-points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem 1.25rem;list-style:none;padding:0;margin:0}.product-file-first-points li{position:relative;padding-inline-start:1.4rem;line-height:1.8}.product-file-first-points li:before{content:"✓";position:absolute;inset-inline-start:0;color:var(--success,#15803d);font-weight:800}@media(max-width:720px){.product-file-first-points{grid-template-columns:1fr}.product-type-choice-grid{grid-template-columns:1fr}.product-type-choice-card{padding:16px}}
 </style>
 @endpush
 
