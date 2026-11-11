@@ -83,11 +83,12 @@ class AuthorizationService
             return true;
         }
 
-        $assignments = $this->activeAssignments($user)
-            ->filter(fn (object $assignment): bool => $this->scopeContains($user, $assignment->scope, $assignment, $record));
+        $activeAssignments = $this->activeAssignments($user);
+        if ($activeAssignments->isNotEmpty()) {
+            $inScope = $activeAssignments
+                ->filter(fn (object $assignment): bool => $this->scopeContains($user, $assignment->scope, $assignment, $record));
 
-        if ($assignments->isNotEmpty()) {
-            return $this->assignedRoleAllows($assignments, $permission);
+            return $inScope->isNotEmpty() && $this->assignedRoleAllows($inScope, $permission);
         }
 
         if ($user->role === User::ROLE_ADMIN) {
@@ -264,12 +265,30 @@ class AuthorizationService
         }
 
         if ($scope === 'team') {
-            $recordTeamId = $record->getAttribute('team_id');
-            if ($teamId !== null) {
-                return $recordTeamId !== null && (int) $recordTeamId === (int) $teamId;
+            $teamIds = $teamId !== null
+                ? collect([(int) $teamId])
+                : \\App\\Models\\Team::query()
+                    ->where('supervisor_id', $user->id)
+                    ->orWhereHas('members', fn ($query) => $query->where('users.id', $user->id)->wherePivot('team_role', 'manager'))
+                    ->pluck('id');
+
+            if ($teamIds->isEmpty()) {
+                return false;
             }
 
-            return $recordTeamId !== null && $user->teams()->whereKey($recordTeamId)->exists();
+            $recordTeamId = $record->getAttribute('team_id');
+            if ($recordTeamId !== null) {
+                return $teamIds->contains((int) $recordTeamId);
+            }
+
+            $ownerId = $record->getAttribute('user_id')
+                ?? $record->getAttribute('owner_id')
+                ?? $record->getAttribute('created_by');
+
+            return $ownerId !== null && DB::table('team_user')
+                ->where('user_id', $ownerId)
+                ->whereIn('team_id', $teamIds)
+                ->exists();
         }
 
         foreach (['user_id', 'owner_id', 'created_by'] as $ownerColumn) {
