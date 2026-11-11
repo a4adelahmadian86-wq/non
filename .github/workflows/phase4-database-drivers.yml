@@ -59,7 +59,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, dom, fileinfo, pdo_mysql, zip
+          extensions: mbstring, dom, fileinfo, pdo_mysql, pdo_sqlite, sqlite3, zip
           coverage: none
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: composer install --no-interaction --prefer-dist --no-progress
@@ -89,7 +89,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, dom, fileinfo, pdo_pgsql, zip
+          extensions: mbstring, dom, fileinfo, pdo_pgsql, pdo_sqlite, sqlite3, zip
           coverage: none
       - run: mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
       - run: composer install --no-interaction --prefer-dist --no-progress
