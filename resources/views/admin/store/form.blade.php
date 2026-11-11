@@ -1,10 +1,12 @@
 @extends('layouts.admin')
 @section('admin-content')
 @php($isEdit = $product->exists)
+@php($intakeMode = $intakeMode ?? false)
+@php($intakeSession = $intakeSession ?? null)
 <section class="store-page" dir="rtl">
   <div class="store-container product-editor">
     <div class="store-section-head">
-      <div><span class="eyebrow">مرکز مدیریت محصولات</span><h1>{{ $isEdit ? 'ویرایش محصول' : 'ایجاد محصول جدید' }}</h1><p>اطلاعات فروش، محتوا و نوع دسترسی را از یک نقطه مدیریت کنید.</p></div>
+      <div><span class="eyebrow">مرکز مدیریت محصولات</span><h1>{{ $isEdit ? 'ویرایش محصول' : ($intakeMode ? 'تکمیل مشخصات محصول' : 'ایجاد محصول جدید') }}</h1><p>{{ $intakeMode ? 'فایل‌ها در مرحله قبل ذخیره و بازبینی شده‌اند؛ اکنون اطلاعات واقعی محصول را ثبت کنید.' : 'اطلاعات فروش، محتوا و نوع دسترسی را از یک نقطه مدیریت کنید.' }}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="store-outline-btn" href="{{ route('admin.store.index') }}">فهرست محصولات</a>@if($isEdit)<a class="store-outline-btn" href="{{ route('store.product',$product->slug) }}" target="_blank" rel="noopener">پیش‌نمایش فروشگاه</a>@endif</div>
     </div>
     @if(session('status'))<div class="store-alert success" role="status">{{ session('status') }}</div>@endif
@@ -37,7 +39,7 @@
       <a href="#product-discovery"><span>{{ $isEdit ? '۵' : '۵' }}</span><b>نمایش</b><small>سئو و فروشگاه</small></a>
       <a href="#product-ai-supervisor"><span>۶</span><b>ناظر هوشمند</b><small>کنترل کیفیت محصول</small></a>
     </div>
-    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : route('admin.store.store') }}" class="store-panel product-editor-form" id="productEditorForm">
+    <form method="post" action="{{ $isEdit ? route('admin.store.update',$product) : ($intakeMode ? route('admin.store.intakes.submit',$intakeSession) : route('admin.store.store')) }}" class="store-panel product-editor-form" id="productEditorForm">
       @csrf @if($isEdit) @method('PUT') @endif
       @if($isEdit)
         <input type="hidden" name="ai_content_source_fingerprints" data-ai-content-provenance>
@@ -50,7 +52,7 @@
       <div class="product-editor-heading" id="product-identity"><div><span>گام اول · هویت محصول</span><h2>مشخصات و دسته‌بندی</h2></div><span class="product-editor-step">اطلاعات ضروری</span></div>
       <div class="product-editor-grid">
         <label class="product-field product-field-wide">نام محصول / دوره *<input name="title" data-product-title value="{{ old('title',$product->title) }}" required maxlength="220" placeholder="عنوان دقیق و قابل فهم برای مشتری"></label>
-        <label class="product-field">نوع محصول *@if($isEdit)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ $isEdit ? 'نوع محصول پس از ایجاد ثابت است تا سوابق و دسترسی‌ها مخلوط نشوند.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
+        <label class="product-field">نوع محصول *@if($isEdit || $intakeMode)<input type="hidden" name="type" value="{{ $product->type }}">@endif<select name="type" data-product-type required @disabled($isEdit || $intakeMode)><option value="digital_file" @selected(old('type',$product->type)==='digital_file')>محصول فایل دانلودی</option><option value="course" @selected(old('type',$product->type)==='course')>دوره آموزشی</option></select><small>{{ ($isEdit || $intakeMode) ? 'نوع محصول در گام اول انتخاب شده و برای جلوگیری از اختلاط فایل‌ها و ساختار دوره قابل تغییر نیست.' : 'نوع محصول تعیین می‌کند چه ابزارهایی در مرحله بعد نمایش داده شود.' }}</small></label>
         <label class="product-field">دسته‌بندی *<select name="category_id" required><option value="">انتخاب دسته</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('category_id',$product->category_id)==$category->id)>{{ $category->name }}</option>@endforeach</select></label>
         <div class="product-editor-subhead" id="product-pricing"><span>گام دوم</span><strong>قیمت‌گذاری و وضعیت فروش</strong><small>قیمت‌ها در پایگاه داده به ریال ذخیره می‌شوند.</small></div>
         <label class="product-field">قیمت فروش (ریال) *<input type="number" name="price_rials" value="{{ old('price_rials',$product->price_rials ?? 0) }}" min="0" max="999999999999" required inputmode="numeric"><small class="product-price-preview" data-price-preview>معادل ۰ تومان</small></label>
@@ -267,7 +269,7 @@
         </div>
       </section>
 
-      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل' }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.' }}</span></div>
+      <div class="product-editor-actions"><button type="submit" class="store-primary-btn" id="productSaveButton">{{ $isEdit ? 'ذخیره اطلاعات محصول' : ($intakeMode ? 'ثبت محصول و ارسال به صف بررسی' : 'ذخیره پیش‌نویس و رفتن به مرحله آپلود فایل') }}</button><span>{{ $isEdit ? 'اطلاعات ذخیره‌شده در تمام بخش‌های فروشگاه و دوره استفاده می‌شود.' : ($intakeMode ? 'محصول ابتدا خصوصی ثبت می‌شود و تا پایان بررسی ناظر و تأیید مجاز منتشر نخواهد شد.' : 'پس از ذخیره پیش‌نویس، فضای آپلود امن برای انتخاب و بررسی فایل باز می‌شود.') }}</span></div>
     </form>
     @if(!$isEdit && $product->type !== 'course')
       <section class="store-panel product-upload-next-step" id="product-upload-step" data-product-upload-step aria-labelledby="product-upload-step-title">

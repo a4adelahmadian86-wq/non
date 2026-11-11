@@ -157,7 +157,7 @@ def validate_evidence_facts(raw_facts: Any, source_chunks: list[dict[str, Any]])
 async def review_product_file(
     file: UploadFile = File(...),
     product_id: str = Form(..., min_length=1, max_length=80),
-    product_title: str = Form(..., min_length=2, max_length=220),
+    product_title: str | None = Form(default=None, max_length=220),
     product_type: Literal["digital_file", "course"] = Form(...),
     primary_scan_status: Literal["clean", "structural_checks_passed"] = Form(...),
     allow_sample_generation: bool = Form(default=True),
@@ -251,7 +251,7 @@ async def review_product_file(
                         image_data,
                         str(asset.get("mime") or "image/jpeg"),
                         {
-                            "title": redact_sensitive_content(product_title)[0],
+                            "title": redact_sensitive_content(product_title or "")[0],
                             "category": redact_sensitive_content(category_name or "")[0],
                             "tags": [redact_sensitive_content(tag)[0] for tag in tags],
                         },
