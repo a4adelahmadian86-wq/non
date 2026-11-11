@@ -31,7 +31,7 @@ class RunStorageBackupJob implements ShouldQueue
         $request->update(['status' => 'running', 'started_at' => now(), 'error_message' => null]);
 
         try {
-            $results = $backup->runWeekly();
+            $results = $backup->runWeekly((string) $request->backup_type);
             $completed = collect($results)->where('status', 'completed')->count();
             $failed = collect($results)->where('status', 'failed')->count();
             $request->update([
