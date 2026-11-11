@@ -37,13 +37,13 @@ Missing optional tables and unconfigured external services are reported as warni
 
 ## Alerting and anomaly detection
 
-The scheduled command `farast:observability:check` runs every minute with overlap protection. It evaluates the dashboard snapshot, emits severity-aware application logs, deduplicates alerts through the shared cache, writes incident-open/reminder/recovery events to the canonical append-only audit ledger, and sends in-app notifications through the existing `NotificationService`.
+The scheduled command `farast:observability:check` runs every minute with overlap protection. It evaluates the dashboard snapshot, emits severity-aware application logs, deduplicates alerts through the shared cache, writes incident-open/reminder/recovery events to the canonical append-only audit ledger, and sends in-app notifications through the existing `NotificationService`. When an operator configures an HTTPS webhook URL, it also sends a bounded JSON alert with an optional bearer token; redirects are disabled and the destination URL/response body are never logged.
 
-Configure explicit recipients with `FARAST_OBSERVABILITY_ALERT_USER_IDS=12,34`; no notification is broadcast to all administrators by default. Configure the repeat interval with `FARAST_OBSERVABILITY_ALERT_COOLDOWN_MINUTES` (5–1440, default 30). Without recipient IDs, durable application logs and audit events are still emitted when the database is available; no in-app notification is sent.
+Configure explicit in-app recipients with `FARAST_OBSERVABILITY_ALERT_USER_IDS=12,34`; no notification is broadcast to all administrators by default. Configure the repeat interval with `FARAST_OBSERVABILITY_ALERT_COOLDOWN_MINUTES` (5–1440, default 30). For out-of-band delivery, set `FARAST_OBSERVABILITY_WEBHOOK_URL` to an HTTPS endpoint and optionally `FARAST_OBSERVABILITY_WEBHOOK_TOKEN` to its bearer token. Without recipient IDs or a webhook, durable application logs and audit events are still emitted when the database is available; no external destination is assumed.
 
 Repeated failed authentications are counted by a keyed HMAC fingerprint of the source IP in the shared cache. The default thresholds are 5 failures (warning) and 10 (critical) within 10 minutes. Raw IP addresses, attempted usernames, emails and credentials are not stored in anomaly records. Threshold crossings are written to structured logs and the canonical audit ledger.
 
-This implementation does not claim external paging: an out-of-band destination (for example, an operator-owned monitoring/alerting service) still needs explicit deployment configuration and a production delivery test. Internal notifications cannot alert operators when the application database/cache itself is unavailable.
+External delivery is implemented but remains inactive until the operator configures an HTTPS destination and proves production delivery. Internal notifications cannot alert operators when the application database/cache itself is unavailable; the webhook is the independent path for that failure mode.
 
 ## Audit integrity and retention
 
