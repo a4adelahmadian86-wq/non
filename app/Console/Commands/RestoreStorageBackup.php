@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
 use Illuminate\Console\Command;
@@ -95,6 +96,32 @@ class RestoreStorageBackup extends Command
             $this->restoreDatabase($databaseDriver, $extracted.'/database/database.sql');
             DB::purge();
             DB::reconnect();
+
+            // The database snapshot was taken before this backup object was uploaded.
+            // Restore the run's final state and account for this archive exactly once.
+            DB::transaction(function () use ($run): void {
+                $restoredRun = StorageBackupRun::query()->lockForUpdate()->find($run->id);
+                if (! $restoredRun) {
+                    throw new RuntimeException('سابقه نسخه پشتیبان در دیتابیس بازیابی‌شده موجود نیست.');
+                }
+
+                if ($restoredRun->status === 'running') {
+                    $volume = StorageVolume::query()->lockForUpdate()->find($run->storage_volume_id);
+                    if (! $volume) {
+                        throw new RuntimeException('Volume نسخه پشتیبان در دیتابیس بازیابی‌شده موجود نیست.');
+                    }
+
+                    $volume->increment('used_bytes', (int) $run->size_bytes);
+                    $volume->increment('object_count');
+                    $restoredRun->update([
+                        'status' => 'completed',
+                        'object_key' => $run->object_key,
+                        'checksum' => $run->checksum,
+                        'size_bytes' => (int) $run->size_bytes,
+                        'completed_at' => $run->completed_at ?? now(),
+                    ]);
+                }
+            });
 
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
