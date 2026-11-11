@@ -11,7 +11,15 @@ class FarastObservabilityService
 {
     public function snapshot(): array
     {
-        $productServices = app(ProductInfrastructureHealthService::class)->snapshot();
+        try {
+            $productServices = app(ProductInfrastructureHealthService::class)->snapshot();
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('product_services', $exception);
+            $productServices = [
+                'supervisor' => ['status' => 'unknown', 'configured' => null],
+                'document_audio' => ['status' => 'unknown', 'configured' => null],
+            ];
+        }
         $productServiceStatuses = array_column($productServices, 'status');
         $productServiceStatus = array_intersect($productServiceStatuses, ['unavailable', 'misconfigured']) !== []
             ? 'critical'
