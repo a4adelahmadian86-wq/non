@@ -14,6 +14,7 @@ return new class extends Migration {
             $table->unsignedBigInteger('reserved_bytes');
             $table->unsignedInteger('reserved_objects')->default(1);
             $table->string('purpose', 40);
+            $table->string('status', 20)->default('active')->index();
             $table->json('metadata')->nullable();
             $table->timestamp('expires_at')->index();
             $table->timestamps();
