@@ -107,6 +107,7 @@ class AuditEventObservabilityTest extends TestCase
     public function test_audit_append_locks_the_stable_migration_row_before_reading_the_chain_head(): void
     {
         $queries = [];
+        $driver = DB::connection()->getDriverName();
         DB::listen(function (QueryExecuted $query) use (&$queries): void {
             $queries[] = strtolower($query->sql);
         });
@@ -117,7 +118,11 @@ class AuditEventObservabilityTest extends TestCase
         $headIndex = null;
         $insertIndex = null;
         foreach ($queries as $index => $sql) {
-            if ($lockIndex === null && preg_match('/update\\s+["`]?migrations["`]?\\s+set\\s+["`]?batch["`]?\\s*=\\s*["`]?batch["`]?/i', $sql) === 1) {
+            $isAppendLock = $driver === 'sqlite'
+                ? preg_match('/update\\s+["`]?migrations["`]?\\s+set\\s+["`]?batch["`]?\\s*=\\s*["`]?batch["`]?/i', $sql) === 1
+                : (str_contains($sql, 'migrations') && (str_contains($sql, 'for update') || str_contains($sql, 'updlock')));
+
+            if ($lockIndex === null && $isAppendLock) {
                 $lockIndex = $index;
             }
             if ($headIndex === null && str_contains($sql, 'select "payload_checksum" from "farast_audit_events"')) {
