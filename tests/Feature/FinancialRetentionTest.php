@@ -69,9 +69,12 @@ class FinancialRetentionTest extends TestCase
             'description' => 'Retention test',
         ]);
 
-        $this->expectException(QueryException::class);
-        $wallet->delete();
-
-        $this->assertDatabaseHas('wallet_transactions', ['id' => $transaction->id]);
+        try {
+            $wallet->delete();
+            self::fail('A wallet with ledger entries must not be deleted.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('wallets', ['id' => $wallet->id]);
+            $this->assertDatabaseHas('wallet_transactions', ['id' => $transaction->id]);
+        }
     }
 }
