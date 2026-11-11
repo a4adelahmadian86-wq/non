@@ -7,12 +7,19 @@ use App\Services\FarastObservabilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Tests\TestCase;
 
 class CheckObservabilityCommandTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Cache::flush();
+    }
 
     public function test_critical_alert_is_sent_once_per_cooldown_and_recovery_is_notified(): void
     {
@@ -31,10 +38,12 @@ class CheckObservabilityCommandTest extends TestCase
         Http::fake();
 
         $observability = \Mockery::mock(FarastObservabilityService::class);
-        $observability->shouldReceive('snapshot')->twice()->andReturn([
-            'status' => 'critical',
-            'components' => ['database' => ['status' => 'critical']],
-        ]);
+        $observability->shouldReceive('snapshot')->times(4)->andReturn(
+            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]],
+            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]],
+            ['status' => 'healthy', 'components' => ['database' => ['status' => 'healthy']]],
+            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]]
+        );
         app()->instance(FarastObservabilityService::class, $observability);
 
         $this->assertSame(1, Artisan::call('farast:observability:check'));
@@ -60,7 +69,12 @@ class CheckObservabilityCommandTest extends TestCase
             'type' => 'security_operational_alert',
             'title' => 'سلامت فراست بازیابی شد',
         ]);
-        Http::assertSentCount(2);
+
+        // The same degraded fingerprint after recovery is a new incident,
+        // not a duplicate of the previous incident's cooldown window.
+        $this->assertSame(1, Artisan::call('farast:observability:check'));
+        $this->assertDatabaseCount('farast_notifications', 3);
+        Http::assertSentCount(3);
         Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'https://alerts.example.test/farast'
             && $request->hasHeader('Authorization', 'Bearer webhook-secret')
             && ($request['severity'] ?? null) === 'critical');
