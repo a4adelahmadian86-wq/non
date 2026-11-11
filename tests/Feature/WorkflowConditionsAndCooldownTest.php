@@ -539,4 +539,18 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertDatabaseCount('farast_workflow_events', 0);
     }
 
+    public function test_condition_equality_does_not_use_php_loose_numeric_string_comparison(): void
+    {
+        $evaluator = app(\\App\\Services\\WorkflowConditionEvaluator::class);
+        $context = ['ticket_code' => '0e12345'];
+
+        $this->assertFalse($evaluator->matches([
+            ['field' => 'ticket_code', 'operator' => 'equals', 'value' => '0'],
+        ], $context));
+
+        $this->assertTrue($evaluator->matches([
+            ['field' => 'ticket_code', 'operator' => 'equals', 'value' => '0e12345'],
+        ], $context));
+    }
+
 }
