@@ -55,26 +55,42 @@ return new class extends Migration
         });
 
         Schema::table('orders', function (Blueprint $table): void {
-            if (! Schema::hasIndex('orders', 'orders_idempotency_key_unique')) {\n                $table->unique('idempotency_key', 'orders_idempotency_key_unique');\n            }
+            if (! Schema::hasIndex('orders', 'orders_idempotency_key_unique')) {
+                $table->unique('idempotency_key', 'orders_idempotency_key_unique');
+            }
         });
 
         Schema::table('payments', function (Blueprint $table): void {
-            if (! Schema::hasIndex('payments', 'payments_idempotency_key_unique')) {\n                $table->unique('idempotency_key', 'payments_idempotency_key_unique');\n            }
-            if (! Schema::hasIndex('payments', 'payments_gateway_authority_unique')) {\n                $table->unique(['gateway', 'authority'], 'payments_gateway_authority_unique');\n            }
-            if (! Schema::hasIndex('payments', 'payments_gateway_transaction_unique')) {\n                $table->unique(['gateway', 'transaction_id'], 'payments_gateway_transaction_unique');\n            }
+            if (! Schema::hasIndex('payments', 'payments_idempotency_key_unique')) {
+                $table->unique('idempotency_key', 'payments_idempotency_key_unique');
+            }
+            if (! Schema::hasIndex('payments', 'payments_gateway_authority_unique')) {
+                $table->unique(['gateway', 'authority'], 'payments_gateway_authority_unique');
+            }
+            if (! Schema::hasIndex('payments', 'payments_gateway_transaction_unique')) {
+                $table->unique(['gateway', 'transaction_id'], 'payments_gateway_transaction_unique');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('payments', function (Blueprint $table): void {
-            if (Schema::hasIndex('payments', 'payments_gateway_transaction_unique')) {\n                $table->dropUnique('payments_gateway_transaction_unique');\n            }
-            if (Schema::hasIndex('payments', 'payments_gateway_authority_unique')) {\n                $table->dropUnique('payments_gateway_authority_unique');\n            }
-            if (Schema::hasIndex('payments', 'payments_idempotency_key_unique')) {\n                $table->dropUnique('payments_idempotency_key_unique');\n            }
+            if (Schema::hasIndex('payments', 'payments_gateway_transaction_unique')) {
+                $table->dropUnique('payments_gateway_transaction_unique');
+            }
+            if (Schema::hasIndex('payments', 'payments_gateway_authority_unique')) {
+                $table->dropUnique('payments_gateway_authority_unique');
+            }
+            if (Schema::hasIndex('payments', 'payments_idempotency_key_unique')) {
+                $table->dropUnique('payments_idempotency_key_unique');
+            }
         });
 
         Schema::table('orders', function (Blueprint $table): void {
-            if (Schema::hasIndex('orders', 'orders_idempotency_key_unique')) {\n                $table->dropUnique('orders_idempotency_key_unique');\n            }
+            if (Schema::hasIndex('orders', 'orders_idempotency_key_unique')) {
+                $table->dropUnique('orders_idempotency_key_unique');
+            }
         });
 
         Schema::table('payments', function (Blueprint $table): void {
