@@ -14,8 +14,6 @@ use App\Services\Storage\StorageTransferService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class StorageProductReferenceSyncTest extends TestCase
