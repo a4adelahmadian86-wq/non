@@ -78,6 +78,10 @@
         <strong>فهرست مطالب</strong>
         <div id="reader-outline-list"></div>
       </section>
+      <section class="farast-reader-layers" id="reader-layers" hidden aria-label="لایه‌های اختیاری PDF">
+        <strong>لایه‌های سند</strong>
+        <div id="reader-layers-list"></div>
+      </section>
     </aside>
 
     <main class="farast-reader-canvas" id="reader-stage" aria-label="صفحه سند">
