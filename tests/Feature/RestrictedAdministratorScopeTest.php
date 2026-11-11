@@ -44,6 +44,47 @@ class RestrictedAdministratorScopeTest extends TestCase
         ]);
     }
 
+    private function createScopedRole(string $key, string $scope, ?int $scopeId): int
+    {
+        $roleId = DB::table('farast_roles')->insertGetId([
+            'key' => $key,
+            'name' => 'نقش آزمایشی '.$key,
+            'description' => 'نقش محدود برای آزمون دامنه مدیر',
+            'scope_type' => $scope,
+            'scope_id' => $scopeId,
+            'is_system' => false,
+            'is_active' => true,
+            'created_by' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $permissionId = DB::table('permissions')->where('key', 'users.view')->value('id');
+        $this->assertNotNull($permissionId, 'users.view permission must be seeded before scoped administrator tests.');
+
+        DB::table('farast_role_permissions')->insert([
+            'role_id' => $roleId,
+            'permission_id' => $permissionId,
+            'scope_type' => $scope,
+            'conditions' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $roleId;
+    }
+
+    private function assignScopedRole(User $platformAdmin, User $restrictedAdmin, int $roleId, string $scope, ?int $scopeId): void
+    {
+        $this->actingAs($platformAdmin)
+            ->post(route('admin.access-center.users.roles.store', $restrictedAdmin), [
+                'role_id' => $roleId,
+                'scope_type' => $scope,
+                'scope_id' => $scopeId,
+            ])
+            ->assertRedirect();
+    }
+
     public function test_global_admin_can_restrict_another_admin_to_one_organization(): void
     {
         $organizationA = $this->organization('a');
@@ -61,6 +102,8 @@ class RestrictedAdministratorScopeTest extends TestCase
             ])
             ->assertRedirect();
 
+        $roleId = $this->createScopedRole('restricted-admin-org-'.$organizationA->id, 'organization', $organizationA->id);
+        $this->assignScopedRole($platformAdmin, $restrictedAdmin, $roleId, 'organization', $organizationA->id);
         $restrictedAdmin->refresh();
         $this->actingAs($restrictedAdmin);
         $this->get('/dashboard')->assertOk();
@@ -122,6 +165,8 @@ class RestrictedAdministratorScopeTest extends TestCase
             ])
             ->assertRedirect();
 
+        $roleId = $this->createScopedRole('restricted-admin-team-'.$teamA->id, 'team', $teamA->id);
+        $this->assignScopedRole($platformAdmin, $restrictedAdmin, $roleId, 'team', $teamA->id);
         $restrictedAdmin->refresh();
         $this->actingAs($restrictedAdmin);
         $this->get('/dashboard')->assertOk();
@@ -172,10 +217,6 @@ class RestrictedAdministratorScopeTest extends TestCase
             'organization_id' => $organization->id,
             'team_ids' => [],
         ]));
-        $this->assertTrue(app(AuthorizationService::class)->allowsFor($restrictedAdmin, 'users.view', [
-            'owner_id' => $restrictedAdmin->id,
-            'organization_id' => null,
-            'team_ids' => [],
-        ]));
+        $this->assertFalse(app(AuthorizationService::class)->allows($restrictedAdmin, 'users.view'));
     }
 }
