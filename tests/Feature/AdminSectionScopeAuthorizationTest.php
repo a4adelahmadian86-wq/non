@@ -185,6 +185,8 @@ class AdminSectionScopeAuthorizationTest extends TestCase
             'role' => User::ROLE_ORGANIZATION_MANAGER,
             'permission_id' => $financePermission->id,
         ]);
+        // In production this write invalidates the request-scoped decision cache.
+        app(AuthorizationService::class)->forgetUser();
         $finance = $this->get('/admin/finance')->assertOk();
         $finance->assertViewHas('financeStats', fn (array $stats): bool => $stats['total'] === 1000);
         $finance->assertViewHas('walletTotal', 300);
