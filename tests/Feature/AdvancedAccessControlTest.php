@@ -517,8 +517,9 @@ class AdvancedAccessControlTest extends TestCase
         $this->assign($employee, $roleId, 'own');
 
         $route = new \Illuminate\Routing\Route('GET', '/team-resource-check', fn () => null);
-        $route->setParameter('resource', $team);
         $request = \Illuminate\Http\Request::create('/team-resource-check');
+        $route->bind($request);
+        $route->setParameter('resource', $team);
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
@@ -546,8 +547,9 @@ class AdvancedAccessControlTest extends TestCase
         ]);
 
         $route = new \Illuminate\Routing\Route('GET', '/resource-creator-check', fn () => null);
-        $route->setParameter('resource', $resource);
         $request = \Illuminate\Http\Request::create('/resource-creator-check');
+        $route->bind($request);
+        $route->setParameter('resource', $resource);
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
