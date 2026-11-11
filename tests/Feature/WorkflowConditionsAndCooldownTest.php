@@ -644,4 +644,65 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertSame(1, (int) $context['revision']);
     }
 
+    public function test_recovered_stale_lease_marks_the_interrupted_run_failed_and_links_the_new_run(): void
+    {
+        $owner = $this->owner('09140000237');
+        $workflow = $this->workflow($owner);
+        $startedAt = now()->subMinutes(31);
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'stale-run:document:237',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 237, 'revision' => 1]),
+            'status' => 'processing',
+            'attempts' => 1,
+            'matched_workflows' => 1,
+            'failed_workflows' => 0,
+            'matched_at' => $startedAt,
+            'started_at' => $startedAt,
+            'created_at' => $startedAt,
+            'updated_at' => $startedAt,
+        ]);
+        $staleRunId = DB::table('farast_workflow_runs')->insertGetId([
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'context' => json_encode(['user_id' => $owner->id, 'event_id' => $eventId]),
+            'started_at' => $startedAt,
+            'created_at' => $startedAt,
+            'updated_at' => $startedAt,
+        ]);
+        $mappingId = DB::table('farast_workflow_event_workflows')->insertGetId([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'attempts' => 1,
+            'run_id' => $staleRunId,
+            'started_at' => $startedAt,
+            'created_at' => $startedAt,
+            'updated_at' => $startedAt,
+            'lease_token' => 'expired-worker-token',
+        ]);
+
+        app(WorkflowEngine::class)->processQueuedEvent($eventId);
+
+        $mapping = DB::table('farast_workflow_event_workflows')->where('id', $mappingId)->first();
+        $this->assertSame('completed', $mapping->status);
+        $this->assertNotNull($mapping->run_id);
+        $this->assertNotSame($staleRunId, (int) $mapping->run_id);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'id' => $staleRunId,
+            'status' => 'failed',
+            'error' => 'Worker lease expired before workflow completion.',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'id' => $mapping->run_id,
+            'workflow_id' => $workflow,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'completed',
+        ]);
+    }
+
 }
