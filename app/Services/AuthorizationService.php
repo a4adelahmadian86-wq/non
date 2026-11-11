@@ -163,7 +163,7 @@ class AuthorizationService
         return $this->scopeContains($user, $this->legacyScope($user), null, $record);
     }
 
-    public function createRole(User $actor, string $key, string $name, array $permissionKeys): object
+    public function createRole(User $actor, string $key, string $name, array $permissionKeys, ?Request $request = null): object
     {
         abort_unless($this->canManageScope($actor, $actor, 'global', null, null), 403);
         $key = trim($key);
@@ -172,7 +172,7 @@ class AuthorizationService
         abort_unless($name !== '' && mb_strlen($name) <= 160, 422, 'نام نقش معتبر نیست.');
         abort_if(in_array($key, ['admin', 'user', 'employee', 'organization_manager', 'team_supervisor', 'observer', 'guest'], true), 422, 'این کلید برای نقش سیستمی رزرو شده است.');
 
-        return DB::transaction(function () use ($actor, $key, $name, $permissionKeys): object {
+        return DB::transaction(function () use ($actor, $key, $name, $permissionKeys, $request): object {
             $roleId = DB::table('roles')->insertGetId([
                 'key' => $key,
                 'name' => $name,
@@ -188,7 +188,7 @@ class AuthorizationService
                 RolePermission::firstOrCreate(['role' => $key, 'permission_id' => $permissionId]);
             }
 
-            $this->audit('role.created', $actor, null, null, ['role_key' => $key]);
+            $this->audit('role.created', $actor, null, null, ['role_key' => $key], $request);
             return DB::table('roles')->where('id', $roleId)->first();
         });
     }
