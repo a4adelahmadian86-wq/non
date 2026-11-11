@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreCourseEnrollment;
@@ -58,6 +60,30 @@ class CrmCustomerWorkspaceTest extends TestCase
             'status' => 'paid',
             'pricing_snapshot' => ['kind' => 'test'],
             'paid_at' => now(),
+        ]);
+
+        $ticket = Ticket::create([
+            'user_id' => $customer->id,
+            'assigned_to' => $admin->id,
+            'subject' => 'پیگیری سفارش مشتری',
+            'status' => 'answered',
+            'priority' => 'normal',
+            'department' => 'support',
+        ]);
+        $customerMessage = TicketMessage::create([
+            'ticket_id' => $ticket->id, 'user_id' => $customer->id,
+            'body' => 'لطفاً وضعیت سفارش را اعلام کنید.',
+            'is_internal' => false, 'is_staff' => false,
+        ]);
+        $staffMessage = TicketMessage::create([
+            'ticket_id' => $ticket->id, 'user_id' => $admin->id,
+            'body' => 'سفارش شما در حال آماده‌سازی است.',
+            'is_internal' => false, 'is_staff' => true,
+        ]);
+        $internalMessage = TicketMessage::create([
+            'ticket_id' => $ticket->id, 'user_id' => $admin->id,
+            'body' => 'نیاز به بررسی انبار دارد.',
+            'is_internal' => true, 'is_staff' => true,
         ]);
 
         Payment::create([
@@ -146,12 +172,40 @@ class CrmCustomerWorkspaceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('customer.id', $customer->id)
             ->assertJsonPath('metrics.orders_count', 2)
+            ->assertJsonPath('metrics.tickets_count', 1)
+            ->assertJsonPath('metrics.ticket_messages_count', 3)
+            ->assertJsonPath('metrics.customer_ticket_replies_count', 1)
+            ->assertJsonPath('metrics.staff_ticket_replies_count', 1)
             ->assertJsonPath('metrics.paid_revenue_rials', 550000)
             ->assertJsonFragment(['type' => 'order', 'id' => $order->id])
             ->assertJsonFragment(['type' => 'payment', 'gateway' => 'wallet', 'amount_rials' => 250000])
             ->assertJsonFragment(['type' => 'wallet_transaction', 'balance_after_rials' => 750000])
             ->assertJsonPath('metrics.payments_count', 1)
             ->assertJsonPath('metrics.wallet_transactions_count', 1);
+        $this->getJson('/admin/crm/customers/'.$customer->id)
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => 'ticket_message',
+                'id' => $customerMessage->id,
+                'ticket_id' => $ticket->id,
+                'title' => 'پیام مشتری',
+                'is_internal' => false,
+                'is_staff' => false,
+            ])
+            ->assertJsonFragment([
+                'type' => 'ticket_message',
+                'id' => $staffMessage->id,
+                'title' => 'پاسخ پشتیبانی',
+                'is_internal' => false,
+                'is_staff' => true,
+            ])
+            ->assertJsonFragment([
+                'type' => 'ticket_message',
+                'id' => $internalMessage->id,
+                'title' => 'یادداشت داخلی پشتیبانی',
+                'is_internal' => true,
+                'is_staff' => true,
+            ]);
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
             ->assertJsonPath('metrics.store_library_items_count', 2)
