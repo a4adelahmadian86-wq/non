@@ -162,6 +162,20 @@ trait PaysWithZarinpal
                 abort_unless(in_array($locked->status, ['pending', 'gateway_pending'], true) && $lockedPayment->status === 'pending', 409, 'سفارش یا تراکنش قبلاً تعیین تکلیف شده است.');
                 abort_unless((int) $lockedPayment->amount_rials === (int) $locked->total_rials, 409, 'مبلغ تراکنش با سفارش مطابقت ندارد.');
 
+                // Mark the verified payment and order before granting entitlements.
+                // Any later failure rolls these changes back with the transaction.
+                $lockedPayment->update([
+                    'status' => 'paid',
+                    'gateway_response' => [
+                        'verification_code' => (int) $verify['code'],
+                        'ref_id' => $verify['ref_id'] ?? null,
+                    ],
+                    'paid_at' => now(),
+                    'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
+                ]);
+                $locked->update(['status' => 'paid', 'paid_at' => now()]);
+                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
+
                 $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
                     $product = $item->product;
@@ -207,19 +221,6 @@ trait PaysWithZarinpal
                     app(StoreCourseEnrollmentService::class)->grant($libraryItem, $product);
                 }
 
-                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
-
-                $lockedPayment->update([
-                    'status' => 'paid',
-                    'gateway_response' => [
-                        'verification_code' => (int) $verify['code'],
-                        'ref_id' => $verify['ref_id'] ?? null,
-                    ],
-                    'paid_at' => now(),
-                    'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
-                ]);
-
-                $locked->update(['status' => 'paid', 'paid_at' => now()]);
                 app(\App\Services\NotificationService::class)->push(
                     (int) $locked->user_id,
                     'order_paid',
