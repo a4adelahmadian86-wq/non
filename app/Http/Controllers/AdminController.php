@@ -35,7 +35,7 @@ class AdminController extends Controller
         // دامنهٔ کاربر از middleware یا محاسبهٔ مستقیم نقش.
         $scope = $request->attributes->get('farast.scope') ?? AdminConsoleService::scopeOf($actor);
         $globalScope = $scope === AdminConsoleService::SCOPE_GLOBAL;
-        $visibleIds = $console->visibleUserIds($actor);
+        $visibleIds = $console->visibleUserIds($actor, 'dashboard.view');
 
         // دسترسی‌های کنسول بر پایهٔ RBAC + Scope — همین‌جا منبع واحد ناوبری است.
         $allowedSections = $console->allowedSections($actor);
@@ -70,6 +70,10 @@ class AdminController extends Controller
             $usersQuery->where('role', User::ROLE_ADMIN);
         }
         $canViewUsers = $console->sectionAllowed($actor, 'users');
+        $userVisibleIds = $canViewUsers ? $console->visibleUserIds($actor, 'users.view') : [];
+        if ($canViewUsers && $userVisibleIds !== null) {
+            $usersQuery->whereIn('id', $userVisibleIds);
+        }
         $filteredUserTotal = $canViewUsers ? (clone $usersQuery)->count() : 0;
         // Do not hydrate personal user data unless users.view is granted in this scope.
         $users = $canViewUsers ? $usersQuery->limit(100)->get() : collect();
@@ -236,8 +240,8 @@ class AdminController extends Controller
             $ticketStats = $tq->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         }
 
-        $visibleTeamIds = $console->visibleTeamIds($actor);
-        $visibleOrganizationIds = $console->visibleOrganizationIds($actor);
+        $visibleTeamIds = $canViewAnalytics ? $console->visibleTeamIds($actor, 'reports.team') : [];
+        $visibleOrganizationIds = $canViewAnalytics ? $console->visibleOrganizationIds($actor, 'reports.team') : [];
         $paidPaymentsQuery = function () use ($visibleIds) {
             $query = DB::table('payments')->where('payments.status', 'paid');
             if ($visibleIds !== null) {
@@ -475,6 +479,7 @@ class AdminController extends Controller
 
         $old = $user->role;
         $user->update(['role' => $d['role']]);
+        app(\App\Services\AuthorizationService::class)->forgetUser((int) $user->id);
 
         if (Schema::hasTable('audit_logs')) {
             $audit->record($request->user()->id, 'admin.user.role_changed', $request->ip(), [
