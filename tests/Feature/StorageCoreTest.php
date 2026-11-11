@@ -243,7 +243,9 @@ class StorageCoreTest extends TestCase
         $this->assertSame('pending_transfer', $managed->status);
         $this->assertSame($stagingPath, $managed->file_key);
         $this->assertSame('private', data_get($managed->metadata, 'disk'));
-        $this->assertTrue(app(StorageManager::class)->exists('storage_volume:'.$volume->id, data_get($managed->metadata, 'orphaned_source.file_key')));
+        $oldKey = (string) data_get($managed->metadata, 'orphaned_source.file_key');
+        $this->assertNotSame('', $oldKey);
+        $this->assertTrue(app(StorageManager::class)->exists('storage_volume:'.$volume->id, $oldKey));
 
         $this->assertSame(1, app(StorageTransferService::class)->transferPending());
         $managed->refresh();
@@ -253,7 +255,7 @@ class StorageCoreTest extends TestCase
         $this->assertSame((int) $stored['size_bytes'], $volume->used_bytes);
         $this->assertSame(1, $volume->object_count);
         $this->assertNull(data_get($managed->metadata, 'orphaned_source'));
-        $this->assertFalse(app(StorageManager::class)->exists('storage_volume:'.$volume->id, $stagingPath === $managed->file_key ? data_get($managed->metadata, 'restored_original_key', '') : 'restore-test/missing-key'));
+        $this->assertFalse(app(StorageManager::class)->exists('storage_volume:'.$volume->id, $oldKey));
         $this->assertTrue(app(StorageManager::class)->exists($managed->metadata['disk'], $managed->file_key));
     }
 
