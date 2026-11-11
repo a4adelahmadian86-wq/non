@@ -300,6 +300,10 @@ class AdvancedAccessControlTest extends TestCase
         $organization = Organization::create(['name' => 'Scoped Action Org', 'slug' => 'scoped-action-org', 'status' => 'active']);
         $manager = $this->user('09140000141', User::ROLE_ORGANIZATION_MANAGER, $organization->id);
         $customer = $this->user('09140000142', User::ROLE_EMPLOYEE, $organization->id);
+        // Isolate the custom own-scoped write grant from the legacy organization-manager grant.
+        DB::table('role_permissions')->where('role', User::ROLE_ORGANIZATION_MANAGER)
+            ->where('permission_id', $this->permissionId('users.edit'))->delete();
+        app(AuthorizationService::class)->forgetUser();
 
         $viewRole = $this->role('organization-customer-view', 'organization', $organization->id);
         $this->grant($viewRole, 'users.view', 'organization');
@@ -370,21 +374,20 @@ class AdvancedAccessControlTest extends TestCase
         request()->attributes->set('farast.scope', 'team');
         $this->assertSame([], app(AdminConsoleService::class)->visibleTeamIds($manager, 'users.view'));
 
+        $assignmentsBeforeRejectedWrite = DB::table('farast_user_roles')->where('user_id', $manager->id)->where('role_id', $roleId)->count();
         $this->actingAs($admin)->post('/admin/access-center/users/'.$manager->id.'/roles', [
             'role_id' => $roleId,
             'scope_type' => 'team',
             'scope_id' => $foreignTeam->id,
         ])->assertUnprocessable();
+        $this->assertSame($assignmentsBeforeRejectedWrite, DB::table('farast_user_roles')->where('user_id', $manager->id)->where('role_id', $roleId)->count());
 
         $this->post('/admin/teams/'.$foreignTeam->id.'/members', [
             'user_id' => $manager->id,
             'team_role' => 'supervisor',
         ])->assertUnprocessable();
 
-        $this->assertDatabaseMissing('farast_user_roles', [
-            'user_id' => $manager->id,
-            'role_id' => $roleId,
-        ]);
+        $this->assertSame($assignmentsBeforeRejectedWrite, DB::table('farast_user_roles')->where('user_id', $manager->id)->where('role_id', $roleId)->count());
     }
 
     public function test_team_manager_cannot_list_a_foreign_organization_user_joined_to_its_team(): void
@@ -443,8 +446,9 @@ class AdvancedAccessControlTest extends TestCase
         $this->assign($employee, $roleId, 'own');
 
         $route = new \Illuminate\Routing\Route('GET', '/team-resource-check', fn () => null);
-        $route->setParameter('resource', $team);
         $request = \Illuminate\Http\Request::create('/team-resource-check');
+        $route->bind($request);
+        $route->setParameter('resource', $team);
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
@@ -472,8 +476,9 @@ class AdvancedAccessControlTest extends TestCase
         ]);
 
         $route = new \Illuminate\Routing\Route('GET', '/resource-creator-check', fn () => null);
-        $route->setParameter('resource', $resource);
         $request = \Illuminate\Http\Request::create('/resource-creator-check');
+        $route->bind($request);
+        $route->setParameter('resource', $resource);
         $request->setRouteResolver(fn () => $route);
         $request->setUserResolver(fn () => $employee);
 
