@@ -25,6 +25,10 @@ const transaction=(mode,work)=>open().then(db=>new Promise((resolve,reject)=>{
 const get=key=>transaction('readonly',store=>{const request=store.get(String(key));return request;});
 const set=(key,value)=>transaction('readwrite',store=>store.put({key:String(key),value,updatedAt:Date.now()})).then(()=>true);
 const remove=key=>transaction('readwrite',store=>store.delete(String(key))).then(()=>true);
+const entries=()=>transaction('readonly',store=>store.getAll());
+const productRecords=async product=>{const suffix=':'+String(product);return (await entries()).filter(record=>typeof record.key==='string'&&record.key.endsWith(suffix));};
+const exportProduct=async product=>({format:'farast-reader-local-backup',version:2,productId:String(product),createdAt:new Date().toISOString(),records:await productRecords(product)});
+const importProduct=async(data,product)=>{if(!data||data.format!=='farast-reader-local-backup'||data.version!==2||data.productId!==String(product)||!Array.isArray(data.records)||data.records.length>30)throw new Error('Invalid local workspace backup');const suffix=':'+String(product);const seen=new Set();let bytes=0;for(const record of data.records){if(!record||typeof record.key!=='string'||!record.key.endsWith(suffix)||record.key.length>240||typeof record.value!=='string'||seen.has(record.key))throw new Error('Invalid local workspace record');seen.add(record.key);bytes+=record.value.length;if(bytes>20*1024*1024)throw new Error('Local workspace backup is too large');}await transaction('readwrite',store=>{for(const record of data.records)store.put({key:record.key,value:record.value,updatedAt:Date.now()});return true;});return data.records.length;};
 const requestPersistence=()=>{
  if(persistPromise)return persistPromise;
  persistPromise=(async()=>{
@@ -44,5 +48,5 @@ document.addEventListener('keydown',retryPersistence,{once:true,capture:true});
 const estimate=async()=>{try{return await navigator.storage?.estimate?.()||null;}catch(_){return null;}};
 const restore=async key=>{const record=await get(key);return record&&Object.prototype.hasOwnProperty.call(record,'value')?record.value:null;};
 const migrate=async(key,legacyValue)=>{const existing=await restore(key);if(existing!==null)return existing;if(legacyValue!==null&&legacyValue!==undefined){await set(key,legacyValue);return legacyValue;}return null;};
-window.FarastReaderDurableStore=Object.freeze({version:1,open,get,set,remove,restore,migrate,requestPersistence,estimate});
+window.FarastReaderDurableStore=Object.freeze({version:2,open,get,set,remove,restore,migrate,requestPersistence,estimate,entries,productRecords,exportProduct,importProduct});
 })();
