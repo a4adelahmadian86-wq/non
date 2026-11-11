@@ -364,6 +364,21 @@ class AdminStoreController extends Controller
         ]);
     }
 
+    public function intakeFileStatus(Request $request, StoreProductIntakeSession $session, StoreProductIntakeFile $file)
+    {
+        abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
+        abort_unless($file->intake_session_id === $session->id && (int) $file->user_id === (int) $request->user()->id, 404);
+
+        return response()->json([
+            'file_id' => $file->id,
+            'status' => $file->status,
+            'supervisor_status' => $file->supervisor_status,
+            'supervisor_verdict' => data_get($file->supervisor_review_json, 'inspection.verdict'),
+            'security_gate' => data_get($file->supervisor_review_json, 'security_gate'),
+            'supervisor_reviewed_at' => $file->supervisor_reviewed_at?->toISOString(),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
     public function cancelIntakeFile(Request $request, StoreProductIntakeSession $session, StoreProductIntakeFile $file)
     {
         abort_unless((int) $session->user_id === (int) $request->user()->id, 404);
