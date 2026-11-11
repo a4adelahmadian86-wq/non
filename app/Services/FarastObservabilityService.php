@@ -47,7 +47,50 @@ class FarastObservabilityService
             'environment' => (string) config('app.env'),
             'observability_enabled' => (bool) config('observability.enabled', true),
             'components' => $components,
+            'incidents' => $this->recentIncidents(),
         ];
+    }
+
+
+    /**
+     * Read only the latest bounded incident transitions from the canonical audit ledger.
+     * No separate incident table or competing history store is introduced.
+     */
+    private function recentIncidents(): array
+    {
+        try {
+            if (! Schema::hasTable('farast_audit_events')) {
+                return [];
+            }
+
+            return DB::table('farast_audit_events')
+                ->where('event_type', 'like', 'observability.incident.%')
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get(['event_id', 'event_type', 'payload_meta', 'created_at'])
+                ->map(function ($event): array {
+                    $meta = is_array($event->payload_meta)
+                        ? $event->payload_meta
+                        : (json_decode((string) $event->payload_meta, true) ?: []);
+
+                    return [
+                        'event_id' => (string) $event->event_id,
+                        'event_type' => (string) $event->event_type,
+                        'severity' => (string) ($meta['severity'] ?? (substr((string) $event->event_type, strrpos((string) $event->event_type, '.') + 1) ?: 'unknown')),
+                        'status' => (string) ($meta['status'] ?? 'unknown'),
+                        'affected_components' => is_array($meta['affected_components'] ?? null)
+                            ? array_slice($meta['affected_components'], 0, 10, true)
+                            : [],
+                        'correlation_id' => is_string($meta['correlation_id'] ?? null) ? $meta['correlation_id'] : null,
+                        'created_at' => $event->created_at,
+                    ];
+                })
+                ->all();
+        } catch (Throwable $exception) {
+            $this->recordProbeFailure('incident_history', $exception);
+
+            return [];
+        }
     }
 
     private function database(): array
