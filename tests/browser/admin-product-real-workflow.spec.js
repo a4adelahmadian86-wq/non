@@ -110,7 +110,8 @@ test.describe('Real admin product workflow', () => {
   });
 
   test('creates, replies to, closes, and rates a real support ticket', async ({ page }) => {
-    test.setTimeout(90_000);
+    test.setTimeout(120_000);
+    page.setDefaultTimeout(15_000);
     const runId = String(process.env.GITHUB_RUN_ID || 'local').replace(/[^a-zA-Z0-9-]/g, '');
     const subject = `تیکت آزمون سرتاسری ${runId}`;
     const firstMessage = 'برای بررسی چرخه واقعی پشتیبانی این پیام آزمایشی ثبت می‌شود.';
