@@ -50,8 +50,17 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/ai-content/generate', [\App\Http\Controllers\AdminProductContentController::class, 'generate'])->middleware('throttle:3,10')->name('store.ai-content.generate');
     Route::get('/store',[AdminStoreController::class,'index'])->name('store.index');
     Route::post('/store/bulk-archive', [AdminStoreController::class, 'bulkArchive'])->middleware('throttle:10,10')->name('store.bulk-archive');
+    Route::get('/store/intake/create', [AdminStoreController::class, 'createIntake'])->middleware('permission:store.products.create')->name('store.intake.create');
+    Route::post('/store/intake', [AdminStoreController::class, 'storeIntake'])->middleware('permission:store.products.create')->name('store.intake.store');
+    Route::get('/store/intake/{session}', [AdminStoreController::class, 'showIntake'])->middleware('permission:store.products.create')->name('store.intake.show');
+    Route::get('/store/intake/{session}/details', [AdminStoreController::class, 'intakeDetails'])->middleware('permission:store.products.create')->name('store.intake.details');
+    Route::post('/store/intake/finalize', [AdminStoreController::class, 'finalizeIntake'])->middleware('permission:store.products.create')->name('store.intake.finalize');
+    Route::post('/store/intake/{session}/files/preflight', [AdminStoreController::class, 'preflightIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.preflight');
+    Route::post('/store/intake/{session}/files/{file}/confirm', [AdminStoreController::class, 'confirmIntakeFile'])->middleware(['permission:store.products.create', 'throttle:120,10'])->name('store.intake.files.confirm');
+    Route::delete('/store/intake/{session}/files/{file}', [AdminStoreController::class, 'cancelIntakeFile'])->middleware('permission:store.products.create')->name('store.intake.files.cancel');
+    Route::get('/store/intake/{session}/files/{file}/status', [AdminStoreController::class, 'intakeFileStatus'])->middleware('permission:store.products.create')->name('store.intake.files.status');
     Route::get('/store/create',[AdminStoreController::class,'create'])->name('store.create');
-    Route::post('/store',[AdminStoreController::class,'store'])->name('store.store');
+    Route::post('/store',[AdminStoreController::class,'store'])->middleware('permission:store.products.create')->name('store.store');
     Route::get('/store/{product}/edit',[AdminStoreController::class,'edit'])->name('store.edit');
     Route::put('/store/{product}',[AdminStoreController::class,'update'])->name('store.update');
     Route::delete('/store/{product}',[AdminStoreController::class,'destroy'])->name('store.destroy');
@@ -76,6 +85,7 @@ Route::middleware(['auth','admin'])->prefix('admin')->name('admin.')->group(func
     Route::post('/store/{product}/course/sections/{section}/lessons',[AdminCourseController::class,'storeLesson'])->name('store.course.lessons.store');
     Route::put('/store/{product}/course/lessons/{lesson}',[AdminCourseController::class,'updateLesson'])->name('store.course.lessons.update');
     Route::delete('/store/{product}/course/lessons/{lesson}',[AdminCourseController::class,'deleteLesson'])->name('store.course.lessons.delete');
+    Route::post('/store/{product}/course/assets/{file}/attach', [AdminCourseController::class, 'attachIntakeAsset'])->name('store.course.assets.attach');
     Route::post('/store/{product}/course/lessons/{lesson}/resources',[AdminCourseController::class,'uploadResource'])->middleware('throttle:10,10')->name('store.course.resources.upload');
     Route::delete('/store/{product}/course/lessons/{lesson}/resources/{file}',[AdminCourseController::class,'deleteResource'])->name('store.course.resources.delete');
     Route::post('/store/{product}/course/lessons/{lesson}/resources/{file}/review',[AdminProductSupervisorController::class,'reviewCourseResource'])->middleware('throttle:5,10')->name('store.course.resources.review');
