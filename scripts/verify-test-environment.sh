@@ -32,7 +32,7 @@ if [[ ! -f vendor/autoload.php ]]; then
   exit 1
 fi
 
-if [[ ! -x vendor/bin/phpunit ]]; then
+if [[ ! -f vendor/bin/phpunit && ! -f vendor/bin/phpunit.bat ]]; then
   echo "PHPUnit is missing. Install development dependencies with: composer install (do not use --no-dev)" >&2
   exit 1
 fi
