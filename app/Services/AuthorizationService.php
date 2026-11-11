@@ -13,8 +13,8 @@ use Illuminate\Http\Request;
  * Central authorization decision point.
  *
  * Legacy role_permissions remain supported during migration. New assignments
- * and direct grants are evaluated first. Decisions are deliberately not cached:
- * revocation must take effect immediately across long-lived workers and sessions.
+ * and direct grants are evaluated first. Permission decisions are memoized only
+ * within this service instance and invalidated after audited access changes.
  */
 class AuthorizationService
 {
@@ -198,12 +198,13 @@ class AuthorizationService
         string $key,
         string $name,
         array $permissionKeys,
-        bool $isActive = true,
+        ?bool $isActive = null,
         ?Request $request = null,
     ): object {
         abort_unless($this->canManageScope($actor, $actor, 'global', null, null), 403);
         $role = DB::table('roles')->where('key', $key)->first();
         abort_unless($role, 404);
+        $isActive ??= (bool) $role->is_active;
         abort_if((bool) $role->is_system, 403, 'نقش سیستمی قابل ویرایش نیست.');
         $name = trim($name);
         abort_unless($name !== '' && mb_strlen($name) <= 160, 422, 'نام نقش معتبر نیست.');
