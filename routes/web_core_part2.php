@@ -40,10 +40,10 @@ Route::middleware(['auth', 'single.editor'])->group(function () {
     Route::post('/editor/agent/tasks/{task}/undo', [\App\Http\Controllers\EditorAgentController::class, 'undo'])->middleware(['throttle:30,10'])->name('editor.agent.undo');
     Route::post('/editor/save', EditorSaveController::class)->middleware(['throttle:120,1', 'capability:can_type'])->name('editor.save');
     Route::post('/editor/assets', [EditorController::class, 'uploadAsset'])->middleware('throttle:60,10')->name('editor.assets.upload');
-    Route::get('/editor/documents/{document}/assets/{resource}', [EditorController::class, 'asset'])->middleware('throttle:120,10')->name('editor.document.asset');
-    Route::get('/editor/documents/{document}/state', [EditorDocumentStateController::class, 'show'])->middleware('throttle:60,10')->name('editor.document.state');
-    Route::get('/editor/documents/{document}/versions', [EditorDocumentStateController::class, 'versions'])->middleware('throttle:30,10')->name('editor.document.versions');
-    Route::post('/editor/documents/{document}/versions/{version}/restore', [EditorDocumentStateController::class, 'restore'])->middleware('throttle:20,10')->name('editor.document.version.restore');
+    Route::get('/editor/documents/{document}/assets/{resource}', [EditorController::class, 'asset'])->middleware(['throttle:120,10', 'resource.permission:documents.view,document'])->name('editor.document.asset');
+    Route::get('/editor/documents/{document}/state', [EditorDocumentStateController::class, 'show'])->middleware(['throttle:60,10', 'resource.permission:documents.view,document'])->name('editor.document.state');
+    Route::get('/editor/documents/{document}/versions', [EditorDocumentStateController::class, 'versions'])->middleware(['throttle:30,10', 'resource.permission:documents.view,document'])->name('editor.document.versions');
+    Route::post('/editor/documents/{document}/versions/{version}/restore', [EditorDocumentStateController::class, 'restore'])->middleware(['throttle:20,10', 'resource.permission:documents.edit,document'])->name('editor.document.version.restore');
     Route::post('/editor/feedback', [EditorController::class, 'feedback'])->middleware(['throttle:60,10', 'capability:can_feedback'])->name('editor.feedback');
     Route::post('/editor/voice/stream-token', [VoiceController::class, 'streamToken'])->middleware(['throttle:30,10', 'capability:can_voice'])->name('editor.voice.stream-token');
     Route::post('/editor/voice/transcribe', [VoiceController::class, 'transcribe'])->middleware(['throttle:30,10', 'capability:can_voice'])->name('editor.voice.transcribe');
