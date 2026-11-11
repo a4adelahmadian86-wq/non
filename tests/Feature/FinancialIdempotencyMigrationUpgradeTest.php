@@ -251,4 +251,34 @@ class FinancialIdempotencyMigrationUpgradeTest extends TestCase
             fn (array $index): bool => ($index['unique'] ?? false) && ($index['columns'] ?? []) === ['gateway', 'authority']
         ));
     }
+    public function test_upgrade_rejects_authority_without_gateway_before_schema_mutation(): void
+    {
+        DB::table('payments')->where('id', 30)->update(['gateway' => null]);
+
+        try {
+            $this->runFinancialMigration();
+            $this->fail('A payment authority without a gateway must be reconciled before adding uniqueness constraints.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('payment authority exists without a gateway', $exception->getMessage());
+        }
+
+        $this->assertFalse(Schema::hasColumn('orders', 'idempotency_key'));
+        $this->assertDatabaseHas('payments', ['id' => 30, 'gateway' => null, 'authority' => 'legacy-authority-30']);
+    }
+
+    public function test_upgrade_rejects_transaction_id_without_gateway_before_schema_mutation(): void
+    {
+        DB::table('payments')->where('id', 30)->update(['gateway' => null, 'authority' => null]);
+
+        try {
+            $this->runFinancialMigration();
+            $this->fail('A payment transaction ID without a gateway must be reconciled before adding uniqueness constraints.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('payment transaction ID exists without a gateway', $exception->getMessage());
+        }
+
+        $this->assertFalse(Schema::hasColumn('orders', 'idempotency_key'));
+        $this->assertDatabaseHas('payments', ['id' => 30, 'gateway' => null, 'transaction_id' => 'legacy-transaction-30']);
+    }
+
 }
