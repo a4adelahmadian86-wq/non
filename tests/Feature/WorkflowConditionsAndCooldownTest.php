@@ -508,4 +508,35 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         $this->assertStringContainsString('within configured thresholds', Artisan::output());
     }
 
+    public function test_internal_event_contracts_reject_incomplete_and_mismatched_domain_payloads(): void
+    {
+        $owner = $this->owner('09140000234');
+        $engine = app(WorkflowEngine::class);
+
+        try {
+            $engine->enqueue('document.saved', [
+                'user_id' => $owner->id,
+                'document_id' => 234,
+            ], 'document:234:missing-revision');
+            $this->fail('A document event without a revision must be rejected.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('revision', $exception->getMessage());
+        }
+
+        try {
+            $engine->enqueue('order.paid', [
+                'user_id' => $owner->id,
+                'order_id' => 234,
+                'amount_rials' => 100000,
+                'order_kind' => 'store',
+                'status' => 'deposit_paid',
+            ], 'order:234:wrong-paid-status');
+            $this->fail('A deposit status cannot satisfy the paid-order contract.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('status does not match', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('farast_workflow_events', 0);
+    }
+
 }
