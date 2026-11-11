@@ -103,11 +103,19 @@ class AdminAccessCenterController extends Controller
             'scope_id' => ['nullable', 'integer', 'min:1'],
             'reason' => ['required', 'string', 'min:8', 'max:500'],
             'starts_at' => ['nullable', 'date'],
-            'expires_at' => ['nullable', 'date', 'after:starts_at'],
+            'expires_at' => ['nullable', 'date', 'after:now'],
         ]);
 
         $scopeType = $data['scope_type'];
         $scopeId = isset($data['scope_id']) ? (int) $data['scope_id'] : null;
+
+        if (! empty($data['starts_at']) && ! empty($data['expires_at'])) {
+            abort_unless(
+                \\Illuminate\\Support\\Carbon::parse($data['expires_at'])->gt(\\Illuminate\\Support\\Carbon::parse($data['starts_at'])),
+                422,
+                'زمان پایان محدودیت باید پس از زمان شروع باشد.'
+            );
+        }
 
         if ($scopeType === 'organization') {
             abort_unless($scopeId && DB::table('organizations')->where('id', $scopeId)->exists(), 422, 'سازمان انتخاب‌شده معتبر نیست.');
