@@ -114,3 +114,12 @@
 | `UploadPreflightService` | `app/Services/UploadPreflightService.php` | — | — | — | private | `estimatePages()`, `depositPercent()`, `fileHash()` | 0 | 5 |
 | `UploadSecurityService` | `app/Services/UploadSecurityService.php` | — | — | — | private | `inspect()` | 0 | 1 |
 | `UserFileRetentionService` | `app/Services/UserFileRetentionService.php` | `StorageManager` | `UserFile` | — | private | `__construct()`, `archiveExpiredLocalFiles()`, `deleteExpiredRemoteFiles()` | 0 | 1 |
+
+| `UserKnowledgeService` | `app/Services/UserKnowledgeService.php` | — | `User`, `UserKnowledge` | — | — | `confirmed()`, `rememberConfirmed()`, `rememberInferred()`, `rememberProject()`, `snapshotForProject()` | 0 | 0 |
+| `VoiceCorrectionService` | `app/Services/VoiceCorrectionService.php` | — | `VoiceCorrection` | — | — | `apply()`, `learn()` | 0 | 0 |
+| `VoiceProviderRouter` | `app/Services/VoiceProviderRouter.php` | `VoiceQuotaManager` | `VoiceProviderAccount` | — | — | `__construct()`, `candidates()`, `best()`, `classRank()` | 0 | 0 |
+| `VoiceQuotaManager` | `app/Services/VoiceQuotaManager.php` | — | `VoiceProviderAccount`, `VoiceProviderUsage` | — | — | `availableSeconds()`, `canStart()`, `consume()`, `recordRequest()`, `resetMonthlyPeriodIfNeeded()` | 1 | 0 |
+| `VoiceTranscriptionService` | `app/Services/VoiceTranscriptionService.php` | — | `AiInteraction`, `SiteSetting` | — | — | `transcribe()` | 0 | 0 |
+| `WorkflowEngine` | `app/Services/WorkflowEngine.php` | `NotificationService` | — | `farast_workflows`, `farast_workflow_runs`, `farast_workflow_event_workflows`, `farast_workflow_events`, `crm_follow_up_tasks` | — | `run()`, `dispatch()`, `retryFailedEvents()` | 28 | 0 |
+| `ZarinpalService` | `app/Services/ZarinpalService.php` | — | `SiteSetting` | — | — | `enabled()`, `merchantId()`, `sandbox()`, `request()`, `verify()` | 0 | 0 |
+| `ProductInfrastructureHealthService` | `app/Services/ProductInfrastructureHealthService.php` | — | — | — | — | `snapshot()` | 0 | 0 |
