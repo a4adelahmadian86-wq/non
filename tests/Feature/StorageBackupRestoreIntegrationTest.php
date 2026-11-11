@@ -18,6 +18,7 @@ class StorageBackupRestoreIntegrationTest extends TestCase
     private string $databasePath;
     private string $originalDefault;
     private array $originalSqlite;
+    private string $originalBackupKey;
     private ?int $volumeId = null;
     private ?string $workDirectory = null;
 
@@ -27,10 +28,12 @@ class StorageBackupRestoreIntegrationTest extends TestCase
 
         $this->originalDefault = (string) config('database.default');
         $this->originalSqlite = (array) config('database.connections.sqlite', []);
-        $this->databasePath = tempnam(sys_get_temp_dir(), 'farast-restore-db-');
-        if ($this->databasePath === '') {
+        $this->originalBackupKey = (string) config('storage_management.backup.encryption_key', '');
+        $databasePath = tempnam(sys_get_temp_dir(), 'farast-restore-db-');
+        if (! is_string($databasePath) || $databasePath === '') {
             throw new RuntimeException('ساخت دیتابیس موقت آزمون بازیابی ناموفق بود.');
         }
+        $this->databasePath = $databasePath;
 
         config([
             'database.default' => 'sqlite',
@@ -51,6 +54,7 @@ class StorageBackupRestoreIntegrationTest extends TestCase
         config([
             'database.default' => $this->originalDefault,
             'database.connections.sqlite' => $this->originalSqlite,
+            'storage_management.backup.encryption_key' => $this->originalBackupKey,
         ]);
         DB::purge();
 
