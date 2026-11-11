@@ -96,6 +96,7 @@ class EmailService
             mailable: new WelcomeMail(...$data),
             htmlView: 'emails.welcome',
             viewData: $data,
+            idempotencyKey: 'welcome:user:'.$user->id,
         );
     }
 
@@ -121,6 +122,7 @@ class EmailService
                 htmlView: 'emails.order-paid',
                 viewData: $data,
                 meta: ['order_id' => $order->id],
+                idempotencyKey: 'order-paid:'.$order->id.':user:'.$user->id,
             );
         } catch (Throwable $e) {
             Log::warning('farast.email.order_paid_failed', ['error' => $e->getMessage()]);
@@ -282,6 +284,7 @@ class EmailService
         string $headline,
         string $body,
         string $type = 'ticket_sla_warning',
+        ?string $eventIdentity = null,
     ): void {
         if (! $staff->email || ! in_array($type, ['ticket_sla_warning', 'ticket_sla_breach'], true) || ! $this->isEnabled($type)) {
             return;
@@ -295,6 +298,7 @@ class EmailService
             headline: $headline,
             body: $body,
             staffUrl: true,
+            idempotencyKey: 'ticket-sla:'.$ticket->id.':'.$type.':'.($eventIdentity ?? 'updated:'.($ticket->updated_at?->format('U.u') ?? 'unknown')).':staff:'.$staff->id,
         );
     }
 
