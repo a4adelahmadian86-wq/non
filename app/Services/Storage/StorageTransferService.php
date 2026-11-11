@@ -59,11 +59,14 @@ class StorageTransferService
 
         if ($reference instanceof StoreProductPreview) {
             $sourceField = (string) data_get($file->metadata, 'source_field', 'path');
+            $oldDisk = $sourceField === 'audio_path' ? ($reference->audio_disk ?: 'private') : ($reference->disk ?: 'private');
+            $oldPath = (string) ($sourceField === 'audio_path' ? $reference->audio_path : $reference->path);
             if ($sourceField === 'audio_path') {
                 $reference->update(['audio_disk' => $disk, 'audio_path' => $file->file_key]);
             } else {
                 $reference->update(['disk' => $disk, 'path' => $file->file_key]);
             }
+            $this->syncProductPreviewReferences((int) $reference->product_id, $oldDisk, $oldPath, $disk, $file->file_key);
             return;
         }
 
