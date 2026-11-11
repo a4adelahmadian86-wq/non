@@ -187,14 +187,14 @@
 | بُعد | مالک/دارایی فعلی |
 |---|---|
 | اعلان شخصی | `farast_notifications`; مدل `FarastNotification` |
-| سرویس | `NotificationService` |
-| کنترلر | `NotificationController` |
+| سرویس مرجع | `NotificationService` |
+| کنترلر مرجع | `NotificationController` |
 | اطلاعیه عمومی/کمپین | `announcements`; مدل `Announcement`; سرویس `AnnouncementService` |
 | کنترلر اطلاعیه | `AnnouncementController` |
-| Route | `routes/notifications.php` و بخشی از `routes/web_core_part2.php` |
-| تست | `NotificationCenterTest` |
+| Route مرجع | `routes/notifications.php` |
+| تست‌ها | `NotificationCenterTest`, `NotificationRouteOwnershipTest` |
 
-**تداخل اثبات‌شده در تعریف Route:** در `web_core_part2.php` مسیرهای `GET /workspace/notifications` با نام `platform.notifications` و `POST /workspace/notifications/{id}/read` با نام `platform.notifications.read` به `PlatformCompletionController` متصل شده‌اند. فایل `routes/notifications.php` همان URI و نام‌ها را به `NotificationController` متصل می‌کند و بعد از `web_core.php` بارگذاری می‌شود. این دو تعریف رقیب‌اند؛ مالکیت نهایی و Route مؤثر باید با `route:list` و تست regression تعیین شود. مالکیت منطقی پیشنهادی اعلان شخصی: `NotificationController + NotificationService + FarastNotification`.
+**تداخل Route اثبات‌شده و اصلاح‌شده در شاخه ممیزی:** `web_core_part2.php` دو endpoint یعنی `GET /workspace/notifications` و `POST /workspace/notifications/{id}/read` را با همان URI و route nameهای `platform.notifications` و `platform.notifications.read` ثبت کرده بود. مقصد آن‌ها `PlatformCompletionController` بود، اما متدهای این کنترلر فقط به `NotificationController` delegate می‌کردند؛ بنابراین پیاده‌سازی منطق اعلان موازی نبود، ولی ثبت Route دوگانه و مالکیت مبهم بود. دو تعریف تکراری از `web_core_part2.php` حذف شدند و مالکیت Route به `routes/notifications.php` واگذار شد. تست `NotificationRouteOwnershipTest` اضافه شد تا Action نهایی هر دو route را به `NotificationController` مقید کند. این تست هنوز در CI اجرا و تأیید نشده است.
 
 ### 4.9 اتوماسیون و گردش‌کار
 
@@ -229,7 +229,7 @@
 | شناسه | یافته مبتنی بر شواهد | اثر احتمالی | اقدام لازم قبل از اصلاح |
 |---|---|---|---|
 | ARCH-01 | چند مسیر تصمیم دسترسی و چند Middleware مجزا وجود دارد | تصمیم‌های ناهمسان و دور زدن Scope | ماتریس تمام Routeهای حساس و call-siteها؛ سپس قرارداد واحد |
-| ARCH-02 | Routeهای اعلان با URI و name یکسان در دو فایل ثبت شده‌اند | مالک نامشخص و رفتار وابسته به ترتیب ثبت | اجرای `route:list` و تست مالکیت route name |
+| ARCH-02 | دو تعریف Route اعلان در `web_core_part2.php` و `notifications.php` وجود داشت؛ در شاخه ممیزی تعریف قدیمی حذف و تست مالکیت اضافه شد | ثبت دوگانه Route و اتکا به ترتیب بارگذاری | اجرای CI و `route:list` پس از ادغام؛ تست `NotificationRouteOwnershipTest` |
 | ARCH-03 | فروشگاه و commerce پلتفرم دو مدل تجاری مستقل دارند | اتصال مبهم order/payment/charge/refund | نمودار aggregate و تطبیق ledger و تراکنش |
 | ARCH-04 | داده فایل دامنه‌ای و فایل مدیریت‌شده هر دو وجود دارند | فایل orphan یا دو منبع metadata | فهرست همه Storage facade / disk / path و طبقه‌بندی legacy |
 | ARCH-05 | Migrationهای هم‌پیشوند زمانی متعدد وجود دارند | وابستگی ضمنی به ترتیب lexical و خطر upgrade | ساخت DAG وابستگی Migration و اجرای upgrade از snapshot |
@@ -368,3 +368,101 @@ UploadPreflightService / UploadSecurityService
 - وضعیت runtime و Migration روی دیتابیس واقعی.
 
 **وضعیت فعلی:** ممیزی پایه و نقشه اولیه منابع حقیقت ثبت شده؛ معیار پذیرش کامل هنوز محقق نشده است. تا تکمیل شکاف‌های بخش 8، این مرحله «در حال انجام» باقی می‌ماند و refactorهای بزرگ نباید بر اساس حدس شروع شوند.
+
+
+## 11. ممیزی دقیق‌تر ترکیب Route و مالکیت Endpoint
+
+### فایل‌های ورودی واقعی
+
+| فایل | وضعیت/نقش |
+|---|---|
+| `routes/web.php` | ورودی اصلی؛ فایل‌های web را به‌ترتیب require می‌کند |
+| `routes/web_core.php` | تجمیع‌کننده دو بخش اصلی |
+| `routes/web_core_part1.php` | صفحه عمومی، احراز هویت، فروشگاه عمومی، assistant، editor preflight و فایل کاربر |
+| `routes/web_core_part2.php` | workspace، editor، پروژه، امنیت، تیکت، wallet و گروه مدیریت |
+| `routes/store_routes.php` | reader، course learning، wishlist، callback پرداخت و عملیات مدیریت فروشگاه |
+| `routes/product_operations.php` | عملیات نظارت و retry پردازش محصول |
+| `routes/support_extra.php` | مرکز ارتباطات، گزارش پشتیبانی و attachment/CSAT |
+| `routes/notifications.php` | مرجع endpointهای اعلان شخصی |
+| `routes/messenger.php` | مرجع endpointهای پیام‌رسان زیر prefix `/messenger` |
+| `routes/legal.php` | در `routes/web.php` require نشده؛ سه Route قانونی آن در `web_core_part1.php` تعریف شده‌اند. فایل فعلاً orphan/تکراری در سطح منبع است و نباید به bootstrap اضافه شود مگر پس از حذف تعریف‌های تکراری و تست. |
+
+### نتیجه جست‌وجوی middleware در فایل‌های Route
+
+- در فایل‌های Route بررسی‌شده هیچ کاربردی از alias `permission:` یافت نشد؛ alias در bootstrap ثبت شده، اما routeها عمدتاً از `admin.section:`، `capability:` و بررسی مستقیم سرویس در Controller استفاده می‌کنند.
+- `admin.section:` در `web_core_part2.php` و Routeهای گروه مدیریت استفاده گسترده دارد؛ گروه `auth + admin` نیز با `AdminOnly` کنترل می‌شود.
+- `capability:` در مسیرهای editor و برخی عملیات مصرف قابلیت اعمال می‌شود.
+- گروه‌های `auth` در workspace، notification، messenger و store-learning وجود دارند؛ مجوز رکوردی باید در Controller/Service نیز enforce شود.
+- مسیرهای دارای پیشوند URL `/api` در `web` route ثبت شده‌اند: `/api/support/guest-message` و دو endpoint خواندن اعلان. این‌ها صرفاً به‌دلیل پیشوند URL، عضو گروه Laravel API نیستند. سیاست Session/CSRF/JSON و throttling باید با رفتار واقعی endpointها مستند شود.
+
+### تفکیک تکرار واقعی از تشابه ظاهری
+
+اسکن متنی اولیه مسیرها چند تشابه نشان داد که پس از بررسی group prefix، تکرار واقعی نبودند:
+- `/store` عمومی در برابر `/admin/store` مدیریت؛
+- `/social` عمومی در برابر `/admin/social`؛
+- `/announcements` کاربر در برابر `/admin/announcements`؛
+- `/discussions/{discussion}/reply` عمومی در برابر `/admin/discussions/{discussion}/reply`؛
+- `/` صفحه اصلی در برابر `/messenger/` و `/admin/`.
+
+در مقابل، دو Route اعلان پیش از اصلاح واقعاً URI و HTTP method یکسان داشتند. این تفکیک مهم است؛ جست‌وجوی متنی بدون لحاظ prefix گروه‌ها می‌تواند false positive تولید کند.
+
+### نگاشت مالکیت Route در سطح دامنه
+
+| دامنه | فایل Route اصلی | Controllerهای اصلی | مالک داده/سرویس |
+|---|---|---|---|
+| Auth و حساب | `web_core_part1.php`, `web_core_part2.php` | `AuthController`, `AccountSecurityController`, `AccountTwoFactorController` | `User`, OTP challengeها، سرویس TOTP |
+| Editor | `web_core_part1.php`, `web_core_part2.php` | `EditorController`, `EditorSaveController`, `EditorDocumentStateController`, `EditorAiAssistController`, `ExportController` | اسناد canonical، `EditorDocumentService`، `OutputAuthorizationService` |
+| Workspace | `web_core_part2.php` | `PlatformCompletionController`, `ProjectController` | `farast_documents`, `farast_document_versions`, `farast_document_shares`, `farast_projects` |
+| Store public | `web_core_part1.php`, `store_routes.php` | `StoreController`, `StoreCartController`, `StoreLibraryController`, `StoreCourseLearningController`, `StoreWishlistController` | `StoreProduct`, `StoreCart`, `Order`, `Payment`, `StoreLibraryItem` |
+| Store admin | `store_routes.php`, `product_operations.php` | `AdminStoreController`, `AdminCourseController`, `AdminProductContentController`, `AdminProductOperationsController`, `AdminProductSupervisorController` | همان کاتالوگ Store و مدل‌های ingest/preview/course |
+| Storage | `web_core_part2.php` و upload/attachment endpointهای دامنه‌ای | `AdminStorageController`, `ManagedStoragePublicController`, `UserFileController` | `StorageManager`, `StorageManagedFile`, `StorageVolume` |
+| Support | `web_core_part1.php`, `web_core_part2.php`, `support_extra.php` | `SupportController`, `CommunicationCenterController`, `SupportReportController` | `Ticket`, `TicketMessage`, `SupportTicketService` |
+| Messenger | `messenger.php` | `MessengerController` | `Conversation`, `ConversationMessage`, `MessengerAccessService` |
+| Notifications | `notifications.php` | `NotificationController` | `FarastNotification`, `NotificationService` |
+| Workflow | `web_core_part2.php`, `console.php` | `PlatformCompletionController` و `WorkflowEngine` | `farast_workflows`, `farast_workflow_runs`, `farast_workflow_events`, `farast_workflow_event_workflows` |
+| CRM | `web_core_part2.php` | `CrmController`, `CrmProjectController`, `CrmMarketingController`, `CrmAnalyticsController` | جداول CRM و جداول customer/follow-up |
+| Admin | `web_core_part2.php`, `support_extra.php`, `store_routes.php`, `product_operations.php` | `AdminController`, `AdminPlatformController` و کنترلرهای دامنه‌ای | هر aggregate دامنه؛ Scope از `ResolveAdminScope` |
+
+### دسترسی: قراردادهای مشاهده‌شده و نقاط نیازمند بررسی
+
+- `AdminOnly` اگر `farast_admin.multi_role_console=false` باشد فقط مدیر اصلی را می‌پذیرد؛ در حالت فعال، نقش‌های `User::DASHBOARD_ROLES` را می‌پذیرد و محدودسازی را به `EnsureAdminSection` و Scope می‌سپارد.
+- مقدار پیش‌فرض `FARAST_ADMIN_MULTI_ROLE` در config برابر true است، اما مقدار runtime محیط استقرار در این ممیزی قابل مشاهده نیست.
+- `EnsureAdminSection` از `AdminConsoleService::sectionAllowed` استفاده می‌کند؛ آن سرویس permission را با `AuthorizationService` و حداقل scope را با `config/farast_admin.php` می‌سنجد.
+- `EnsurePermission` ثبت شده ولی در Routeها alias آن استفاده نشده است؛ این به معنی بلااستفاده بودن کلاس در کل برنامه نیست، زیرا ممکن است در کد به‌صورت مستقیم resolve شود.
+- `AuthorizationService` نقش مدیر را پیش از lookup مجوز مجاز می‌کند. این رفتار فقط در نقاطی که Scope/Policy جداگانه enforce شده باشد محدود می‌شود؛ هر Controller که تنها `AuthorizationService::allows` را فراخوانی کند باید جداگانه برای scope override بررسی شود.
+- `CapabilityService` محدودیت محصول/سهمیه را از `site_settings` و `user_capabilities` می‌خواند و نباید جایگزین RBAC شود.
+- Policy ثبت‌شده در Provider فعلی فقط `TicketPolicy` است؛ مالکیت سایر aggregateها عمدتاً از طریق شرط‌های user_id و سرویس‌های دامنه‌ای اعمال می‌شود. inventory همه این شرط‌ها هنوز نیازمند تکمیل است.
+
+### اتوماسیون: دو سطح داده، نه دو موتور رقیب
+
+بررسی Migration و `WorkflowEngine` نشان می‌دهد:
+- `farast_workflows` تعریف گردش‌کار کاربر است؛ trigger و steps در همین جدول ذخیره می‌شوند.
+- `farast_workflow_runs` سابقه اجرای هر workflow است.
+- `farast_workflow_events` رویداد دامنه را با idempotency key و وضعیت کلی نگه می‌دارد.
+- `farast_workflow_event_workflows` وضعیت اجرای هر workflow برای یک event را نگه می‌دارد و unique(event_id, workflow_id) دارد.
+- `WorkflowEngine::dispatch` event را ثبت و process می‌کند؛ `retryFailedEvents` از ledger اجرا برای retry استفاده می‌کند؛ `run` اجرای workflow و marker تکمیل mapping را در transaction ثبت می‌کند.
+- `PlatformCompletionController` مدیریت تعریف workflow و اجرای دستی را انجام می‌دهد؛ engine مالک اجرای stepهاست.
+- scheduler در `routes/console.php` retry eventها را هر دقیقه اجرا می‌کند.
+
+این جدول‌ها نقش‌های متفاوت در یک چرخه دارند و نباید به‌عنوان چهار منبع حقیقت موازی ادغام شوند. بااین‌حال پاسخ HTTP اجرای دستی فعلاً پس از فراخوانی `run` مقدار `status=completed` را بازمی‌گرداند؛ رفتار خطا با exception منتقل می‌شود. برای event-driven run، وضعیت نهایی از ledger خوانده می‌شود.
+
+### سندها: مرجع canonical و legacy
+
+`AdminController` و `AdminPlatformController` در محاسبه شاخص سند، `farast_documents` را منبع canonical می‌گیرند و فقط ردیف‌های legacy در `typing_documents` را که `farast_document_id` ندارند اضافه می‌کنند. این قرارداد ضد double-count در هر دو داشبورد پیاده شده است. در مقابل، `PlatformCompletionController` در CRUD workspace مستقیماً از `DB::table('farast_documents')` و `farast_document_versions` استفاده می‌کند و به Eloquent Model متکی نیست. این یک انتخاب فعلی است، اما باید در نگاشت ownership به‌عنوان query-builder repository ثبت شود، نه اینکه به اشتباه نبود مدل را به معنی نبود منبع داده بدانیم.
+
+## 12. تغییرات انجام‌شده در شاخه ممیزی
+
+1. دو Route تکراری اعلان از `routes/web_core_part2.php` حذف شدند؛ مالک Route اکنون فقط `routes/notifications.php` است.
+2. تست `tests/Feature/NotificationRouteOwnershipTest.php` اضافه شد تا route nameهای اعلان به Actionهای `NotificationController` متصل بمانند.
+3. هیچ جدول، migration، endpoint عمومی جدید یا منطق تجاری تغییر نکرده است.
+4. این تغییر در شاخه ممیزی است و تا اجرای تست و بازبینی، در `main` قرار نگرفته است.
+
+## 13. معیار پذیرش به‌روزشده
+
+بخش Route اکنون دارای مالکیت مستند و یک اصلاح کوچک با تست اختصاصی است؛ اما تکمیل کل مرحله دوم هنوز منوط به:
+- اجرای تست جدید و suite مرتبط اعلان؛
+- اجرای `route:list` و تطبیق inventory ایستا با runtime؛
+- تکمیل ERD تمام Migrationها و تأیید Foreign Keyهای واقعی؛
+- استخراج همه call-siteهای مستقیم دیتابیس و Storage؛
+- ماتریس endpoint به permission/scope و تست‌های منفی برای تمام دامنه‌های حساس؛
+- اجرای تست‌های کل مخزن و ثبت نتایج است.
