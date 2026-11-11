@@ -244,6 +244,16 @@ class AdminStoreController extends Controller
 
         $data = $this->validated($request);
         abort_unless(($data['type'] ?? null) === $session->product_type, 422, 'نوع محصول با نوع نشست ورود مطابقت ندارد.');
+        $manualReviewRequired = $files->contains(fn ($file) => data_get($file->inspection_json, 'antivirus.status') !== 'clean'
+            || data_get($file->supervisor_review_json, 'security_gate') === 'manual_scan_required'
+            || data_get($file->inspection_json, 'risk_level') === 'warning');
+        $data['metadata'] = array_replace_recursive((array) ($data['metadata'] ?? []), [
+            'intake_security_review' => [
+                'status' => $manualReviewRequired ? 'manual_review_required' : 'not_required',
+                'source' => 'product_intake',
+                'created_at' => now()->toISOString(),
+            ],
+        ]);
         $data['sku'] = filled($data['sku'] ?? null) ? $data['sku'] : $this->uniqueSku();
         $data['slug'] = $this->uniqueSlug($data['title'], $data['slug'] ?? null);
         $data['status'] = 'draft';
@@ -639,6 +649,9 @@ class AdminStoreController extends Controller
             $fieldEvidence = $contentGenerator->validateFieldEvidence($product, $submittedFieldEvidence);
         }
         $data = $this->validated($request, $product);
+        if (($data['status'] ?? null) === 'published') {
+            abort_unless(app(\\App\\Services\\AuthorizationService::class)->allows($request->user(), 'store.products.publish'), 403, 'مجوز انتشار محصول برای حساب شما ثبت نشده است.');
+        }
         $tagIds = $data['tag_ids'] ?? [];
         $aiTagNames = $request->validate([
             'ai_content_tag_names' => 'nullable|array|max:10',
@@ -716,6 +729,17 @@ class AdminStoreController extends Controller
             }
 
             if (($data['status'] ?? '') === 'published') {
+                if (data_get($lockedProduct->metadata, 'intake_security_review.status') === 'manual_review_required') {
+                    abort_unless(in_array($request->user()->role, [User::ROLE_ADMIN, User::ROLE_ORGANIZATION_MANAGER, User::ROLE_TEAM_SUPERVISOR], true), 403, 'تأیید امنیتی نهایی فقط برای مدیران مجاز است.');
+                    $reviewMetadata = (array) ($data['metadata'] ?? $lockedProduct->metadata ?? []);
+                    $reviewMetadata['intake_security_review'] = array_merge((array) data_get($lockedProduct->metadata, 'intake_security_review', []), [
+                        'status' => 'approved',
+                        'reviewed_by' => $request->user()->id,
+                        'reviewed_at' => now()->toISOString(),
+                    ]);
+                    $data['metadata'] = $reviewMetadata;
+                    $this->audit('store.product.intake_security_review_approved', $lockedProduct, ['reviewed_by' => $request->user()->id]);
+                }
                 $supervisorSettings = (array) data_get($data, 'metadata.ai_supervisor', []);
                 if ((bool) data_get($supervisorSettings, 'enabled', false)
                     && data_get($supervisorSettings, 'mode', 'suggest') === 'review_gate') {
