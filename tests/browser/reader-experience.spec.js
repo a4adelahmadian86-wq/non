@@ -25,6 +25,8 @@ test('reopens durable reader storage after another tab invalidates the database 
   await page.goto('/');
   await page.addScriptTag({ url: '/js/farast-reader-storage.js' });
   await page.evaluate(async () => {
+    window.__readerDatabaseReadyEvents = 0;
+    window.addEventListener('farast:storage-database-ready', () => window.__readerDatabaseReadyEvents++);
     await window.FarastReaderDurableStore.set('reader-storage-reconnect-probe', 'before-close');
   });
 
@@ -41,9 +43,10 @@ test('reopens durable reader storage after another tab invalidates the database 
       const store = window.FarastReaderDurableStore;
       await store.set('reader-storage-reconnect-probe', 'after-reopen');
       const record = await store.get('reader-storage-reconnect-probe');
-      return record?.value ?? null;
+      return { value: record?.value ?? null, readyEvents: window.__readerDatabaseReadyEvents };
     });
-    expect(restored).toBe('after-reopen');
+    expect(restored.value).toBe('after-reopen');
+    expect(restored.readyEvents).toBeGreaterThanOrEqual(2);
   } finally {
     await otherTab.close();
   }
