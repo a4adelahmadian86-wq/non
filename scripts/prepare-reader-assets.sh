@@ -27,6 +27,16 @@ echo "Verified PDF.js release archive: $PDFJS_VERSION ($ACTUAL_SHA256)"
 mkdir -p "$DIST_DIR"
 unzip -q "$ARCHIVE_PATH" -d "$DIST_DIR"
 
+# The release archive contains the verified display build; the version-pinned
+# npm distribution supplies the legacy viewer modules and auxiliary assets.
+npm install --prefix "$TMP_DIR/npm" --no-save --ignore-scripts --no-audit --no-fund --package-lock=true "pdfjs-dist@${PDFJS_VERSION}"
+PACKAGE_DIR="$TMP_DIR/npm/node_modules/pdfjs-dist"
+PACKAGE_VERSION="$(node -p "require('$TMP_DIR/npm/node_modules/pdfjs-dist/package.json').version")"
+if [ "$PACKAGE_VERSION" != "$PDFJS_VERSION" ]; then
+  echo "Unexpected PDF.js npm package version: $PACKAGE_VERSION" >&2
+  exit 1
+fi
+
 BUILD_FILE="$(find "$DIST_DIR" -type f \( -path '*/legacy/build/pdf.mjs' -o -path '*/build/pdf.mjs' \) -print -quit)"
 BUILD_DIR="${BUILD_FILE%/pdf.mjs}"
 if [ -z "$BUILD_FILE" ] || [ ! -s "$BUILD_DIR/pdf.mjs" ] || [ ! -s "$BUILD_DIR/pdf.worker.mjs" ]; then
@@ -37,16 +47,16 @@ fi
 
 # The official legacy-dist archive places build/ and web/ side by side;
 # npm package layouts may nest them under legacy/.
-LEGACY_WEB_DIR="$(dirname "$BUILD_DIR")/web"
+LEGACY_WEB_DIR="$PACKAGE_DIR/legacy/web"
 if [ ! -s "$LEGACY_WEB_DIR/pdf_viewer.mjs" ] || [ ! -s "$LEGACY_WEB_DIR/pdf_viewer.css" ]; then
   echo "Verified PDF.js archive is missing the legacy PDF viewer module or stylesheet." >&2
   unzip -Z1 "$ARCHIVE_PATH" | grep -E 'legacy/web/pdf_viewer\.(mjs|css)' | head -80 >&2 || true
   exit 1
 fi
 
-LICENSE_PATH="$(find "$DIST_DIR" -maxdepth 5 -type f -name LICENSE -print -quit)"
-if [ -z "$LICENSE_PATH" ]; then
-  echo "Verified PDF.js archive is missing LICENSE." >&2
+LICENSE_PATH="$PACKAGE_DIR/LICENSE"
+if [ ! -s "$LICENSE_PATH" ]; then
+  echo "Pinned PDF.js npm distribution is missing LICENSE." >&2
   exit 1
 fi
 
@@ -57,6 +67,12 @@ mkdir -p "$TARGET_DIR/legacy/build" "$TARGET_DIR/legacy/web" "$TARGET_DIR/web"
 
 cp "$BUILD_DIR/pdf.mjs" "$TARGET_DIR/legacy/build/pdf.mjs"
 cp "$BUILD_DIR/pdf.worker.mjs" "$TARGET_DIR/legacy/build/pdf.worker.mjs"
+# Require the official release archive and npm package to ship identical
+# legacy display/worker payloads before combining their complementary assets.
+if ! cmp -s "$BUILD_DIR/pdf.mjs" "$PACKAGE_DIR/legacy/build/pdf.mjs" || ! cmp -s "$BUILD_DIR/pdf.worker.mjs" "$PACKAGE_DIR/legacy/build/pdf.worker.mjs"; then
+  echo "PDF.js official release archive and npm package payloads do not match." >&2
+  exit 1
+fi
 cp "$LEGACY_WEB_DIR/pdf_viewer.mjs" "$TARGET_DIR/legacy/web/pdf_viewer.mjs"
 cp "$LEGACY_WEB_DIR/pdf_viewer.css" "$TARGET_DIR/legacy/web/pdf_viewer.css"
 if [ -d "$LEGACY_WEB_DIR/images" ]; then
@@ -65,17 +81,20 @@ fi
 cp "$LICENSE_PATH" "$TARGET_DIR/LICENSE"
 
 for asset_dir in cmaps standard_fonts wasm; do
-  SOURCE_DIR="$(find "$DIST_DIR" -type d -name "$asset_dir" -print -quit)"
-  if [ -n "$SOURCE_DIR" ]; then
-    cp -a "$SOURCE_DIR" "$TARGET_DIR/$asset_dir"
+  if [ -d "$PACKAGE_DIR/$asset_dir" ]; then
+    cp -a "$PACKAGE_DIR/$asset_dir" "$TARGET_DIR/$asset_dir"
   fi
 done
 
-IMAGES_DIR="$(find "$DIST_DIR" -type d -path '*/web/images' -print -quit)"
-if [ -n "$IMAGES_DIR" ]; then
-  cp -a "$IMAGES_DIR" "$TARGET_DIR/web/images"
+if [ -d "$PACKAGE_DIR/legacy/web/images" ]; then
+  cp -a "$PACKAGE_DIR/legacy/web/images" "$TARGET_DIR/legacy/web/images"
+fi
+if [ -d "$PACKAGE_DIR/web/images" ]; then
+  cp -a "$PACKAGE_DIR/web/images" "$TARGET_DIR/web/images"
 fi
 
 printf '%s\\n' "$PDFJS_VERSION" > "$TARGET_DIR/VERSION"
 printf '%s\\n' "$PDFJS_ARCHIVE_SHA256" > "$TARGET_DIR/SHA256"
+PACKAGE_INTEGRITY="$(node -p "require('$TMP_DIR/npm/package-lock.json').packages['node_modules/pdfjs-dist'].integrity")"
+printf '%s\\n' "$PACKAGE_INTEGRITY" > "$TARGET_DIR/NPM_INTEGRITY"
 echo "Prepared verified, self-hosted PDF.js $PDFJS_VERSION in public/vendor/pdfjs"
