@@ -119,10 +119,10 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         try {
             DB::transaction(function () use ($engine, $context, $rolledBackKey): void {
                 $this->assertGreaterThan(0, $engine->enqueue('document.saved', $context, $rolledBackKey));
-                throw new \\RuntimeException('Simulated source transaction rollback');
+                throw new \RuntimeException('Simulated source transaction rollback');
             });
             $this->fail('The simulated source transaction must roll back.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('Simulated source transaction rollback', $exception->getMessage());
         }
 
