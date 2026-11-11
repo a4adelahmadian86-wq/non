@@ -21,7 +21,7 @@
       storageWarning.hidden=false;
     }
   });
-  window.addEventListener('farast:storage-database-ready',()=>{if(!storageWriteFailed&&!storagePersistenceUnavailable)storageWarning.hidden=true;});
+  window.addEventListener('farast:storage-database-ready',()=>{if(storageWriteFailed)return;if(storagePersistenceUnavailable){storageWarning.textContent='ذخیره‌سازی پایدار مرورگر فعال نشده است. اطلاعات در IndexedDB نگه‌داری می‌شوند، اما ممکن است در پاک‌سازی داده‌های سایت یا کمبود فضای دستگاه حذف شوند.';storageWarning.hidden=false;return;}storageWarning.hidden=true;});
   window.addEventListener('farast:storage-blocked',()=>{
     storageWarning.textContent='حافظهٔ خوانشگر در تب دیگری در حال به‌روزرسانی است؛ پس از بسته‌شدن تب قدیمی، ذخیره‌سازی دوباره متصل می‌شود.';
     storageWarning.hidden=false;
