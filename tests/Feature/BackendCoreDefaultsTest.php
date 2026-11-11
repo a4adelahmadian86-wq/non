@@ -46,6 +46,9 @@ class BackendCoreDefaultsTest extends TestCase
 
     public function test_backup_job_is_persisted_and_processed_by_the_real_database_worker(): void
     {
+        // This test uses RefreshDatabase's enclosing transaction; disable the queue's
+        // after-commit deferral so the worker can consume the job before teardown.
+        config(['queue.connections.backups.after_commit' => false]);
         $request = StorageBackupRun::create([
             'backup_type' => 'weekly',
             'source_name' => 'worker_integration_test',
