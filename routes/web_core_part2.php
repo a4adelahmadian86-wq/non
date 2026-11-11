@@ -5,6 +5,7 @@ use App\Http\Controllers\AccountTwoFactorController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ContentDiscussionController;
 use App\Http\Controllers\AdminPlatformController;
+use App\Http\Controllers\AdminAccessCenterController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CanvaController;
 use App\Http\Controllers\CrmController;
@@ -192,8 +193,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/integrations/canva/connect', [CanvaController::class, 'connect'])->middleware('admin.section:integrations')->name('integrations.canva.connect');
     Route::get('/integrations/canva/callback', [CanvaController::class, 'callback'])->middleware('admin.section:integrations')->name('integrations.canva.callback');
     Route::post('/integrations/canva/disconnect', [CanvaController::class, 'disconnect'])->middleware('admin.section:integrations')->name('integrations.canva.disconnect');
-    Route::get('/access', [AdminPlatformController::class, 'access'])->middleware('admin.section:access')->name('access');
-    Route::post('/access/roles/{role}', [AdminPlatformController::class, 'updateRole'])->middleware('admin.section:access')->name('access.roles.update');
+    Route::get('/access', [AdminAccessCenterController::class, 'index'])->middleware('admin.section:access')->name('access');
+    Route::post('/access/roles/{role}', [AdminAccessCenterController::class, 'updateBaseRole'])->middleware(['admin.section:access', 'throttle:20,10'])->name('access.roles.update');
     Route::get('/organizations', [AdminPlatformController::class, 'organizations'])->middleware('admin.section:organizations')->name('organizations');
     Route::post('/organizations', [AdminPlatformController::class, 'storeOrganization'])->middleware('admin.section:organizations')->name('organizations.store');
     Route::get('/analytics', [AdminPlatformController::class, 'analytics'])->middleware('admin.section:analytics')->name('analytics');
