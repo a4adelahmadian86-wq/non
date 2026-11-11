@@ -8,6 +8,9 @@ use App\Models\StoreProductFile;
 use App\Jobs\ProcessProductDocument;
 use App\Models\StoreProductDocument;
 use App\Models\StoreProductIngestion;
+use App\Models\StoreProductIntakeSession;
+use App\Models\StoreProductIntakeFile;
+use App\Models\StoreProductPublicationReview;
 use App\Models\StoreProductDocumentPage;
 use App\Models\StoreProductImage;
 use App\Models\StorageManagedFile;
@@ -46,6 +49,38 @@ class AdminStoreProductWorkflowTest extends TestCase
         ]);
     }
 
+    private function intakeSession(User $user, string $type = 'digital_file'): StoreProductIntakeSession
+    {
+        $session = StoreProductIntakeSession::create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'product_type' => $type,
+            'status' => StoreProductIntakeSession::STATUS_DETAILS,
+            'expires_at' => now()->addHours(2),
+        ]);
+
+        StoreProductIntakeFile::create([
+            'intake_session_id' => $session->id,
+            'user_id' => $user->id,
+            'status' => 'uploaded',
+            'staging_disk' => 'private',
+            'managed_disk' => 'private',
+            'managed_path' => 'store/intake-fixtures/'.$session->id.'/asset.txt',
+            'original_name' => 'asset.txt',
+            'relative_path' => 'assets/asset.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => 11,
+            'sha256' => str_repeat('a', 64),
+            'inspection_json' => ['safe' => true, 'detected_type' => 'text', 'antivirus' => ['status' => 'not_requested']],
+            'is_primary' => true,
+            'supervisor_status' => 'completed',
+            'supervisor_review_json' => ['security_gate' => 'structural_checks_passed', 'review_id' => 'fixture-review'],
+            'uploaded_at' => now(),
+        ]);
+
+        return $session;
+    }
+
     private function payload(StoreCategory $category, array $overrides = []): array
     {
         return array_merge([
@@ -67,16 +102,20 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $this->actingAs($admin)
             ->get(route('admin.store.create'))
+            ->assertRedirect(route('admin.store.intake.create'));
+
+        $this->actingAs($admin)
+            ->get(route('admin.store.intake.create'))
             ->assertOk()
-            ->assertDontSee('شناسه محصول (SKU)')
-            ->assertDontSee('نشانی اختصاصی (Slug)')
-            ->assertDontSee('نوع مجوز استفاده')
-            ->assertSee('admin-store-product-wizard.js')
-            ->assertSee('product-upload-step')
-            ->assertSee('ورود به انتخاب فایل');
+            ->assertSee('ابتدا نوع محصول را انتخاب کنید')
+            ->assertSee('digital_file')
+            ->assertSee('course');
+
         $this->assertStringNotContainsString('name="related_product_ids[]"', (string) file_get_contents(resource_path('views/admin/store/form.blade.php')));
+        $session = $this->intakeSession($admin);
 
         $response = $this->actingAs($admin)->post(route('admin.store.store'), [
+            'intake_session_id' => $session->id,
             'category_id' => $category->id,
             'title' => 'محصول با شناسه خودکار',
             'type' => 'digital_file',
@@ -88,6 +127,11 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertNotEmpty($product->sku);
         $this->assertStringStartsWith('PRD-', $product->sku);
         $this->assertNotEmpty($product->slug);
+        $this->assertSame('draft', $product->fresh()->status);
+        $this->assertDatabaseHas('store_product_publication_reviews', [
+            'product_id' => $product->id,
+            'status' => StoreProductPublicationReview::STATUS_PENDING_AI,
+        ]);
 
         $this->actingAs($admin)
             ->get(route('admin.store.edit', $product))
@@ -277,10 +321,10 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $response = $this->actingAs($admin)->post(
             route('admin.store.store'),
-            $this->payload($category, [
+            array_merge($this->payload($category, [
                 'status' => 'published',
                 'cover_path' => 'https://attacker.invalid/fake-cover.jpg',
-            ])
+            ]), ['intake_session_id' => $this->intakeSession($admin)->id])
         );
 
         $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
@@ -298,11 +342,11 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $response = $this->actingAs($admin)->post(
             route('admin.store.store'),
-            $this->payload($category, [
+            array_merge($this->payload($category, [
                 'title' => 'دوره آزمایشی',
                 'sku' => 'TEST-COURSE-001',
                 'type' => 'course',
-            ])
+            ]), ['intake_session_id' => $this->intakeSession($admin, 'course')->id])
         );
 
         $product = StoreProduct::query()->where('sku', 'TEST-COURSE-001')->firstOrFail();
@@ -329,10 +373,10 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $response = $this->actingAs($admin)->post(
             route('admin.store.store'),
-            $this->payload($category, [
+            array_merge($this->payload($category, [
                 'tag_ids' => [$tag->id],
                 'related_product_ids' => [$related->id],
-            ])
+            ]), ['intake_session_id' => $this->intakeSession($admin)->id])
         );
 
         $product = StoreProduct::query()->where('sku', 'TEST-PRODUCT-001')->firstOrFail();
@@ -454,9 +498,9 @@ class AdminStoreProductWorkflowTest extends TestCase
 
         $this->actingAs($admin)
             ->from(route('admin.store.create'))
-            ->post(route('admin.store.store'), $this->payload($category, [
+            ->post(route('admin.store.store'), array_merge($this->payload($category, [
                 'compare_at_price_rials' => 125000,
-            ]))
+            ]), ['intake_session_id' => $this->intakeSession($admin)->id]))
             ->assertRedirect(route('admin.store.create'))
             ->assertSessionHasErrors('compare_at_price_rials');
 
@@ -762,16 +806,20 @@ class AdminStoreProductWorkflowTest extends TestCase
         $category = $this->category();
 
         $this->actingAs($admin)
-            ->get(route('admin.store.create'))
+            ->get(route('admin.store.intake.create'))
+            ->assertOk();
+
+        $session = $this->intakeSession($admin);
+        $this->actingAs($admin)->get(route('admin.store.intake.details', $session))
             ->assertOk()
             ->assertSee('name="download_policy"', false)
             ->assertSee('فقط مطالعه آنلاین');
 
-        $this->actingAs($admin)->post(route('admin.store.store'), $this->payload($category, [
+        $this->actingAs($admin)->post(route('admin.store.store'), array_merge($this->payload($category, [
             'title' => 'محصول سیاست تحویل',
             'sku' => 'DELIVERY-POLICY-001',
             'download_policy' => 'reader_only',
-        ]))->assertRedirect();
+        ]), ['intake_session_id' => $session->id]))->assertRedirect();
 
         $this->assertDatabaseHas('store_products', [
             'sku' => 'DELIVERY-POLICY-001',
