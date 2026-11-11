@@ -12,6 +12,12 @@ class EditorDocumentArchitectureTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['queue.default' => 'database']);
+    }
+
     private function makeUser(): User
     {
         $u = new User;
