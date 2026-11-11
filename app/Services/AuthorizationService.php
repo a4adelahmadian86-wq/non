@@ -231,8 +231,8 @@ class AuthorizationService
             $scope = \App\Http\Middleware\ResolveAdminScope::scopeFor($user);
         }
 
-        if ($scope === 'team' && $user->isAdmin()) {
-            return \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user) ? 'team' : 'own';
+        if (in_array($scope, ['organization', 'team'], true) && $user->isAdmin()) {
+            return \App\Http\Middleware\ResolveAdminScope::scopeIdFor($user) ? $scope : 'own';
         }
 
         // A supervisor with no managed team is effectively personal-scope.
