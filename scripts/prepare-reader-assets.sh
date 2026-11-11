@@ -60,8 +60,8 @@ for asset_dir in cmaps standard_fonts wasm; do
   fi
 done
 
-printf '%s\\n' "$PDFJS_VERSION" > "$TARGET_DIR/VERSION"
-printf '%s\\n' "$PACKAGE_INTEGRITY" > "$TARGET_DIR/NPM_INTEGRITY"
+printf '%s\n' "$PDFJS_VERSION" > "$TARGET_DIR/VERSION"
+printf '%s\n' "$PACKAGE_INTEGRITY" > "$TARGET_DIR/NPM_INTEGRITY"
 (
   cd "$TARGET_DIR"
   find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
