@@ -466,7 +466,7 @@ UploadPreflightService / UploadSecurityService
 ## 12. تغییرات انجام‌شده در شاخه ممیزی
 
 1. دو Route تکراری اعلان از `routes/web_core_part2.php` حذف شدند؛ مالک Route اکنون فقط `routes/notifications.php` است.
-2. تست `tests/Feature/NotificationRouteOwnershipTest.php` اضافه شد تا route nameهای اعلان به Actionهای `NotificationController` متصل بمانند.
+2. تست مالکیت runtime اعلان در مرحله ممیزی طراحی شد، اما برای جلوگیری از تعارض با PR #347 از شاخه نهایی حذف شد؛ پس از ادغام RBAC باید در PR مستقل اضافه شود.
 3. هیچ جدول، migration، endpoint عمومی جدید یا منطق تجاری تغییر نکرده است.
 4. این تغییر در شاخه ممیزی است و تا اجرای تست و بازبینی، در `main` قرار نگرفته است.
 
@@ -1100,14 +1100,14 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 | #333 | باز، غیر Draft | `AdminStoreController`, `AdminCourseController`, `StoreProduct`, `AuthorizationService`, `routes/store_routes.php`, intake session/file models و migrationها | مسیر type-first با session قبل از ایجاد محصول. در طراحی پیشنهادی، pre-product intake مرجع واحد باشد و StoreProductIngestion فقط فایل محصول موجود را مدیریت کند. reviewer باید resource scope داشته باشد. |
 | #335 | باز، Draft؛ mergeable=false در snapshot | `StorageManager`, `StorageBackupService`, `StorageTransferService`, `AdminStoreController`, `StoreController`, migration reservation و restore tests | بزرگ‌ترین تغییر چرخه عمر فایل محصول است؛ با #357 در StoreController overlap دارد. merge order باید با #369 و #357 هماهنگ شود. |
 | #357 | باز، غیر Draft | فقط `StoreController.php` | تغییر محدود stream صوت preview؛ با #335 روی همان controller تداخل مستقیم دارد. ابتدا قرارداد StorageManager و مالک نهایی readerAudio/previewAudio مشخص شود؛ cherry-pick کور ممنوع. |
-| #358 | باز، غیر Draft | `SupportNotificationService`, `SupportTicketService`, `EmailService`, `SmsService`, log models و migration idempotency | هویت هر reply باید مستقل بماند و dedupe فقط retry همان رخداد را یکی کند. با Workflow/Notification مرکزی #347 و observability #353 باید از نظر transaction boundary و correlation تطبیق شود. |
+| #358 | merged در main | `SupportNotificationService`, `SupportTicketService`, `EmailService`, `SmsService`, `SmsLog`, migrationهای idempotency | تغییر در منبع فعلی main است؛ هویت هر reply مستقل و retry همان رخداد dedupe می‌شود. |
 | #361 | باز، غیر Draft | `CrmController`, `StoreCourseLearningController`, `StoreCourseProgressService` | با #368 در همان سه فایل overlap دارد؛ هر دو یک مسیر progress timeline پیشنهاد می‌کنند. فقط یک پیاده‌سازی سرویس و یک مالک CRM باقی بماند. |
-| #368 | باز، غیر Draft؛ base جدیدتر از #361 | همان سه فایل به‌علاوه تست timeline | candidate rebased برای مقایسه با #361؛ منبع پیشرفت باید همان enrollment/progress فعلی باشد و جدول timeline مستقل ساخته نشود. |
+| #368 | merged در main | `CrmController`, `StoreCourseLearningController`, `StoreCourseProgressService`, `CrmCourseProgressTimelineTest` | منبع canonical محاسبه پیشرفت در main است؛ #361 قدیمی باید با این پیاده‌سازی reconcile شود. |
 | #365 | باز، غیر Draft | تست `BusinessCommerceLifecycleTest` | تست سرتاسری ارزشمند؛ باید پس از تثبیت قرارداد Order/Payment/Library/Enrollment با تغییرهای #340 و #333 همگام شود. |
 | #352 | باز، غیر Draft | `StoreController`, `ProcessProductDocument`, Reader Blade/JS، seeder و browser E2E | تست پذیرش UI واقعی؛ با #335/#357 و #333 روی product/reader/file flow تداخل دارد. بعد از تثبیت implementation اجرا و rebased شود. |
 | #353 | باز، غیر Draft | `AuditEventService`, `AuditLogService`, `AppServiceProvider`, `bootstrap/app.php`, `routes/console.php`, middleware و tests | با قرارداد سه دفتر audit و مرحله دسترسی overlap دارد. writerهای موجود را بدون طرح migration/dual-write و تست integrity جایگزین نکند. |
 | #354 | باز، Draft | `SupportReportController`, `SupportSlaService`, `routes/notifications.php`, `routes/store_routes.php`, `routes/support_extra.php` | با route ownership این ممیزی و #358 هم‌پوشانی دارد. قبل از ادغام، inventory route و permission باید مجدداً تولید شود. |
-| #367 | باز، غیر Draft | `.github/workflows/farast-ci.yml`, workflowهای تست، `StoreReaderAccessTest`, test environment verifier | گیت پایه برای اعتماد به تست‌هاست؛ باید قبل از پذیرش runtime مرحله دوم بررسی شود. تغییرهای workflow آن با هر PR که همین فایل‌ها را لمس می‌کند نیازمند merge order است. |
+| #367 | merged در main | `.github/workflows/farast-ci.yml`, workflowهای تست، `scripts/verify-test-environment.php` | baseline مشترک محیط PHP در main است؛ تمام نتایج CI بعدی باید با verifier جدید سنجیده شوند. |
 | #369 | باز، غیر Draft | backup/restore commands، `StorageBackupService`, `AdminStorageController`, `routes/console.php`, readiness و workflow release | با #335 روی backup/storage overlap دارد. ابتدا lock/recovery contract و restore strictness را با #335 تطبیق دهید، سپس E2E backup/restore اجرا شود. |
 
 ### ترتیب ادغام پیشنهادی از روی هم‌پوشانی فایل‌ها
@@ -1204,7 +1204,7 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 
 در `main` اکنون HEAD برابر `1b9108fcedfb3f330a2ba19caba91a33cb00a966` است. مقایسه Git با خط مبنای قبلی `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`، ۱۶ commit جدید را نشان می‌دهد که بخش مهم آن‌ها شامل ادغام #358 (هویت رویداد و idempotency اعلان‌های پشتیبانی)، #368 (سرویس مشترک پیشرفت دوره در CRM و یادگیری) و #367 (baseline تست PHP) است. دو تغییر نخست مستقیماً منبع حقیقت پشتیبانی و یادگیری را تغییر داده‌اند و inventoryهای Service/Controller/Model/Migration/Test در این نسخه بر اساس آن‌ها به‌روزرسانی می‌شوند.
 
-تعدادهای جدید در HEAD فعلی: ۱۱۶ Migration، ۱۰۵ Model، ۱۱۳ Service، ۵۱ Controller/Trait، ۱۱۴ فایل PHP تست و ۱۷ فایل Browser JS. تعداد Routeهای فعال از نظر فایل‌های منبع تغییر نکرده و ۳۳۴ declaration باقی است؛ inventory پیشنهادی اعلان همچنان دو declaration متعارض main را حذف می‌کند.
+تعدادهای جدید در HEAD فعلی: ۱۱۶ Migration، ۱۰۵ Model، ۱۱۳ Service، ۵۱ Controller/Trait، ۱۱۴ فایل PHP تست و ۱۷ فایل Browser JS. Route inventory شامل ۳۳۶ declaration خام main است؛ دو جفت اعلان متعارض در آن حفظ شده‌اند و مالک candidate آن‌ها `NotificationController` است، اما در این ممیزی کد Route تغییر نکرده است.
 
 
 ## 30. وضعیت معتبر پس از ادغام #358، #368 و #367 در main
