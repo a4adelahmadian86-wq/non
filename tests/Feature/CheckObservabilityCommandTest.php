@@ -38,10 +38,8 @@ class CheckObservabilityCommandTest extends TestCase
         Http::fake();
 
         $observability = \Mockery::mock(FarastObservabilityService::class);
-        $observability->shouldReceive('snapshot')->times(4)->andReturn(
+        $observability->shouldReceive('snapshot')->twice()->andReturn(
             ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]],
-            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]],
-            ['status' => 'healthy', 'components' => ['database' => ['status' => 'healthy']]],
             ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]]
         );
         app()->instance(FarastObservabilityService::class, $observability);
@@ -56,10 +54,10 @@ class CheckObservabilityCommandTest extends TestCase
         ]);
 
         $recovery = \Mockery::mock(FarastObservabilityService::class);
-        $recovery->shouldReceive('snapshot')->once()->andReturn([
-            'status' => 'healthy',
-            'components' => ['database' => ['status' => 'healthy']],
-        ]);
+        $recovery->shouldReceive('snapshot')->twice()->andReturn(
+            ['status' => 'healthy', 'components' => ['database' => ['status' => 'healthy']]],
+            ['status' => 'critical', 'components' => ['database' => ['status' => 'critical']]]
+        );
         app()->instance(FarastObservabilityService::class, $recovery);
 
         $this->assertSame(0, Artisan::call('farast:observability:check'));
