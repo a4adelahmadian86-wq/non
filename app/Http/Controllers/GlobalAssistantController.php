@@ -492,7 +492,7 @@ class GlobalAssistantController extends Controller
                 'temperature' => 0.2,
                 'stream' => true,
             ];
-            $payload[$target['limit_key']] = 220;
+            $payload[$target['limit_key']] = 500;
             try {
                 $candidate = Http::withToken($target['token'])->accept('text/event-stream')
                     ->withOptions(['stream' => true])
