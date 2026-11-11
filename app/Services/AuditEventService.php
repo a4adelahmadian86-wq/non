@@ -44,6 +44,8 @@ class AuditEventService
                 'payload_meta' => $payloadMeta,
             ];
 
+            $canonicalPayload = app(AuditIntegrityService::class)->canonicalPayload($payload);
+
             return FarastAuditEvent::create([
                 'event_id' => (string) Str::uuid(),
                 'user_id' => $userId,
@@ -53,7 +55,8 @@ class AuditEventService
                 'aggregate_id' => $aggregateId,
                 'source' => $source,
                 'payload_meta' => $payloadMeta,
-                'payload_checksum' => hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+                'payload_canonical' => $canonicalPayload,
+                'payload_checksum' => hash('sha256', $canonicalPayload),
                 'previous_checksum' => $previous,
             ]);
         });
