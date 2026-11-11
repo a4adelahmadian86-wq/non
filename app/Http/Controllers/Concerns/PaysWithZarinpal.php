@@ -174,7 +174,36 @@ trait PaysWithZarinpal
                     'transaction_id' => $verify['ref_id'] ? 'ZP-'.$verify['ref_id'] : $authority,
                 ]);
                 $locked->update(['status' => 'paid', 'paid_at' => now()]);
-                app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
+
+                try {
+                    app(\App\Services\StoreCouponRedemptionService::class)->redeemForPaidOrder($locked);
+                } catch (\RuntimeException $exception) {
+                    // Gateway verification means external funds were captured. Do not
+                    // roll back the paid order or deny its entitlement because a mutable
+                    // coupon rule changed after checkout; preserve an explicit audit flag.
+                    report($exception);
+                    $snapshot = $locked->pricing_snapshot ?? [];
+                    $snapshot['coupon_redemption_reconciliation'] = [
+                        'status' => 'required',
+                        'reason_code' => 'post_capture_validation_failed',
+                        'reason' => mb_substr($exception->getMessage(), 0, 180),
+                        'recorded_at' => now()->toIso8601String(),
+                    ];
+                    $locked->forceFill(['pricing_snapshot' => $snapshot])->save();
+
+                    try {
+                        app(\App\Services\AuditEventService::class)->record(
+                            'store.coupon_redemption_reconciliation_required',
+                            (int) $locked->user_id,
+                            null,
+                            'order',
+                            (int) $locked->id,
+                            ['reason_code' => 'post_capture_validation_failed'],
+                        );
+                    } catch (\Throwable $auditException) {
+                        report($auditException);
+                    }
+                }
 
                 $items = $locked->storeItems()->with('product')->get();
                 foreach ($items as $item) {
