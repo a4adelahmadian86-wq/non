@@ -135,6 +135,9 @@ class CrmCustomerWorkspaceTest extends TestCase
             'enrollment_id' => $enrollment->id, 'lesson_id' => $completedLesson->id,
             'last_position_seconds' => 45, 'completed_at' => now(),
         ]);
+        app(\App\Services\StoreCourseProgressService::class)->syncCompletion(
+            $enrollment->fresh(['course.sections.lessons', 'progress'])
+        );
 
         $this->actingAs($admin)->getJson('/admin/crm/customers')
             ->assertOk()->assertJsonFragment(['id' => $customer->id]);
@@ -158,12 +161,12 @@ class CrmCustomerWorkspaceTest extends TestCase
         $this->getJson('/admin/crm/customers/'.$customer->id)
             ->assertOk()
             ->assertJsonPath('metrics.course_enrollments_count', 1)
-            ->assertJsonPath('metrics.completed_course_enrollments_count', 0)
+            ->assertJsonPath('metrics.completed_course_enrollments_count', 1)
             ->assertJsonPath('metrics.completed_course_lessons_count', 1)
             ->assertJsonFragment([
                 'type' => 'course_enrollment',
                 'id' => $enrollment->id,
-                'status' => 'active',
+                'status' => 'completed',
                 'completed_lessons_count' => 1,
                 'published_lessons_count' => 1,
                 'progress_percent' => 100,
