@@ -144,6 +144,11 @@ class UnifiedAuthorizationTest extends TestCase
             'documents.view',
             $this->record(['user_id' => $admin->id]),
         ));
+
+        $root = User::factory()->create(['role' => 'admin']);
+        $authorization->grantDirectPermission($root, $admin, 'access.manage', 'allow', 'own');
+        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $authorization->assignRole($admin, $admin, 'employee', 'global');
     }
 
     public function test_team_assignment_limits_console_scope_and_record_access(): void
