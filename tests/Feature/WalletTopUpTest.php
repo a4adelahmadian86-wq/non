@@ -26,10 +26,12 @@ class WalletTopUpTest extends TestCase
     public function test_top_up_is_rejected_when_gateway_is_not_configured(): void
     {
         $user = User::factory()->create();
+        $this->actingAs($user)->get('/wallet');
+        $idempotencyKey = session('wallet_topup_idempotency_key');
 
         $this->actingAs($user)
             ->from('/wallet')
-            ->post('/wallet/top-up', ['amount_rials' => 100000])
+            ->post('/wallet/top-up', ['amount_rials' => 100000, 'idempotency_key' => $idempotencyKey])
             ->assertRedirect('/wallet')
             ->assertSessionHasErrors('topup');
 
@@ -41,6 +43,8 @@ class WalletTopUpTest extends TestCase
     {
         $this->enableGateway();
         $user = User::factory()->create();
+        $this->actingAs($user)->get('/wallet');
+        $idempotencyKey = session('wallet_topup_idempotency_key');
 
         Http::fake([
             'https://sandbox.zarinpal.com/pg/v4/payment/request.json' => Http::response([
@@ -52,7 +56,7 @@ class WalletTopUpTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->post('/wallet/top-up', ['amount_rials' => 250000])
+            ->post('/wallet/top-up', ['amount_rials' => 250000, 'idempotency_key' => $idempotencyKey])
             ->assertRedirect('https://sandbox.zarinpal.com/pg/StartPay/A000000000000000000000000000000001');
 
         $order = Order::query()->where('user_id', $user->id)->firstOrFail();

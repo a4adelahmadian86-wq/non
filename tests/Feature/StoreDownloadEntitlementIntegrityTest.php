@@ -124,7 +124,8 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
             ->assertOk();
 
-        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+        $this->get('/cart');
+        $this->post('/cart/checkout', ['accept_terms' => '1', 'idempotency_key' => session('store_checkout_idempotency_key')])->assertRedirect();
 
         $order = Order::query()->latest('id')->firstOrFail();
         $item = StoreOrderItem::query()->where('order_id', $order->id)->firstOrFail();
@@ -195,7 +196,8 @@ class StoreDownloadEntitlementIntegrityTest extends TestCase
             ->postJson('/cart/products/'.$product->id, ['quantity' => 1])
             ->assertOk();
 
-        $this->post('/cart/checkout', ['accept_terms' => '1'])->assertRedirect();
+        $this->get('/cart');
+        $this->post('/cart/checkout', ['accept_terms' => '1', 'idempotency_key' => session('store_checkout_idempotency_key')])->assertRedirect();
         $order = Order::query()->latest('id')->firstOrFail();
         $originalTotal = (int) $order->total_rials;
         $item = StoreOrderItem::query()->where('order_id', $order->id)->firstOrFail();
