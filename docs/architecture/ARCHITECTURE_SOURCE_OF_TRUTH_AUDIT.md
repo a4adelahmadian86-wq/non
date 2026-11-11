@@ -21,14 +21,14 @@
 | شاخه | `main` |
 | Commit | `1b9108fcedfb3f330a2ba19caba91a33cb00a966` |
 | Laravel / PHP constraint | Laravel `^12.0` / PHP `^8.2` |
-| فایل‌های Migration | 114 |
-| فایل‌های Model در `app/Models` | 104 |
-| فایل‌های PHP در `app/Services` | 112 |
+| فایل‌های Migration | 116 |
+| فایل‌های Model در `app/Models` | 105 |
+| فایل‌های PHP در `app/Services` | 113 |
 | فایل‌های PHP در `app/Http/Controllers` | 51 (شامل ۱ Trait) |
 | Middlewareهای برنامه | 11 |
-| فایل‌های آزمون PHP / Browser | 110 PHP + 17 JS |
+| فایل‌های آزمون PHP / Browser | 114 PHP + 17 JS |
 
-درخت کامل Git در این نسخه 1,151 ورودی داشت. مسیر app/Services شامل 112 فایل PHP و 6 directory entry؛ مسیر app/Http/Controllers شامل 51 فایل PHP و یک directory entry؛ مسیر tests شامل 110 فایل PHP و 18 فایل JS است. این اعداد شمار فایل/ورودی‌اند، نه شمار قابلیت‌های سالم.
+درخت کامل Git در این نسخه 1,162 ورودی دارد. مسیر app/Services شامل 113 فایل PHP و 6 directory entry؛ مسیر app/Http/Controllers شامل 51 فایل PHP و یک directory entry؛ مسیر tests شامل 114 فایل PHP و 17 فایل JS است. این اعداد شمار فایل/ورودی‌اند، نه شمار قابلیت‌های سالم.
 
 ### وضعیت CI و حفاظت شاخه در لحظه ممیزی
 
@@ -201,9 +201,9 @@
 | اطلاعیه عمومی/کمپین | `announcements`; مدل `Announcement`; سرویس `AnnouncementService` |
 | کنترلر اطلاعیه | `AnnouncementController` |
 | Route مرجع | `routes/notifications.php` |
-| تست‌ها | `NotificationCenterTest`, `NotificationRouteOwnershipTest` |
+| تست‌ها | `NotificationCenterTest`, `SupportNotificationEventIdentityTest`, `EmailServiceIdempotencyTest`, `SmsServiceIdempotencyTest` |
 
-**تداخل Route اثبات‌شده و اصلاح‌شده در شاخه ممیزی:** `web_core_part2.php` دو endpoint یعنی `GET /workspace/notifications` و `POST /workspace/notifications/{id}/read` را با همان URI و route nameهای `platform.notifications` و `platform.notifications.read` ثبت کرده بود. مقصد آن‌ها `PlatformCompletionController` بود، اما متدهای این کنترلر فقط به `NotificationController` delegate می‌کردند؛ بنابراین پیاده‌سازی منطق اعلان موازی نبود، ولی ثبت Route دوگانه و مالکیت مبهم بود. دو تعریف تکراری از `web_core_part2.php` حذف شدند و مالکیت Route به `routes/notifications.php` واگذار شد. تست `NotificationRouteOwnershipTest` اضافه شد تا Action نهایی هر دو route را به `NotificationController` مقید کند. این تست در اجرای Phase 3 Commerce Tests با run ID 43017849679 روی commit 9d9a4b498434aa3922d4543fc391cdfc29cfc649 موفق شد؛ همان اجرا به‌علت پنج شکست مستقل در StoreReaderAccessTest در مجموع ناموفق بود.
+**تداخل Route اثبات‌شده در main:** دو endpoint اعلان یعنی `GET /workspace/notifications` و `POST /workspace/notifications/{id}/read` در هر دو `web_core_part2.php` و `notifications.php` تعریف شده‌اند. Actionهای قدیمی `PlatformCompletionController` صرفاً به `NotificationController` delegate می‌کنند؛ بنابراین منطق اصلی اعلان در `NotificationController` است، اما ثبت Route و name تکراری است و مالکیت اجرایی به ترتیب بارگذاری وابسته می‌شود. به‌دلیل هم‌پوشانی مستقیم `routes/web_core_part2.php` با PR #347، این ممیزی فایل اجرایی Route را تغییر نمی‌دهد؛ حذف دو declaration قدیمی باید پس از ادغام RBAC در یک تغییر مستقل و با تست runtime انجام شود.
 
 ### 4.9 اتوماسیون و گردش‌کار
 
@@ -238,7 +238,7 @@
 | شناسه | یافته مبتنی بر شواهد | اثر احتمالی | اقدام لازم قبل از اصلاح |
 |---|---|---|---|
 | ARCH-01 | چند مسیر تصمیم دسترسی و چند Middleware مجزا وجود دارد | تصمیم‌های ناهمسان و دور زدن Scope | ماتریس تمام Routeهای حساس و call-siteها؛ سپس قرارداد واحد |
-| ARCH-02 | دو تعریف Route اعلان در `web_core_part2.php` و `notifications.php` وجود داشت؛ در شاخه ممیزی تعریف قدیمی حذف و تست مالکیت اضافه شد | ثبت دوگانه Route و اتکا به ترتیب بارگذاری | اجرای CI و `route:list` پس از ادغام؛ تست `NotificationRouteOwnershipTest` |
+| ARCH-02 | دو تعریف Route اعلان در `web_core_part2.php` و `notifications.php` در main وجود دارد؛ منطق مرجع در `NotificationController` است اما Route name و Method/URI تکرار شده‌اند | ثبت دوگانه Route و اتکا به ترتیب بارگذاری | پس از ادغام PR #347، حذف declaration قدیمی و افزودن تست runtime مالکیت |
 | ARCH-03 | فروشگاه و commerce پلتفرم دو مدل تجاری مستقل دارند | اتصال مبهم order/payment/charge/refund | نمودار aggregate و تطبیق ledger و تراکنش |
 | ARCH-04 | داده فایل دامنه‌ای و فایل مدیریت‌شده هر دو وجود دارند | فایل orphan یا دو منبع metadata | فهرست همه Storage facade / disk / path و طبقه‌بندی legacy |
 | ARCH-05 | Migrationهای هم‌پیشوند زمانی متعدد وجود دارند | وابستگی ضمنی به ترتیب lexical و خطر upgrade | ساخت DAG وابستگی Migration و اجرای upgrade از snapshot |
@@ -248,7 +248,7 @@
 
 ### Migrationهای دارای پیشوند زمانی مشترک
 
-در ۱۱۴ فایل Migration فعلی، **۱۰ گروه timestamp تکراری** وجود دارد:
+در ۱۱۶ فایل Migration فعلی، **۱۰ گروه timestamp تکراری** وجود دارد:
 - `2026_09_12_000012`: افزودن email به users / ایجاد ai_interactions و ai_feedback
 - `2026_10_03_000001`: ساخت لایه FARAST Phase 5 / ایجاد Professional Commercial Engine
 - `2026_10_19_000002`: افزودن SLA به tickets / توسعه announcements
@@ -630,7 +630,7 @@ farast_workflow_events
 | #318 | file-first secure intake، staging، document ingestion و reader integration | AdminStoreController، StoreController، StoreProduct، StoreProductFile، store_routes.php و web_core_part1.php | Draft؛ FARAST CI شکست خورده، Reader browser و Product Supervisor موفق | مسیر ایجاد محصول با #333 هم‌پوشان است؛ ادغام جداگانه بدون تصمیم واحد، خطر دو جریان intake دارد |
 | #353 | observability و trace/audit integration | web_core_part2.php، AppServiceProvider، AuditLogService و middleware | Draft؛ چند check در صف | تغییر Route در همان فایل با اصلاح اعلان ما هم‌فایل است؛ پس از ادغام، حذف دو Route اعلان و route inventory دوباره کنترل شود |
 | #351 | قراردادهای integration ماژول‌های کسب‌وکار | فقط سند معماری جدید | Draft؛ Laravel check ناموفق، برخی checks دیگر موفق/درحال اجرا | مکمل این ممیزی است، نه منبع حقیقت runtime؛ اختلاف اصطلاحات و مبنا باید پس از ادغام همسان شود |
-| #348 | ممیزی منابع حقیقت و حذف مالکیت تکراری اعلان | `routes/web_core_part2.php`, `routes/notifications.php`, تست `NotificationRouteOwnershipTest` و همین سند | Draft؛ تست اختصاصی مالکیت اعلان در suite موفق؛ suite کلی ۵ شکست Reader و ۶۰۴ موفق؛ FARAST CI هنوز در حال اجرا | تغییر route کوچک و تست آن آماده‌اند؛ merge تا رفع baseline Reader و تکمیل runtime route:list متوقف بماند |
+| #371 | ممیزی منابع حقیقت روی main جدید | inventoryهای معماری، matrix و سطح View/API؛ بدون تغییر کد Route یا تست | PR قبلی با main قدیمی superseded شد؛ نسخه جاری پس از rebase روی main `1b9108f` آماده بازبینی است | تغییرات صرفاً مستنداتی؛ تعارض Route اعلان به‌صورت finding باقی می‌ماند تا پس از PR #347 رفع شود |
 | #357 | stream کردن audio preview از Storage | `StoreController.php` | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | با #335 هم‌پوشانی مستقیم دارد؛ تغییر بازیابی audio باید با StorageManager و volume-aware streaming سازگار بماند |
 | #358 | جلوگیری از ادغام/حذف ناخواسته اعلان‌های پاسخ تیکت | `SupportNotificationService.php`, `SupportTicketService.php` و تست identity اعلان | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | با مالکیت NotificationService هم‌راستا شود؛ dedupe key باید هویت هر reply را حفظ کند و فقط retry همان رخداد را dedupe کند |
 | #359 | اصلاح restore بکاپ وقتی manifest اولین ورودی ZIP است | `RestoreStorageBackup.php` | غیر Draft؛ وضعیت CI این snapshot هنوز نهایی نشده | با lifecycle بکاپ Storage مرتبط است؛ تست archiveهای چندترتیبی و restore واقعی لازم است |
@@ -861,7 +861,7 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 
 ### 18.5 Route ownership: نتیجه تست در CI
 
-در HEAD شاخه ممیزی، `NotificationRouteOwnershipTest` در اجرای Laravel suite واقعاً **PASS** شده است. این تست ثابت می‌کند نام‌های `platform.notifications` و `platform.notifications.read` به `NotificationController@index/read` resolve می‌شوند.
+تست runtime مالکیت Route در این PR اجرا نمی‌شود، زیرا تعارض Route با PR #347 در فایل مشترک است و برای جلوگیری از تداخل با شاخه همکار، اصلاح و تست آن به commit مستقل پس از ادغام RBAC موکول شده است.
 
 همان اجرای suite در مجموع **۶۰۴ تست موفق و ۵ تست ناموفق** داشته؛ هر پنج شکست در `StoreReaderAccessTest` بوده‌اند (قرارداد streamed response، audio status، PDF preview، CSP و محتوای transcript). بنابراین:
 - تست اختصاصی اصلاح Route اعلان موفق است.
@@ -871,13 +871,13 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 
 ### 18.6 فهرست Routeها
 
-فهرست ۳۳۴ declaration فعال در شاخه ممیزی، به تفکیک فایل، همراه با method، URI نهایی پس از prefix، route name، action، middleware گروه و middleware صریح در فایل زیر ثبت شده است:
+فهرست ۳۳۶ declaration خام در main (شامل دو جفت Route متعارض)، به تفکیک فایل، همراه با method، URI نهایی پس از prefix، route name، action، middleware گروه و middleware صریح در فایل زیر ثبت شده است:
 
 - `docs/architecture/ROUTE_OWNERSHIP_INVENTORY.md`
 
 ### 18.7 فهرست کامل مدل‌ها
 
-برای ۱۰۴ فایل مدل Eloquent، نام کلاس، table override صریح، primary key، connection و روابط قابل استخراج ثبت شده است:
+برای ۱۰۵ فایل مدل Eloquent، نام کلاس، table override صریح، primary key، connection و روابط قابل استخراج ثبت شده است:
 
 - `docs/architecture/MODEL_OWNERSHIP_INVENTORY.md`
 
@@ -885,7 +885,7 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 
 ### 18.8 فهرست کامل Migrationها
 
-برای تمام ۱۱۴ Migration، جدول‌های create/alter/rename، FKهای صریح، unique/indexهای قابل استخراج و guardهای create-if-missing ثبت شده است:
+برای تمام ۱۱۶ Migration، جدول‌های create/alter/rename، FKهای صریح، unique/indexهای قابل استخراج و guardهای create-if-missing ثبت شده است:
 
 - `docs/architecture/MIGRATION_SCHEMA_INVENTORY.md`
 
@@ -895,7 +895,7 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 
 ### 18.9 هم‌پوشانی محل تعریف جدول‌ها در Migrationها
 
-استخراج ایستای تمام ۱۱۴ Migration این آمار را به دست می‌دهد:
+استخراج ایستای تمام ۱۱۶ Migration این آمار را به دست می‌دهد:
 
 - ۱۵۲ عملیات `Schema::create` روی ۱۴۴ نام جدول متمایز؛
 - ۱۳۱ عملیات `Schema::table` روی ۳۷ جدول متمایز؛
@@ -918,7 +918,7 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 دو inventory مکمل برای اتصال Route → Controller → Service → Model/Table اضافه شده‌اند:
 
 - `docs/architecture/CONTROLLER_CALLSITE_INVENTORY.md`: ۵۱ کنترلر؛ importهای Service/Model، جدول‌های literal در `DB::table`، توکن‌های authorization قابل تشخیص، actionهای public و تعداد call مستقیم DB/Storage.
-- `docs/architecture/SERVICE_DEPENDENCY_INVENTORY.md`: ۱۱۲ سرویس؛ dependencyهای import/constructor/app-resolve، مدل‌ها، جدول‌های literal، diskهای Storage، متدهای public و تعداد call مستقیم DB/Storage.
+- `docs/architecture/SERVICE_DEPENDENCY_INVENTORY.md`: ۱۱۳ سرویس؛ dependencyهای import/constructor/app-resolve، مدل‌ها، جدول‌های literal، diskهای Storage، متدهای public و تعداد call مستقیم DB/Storage.
 
 شمارش استاتیک فعلی:
 - در Controllerها: ۲۸ فایل دارای call مستقیم DB با مجموع ۲۴۴ call؛ ۱۱ فایل دارای call مستقیم Storage با مجموع ۵۱ call.
@@ -945,7 +945,7 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 این شمارش صرفاً اولویت بررسی را مشخص می‌کند. تعداد بیشتر به‌تنهایی نشانه بد بودن کلاس نیست؛ معیار اصلاح، مالکیت دامنه، تراکنش، authorization و idempotency هر call-site است. به‌ویژه `AdminStoreController` نباید با یک Storage abstraction موازی جایگزین شود؛ callهای مستقیم آن باید به‌صورت تدریجی با `StorageManager` canonical تطبیق داده شوند.
 ### 18.10 محدودیت inventory مدل‌ها
 
-از ۱۰۴ فایل مدل:
+از ۱۰۵ فایل مدل:
 - ۴۰ مدل `$table` صریح دارند؛
 - ۶۴ مدل به قرارداد نام‌گذاری Eloquent متکی‌اند و نام نهایی جدول آن‌ها در این inventory به‌صورت قطعی حدس زده نشده؛
 - ۱۶۵ رابطه مستقیم از الگوی استاتیک قابل استخراج بوده است.
@@ -984,7 +984,7 @@ ARCH-15 دو دفتر `audit_logs` و `farast_audit_events` را از هم جد�
 5. تعیین تکلیف unique index شمارنده‌های مصرف؛
 6. تأیید آخرین PRهای دارای migration و سپس به‌روزرسانی این سند روی آخرین main.
 
-**وضعیت نهایی این مرحله در این snapshot: نقشه ایستای ۳۳۴ Route، ۱۰۴ Model و ۱۱۴ Migration به‌همراه جریان‌های اصلی و تعارض‌های منبع حقیقت ثبت شده است؛ اما پذیرش runtime هنوز باز است. به‌ویژه مصرف‌کننده legacy در `ProjectBillingService` و unique key شمارنده مصرف باید پیش از canonicalization مالی تعیین تکلیف شوند. هیچ refactor گسترده‌ای بر مبنای حدس مجاز نیست؛ ابتدا گیت‌های بالا باید با نتیجه واقعی بسته شوند.**
+**وضعیت این مرحله در این snapshot: نقشه ایستای ۳۳۶ declaration خام Route، ۱۰۵ Model و ۱۱۶ Migration به‌همراه جریان‌های اصلی و تعارض‌های منبع حقیقت ثبت شده است؛ اما پذیرش runtime هنوز باز است. به‌ویژه مصرف‌کننده legacy در `ProjectBillingService` و unique key شمارنده مصرف باید پیش از canonicalization مالی تعیین تکلیف شوند. هیچ refactor گسترده‌ای بر مبنای حدس مجاز نیست؛ ابتدا گیت‌های بالا باید با نتیجه واقعی بسته شوند.**
 
 
 ## 18. Findings in active implementation and candidate branches
@@ -1035,7 +1035,7 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 ### وضعیت اجرایی Pull Requestهای وابسته
 
 آخرین snapshot checkها باید هنگام ادغام دوباره خوانده شود؛ وضعیت مشاهده‌شده در زمان این ممیزی:
-- PR #348: تست NotificationRouteOwnershipTest موفق شده؛ suite مرتبط در commit 9d9a4b498434aa3922d4543fc391cdfc29cfc649 دارای 604 موفق و 5 شکست StoreReaderAccessTest بود.
+- PR #348 قدیمی به‌عنوان superseded بسته شد؛ PR جایگزین روی main جدیدتر ایجاد می‌شود. تست اختصاصی مالکیت اعلان در این PR باقی نمانده تا پس از ادغام #347 و حذف تعارض Routeها اضافه شود.
 - PR #350: Phase 3 در HEAD آن سبز شد و 608 تست موفق گزارش شد؛ Laravel check هنوز باید نهایی شود.
 - PR #335: Phase 3 دارای 620 موفق و یک شکست StorageBackupRestoreIntegrationTest بود؛ علت دقیق locateName index 0 شناسایی و در PR comment ثبت شد.
 - PR #340: Phase 3 دارای 614 موفق و 12 شکست بود؛ هفت شکست در setup تست FinancialIdempotencyMigrationUpgradeTest به‌علت duplicate transaction_id و پنج شکست StoreReader. تست‌های سه موتور دیتابیس در صف بودند. ایراد schema واقعی legacy و wallet holds نیز در PR comment ثبت شد.
@@ -1128,7 +1128,7 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 
 ### وضعیت اجرای تست این PR
 
-در commit قبلی ممیزی، Phase 3 Commerce Tests با موفقیت پایان یافت؛ job اصلی `test` نتیجه `success` داشت. پس از گسترش `NotificationRouteOwnershipTest` برای assert کردن هر ۸ endpoint اعلان، commit جدید ایجاد شد و CI باید روی HEAD جدید دوباره اجرا شود. وضعیت queued/pending را قبولی تلقی نکنید.
+در HEAD قبلی شاخه، Phase 3 روی یک snapshot پیشین موفق شده بود؛ این نتیجه به main فعلی قابل انتقال نیست. این PR اکنون فاقد تست Route جدید است و پذیرش آن باید بر اساس اجرای تازه FARAST CI/Phase 3/Phase 4 روی HEAD نهایی انجام شود.
 
 
 ## 23. تکمیل ردیابی صفحه، API و تست
@@ -1139,11 +1139,11 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 - `docs/architecture/CONTROLLER_VIEW_API_SURFACE_INVENTORY.md`: ۵۱ فایل Controller/Trait را به Viewهای مستقیم، JSON/stream/download/redirect/back response surface متصل می‌کند.
 
 خط مبنای تعداد فایل‌های تست در HEAD فعلی main:
-- ۱۱۰ فایل PHP در Feature/Unit؛
+- ۱۱۴ فایل PHP در Feature/Unit؛
 - ۱۷ فایل JavaScript در Browser؛
 - جمعاً ۱۲۷ فایل آزمون در مسیرهای بررسی‌شده.
 
-این عدد شمار فایل است، نه تعداد test method و نه نتیجه قبولی. ماتریس traceability عمداً شکاف‌های بدون تست منفی را باز نگه می‌دارد و ادعای پوشش کامل ۳۳۴ Route ندارد.
+این عدد شمار فایل است، نه تعداد test method و نه نتیجه قبولی. ماتریس traceability عمداً شکاف‌های بدون تست منفی را باز نگه می‌دارد و ادعای پوشش کامل ۳۳۶ declaration Route ندارد.
 
 ## 24. اصلاح دقت استخراج Schema و Model
 
@@ -1156,14 +1156,14 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 
 ## 25. وضعیت اعتبارسنجی آخرین HEAD ممیزی
 
-پس از گسترش تست `NotificationRouteOwnershipTest` به هر ۸ endpoint اعلان و اضافه‌شدن دو inventory مکمل، CI روی HEAD جدید دوباره فعال شده است:
+پس از اضافه‌شدن matrix قابلیت و inventory سطح View/API، CI باید روی HEAD نهایی re-run شود؛ هیچ تست جدید Route در این PR وجود ندارد:
 - Phase 3 Commerce Tests: در snapshot فعلی در حالت pending/در صف؛
 - FARAST CI: jobهای Laravel و smoke در صف؛
 - Phase 4 Agent: در صف.
 
 تا تکمیل این checkها، نتیجه تست جدید را موفق اعلام نکنید. در اجرای قبلی همین شاخه، Phase 3 موفق بود؛ اما آن نتیجه مربوط به HEAD قبلی است و برای HEAD جدید قابل انتقال نیست.
 
-**وضعیت مرحله دوم پس از این تکمیل:** inventoryهای ایستا اکنون شامل ۳۳۴ Route، ۱۰۴ Model، ۱۱۴ Migration، ۱۱۲ Service، ۵۱ Controller/Trait، ماتریس ۱۳ حوزه قابلیت و سطح View/API هستند. گیت‌های runtime، schema واقعی و CI همچنان بازند؛ بنابراین مرحله برای پذیرش نهایی هنوز بسته نشده است.
+**وضعیت مرحله دوم پس از این تکمیل:** inventoryهای ایستا اکنون شامل ۳۳۶ declaration Route، ۱۰۵ Model، ۱۱۶ Migration، ۱۱۳ Service، ۵۱ Controller/Trait، ماتریس ۱۳ حوزه قابلیت و سطح View/API هستند. گیت‌های runtime، schema واقعی و CI همچنان بازند؛ بنابراین مرحله برای پذیرش نهایی هنوز بسته نشده است.
 
 
 ## 26. یافته جدید: Route گزارش پشتیبانی از قرارداد بخش مدیریتی پیروی نمی‌کند
@@ -1181,7 +1181,7 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 
 ## 27. شمارش ماشینی Routeهای مدیریتی فاقد section gate
 
-از ۳۳۴ ردیف Route inventory، **۴۰ Route** با middleware گروهی `auth, admin` و بدون `admin.section:*` شناسایی شدند:
+از ۳۳۶ ردیف Route inventory، **۴۰ Route** با middleware گروهی `auth, admin` و بدون `admin.section:*` شناسایی شدند:
 - ۳۹ Route در سطح Store Admin شامل catalog CRUD، فایل، preview، AI supervisor، AI content، course sections/lessons/resources و product operations؛
 - ۱ Route گزارش پشتیبانی با نام `admin.support.report`.
 
@@ -1205,3 +1205,43 @@ This finding was posted on PR #347. Do not accept silent pending events as a val
 در `main` اکنون HEAD برابر `1b9108fcedfb3f330a2ba19caba91a33cb00a966` است. مقایسه Git با خط مبنای قبلی `5a9323e9f323e43ebfc1ccc94dd52102a3fd4ddf`، ۱۶ commit جدید را نشان می‌دهد که بخش مهم آن‌ها شامل ادغام #358 (هویت رویداد و idempotency اعلان‌های پشتیبانی)، #368 (سرویس مشترک پیشرفت دوره در CRM و یادگیری) و #367 (baseline تست PHP) است. دو تغییر نخست مستقیماً منبع حقیقت پشتیبانی و یادگیری را تغییر داده‌اند و inventoryهای Service/Controller/Model/Migration/Test در این نسخه بر اساس آن‌ها به‌روزرسانی می‌شوند.
 
 تعدادهای جدید در HEAD فعلی: ۱۱۶ Migration، ۱۰۵ Model، ۱۱۳ Service، ۵۱ Controller/Trait، ۱۱۴ فایل PHP تست و ۱۷ فایل Browser JS. تعداد Routeهای فعال از نظر فایل‌های منبع تغییر نکرده و ۳۳۴ declaration باقی است؛ inventory پیشنهادی اعلان همچنان دو declaration متعارض main را حذف می‌کند.
+
+
+## 30. وضعیت معتبر پس از ادغام #358، #368 و #367 در main
+
+این بخش وضعیت بخش 22 را supersede می‌کند. سه تغییر زیر اکنون در main هستند و باید به‌عنوان کد موجود، نه PR باز، در تحلیل‌های بعدی در نظر گرفته شوند:
+
+- **#358 merged:** `SupportNotificationService` برای replyهای مجزا از `messageId/eventIdentity` استفاده می‌کند؛ `EmailService` و `SmsService` idempotency key دارند؛ `SmsLog` و `email_logs.idempotency_key` دفتر ارسال را پایدار می‌کنند. تست‌های `SupportNotificationEventIdentityTest`, `EmailServiceIdempotencyTest`, `SmsServiceIdempotencyTest` در main موجودند.
+- **#368 merged:** `StoreCourseProgressService` مالک محاسبه مشترک available/completed/progress است و هم `CrmController` و هم `StoreCourseLearningController` از آن استفاده می‌کنند. این یک منبع حقیقت مشترک برای پیشرفت دوره است؛ جدول timeline موازی ساخته نشده است. `CrmCourseProgressTimelineTest` در main موجود است.
+- **#367 merged:** `scripts/verify-test-environment.php` و تغییر workflowها baseline محیط تست PHP را یکپارچه می‌کنند؛ CI فعلی باید با همین verifier تفسیر شود.
+
+### وضعیت PRهای باز و وابستگی‌های واقعی در HEAD `1b9108f`
+
+| PR | وضعیت در snapshot | وابستگی/تعارض |
+|---:|---|---|
+| #377 | باز، غیر Draft، base روی main فعلی | E2E و reader failure-state؛ فایل‌های `StoreController`, `ProcessProductDocument`, reader JS، seed و workflow را تغییر می‌دهد. با #335/#357 و #375 در چرخه فایل/reader هماهنگ شود. |
+| #375 | باز، غیر Draft، mergeable=false | release و disaster recovery؛ `StorageBackupService`, `AdminStorageController`, `routes/console.php`, workflowها و restore tests. با #335 روی storage backup overlap مستقیم دارد. |
+| #365 | باز، غیر Draft | تست lifecycle خرید catalog تا course؛ باید بعد از تثبیت #333 و قرارداد پرداخت #340 اجرا شود. |
+| #361 | باز، غیر Draft | همان Controllerهای CRM/course progress که #368 در main اصلاح کرده است؛ باید با implementation ادغام‌شده #368 reconcile شود و نباید نسخه قدیمی progress را دوباره وارد کند. |
+| #360 | باز، غیر Draft | IndexedDB reader invalidation؛ با #377 روی reader JS/Browser tests هماهنگ شود. |
+| #357 | باز، غیر Draft | stream مستقیم preview audio در `StoreController`; با #335/#375 در storage contract و با #377 در reader playback هماهنگ شود. |
+| #354 | باز، Draft | گزارش، file processing و resilience؛ routeها و سرویس‌های support/store را لمس می‌کند. با Route inventory و scope gateها تطبیق شود. |
+| #353 | باز، غیر Draft | observability/audit writers؛ با سه دفتر audit و integrity chain هماهنگ شود. |
+| #347 | باز، غیر Draft، mergeable=false | RBAC و Workflow core؛ فایل `routes/web_core_part2.php` و چند route group مشترک را تغییر می‌دهد. اصلاح دو Route اعلان در این ممیزی عمداً تا ادغام/تثبیت این PR عقب افتاد. |
+| #340 | باز، Draft | financial idempotency/retention؛ migration upgrade و ledger/wallet reservation باید قبل از هر تغییر checkout تأیید شود. |
+| #336 | باز، غیر Draft | voice API contract tests؛ در بررسی route/Service voice به‌عنوان گیت آزمون لحاظ شود. |
+| #335 | باز، Draft | StorageManager و lifecycle فایل محصول؛ با #375 backup/restore و #357 preview audio overlap دارد. |
+| #333 | باز، غیر Draft | type-first product intake؛ با #318 رقیب state machine intake است. |
+| #330 | باز، غیر Draft، base قدیمی | RBAC/Workflow قدیمی‌تر و هم‌پوشان با #347؛ هر دو نباید مستقل merge شوند. |
+| #318 | باز، Draft | file-first product intake؛ با #333 رقیب state machine است. |
+
+### ترتیب به‌روزشده ادغام
+
+1. #367 اکنون در main است؛ verifier آن باید gate مشترک تمام PRهای باقی‌مانده باشد.
+2. یک شاخه canonical از RBAC میان #330 و #347 انتخاب شود؛ #347 candidate به‌روزتر است اما mergeable=false و نیازمند حل conflict است.
+3. پس از تثبیت route file در #347، یک PR کوچک و مستقل برای حذف دو declaration اعلان از `web_core_part2.php` و تست مالکیت runtime ثبت شود.
+4. #335 و #375 به یک storage/backup contract تبدیل شوند؛ #357 و #377 پس از آن بر همان قرارداد reader سوار شوند.
+5. #333 یا #318 فقط یکی را به‌عنوان pre-product intake state machine نگه دارد؛ اجزای مفید دیگر به‌صورت port محدود منتقل شوند.
+6. #340 پس از migration-upgrade و ledger review؛ #353 و #354 پس از route/permission map؛ #365 و #377 پس از تثبیت چرخه محصول.
+
+**قاعده:** این PR صرفاً مستندات را تغییر می‌دهد. هیچ شاخه همکار force-push، rebase، merge یا ویرایش نشده است.
