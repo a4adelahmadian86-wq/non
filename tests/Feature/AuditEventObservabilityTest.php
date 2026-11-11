@@ -8,6 +8,8 @@ use App\Services\FarastTraceContext;
 use App\Services\FarastObservabilityService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Tests\TestCase;
 
@@ -102,4 +104,36 @@ class AuditEventObservabilityTest extends TestCase
         $this->assertArrayNotHasKey('request_id', $event->payload_meta);
         $this->assertSame('background-job-correlation', $event->payload_meta['correlation_id']);
     }
+    public function test_audit_append_locks_the_stable_migration_row_before_reading_the_chain_head(): void
+    {
+        $queries = [];
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        app(AuditEventService::class)->record('audit.append_lock_verified');
+
+        $lockIndex = null;
+        $headIndex = null;
+        $insertIndex = null;
+        foreach ($queries as $index => $sql) {
+            if ($lockIndex === null && str_contains($sql, 'update "migrations"') && str_contains($sql, 'batch = batch')) {
+                $lockIndex = $index;
+            }
+            if ($headIndex === null && str_contains($sql, 'select "payload_checksum" from "farast_audit_events"')) {
+                $headIndex = $index;
+            }
+            if ($insertIndex === null && str_contains($sql, 'insert into "farast_audit_events"')) {
+                $insertIndex = $index;
+            }
+        }
+
+        $this->assertNotNull($lockIndex, 'The stable database append lock was not acquired.');
+        $this->assertNotNull($headIndex, 'The audit chain head was not read.');
+        $this->assertNotNull($insertIndex, 'The audit event was not appended.');
+        $this->assertLessThan($headIndex, $lockIndex, 'The chain head must be read only after acquiring the append lock.');
+        $this->assertLessThan($insertIndex, $headIndex, 'The previous checksum must be read before inserting the event.');
+        $this->assertTrue(app(AuditIntegrityService::class)->verify()['ok']);
+    }
+
 }
