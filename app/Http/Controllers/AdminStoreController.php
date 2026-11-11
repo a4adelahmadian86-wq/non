@@ -117,6 +117,18 @@ class AdminStoreController extends Controller
         $supervisorConfigured = app(\App\Services\ProductSupervisorClient::class)->configured();
         $canManagePublication = app(\App\Services\AuthorizationService::class)
             ->allows(auth()->user(), 'store.products.publish');
+        $intakeManualReviewQueue = $canManagePublication
+            ? StoreProductIntakeSession::query()
+                ->with('user:id,name')
+                ->whereNull('product_id')
+                ->whereIn('status', [StoreProductIntakeSession::STATUS_SELECTING_FILES, StoreProductIntakeSession::STATUS_FILES_UPLOADED])
+                ->where('expires_at', '>', now())
+                ->whereHas('files', fn ($query) => $query->where('status', 'uploaded')->where('supervisor_status', 'manual_review_required'))
+                ->orderBy('created_at')
+                ->limit(20)
+                ->get()
+            : collect();
+
         $publicationQueue = StoreProductPublicationReview::query()
             ->with(['product:id,title,type,status', 'submitter:id,name'])
             ->whereIn('status', [StoreProductPublicationReview::STATUS_PENDING_AI, StoreProductPublicationReview::STATUS_PENDING_MANAGER])
@@ -129,7 +141,7 @@ class AdminStoreController extends Controller
         return view('admin.store.index', compact(
             'products', 'categories', 'q', 'type', 'status', 'categoryId', 'sort', 'stats',
             'processingStats', 'ingestionStats', 'queueStats', 'attentionCount', 'attentionDocuments',
-            'supervisorConfigured', 'publicationQueue', 'canManagePublication'
+            'supervisorConfigured', 'publicationQueue', 'intakeManualReviewQueue', 'canManagePublication'
         ));
     }
 
