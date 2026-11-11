@@ -7,6 +7,16 @@ concurrency:
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'config/**'
+      - 'database/**'
+      - 'tests/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/phase3-commerce.yml'
   workflow_dispatch:
 
 jobs:
