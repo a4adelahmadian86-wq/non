@@ -41,7 +41,7 @@
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
   group.append(status);
-  const personalPanel=document.createElement('details');personalPanel.className='farast-reader-advanced-panel farast-reader-preferences-panel';const personalSummary=document.createElement('summary');personalSummary.textContent='تنظیمات مطالعه و یادداشت‌های شخصی';personalPanel.append(personalSummary,group);toolbar.append(personalPanel);
+  const personalPanel=document.createElement('details');personalPanel.className='farast-reader-advanced-panel farast-reader-preferences-panel';const personalSummary=document.createElement('summary');personalSummary.textContent='تنظیمات نمایش و مطالعه';personalPanel.append(personalSummary,group);toolbar.append(personalPanel);
   const notesPanel = document.createElement('section');
   notesPanel.className = 'farast-reader-local-notes';
   notesPanel.hidden = true;
