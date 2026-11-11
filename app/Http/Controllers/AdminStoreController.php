@@ -407,7 +407,7 @@ class AdminStoreController extends Controller
                 'size_bytes' => $inspection['size'],
                 'sha256' => $inspection['checksum'],
                 'inspection_json' => $inspection,
-                'is_primary' => $request->boolean('is_primary', $session->files()->doesntExist()),
+                'is_primary' => $request->boolean('is_primary') && ! $session->files()->where('is_primary', true)->exists(),
                 'expires_at' => now()->addMinutes(30),
             ]);
         } catch (Throwable $exception) {
