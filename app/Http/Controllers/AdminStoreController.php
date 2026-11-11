@@ -6,6 +6,7 @@ use App\Models\StoreCategory;
 use App\Models\StoreCourse;
 use App\Models\StoreProduct;
 use App\Models\StoreProductFile;
+use App\Models\StoreProductDocumentArtifact;
 use App\Models\StorageManagedFile;
 use App\Models\StoreProductIngestion;
 use App\Jobs\ProcessProductDocument;
@@ -841,7 +842,7 @@ class AdminStoreController extends Controller
         return back()->with('status', 'فایل حذف شد.');
     }
 
-    public function uploadPreview(Request $request, StoreProduct $product, UploadSecurityService $security)
+    public function uploadPreview(Request $request, StoreProduct $product, UploadSecurityService $security, StorageManager $storage)
     {
         abort_unless($product->type !== 'course', 422, 'برای دوره، نمونه‌ها را در ساختار جلسات دوره تعریف کنید.');
         $request->validate([
@@ -855,7 +856,7 @@ class AdminStoreController extends Controller
         $accessLevel = $request->input('access_level', 'sample');
         abort_if($accessLevel === 'full' && $product->download_policy !== 'reader_only', 422, 'محتوای کامل فقط برای محصول با سیاست فقط‌خواندنی قابل ثبت است.');
         $sourcePath = $upload->store('store/quarantine/previews/'.$product->id, 'private');
-        $preparedPath = null;
+        $managed = null;
         $sourcePageCount = null;
         $includedPageCount = null;
 
@@ -898,20 +899,28 @@ class AdminStoreController extends Controller
                 );
             }
 
-            $directory = 'store/previews/'.$product->id;
             $filename = Str::random(40).'.'.($kind === 'html' ? 'html' : ($kind === 'pdf' ? 'pdf' : $extension));
-            $preparedPath = $directory.'/'.$filename;
-            abort_unless(Storage::disk('private')->put($preparedPath, $preparedBytes), 503, 'ذخیره نسخه آماده پیش‌نمایش ممکن نشد.');
+            $managed = $storage->storeContents(
+                $preparedBytes,
+                $filename,
+                $mime,
+                StorageManager::CRITICAL,
+                'store-product-preview',
+                StoreProductPreview::class,
+                null,
+                (int) $product->id,
+                'private'
+            );
 
             Storage::disk('private')->delete($sourcePath);
 
-            DB::transaction(function () use ($product, $preparedPath, $mime, $request, $kind, $accessLevel, $sourcePageCount, $includedPageCount) {
+            DB::transaction(function () use ($product, $managed, $mime, $request, $kind, $accessLevel, $sourcePageCount, $includedPageCount, $storage): void {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $sort = (int) ($lockedProduct->previews()->max('sort_order') ?? 0) + 1;
-                StoreProductPreview::create([
+                $preview = StoreProductPreview::create([
                     'product_id' => $lockedProduct->id,
-                    'disk' => 'private',
-                    'path' => $preparedPath,
+                    'disk' => $managed['disk'],
+                    'path' => $managed['path'],
                     'mime' => $mime,
                     'page_number' => $request->input('page_number') ?: $sort,
                     'source_page_count' => $sourcePageCount,
@@ -922,6 +931,7 @@ class AdminStoreController extends Controller
                     'is_active' => true,
                     'sort_order' => $sort,
                 ]);
+                $storage->bindReference((int) $managed['managed_file_id'], StoreProductPreview::class, (int) $preview->id, (int) $lockedProduct->id, 'path');
                 $this->audit('store.product.preview_uploaded', $lockedProduct, [
                     'mime' => $mime,
                     'kind' => $kind,
@@ -933,12 +943,10 @@ class AdminStoreController extends Controller
             });
         } catch (Throwable $exception) {
             Storage::disk('private')->delete($sourcePath);
-            if ($preparedPath) {
-                Storage::disk('private')->delete($preparedPath);
+            if ($managed) {
+                try { $storage->delete($managed['disk'], $managed['path']); } catch (Throwable $cleanupException) { report($cleanupException); }
             }
-            if ($exception instanceof ValidationException) {
-                throw $exception;
-            }
+            if ($exception instanceof ValidationException) throw $exception;
             report($exception);
             abort(503, 'آماده‌سازی امن پیش‌نمایش ناموفق بود؛ فایل اصلی در خوانشگر منتشر نشد.');
         }
@@ -950,7 +958,7 @@ class AdminStoreController extends Controller
         return back()->with('status', $message);
     }
 
-    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview, UploadSecurityService $security)
+    public function uploadPreviewAudio(Request $request, StoreProduct $product, StoreProductPreview $preview, UploadSecurityService $security, StorageManager $storage)
     {
         abort_unless((int) $preview->product_id === (int) $product->id, 404);
         $data = $request->validate([
@@ -983,11 +991,11 @@ class AdminStoreController extends Controller
         }
 
         $audio = $data['audio'];
-        $extension = strtolower($audio->getClientOriginalExtension());
         $mime = $audio->getMimeType() ?: 'application/octet-stream';
         $quarantinePath = $audio->store('store/quarantine/reader-audio/'.$product->id, 'private');
-        $path = 'store/reader-audio/'.$product->id.'/'.Str::random(40).'.'.$extension;
+        $managed = null;
         $databaseCommitted = false;
+
         try {
             $inspection = $security->inspect($quarantinePath, $mime, 100 * 1024 * 1024, [
                 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav',
@@ -999,9 +1007,20 @@ class AdminStoreController extends Controller
                 409,
                 'محتوای صوت هنگام انتقال تغییر کرده است.'
             );
-            abort_unless(Storage::disk('private')->copy($quarantinePath, $path), 503, 'ذخیره فایل صوتی ممکن نشد.');
 
-            [$oldDisk, $oldPath] = DB::transaction(function () use ($product, $preview, $path, $mime, $timings) {
+            $managed = $storage->adoptExistingPrivate(
+                $quarantinePath,
+                $audio->getClientOriginalName(),
+                $mime,
+                (int) $audio->getSize(),
+                'store-preview-audio',
+                StoreProductPreview::class,
+                null,
+                (int) $product->id,
+                StorageManager::CRITICAL
+            );
+
+            [$oldDisk, $oldPath] = DB::transaction(function () use ($product, $preview, $managed, $mime, $timings, $storage) {
                 $lockedProduct = StoreProduct::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $lockedPreview = StoreProductPreview::query()
                     ->whereKey($preview->id)
@@ -1010,11 +1029,12 @@ class AdminStoreController extends Controller
                     ->firstOrFail();
                 $old = [$lockedPreview->audio_disk ?: 'private', $lockedPreview->audio_path];
                 $lockedPreview->forceFill([
-                    'audio_disk' => 'private',
-                    'audio_path' => $path,
+                    'audio_disk' => $managed['disk'],
+                    'audio_path' => $managed['path'],
                     'audio_mime' => $mime,
                     'audio_timing' => $timings,
                 ])->save();
+                $storage->bindReference((int) $managed['managed_file_id'], StoreProductPreview::class, (int) $lockedPreview->id, (int) $lockedProduct->id, 'audio_path');
                 $this->audit('store.product.preview_audio_uploaded', $lockedProduct, [
                     'preview_id' => $lockedPreview->id,
                     'timing_segments' => count($timings),
@@ -1024,16 +1044,19 @@ class AdminStoreController extends Controller
                 return $old;
             });
             $databaseCommitted = true;
+
             if ($oldPath) {
-                Storage::disk($oldDisk)->delete($oldPath);
+                try {
+                    $this->deleteProductAssetIfUnreferenced($storage, $oldDisk, $oldPath);
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
             }
         } catch (Throwable $exception) {
-            if (! $databaseCommitted) {
-                Storage::disk('private')->delete($path);
+            if (! $databaseCommitted && $managed) {
+                try { $storage->delete($managed['disk'], $managed['path']); } catch (Throwable $cleanupException) { report($cleanupException); }
             }
-            if ($exception instanceof ValidationException) {
-                throw $exception;
-            }
+            if ($exception instanceof ValidationException) throw $exception;
             throw $exception;
         } finally {
             Storage::disk('private')->delete($quarantinePath);
@@ -1206,7 +1229,7 @@ class AdminStoreController extends Controller
         return back()->with('status', 'تصویر گالری حذف شد.');
     }
 
-    public function deletePreview(StoreProduct $product, StoreProductPreview $preview)
+    public function deletePreview(StoreProduct $product, StoreProductPreview $preview, StorageManager $storage)
     {
         abort_unless($preview->product_id === $product->id, 404);
         [$disk, $path, $audioDisk, $audioPath] = DB::transaction(function () use ($product, $preview) {
@@ -1221,12 +1244,35 @@ class AdminStoreController extends Controller
 
             return [$disk, $path, $audioDisk, $audioPath];
         });
-        Storage::disk($disk)->delete($path);
-        if ($audioPath) {
-            Storage::disk($audioDisk)->delete($audioPath);
-        }
+        $this->deleteProductAssetIfUnreferenced($storage, $disk, $path);
+        if ($audioPath) $this->deleteProductAssetIfUnreferenced($storage, $audioDisk, $audioPath);
 
         return back()->with('status', 'پیش‌نمایش حذف شد.');
+    }
+
+    private function deleteProductAssetIfUnreferenced(StorageManager $storage, string $disk, ?string $path): void
+    {
+        if (! $path) return;
+
+        $previewReferences = StoreProductPreview::query()
+            ->where(fn ($query) => $query->where('path', $path)->orWhere('audio_path', $path))
+            ->get()
+            ->contains(fn (StoreProductPreview $preview) =>
+                ((string) $preview->path === $path && ($preview->disk ?: 'private') === $disk)
+                || ((string) $preview->audio_path === $path && ($preview->audio_disk ?: 'private') === $disk)
+            );
+        $artifactReferences = StoreProductDocumentArtifact::query()
+            ->where('path', $path)
+            ->get()
+            ->contains(fn (StoreProductDocumentArtifact $artifact) => ($artifact->disk ?: 'private') === $disk);
+        $productFileReferences = StoreProductFile::query()
+            ->where('path', $path)
+            ->get()
+            ->contains(fn (StoreProductFile $file) => ($file->disk ?: 'private') === $disk);
+
+        if (! $previewReferences && ! $artifactReferences && ! $productFileReferences) {
+            $storage->delete($disk, $path);
+        }
     }
 
     public function storeTag(Request $request)
