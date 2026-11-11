@@ -116,6 +116,16 @@ class S3CompatibleAdapter
         }
     }
 
+    public function size(StorageVolume $volume, string $key): int
+    {
+        $response = $this->request($volume, 'HEAD', $key);
+        $size = $response->getHeaderLine('Content-Length');
+        if ($size === '' || ! ctype_digit($size)) {
+            throw new RuntimeException('اندازه شیء از سرویس ذخیره‌سازی دریافت نشد.');
+        }
+        return (int) $size;
+    }
+
     public function delete(StorageVolume $volume, string $key): void
     {
         $this->request($volume, 'DELETE', $key);
