@@ -20,6 +20,11 @@ class FarastObservability
         $requestId = $this->safeIdentifier($request->header('X-Request-Id')) ?? (string) Str::uuid();
         $correlationId = $this->safeIdentifier($request->header('X-Correlation-Id')) ?? $requestId;
 
+        $trace = app(\\App\\Services\\FarastTraceContext::class);
+        $trace->set($requestId, $correlationId);
+        $request->attributes->set('farast.request_id', $requestId);
+        $request->attributes->set('farast.correlation_id', $correlationId);
+
         try {
             Log::withContext([
                 'request_id' => $requestId,
@@ -60,6 +65,8 @@ class FarastObservability
                     Log::withoutContext();
                 } catch (Throwable $exception) {
                     error_log('FARAST request log context cleanup failed: '.get_class($exception));
+                } finally {
+                    $trace->clear();
                 }
             }
         }
