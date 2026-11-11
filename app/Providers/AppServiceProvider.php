@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Ticket;
 use App\Policies\TicketPolicy;
 use App\Services\SupportTicketService;
+use App\Services\FarastTraceContext;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -15,7 +16,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SupportTicketService::class);
-        $this->app->singleton(\App\Services\FarastTraceContext::class);
+        $this->app->singleton(FarastTraceContext::class);
     }
 
     public function boot(): void
