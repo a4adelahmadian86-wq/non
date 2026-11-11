@@ -150,59 +150,76 @@ class StorageBackupService
             }
 
             $manifestJson = $zip->getFromName('manifest.json');
-            $manifest = is_string($manifestJson) ? json_decode($manifestJson, true) : null;
-            if (! is_array($manifest) || empty($manifest['database_driver'])) {
-                throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ پس از انتقال قابل رمزگشایی نیست.');
+            try {
+                $manifest = is_string($manifestJson)
+                    ? json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR)
+                    : null;
+            } catch (\JsonException $exception) {
+                throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ JSON معتبر نیست.', 0, $exception);
             }
 
-            $formatVersion = (int) ($manifest['format_version'] ?? 1);
-            $expectedEntries = $manifest['entries'] ?? [];
-            if ($formatVersion >= 2 && (
-                ! is_array($expectedEntries)
-                || (int) ($manifest['entry_count'] ?? -1) !== count($expectedEntries)
-            )) {
-                throw new RuntimeException('فهرست اصالت فایل‌های آرشیو بکاپ معتبر نیست.');
+            $entries = is_array($manifest) ? ($manifest['entries'] ?? null) : null;
+            if (
+                ! is_array($manifest)
+                || ($manifest['format_version'] ?? null) !== 2
+                || empty($manifest['database_driver'])
+                || ! is_array($entries)
+                || count($entries) < 1
+                || (int) ($manifest['entry_count'] ?? -1) !== count($entries)
+            ) {
+                throw new RuntimeException('Manifest رمزنگاری‌شده بکاپ ناقص یا ناسازگار است.');
             }
 
-            $manifestStat = $zip->statName('manifest.json');
-            if (! is_array($manifestStat) || ($manifestStat['encryption_method'] ?? null) !== ZipArchive::EM_AES_256) {
-                throw new RuntimeException('Manifest بکاپ باید با AES-256 رمزنگاری شده باشد.');
+            ksort($entries, SORT_STRING);
+            $expectedHmac = hash_hmac('sha256', $this->canonicalizeEntries($entries), $password);
+            if (! hash_equals($expectedHmac, (string) ($manifest['inventory_hmac'] ?? ''))) {
+                throw new RuntimeException('امضای موجودی فایل‌های بکاپ معتبر نیست.');
             }
 
+            foreach ($entries as $entryName => $metadata) {
+                if (
+                    ! is_string($entryName)
+                    || $entryName === ''
+                    || ! is_array($metadata)
+                    || ! is_int($metadata['size_bytes'] ?? null)
+                    || $metadata['size_bytes'] < 0
+                    || ! is_string($metadata['sha256'] ?? null)
+                    || ! preg_match('/^[a-f0-9]{64}$/i', $metadata['sha256'])
+                ) {
+                    throw new RuntimeException('ساختار موجودی فایل‌های بکاپ نامعتبر است.');
+                }
+            }
+
+            $seenNames = [];
             $seenEntries = [];
             $databaseBytes = null;
+
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $stat = $zip->statIndex($index);
                 $name = is_array($stat) ? (string) ($stat['name'] ?? '') : '';
-                if ($name === '' || str_ends_with($name, '/')) {
+                if ($name === '') {
+                    throw new RuntimeException('آرشیو بکاپ شامل ورودی بدون نام است.');
+                }
+                if (isset($seenNames[$name])) {
+                    throw new RuntimeException('آرشیو بکاپ شامل ورودی تکراری است: '.$name);
+                }
+                $seenNames[$name] = true;
+
+                if (str_ends_with($name, '/')) {
                     continue;
                 }
-                if ($name === 'manifest.json') {
-                    continue;
-                }
-                if (
-                    str_starts_with($name, '/')
-                    || preg_match('/^[A-Za-z]:/', $name)
-                    || str_contains($name, '\\')
-                    || preg_match('#(^|/)\.\.?(/|$)#', $name)
-                    || str_contains($name, "\0")
-                    || isset($seenEntries[$name])
-                ) {
-                    throw new RuntimeException('مسیر تکراری یا ناامن در آرشیو بکاپ شناسایی شد.');
-                }
-                $seenEntries[$name] = true;
 
                 if (($stat['encryption_method'] ?? null) !== ZipArchive::EM_AES_256) {
                     throw new RuntimeException('همه فایل‌های آرشیو بکاپ باید با AES-256 رمزنگاری شده باشند.');
                 }
 
-                $expected = $formatVersion >= 2 ? ($expectedEntries[$name] ?? null) : null;
-                if ($formatVersion >= 2 && (
-                    ! is_array($expected)
-                    || ! is_string($expected['sha256'] ?? null)
-                    || ! preg_match('/^[a-f0-9]{64}$/', $expected['sha256'])
-                )) {
-                    throw new RuntimeException('فهرست اصالت آرشیو، فایل موجود را پوشش نمی‌دهد: '.$name);
+                if ($name === 'manifest.json') {
+                    continue;
+                }
+
+                $expected = $entries[$name] ?? null;
+                if (! is_array($expected)) {
+                    throw new RuntimeException('فایلی خارج از موجودی رمزنگاری‌شده در آرشیو وجود دارد: '.$name);
                 }
 
                 $stream = $zip->getStream($name);
@@ -232,27 +249,31 @@ class StorageBackupService
                 }
 
                 $actualChecksum = hash_final($hash);
-                if ($bytesRead !== (int) ($stat['size'] ?? -1)) {
-                    throw new RuntimeException('اندازه فایل رمزگشایی‌شده با ساختار ZIP مطابقت ندارد: '.$name);
-                }
-                if ($formatVersion >= 2 && (
-                    $bytesRead !== (int) ($expected['size_bytes'] ?? -1)
+                if (
+                    $bytesRead !== (int) ($stat['size'] ?? -1)
+                    || $bytesRead !== $expected['size_bytes']
                     || ! hash_equals($expected['sha256'], $actualChecksum)
-                )) {
-                    throw new RuntimeException('Checksum فایل آرشیو با Manifest امضاشده مطابقت ندارد: '.$name);
+                ) {
+                    throw new RuntimeException('اندازه یا SHA-256 فایل رمزگشایی‌شده با موجودی بکاپ مطابقت ندارد: '.$name);
                 }
 
+                $seenEntries[$name] = true;
                 if ($name === 'database/database.sql') {
                     $databaseBytes = $bytesRead;
                 }
             }
 
-            if (
-                ! is_int($databaseBytes)
-                || $databaseBytes < 1
-                || ($formatVersion >= 2 && count($seenEntries) !== count($expectedEntries))
-            ) {
-                throw new RuntimeException('فهرست کامل فایل‌های بکاپ یا جریان دیتابیس در آرشیو معتبر نیست.');
+            $expectedNames = array_keys($entries);
+            $actualNames = array_keys($seenEntries);
+            sort($expectedNames, SORT_STRING);
+            sort($actualNames, SORT_STRING);
+
+            if ($expectedNames !== $actualNames) {
+                throw new RuntimeException('موجودی فایل‌های بکاپ با محتوای واقعی آرشیو مطابقت ندارد.');
+            }
+
+            if (! is_int($databaseBytes) || $databaseBytes < 1) {
+                throw new RuntimeException('جریان کامل دیتابیس در آرشیو بکاپ موجود یا قابل رمزگشایی نیست.');
             }
         } finally {
             $zip->close();
@@ -308,8 +329,10 @@ class StorageBackupService
         });
 
         $manifest['managed_files_included'] = $managedCount;
+        ksort($entries, SORT_STRING);
         $manifest['entries'] = $entries;
         $manifest['entry_count'] = count($entries);
+        $manifest['inventory_hmac'] = hash_hmac('sha256', $this->canonicalizeEntries($entries), $password);
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         if (! $zip->setEncryptionName('manifest.json', ZipArchive::EM_AES_256)) {
             $zip->close();
@@ -399,6 +422,13 @@ class StorageBackupService
         }
 
         $this->addEncryptedFile($zip, $dump, 'database/database.sql', $entries);
+    }
+
+    private function canonicalizeEntries(array $entries): string
+    {
+        ksort($entries, SORT_STRING);
+
+        return json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 
     private function removeDirectory(string $directory): void
