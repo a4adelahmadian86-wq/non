@@ -13,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ReviewProductIntakeFile implements ShouldQueue
@@ -74,23 +75,31 @@ class ReviewProductIntakeFile implements ShouldQueue
             throw new \RuntimeException('intake_managed_file_missing');
         }
 
-        $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-intake-review-');
-        if (! is_string($temporaryPath) || $temporaryPath === '') {
-            throw new \RuntimeException('intake_review_temp_unavailable');
-        }
-
+        $temporaryPath = null;
         $stream = null;
         try {
-            $storage->downloadTo($disk, $path, $temporaryPath);
-            $actualChecksum = hash_file('sha256', $temporaryPath);
-            if (! is_string($actualChecksum) || ! hash_equals((string) $ingestion->sha256, $actualChecksum)) {
-                throw new \RuntimeException('intake_review_checksum_mismatch');
+            if (str_starts_with($disk, 'storage_volume:')) {
+                $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-intake-review-');
+                if (! is_string($temporaryPath) || $temporaryPath === '') {
+                    throw new \RuntimeException('intake_review_temp_unavailable');
+                }
+                $storage->downloadTo($disk, $path, $temporaryPath);
+                $stream = fopen($temporaryPath, 'rb');
+            } else {
+                $stream = Storage::disk($disk)->readStream($path);
             }
 
-            $stream = fopen($temporaryPath, 'rb');
             if (! is_resource($stream)) {
                 throw new \RuntimeException('intake_review_stream_unavailable');
             }
+
+            $hashContext = hash_init('sha256');
+            hash_update_stream($hashContext, $stream);
+            $actualChecksum = hash_final($hashContext);
+            if (! hash_equals((string) $ingestion->sha256, $actualChecksum)) {
+                throw new \RuntimeException('intake_review_checksum_mismatch');
+            }
+            rewind($stream);
 
             $this->storeResult($ingestion, $session, 'reviewing', [
                 'status' => 'reviewing',
@@ -105,13 +114,14 @@ class ReviewProductIntakeFile implements ShouldQueue
                 'primary_scan_status' => $ingestion->antivirus_status === 'clean'
                     ? 'clean'
                     : 'structural_checks_passed',
-                'antivirus_status' => (string) $ingestion->antivirus_status,
             ]);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
             }
-            @unlink($temporaryPath);
+            if ($temporaryPath) {
+                @unlink($temporaryPath);
+            }
         }
 
         $providerStatus = (array) ($review['provider_status'] ?? []);
