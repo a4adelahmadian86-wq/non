@@ -469,8 +469,9 @@ class AdminStoreController extends Controller
             ['label' => 'سیاست ناظر هوشمند', 'ready' => ! $supervisorEnabled || filled(data_get($product->metadata, 'ai_supervisor.mode')), 'required' => false],
         ];
         $publicationReady = collect($readiness)->where('required', true)->every(fn ($item) => $item['ready']);
+        $canPublishProducts = app(AuthorizationService::class)->allows(request()->user(), 'store.publish_products');
 
-        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness'));
+        return view('admin.store.form', compact('product', 'categories', 'tags', 'relatedProducts', 'readiness', 'publicationReady', 'supervisorReviewFresh', 'aiContentReadiness', 'canPublishProducts'));
     }
 
     public function update(Request $request, StoreProduct $product, ProductSupervisorSnapshotBuilder $snapshotBuilder, \App\Services\ProductPublicationReadiness $publicationReadiness, \App\Services\ProductContentGenerationService $contentGenerator)
