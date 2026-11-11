@@ -348,6 +348,32 @@ class StoreReaderAccessTest extends TestCase
 
         $document->artifacts()->delete();
         Storage::disk('private')->delete($audioPath);
+
+        $olderAudioPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/audio-v2.wav';
+        Storage::disk('private')->put($olderAudioPath, 'older-audio');
+        $document->artifacts()->create([
+            'artifact_type' => 'audio_full_wav',
+            'version' => 2,
+            'disk' => 'private',
+            'path' => $olderAudioPath,
+            'mime' => 'audio/wav',
+            'size_bytes' => strlen('older-audio'),
+            'sha256' => hash('sha256', 'older-audio'),
+            'metadata_json' => ['source_sha256' => $document->source_sha256, 'duration_ms' => 500],
+        ]);
+        $structure = (array) $document->fresh()->structure_json;
+        $structure['audio'] = ['status' => 'upgrading'];
+        $document->update(['structure_json' => $structure]);
+        $this->actingAs($user)->get(route('store.reader', $product->slug))
+            ->assertOk()
+            ->assertSee('data-reader-audio-status="upgrading"', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=2', false)
+            ->assertSee(route('store.reader.audio', [$product, $document]).'?version=3', false);
+        $this->actingAs($user)->call('HEAD', route('store.reader.audio', [$product, $document]).'?version=3')
+            ->assertStatus(202);
+        $document->artifacts()->delete();
+        Storage::disk('private')->delete($olderAudioPath);
+
         $structure = (array) $document->fresh()->structure_json;
         $structure['audio'] = ['status' => 'failed'];
         $document->update(['structure_json' => $structure]);
