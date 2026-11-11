@@ -15,6 +15,7 @@ class BackendCoreDefaultsTest extends TestCase
     {
         $this->assertSame('database', config('queue.connections.backups.driver'));
         $this->assertSame('backups', config('queue.connections.backups.queue'));
+        // CI explicitly selects sync; production defaults to database when no driver is configured.
         $this->assertSame(env('QUEUE_CONNECTION', 'database'), config('queue.default'));
     }
 
