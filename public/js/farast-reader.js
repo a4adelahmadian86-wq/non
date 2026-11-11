@@ -620,7 +620,7 @@
       if(pdfLoading)pdfLoading.hidden=true;
       await renderPdfPage(1);
       await loadPdfOutline();
-    }catch(error){showPdfError(error);}
+    }catch(error){if(error?.message==='PDF_ENGINE_MISSING'&&showNativePdfFallback(nextUrl))return;showPdfError(error);}
   };
 
   const requestPdfPassword=(updatePassword,reason,loadingTask)=>{
@@ -670,6 +670,29 @@
     });
     dialog.showModal();
     input.focus();
+  };
+
+  const showNativePdfFallback=url=>{
+    const surface=activeArticle()?.querySelector('.farast-pdf-document');
+    if(!surface||!url)return false;
+    root.classList.add('is-native-pdf-fallback');
+    const notice=document.createElement('p');
+    notice.className='farast-pdf-native-notice';
+    notice.textContent='نمایشگر پیشرفته PDF روی این سرور نصب نیست؛ نمایشگر داخلی مرورگر فعال شد. برای جست‌وجو، نشانک و حاشیه‌نویسی کامل، موتور PDF محلی باید نصب شود.';
+    const frame=document.createElement('iframe');
+    frame.className='farast-pdf-native-frame';
+    frame.src=url;
+    frame.title='نمایش PDF با موتور داخلی مرورگر';
+    frame.loading='eager';
+    frame.referrerPolicy='no-referrer';
+    frame.setAttribute('allowfullscreen','');
+    surface.replaceChildren(notice,frame);
+    surface.style.display='block';
+    surface.style.width='100%';
+    surface.style.maxWidth='100%';
+    surface.style.minHeight='70vh';
+    surface.style.height='calc(100vh - 230px)';
+    return true;
   };
 
   const showPdfError=error=>{
