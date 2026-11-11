@@ -66,9 +66,10 @@ Schedule::command('announcements:broadcast-due')
 
 // Retry failed workflow steps without replaying steps that already completed.
 Artisan::command('farast:workflows:retry {--limit=50}', function (WorkflowEngine $engine) {
+    $recoveredRuns = $engine->recoverStaleRuns();
     $queued = $engine->dispatchPendingEvents((int) $this->option('limit'));
-    $this->info("Queued {$queued} pending or recoverable workflow event(s).");
-})->purpose('Retry failed FARAST workflow event steps');
+    $this->info("Recovered {$recoveredRuns} stale workflow run(s); queued {$queued} pending or recoverable event(s).");
+})->purpose('Recover stale workflow runs and retry failed event steps');
 
 Schedule::command('farast:workflows:retry --limit=50')
     ->everyMinute()
