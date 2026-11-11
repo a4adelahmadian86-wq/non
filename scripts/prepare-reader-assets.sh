@@ -8,7 +8,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 TARGET_DIR="$ROOT_DIR/public/vendor/pdfjs"
-PACKAGE_DIR="$TMP_DIR/node_modules/pdfjs-dist"
 
 PACK_JSON="$(npm pack --ignore-scripts --json --pack-destination "$TMP_DIR" "pdfjs-dist@${PDFJS_VERSION}")"
 PACKAGE_INTEGRITY="$(node -e 'const result=JSON.parse(process.argv[1]); const value=result[0]?.integrity; if (!value) process.exit(1); process.stdout.write(value);' "$PACK_JSON")"
@@ -42,7 +41,7 @@ done
 
 # Rebuild the self-hosted payload deterministically; never use a CDN at runtime.
 rm -rf "$TARGET_DIR/legacy/build" "$TARGET_DIR/legacy/web" "$TARGET_DIR/web"
-rm -rf "$TARGET_DIR/cmaps" "$TARGET_DIR/standard_fonts" "$TARGET_DIR/wasm"
+rm -rf "$TARGET_DIR/cmaps" "$TARGET_DIR/standard_fonts" "$TARGET_DIR/wasm" "$TARGET_DIR/image_decoders" "$TARGET_DIR/iccs"
 mkdir -p "$TARGET_DIR/legacy/build" "$TARGET_DIR/legacy/web" "$TARGET_DIR/web"
 
 cp "$PACKAGE_DIR/legacy/build/pdf.mjs" "$TARGET_DIR/legacy/build/pdf.mjs"
