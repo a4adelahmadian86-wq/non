@@ -215,6 +215,27 @@ class AppServiceProvider extends ServiceProvider
                     'threshold' => $threshold,
                     'window_minutes' => $window,
                 ]);
+                try {
+                    app(\App\Services\AuditEventService::class)->record(
+                        'security.authentication_anomaly',
+                        null,
+                        null,
+                        'authentication',
+                        null,
+                        [
+                            'source_fingerprint' => substr($fingerprint, 0, 16),
+                            'failed_attempts' => $count,
+                            'threshold' => $threshold,
+                            'window_minutes' => $window,
+                            'severity' => $level,
+                        ],
+                        'security'
+                    );
+                } catch (Throwable $auditException) {
+                    Log::critical('farast.security.anomaly_audit_failed', [
+                        'exception_class' => get_class($auditException),
+                    ]);
+                }
             }
         } catch (Throwable $exception) {
             // Authentication must remain available when the cache/telemetry layer fails.
