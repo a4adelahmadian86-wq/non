@@ -9,6 +9,7 @@ use App\Jobs\ProcessProductDocument;
 use App\Jobs\ReviewProductForPublication;
 use App\Jobs\ReviewProductFileAsset;
 use App\Services\ProductSupervisorClient;
+use App\Services\Storage\StorageManager;
 use App\Services\ProductSupervisorSnapshotBuilder;
 use App\Services\ProductPublicationReadiness;
 use App\Services\AuthorizationService;
@@ -1415,6 +1416,80 @@ class AdminStoreProductWorkflowTest extends TestCase
         $this->assertSame($sha, $review['sha256']);
         $this->assertSame('asset-review-001', $review['review_id']);
         Queue::assertPushed(ReviewProductForPublication::class, fn ($job) => $job->productId === $product->id);
+    }
+
+    public function test_file_asset_supervisor_reads_managed_storage_volumes_through_storage_manager(): void
+    {
+        $admin = $this->admin();
+        $category = $this->category();
+        $product = StoreProduct::create([
+            'category_id' => $category->id,
+            'title' => 'محصول روی فضای مدیریت‌شده',
+            'slug' => 'managed-volume-asset-review',
+            'sku' => 'MANAGED-ASSET-REVIEW-001',
+            'type' => 'digital_file',
+            'price_rials' => 125000,
+            'status' => 'draft',
+            'metadata' => ['publication_workflow' => ['status' => 'idle', 'submitted_by' => $admin->id]],
+        ]);
+        $bytes = 'managed volume verified asset bytes';
+        $sha = hash('sha256', $bytes);
+        $file = StoreProductFile::create([
+            'product_id' => $product->id,
+            'purpose' => 'product_download',
+            'version' => '1.0',
+            'disk' => 'storage_volume:17',
+            'path' => 'products/2026/11/managed-asset.pdf',
+            'original_name' => 'managed-asset.pdf',
+            'mime' => 'application/pdf',
+            'size_bytes' => strlen($bytes),
+            'sha256' => $sha,
+            'is_primary' => true,
+            'is_active' => true,
+            'scan_status' => 'clean',
+            'scan_engine' => 'farast_static_v1',
+            'scanned_at' => now(),
+        ]);
+
+        $temporaryPath = null;
+        $storage = \Mockery::mock(StorageManager::class);
+        $storage->shouldReceive('downloadTo')
+            ->once()
+            ->with('storage_volume:17', $file->path, \Mockery::type('string'))
+            ->andReturnUsing(function ($disk, $path, $target) use (&$temporaryPath, $bytes) {
+                $temporaryPath = $target;
+                file_put_contents($target, $bytes);
+            });
+
+        $supervisor = \Mockery::mock(ProductSupervisorClient::class);
+        $supervisor->shouldReceive('configured')->once()->andReturn(true);
+        $supervisor->shouldReceive('reviewFile')
+            ->once()
+            ->with(\Mockery::on(fn ($stream) => is_resource($stream)), 'managed-asset.pdf', \Mockery::type('array'))
+            ->andReturn([
+                'review_id' => 'managed-asset-review-001',
+                'summary' => 'فایل فضای مدیریت‌شده بررسی شد.',
+                'findings' => [],
+                'warnings' => [],
+                'provider_status' => [],
+                'inspection' => [
+                    'detected_type' => 'pdf',
+                    'extracted_characters' => 30,
+                    'antivirus_status' => 'not_configured',
+                    'upstream_scan_status' => 'not_provided',
+                    'archive_entries' => [],
+                ],
+                'security_gate' => 'structural_checks_passed',
+            ]);
+
+        (new ReviewProductFileAsset($product->id, $file->id))->handle($supervisor, $storage);
+
+        $review = data_get($product->fresh()->metadata, 'ai_supervisor.asset_reviews.file:'.$file->id);
+        $this->assertSame('completed', $review['status']);
+        $this->assertSame($sha, $review['sha256']);
+        $this->assertSame('managed-asset-review-001', $review['review_id']);
+        $this->assertIsString($temporaryPath);
+        $this->assertFileDoesNotExist($temporaryPath);
     }
 
     public function test_publication_supervisor_waits_for_pending_file_asset_review(): void
