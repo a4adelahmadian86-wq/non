@@ -386,7 +386,7 @@ class AdminStoreController extends Controller
             : redirect()->to(route('admin.store.edit', $product).'#product-files')->with('status', 'محصول و فایل‌های بررسی‌شده ثبت شدند؛ انتشار فقط پس از بررسی ناظر و مجوز لازم انجام می‌شود.');
     }
 
-    public function approveManualPublication(Request $request, StoreProduct $product, AuthorizationService $authorization, \\App\\Services\\ProductPublicationReadiness $readiness)
+    public function approveManualPublication(Request $request, StoreProduct $product, AuthorizationService $authorization, \App\Services\ProductPublicationReadiness $readiness)
     {
         abort_unless($authorization->allows($request->user(), 'store.publish_products'), 403, 'مجوز انتشار محصول را ندارید.');
         $data = $request->validate([
