@@ -349,7 +349,7 @@ class FarastObservabilityService
                 }
 
                 try {
-                    $timestamp = new DateTimeImmutable($record['datetime']);
+                    $timestamp = new \DateTimeImmutable($record['datetime']);
                     if ($timestamp >= $cutoff) {
                         $count++;
                     }
