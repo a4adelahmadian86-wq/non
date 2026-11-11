@@ -257,7 +257,7 @@ PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر 
 **وضعیت:** هیچ‌یک از PRهای #262/#265/#279/#318/#333 را نمی‌توان صرفاً به‌دلیل سبز بودن مستقل، جداگانه ادغام کرد. لازم است یک PR ادغام‌شده و rebased روی main جاری ساخته شود که schema نهایی را تثبیت و فایل‌های هم‌پوشان را یک‌بار تغییر دهد.
 
 
-## 8. وضعیت CI خط مبنای جدید
+## 9. وضعیت CI خط مبنای جدید
 
 پس از ادغام PR #371، checkهای commit `c3067f69da7d29b874c26438e804e4067a078bab` در لحظه ثبت این سند هنوز در حال اجرا بودند:
 - `laravel`: in progress
@@ -269,7 +269,7 @@ PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر 
 
 بنابراین نتیجه این commit هنوز pass اعلام نمی‌شود. checkهای سبز PR #371 روی head آن PR، جایگزین checkهای merge commit نیستند.
 
-## 9. ترتیب ادامه ممیزی/تثبیت
+## 10. ترتیب ادامه ممیزی/تثبیت
 
 1. دریافت نتیجه نهایی CI روی `c3067f69...`؛ در صورت شکست، تشخیص بر اساس job و log.
 2. بررسی و ادغام امن PR #347 پس از rebase و CI؛ این مسیر شکاف authorization سطح Route را می‌بندد.
@@ -278,7 +278,7 @@ PR #379 نیز `StorageBackupService` و `RestoreStorageBackup` را تغییر 
 5. اجرای runtime inventory روی main پس از ادغام این تغییرها: `route:list`, migration fresh install/upgrade، تست‌های منفی Scope و مالکیت فایل.
 6. تکمیل call graph برای هر سرویس با مصرف‌کننده‌ها و تست‌های واقعی؛ سپس تعیین موارد retain/consolidate/deprecate.
 
-## 10. معیار تکمیل
+## 11. معیار تکمیل
 
 این addendum وضعیت snapshot را ثبت می‌کند، نه پایان کل مرحله دوم را. مرحله دوم تنها وقتی بسته می‌شود که:
 - Routeها و نام‌ها در runtime یکتا باشند؛
