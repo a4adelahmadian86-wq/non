@@ -837,4 +837,75 @@ class WorkflowConditionsAndCooldownTest extends TestCase
         ]);
     }
 
+    public function test_exhausted_stale_lease_becomes_terminal_and_remains_manually_recoverable(): void
+    {
+        $owner = $this->owner('09140000240');
+        $workflow = $this->workflow($owner);
+        $startedAt = now()->subMinutes(31);
+        $eventId = DB::table('farast_workflow_events')->insertGetId([
+            'event_type' => 'document.saved',
+            'idempotency_key' => 'exhausted-stale-lease:document:240',
+            'user_id' => $owner->id,
+            'context' => json_encode(['user_id' => $owner->id, 'document_id' => 240, 'revision' => 1]),
+            'status' => 'processing',
+            'attempts' => 5,
+            'matched_workflows' => 1,
+            'failed_workflows' => 0,
+            'matched_at' => $startedAt,
+            'started_at' => $startedAt,
+            'created_at' => $startedAt,
+            'updated_at' => $startedAt,
+        ]);
+        $runId = DB::table('farast_workflow_runs')->insertGetId([
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'context' => json_encode(['user_id' => $owner->id, 'event_id' => $eventId]),
+            'started_at' => $startedAt,
+            'created_at' => $startedAt,
+            'updated_at' => $startedAt,
+        ]);
+        $mappingId = DB::table('farast_workflow_event_workflows')->insertGetId([
+            'event_id' => $eventId,
+            'workflow_id' => $workflow,
+            'status' => 'running',
+            'attempts' => 5,
+            'run_id' => $runId,
+            'started_at' => $startedAt,
+            'lease_token' => 'exhausted-expired-token',
+            'created_at' => $startedAt,
+            'updated_at' => $startedAt,
+        ]);
+
+        $engine = app(WorkflowEngine::class);
+        $this->assertSame(1, $engine->dispatchPendingEvents());
+        (new ProcessWorkflowEvent($eventId))->handle($engine);
+
+        $this->assertDatabaseHas('farast_workflow_runs', [
+            'id' => $runId,
+            'status' => 'failed',
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'id' => $mappingId,
+            'status' => 'failed',
+            'attempts' => 5,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'failed',
+        ]);
+
+        $this->assertTrue($engine->retryFailedEvent($eventId));
+        $this->assertDatabaseHas('farast_workflow_events', [
+            'id' => $eventId,
+            'status' => 'pending',
+            'attempts' => 0,
+        ]);
+        $this->assertDatabaseHas('farast_workflow_event_workflows', [
+            'id' => $mappingId,
+            'status' => 'pending',
+            'attempts' => 0,
+            'run_id' => null,
+        ]);
+    }
+
 }
