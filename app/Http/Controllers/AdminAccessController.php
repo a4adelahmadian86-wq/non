@@ -57,6 +57,7 @@ class AdminAccessController extends Controller
             $data['key'],
             $data['name'],
             $data['permissions'] ?? [],
+            $request,
         );
 
         return response()->json(['role' => $role], 201);
