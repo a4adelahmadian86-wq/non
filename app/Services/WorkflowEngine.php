@@ -314,13 +314,20 @@ class WorkflowEngine
             return $eventAttempts < 5;
         }
 
-        $hasMappings = DB::table('farast_workflow_event_workflows')
+        $mappings = DB::table('farast_workflow_event_workflows')
+            ->where('event_id', $eventId);
+
+        if (! $mappings->exists()) {
+            return $eventAttempts < 5;
+        }
+
+        $hasPending = DB::table('farast_workflow_event_workflows')
             ->where('event_id', $eventId)
+            ->where('status', 'pending')
             ->exists();
 
-        return $hasMappings
-            ? $this->hasRetryableWorkflowSteps($eventId)
-            : $eventAttempts < 5;
+        return $this->hasRetryableWorkflowSteps($eventId)
+            || ($hasPending && $eventAttempts < 5);
     }
 
     /** Whether an event still has workflow mappings below their retry limit. */
@@ -333,7 +340,7 @@ class WorkflowEngine
         return DB::table('farast_workflow_event_workflows')
             ->where('event_id', $eventId)
             ->where('attempts', '<', 5)
-            ->whereIn('status', ['pending', 'failed'])
+            ->where('status', 'failed')
             ->exists();
     }
 
@@ -372,9 +379,12 @@ class WorkflowEngine
                     $retryable->select(DB::raw(1))->from('farast_workflow_event_workflows')
                         ->whereColumn('farast_workflow_event_workflows.event_id', 'farast_workflow_events.id')
                         ->where(function ($states) {
-                            $states->where(function ($retryable) {
-                                $retryable->where('attempts', '<', 5)
-                                    ->whereIn('status', ['pending', 'failed']);
+                            $states->where(function ($pending) {
+                                $pending->where('status', 'pending')
+                                    ->where('farast_workflow_events.attempts', '<', 5);
+                            })->orWhere(function ($failed) {
+                                $failed->where('status', 'failed')
+                                    ->where('farast_workflow_event_workflows.attempts', '<', 5);
                             })->orWhere(function ($stale) {
                                 $stale->where('status', 'running')
                                     ->where('started_at', '<=', now()->subMinutes(30));
