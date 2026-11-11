@@ -621,7 +621,7 @@ class AdminStoreController extends Controller
             'supervisor_verdict' => data_get($file->supervisor_review_json, 'inspection.verdict'),
             'security_gate' => data_get($file->supervisor_review_json, 'security_gate'),
             'manual_reviewed' => (bool) data_get($file->supervisor_review_json, 'manual_review.approved', false),
-            'supervisor_reviewed_at => $file->supervisor_reviewed_at?->toISOString(),
+            'supervisor_reviewed_at' => $file->supervisor_reviewed_at?->toISOString(),
         ])->header('Cache-Control', 'private, no-store');
     }
 
