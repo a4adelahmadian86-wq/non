@@ -2,6 +2,10 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ serviceWorkers: 'block' });
 
+async function openPersonalTools(page) {
+  await page.locator('.farast-reader-preferences-panel > summary').click();
+}
+
 test('syncs authenticated reading progress to the account endpoint', async ({ page }) => {
   let savedState = null;
   await page.route('**/store/1/reader-state', async route => {
@@ -1395,6 +1399,7 @@ test('personal reading light, font preferences, highlights and annotations stay 
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
 
   await page.locator('[data-reading-light]').click();
   await expect(page.locator('[data-reading-light]')).toHaveAttribute('aria-pressed', 'true');
@@ -1493,6 +1498,7 @@ test('personal reader backup restores local notes and highlights without a serve
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   const backup = { format: 'farast-reader-personal-tools', version: 1, data: {
     light: true, font: 'serif', size: 130, lineHeight: 1.9, measure: 'wide', paragraphSpacing: 2, focusMode: true, readingRuler: true,
     highlights: [{ id: 'h1', quote: 'متن نمونه', page: 1, created: 1 }],
@@ -1531,6 +1537,7 @@ test('personal highlights span inline formatting and restore after a page rerend
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   await page.evaluate(() => {
     const p = document.querySelector('.farast-reader-document p');
     const range = document.createRange();
@@ -1565,6 +1572,7 @@ test('local reader ink supports drawing, erasing mode, undo and browser persiste
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   await page.locator('[data-ink-toggle]').click();
   await expect(page.locator('[data-ink-toggle]')).toHaveAttribute('aria-pressed', 'true');
   const canvas = page.locator('.farast-reader-page-item').first().locator('canvas.farast-reader-ink-canvas');
@@ -1600,6 +1608,7 @@ test('reader highlights stay anchored to the selected duplicate phrase', async (
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   const phrase = 'عبارت تکراری';
   await page.evaluate(phrase => {
     const text = document.querySelector('.farast-reader-document p').firstChild;
@@ -1651,6 +1660,7 @@ test('reader ink exposes keyboard guidance and discards cancelled pointer stroke
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   const toggle = page.locator('[data-ink-toggle]');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.farast-reader-ink-help')).toContainText('صفحه‌کلید');
@@ -1698,6 +1708,7 @@ test('reader backup restore enforces the aggregate ink point budget', async ({ p
     JSON.stringify({ inkStrokes: strokes })
   ), strokes);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   await page.locator('[data-ink-undo]').click();
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('farast.reader.personal-tools.v1:ink-budget-fixture')));
   expect(stored.inkStrokes).toHaveLength(59);
@@ -1715,6 +1726,7 @@ test('saved reader highlights can be navigated to and removed from the personal 
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   await page.evaluate(() => {
     const text = document.querySelector('.farast-reader-document p').firstChild;
     const start = text.nodeValue.indexOf('عبارت برجسته');
@@ -1745,6 +1757,7 @@ test('PDF reader notes preserve their internal page and jump to the selected pas
   const secondPage = root.locator('.farast-pdf-cont-page[data-pdf-cont-page="2"]');
   await expect(secondPage).toHaveAttribute('data-rendered', '1');
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   const textSpan = secondPage.locator('.farast-pdf-cont-text span').first();
   await textSpan.evaluate(span => {
     const textNode = span.firstChild;
@@ -1780,6 +1793,7 @@ test('saved reader notes navigate back to their exact anchored text', async ({ p
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   await page.evaluate(() => { window.prompt = () => 'یادداشت برای عبارت دوم'; });
   await page.evaluate(() => {
     const text = document.querySelector('.farast-reader-document p').firstChild;
@@ -1808,6 +1822,7 @@ test('reader notes preserve the exact selected occurrence offset', async ({ page
     </section>
   `);
   await page.addScriptTag({ path: require.resolve('../../public/js/farast-reader-personal-tools.js') });
+  await openPersonalTools(page);
   await page.evaluate(() => { window.prompt = () => 'یادداشت آزمایشی'; });
   const phrase = 'عبارت';
   await page.evaluate(phrase => {
