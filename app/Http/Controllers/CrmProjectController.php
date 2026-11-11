@@ -86,7 +86,7 @@ class CrmProjectController extends Controller
     public function assignHumanTask(Request $request, int $project, int $task, AdminConsoleService $console)
     {
         $record = FarastProject::query()->findOrFail($project);
-        $console->authorizeAction($request->user(), 'users', (int) $record->user_id);
+        $console->authorizeAction($request->user(), 'users', (int) $record->user_id, 'users.edit');
 
         $data = $request->validate([
             'specialist_id' => 'present|nullable|integer|exists:users,id',
@@ -104,7 +104,7 @@ class CrmProjectController extends Controller
                 ->where('is_blocked', false)
                 ->firstOrFail();
 
-            $console->authorizeAction($request->user(), 'users', (int) $specialist->id);
+            $console->authorizeAction($request->user(), 'users', (int) $specialist->id, 'users.edit');
         }
 
         DB::transaction(function () use ($record, $task, $data, $request): void {

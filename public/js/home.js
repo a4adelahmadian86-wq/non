@@ -2,7 +2,6 @@
 const root=document.querySelector('.farast-home');
 if(!root)return;
 const authenticated=root.dataset.authenticated==='1';
-const projectsStoreUrl=root.dataset.projectsStoreUrl||'/projects';
 const grid=root.querySelector('#intentGrid'),step=root.querySelector('#discoveryStep'),content=root.querySelector('#stepContent'),back=root.querySelector('#discoveryBack'),status=root.querySelector('#discoveryStatus');
 const token=document.querySelector('meta[name="csrf-token"]')?.content||'';
 const answers={}; let activeIntent=null;
@@ -18,7 +17,7 @@ const api=async(url,body={})=>{const response=await fetch(url,{method:'POST',hea
 const showStep=html=>{grid.hidden=true;step.hidden=false;content.innerHTML=html;setStatus('');content.querySelector('button,input')?.focus()};
 const showGrid=()=>{step.hidden=true;grid.hidden=false;setStatus('');grid.querySelector('[data-intent="'+(activeIntent||'')+'"]')?.focus()};
 const goLogin=path=>{location.href='/login?continue='+encodeURIComponent(path)};
-const createProject=async(projectType='typing',workflow='manual',extra={})=>api(projectsStoreUrl,{project_type:projectType,template:extra.template||'simple_typing',workflow,source_type:extra.source_type||null,language:extra.language||'fa',estimated_pages:1,name:extra.name||labels[projectType]||'پروژه جدید'});
+const createProject=async(projectType='typing',workflow='manual',extra={})=>api('{{ route('projects.store') }}',{project_type:projectType,template:extra.template||'simple_typing',workflow,source_type:extra.source_type||null,language:extra.language||'fa',estimated_pages:1,name:extra.name||labels[projectType]||'پروژه جدید'});
 const openProject=async(projectType,workflow,extra={})=>{setStatus('در حال ساخت پروژه و آماده‌سازی محیط کار…');try{const result=await createProject(projectType,workflow,extra);location.href=result.next_url}catch(error){if(error.status===401){goLogin('/projects/new');return}setStatus(error.message)}};
 const renderFileType=()=>{showStep('<span class="step-kicker">از فایل شروع می‌کنید</span><h3>نوع محتوای فایل چیست؟</h3><p>فقط برای انتخاب OCR مناسب می‌پرسیم.</p><div class="choice-grid"><button class="choice-card" data-source="printed" type="button"><i class="fa-solid fa-file-lines"></i><strong>متن چاپی</strong><small>PDF یا اسکن چاپی</small></button><button class="choice-card" data-source="handwritten" type="button"><i class="fa-solid fa-pen-nib"></i><strong>دست‌نوشته</strong><small>متن دست‌نویس فارسی یا لاتین</small></button><button class="choice-card" data-source="mixed" type="button"><i class="fa-solid fa-layer-group"></i><strong>ترکیبی</strong><small>چاپی و دست‌نویس با هم</small></button></div>');content.querySelectorAll('[data-source]').forEach(b=>b.onclick=()=>{answers.source_type=b.dataset.source;renderUpload()})};
 const renderUpload=()=>{showStep('<span class="step-kicker">یک قدم تا پروژه</span><h3>فایل را انتخاب کنید</h3><p>پس از بارگذاری، برآورد لازم را انجام می‌دهیم و سپس وارد Word Processor می‌شوید.</p><label class="upload-drop" for="intentFile"><i class="fa-solid fa-cloud-arrow-up"></i><strong>انتخاب فایل</strong><small>PDF، تصویر یا اسکن</small><input id="intentFile" type="file" accept="image/*,.pdf,.zip" hidden></label>');content.querySelector('#intentFile').onchange=(e)=>{if(e.target.files?.[0])sendFile(e.target.files[0])}};

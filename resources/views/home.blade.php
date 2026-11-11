@@ -59,7 +59,7 @@
 @endpush
 
 @section('content')
-<div class="farast-home" dir="rtl" data-projects-store-url="{{ route('projects.store') }}" data-authenticated="{{ $isAuthenticated ? '1' : '0' }}">
+<div class="farast-home" dir="rtl" data-authenticated="{{ $isAuthenticated ? '1' : '0' }}">
     <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero-copy">
             <span class="home-kicker"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> فضای یکپارچه فراست</span>
