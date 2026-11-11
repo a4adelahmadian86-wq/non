@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
 use App\Models\StorageVolume;
+use App\Models\StorageVolumeReservation;
 use App\Jobs\RunStorageBackupJob;
 use App\Services\StorageConnectionService;
 use App\Services\Storage\StorageManager;
@@ -24,7 +25,7 @@ class AdminStorageController extends Controller
 
     public function index()
     {
-        $volumes = StorageVolume::withCount('files')->withSum('files', 'size_bytes')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
+        $volumes = StorageVolume::withCount('files')->withSum('files', 'size_bytes')->withSum('reservations', 'reserved_bytes')->orderBy('drive_key')->orderBy('priority')->get()->groupBy('drive_key');
         $inventory = StorageManagedFile::query()->where('status', '!=', 'deleted')
             ->selectRaw('drive_key, COUNT(*) as file_count, COALESCE(SUM(size_bytes), 0) as bytes_used, SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as pending_count', ['pending_transfer', 'transfer_error'])
             ->groupBy('drive_key')->get()->keyBy('drive_key');
@@ -36,6 +37,7 @@ class AdminStorageController extends Controller
                 'kind' => $definition['kind'], 'volumes' => $items,
                 'capacity' => $items->isNotEmpty() && $items->every(fn ($v) => $v->capacity_bytes !== null) ? $items->sum('capacity_bytes') : null,
                 'used' => (int) $items->sum('used_bytes'),
+                'reserved' => (int) $items->sum('reservations_sum_reserved_bytes'),
                 'files' => (int) $items->sum('object_count') + (int) ($files->pending_count ?? 0),
                 'pending' => (int) ($files->pending_count ?? 0),
                 'healthy' => $items->where('status', 'healthy')->count(),
@@ -185,27 +187,34 @@ class AdminStorageController extends Controller
 
     public function destroy(StorageVolume $volume)
     {
-        $hasManagedFiles = $volume->files()->whereNotIn('status', ['deleted'])->exists();
-        $hasOrphanedObjects = StorageManagedFile::query()
-            ->where('metadata->orphaned_source->volume_id', $volume->id)
-            ->exists();
-        $hasProviderObjects = (int) $volume->object_count > 0;
-        $inventoryIsFresh = $volume->status === 'healthy'
-            && $volume->last_checked_at
-            && $volume->last_checked_at->gte(now()->subMinutes(30));
+        DB::transaction(function () use ($volume): void {
+            $lockedVolume = StorageVolume::query()->lockForUpdate()->findOrFail($volume->id);
+            $hasManagedFiles = $lockedVolume->files()->whereNotIn('status', ['deleted'])->exists();
+            $hasOrphanedObjects = StorageManagedFile::query()
+                ->where('metadata->orphaned_source->volume_id', $lockedVolume->id)
+                ->exists();
+            $hasReservations = StorageVolumeReservation::query()
+                ->where('storage_volume_id', $lockedVolume->id)
+                ->exists();
+            $hasProviderObjects = (int) $lockedVolume->object_count > 0;
+            $inventoryIsFresh = $lockedVolume->status === 'healthy'
+                && $lockedVolume->last_checked_at
+                && $lockedVolume->last_checked_at->gte(now()->subMinutes(30));
 
-        abort_if(
-            $hasManagedFiles || $hasOrphanedObjects || $hasProviderObjects || ! $inventoryIsFresh,
-            409,
-            'برای حذف امن، ابتدا اتصال را بررسی کنید و مطمئن شوید موجودی سرویس‌دهنده در ۳۰ دقیقه اخیر صفر بوده و هیچ فایل یا نسخه پشتیبانی باقی نمانده است.'
-        );
+            abort_if(
+                $hasManagedFiles || $hasOrphanedObjects || $hasReservations || $hasProviderObjects || ! $inventoryIsFresh,
+                409,
+                'برای حذف امن، ابتدا اتصال را بررسی کنید و مطمئن شوید موجودی سرویس‌دهنده در ۳۰ دقیقه اخیر صفر بوده و هیچ فایل، رزرو ظرفیت یا نسخه پشتیبانی باقی نمانده است.'
+            );
 
-        // The public files() relation intentionally hides deleted records. Detach
-        // those historical rows through the unfiltered relation before deleting
-        // the volume because the database foreign key is RESTRICT.
-        $volume->allFiles()->where('status', 'deleted')->update(['storage_volume_id' => null]);
-        StorageBackupRun::query()->where('storage_volume_id', $volume->id)->update(['storage_volume_id' => null]);
-        $volume->delete();
+            // The public files() relation intentionally hides deleted records. Detach
+            // those historical rows through the unfiltered relation before deleting
+            // the volume because the database foreign key is RESTRICT.
+            $lockedVolume->allFiles()->where('status', 'deleted')->update(['storage_volume_id' => null]);
+            StorageBackupRun::query()->where('storage_volume_id', $lockedVolume->id)->update(['storage_volume_id' => null]);
+            $lockedVolume->delete();
+        });
+
         return redirect()->route('admin.storage.index')->with('status', 'اتصال حذف شد.');
     }
 }

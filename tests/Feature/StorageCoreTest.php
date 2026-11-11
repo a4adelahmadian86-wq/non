@@ -5,14 +5,19 @@ namespace Tests\Feature;
 use App\Models\StorageManagedFile;
 use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
+use App\Models\StorageVolumeReservation;
 use App\Models\User;
 use App\Services\Storage\StorageManager;
+use App\Services\Storage\S3CompatibleAdapter;
 use App\Services\Storage\StorageTransferService;
 use App\Services\StorageConnectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class StorageCoreTest extends TestCase
@@ -84,6 +89,203 @@ class StorageCoreTest extends TestCase
             'status' => 'pending_transfer',
             'storage_volume_id' => null,
         ]);
+    }
+
+    public function test_capacity_reservations_prevent_uploads_from_overcommitting_a_volume(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Reserved capacity volume', 'driver' => 'local',
+            'capacity_bytes' => 10, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $reservation = $storage->reserveVolumeCapacity($volume, 7, 'test-upload', [
+            'object_key' => 'reservations/first.bin',
+        ]);
+        $this->assertNotNull($reservation);
+        $this->assertSame(3, $volume->fresh()->free_bytes);
+        $this->assertNull($storage->reserveVolumeCapacity($volume, 4, 'concurrent-upload', [
+            'object_key' => 'reservations/second.bin',
+        ]));
+
+        $stagedContents = '1234';
+        $staged = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('capacity-blocked.txt', $stagedContents),
+            StorageManager::CRITICAL,
+            'capacity-test'
+        );
+        $this->assertNull($staged['volume_id']);
+        $this->assertSame('pending_transfer', $staged['status']);
+
+        $storage->releaseVolumeCapacityReservation($reservation);
+        $stored = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('capacity-available.txt', $stagedContents),
+            StorageManager::CRITICAL,
+            'capacity-test'
+        );
+
+        $this->assertSame($volume->id, $stored['volume_id']);
+        $volume->refresh();
+        $this->assertSame(strlen($stagedContents), $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+        $this->assertSame(6, $volume->free_bytes);
+        $this->assertDatabaseCount('storage_volume_reservations', 0);
+    }
+
+    public function test_backup_upload_reserves_capacity_until_checksum_verified_run_is_committed(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'foreign_backup',
+            'name' => 'Backup reservation volume',
+            'driver' => 'local',
+            'capacity_bytes' => 1048576,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+        $run = StorageBackupRun::create([
+            'storage_volume_id' => $volume->id,
+            'backup_type' => 'weekly',
+            'source_name' => 'application',
+            'status' => 'running',
+            'started_at' => now(),
+            'size_bytes' => 0,
+            'checksum' => hash('sha256', 'backup-payload'),
+        ]);
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-backup-reservation-test-');
+        $this->assertIsString($temporary);
+        $payload = 'backup-payload';
+        file_put_contents($temporary, $payload);
+
+        try {
+            $storage = app(StorageManager::class);
+            $key = 'weekly/test/farast-reservation.zip';
+            $reservation = $storage->uploadBackup($volume, $key, $temporary, (int) $run->id);
+
+            $this->assertTrue($storage->exists($storage->volumeDisk($volume), $key));
+            $this->assertDatabaseHas('storage_volume_reservations', [
+                'reservation_key' => $reservation,
+                'storage_volume_id' => $volume->id,
+                'reserved_bytes' => strlen($payload),
+                'purpose' => 'backup',
+                'status' => 'active',
+            ]);
+            $this->assertSame(0, $volume->fresh()->used_bytes);
+            $this->assertSame(0, $volume->fresh()->object_count);
+            $reserved = StorageVolumeReservation::query()->where('reservation_key', $reservation)->firstOrFail();
+            $this->assertTrue($reserved->expires_at->greaterThan(now()->addHours(5)));
+
+            $storage->commitVolumeCapacityReservation($reservation);
+            $run->update(['status' => 'completed', 'object_key' => $key, 'completed_at' => now()]);
+            $volume->refresh();
+            $this->assertSame(strlen($payload), $volume->used_bytes);
+            $this->assertSame(1, $volume->object_count);
+            $this->assertDatabaseCount('storage_volume_reservations', 0);
+        } finally {
+            @unlink($temporary);
+        }
+    }
+
+    public function test_expired_capacity_reservation_removes_partial_object_before_releasing_capacity(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Expired reservation volume', 'driver' => 'local',
+            'capacity_bytes' => 1024, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $backupRun = StorageBackupRun::create([
+            'storage_volume_id' => $volume->id,
+            'backup_type' => 'weekly',
+            'source_name' => 'application',
+            'status' => 'running',
+            'started_at' => now(),
+            'size_bytes' => 16,
+            'checksum' => hash('sha256', 'partial-upload'),
+        ]);
+        $key = 'reservations/abandoned-upload.bin';
+        $reservation = $storage->reserveVolumeCapacity($volume, 16, 'backup', [
+            'object_key' => $key,
+            'backup_run_id' => $backupRun->id,
+        ]);
+        $this->assertNotNull($reservation);
+
+        $absolute = storage_path('app/storage-volumes/'.$volume->id.'/'.$key);
+        File::ensureDirectoryExists(dirname($absolute));
+        file_put_contents($absolute, 'partial-upload');
+        StorageVolumeReservation::query()
+            ->where('reservation_key', $reservation)
+            ->update(['expires_at' => now()->subMinute()]);
+
+        $this->assertSame(1, $storage->cleanupExpiredVolumeReservations());
+        $this->assertFileDoesNotExist($absolute);
+        $this->assertDatabaseCount('storage_volume_reservations', 0);
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'id' => $backupRun->id,
+            'status' => 'failed',
+            'object_key' => $key,
+        ]);
+    }
+
+    public function test_generated_contents_use_the_central_managed_storage_pipeline(): void
+    {
+        StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Generated content volume', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $contents = '%PDF-1.4 generated preview payload';
+        $storage = app(StorageManager::class);
+        $stored = $storage->storeContents(
+            $contents,
+            'generated-preview.pdf',
+            'application/pdf',
+            StorageManager::CRITICAL,
+            'store-product-preview'
+        );
+
+        $this->assertSame($contents, $storage->get($stored['disk'], $stored['path']));
+        $this->assertSame(strlen($contents), $stored['size_bytes']);
+        $this->assertSame(hash('sha256', $contents), $stored['sha256']);
+        $this->assertDatabaseHas('storage_managed_files', [
+            'id' => $stored['managed_file_id'],
+            'status' => 'active',
+            'checksum' => hash('sha256', $contents),
+        ]);
+    }
+
+    public function test_size_reads_local_volume_and_private_staging_objects(): void
+    {
+        StorageVolume::create([
+            'drive_key' => 'iran_primary', 'name' => 'Local size volume', 'driver' => 'local',
+            'capacity_bytes' => 10485760, 'used_bytes' => 0, 'object_count' => 0,
+            'status' => 'healthy', 'is_active' => true, 'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $localContents = 'measured-local-content';
+        $local = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('local-size.txt', $localContents),
+            StorageManager::CRITICAL,
+            'size-test'
+        );
+
+        $this->assertSame(strlen($localContents), $storage->size($local['disk'], $local['path']));
+
+        $stagedContents = 'measured-staging-content';
+        $staged = $storage->storeUploadedFile(
+            UploadedFile::fake()->createWithContent('staged-size.txt', $stagedContents),
+            StorageManager::NON_CRITICAL,
+            'size-test'
+        );
+
+        $this->assertNull($staged['volume_id']);
+        $this->assertSame(strlen($stagedContents), $storage->size($staged['disk'], $staged['path']));
     }
 
     public function test_managed_deletes_are_deferred_until_backup_snapshot_finishes(): void
@@ -369,6 +571,104 @@ class StorageCoreTest extends TestCase
     }
 
 
+    public function test_volume_cannot_be_deleted_while_capacity_is_reserved(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'is_blocked' => false,
+        ]);
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Reserved volume',
+            'driver' => 'local',
+            'capacity_bytes' => 1024,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'last_checked_at' => now(),
+            'priority' => 1,
+        ]);
+
+        $storage = app(StorageManager::class);
+        $reservation = $storage->reserveVolumeCapacity($volume, 12, 'delete-guard-test', [
+            'object_key' => 'reservations/protected.bin',
+        ]);
+        $this->assertNotNull($reservation);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.storage.destroy', $volume))
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('storage_volumes', ['id' => $volume->id]);
+        $storage->releaseVolumeCapacityReservation($reservation);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.storage.destroy', $volume))
+            ->assertRedirect(route('admin.storage.index'));
+
+        $this->assertDatabaseMissing('storage_volumes', ['id' => $volume->id]);
+    }
+
+    public function test_transfer_failures_use_exponential_backoff_instead_of_hot_looping(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'foreign_primary',
+            'name' => 'Temporarily unavailable transfer target',
+            'driver' => 's3',
+            'endpoint' => 'https://storage.example.invalid',
+            'bucket' => 'farast',
+            'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+            'capacity_bytes' => 10485760,
+            'used_bytes' => 0,
+            'object_count' => 0,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+
+        $key = 'transfer-tests/retry-backoff.txt';
+        $contents = 'retry-with-backoff';
+        Storage::disk('private')->put($key, $contents);
+        $file = StorageManagedFile::create([
+            'storage_volume_id' => null,
+            'drive_key' => 'foreign_primary',
+            'file_key' => $key,
+            'file_key_hash' => hash('sha256', $key),
+            'original_name' => 'retry-backoff.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => strlen($contents),
+            'checksum' => hash('sha256', $contents),
+            'classification' => 'non_critical',
+            'source_module' => 'transfer-test',
+            'visibility' => 'private',
+            'status' => 'pending_transfer',
+            'metadata' => [
+                'disk' => 'private',
+                'staging_disk' => 'private',
+                'target_drive' => 'foreign_primary',
+                'reference_pending' => false,
+            ],
+        ]);
+
+        $adapter = Mockery::mock(S3CompatibleAdapter::class);
+        $adapter->shouldReceive('putFile')->once()->andThrow(new RuntimeException('provider temporarily unavailable'));
+        $adapter->shouldReceive('delete')->once();
+        app()->instance(S3CompatibleAdapter::class, $adapter);
+        app()->forgetInstance(StorageManager::class);
+        app()->forgetInstance(StorageTransferService::class);
+
+        $transfer = app(StorageTransferService::class);
+        $this->assertSame(0, $transfer->transferPending());
+        $file->refresh();
+
+        $this->assertSame('transfer_error', $file->status);
+        $this->assertGreaterThan(0, (int) data_get($file->metadata, 'transfer_attempts'));
+        $this->assertTrue(Carbon::parse(data_get($file->metadata, 'next_transfer_at'))->isFuture());
+        $this->assertSame(0, $transfer->transferPending());
+        $this->assertDatabaseCount('storage_volume_reservations', 0);
+    }
+
     public function test_local_inventory_ignores_and_reclaims_abandoned_write_artifacts(): void
     {
         $volume = StorageVolume::create([
@@ -389,6 +689,73 @@ class StorageCoreTest extends TestCase
         $this->assertSame(4, $volume->used_bytes);
         $this->assertSame(1, $volume->object_count);
         $this->assertFileDoesNotExist($abandoned);
+    }
+
+    public function test_failed_provider_delete_keeps_a_retryable_record_and_releases_inventory_only_after_success(): void
+    {
+        $volume = StorageVolume::create([
+            'drive_key' => 'iran_primary',
+            'name' => 'Recoverable delete volume',
+            'driver' => 's3',
+            'endpoint' => 'https://storage.example.invalid',
+            'bucket' => 'farast',
+            'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+            'capacity_bytes' => 10485760,
+            'used_bytes' => 12,
+            'object_count' => 1,
+            'status' => 'healthy',
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+
+        $file = StorageManagedFile::create([
+            'storage_volume_id' => $volume->id,
+            'drive_key' => 'iran_primary',
+            'file_key' => 'recoverable/delete-me.txt',
+            'file_key_hash' => hash('sha256', 'recoverable/delete-me.txt'),
+            'original_name' => 'delete-me.txt',
+            'mime' => 'text/plain',
+            'size_bytes' => 12,
+            'checksum' => hash('sha256', 'delete-me'),
+            'classification' => 'critical',
+            'source_module' => 'storage-test',
+            'visibility' => 'private',
+            'status' => 'active',
+            'metadata' => ['disk' => 'storage_volume:'.$volume->id],
+        ]);
+
+        $failedAdapter = \Mockery::mock(\App\Services\Storage\S3CompatibleAdapter::class);
+        $failedAdapter->shouldReceive('delete')->once()->andThrow(new \RuntimeException('provider temporarily unavailable'));
+        app()->instance(\App\Services\Storage\S3CompatibleAdapter::class, $failedAdapter);
+        app()->forgetInstance(StorageManager::class);
+
+        try {
+            app(StorageManager::class)->delete('storage_volume:'.$volume->id, $file->file_key);
+            $this->fail('The provider failure should be surfaced to the caller.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('provider temporarily unavailable', $exception->getMessage());
+        }
+
+        $file->refresh();
+        $volume->refresh();
+        $this->assertSame('delete_pending', $file->status);
+        $this->assertNotNull(data_get($file->metadata, 'delete_requested_at'));
+        $this->assertSame(12, $volume->used_bytes);
+        $this->assertSame(1, $volume->object_count);
+
+        $retryAdapter = \Mockery::mock(\App\Services\Storage\S3CompatibleAdapter::class);
+        $retryAdapter->shouldReceive('delete')->once();
+        app()->instance(\App\Services\Storage\S3CompatibleAdapter::class, $retryAdapter);
+        app()->forgetInstance(StorageManager::class);
+
+        $this->assertSame(1, app(StorageManager::class)->cleanupDeferredDeletes());
+        $file->refresh();
+        $volume->refresh();
+
+        $this->assertSame('deleted', $file->status);
+        $this->assertNull(data_get($file->metadata, 'delete_requested_at'));
+        $this->assertSame(0, $volume->used_bytes);
+        $this->assertSame(0, $volume->object_count);
     }
 
 }
