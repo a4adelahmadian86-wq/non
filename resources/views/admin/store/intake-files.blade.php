@@ -35,6 +35,18 @@
             <div>{{ number_format($file->size_bytes) }} بایت · {{ $file->mime }}</div>
             <div>وضعیت: {{ $file->status === 'uploaded' ? 'منتقل‌شده به ذخیره‌سازی' : ($file->status === 'inspected' ? 'بازرسی‌شده؛ منتظر تأیید شما' : $file->status) }}</div>
             <div>ناظر هوشمند: {{ $file->supervisor_status }}</div>
+            @if($file->supervisor_status === 'manual_review_required')
+              <p>بررسی خودکار کامل نشده است؛ انتشار این فایل بدون تصمیم دستی مدیر مجاز نیست.</p>
+            @endif
+            @if($canManageIntakeReview && $file->supervisor_status === 'manual_review_required')
+              <form method="post" action="{{ route('admin.store.intake.files.manual-review', [$session, $file]) }}" style="display:grid;gap:8px">
+                @csrf
+                <label>یادداشت بررسی دستی مدیر (حداقل ۲۰ نویسه)
+                  <textarea name="manager_notes" minlength="20" maxlength="2000" required placeholder="فایل را بررسی کنید و دلیل تأیید دستی را ثبت کنید"></textarea>
+                </label>
+                <button type="submit" class="store-primary-btn">ثبت تأیید دستی فایل</button>
+              </form>
+            @endif
             @if($file->status === 'inspected')
               <button type="button" class="store-primary-btn" data-intake-confirm-existing="{{ $file->id }}">تأیید گزارش و انتقال به ذخیره‌سازی</button>
             @endif
