@@ -56,6 +56,16 @@ class AdminStorageController extends Controller
         abort_unless(config('storage_management.backup.encryption_key'), 422, 'کلید رمزنگاری بکاپ تنظیم نشده است.');
         abort_unless(StorageVolume::query()->where('drive_key', 'foreign_backup')->where('is_active', true)->where('status', 'healthy')->exists(), 422, 'ابتدا حداقل یک هاست سالم در درایو بکاپ خارجی متصل کنید.');
 
+        \Illuminate\Support\Facades\Artisan::call('storage:recover-stale-backup-runs');
+        abort_if(
+            StorageBackupRun::query()
+                ->whereIn('source_name', ['scheduler_request', 'manual_request'])
+                ->whereIn('status', ['queued', 'running'])
+                ->exists(),
+            409,
+            'یک درخواست بکاپ در صف یا در حال اجراست؛ پس از پایان آن دوباره تلاش کنید.'
+        );
+
         $run = StorageBackupRun::create([
             'backup_type' => 'manual',
             'source_name' => 'manual_request',

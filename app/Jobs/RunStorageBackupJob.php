@@ -25,6 +25,11 @@ class RunStorageBackupJob implements ShouldQueue
     public function handle(StorageBackupService $backup): void
     {
         $request = StorageBackupRun::findOrFail($this->requestRunId);
+        if ($request->status !== 'queued') {
+            return;
+        }
+        $request->update(['status' => 'running', 'started_at' => now(), 'error_message' => null]);
+
         try {
             $results = $backup->runWeekly();
             $completed = collect($results)->where('status', 'completed')->count();
@@ -33,7 +38,9 @@ class RunStorageBackupJob implements ShouldQueue
                 'status' => $completed > 0 && $failed === 0 ? 'completed' : 'failed',
                 'completed_at' => now(),
                 'metadata' => ['request_only' => true, 'destinations' => $results],
-                'error_message' => $completed > 0 ? null : 'هیچ مقصدی بکاپ را با موفقیت تکمیل نکرد.',
+                'error_message' => $failed > 0
+                    ? "تکمیل بکاپ در {$failed} مقصد ناموفق بود."
+                    : ($completed === 0 ? 'هیچ مقصدی بکاپ را با موفقیت تکمیل نکرد.' : null),
             ]);
         } catch (\Throwable $exception) {
             $request->update(['status' => 'failed', 'completed_at' => now(), 'error_message' => mb_substr($exception->getMessage(), 0, 1000)]);
