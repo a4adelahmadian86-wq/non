@@ -422,7 +422,7 @@ class WorkflowConditionsAndCooldownTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        ProcessWorkflowEvent::dispatch($eventId)->onConnection('database')->onQueue('automation');
+        ProcessWorkflowEvent::dispatch($eventId)->onConnection('database')->onQueue('automation')->beforeCommit();
         $this->assertDatabaseHas('jobs', ['queue' => 'automation']);
 
         Artisan::call('queue:work', [
