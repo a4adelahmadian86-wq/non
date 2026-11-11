@@ -43,6 +43,7 @@ class S3CompatibleAdapter
         try {
             $partNumber = 1;
             while (! feof($stream)) {
+                if ($partNumber > 10000) throw new RuntimeException('تعداد بخش‌های آپلود از سقف S3 بیشتر شد.');
                 $part = fread($stream, $partSize);
                 if (! is_string($part) || $part === '') break;
                 $partStream = fopen('php://temp', 'w+b');
@@ -57,7 +58,6 @@ class S3CompatibleAdapter
                 if ($etag === '') throw new RuntimeException('ETag بخش آپلودشده دریافت نشد.');
                 $parts[] = ['number' => $partNumber, 'etag' => $etag];
                 $partNumber++;
-                if ($partNumber > 10000) throw new RuntimeException('تعداد بخش‌های آپلود از سقف S3 بیشتر شد.');
             }
             if ($parts === []) throw new RuntimeException('فایل بکاپ خالی است.');
             $completion = '<CompleteMultipartUpload>'.implode('', array_map(
