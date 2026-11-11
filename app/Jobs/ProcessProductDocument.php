@@ -193,7 +193,10 @@ class ProcessProductDocument implements ShouldQueue
         $sampleHash = null;
         $samplePageNumbers = [];
         $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
-        if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
+        $existingSampleBefore = $document->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+        $existingSampleAvailable = $existingSampleBefore
+            && $storage->exists($existingSampleBefore->disk ?: 'private', $existingSampleBefore->path);
+        if ($file->is_primary && ! $existingSampleAvailable && is_string($sampleBase64) && $sampleBase64 !== '') {
             $sampleBytes = base64_decode($sampleBase64, true);
             if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
                 $sampleHash = hash('sha256', $sampleBytes);
