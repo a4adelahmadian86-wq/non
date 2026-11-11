@@ -19,7 +19,7 @@ use RuntimeException;
 
 class StorageTransferService
 {
-    public function __construct(private readonly S3CompatibleAdapter $s3) {}
+    public function __construct(private readonly S3CompatibleAdapter $s3, private readonly StorageManager $storage) {}
 
     public function syncSourceReference(StorageManagedFile $file, string $disk): void
     {
@@ -154,6 +154,7 @@ class StorageTransferService
             return 0;
         }
 
+        $this->storage->cleanupExpiredVolumeReservations(max(1, $limit));
         $this->cleanupOrphanedSources(max(1, $limit));
 
         // Recover abandoned claims. A transfer request has a bounded HTTP timeout,
@@ -176,7 +177,8 @@ class StorageTransferService
 
             $claimed = collect();
             foreach ($candidates as $file) {
-                if (data_get($file->metadata, 'reference_pending', false)) {
+                if (data_get($file->metadata, 'reference_pending', false)
+                    || data_get($file->metadata, 'capacity_reservation_key')) {
                     continue;
                 }
 
@@ -193,34 +195,68 @@ class StorageTransferService
         $moved = 0;
         foreach ($files as $file) {
             $targetDrive = (string) data_get($file->metadata, 'target_drive', $file->drive_key);
-            $target = StorageVolume::query()
+            $target = null;
+            $reservationKey = null;
+            $targets = StorageVolume::query()
                 ->where('drive_key', $targetDrive)
                 ->where('is_active', true)
                 ->where('status', 'healthy')
-                ->where(fn ($q) => $q->whereNull('capacity_bytes')->orWhereRaw('(capacity_bytes - used_bytes) >= ?', [(int) $file->size_bytes]))
                 ->where(fn ($q) => $q->whereNull('max_file_bytes')->orWhere('max_file_bytes', '>=', (int) $file->size_bytes))
-                ->where(fn ($q) => $q->whereNull('file_limit')->orWhereRaw('object_count < file_limit'))
                 ->orderBy('priority')
-                ->first();
+                ->get();
 
-            if (! $target) {
+            foreach ($targets as $candidate) {
+                $candidateReservation = $this->storage->reserveVolumeCapacity(
+                    $candidate,
+                    (int) $file->size_bytes,
+                    'transfer',
+                    [
+                        'object_key' => $file->file_key,
+                        'managed_file_id' => (int) $file->id,
+                    ]
+                );
+                if ($candidateReservation !== null) {
+                    $target = $candidate;
+                    $reservationKey = $candidateReservation;
+                    break;
+                }
+            }
+
+            if (! $target || $reservationKey === null) {
                 $file->update(['status' => 'pending_transfer']);
                 continue;
             }
 
+            $file = DB::transaction(function () use ($file, $reservationKey): StorageManagedFile {
+                $locked = StorageManagedFile::query()->lockForUpdate()->findOrFail($file->id);
+                if ($locked->status !== 'transferring' || $locked->storage_volume_id !== null) {
+                    throw new RuntimeException('وضعیت فایل پیش از رزرو مقصد تغییر کرده است.');
+                }
+                $metadata = (array) $locked->metadata;
+                $metadata['capacity_reservation_key'] = $reservationKey;
+                $locked->update(['metadata' => $metadata]);
+                return $locked->fresh();
+            });
+
             $sourceDisk = (string) data_get($file->metadata, 'staging_disk', 'private');
             $source = Storage::disk($sourceDisk);
             if (! $source->exists($file->file_key)) {
+                $this->storage->releaseVolumeCapacityReservation($reservationKey);
+                $metadata = (array) $file->metadata;
+                unset($metadata['capacity_reservation_key']);
                 $file->update([
                     'status' => 'transfer_error',
-                    'metadata' => array_merge((array) $file->metadata, ['transfer_error' => 'staging_file_missing']),
+                    'metadata' => array_merge($metadata, ['transfer_error' => 'staging_file_missing']),
                 ]);
                 continue;
             }
 
             $temp = tempnam(sys_get_temp_dir(), 'farast-transfer');
             if (! is_string($temp)) {
-                $file->update(['status' => 'transfer_error']);
+                $this->storage->releaseVolumeCapacityReservation($reservationKey);
+                $metadata = (array) $file->metadata;
+                unset($metadata['capacity_reservation_key']);
+                $file->update(['status' => 'transfer_error', 'metadata' => $metadata]);
                 continue;
             }
 
@@ -290,23 +326,24 @@ class StorageTransferService
                 }
 
                 $newDisk = 'storage_volume:'.$target->id;
-                DB::transaction(function () use ($file, $target, $newDisk): void {
+                DB::transaction(function () use ($file, $target, $newDisk, $reservationKey): void {
                     $lockedFile = StorageManagedFile::query()->lockForUpdate()->findOrFail($file->id);
                     if ($lockedFile->status !== 'transferring' || $lockedFile->storage_volume_id !== null) {
                         throw new RuntimeException('وضعیت فایل هنگام ثبت انتقال تغییر کرده است.');
                     }
+                    $metadata = (array) $lockedFile->metadata;
+                    unset($metadata['capacity_reservation_key']);
                     $lockedFile->update([
                         'storage_volume_id' => $target->id,
                         'status' => 'active',
-                        'metadata' => array_merge((array) $lockedFile->metadata, [
+                        'metadata' => array_merge($metadata, [
                             'disk' => $newDisk,
                             'transferred_at' => now()->toIso8601String(),
                             'transfer_error' => null,
                         ]),
                     ]);
                     $this->syncSourceReference($lockedFile->fresh(), $newDisk);
-                    $target->increment('used_bytes', (int) $lockedFile->size_bytes);
-                    $target->increment('object_count');
+                    $this->storage->commitVolumeCapacityReservation($reservationKey);
                 });
 
                 try {
@@ -324,6 +361,7 @@ class StorageTransferService
                 $this->cleanupOrphanedSource($file->fresh());
                 $moved++;
             } catch (\Throwable $exception) {
+                $cleaned = ! $writeAttempted && ! $uploaded;
                 if ($uploaded || $writeAttempted) {
                     try {
                         if ($target->driver === 's3') {
@@ -334,10 +372,20 @@ class StorageTransferService
                                 throw new RuntimeException('پاک‌سازی فایل ناقص مقصد ناموفق بود.');
                             }
                         }
+                        $cleaned = true;
                     } catch (\Throwable $cleanupException) {
                         report($cleanupException);
                     }
                 }
+
+                $metadata = (array) $file->fresh()->metadata;
+                if ($cleaned) {
+                    $this->storage->releaseVolumeCapacityReservation($reservationKey);
+                    unset($metadata['capacity_reservation_key']);
+                } else {
+                    $metadata['capacity_reservation_key'] = $reservationKey;
+                }
+
                 $target->update([
                     'status' => 'error',
                     'last_checked_at' => now(),
@@ -345,7 +393,7 @@ class StorageTransferService
                 ]);
                 $file->update([
                     'status' => 'transfer_error',
-                    'metadata' => array_merge((array) $file->fresh()->metadata, [
+                    'metadata' => array_merge($metadata, [
                         'transfer_error' => mb_substr($exception->getMessage(), 0, 400),
                     ]),
                 ]);
