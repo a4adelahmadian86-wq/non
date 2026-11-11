@@ -35,3 +35,19 @@
 | `CommunicationSearchService` | `app/Services/CommunicationSearchService.php` | — | `Conversation`, `ConversationMessage`, `FarastNotification`, `Ticket`, `TicketMessage`, `User` | — | — | `search()` | 0 | 0 |
 | `CostEventService` | `app/Services/CostEventService.php` | — | `FarastCostEvent` | — | — | `record()` | 0 | 0 |
 | `CrmAudienceService` | `app/Services/CrmAudienceService.php` | — | `User` | — | — | `query()` | 0 | 0 |
+
+| `DashboardNavigationService` | `app/Services/DashboardNavigationService.php` | `MessengerAccessService`, `CapabilityService`, `AuthorizationService` | `Ticket`, `User` | `tickets` | — | `__construct()`, `forUser()` | 0 | 0 |
+| `DeclineMessageService` | `app/Services/DeclineMessageService.php` | — | — | — | — | `next()` | 0 | 0 |
+| `DurabilityService` | `app/Services/DurabilityService.php` | — | — | `farast_backup_manifests`, `farast_restore_verifications` | farast_remote | `backup()`, `verifyRestore()` | 6 | 2 |
+| `EditorAiAssistService` | `app/Services/EditorAiAssistService.php` | `AiOrchestrator`, `EntitlementService`, `CommerceAuthorizationService` | `FarastProject`, `User` | — | — | `__construct()`, `assist()` | 0 | 0 |
+| `EditorDocumentService` | `app/Services/EditorDocumentService.php` | `DatabaseManager` | `FarastDocument`, `TypingDocument` | — | — | `__construct()`, `save()`, `saveCanonicalModel()`, `loadForLegacy()`, `normalizePageSettings()`, `defaultPageSettings()`, `sanitizeHtml()`, `normalizeHtml()` | 0 | 0 |
+| `EditorKernelToolHandler` | `app/Services/EditorKernelToolHandler.php` | `EditorDocumentService` | `FarastDocument`, `User` | — | — | `__construct()`, `handle()` | 0 | 0 |
+| `EmailService` | `app/Services/EmailService.php` | `MailConfigService` | `Announcement`, `EmailLog`, `Order`, `SiteSetting`, `Ticket`, `User` | — | — | `__construct()`, `isEnabled()`, `sendOtp()`, `sendWelcome()`, `sendOrderPaid()`, `sendTicketReply()`, `sendTicketReplyGuest()`, `sendTicketCreated()`, `sendTicketCreatedStaff()`, `sendTicketCustomerReply()`, `sendTicketClosed()`, `sendTicketAssigned()`, `sendTicketSlaAlert()`, `sendSystemAnnouncement()`, `sendPasswordChanged()`, `sendTest()` | 0 | 0 |
+| `EntitlementService` | `app/Services/EntitlementService.php` | `CapabilityService` | `FarastEntitlement`, `FarastProject`, `User` | — | — | `__construct()`, `authorize()`, `allows()`, `consume()`, `grant()` | 1 | 0 |
+| `EvaluationService` | `app/Services/EvaluationService.php` | `AuditEventService` | — | `farast_evaluation_datasets`, `farast_evaluation_cases`, `farast_tool_versions` | — | `createDataset()`, `addCase()`, `recordResult()`, `regression()`, `promote()` | 10 | 0 |
+| `FarastToolHandlerRegistry` | `app/Services/FarastToolHandlerRegistry.php` | `EditorKernelToolHandler`, `AiEditorToolHandler`, `OcrToolHandler`, `SpeechToolHandler` | — | — | — | `handler()` | 0 | 0 |
+| `FeedbackPipelineService` | `app/Services/FeedbackPipelineService.php` | — | `AiFeedback`, `FarastFeedbackEvidence` | `farast_tools`, `farast_tool_versions`, `farast_review_cases`, `farast_approved_knowledge`, `farast_evaluation_datasets`, `farast_evaluation_cases` | — | `record()`, `queueReview()`, `approve()`, `reject()`, `createEvaluationCase()`, `validateToolVersion()`, `promoteToolVersion()`, `productionKnowledge()` | 16 | 0 |
+| `FreeQuotaService` | `app/Services/FreeQuotaService.php` | — | `FreeCredit`, `User` | — | — | `availablePages()`, `consume()` | 1 | 0 |
+| `GeminiService` | `app/Services/GeminiService.php` | — | `AiInteraction`, `SiteSetting` | — | — | `transcribe()` | 0 | 0 |
+| `GoogleSpeechToTextService` | `app/Services/GoogleSpeechToTextService.php` | — | `AiInteraction` | — | — | `enabled()`, `transcribe()` | 0 | 0 |
+| `HumanTaskService` | `app/Services/HumanTaskService.php` | `AuditEventService` | `User` | `farast_human_tasks` | — | `request()`, `assign()`, `submitOutput()`, `qa()`, `accept()` | 5 | 0 |
