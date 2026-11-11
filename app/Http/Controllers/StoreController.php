@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateProductDocumentAudio;
 use App\Models\ContentDiscussion;
 use App\Models\StoreCategory;
 use App\Models\StoreCourseLesson;
@@ -496,7 +497,7 @@ class StoreController extends Controller
         }, $status, $headers);
     }
 
-    public function reader(string $slug)
+    public function reader(string $slug, StorageManager $storage)
     {
         $product = StoreProduct::with([
             'previews' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
@@ -540,13 +541,22 @@ class StoreController extends Controller
                         ->where('artifact_type', 'audio_full_wav')
                         ->where('version', '>=', 2)
                         ->sortByDesc('version')
-                        ->first(static fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
-                            && Storage::disk($artifact->disk ?: 'private')->exists($artifact->path));
+                        ->first(fn ($artifact) => hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', ''))
+                            && $storage->exists($artifact->disk ?: 'private', $artifact->path));
                     $audioArtifactReady = (bool) $audioArtifact;
 
-                    // Reading a PDF must never trigger a remote speech-provider call.
-                    // Existing audio artifacts remain playable from this application's own storage.
-                    $readerAudioStatus = $audioArtifactReady ? 'ready' : 'unavailable';
+                    $audioNeedsUpgrade = ! $audioArtifactReady || (int) $audioArtifact->version < 3;
+                    $documentAudioConfigured = filled(config('services.document_audio.url'))
+                        && filled(config('services.document_audio.token'));
+                    if ($audioNeedsUpgrade && $documentAudioConfigured) {
+                        GenerateProductDocumentAudio::dispatch((int) $document->id)->afterResponse();
+                        $readerAudioPollUrl = route('store.reader.audio', [$product, $document]).'?version=3';
+                        $readerAudioStatus = $audioArtifactReady ? 'upgrading' : 'pending';
+                    } elseif (! $audioArtifactReady) {
+                        $readerAudioStatus = 'unavailable';
+                    } else {
+                        $readerAudioStatus = 'ready';
+                    }
 
                     if ($audioArtifactReady) {
                         $readerAudioUrl = route('store.reader.audio', [$product, $document]).'?version='.(int) $audioArtifact->version;
@@ -650,16 +660,11 @@ class StoreController extends Controller
         $readerIdentity = $user
             ? (trim((string) $user->mobile) !== '' ? trim((string) $user->mobile) : 'حساب #'.$user->id)
             : (string) request()->ip();
-        $readerPdfEngineReady = is_file(public_path('vendor/pdfjs/legacy/build/pdf.mjs'))
-            && is_file(public_path('vendor/pdfjs/legacy/build/pdf.worker.mjs'))
-            && is_file(public_path('vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap'))
-            && is_file(public_path('vendor/pdfjs/standard_fonts/FoxitSans.pfb'));
 
         return response()
             ->view('store.reader', compact(
                 'product',
                 'previews',
-                'readerPdfEngineReady',
                 'readerIdentity',
                 'readerMode',
                 'readerDocument',
@@ -675,7 +680,7 @@ class StoreController extends Controller
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('X-Frame-Options', 'SAMEORIGIN')
             ->header('Referrer-Policy', 'no-referrer')
-            ->header('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:")
+            ->header('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:")
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
@@ -771,7 +776,7 @@ class StoreController extends Controller
             ->header('Cross-Origin-Resource-Policy', 'same-origin');
     }
 
-    public function readerAudio(StoreProduct $product, StoreProductDocument $document)
+    public function readerAudio(StoreProduct $product, StoreProductDocument $document, StorageManager $storage)
     {
         $user = request()->user();
         abort_unless(
@@ -809,12 +814,13 @@ class StoreController extends Controller
             $artifactQuery->where('version', '>=', 2)->orderByDesc('version');
         }
         $artifact = $artifactQuery->get()
-            ->first(static fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
-                && Storage::disk($candidate->disk ?: 'private')->exists($candidate->path));
+            ->first(fn ($candidate) => hash_equals((string) $document->source_sha256, (string) data_get($candidate->metadata_json, 'source_sha256', ''))
+                && $storage->exists($candidate->disk ?: 'private', $candidate->path));
         abort_unless($artifact, 404);
         abort_unless(hash_equals((string) $document->source_sha256, (string) data_get($artifact->metadata_json, 'source_sha256', '')), 409);
-        $disk = Storage::disk($artifact->disk ?: 'private');
-        $size = (int) $disk->size($artifact->path);
+        $artifactDisk = $artifact->disk ?: 'private';
+        $size = $storage->size($artifactDisk, $artifact->path);
+        abort_unless($size > 0, 404);
         $start = 0;
         $end = max(0, $size - 1);
         $status = 200;
@@ -856,20 +862,32 @@ class StoreController extends Controller
             return response('', $status, $headers);
         }
 
-        $stream = $disk->readStream($artifact->path);
-        abort_unless(is_resource($stream), 404);
+        $temporary = tempnam(sys_get_temp_dir(), 'farast-reader-audio');
+        if (! is_string($temporary)) abort(503, 'فضای موقت برای پخش فایل صوتی در دسترس نیست.');
+        try {
+            $storage->downloadTo($artifactDisk, $artifact->path, $temporary);
+            $stream = fopen($temporary, 'rb');
+            if (! is_resource($stream)) throw new \RuntimeException('جریان فایل صوتی برای پخش باز نشد.');
+        } catch (\Throwable $exception) {
+            @unlink($temporary);
+            throw $exception;
+        }
 
-        return response()->stream(function () use ($stream, $start, $length) {
-            if ($start > 0) fseek($stream, $start);
-            $remaining = $length;
-            while ($remaining > 0 && ! feof($stream)) {
-                $chunk = fread($stream, min(8192, $remaining));
-                if (! is_string($chunk) || $chunk === '') break;
-                echo $chunk;
-                $remaining -= strlen($chunk);
-                flush();
+        return response()->stream(function () use ($stream, $temporary, $start, $length) {
+            try {
+                if ($start > 0) fseek($stream, $start);
+                $remaining = $length;
+                while ($remaining > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(8192, $remaining));
+                    if (! is_string($chunk) || $chunk === '') break;
+                    echo $chunk;
+                    $remaining -= strlen($chunk);
+                    flush();
+                }
+            } finally {
+                fclose($stream);
+                @unlink($temporary);
             }
-            fclose($stream);
         }, $status, $headers);
     }
 

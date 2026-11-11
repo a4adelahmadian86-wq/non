@@ -5,6 +5,7 @@ namespace App\Services\Storage;
 use App\Models\StorageManagedFile;
 use App\Models\StorageBackupRun;
 use App\Models\StorageVolume;
+use App\Models\StorageVolumeReservation;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -37,23 +38,52 @@ class StorageManager
         // never spill into a foreign region, and a non-critical file cannot
         // consume the Iranian primary pool.
         foreach ($volumes as $volume) {
+            $reservationKey = $this->reserveVolumeCapacity($volume, (int) $file->getSize(), 'upload', [
+                'object_key' => $key,
+            ]);
+            if ($reservationKey === null) {
+                continue;
+            }
+
             try {
                 $this->writeToVolume($volume, $key, $file->getRealPath());
                 $this->verifyWrittenObject($volume, $key, $checksum);
-                try {
-                    return $this->register($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, 'active');
-                } catch (\Throwable $exception) {
-                    if ($volume->driver === 's3') $this->s3->delete($volume, $key);
-                    else @unlink($this->localVolumePath($volume, $key));
-                    throw $exception;
-                }
+
+                return $this->register(
+                    $volume,
+                    $key,
+                    $file,
+                    $checksum,
+                    $classification,
+                    $sourceModule,
+                    $sourceType,
+                    $sourceId,
+                    $productId,
+                    $visibility,
+                    'active',
+                    [],
+                    $reservationKey
+                );
             } catch (\Throwable $exception) {
+                $cleaned = false;
                 try {
-                    if ($volume->driver === 's3') $this->s3->delete($volume, $key);
-                    elseif ($volume->driver === 'local') @unlink($this->localVolumePath($volume, $key));
+                    if ($volume->driver === 's3') {
+                        $this->s3->delete($volume, $key);
+                    } elseif ($volume->driver === 'local') {
+                        $localPath = $this->localVolumePath($volume, $key);
+                        if (is_file($localPath) && ! @unlink($localPath)) {
+                            throw new RuntimeException('پاک‌سازی فایل ناقص مقصد ناموفق بود.');
+                        }
+                    }
+                    $cleaned = true;
                 } catch (\Throwable $cleanupException) {
                     report($cleanupException);
                 }
+
+                if ($cleaned) {
+                    $this->releaseVolumeCapacityReservation($reservationKey);
+                }
+
                 $volume->forceFill([
                     'status' => 'error',
                     'last_checked_at' => now(),
@@ -72,6 +102,55 @@ class StorageManager
             'staging_disk' => 'private',
             'target_drive' => $drive,
         ]);
+    }
+
+    public function storeContents(
+        string $contents,
+        string $originalName,
+        string $mime,
+        string $classification,
+        string $sourceModule,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        ?int $productId = null,
+        string $visibility = 'private'
+    ): array {
+        $originalName = basename(str_replace('\\', '/', trim($originalName)));
+        if ($originalName === '' || $originalName === '.' || $originalName === '..') {
+            throw new RuntimeException('نام فایل برای ذخیره‌سازی معتبر نیست.');
+        }
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'farast-storage-content-');
+        if (! is_string($temporaryPath)) {
+            throw new RuntimeException('ساخت فایل موقت برای ذخیره محتوا ناموفق بود.');
+        }
+
+        try {
+            $written = file_put_contents($temporaryPath, $contents, LOCK_EX);
+            if (! is_int($written) || $written !== strlen($contents)) {
+                throw new RuntimeException('نوشتن کامل محتوای فایل موقت ناموفق بود.');
+            }
+
+            $upload = new UploadedFile(
+                $temporaryPath,
+                $originalName,
+                $mime !== '' ? $mime : 'application/octet-stream',
+                UPLOAD_ERR_OK,
+                true
+            );
+
+            return $this->storeUploadedFile(
+                $upload,
+                $classification,
+                $sourceModule,
+                $sourceType,
+                $sourceId,
+                $productId,
+                $visibility
+            );
+        } finally {
+            @unlink($temporaryPath);
+        }
     }
 
     public function adoptExistingPrivate(
@@ -93,11 +172,20 @@ class StorageManager
         return $stored;
     }
 
-    public function bindReference(int $managedFileId, string $sourceType, int $sourceId, ?int $productId = null): void
-    {
+    public function bindReference(
+        int $managedFileId,
+        string $sourceType,
+        int $sourceId,
+        ?int $productId = null,
+        string $sourceField = 'path'
+    ): void {
+        if (! in_array($sourceField, ['path', 'audio_path'], true)) {
+            throw new RuntimeException('فیلد مرجع فایل در ماژول مبدأ پشتیبانی نمی‌شود.');
+        }
         $file = StorageManagedFile::findOrFail($managedFileId);
         $metadata = (array) $file->metadata;
         $metadata['reference_pending'] = false;
+        $metadata['source_field'] = $sourceField;
         $file->update([
             'source_type' => $sourceType,
             'source_id' => $sourceId,
@@ -150,11 +238,25 @@ class StorageManager
             ->where('started_at', '>=', now()->subHours(8))
             ->exists();
 
-        if ($managed && $snapshotInProgress) {
-            $metadata = (array) $managed->metadata;
-            $metadata['delete_after_snapshot'] = true;
-            $managed->update(['status' => 'delete_pending', 'metadata' => $metadata]);
-            return;
+        if ($managed) {
+            // Persist the deletion intent before touching the external volume.
+            // If the provider or the following DB commit fails, scheduled cleanup
+            // can retry this idempotent operation without losing the managed record.
+            $managed = DB::transaction(function () use ($managed, $snapshotInProgress): ?StorageManagedFile {
+                $locked = StorageManagedFile::query()->lockForUpdate()->find($managed->id);
+                if (! $locked || $locked->status === 'deleted') return null;
+
+                $metadata = (array) $locked->metadata;
+                $metadata['delete_requested_at'] ??= now()->toIso8601String();
+                if ($snapshotInProgress) {
+                    $metadata['delete_after_snapshot'] = true;
+                }
+                $locked->update(['status' => 'delete_pending', 'metadata' => $metadata]);
+
+                return $locked->fresh();
+            });
+
+            if (! $managed || $snapshotInProgress) return;
         }
 
         if ($volumeId) {
@@ -179,20 +281,25 @@ class StorageManager
         if ($managed) {
             DB::transaction(function () use ($managed, $volumeId): void {
                 $locked = StorageManagedFile::query()->lockForUpdate()->find($managed->id);
-                if (! $locked || $locked->status === 'deleted') return;
+                if (! $locked || $locked->status === 'deleted' || $locked->status !== 'delete_pending') return;
+
                 if ($volumeId) {
                     DB::table('storage_volumes')->where('id', $volumeId)->update([
                         'used_bytes' => DB::raw('CASE WHEN used_bytes >= '.(int) $locked->size_bytes.' THEN used_bytes - '.(int) $locked->size_bytes.' ELSE 0 END'),
                         'object_count' => DB::raw('CASE WHEN object_count > 0 THEN object_count - 1 ELSE 0 END'),
                     ]);
                 }
-                $locked->update(['status' => 'deleted']);
+
+                $metadata = (array) $locked->metadata;
+                unset($metadata['delete_after_snapshot'], $metadata['delete_requested_at']);
+                $locked->update(['status' => 'deleted', 'metadata' => $metadata]);
             });
         }
     }
 
     public function cleanupDeferredDeletes(int $limit = 100): int
     {
+        $this->cleanupExpiredVolumeReservations(max(1, $limit));
         if (StorageBackupRun::query()->where('source_name', 'snapshot_lock')->where('status', 'running')->where('started_at', '>=', now()->subHours(8))->exists()) return 0;
         $files = StorageManagedFile::query()->where('status', 'delete_pending')->orderBy('id')->limit(max(1, $limit))->get();
         foreach ($files as $file) {
@@ -200,6 +307,42 @@ class StorageManager
             $this->delete($disk, $file->file_key);
         }
         return $files->count();
+    }
+
+    public function size(string $disk, string $path): int
+    {
+        if (str_starts_with($disk, 'storage_volume:')) {
+            $path = StoragePath::normalizeObjectKey($path);
+            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
+
+            if ($volume->driver === 'local') {
+                $localPath = $this->localVolumePath($volume, $path);
+                if (! is_file($localPath)) {
+                    throw new RuntimeException('فایل در فضای ذخیره‌سازی موجود نیست.');
+                }
+
+                $size = filesize($localPath);
+                if (! is_int($size)) {
+                    throw new RuntimeException('اندازه فایل از فضای ذخیره‌سازی محلی قابل خواندن نیست.');
+                }
+
+                return $size;
+            }
+
+            return $this->s3->size($volume, $path);
+        }
+
+        $sourceDisk = Storage::disk($disk ?: 'private');
+        if (! $sourceDisk->exists($path)) {
+            throw new RuntimeException('فایل در فضای ذخیره‌سازی موجود نیست.');
+        }
+
+        $size = $sourceDisk->size($path);
+        if (! is_int($size) || $size < 0) {
+            throw new RuntimeException('اندازه فایل از فضای ذخیره‌سازی قابل خواندن نیست.');
+        }
+
+        return $size;
     }
 
     public function downloadTo(string $disk, string $path, string $target): void
@@ -225,21 +368,6 @@ class StorageManager
             fclose($stream);
             fclose($output);
         }
-    }
-
-    public function size(string $disk, string $path): int
-    {
-        if (str_starts_with($disk, 'storage_volume:')) {
-            $path = StoragePath::normalizeObjectKey($path);
-            $volume = StorageVolume::findOrFail((int) substr($disk, 15));
-            if ($volume->driver === 'local') {
-                $size = @filesize($this->localVolumePath($volume, $path));
-                if (! is_int($size) || $size < 0) throw new RuntimeException('اندازه فایل در فضای محلی دریافت نشد.');
-                return $size;
-            }
-            return $this->s3->size($volume, $path);
-        }
-        return (int) Storage::disk($disk ?: 'private')->size($path);
     }
 
     public function streamRange(string $disk, string $path, int $start, int $length, $output): void
@@ -289,9 +417,252 @@ class StorageManager
         }
     }
 
-    public function uploadBackup(StorageVolume $volume, string $key, string $localPath): void
+    public function uploadBackup(StorageVolume $volume, string $key, string $localPath, int $backupRunId): string
     {
-        $this->writeToVolume($volume, StoragePath::normalizeObjectKey($key), $localPath);
+        if (! is_file($localPath)) {
+            throw new RuntimeException('فایل محلی بکاپ برای انتقال موجود نیست.');
+        }
+
+        $size = filesize($localPath);
+        $checksum = hash_file('sha256', $localPath);
+        if (! is_int($size) || ! is_string($checksum)) {
+            throw new RuntimeException('اندازه یا Checksum فایل بکاپ قابل محاسبه نیست.');
+        }
+
+        $key = StoragePath::normalizeObjectKey($key);
+        $reservationKey = $this->reserveVolumeCapacity($volume, $size, 'backup', [
+            'object_key' => $key,
+            'backup_run_id' => $backupRunId,
+        ], 360);
+        if ($reservationKey === null) {
+            throw new StorageCapacityException('ظرفیت یا محدودیت تعداد فایل برای مقصد بکاپ کافی نیست.');
+        }
+
+        try {
+            $this->writeToVolume($volume, $key, $localPath);
+            $this->verifyWrittenObject($volume, $key, $checksum);
+
+            return $reservationKey;
+        } catch (\Throwable $exception) {
+            $cleaned = false;
+            try {
+                if ($volume->driver === 's3') {
+                    $this->s3->delete($volume, $key);
+                } elseif ($volume->driver === 'local') {
+                    $target = $this->localVolumePath($volume, $key);
+                    if (is_file($target) && ! @unlink($target)) {
+                        throw new RuntimeException('پاک‌سازی فایل بکاپ ناقص ناموفق بود.');
+                    }
+                }
+                $cleaned = true;
+            } catch (\Throwable $cleanupException) {
+                report($cleanupException);
+            }
+
+            if ($cleaned) {
+                $this->releaseVolumeCapacityReservation($reservationKey);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function reserveVolumeCapacity(StorageVolume $volume, int $bytes, string $purpose, array $metadata = [], int $leaseMinutes = 120): ?string
+    {
+        if ($bytes < 0) {
+            throw new RuntimeException('اندازه رزرو فضای ذخیره‌سازی معتبر نیست.');
+        }
+
+        return DB::transaction(function () use ($volume, $bytes, $purpose, $metadata, $leaseMinutes): ?string {
+            $locked = StorageVolume::query()->lockForUpdate()->find($volume->id);
+            if (! $locked || ! $locked->is_active || $locked->status !== 'healthy') {
+                return null;
+            }
+
+            if ($locked->max_file_bytes !== null && $bytes > (int) $locked->max_file_bytes) {
+                return null;
+            }
+
+            $reservedBytes = (int) StorageVolumeReservation::query()
+                ->where('storage_volume_id', $locked->id)
+                ->sum('reserved_bytes');
+            $reservedObjects = (int) StorageVolumeReservation::query()
+                ->where('storage_volume_id', $locked->id)
+                ->sum('reserved_objects');
+
+            if ($locked->capacity_bytes !== null
+                && ((int) $locked->used_bytes + $reservedBytes + $bytes) > (int) $locked->capacity_bytes) {
+                return null;
+            }
+
+            if ($locked->file_limit !== null
+                && ((int) $locked->object_count + $reservedObjects + 1) > (int) $locked->file_limit) {
+                return null;
+            }
+
+            $key = (string) Str::uuid();
+            StorageVolumeReservation::create([
+                'storage_volume_id' => $locked->id,
+                'reservation_key' => $key,
+                'reserved_bytes' => $bytes,
+                'reserved_objects' => 1,
+                'purpose' => mb_substr($purpose, 0, 40),
+                'metadata' => array_merge($metadata, [
+                    'driver' => $locked->driver,
+                    'disk' => $this->volumeDisk($locked),
+                ]),
+                'expires_at' => now()->addMinutes(max(5, min(1440, $leaseMinutes))),
+            ]);
+
+            return $key;
+        });
+    }
+
+    public function commitVolumeCapacityReservation(string $reservationKey): void
+    {
+        DB::transaction(function () use ($reservationKey): void {
+            $reservation = StorageVolumeReservation::query()
+                ->where('reservation_key', $reservationKey)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ($reservation->status !== 'active') {
+                throw new RuntimeException('رزرو ظرفیت در حال پاک‌سازی است و قابل نهایی‌سازی نیست.');
+            }
+            $volume = StorageVolume::query()->lockForUpdate()->findOrFail($reservation->storage_volume_id);
+            $volume->increment('used_bytes', (int) $reservation->reserved_bytes);
+            $volume->increment('object_count', (int) $reservation->reserved_objects);
+            $reservation->delete();
+        });
+    }
+
+    public function releaseVolumeCapacityReservation(string $reservationKey): void
+    {
+        StorageVolumeReservation::query()
+            ->where('reservation_key', $reservationKey)
+            ->where('status', 'active')
+            ->delete();
+    }
+
+    public function releaseBackupCapacityReservation(int $backupRunId): void
+    {
+        StorageVolumeReservation::query()
+            ->where('purpose', 'backup')
+            ->where('metadata->backup_run_id', $backupRunId)
+            ->where('status', 'active')
+            ->delete();
+    }
+
+    public function cleanupExpiredVolumeReservations(int $limit = 100): int
+    {
+        // A process may die after claiming a reservation but before finishing provider cleanup.
+        // Recover claims only after a lease longer than the provider request timeout.
+        StorageVolumeReservation::query()
+            ->where('status', 'cleaning')
+            ->where('updated_at', '<', now()->subMinutes(15))
+            ->update(['status' => 'active', 'expires_at' => now()]);
+
+        $reservations = StorageVolumeReservation::query()
+            ->where('status', 'active')
+            ->where('expires_at', '<=', now())
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->get();
+
+        $cleaned = 0;
+        foreach ($reservations as $reservation) {
+            $claimed = DB::transaction(function () use ($reservation): ?StorageVolumeReservation {
+                $locked = StorageVolumeReservation::query()
+                    ->whereKey($reservation->id)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $locked || $locked->status !== 'active' || $locked->expires_at->isFuture()) {
+                    return null;
+                }
+
+                $locked->update(['status' => 'cleaning']);
+
+                return $locked->fresh();
+            });
+
+            if (! $claimed) {
+                continue;
+            }
+
+            try {
+                $volume = StorageVolume::find($claimed->storage_volume_id);
+                $key = (string) data_get($claimed->metadata, 'object_key', '');
+                if ($volume && $key !== '') {
+                    $key = StoragePath::normalizeObjectKey($key);
+                    if ($volume->driver === 'local') {
+                        $localPath = $this->localVolumePath($volume, $key);
+                        if (is_file($localPath) && ! @unlink($localPath)) {
+                            throw new RuntimeException('پاک‌سازی فایل رزروشده منقضی‌شده ناموفق بود.');
+                        }
+                    } elseif ($volume->driver === 's3') {
+                        $this->s3->delete($volume, $key);
+                    }
+                }
+
+                DB::transaction(function () use ($claimed): void {
+                    $lockedReservation = StorageVolumeReservation::query()
+                        ->whereKey($claimed->id)
+                        ->lockForUpdate()
+                        ->first();
+                    if (! $lockedReservation || $lockedReservation->status !== 'cleaning') {
+                        return;
+                    }
+
+                    $managedFileId = (int) data_get($lockedReservation->metadata, 'managed_file_id', 0);
+                    $backupRunId = (int) data_get($lockedReservation->metadata, 'backup_run_id', 0);
+                    $reservationKey = (string) $lockedReservation->reservation_key;
+                    $lockedReservation->delete();
+
+                    if ($backupRunId > 0) {
+                        $backupRun = StorageBackupRun::query()->lockForUpdate()->find($backupRunId);
+                        if ($backupRun && $backupRun->status === 'running') {
+                            $backupRun->update([
+                                'status' => 'failed',
+                                'object_key' => data_get($lockedReservation->metadata, 'object_key'),
+                                'completed_at' => now(),
+                                'error_message' => 'رزرو ظرفیت بکاپ منقضی شد و فایل ناقص پاک‌سازی شد.',
+                            ]);
+                        }
+                    }
+
+                    if ($managedFileId > 0) {
+                        $managed = StorageManagedFile::query()->lockForUpdate()->find($managedFileId);
+                        if ($managed) {
+                            $metadata = (array) $managed->metadata;
+                            if (hash_equals((string) data_get($metadata, 'capacity_reservation_key', ''), $reservationKey)) {
+                                unset($metadata['capacity_reservation_key']);
+                                $changes = ['metadata' => $metadata];
+                                if ($managed->status === 'transferring') {
+                                    $changes['status'] = 'transfer_error';
+                                }
+                                $managed->update($changes);
+                            }
+                        }
+                    }
+                });
+                $cleaned++;
+            } catch (\Throwable $exception) {
+                DB::transaction(function () use ($claimed): void {
+                    $locked = StorageVolumeReservation::query()
+                        ->whereKey($claimed->id)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($locked && $locked->status === 'cleaning') {
+                        $locked->update([
+                            'status' => 'active',
+                            'expires_at' => now()->addMinutes(15),
+                        ]);
+                    }
+                });
+                report($exception);
+            }
+        }
+
+        return $cleaned;
     }
 
     public function volumeDisk(StorageVolume $volume): string
@@ -368,9 +739,10 @@ class StorageManager
         ?int $productId,
         string $visibility,
         string $status,
-        array $metadata = []
+        array $metadata = [],
+        ?string $reservationKey = null
     ): array {
-        return DB::transaction(function () use ($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, $status, $metadata): array {
+        return DB::transaction(function () use ($volume, $key, $file, $checksum, $classification, $sourceModule, $sourceType, $sourceId, $productId, $visibility, $status, $metadata, $reservationKey): array {
             $disk = $volume ? $this->volumeDisk($volume) : 'private';
             $record = StorageManagedFile::create([
                 'storage_volume_id' => $volume?->id,
@@ -392,8 +764,24 @@ class StorageManager
             ]);
 
             if ($volume) {
-                $volume->increment('used_bytes', (int) $file->getSize());
-                $volume->increment('object_count');
+                if ($reservationKey !== null) {
+                    $reservation = StorageVolumeReservation::query()
+                        ->where('reservation_key', $reservationKey)
+                        ->where('storage_volume_id', $volume->id)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+                    if ((int) $reservation->reserved_bytes !== (int) $file->getSize()) {
+                        throw new RuntimeException('رزرو ظرفیت با اندازه فایل مطابقت ندارد.');
+                    }
+
+                    $lockedVolume = StorageVolume::query()->lockForUpdate()->findOrFail($volume->id);
+                    $lockedVolume->increment('used_bytes', (int) $reservation->reserved_bytes);
+                    $lockedVolume->increment('object_count', (int) $reservation->reserved_objects);
+                    $reservation->delete();
+                } else {
+                    $volume->increment('used_bytes', (int) $file->getSize());
+                    $volume->increment('object_count');
+                }
             }
 
             return [

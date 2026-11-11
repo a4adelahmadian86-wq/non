@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\StorageBackupRun;
 use App\Models\StorageManagedFile;
+use App\Models\StorageVolume;
+use App\Models\StorageVolumeReservation;
 use App\Services\Storage\StorageManager;
 use App\Services\Storage\StorageTransferService;
 use Illuminate\Console\Command;
@@ -96,6 +98,42 @@ class RestoreStorageBackup extends Command
             DB::purge();
             DB::reconnect();
 
+            // The database snapshot was taken before this backup object was uploaded.
+            // Restore the run's final state and account for this archive exactly once.
+            DB::transaction(function () use ($run): void {
+                $restoredRun = StorageBackupRun::query()->lockForUpdate()->find($run->id);
+                if (! $restoredRun) {
+                    throw new RuntimeException('سابقه نسخه پشتیبان در دیتابیس بازیابی‌شده موجود نیست.');
+                }
+
+                if ($restoredRun->status === 'running') {
+                    $volume = StorageVolume::query()->lockForUpdate()->find($run->storage_volume_id);
+                    if (! $volume) {
+                        throw new RuntimeException('Volume نسخه پشتیبان در دیتابیس بازیابی‌شده موجود نیست.');
+                    }
+
+                    $volume->increment('used_bytes', (int) $run->size_bytes);
+                    $volume->increment('object_count');
+                    $restoredRun->update([
+                        'status' => 'completed',
+                        'object_key' => $run->object_key,
+                        'checksum' => $run->checksum,
+                        'size_bytes' => (int) $run->size_bytes,
+                        'completed_at' => $run->completed_at ?? now(),
+                    ]);
+                }
+            });
+
+            $reservationCount = StorageVolumeReservation::query()->count();
+            StorageVolumeReservation::query()->update([
+                'status' => 'active',
+                'expires_at' => now(),
+            ]);
+            $storage->cleanupExpiredVolumeReservations(max(100, $reservationCount));
+            if (StorageVolumeReservation::query()->exists()) {
+                throw new RuntimeException('بازیابی کامل نشد؛ برخی رزروهای قدیمی فضای ذخیره‌سازی هنوز پاک‌سازی نشده‌اند.');
+            }
+
             $restored = $this->stageRemoteObjects($extracted, $transfers);
             $this->stagePendingObjects($extracted);
 
@@ -123,9 +161,41 @@ class RestoreStorageBackup extends Command
 
         if ($driver === 'sqlite') {
             $database = (string) ($config['database'] ?? '');
-            if ($database === '' || $database === ':memory:' || ! copy($dumpPath, $database)) {
-                throw new RuntimeException('بازگردانی فایل پایگاه داده SQLite ناموفق بود.');
+            if ($database === '' || $database === ':memory:') {
+                throw new RuntimeException('مسیر پایگاه داده SQLite برای بازیابی معتبر نیست.');
             }
+
+            File::ensureDirectoryExists(dirname($database));
+            $temporary = $database.'.restore-'.bin2hex(random_bytes(8));
+            $previous = $database.'.pre-restore-'.bin2hex(random_bytes(8));
+            if (! copy($dumpPath, $temporary)) {
+                throw new RuntimeException('ساخت فایل موقت پایگاه داده SQLite ناموفق بود.');
+            }
+
+            // Remove stale WAL sidecars before replacing the database snapshot.
+            @unlink($database.'-wal');
+            @unlink($database.'-shm');
+
+            $hadPrevious = is_file($database);
+            if ($hadPrevious && ! @rename($database, $previous)) {
+                @unlink($temporary);
+                throw new RuntimeException('جابجایی امن پایگاه داده فعلی SQLite ناموفق بود.');
+            }
+
+            if (! @rename($temporary, $database)) {
+                if ($hadPrevious) {
+                    @rename($previous, $database);
+                }
+                @unlink($temporary);
+                throw new RuntimeException('جایگزینی اتمیک پایگاه داده SQLite ناموفق بود.');
+            }
+
+            if ($hadPrevious) {
+                @unlink($previous);
+            }
+            @unlink($database.'-wal');
+            @unlink($database.'-shm');
+
             return;
         }
 
@@ -198,13 +268,63 @@ class RestoreStorageBackup extends Command
     private function restoreDirectory(string $source, string $destination): void
     {
         if (! is_dir($source)) return;
-        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS));
-        foreach ($iterator as $item) {
-            if (! $item->isFile()) continue;
-            $relative = ltrim(substr($item->getPathname(), strlen($source)), DIRECTORY_SEPARATOR);
-            $target = $destination.DIRECTORY_SEPARATOR.$relative;
-            File::ensureDirectoryExists(dirname($target));
-            if (! copy($item->getPathname(), $target)) throw new RuntimeException('کپی فایل محلی بازیابی ناموفق بود: '.$relative);
+
+        $parent = dirname($destination);
+        File::ensureDirectoryExists($parent);
+        $temporary = $parent.DIRECTORY_SEPARATOR.basename($destination).'.restore-'.bin2hex(random_bytes(8));
+        $previous = $parent.DIRECTORY_SEPARATOR.basename($destination).'.pre-restore-'.bin2hex(random_bytes(8));
+        if (! mkdir($temporary, 0700, true) && ! is_dir($temporary)) {
+            throw new RuntimeException('ساخت پوشه موقت بازیابی فایل‌ها ناموفق بود.');
+        }
+
+        $previousMoved = false;
+        try {
+            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS));
+            foreach ($iterator as $item) {
+                if ($item->isLink()) {
+                    throw new RuntimeException('پیوند نمادین در محتوای استخراج‌شده بکاپ مجاز نیست.');
+                }
+                if (! $item->isFile()) continue;
+
+                $relative = ltrim(substr($item->getPathname(), strlen($source)), DIRECTORY_SEPARATOR);
+                $target = $temporary.DIRECTORY_SEPARATOR.$relative;
+                File::ensureDirectoryExists(dirname($target));
+                if (! copy($item->getPathname(), $target)) {
+                    throw new RuntimeException('کپی فایل محلی بازیابی ناموفق بود: '.$relative);
+                }
+            }
+
+            $destinationExists = is_dir($destination) || is_file($destination) || is_link($destination);
+            if ($destinationExists) {
+                if (! @rename($destination, $previous)) {
+                    throw new RuntimeException('جابجایی پوشه فعلی برای بازیابی امن ناموفق بود.');
+                }
+                $previousMoved = true;
+            }
+
+            if (! @rename($temporary, $destination)) {
+                if ($previousMoved) {
+                    @rename($previous, $destination);
+                    $previousMoved = false;
+                }
+                throw new RuntimeException('جایگزینی اتمیک پوشه بازیابی ناموفق بود.');
+            }
+
+            if ($previousMoved) {
+                if (is_dir($previous) && ! is_link($previous)) {
+                    $this->removeDirectory($previous);
+                } else {
+                    @unlink($previous);
+                }
+            }
+        } catch (\Throwable $exception) {
+            if (is_dir($temporary)) {
+                $this->removeDirectory($temporary);
+            }
+            if ($previousMoved && ! file_exists($destination) && ! is_link($destination)) {
+                @rename($previous, $destination);
+            }
+            throw $exception;
         }
     }
 

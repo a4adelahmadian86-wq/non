@@ -3,7 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\StoreProductDocument;
+use App\Models\StoreProductDocumentArtifact;
 use App\Models\StoreProductPreview;
+use App\Models\StoreProductFile;
 use App\Jobs\GenerateProductDocumentAudio;
 use App\Services\ProductSupervisorClient;
 use App\Services\Storage\StorageManager;
@@ -97,33 +99,49 @@ class ProcessProductDocument implements ShouldQueue
                 }
                 $readerPdfArtifact = $document->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
                 $readerPdfPath = $readerPdfArtifact?->path;
-                $pdfDisk = Storage::disk($readerPdfArtifact?->disk ?: 'private');
-                $pdfBytes = $readerPdfArtifact && $readerPdfPath && $pdfDisk->exists($readerPdfPath)
-                    ? $pdfDisk->get($readerPdfPath)
+                $readerPdfDisk = $readerPdfArtifact?->disk ?: 'private';
+                $readerPdfExists = $readerPdfArtifact && $readerPdfPath && $storage->exists($readerPdfDisk, $readerPdfPath);
+                $pdfBytes = $readerPdfExists
+                    ? $storage->get($readerPdfDisk, $readerPdfPath)
                     : app(\App\Http\Controllers\StoreController::class)->prepareDocxPreview($docxBytes);
                 if (! is_string($pdfBytes) || ! str_starts_with($pdfBytes, '%PDF-') || strlen($pdfBytes) > 25 * 1024 * 1024) {
                     throw new \RuntimeException('product_docx_conversion_invalid');
                 }
-                if (! $readerPdfArtifact || ! $readerPdfPath || ! $pdfDisk->exists($readerPdfPath)) {
-                    $readerPdfPath = 'store/products/'.$product->id.'/artifacts/'.$document->source_sha256.'/reader-v1.pdf';
-                    if (! Storage::disk('private')->put($readerPdfPath, $pdfBytes)) {
-                        throw new \RuntimeException('product_docx_conversion_storage_failed');
-                    }
-                    $document->artifacts()->updateOrCreate(
-                        ['artifact_type' => 'reader_pdf', 'version' => 1],
-                        [
-                            'disk' => 'private',
-                            'path' => $readerPdfPath,
-                            'mime' => 'application/pdf',
-                            'size_bytes' => strlen($pdfBytes),
-                            'sha256' => hash('sha256', $pdfBytes),
-                            'metadata_json' => [
-                                'source_sha256' => $document->source_sha256,
-                                'conversion_engine' => 'phpword_dompdf',
-                                'generated_once' => true,
-                            ],
-                        ]
+                if (! $readerPdfExists) {
+                    $managed = $storage->storeContents(
+                        $pdfBytes,
+                        'reader-v1.pdf',
+                        'application/pdf',
+                        StorageManager::CRITICAL,
+                        'store-product-artifact',
+                        StoreProductDocumentArtifact::class,
+                        null,
+                        (int) $product->id,
+                        'private'
                     );
+                    try {
+                        $artifact = $document->artifacts()->updateOrCreate(
+                            ['artifact_type' => 'reader_pdf', 'version' => 1],
+                            [
+                                'disk' => $managed['disk'],
+                                'path' => $managed['path'],
+                                'mime' => 'application/pdf',
+                                'size_bytes' => strlen($pdfBytes),
+                                'sha256' => hash('sha256', $pdfBytes),
+                                'metadata_json' => [
+                                    'source_sha256' => $document->source_sha256,
+                                    'conversion_engine' => 'phpword_dompdf',
+                                    'generated_once' => true,
+                                ],
+                            ]
+                        );
+                        $storage->bindReference((int) $managed['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $product->id);
+                        $readerPdfPath = $artifact->path;
+                        $readerPdfDisk = $artifact->disk;
+                    } catch (\Throwable $exception) {
+                        $storage->delete($managed['disk'], $managed['path']);
+                        throw $exception;
+                    }
                 }
                 $reviewStream = fopen('php://temp', 'w+b');
                 if (! is_resource($reviewStream)) {
@@ -172,9 +190,37 @@ class ProcessProductDocument implements ShouldQueue
         $chunks = is_array($payload['content_chunks'] ?? null) ? array_slice($payload['content_chunks'], 0, 300) : [];
         $totalCharacters = 0;
         $totalWords = 0;
+        $sampleManaged = null;
+        $sampleHash = null;
+        $samplePageNumbers = [];
+        $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
+        $existingSampleBefore = $document->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
+        $existingSampleAvailable = $existingSampleBefore
+            && $storage->exists($existingSampleBefore->disk ?: 'private', $existingSampleBefore->path);
+        if ($file->is_primary && ! $existingSampleAvailable && is_string($sampleBase64) && $sampleBase64 !== '') {
+            $sampleBytes = base64_decode($sampleBase64, true);
+            if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
+                $sampleHash = hash('sha256', $sampleBytes);
+                $samplePageNumbers = array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int'));
+                $sampleManaged = $storage->storeContents(
+                    $sampleBytes,
+                    'sample-v1.pdf',
+                    'application/pdf',
+                    StorageManager::CRITICAL,
+                    'store-product-artifact',
+                    StoreProductDocumentArtifact::class,
+                    null,
+                    (int) $product->id,
+                    'private'
+                );
+            }
+        }
 
-        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, &$totalCharacters, &$totalWords) {
+        $sampleManagedBound = false;
+        try {
+        DB::transaction(function () use ($document, $file, $product, $sourceExtension, $payload, $chunks, $sampleManaged, $sampleHash, $samplePageNumbers, $storage, &$sampleManagedBound, &$totalCharacters, &$totalWords) {
             $locked = StoreProductDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
+            $file = StoreProductFile::query()->whereKey($file->id)->lockForUpdate()->firstOrFail();
             $locked->chunks()->delete();
             $locked->facts()->delete();
 
@@ -270,63 +316,61 @@ class ProcessProductDocument implements ShouldQueue
                 'publication_authorized' => false,
             ];
 
-            $sampleBase64 = $payload['sample_pdf_base64'] ?? null;
-            if ($file->is_primary && is_string($sampleBase64) && $sampleBase64 !== '') {
-                $sampleBytes = base64_decode($sampleBase64, true);
-                if (is_string($sampleBytes) && strlen($sampleBytes) <= 8 * 1024 * 1024 && str_starts_with($sampleBytes, '%PDF-')) {
-                    $sampleHash = hash('sha256', $sampleBytes);
-                    $samplePath = 'store/products/'.$locked->product_id.'/artifacts/'.$locked->source_sha256.'/sample-v1.pdf';
-                    $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->first();
-                    $sampleDisk = Storage::disk($existingSample?->disk ?: 'private');
-                    $samplePathForReader = null;
-                    if ($existingSample && $sampleDisk->exists($existingSample->path)) {
-                        $samplePathForReader = $existingSample->path;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
-                            'sha256' => $existingSample->sha256,
-                            'generated_once' => true,
-                        ];
-                    } elseif (Storage::disk('private')->put($samplePath, $sampleBytes)) {
-                        $artifact = $locked->artifacts()->updateOrCreate(
-                            ['artifact_type' => 'sample_pdf', 'version' => 1],
-                            [
-                                'disk' => 'private',
-                                'path' => $samplePath,
-                                'mime' => 'application/pdf',
-                                'size_bytes' => strlen($sampleBytes),
-                                'sha256' => $sampleHash,
-                                'metadata_json' => [
-                                    'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                                    'source_sha256' => $locked->source_sha256,
-                                    'generated_once' => true,
-                                ],
-                            ]
-                        );
-                        $samplePathForReader = $artifact->path;
-                        $structure['sample'] = [
-                            'artifact_type' => 'sample_pdf',
-                            'selected_pages' => array_values(array_filter($payload['sample_page_numbers'] ?? [], 'is_int')),
-                            'sha256' => $artifact->sha256,
-                            'generated_once' => true,
-                        ];
-                    }
+            if ($file->is_primary && ($sampleManaged || $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->exists())) {
+                $existingSample = $locked->artifacts()->where('artifact_type', 'sample_pdf')->where('version', 1)->lockForUpdate()->first();
+                $samplePathForReader = null;
+                $sampleDiskForReader = 'private';
+                if ($existingSample && $storage->exists($existingSample->disk ?: 'private', $existingSample->path)) {
+                    $samplePathForReader = $existingSample->path;
+                    $sampleDiskForReader = $existingSample->disk ?: 'private';
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => (array) data_get($existingSample->metadata_json, 'selected_pages', []),
+                        'sha256' => $existingSample->sha256,
+                        'generated_once' => true,
+                    ];
+                } elseif ($sampleManaged) {
+                    $artifact = $locked->artifacts()->updateOrCreate(
+                        ['artifact_type' => 'sample_pdf', 'version' => 1],
+                        [
+                            'disk' => $sampleManaged['disk'],
+                            'path' => $sampleManaged['path'],
+                            'mime' => 'application/pdf',
+                            'size_bytes' => (int) data_get($sampleManaged, 'size_bytes', 0),
+                            'sha256' => $sampleHash,
+                            'metadata_json' => [
+                                'selected_pages' => $samplePageNumbers,
+                                'source_sha256' => $locked->source_sha256,
+                                'generated_once' => true,
+                            ],
+                        ]
+                    );
+                    $storage->bindReference((int) $sampleManaged['managed_file_id'], StoreProductDocumentArtifact::class, (int) $artifact->id, (int) $locked->product_id);
+                    $sampleManagedBound = true;
+                    $samplePathForReader = $artifact->path;
+                    $sampleDiskForReader = $artifact->disk;
+                    $structure['sample'] = [
+                        'artifact_type' => 'sample_pdf',
+                        'selected_pages' => $samplePageNumbers,
+                        'sha256' => $artifact->sha256,
+                        'generated_once' => true,
+                    ];
+                }
 
-                    if ($samplePathForReader) {
-                        StoreProductPreview::query()->updateOrCreate(
-                            ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
-                            [
-                                'disk' => 'private',
-                                'mime' => 'application/pdf',
-                                'page_number' => 1,
-                                'kind' => 'pdf',
-                                'access_level' => 'sample',
-                                'watermarked' => true,
-                                'is_active' => true,
-                                'sort_order' => 0,
-                            ]
-                        );
-                    }
+                if ($samplePathForReader) {
+                    StoreProductPreview::query()->updateOrCreate(
+                        ['product_id' => $locked->product_id, 'path' => $samplePathForReader],
+                        [
+                            'disk' => $sampleDiskForReader,
+                            'mime' => 'application/pdf',
+                            'page_number' => 1,
+                            'kind' => 'pdf',
+                            'access_level' => 'sample',
+                            'watermarked' => true,
+                            'is_active' => true,
+                            'sort_order' => 0,
+                        ]
+                    );
                 }
             }
 
@@ -338,14 +382,14 @@ class ProcessProductDocument implements ShouldQueue
                     $fullReaderPath = $file->path;
                     $fullReaderDisk = $file->disk ?: 'private';
                 } elseif ($sourceExtension === 'docx') {
-                    $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->first();
+                    $readerPdf = $locked->artifacts()->where('artifact_type', 'reader_pdf')->where('version', 1)->lockForUpdate()->first();
                     if ($readerPdf) {
                         $fullReaderPath = $readerPdf->path;
                         $fullReaderDisk = $readerPdf->disk ?: 'private';
                     }
                 }
 
-                if ($fullReaderPath && Storage::disk($fullReaderDisk)->exists($fullReaderPath)) {
+                if ($fullReaderPath && $storage->exists($fullReaderDisk, $fullReaderPath)) {
                     StoreProductPreview::query()->updateOrCreate(
                         ['product_id' => $locked->product_id, 'path' => $fullReaderPath],
                         [
@@ -386,6 +430,13 @@ class ProcessProductDocument implements ShouldQueue
                 'processed_at' => now(),
             ]);
         });
+        } catch (Throwable $exception) {
+            if ($sampleManaged) $storage->delete($sampleManaged['disk'], $sampleManaged['path']);
+            throw $exception;
+        }
+        if ($sampleManaged && ! $sampleManagedBound) {
+            $storage->delete($sampleManaged['disk'], $sampleManaged['path']);
+        }
 
         $processedDocument = $document->fresh();
         if ($processedDocument
