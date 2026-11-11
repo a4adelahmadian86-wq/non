@@ -39,7 +39,7 @@ class FarastObservabilityService
 
             return ['status' => 'healthy', 'message' => 'اتصال پایگاه داده برقرار است.'];
         } catch (Throwable $exception) {
-            report($exception);
+            $this->recordProbeFailure('database', $exception);
 
             return ['status' => 'critical', 'message' => 'اتصال پایگاه داده ناموفق است.'];
         }
@@ -87,7 +87,7 @@ class FarastObservabilityService
                 $result['failed_jobs_warning'] = 'جدول failed_jobs وجود ندارد.';
             }
         } catch (Throwable $exception) {
-            report($exception);
+            $this->recordProbeFailure('queue', $exception);
             $result['status'] = 'critical';
             $result['message'] = 'خواندن وضعیت صف ناموفق است.';
         }
@@ -148,11 +148,26 @@ class FarastObservabilityService
                 $result['status'] = 'warning';
             }
         } catch (Throwable $exception) {
-            report($exception);
+            $this->recordProbeFailure('storage', $exception);
             $result['status'] = 'critical';
         }
 
         return $result;
+    }
+
+
+    private function recordProbeFailure(string $component, Throwable $exception): void
+    {
+        try {
+            // Exception messages can contain connection details or provider paths.
+            // Keep operational logs useful without copying those values.
+            Log::warning('farast.health.probe_failed', [
+                'component' => $component,
+                'exception_class' => get_class($exception),
+            ]);
+        } catch (Throwable $loggingException) {
+            error_log('FARAST health probe logging failed: '.get_class($loggingException));
+        }
     }
 
     private function logging(): array
