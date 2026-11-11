@@ -742,7 +742,12 @@ class WorkflowEngine
             return;
         }
 
-        $pending = ProcessWorkflowEvent::dispatch($eventId)->onQueue('automation');
+        $eventType = DB::table('farast_workflow_events')->where('id', $eventId)->value('event_type');
+        $queue = in_array($eventType, ['order.paid', 'order.deposit_paid'], true)
+            ? 'automation-critical'
+            : 'automation';
+
+        $pending = ProcessWorkflowEvent::dispatch($eventId)->onQueue($queue);
         if ($afterCommit) {
             $pending->afterCommit();
         }
