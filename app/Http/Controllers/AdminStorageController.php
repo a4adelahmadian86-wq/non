@@ -81,8 +81,8 @@ class AdminStorageController extends Controller
         }
 
         $driver = (string) ($connection['driver'] ?? 's3');
-        if (! in_array($driver, ['s3', 'local'], true)) {
-            return back()->withErrors(['connection_json' => 'درایور اعلام‌شده پشتیبانی نمی‌شود.'])->withInput($request->except('connection_json'));
+        if ($driver !== 's3') {
+            return back()->withErrors(['connection_json' => 'هاست‌های قابل افزودن باید API سازگار با S3 داشته باشند؛ فضای محلی فقط staging داخلی FARAST است و به‌عنوان هاست ثبت نمی‌شود.'])->withInput($request->except('connection_json'));
         }
 
         $credentials = (array) ($connection['credentials'] ?? []);
