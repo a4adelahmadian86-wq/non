@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\AuthorizationService;
 use Closure;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
 
 /**
@@ -48,18 +49,16 @@ class ResolveAdminScope
         }
         abort_if($user->is_blocked, 403, 'حساب شما مسدود شده است.');
 
-        $scope = match ($user->role) {
-            User::ROLE_ADMIN => self::SCOPE_GLOBAL,
-            User::ROLE_ORGANIZATION_MANAGER => self::SCOPE_ORGANIZATION,
-            User::ROLE_TEAM_SUPERVISOR => self::SCOPE_TEAM,
-            default => self::SCOPE_OWN,
-        };
+        $scope = self::scopeFor($user);
 
-        // اگر کاربر مدیر باشد اما سازمان نداشته باشد، دامنه به own تنزل می‌کند تا دادهٔ نشت نکند.
-        if ($scope === self::SCOPE_ORGANIZATION && ! $user->organization_id) {
+        // Legacy non-admin roles without a real organization/team fail closed.
+        if ($scope === self::SCOPE_ORGANIZATION && ! $user->isAdmin() && ! $user->organization_id) {
             $scope = self::SCOPE_OWN;
         }
-        if ($scope === self::SCOPE_TEAM && ! $this->hasManagedTeams($user)) {
+        if ($scope === self::SCOPE_TEAM && ! $user->isAdmin() && ! $this->hasManagedTeams($user)) {
+            $scope = self::SCOPE_OWN;
+        }
+        if ($scope === self::SCOPE_TEAM && $user->isAdmin() && ! self::scopeIdFor($user)) {
             $scope = self::SCOPE_OWN;
         }
 
@@ -93,12 +92,83 @@ class ResolveAdminScope
             return self::SCOPE_OWN;
         }
 
+        if ($user->isAdmin()) {
+            if (! Schema::hasTable('farast_user_admin_scopes')) {
+                return self::SCOPE_GLOBAL;
+            }
+
+            $restriction = DB::table('farast_user_admin_scopes')
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (! $restriction) {
+                return self::SCOPE_GLOBAL;
+            }
+
+            if ($restriction->starts_at && now()->lt($restriction->starts_at)) {
+                return self::SCOPE_GLOBAL;
+            }
+
+            if ($restriction->expires_at && now()->gte($restriction->expires_at)) {
+                return self::SCOPE_OWN;
+            }
+
+            return in_array($restriction->scope_type, [self::SCOPE_ORGANIZATION, self::SCOPE_TEAM, self::SCOPE_OWN], true)
+                ? $restriction->scope_type
+                : self::SCOPE_OWN;
+        }
+
         return match ($user->role) {
-            User::ROLE_ADMIN => self::SCOPE_GLOBAL,
             User::ROLE_ORGANIZATION_MANAGER => $user->organization_id ? self::SCOPE_ORGANIZATION : self::SCOPE_OWN,
             User::ROLE_TEAM_SUPERVISOR => self::SCOPE_TEAM,
             default => self::SCOPE_OWN,
         };
+    }
+
+    /** Explicit organization/team boundary assigned to a restricted administrator. */
+    public static function scopeIdFor(?User $user): ?int
+    {
+        if (! $user || ! $user->isAdmin() || ! Schema::hasTable('farast_user_admin_scopes')) {
+            return null;
+        }
+
+        $restriction = DB::table('farast_user_admin_scopes')
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (! $restriction
+            || ($restriction->starts_at && now()->lt($restriction->starts_at))
+            || ($restriction->expires_at && now()->gte($restriction->expires_at))) {
+            return null;
+        }
+
+        return $restriction->scope_id !== null ? (int) $restriction->scope_id : null;
+    }
+
+    public static function organizationIdForScope(?User $user): ?int
+    {
+        if (! $user) {
+            return null;
+        }
+
+        if (! $user->isAdmin()) {
+            return $user->organization_id !== null ? (int) $user->organization_id : null;
+        }
+
+        $scope = self::scopeFor($user);
+        $scopeId = self::scopeIdFor($user);
+
+        if ($scope === self::SCOPE_ORGANIZATION) {
+            return $scopeId;
+        }
+
+        if ($scope === self::SCOPE_TEAM && $scopeId) {
+            $organizationId = Team::query()->whereKey($scopeId)->value('organization_id');
+
+            return $organizationId !== null ? (int) $organizationId : null;
+        }
+
+        return null;
     }
 
     /**
@@ -158,12 +228,13 @@ class ResolveAdminScope
 
     private static function organizationUserIds(User $user): array
     {
-        if (! $user->organization_id) {
+        $organizationId = $user->isAdmin() ? self::scopeIdFor($user) : $user->organization_id;
+        if (! $organizationId) {
             return [$user->id];
         }
 
         return User::query()
-            ->where('organization_id', $user->organization_id)
+            ->where('organization_id', $organizationId)
             ->where('role', '!=', User::ROLE_ADMIN)
             ->pluck('id')
             ->all();
@@ -171,6 +242,24 @@ class ResolveAdminScope
 
     private static function teamUserIds(User $user): array
     {
+        if ($user->isAdmin()) {
+            $teamId = self::scopeIdFor($user);
+            $team = $teamId ? Team::query()->whereKey($teamId)->first(['id', 'organization_id']) : null;
+            if (! $team) {
+                return [$user->id];
+            }
+
+            $memberIds = DB::table('team_user')
+                ->join('users', 'users.id', '=', 'team_user.user_id')
+                ->where('team_user.team_id', $team->id)
+                ->where('users.organization_id', $team->organization_id)
+                ->where('users.role', '!=', User::ROLE_ADMIN)
+                ->pluck('team_user.user_id')
+                ->all();
+
+            return collect([$user->id])->merge($memberIds)->unique()->values()->all();
+        }
+
         if (! $user->organization_id) {
             return [$user->id];
         }
