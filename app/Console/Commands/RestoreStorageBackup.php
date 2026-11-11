@@ -18,19 +18,42 @@ use ZipArchive;
 
 class RestoreStorageBackup extends Command
 {
-    protected $signature = 'storage:restore-backup {runId} {--confirm}';
+    protected $signature = 'storage:restore-backup {runId?} {--archive=} {--confirm}';
     protected $description = 'Restore an encrypted application backup into local staging and keep the site in maintenance mode';
 
-    public function handle(StorageManager $storage, StorageTransferService $transfers): int
+    public function handle(StorageManager $storage, StorageTransferService $transfers, StorageBackupService $backup): int
     {
         if (! $this->option('confirm')) {
             $this->error('این عملیات مخرب است؛ برای تأیید صریح، گزینه --confirm را وارد کنید.');
             return self::FAILURE;
         }
-        $run = StorageBackupRun::with('volume')->find($this->argument('runId'));
-        if (! $run || $run->status !== 'completed' || ! $run->volume || ! $run->object_key) {
-            $this->error('نسخه پشتیبان تکمیل‌شده و قابل دسترسی پیدا نشد.');
+        $runId = $this->argument('runId');
+        $archiveOption = $this->option('archive');
+        if (($runId && $archiveOption) || (! $runId && ! $archiveOption)) {
+            $this->error('یک شناسه بکاپ یا مسیر آرشیو محلی را انتخاب کنید؛ هر دو هم‌زمان مجاز نیستند.');
             return self::FAILURE;
+        }
+
+        $run = null;
+        $sourceArchive = null;
+        if ($runId) {
+            $run = StorageBackupRun::with('volume')->find($runId);
+            if (! $run || $run->status !== 'completed' || ! $run->volume || ! $run->object_key) {
+                $this->error('نسخه پشتیبان تکمیل‌شده و قابل دسترسی پیدا نشد.');
+                return self::FAILURE;
+            }
+        } else {
+            $archivePath = (string) $archiveOption;
+            $sourceArchive = realpath($archivePath);
+            if (
+                $sourceArchive === false
+                || ! is_file($sourceArchive)
+                || ! is_readable($sourceArchive)
+                || is_link($archivePath)
+            ) {
+                $this->error('آرشیو محلی برای بازیابی وجود ندارد یا قابل خواندن نیست.');
+                return self::FAILURE;
+            }
         }
         $password = (string) config('storage_management.backup.encryption_key', '');
         if ($password === '') {
@@ -52,15 +75,26 @@ class RestoreStorageBackup extends Command
         $maintenanceEnabled = false;
 
         try {
-            $storage->downloadTo($storage->volumeDisk($run->volume), $run->object_key, $archive);
+            if ($run) {
+                $storage->downloadTo($storage->volumeDisk($run->volume), $run->object_key, $archive);
+            } elseif (! is_string($sourceArchive) || ! copy($sourceArchive, $archive)) {
+                throw new RuntimeException('کپی آرشیو محلی به فضای موقت بازیابی ناموفق بود.');
+            }
+
             $checksum = hash_file('sha256', $archive);
-            if (! is_string($checksum) || ! hash_equals((string) $run->checksum, $checksum)) {
+            if (! is_string($checksum) || ($run && ! hash_equals((string) $run->checksum, $checksum))) {
                 throw new RuntimeException('Checksum نسخه پشتیبان صحیح نیست.');
             }
+            // For a local bootstrap restore, the encrypted manifest and per-entry
+            // AES authentication are the trust anchor; no database run row is needed.
+            $backup->verifyArchive($archive);
 
             $zip = new ZipArchive();
             if ($zip->open($archive) !== true) throw new RuntimeException('فایل ZIP نسخه پشتیبان باز نشد.');
-            $zip->setPassword($password);
+            if (! $zip->setPassword($password)) {
+                $zip->close();
+                throw new RuntimeException('تنظیم کلید رمزگشایی آرشیو بازیابی ناموفق بود.');
+            }
             $seenEntries = [];
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $name = $zip->getNameIndex($index);
