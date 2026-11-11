@@ -882,7 +882,7 @@ test('shows pending narration state and checks the protected audio artifact with
   await page.route('**/store/product/1/reader/audio/2*', async route => {
     expect(route.request().method()).toBe('HEAD');
     polls += 1;
-    await route.fulfill({ status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+    await route.fulfill({ status: 202, headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '5' } });
   });
   await page.goto('/');
   await page.setContent(
@@ -897,6 +897,33 @@ test('shows pending narration state and checks the protected audio artifact with
   await expect(status).toContainText('در حال آماده‌سازی');
   await expect.poll(() => polls).toBe(1);
 });
+
+for (const [statusCode, expectedMessage] of [
+  [409, 'آماده‌سازی نسخه صوتی با خطا روبه‌رو شد'],
+  [410, 'سرویس تولید صوت برای این محیط تنظیم نشده است'],
+  [404, 'وضعیت آماده‌سازی صوت قابل تشخیص نیست'],
+]) {
+  test(`stops narration polling for terminal audio response ${statusCode}`, async ({ page }) => {
+    let polls = 0;
+    await page.route('**/store/product/1/reader/audio/2*', async route => {
+      expect(route.request().method()).toBe('HEAD');
+      polls += 1;
+      await route.fulfill({ status: statusCode, headers: { 'Cache-Control': 'private, no-store' } });
+    });
+    await page.goto('/');
+    await page.setContent(
+      '<section data-reader-root data-reader-audio-status="pending" ' +
+        'data-reader-audio-poll-url="/store/product/1/reader/audio/2?version=3">' +
+        '<div data-reader-audio-pending role="status" aria-live="polite" hidden></div>' +
+      '</section>'
+    );
+    await page.addScriptTag({ url: new URL('/js/farast-reader-document-audio.js', page.url()).href });
+    const status = page.locator('[data-reader-audio-pending]');
+    await expect(status).toBeVisible();
+    await expect(status).toContainText(expectedMessage);
+    await expect.poll(() => polls).toBe(1);
+  });
+}
 
 
 test('highlights the exact active HTML word while the precomputed document audio plays', async ({ page }) => {
