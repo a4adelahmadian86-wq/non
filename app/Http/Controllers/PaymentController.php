@@ -303,6 +303,7 @@ class PaymentController extends Controller
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
+                    'idempotency_key' => 'store-wallet-order-'.$locked->id,
                     'amount_rials' => $total,
                     'status' => 'paid',
                     'transaction_id' => 'STORE-WALLET-'.$locked->id.'-'.now()->timestamp,
@@ -403,6 +404,7 @@ class PaymentController extends Controller
                 Payment::create([
                     'order_id' => $locked->id,
                     'gateway' => 'wallet',
+                    'idempotency_key' => 'deposit-wallet-order-'.$locked->id,
                     'amount_rials' => $amount,
                     'status' => 'paid',
                     'transaction_id' => 'DEPOSIT-WALLET-'.$locked->id.'-'.now()->timestamp,
