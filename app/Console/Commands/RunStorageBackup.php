@@ -22,36 +22,12 @@ class RunStorageBackup extends Command
         }
 
         try {
-            // The dedicated worker has a four-hour hard timeout and a 4h10m
-            // retry_after. A running request older than five hours is abandoned,
-            // not an active backup; recover it so one killed worker cannot block
-            // every future scheduled backup indefinitely.
-            StorageBackupRun::query()
-                ->where('source_name', 'scheduler_request')
-                ->where('status', 'running')
-                ->whereNotNull('started_at')
-                ->where('started_at', '<', now()->subHours(5))
-                ->update([
-                    'status' => 'failed',
-                    'completed_at' => now(),
-                    'error_message' => 'درخواست بکاپ پس از پایان مهلت اجرای Worker بدون نتیجه باقی مانده بود.',
-                ]);
-
-            // A queued request older than one day indicates that no backup worker
-            // has consumed it. Do not let a permanently unavailable queue suppress
-            // the next scheduled backup forever.
-            StorageBackupRun::query()
-                ->where('source_name', 'scheduler_request')
-                ->where('status', 'queued')
-                ->where('created_at', '<', now()->subDay())
-                ->update([
-                    'status' => 'failed',
-                    'completed_at' => now(),
-                    'error_message' => 'درخواست بکاپ بیش از ۲۴ ساعت در صف باقی مانده و توسط Worker دریافت نشده بود.',
-                ]);
+            if ($this->call('storage:recover-stale-backup-runs') !== self::SUCCESS) {
+                return self::FAILURE;
+            }
 
             $existing = StorageBackupRun::query()
-                ->where('source_name', 'scheduler_request')
+                ->whereIn('source_name', ['scheduler_request', 'manual_request'])
                 ->whereIn('status', ['queued', 'running'])
                 ->latest('id')
                 ->first();

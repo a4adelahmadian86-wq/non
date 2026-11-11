@@ -111,6 +111,7 @@ Scheduler لاراول باید دقیقاً یک اجراکننده فعال ب
 - اگر Scheduler با Cron اجرا می‌شود، اجرای `php artisan schedule:run` باید هر دقیقه انجام شود.
 - اگر Worker دائمی استفاده می‌شود، باید Supervisor/Process Manager میزبان آن را restart کند و سیگنال توقف را به‌شکل graceful مدیریت کند.
 - اگر `QUEUE_SCHEDULED_WORKER=true` است، فرمان‌های Worker زمان‌بندی‌شده در `routes/console.php` فعال می‌شوند؛ این حالت را هم‌زمان با Worker دائمی بدون طراحی ظرفیت و جلوگیری از مصرف دوگانه فعال نکنید.
+- اجرای بکاپ با Cache lock مشترک serialize می‌شود؛ `storage:recover-stale-backup-runs` هر ۱۵ دقیقه درخواست‌های متوقف‌شده، رکوردهای اجرای بکاپ و snapshot lockهای منقضی را آزاد می‌کند.
 - صف‌های `documents`، `documents-audio`، `default` و `backups` در کد فعلی قراردادهای جدا دارند؛ نام صف و connection باید در میزبان واقعی با همین تنظیمات هماهنگ باشد.
 - پس از Deploy، Workerها باید با نسخه جدید کد restart شوند؛ Jobهای در حال اجرا و timeout آن‌ها قبل از این کار بررسی شود.
 

@@ -162,11 +162,10 @@ class RestoreStorageBackup extends Command
                 ->where('status', 'running')
                 ->update(['status' => 'completed', 'completed_at' => now(), 'error_message' => null]);
 
-            // The scheduler request is marked running before its backup job starts.
-            // Because the snapshot is taken inside that job, it captures this in-flight
-            // request. Complete it after restore so it cannot block all future backups.
+            // Scheduled and manual requests are marked running before their backup job
+            // takes the snapshot. Complete both after restore so neither remains stuck.
             StorageBackupRun::query()
-                ->where('source_name', 'scheduler_request')
+                ->whereIn('source_name', ['scheduler_request', 'manual_request'])
                 ->whereIn('status', ['queued', 'running'])
                 ->get()
                 ->each(function (StorageBackupRun $request) use ($run): void {

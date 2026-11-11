@@ -75,6 +75,14 @@ class StorageBackupRecoveryTest extends TestCase
             'metadata' => ['request_only' => true],
         ]);
 
+        StorageBackupRun::create([
+            'backup_type' => 'manual',
+            'source_name' => 'manual_request',
+            'status' => 'running',
+            'started_at' => now(),
+            'metadata' => ['request_only' => true],
+        ]);
+
         StorageVolume::forceCreate([
             'id' => $this->volumeId,
             'drive_key' => 'foreign_backup',
@@ -185,6 +193,20 @@ class StorageBackupRecoveryTest extends TestCase
         $this->assertNotEmpty(
             data_get(
                 StorageBackupRun::query()->where('source_name', 'scheduler_request')->firstOrFail()->metadata,
+                'restored_at'
+            )
+        );
+
+        $this->assertSame(
+            0,
+            StorageBackupRun::query()
+                ->where('source_name', 'manual_request')
+                ->whereIn('status', ['queued', 'running'])
+                ->count()
+        );
+        $this->assertNotEmpty(
+            data_get(
+                StorageBackupRun::query()->where('source_name', 'manual_request')->firstOrFail()->metadata,
                 'restored_at'
             )
         );

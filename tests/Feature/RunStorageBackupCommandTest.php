@@ -29,8 +29,8 @@ class RunStorageBackupCommandTest extends TestCase
     public function test_weekly_backup_command_does_not_dispatch_a_duplicate_active_request(): void
     {
         StorageBackupRun::create([
-            'backup_type' => 'weekly',
-            'source_name' => 'scheduler_request',
+            'backup_type' => 'manual',
+            'source_name' => 'manual_request',
             'status' => 'queued',
             'metadata' => ['request_only' => true],
         ]);
@@ -42,7 +42,7 @@ class RunStorageBackupCommandTest extends TestCase
         $this->assertSame(
             1,
             StorageBackupRun::query()
-                ->where('source_name', 'scheduler_request')
+                ->whereIn('source_name', ['scheduler_request', 'manual_request'])
                 ->whereIn('status', ['queued', 'running'])
                 ->count()
         );
@@ -64,6 +64,21 @@ class RunStorageBackupCommandTest extends TestCase
             'metadata' => ['request_only' => true],
         ]);
         $queuedTooLong->forceFill(['created_at' => now()->subDays(2)])->save();
+
+        $staleSnapshotLock = StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'snapshot_lock',
+            'status' => 'running',
+            'started_at' => now()->subHours(6),
+            'metadata' => ['snapshot' => true],
+        ]);
+        $staleApplicationRun = StorageBackupRun::create([
+            'backup_type' => 'weekly',
+            'source_name' => 'application',
+            'status' => 'running',
+            'started_at' => now()->subHours(6),
+            'metadata' => [],
+        ]);
         Queue::fake();
 
         $this->artisan('storage:backup-weekly')->assertExitCode(0);
@@ -74,6 +89,15 @@ class RunStorageBackupCommandTest extends TestCase
         ]);
         $this->assertDatabaseHas('storage_backup_runs', [
             'id' => $queuedTooLong->id,
+            'status' => 'failed',
+        ]);
+
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'id' => $staleSnapshotLock->id,
+            'status' => 'failed',
+        ]);
+        $this->assertDatabaseHas('storage_backup_runs', [
+            'id' => $staleApplicationRun->id,
             'status' => 'failed',
         ]);
         $this->assertDatabaseHas('storage_backup_runs', [

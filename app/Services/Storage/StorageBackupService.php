@@ -25,6 +25,22 @@ class StorageBackupService
 
     public function runWeekly(): array
     {
+        // Prevent concurrent snapshots from racing volume capacity accounting and uploads.
+        // The worker hard timeout is four hours; the six-hour lease leaves recovery headroom.
+        $lock = Cache::lock('farast:backup:execution', 21600);
+        if (! $lock->get()) {
+            throw new \RuntimeException('A backup operation is already running.');
+        }
+
+        try {
+            return $this->runWeeklyLocked();
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function runWeeklyLocked(): array
+    {
         $backupKey = (string) config('storage_management.backup.encryption_key', '');
         if ($backupKey === '') throw new RuntimeException('برای بکاپ رمزنگاری‌شده، FARAST_BACKUP_ENCRYPTION_KEY باید تنظیم شود.');
         if (! class_exists(ZipArchive::class)) throw new RuntimeException('افزونه ZipArchive برای ساخت بکاپ لازم است.');

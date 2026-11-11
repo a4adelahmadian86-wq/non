@@ -100,7 +100,7 @@ php artisan queue:work backups --queue=backups --sleep=3 --tries=1 --timeout=144
 - `storage:backup-weekly` یک درخواست را در صف اختصاصی `backups` قرار می‌دهد؛ تولید آرشیو توسط `RunStorageBackupJob` و Worker صف `backups` انجام می‌شود، نه در فرایند Cron. درخواست‌های `queued/running` در `storage_backup_runs` قابل پایش‌اند.
 - درخواست زمان‌بندی‌شده فقط وقتی قابل اجراست که `FARAST_BACKUP_ENCRYPTION_KEY` و حداقل یک Volume سالم با `drive_key=foreign_backup` پیکربندی شده باشد.
 - بکاپ با AES-256 رمزنگاری می‌شود؛ SHA-256 پس از انتقال مقایسه می‌شود و خوانایی Manifest و جریان دیتابیس رمزگشایی‌شده نیز قبل از موفق علامت‌گذاری شدن بررسی می‌شود.
-- درخواست زمان‌بندی‌شده‌ای که بیش از ۵ ساعت در حالت running یا بیش از ۲۴ ساعت در حالت queued بماند، هنگام اجرای بعدی فرمان زمان‌بندی‌شده به failed تبدیل می‌شود؛ این پاک‌سازی جایگزین پایش پیوسته Worker و صف نیست.
+- قفل اجرای بکاپ در Cache مشترک، اجرای هم‌زمان Snapshotها را متوقف می‌کند. فرمان `storage:recover-stale-backup-runs` هر ۱۵ دقیقه اجرا می‌شود: اجرای running قدیمی‌تر از ۵ ساعت (شامل snapshot lock و رکورد مقصد) و درخواست queued قدیمی‌تر از ۲۴ ساعت را failed می‌کند. `storage:backup-weekly` نیز پیش از dispatch همین پاک‌سازی را اجرا می‌کند؛ این پاک‌سازی جایگزین پایش پیوسته Worker و صف نیست.
 - بررسی دستی: `php artisan storage:verify-backup {runId}`.
 - Restore مخرب است و دیتابیس و فایل‌ها را جایگزین می‌کند: `php artisan storage:restore-backup {runId} --confirm`. فقط در محیط بازیابی جداگانه یا پنجره رخداد کنترل‌شده اجرا شود. پس از Restore برنامه عمداً در Maintenance Mode باقی می‌ماند؛ پس از اعتبارسنجی داده‌ها، Storage و Workerها، اپراتور باید `php artisan up` را اجرا کند.
 - آزمون Restore باید از دیتابیس و Storage جداگانه استفاده کند؛ هرگز برای تمرین روی Production اجرا نشود.
