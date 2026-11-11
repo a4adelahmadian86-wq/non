@@ -169,6 +169,9 @@ class FarastObservabilityService
             if ($connection === 'sync') {
                 $result['status'] = 'warning';
                 $result['message'] = 'پردازش صف به‌صورت هم‌زمان انجام می‌شود؛ backlog پایدار قابل اندازه‌گیری نیست.';
+            } elseif (config("queue.connections.{$connection}.driver") !== 'database') {
+                $result['status'] = 'warning';
+                $result['message'] = 'برای این درایور صف، شمارش backlog در این داشبورد پیکربندی نشده است.';
             } elseif (Schema::connection($queueDatabase)->hasTable($queueTable)) {
                 $jobs = DB::connection($queueDatabase)->table($queueTable);
                 $result['pending_jobs'] = (int) (clone $jobs)->count();
