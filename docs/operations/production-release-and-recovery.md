@@ -157,7 +157,7 @@ Scheduler لاراول باید دقیقاً یک اجراکننده فعال ب
 Workflow دستی `.github/workflows/release.yml` برای ایجاد Release نسخه‌گذاری‌شده در GitHub در نظر گرفته شده است. این Workflow:
 - فقط از `main` اجرا می‌شود؛
 - قالب نسخه `vMAJOR.MINOR.PATCH` را اعتبارسنجی می‌کند؛
-- آخرین اجرای `FARAST CI` را بررسی می‌کند و فقط در صورت موفقیت همان SHA اجازه انتشار می‌دهد؛
+- موفقیت Workflowهای اصلی `FARAST CI`، `FARAST Phase 3 Commerce Tests` و `FARAST Phase 4 Agent` را برای همان SHA و رویداد push روی `main` بررسی می‌کند؛ آزمون‌های مسیرمحور مرورگر، صدا و Supervisor نیز اگر برای همان SHA اجرا شده باشند باید موفق باشند؛
 - Tag و GitHub Release می‌سازد؛
 - هیچ سرویس Production را Deploy یا Migration نمی‌کند.
 
