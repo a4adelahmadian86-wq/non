@@ -360,8 +360,8 @@ class PlatformCompletionController extends Controller {
   $x=$r->validate(['user_id'=>'required|integer|exists:users,id','team_role'=>'required|in:owner,supervisor,manager,employee']);
   $memberId=(int)$x['user_id'];
   DB::transaction(function()use($r,$team,$x,$memberId):void{
-   $teamRecord=\\App\\Models\\Team::query()->whereKey((int)$team)->lockForUpdate()->firstOrFail();
-   $member=\\App\\Models\\User::query()->whereKey($memberId)->lockForUpdate()->firstOrFail();
+   $teamRecord=\App\Models\Team::query()->whereKey((int)$team)->lockForUpdate()->firstOrFail();
+   $member=\App\Models\User::query()->whereKey($memberId)->lockForUpdate()->firstOrFail();
    abort_unless(
     $teamRecord->organization_id!==null
     && $member->organization_id!==null
@@ -402,8 +402,8 @@ class PlatformCompletionController extends Controller {
   abort_unless($r->user()?->isAdmin(),403);
   $memberId=(int)$user;
   DB::transaction(function()use($r,$team,$memberId):void{
-   $teamRecord=\\App\\Models\\Team::query()->whereKey((int)$team)->lockForUpdate()->firstOrFail();
-   $member=\\App\\Models\\User::query()->whereKey($memberId)->lockForUpdate()->firstOrFail();
+   $teamRecord=\App\Models\Team::query()->whereKey((int)$team)->lockForUpdate()->firstOrFail();
+   $member=\App\Models\User::query()->whereKey($memberId)->lockForUpdate()->firstOrFail();
    $beforeMembership=DB::table('team_user')->where('team_id',$teamRecord->id)->where('user_id',$memberId)->first();
    $beforeSupervisorId=$teamRecord->supervisor_id?(int)$teamRecord->supervisor_id:null;
    if(! $beforeMembership && $beforeSupervisorId!==$memberId){return;}
